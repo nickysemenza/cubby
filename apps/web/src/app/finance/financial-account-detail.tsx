@@ -7,10 +7,8 @@ import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
-import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import {
   accountIdentityKindOptions,
   provisionalOptions,
@@ -22,13 +20,6 @@ export function FinancialAccountDetail({
   account: FinancialAccountOut;
 }) {
   const [editOpen, setEditOpen] = useState(false);
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: account.id,
-    name: account.name,
-    entity: "financialAccount",
-    mutationOptions: entityMutationOptionsFactory("financialAccount", "delete"),
-    redirectTo: "/financial-accounts",
-  });
   return (
     <Page
       variant="detail"
@@ -37,7 +28,6 @@ export function FinancialAccountDetail({
       rawData={account}
       heroActions={{
         primary: <DetailEditAction onClick={() => setEditOpen(true)} />,
-        secondary: deleteButton,
       }}
     >
       <DetailSections
@@ -112,7 +102,6 @@ export function FinancialAccountDetail({
         onOpenChange={setEditOpen}
         request={financialAccountEditRequest(account)}
       />
-      {deleteDialog}
     </Page>
   );
 }

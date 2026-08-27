@@ -39,7 +39,6 @@ import {
 } from "~/app/_components/data-table/editable-cell";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ChipsInput } from "~/app/_components/forms/chips-input";
-import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { RelationshipSummaryTable } from "~/app/_components/relationships/relationship-summary-table";
 import { expense } from "~/app/expenses/expense.functions";
@@ -530,19 +529,6 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const updateMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("project", "update"),
     entity: "project",
-  });
-
-  // `deleteProjects` refuses a project that still has sub-projects, tasks or
-  // expenses (assertNoDependents) — that error surfaces as the hook's toast,
-  // so the destructive case explains itself rather than needing a guard here.
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: project.id,
-    name: project.name,
-    entityLabel: "Project",
-    entity: "project",
-    mutationOptions: (callbacks) =>
-      entityMutationOptionsFactory("project", "delete")(callbacks),
-    redirectTo: "/projects",
   });
 
   const { data: projectOptions } = useQuery(
@@ -1313,14 +1299,12 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         tone: project.status === "done" ? "green" : "ink",
       }}
       heroStats={heroStats}
-      heroActions={{ secondary: deleteButton }}
     >
       <DetailSections
         sections={sections}
         rawData={project}
         heroImages={images}
       />
-      {deleteDialog}
 
       <EntityEditDialog
         open={isCreatingSubProject}

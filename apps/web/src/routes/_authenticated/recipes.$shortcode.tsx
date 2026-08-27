@@ -7,9 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { Edit, PackageCheck, X } from "lucide-react";
 import { z } from "zod";
-import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import type { DetailSection } from "~/app/_components/data-table/detail-page";
-import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import { RecipeAvailabilityPanel } from "~/app/_components/recipe/RecipeAvailabilityPanel";
@@ -18,7 +16,6 @@ import RecipeDetail, {
   remapLegacyView,
 } from "~/app/_components/recipe/RecipeDetail";
 import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
-import { useDuplicateRecipe } from "~/app/_components/recipe/use-duplicate-recipe";
 import {
   detailPage,
   notFoundPage,
@@ -29,7 +26,6 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 import { formatCurrency } from "~/lib/utils";
@@ -127,18 +123,6 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     });
   };
 
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: recipe.id,
-    name: recipe.name,
-    entityLabel: "Recipe",
-    entity: "recipe",
-    mutationOptions: (callbacks) =>
-      entityMutationOptionsFactory("recipe", "delete")(callbacks),
-    redirectTo: "/recipes",
-  });
-
-  const { duplicateRecipe, isPending: isDuplicating } = useDuplicateRecipe();
-
   // Placard stats from the persisted totals — zero engine calls. The Data
   // view's summary card shows live SCALED totals; these are the 1× ledger
   // numbers, consistent with the recipe list.
@@ -196,16 +180,10 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
               secondary: (
                 <>
                   <CopyRecipeParseButton recipe={recipe} />
-                  <VerbButton
-                    verb="duplicate"
-                    disabled={isDuplicating}
-                    onClick={() => duplicateRecipe(recipe.id)}
-                  />
                   <Button onClick={startEditing} variant="outline" size="sm">
                     <Edit />
                     Edit Recipe
                   </Button>
-                  {deleteButton}
                 </>
               ),
             }
@@ -233,8 +211,6 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
           onFlowLayoutChange={setFlowLayout}
         />
       )}
-
-      {deleteDialog}
     </Page>
   );
 }

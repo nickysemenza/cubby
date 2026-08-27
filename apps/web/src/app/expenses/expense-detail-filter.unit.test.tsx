@@ -72,9 +72,6 @@ vi.mock("../_components/data-table/editable-entity-cell", () => ({
 vi.mock("../_components/hooks/useEntityDetail", () => ({
   useEntityDetail: () => ({ commonSections: [] }),
 }));
-vi.mock("../_components/hooks/useEntityDelete", () => ({
-  useEntityDelete: () => ({ deleteButton: null, deleteDialog: null }),
-}));
 vi.mock("../_components/hooks/useUpdateMutation", () => ({
   useUpdateMutation: () => ({
     mutateAsync: vi.fn(),

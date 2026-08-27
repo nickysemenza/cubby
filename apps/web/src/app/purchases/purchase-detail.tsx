@@ -4,7 +4,6 @@ import {
   FileText,
   Info,
   Link2,
-  Merge,
   Package,
   ReceiptText,
   Scale,
@@ -31,10 +30,7 @@ import {
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
-import { useActionMutation } from "../_components/hooks/useActionMutation";
-import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { EntityMergeDialog } from "../_components/merge/entity-merge-dialog";
 import { RelationshipSummaryTable } from "../_components/relationships/relationship-summary-table";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
@@ -58,7 +54,6 @@ const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
  * lines.
  */
 export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
-  const [mergeOpen, setMergeOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkProductsOpen, setLinkProductsOpen] = useState(false);
 
@@ -80,27 +75,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const updateMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("purchase", "update"),
     entity: "purchase",
-  });
-
-  const mergeMutation = useActionMutation({
-    mutationFn: purchaseOperations.merge.mutationOptions,
-    success: "Purchases merged",
-    onSuccess: () => setMergeOpen(false),
-  });
-
-  // `deletePurchases` NULLs `purchaseId` on the purchase's expenses rather than
-  // deleting them — the lines survive as unattached ledger rows — so this needs
-  // no dependency guard, but the copy should say where the money goes.
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: purchase.id,
-    name: purchaseLabel(purchase),
-    entityLabel: "Purchase",
-    entity: "purchase",
-    mutationOptions: (callbacks) =>
-      entityMutationOptionsFactory("purchase", "delete")(callbacks),
-    redirectTo: "/purchases",
-    description:
-      "The purchase and its documents go; its expenses stay in the ledger, unattached to any purchase.",
   });
 
   const status = purchaseReconciliationStatus(purchase);
@@ -465,31 +439,9 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
               : { label: "Needs review", tone: "ink" }
       }
       heroStats={heroStats}
-      heroActions={{
-        primary: (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMergeOpen(true)}
-          >
-            <Merge />
-            Merge purchases
-          </Button>
-        ),
-        secondary: deleteButton,
-      }}
+      heroActions={{}}
     >
       <DetailSections sections={sections} rawData={purchase} />
-      <EntityMergeDialog
-        entity="purchase"
-        keeper={purchase}
-        open={mergeOpen}
-        onOpenChange={setMergeOpen}
-        onConfirm={(keepId, mergeIds) =>
-          mergeMutation.mutate({ keepId, mergeIds })
-        }
-        isPending={mergeMutation.isPending}
-      />
       <LinkExpensesDialog
         open={linkOpen}
         onOpenChange={setLinkOpen}
@@ -501,7 +453,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
         purchase={purchase}
         attachedIds={attachedProductIds}
       />
-      {deleteDialog}
     </Page>
   );
 };

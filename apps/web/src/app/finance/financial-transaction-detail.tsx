@@ -9,10 +9,8 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialTransactionEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrency } from "~/lib/utils";
 import { DetailSections } from "../_components/data-table/detail-page";
-import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { TableLink } from "../_components/table/TableLink";
 export function FinancialTransactionDetail({
   transaction,
@@ -20,16 +18,6 @@ export function FinancialTransactionDetail({
   transaction: FinancialTransactionOut;
 }) {
   const [editOpen, setEditOpen] = useState(false);
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: transaction.id,
-    name: transaction.merchant || transaction.rawDescription || transaction.id,
-    entity: "financialTransaction",
-    mutationOptions: entityMutationOptionsFactory(
-      "financialTransaction",
-      "delete",
-    ),
-    redirectTo: "/financial-transactions",
-  });
   return (
     <Page
       variant="detail"
@@ -40,7 +28,6 @@ export function FinancialTransactionDetail({
       rawData={transaction}
       heroActions={{
         primary: <DetailEditAction onClick={() => setEditOpen(true)} />,
-        secondary: deleteButton,
       }}
       heroStats={[
         { label: "Amount", value: formatCurrency(transaction.amount) },
@@ -185,7 +172,6 @@ export function FinancialTransactionDetail({
         onOpenChange={setEditOpen}
         request={financialTransactionEditRequest(transaction)}
       />
-      {deleteDialog}
     </Page>
   );
 }

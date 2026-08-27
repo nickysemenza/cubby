@@ -45,7 +45,6 @@ import {
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
-import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
@@ -252,24 +251,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
   const { commonSections } = useEntityDetail<TaskOut, never>({
     entity: "task",
     data: task,
-  });
-
-  // `deleteTasks` also soft-deletes live subtasks and hard-deletes this task's
-  // dependency edges (server/repo/task/crud.ts) — neither is visible from the
-  // generic dialog copy, so spell the cascade out.
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: task.id,
-    name: task.name,
-    entityLabel: "Task",
-    entity: "task",
-    mutationOptions: (callbacks) =>
-      entityMutationOptionsFactory("task", "delete")(callbacks),
-    redirectTo: "/tasks",
-    description: `${
-      task.subtaskCount > 0
-        ? `This also deletes ${task.subtaskCount} subtask${task.subtaskCount === 1 ? "" : "s"}, and removes`
-        : "This also removes"
-    } the task from any dependency chains. This action cannot be undone.`,
   });
 
   // Resolve blockedBy/blocking dependency ids into linked name badges via
@@ -658,7 +639,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             Schedule follow-up
           </Button>
         ),
-        secondary: deleteButton,
       }}
     >
       <DetailSections sections={sections} rawData={task} />
@@ -672,7 +652,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           subjectProductId: task.subjectProductId,
         })}
       />
-      {deleteDialog}
     </Page>
   );
 };

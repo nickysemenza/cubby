@@ -2,21 +2,16 @@ import type {
   InventoryUpdateInput,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
-import { ArrowRightLeft, Package } from "lucide-react";
+import { Package } from "lucide-react";
 import type { FC } from "react";
-import { useState } from "react";
 import type { z } from "zod";
 import { Page } from "~/components/page/Page";
-import { Button } from "~/components/ui/button";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
-import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { InventoryBasicInfo } from "./inventory-basic-info";
 import { InventoryForm } from "./inventory-form";
-import { MoveInventoryDialog } from "./move-inventory-dialog";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -27,23 +22,12 @@ interface InventoryDetailProps {
 export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
-  const [showMoveDialog, setShowMoveDialog] = useState(false);
-
   const { commonSections, editMode } = useEntityDetail<
     InventoryItem,
     InventoryUpdateInput
   >({
     entity: "inventory",
     data: inventoryitem,
-  });
-
-  const { deleteButton, deleteDialog, isPending } = useEntityDelete({
-    id: inventoryitem.id,
-    name: inventoryitem.product.name,
-    entityLabel: "Inventory Entry",
-    entity: "inventory",
-    mutationOptions: entityMutationOptionsFactory("inventory", "delete"),
-    redirectTo: "/inventory",
   });
 
   const sections: DetailSection[] = [
@@ -60,52 +44,17 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     ...commonSections,
   ];
 
-  // Page-level action cluster on the hero plate. Edit/Move/Delete are disabled
-  // while a delete is in flight so the row reads as "deleting" before the
-  // redirect lands.
-  const secondaryActions = (
-    <>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setShowMoveDialog(true)}
-        disabled={isPending}
-      >
-        <ArrowRightLeft />
-        Move
-      </Button>
-      {deleteButton}
-    </>
-  );
-
   return (
-    <>
-      <Page
-        variant="detail"
-        entity="inventory"
-        title={inventoryitem.product.name}
-        rawData={inventoryitem}
-        heroActions={{
-          primary: (
-            <DetailEditAction
-              onClick={editMode.startEditing}
-              disabled={isPending}
-            />
-          ),
-          secondary: secondaryActions,
-        }}
-      >
-        <DetailSections sections={sections} rawData={inventoryitem} />
-      </Page>
-      {deleteDialog}
-      {showMoveDialog && (
-        <MoveInventoryDialog
-          open
-          onOpenChange={setShowMoveDialog}
-          items={[inventoryitem]}
-          onSuccess={() => setShowMoveDialog(false)}
-        />
-      )}
-    </>
+    <Page
+      variant="detail"
+      entity="inventory"
+      title={inventoryitem.product.name}
+      rawData={inventoryitem}
+      heroActions={{
+        primary: <DetailEditAction onClick={editMode.startEditing} />,
+      }}
+    >
+      <DetailSections sections={sections} rawData={inventoryitem} />
+    </Page>
   );
 };

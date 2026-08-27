@@ -126,6 +126,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
       sections={sections}
       rawData={image}
       heroMedia={<ImageDetailMedia image={image} />}
+      showEntityActions={false}
     />
   );
 }

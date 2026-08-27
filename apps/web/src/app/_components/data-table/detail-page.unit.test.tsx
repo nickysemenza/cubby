@@ -48,6 +48,9 @@ vi.mock("../relationships/relationship-route-preview", () => ({
 vi.mock("../audit-log/audit-log-list", () => ({
   AuditLogList: () => <div data-testid="audit-log">Audit log</div>,
 }));
+vi.mock("../actions/entity-actions", () => ({
+  EntityActionButtons: () => <div data-testid="detail-actions" />,
+}));
 
 const sections: DetailSection[] = [
   {

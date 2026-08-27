@@ -12,6 +12,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Row } from "~/components/layout";
 import { usePageDetailContext } from "~/components/page/Page";
 import {
   Card,
@@ -23,6 +24,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
+import {
+  EntityActionButtons,
+  type EntityActionRow,
+} from "../actions/entity-actions";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
@@ -43,6 +48,24 @@ type DetailMode = "overview" | "relations" | "activity";
 
 function normalizedHash(hash: string) {
   return hash.startsWith("#") ? hash.slice(1) : hash;
+}
+
+function detailSourceId(entity: Entity, record: unknown): string | undefined {
+  if (!record || typeof record !== "object") return undefined;
+  if ("id" in record && typeof record.id === "string") return record.id;
+  return entity === "usda-food" &&
+    "fdc_id" in record &&
+    typeof record.fdc_id === "number"
+    ? String(record.fdc_id)
+    : undefined;
+}
+
+function detailActionRecord(
+  record: unknown,
+  sourceId: string | undefined,
+): EntityActionRow | undefined {
+  if (!record || typeof record !== "object" || !sourceId) return undefined;
+  return { ...record, id: sourceId };
 }
 
 function modeForHash({
@@ -395,6 +418,8 @@ interface DetailSectionsProps {
   heroMedia?: ReactNode;
   /** Compact, page-authored relationship evidence shown only in Overview. */
   relationshipPreview?: ReactNode;
+  /** Page-owned action hosts (such as Image's hero) suppress this generic one. */
+  showEntityActions?: boolean;
 }
 
 export const DetailSections: FC<DetailSectionsProps> = ({
@@ -403,18 +428,15 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   heroImages,
   heroMedia,
   relationshipPreview: authoredRelationshipPreview,
+  showEntityActions = true,
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
   const locationHash = useLocation({ select: (location) => location.hash });
   const navigate = useNavigate();
-  const sourceId =
-    pageDetail?.rawData &&
-    typeof pageDetail.rawData === "object" &&
-    "id" in pageDetail.rawData &&
-    typeof pageDetail.rawData.id === "string"
-      ? pageDetail.rawData.id
-      : undefined;
+  const sourceId = pageDetail
+    ? detailSourceId(pageDetail.entity, pageDetail.rawData)
+    : undefined;
   const hasSourceViews = relatedViewRegistry.some(
     (view) => view.source === pageDetail?.entity,
   );
@@ -594,6 +616,9 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
   const compactRelationshipPreview =
     authoredRelationshipPreview ?? genericRelationshipPreview;
+  const actionRecord = pageDetail
+    ? detailActionRecord(pageDetail.rawData, sourceId)
+    : undefined;
   const visual = heroVisual({
     heroImages,
     heroMedia: heroMedia ?? pageDetail?.heroMedia,
@@ -623,6 +648,17 @@ export const DetailSections: FC<DetailSectionsProps> = ({
               onSelect={selectOverviewSection}
             />
             {compactRelationshipPreview}
+            {showEntityActions &&
+            pageDetail &&
+            actionRecord &&
+            pageDetail.entity !== "product" ? (
+              <Row wrap justify="end" gap="sm" className="px-2 sm:px-0">
+                <EntityActionButtons
+                  entity={pageDetail.entity}
+                  record={actionRecord}
+                />
+              </Row>
+            ) : null}
             <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
               {renderResponsiveLayout({
                 sections: overviewSections,

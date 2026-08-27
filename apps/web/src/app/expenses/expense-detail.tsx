@@ -34,7 +34,6 @@ import {
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { entityCellClipboard } from "../_components/data-table/inventory-column-helpers";
-import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
@@ -72,18 +71,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
   const { commonSections } = useEntityDetail<ExpenseOut, never>({
     entity: "expense",
     data: expense,
-  });
-
-  // Record-level delete lives on the detail plate, not in a section header —
-  // Overview's headerAction is the constructive "Receive into inventory".
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: expense.id,
-    name: expense.name,
-    entityLabel: "Expense",
-    entity: "expense",
-    mutationOptions: (callbacks) =>
-      entityMutationOptionsFactory("expense", "delete")(callbacks),
-    redirectTo: "/expenses",
   });
 
   const fields: BasicInfoField[] = [
@@ -674,7 +661,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             </span>
           </>
         ),
-        secondary: deleteButton,
       }}
     >
       <DetailSections sections={sections} rawData={expense} />
@@ -694,7 +680,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           expenseName={expense.name}
         />
       ) : null}
-      {deleteDialog}
     </Page>
   );
 };

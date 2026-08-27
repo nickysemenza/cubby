@@ -32,7 +32,6 @@ import {
   DetailSections,
 } from "../_components/data-table/detail-page";
 import { EditableCell } from "../_components/data-table/editable-cell";
-import { useEntityDelete } from "../_components/hooks/useEntityDelete";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import {
@@ -49,10 +48,8 @@ const WISH_TAGS: readonly OperationCacheTag[] = [["wish"]];
 /**
  * Wish detail — the outcome plus its candidate tool alternatives.
  *
- * Deletion goes through `useEntityDelete` (a real confirm dialog with an
- * operation-impact preview) rather than `window.confirm`, and the body is
- * `DetailSections` so History (an auditable entity) and the registered
- * `wish.candidates` relationship both show up automatically — see
+ * The body is `DetailSections` so History (an auditable entity) and the
+ * registered `wish.candidates` relationship both show up automatically — see
  * `entityManifest.wish` and `relatedViewRegistry`.
  */
 export function WishDetail({ wish }: { wish: WishOut }) {
@@ -70,27 +67,6 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   const { commonSections } = useEntityDetail<WishOut, never>({
     entity: "wish",
     data: wish,
-  });
-
-  const { deleteButton, deleteDialog } = useEntityDelete({
-    id: wish.id,
-    name: wish.name,
-    entityLabel: "Wish",
-    entity: "wish",
-    mutationOptions: (callbacks) =>
-      entityMutationOptionsFactory(
-        "wish",
-        "delete",
-      )({
-        ...callbacks,
-        // `wish.delete` resolves to `void` — a wish is out of the embedding
-        // pipeline and owns no rollups to recompute, so there are no
-        // background batches to report. `useEntityDelete` threads the
-        // mutation's data into its side-effect summary, so hand it an empty
-        // one rather than `void` (mirrors vendor-detail).
-        onSuccess: () => callbacks.onSuccess({}),
-      }),
-    redirectTo: "/wishes",
   });
 
   const wishKey = entityDetailFor("wish").queryKey(wish.id);
@@ -237,13 +213,11 @@ export function WishDetail({ wish }: { wish: WishOut }) {
               <Check />
               {wish.acquiredAt ? "Still wanted" : "Mark acquired"}
             </Button>
-            {deleteButton}
           </>
         ),
       }}
     >
       <DetailSections sections={sections} rawData={wish} />
-      {deleteDialog}
       <EntityEditDialog
         open={editing}
         onOpenChange={setEditing}
