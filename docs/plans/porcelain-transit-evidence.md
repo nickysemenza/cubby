@@ -29,7 +29,7 @@ fix only redesign-caused failures.
 | --- | --- | --- |
 | T0 Governance and baselines | Complete | Branch/base above; approved mocks, calibration, truth matrix, and 18 source-state screenshots are committed together |
 | T1 Tokens, fonts, and primitives | Complete | Shared raw tokens, Inter-led typography, domain palette, modest geometry, restrained overlays, rebuilt core primitives, and desktop/mobile state gallery |
-| T2 Desktop/mobile shell | Complete | 208px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
+| T2 Desktop/mobile shell | Complete | The original 224px expanded rail is narrowed to 208px by this post-merge follow-up; the 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint remain |
 | T3 Products reference workbench | Complete | Approved 28px Product density, docked inspector, Sheet, phone projection, one Product-owned relationship query, fixed direct/derived semantics, bounded previews, explicit provenance, and synthetic desktop/phone examples |
 | T4 Canonical detail system | Complete | Product detail reuses the same relationship query near the hero and in its full route ledger, suppresses the generic duplicate explorer, and preserves recategorized project-use history as read-only evidence |
 | T5 Canonical lists/details | Complete | Standard, direct-workbench, Project, Wishlist, Meal, and USDA rosters share the responsive inspector/mobile-detail contract; canonical details use one section ledger for Activity and truthful relationships, first-wave fallback previews are explicit, and read-heavy density is scoped rather than global |
@@ -96,8 +96,8 @@ height while retaining the named viewport width.
 | 2026-08-26 | T2 | Rebase onto latest `origin/main` | Pass | Base is `8ca2408ef`; both committed UI changes rebased and the six-file shell diff restored without conflict; upstream now includes E2E retry PR #923 |
 | 2026-08-26 | T2 | Navigation and workspace-navigator focused tests | Pass: 36 tests | Covers route uniqueness, domain/group agreement, full expanded-rail labels, search, and navigator rendering |
 | 2026-08-26 | T2 | `pnpm typecheck:web` and `git diff --check` | Pass | Web and service-worker TypeScript checks are clean after reviewer corrections |
-| 2026-08-26 | T2 | Independent shell review | Pass after corrections | Confirmed 208px rail, 56px collapsed rail, 48px command band, safe-area/keyboard behavior; corrected Cook label contrast, Meals/Plan route truth, and obsolete shortened labels |
-| 2026-08-26 | T2 | Products shell at desktop/mobile | Pass | `.impeccable/checkpoints/t2-shell/products-1440x900.png` and `products-430x932.png`; computed dimensions verified as 208px rail and 48px command band |
+| 2026-08-26 | T2 | Independent shell review | Pass after corrections | Confirmed 224px rail, 56px collapsed rail, 48px command band, safe-area/keyboard behavior; corrected Cook label contrast, Meals/Plan route truth, and obsolete shortened labels |
+| 2026-08-26 | T2 | Products shell at desktop/mobile | Pass | `.impeccable/checkpoints/t2-shell/products-1440x900.png` and `products-430x932.png`; computed dimensions verified as 224px rail and 48px command band |
 | 2026-08-26 | T3–T4 | Focused UI tests | Pass: 23 tests in 9 files | Covers inspector tabs/lazy activity, canonical stations, current-vs-bulk state, scoped density, workbench forwarding, detail index, mobile canonical links, toolbar, hero, and compact mobile view controls |
 | 2026-08-26 | T3–T4 | `pnpm typecheck:web`, `pnpm format:changed`, and `git diff --check` | Pass | Web/service-worker types, formatting, and patch whitespace are clean after midpoint corrections |
 | 2026-08-26 | T3–T4 | Adversarial midpoint review | Corrections applied; user checkpoint remains | Scoped dense default to Products, removed duplicate intermediate inspector mount and generic Vendors-first graph, added `aria-current`, canonical Inventory/Location station links, 44px phone stations, mobile density forwarding, and modernized shared detail language/index |
@@ -192,10 +192,10 @@ returns exact branch counts, at most three previews, canonical shortcodes, and
 explicit provenance. Stock and identity Locations, Expenses and Purchases, used
 on and purchased-for Projects, Tasks, and derived Vendors remain distinctly
 named rather than flattened into a decorative graph or inferred in the client.
-The operation stays within the deterministic statement budget enforced by
-`apps/web/src/server/repo/product/relationship-route.integration.test.ts`.
-That budget may be tightened through later query consolidation, but not weakened
-to reintroduce client fan-out or dilute the fixed contract.
+The separate query-consolidation follow-up owns a deterministic test-enforced
+budget. This historical design ledger does not duplicate that mutable count;
+later consolidation must not reintroduce client fan-out or dilute the fixed
+contract.
 
 ### Checkpoint decision
 
