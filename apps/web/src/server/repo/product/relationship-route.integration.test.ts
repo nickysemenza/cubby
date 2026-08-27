@@ -79,6 +79,7 @@ describe("getProductRelationshipRoute", () => {
     );
     const vendorId = await findOrCreateVendor(ctx.db, "Source cap vendor");
     const linkCodes = ["PUR-WWWW", "PUR-XXXX", "PUR-YYYY", "PUR-ZZZZ"];
+    const expectedLinkAttachedAt = new Date("2026-04-01T12:34:56.789Z");
     for (const code of linkCodes) {
       const linkedPurchase = await insertWithShortcode(ctx.db, "purchase", {
         vendorId,
@@ -95,6 +96,12 @@ describe("getProductRelationshipRoute", () => {
         [product.entityId],
         ctx.actor,
       );
+      if (code === "PUR-WWWW") {
+        await getDb(ctx.db)
+          .update(purchaseProduct)
+          .set({ createdAt: expectedLinkAttachedAt })
+          .where(eq(purchaseProduct.purchaseId, linkedPurchase.id));
+      }
     }
     const expenseOnly = await createExpense(
       ctx.db,
@@ -133,6 +140,9 @@ describe("getProductRelationshipRoute", () => {
       [testShortcode("purchase", "PUR-XXXX"), "link"],
       [testShortcode("purchase", "PUR-YYYY"), "link"],
     ]);
+    expect(route.direct.purchases.preview[0]?.linkAttachedAt).toEqual(
+      expectedLinkAttachedAt,
+    );
     expect(productRelationshipRouteOut.parse(route)).toEqual(route);
   });
 

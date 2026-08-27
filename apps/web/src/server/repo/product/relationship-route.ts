@@ -67,6 +67,17 @@ type VendorRelationRow = {
   name: string;
 };
 
+const mapPurchaseLinkAttachedAt = (
+  value: Date | string | null,
+): Date | null => {
+  if (value === null) return null;
+  const mapped = purchaseProduct.createdAt.mapFromDriverValue(value);
+  if (!(mapped instanceof Date)) {
+    throw new TypeError("PurchaseProduct.createdAt did not map to a Date");
+  }
+  return mapped;
+};
+
 export async function getProductRelationshipRoute(
   db: Database,
   productId: ProductId,
@@ -440,10 +451,7 @@ export async function getProductRelationshipRoute(
                 }
               : null,
           source: row.source,
-          linkAttachedAt:
-            typeof row.linkAttachedAt === "string"
-              ? new Date(row.linkAttachedAt)
-              : row.linkAttachedAt,
+          linkAttachedAt: mapPurchaseLinkAttachedAt(row.linkAttachedAt),
         })),
       },
       usedOnProjects: {
