@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useState } from "react";
+import { ProductAddToInventoryDialog } from "../products/product-add-to-inventory-dialog";
 import type { BulkAddProduct } from "../products/product-bulk-add-to-inventory-dialog";
 import { ProductBulkAddToInventoryDialog } from "../products/product-bulk-add-to-inventory-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
@@ -62,15 +63,31 @@ export function useAddToInventoryAction(): EntityActionHandles {
         }}
       />
     ),
-    dialog: (
-      <ProductBulkAddToInventoryDialog
-        key="add-to-inventory"
-        open={staged.length > 0}
-        onOpenChange={(open) => {
-          if (!open) setStaged([]);
-        }}
-        products={staged}
-      />
-    ),
+    // One product gets the single-product dialog, which can offer the AI
+    // location suggester — it reads one product's history for a basis, so a
+    // mixed selection has nothing to suggest from. Anything more gets the
+    // grid, where the shared location is the whole point.
+    dialog:
+      staged.length === 1 && staged[0] ? (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStaged([]);
+          }}
+          product={{
+            id: staged[0].id,
+            name: staged[0].name,
+            manufacturer: staged[0].manufacturer ?? "",
+          }}
+        />
+      ) : (
+        <ProductBulkAddToInventoryDialog
+          open={staged.length > 1}
+          onOpenChange={(open) => {
+            if (!open) setStaged([]);
+          }}
+          products={staged}
+        />
+      ),
   };
 }

@@ -2,8 +2,9 @@ import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -19,7 +20,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ProductAddToInventoryDialog } from "~/app/_components/products/product-add-to-inventory-dialog";
+import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { product } from "~/app/products/product.functions";
 import { groupComponentsByParent } from "~/app/products/product-kit-rows";
 import { Badge } from "~/components/ui/badge";
@@ -127,14 +128,19 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     success: "Link removed — any itemized expense still relates these",
     invalidateKeys: invalidatesFor("purchase", "product"),
   });
-  const [addToInventoryRow, setAddToInventoryRow] =
-    useState<PurchaseProductRow | null>(null);
+  // A kit component is shown here as part of its kit, not in its own right —
+  // the same reason productlist's tree excludes them from selection.
+  const selection = useEntitySelection<PurchaseProductRow>({
+    entity: "product",
+    canSelectRow: (row) => !row.isComponent,
+  });
   const helper = useMemo(
     () => createCubbyColumnHelper<PurchaseProductRow>(),
     [],
   );
   const columns = useMemo<CubbyColumnDef<PurchaseProductRow>[]>(
     () => [
+      ...selection.selectColumns,
       createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", {
         header: "Product",
@@ -176,13 +182,6 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         // leave the row in place. Clear the Expense's product instead.
         extraActions: (row) => (
           <>
-            <VerbMenuItem
-              verb="addToInventory"
-              onSelect={(event) => {
-                event.stopPropagation();
-                setAddToInventoryRow(row);
-              }}
-            />
             {row.linked && (
               <VerbMenuItem
                 verb="removeFromPurchase"
@@ -197,7 +196,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
         ),
       }),
     ],
-    [detach, helper, purchaseId],
+    [detach, helper, purchaseId, selection.selectColumns],
   );
   const layout = useCubbyTableLayout({ key: "purchase:products", columns });
   const table = useCubbyTable({
@@ -208,14 +207,18 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     // `rowKey`, not `id`: a component can appear under two kits on one order.
     getRowId: (row) => row.rowKey,
     getSubRows: (row) => row.subRows,
+    enableRowSelection: selection.enableRowSelection,
+    state: { rowSelection: selection.rowSelection },
+    onRowSelectionChange: selection.onRowSelectionChange,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
 
   return (
-    <>
+    <EntityActionsProvider value={selection.rowActions}>
       <RTable
         table={table}
         entity="product"
+        bulkActionBar={selection.renderBulkActionBar(table)}
         ariaLabel="Products linked to this purchase"
         embedded
         isLoading={query.isPending}
@@ -232,15 +235,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
           </Empty>
         }
       />
-      {addToInventoryRow && (
-        <ProductAddToInventoryDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setAddToInventoryRow(null);
-          }}
-          product={addToInventoryRow}
-        />
-      )}
-    </>
+      {selection.actionDialogs}
+    </EntityActionsProvider>
   );
 }

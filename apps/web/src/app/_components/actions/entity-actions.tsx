@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ReactNode } from "react";
-import { Fragment, createContext, useContext, useMemo, useRef } from "react";
+import { createContext, Fragment, useContext, useMemo, useRef } from "react";
 import type {
   BulkAction,
   BulkActionResult,
@@ -43,6 +43,8 @@ import { useAddToInventoryAction } from "./use-add-to-inventory-action";
  */
 export interface EntityActionRow {
   id: string;
+  /** Used for display only; absent where a surface knows only the code. */
+  name?: string | null;
 }
 
 /** Where a registered action is allowed to appear. */
@@ -114,7 +116,11 @@ export const entityActions: readonly EntityActionDefinition[] = [
     // repeated on three tables, so stocking an order meant opening the same
     // dialog once per line and re-picking the same shelf every time.
     arity: "both",
-    surfaces: ["row", "bar", "detail", "palette-quick"],
+    // No "detail": the product detail page keeps its own dialog because it is
+    // the one caller that can pass `accounting`, and so the only one that can
+    // warn when stocking another unit would account for more kits than were
+    // bought. A registry entry cannot reproduce that from a row's id alone.
+    surfaces: ["row", "bar", "palette-quick"],
     // The dialog collects a location and per-row quantities, so the bar's job
     // ends once the rows are staged — and a cancelled dialog should leave the
     // operator's selection where they left it.
@@ -138,6 +144,15 @@ export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
   rowMenuItems: (row: TRow) => ReactNode;
   /** Render once per surface, outside the table. */
   dialogs: ReactNode;
+  /**
+   * Actions a surface renders its own control for, against a single record —
+   * the command palette, which has `CommandItem`s rather than menu items and
+   * resolves one record from a shortcode.
+   */
+  singleRecordActions: {
+    verb: ActionVerbId;
+    run: (row: EntityActionRow) => void;
+  }[];
 }
 
 /**
@@ -176,7 +191,8 @@ export function useEntityActions<TRow extends EntityActionRow>(
         (definition) =>
           appliesTo(definition, entity, "row") ||
           appliesTo(definition, entity, "bar") ||
-          appliesTo(definition, entity, "detail"),
+          appliesTo(definition, entity, "detail") ||
+          appliesTo(definition, entity, "palette-quick"),
       ),
     [entity, registry],
   );
@@ -227,7 +243,17 @@ export function useEntityActions<TRow extends EntityActionRow>(
     <Fragment key={definition.verb}>{handles.dialog}</Fragment>
   ));
 
-  return { bulkActions, rowMenuItems, dialogs };
+  const singleRecordActions = resolved.flatMap(({ definition, handles }) => {
+    if (definition.arity === "multi") return [];
+    if (!appliesTo(definition, entity, "palette-quick")) return [];
+    const { run } = handles;
+    if (!run) return [];
+    return [
+      { verb: definition.verb, run: (row: EntityActionRow) => void run([row]) },
+    ];
+  });
+
+  return { bulkActions, rowMenuItems, dialogs, singleRecordActions };
 }
 
 /**
