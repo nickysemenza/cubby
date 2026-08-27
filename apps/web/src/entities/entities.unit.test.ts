@@ -2,6 +2,7 @@ import {
   browserRoutedEntities,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
+import { entityNames } from "@cubby/schemas/entity-names";
 import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
 import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
@@ -124,5 +125,34 @@ describe("entity label parity", () => {
     // The concrete case this replaced: one word choice, not a casing quirk.
     expect(ENTITY_LABEL.inventory).toBe("Inventory item");
     expect(entityLabel("inventory")).toBe("Inventory Item");
+  });
+
+  it("takes every pluralLabel verbatim from the entity manifest", () => {
+    // `pluralLabel` used to be a hand-typed map here; it is now declared as
+    // `names.plural` on each entity literal. This pins the registry to the
+    // manifest so the nav name can't be re-forked locally, and re-lists the
+    // four that are NOT the naive plural of `label` — those are the reason
+    // the value stays declared rather than computed from the singular.
+    const declared = Object.fromEntries(
+      browserRoutedEntities.map((entity) => [
+        entity,
+        entities[entity].pluralLabel,
+      ]),
+    );
+    expect(declared).toEqual(
+      Object.fromEntries(
+        browserRoutedEntities.map((entity) => [
+          entity,
+          entityNames[entity].plural,
+        ]),
+      ),
+    );
+
+    expect(declared).toMatchObject({
+      inventory: "Inventory",
+      financialAccount: "Accounts",
+      financialTransaction: "Transactions",
+      wish: "Wishlist",
+    });
   });
 });

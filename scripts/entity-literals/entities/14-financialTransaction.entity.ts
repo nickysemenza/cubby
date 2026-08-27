@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "financialTransaction",
-  names: { singular: "Financial Transaction" },
+  names: { singular: "Financial Transaction", plural: "Transactions" },
   route: { basePath: "financial-transactions" },
   table: "FinancialTransaction",
   identifiers: {

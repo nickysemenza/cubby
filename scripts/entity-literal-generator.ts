@@ -1365,6 +1365,38 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         )} as const satisfies Record<Entity, EntityDescriptor>;\n`,
     },
     {
+      relativePath: "packages/schemas/src/generated/entity-names.gen.ts",
+      source:
+        generatedHeader +
+        // `entity-core` rather than `entity`: this artifact is imported by
+        // `identifiers.ts`, and `entity.ts` reaches back into the (much
+        // larger) manifest module.
+        'import type { Entity } from "../entity-core";\n\n' +
+        "/**\n" +
+        " * Display names for one entity, exactly as its literal declares them.\n" +
+        " *\n" +
+        " * `singular` is Title Case and names ONE record; `plural` is the\n" +
+        " * nav/section name, which is not a pluralization of the singular (see the\n" +
+        " * `names` block in `scripts/entity-literals/entities/*.entity.ts`). It is\n" +
+        " * `null` for the entities that have no browser route to name a section of.\n" +
+        " *\n" +
+        " * Deliberately its own artifact rather than a field read off\n" +
+        " * `entityInspectorMetadata`: these strings are needed by eagerly-loaded\n" +
+        " * client code (the entity registry, `identifiers.ts`), and the inspector\n" +
+        " * artifact is two orders of magnitude larger.\n" +
+        " */\n" +
+        "export type EntityNames = { singular: string; plural: string | null };\n\n" +
+        "// biome-ignore format: generated names stay one entity per line.\n" +
+        `export const entityNames = ${compactLiteral(
+          Object.fromEntries(
+            entities.map(({ key, inspector }) => [
+              key,
+              { singular: inspector.singular, plural: inspector.plural },
+            ]),
+          ),
+        )} as const satisfies Record<Entity, EntityNames>;\n`,
+    },
+    {
       relativePath: "packages/schemas/src/generated/entity-inspector.gen.ts",
       source:
         generatedHeader +

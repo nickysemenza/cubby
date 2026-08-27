@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "wish",
-  names: { singular: "Wish" },
+  names: { singular: "Wish", plural: "Wishlist" },
   route: { basePath: "wishes" },
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-", legacy: null },

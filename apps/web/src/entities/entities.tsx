@@ -3,6 +3,7 @@ import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import { entityNames } from "@cubby/schemas/entity-names";
 import { displayGtin } from "@cubby/schemas/external-id";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
@@ -104,9 +105,11 @@ const titleCaseEntityLabel = (entity: ShortcodeEntity): string =>
     .join(" ");
 
 /**
- * `pluralLabel` is hand-authored on purpose; it is NOT a pluralization of
- * `label`, so do not "derive" it (`pluralize` is already a dependency and gets
- * all four exceptions below wrong).
+ * Reads the nav/section name an entity's manifest literal declares
+ * (`names.plural` in `scripts/entity-literals/entities/*.entity.ts`, surfaced
+ * as `entityNames`). It is declared per entity rather than derived, and is NOT
+ * a pluralization of `label` — `pluralize` is already a dependency and gets
+ * all four exceptions below wrong.
  *
  * It answers a different question: `label` names one record, while
  * `pluralLabel` is the NAV/SECTION name, read in a place — the sidebar, a page
@@ -117,11 +120,19 @@ const titleCaseEntityLabel = (entity: ShortcodeEntity): string =>
  * (not "Wishes"). The other twelve coincide with a naive plural, which is
  * exactly the trap. Same shape as `DISPLAY_NAME_COLUMN` being a third question
  * rather than a third copy (see `shortcode-resolver.ts`).
+ *
+ * The return type is the manifest's own string literal, so a browser-routed
+ * entity that declared no plural (`null`, as the route-less `ledgerParty` and
+ * `ledgerTransfer` do) fails to compile here rather than reaching the nav.
  */
+const manifestPluralLabel = <E extends BrowserRoutedEntity>(
+  entity: E,
+): (typeof entityNames)[E]["plural"] => entityNames[entity].plural;
+
 const entityDefinitions = {
   ingredient: {
     label: titleCaseEntityLabel("ingredient"),
-    pluralLabel: "Ingredients",
+    pluralLabel: manifestPluralLabel("ingredient"),
     ...generatedBrowserRoutes.ingredient,
     lucideIcon: Carrot,
     color: {
@@ -167,7 +178,7 @@ const entityDefinitions = {
   },
   product: {
     label: titleCaseEntityLabel("product"),
-    pluralLabel: "Products",
+    pluralLabel: manifestPluralLabel("product"),
     ...generatedBrowserRoutes.product,
     lucideIcon: Barcode,
     color: INK.primary,
@@ -236,7 +247,7 @@ const entityDefinitions = {
   },
   recipe: {
     label: titleCaseEntityLabel("recipe"),
-    pluralLabel: "Recipes",
+    pluralLabel: manifestPluralLabel("recipe"),
     ...generatedBrowserRoutes.recipe,
     lucideIcon: ChefHat,
     color: INK.primary,
@@ -267,7 +278,7 @@ const entityDefinitions = {
   },
   cookbook: {
     label: titleCaseEntityLabel("cookbook"),
-    pluralLabel: "Cookbooks",
+    pluralLabel: manifestPluralLabel("cookbook"),
     ...generatedBrowserRoutes.cookbook,
     lucideIcon: BookOpen,
     color: INK.primary,
@@ -277,7 +288,7 @@ const entityDefinitions = {
   },
   location: {
     label: titleCaseEntityLabel("location"),
-    pluralLabel: "Locations",
+    pluralLabel: manifestPluralLabel("location"),
     ...generatedBrowserRoutes.location,
     lucideIcon: MapPin,
     color: INK.slate,
@@ -306,7 +317,7 @@ const entityDefinitions = {
   },
   inventory: {
     label: titleCaseEntityLabel("inventory"),
-    pluralLabel: "Inventory",
+    pluralLabel: manifestPluralLabel("inventory"),
     ...generatedBrowserRoutes.inventory,
     lucideIcon: Package,
     color: INK.primary,
@@ -334,7 +345,7 @@ const entityDefinitions = {
   },
   meal: {
     label: titleCaseEntityLabel("meal"),
-    pluralLabel: "Meals",
+    pluralLabel: manifestPluralLabel("meal"),
     ...generatedBrowserRoutes.meal,
     lucideIcon: CalendarDays,
     // Neutral, not amber: the status ramp is reserved for entities whose accent
@@ -354,7 +365,7 @@ const entityDefinitions = {
   },
   project: {
     label: titleCaseEntityLabel("project"),
-    pluralLabel: "Projects",
+    pluralLabel: manifestPluralLabel("project"),
     ...generatedBrowserRoutes.project,
     lucideIcon: Hammer,
     color: INK.plum,
@@ -377,7 +388,7 @@ const entityDefinitions = {
   },
   task: {
     label: titleCaseEntityLabel("task"),
-    pluralLabel: "Tasks",
+    pluralLabel: manifestPluralLabel("task"),
     ...generatedBrowserRoutes.task,
     lucideIcon: ListChecks,
     color: INK.slate,
@@ -399,7 +410,7 @@ const entityDefinitions = {
   },
   vendor: {
     label: titleCaseEntityLabel("vendor"),
-    pluralLabel: "Vendors",
+    pluralLabel: manifestPluralLabel("vendor"),
     ...generatedBrowserRoutes.vendor,
     lucideIcon: Store,
     // A quiet roster, not a live money surface — same neutral as location/task.
@@ -448,7 +459,7 @@ const entityDefinitions = {
   },
   purchase: {
     label: titleCaseEntityLabel("purchase"),
-    pluralLabel: "Purchases",
+    pluralLabel: manifestPluralLabel("purchase"),
     ...generatedBrowserRoutes.purchase,
     lucideIcon: Receipt,
     color: INK.primary,
@@ -502,7 +513,7 @@ const entityDefinitions = {
   },
   expense: {
     label: titleCaseEntityLabel("expense"),
-    pluralLabel: "Expenses",
+    pluralLabel: manifestPluralLabel("expense"),
     ...generatedBrowserRoutes.expense,
     lucideIcon: ReceiptText,
     color: INK.primary,
@@ -530,7 +541,7 @@ const entityDefinitions = {
   financialAccount: {
     label: titleCaseEntityLabel("financialAccount"),
     dialogLabel: "Account",
-    pluralLabel: "Accounts",
+    pluralLabel: manifestPluralLabel("financialAccount"),
     ...generatedBrowserRoutes.financialAccount,
     lucideIcon: CreditCard,
     color: INK.slate,
@@ -553,7 +564,7 @@ const entityDefinitions = {
   financialTransaction: {
     label: titleCaseEntityLabel("financialTransaction"),
     dialogLabel: "Transaction",
-    pluralLabel: "Transactions",
+    pluralLabel: manifestPluralLabel("financialTransaction"),
     ...generatedBrowserRoutes.financialTransaction,
     lucideIcon: CreditCard,
     color: INK.primary,
@@ -576,7 +587,7 @@ const entityDefinitions = {
   },
   wish: {
     label: titleCaseEntityLabel("wish"),
-    pluralLabel: "Wishlist",
+    pluralLabel: manifestPluralLabel("wish"),
     ...generatedBrowserRoutes.wish,
     lucideIcon: Heart,
     color: INK.plum,
@@ -595,7 +606,7 @@ const entityDefinitions = {
   },
   "usda-food": {
     label: "USDA Food",
-    pluralLabel: "USDA Foods",
+    pluralLabel: manifestPluralLabel("usda-food"),
     ...generatedBrowserRoutes["usda-food"],
     lucideIcon: Apple,
     color: INK.positive,
@@ -614,7 +625,7 @@ const entityDefinitions = {
   },
   image: {
     label: titleCaseEntityLabel("image"),
-    pluralLabel: "Images",
+    pluralLabel: manifestPluralLabel("image"),
     ...generatedBrowserRoutes.image,
     lucideIcon: Image,
     color: {

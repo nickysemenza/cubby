@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "image",
-  names: { singular: "Image" },
+  names: { singular: "Image", plural: "Images" },
   route: { basePath: "images" },
   table: "Image",
   identifiers: { brand: "ImageId", shortcode: "IMG-", legacy: null },

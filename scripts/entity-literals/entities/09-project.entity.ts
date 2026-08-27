@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "project",
-  names: { singular: "Project" },
+  names: { singular: "Project", plural: "Projects" },
   route: { basePath: "projects" },
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-", legacy: null },

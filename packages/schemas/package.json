@@ -12,6 +12,7 @@
     "./entity": "./src/entity.ts",
     "./entity-core": "./src/entity-core.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
+    "./entity-names": "./src/generated/entity-names.gen.ts",
     "./entity-integrity": "./src/entity-integrity.ts",
     "./related-view": "./src/related-view.ts",
     "./relatedness": "./src/relatedness.ts",

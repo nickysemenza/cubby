@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "usda-food",
-  names: { singular: "USDA Food" },
+  names: { singular: "USDA Food", plural: "USDA Foods" },
   route: { basePath: "usda", detailParam: "id" },
   table: null,
   identifiers: { brand: null, shortcode: null, legacy: null },

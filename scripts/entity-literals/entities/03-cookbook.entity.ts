@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "cookbook",
-  names: { singular: "Cookbook" },
+  names: { singular: "Cookbook", plural: "Cookbooks" },
   route: { basePath: "cookbooks" },
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-", legacy: null },
