@@ -1,4 +1,7 @@
-import type { CookbookSummary } from "@cubby/schemas/recipe";
+import {
+  type CookbookSummary,
+  cookbookCoverImage,
+} from "@cubby/schemas/recipe";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
@@ -45,8 +48,13 @@ export function CookbookList() {
     () => [
       createImageColumn(columnHelper, {
         entity: "cookbook",
-        getImages: (row) =>
-          row.coverUrl ? [{ id: row.id, url: row.coverUrl }] : [],
+        // Falls back to the physical copy on the shelf: reading only
+        // `row.coverUrl` placeholdered every cookbook whose sole photograph
+        // lived on its linked Product.
+        getImages: (row) => {
+          const cover = cookbookCoverImage(row);
+          return cover ? [{ id: row.id, url: cover }] : [];
+        },
       }),
       createNameColumn(columnHelper, "cookbook", "book", {
         header: "Title",

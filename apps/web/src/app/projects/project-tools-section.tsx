@@ -19,6 +19,7 @@ import {
   createCurrencyColumn,
   createImageColumn,
   createNameColumn,
+  rowImages,
 } from "~/app/_components/data-table/columnHelpers";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
@@ -128,7 +129,7 @@ function ResourcesTable({
   const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
   const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
     () => [
-      createImageColumn(helper, { entity: "product" }),
+      createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       helper.accessor((row) => row.category, {
         id: "type",
@@ -266,7 +267,7 @@ function SelectableResourceTable({
   const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
     () => [
       buildSelectColumn<PickerRow>(),
-      createImageColumn(helper, { entity: "product" }),
+      createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       ...(suggested
         ? [

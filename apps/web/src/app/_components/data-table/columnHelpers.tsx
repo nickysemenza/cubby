@@ -171,14 +171,34 @@ const defaultRowLink = <T extends BaseRow>(
   return (row) => ({ to, params: nameColumnParams(row) });
 };
 
-interface ImageRow extends BaseRow {
-  images?: Array<{
+/** A row that genuinely carries its own images. `images` is REQUIRED: when it
+ *  was optional, any row type without the field satisfied this shape, and
+ *  `rowImages` silently returned `[]` forever. */
+interface ImageRow {
+  images: Array<{
     id: string;
     url: string;
     filename: string;
     contentType?: string;
   }>;
 }
+
+/**
+ * The plain accessor for rows that own their images — everything but PDF
+ * manuals, which share the images relation.
+ *
+ * Name it explicitly at a `createImageColumn` call site; that mention is the
+ * assertion that this row really has `images`. It used to be the factory's
+ * default, reached through an `as unknown as ImageRow` cast, so an entity with
+ * no images field (ingredient) compiled fine and rendered the placeholder icon
+ * on every row forever with nothing to catch it.
+ */
+export const rowImages = <T extends ImageRow>(row: T) =>
+  row.images.filter(
+    (img) =>
+      img.contentType === undefined ||
+      isDisplayableImageFile({ ...img, contentType: img.contentType }),
+  );
 
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
@@ -427,8 +447,11 @@ export function createImageColumn<T extends BaseRow>(
   options: {
     /** Entity type for colored placeholder icon when no image */
     entity: Entity;
-    /** Custom accessor when row doesn't have standard `images` array */
-    getImages?: (
+    /** How this row resolves its thumbnail. Required, never defaulted: pass
+     *  `rowImages` when the row owns its images, or a cascade resolver
+     *  (`locationCoverImage`, `ingredientCoverImage`) when it borrows a linked
+     *  entity's. Omitting it used to yield a permanently-empty column. */
+    getImages: (
       row: T,
     ) => Array<{ id: string; url: string; filename?: string }>;
     /** Custom className for the column (default: "px-0 py-0 h-px") */
@@ -437,16 +460,7 @@ export function createImageColumn<T extends BaseRow>(
     mobile?: MobileColumnMeta;
   },
 ) {
-  // PDF manuals share the images relation — keep them out of thumbnails.
-  const getImages =
-    options.getImages ??
-    ((row: T) =>
-      ((row as unknown as ImageRow).images ?? []).filter(
-        (img) =>
-          img.contentType === undefined ||
-          isDisplayableImageFile({ ...img, contentType: img.contentType }),
-      ));
-  const { entity } = options;
+  const { entity, getImages } = options;
 
   return columnHelper.accessor((row) => getImages(row), {
     id: "image",

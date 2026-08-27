@@ -18,6 +18,7 @@ import {
   createCurrencyColumn,
   createImageColumn,
   createNameColumn,
+  rowImages,
 } from "~/app/_components/data-table/columnHelpers";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
@@ -126,7 +127,7 @@ function KitTable({
   const helper = useMemo(() => createCubbyColumnHelper<ProductRow>(), []);
   const columns = useMemo<CubbyColumnDef<ProductRow>[]>(
     () => [
-      createImageColumn(helper, { entity: "product" }),
+      createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", {
         header: nameHeader,
       }),
@@ -278,7 +279,7 @@ function AddComponentsDialog({
   const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
     () => [
       buildSelectColumn<PickerRow>(),
-      createImageColumn(helper, { entity: "product" }),
+      createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", { header: "Product" }),
       helper.accessor((row) => row.manufacturer, {
         id: "manufacturer",
