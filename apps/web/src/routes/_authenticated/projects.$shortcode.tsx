@@ -1,6 +1,8 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { notFoundPage } from "~/app/_components/routing/entity-routes";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { expense } from "~/app/expenses/expense.functions";
 import { project } from "~/app/projects/project.functions";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
@@ -18,7 +20,6 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { shortcodeHead } from "~/lib/page-title";
 
 const ProjectNotFound = notFoundPage(
@@ -26,6 +27,12 @@ const ProjectNotFound = notFoundPage(
   "Project not found",
   "This project is no longer available.",
 );
+
+const ProjectDetailRoute = detailPage({
+  query: (shortcode) => entityDetailQueryOptions("project", shortcode),
+  render: (project) => <ProjectDetailPage project={project} />,
+  title: (project) => project.name,
+});
 
 export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   loader: async ({ params, context }) => {
@@ -63,18 +70,3 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   head: shortcodeHead,
   component: ProjectDetailRoute,
 });
-
-function ProjectDetailRoute() {
-  const { shortcode } = Route.useParams();
-  const { data: project } = useSuspenseQuery(
-    entityDetailQueryOptions("project", shortcode),
-  );
-
-  useDetailTitle(shortcode, project?.name);
-
-  // The loader already threw notFound for an unknown code; this guard only
-  // satisfies the nullable output type.
-  if (!project) return null;
-
-  return <ProjectDetailPage project={project} />;
-}

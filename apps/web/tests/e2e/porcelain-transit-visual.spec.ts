@@ -26,6 +26,13 @@ async function expectCleanVisualState(page: Page) {
   ).toHaveCount(0);
 }
 
+function nondeterministicMasks(page: Page) {
+  return [
+    page.getByTestId("problems-badge"),
+    page.getByTestId("build-metadata"),
+  ];
+}
+
 test("Porcelain desktop Products workbench remains visually stable", async ({
   page,
 }) => {
@@ -50,6 +57,8 @@ test("Porcelain desktop Products workbench remains visually stable", async ({
     {
       animations: "disabled",
       caret: "hide",
+      mask: nondeterministicMasks(page),
+      maskColor: "#e7ebf1",
     },
   );
 });
@@ -76,6 +85,8 @@ test("Porcelain phone Products roster remains visually stable", async ({
   await expect(page).toHaveScreenshot("porcelain-products-roster-phone.png", {
     animations: "disabled",
     caret: "hide",
+    mask: nondeterministicMasks(page),
+    maskColor: "#e7ebf1",
   });
 });
 
@@ -93,8 +104,15 @@ test("Porcelain phone Product detail keeps its relationship journey visible", as
     page.getByRole("heading", { level: 2, name: "Relationships" }),
   ).toBeVisible({ timeout: 15000 });
   await expectViewportBounded(page);
-  const stockHeading = page.getByRole("heading", { level: 4, name: "Stock" });
-  await expect(stockHeading).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.getByRole("button", { name: "Stock 1", exact: true }),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.getByRole("link", {
+      name: "Direct Stock: Porcelain visual phone detail shelf",
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 15000 });
   await page.waitForLoadState("networkidle");
   await expectCleanVisualState(page);
 
@@ -105,7 +123,11 @@ test("Porcelain phone Product detail keeps its relationship journey visible", as
       caret: "hide",
       // Shortcodes vary between isolated databases; keep the generated record
       // identifier out of the committed image while preserving relationship UI.
-      mask: [page.getByText(product.id, { exact: true })],
+      mask: [
+        ...nondeterministicMasks(page),
+        page.getByText(product.id, { exact: true }),
+      ],
+      maskColor: "#e7ebf1",
     },
   );
 });
