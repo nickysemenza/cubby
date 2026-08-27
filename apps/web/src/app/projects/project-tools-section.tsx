@@ -14,7 +14,6 @@ import { Plus, Search, Wrench } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -189,7 +188,7 @@ function ResourcesTable({
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
   return (
-    <EntityActionsProvider value={selection.rowActions}>
+    <>
       <RTable
         table={table}
         entity="product"
@@ -209,8 +208,7 @@ function ResourcesTable({
           </Empty>
         }
       />
-      {selection.actionDialogs}
-    </EntityActionsProvider>
+    </>
   );
 }
 

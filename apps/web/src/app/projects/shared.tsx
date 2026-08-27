@@ -21,7 +21,6 @@ import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
 import {
   type VendorName,
   WithVendorSearch,
@@ -462,7 +461,7 @@ export function TaskList({
   }
 
   return (
-    <EntityActionsProvider value={selection.rowActions}>
+    <>
       <RTable
         table={table}
         embedded
@@ -470,12 +469,11 @@ export function TaskList({
         bulkActionBar={selection.renderBulkActionBar(table)}
       />
       {deleteDialog}
-      {selection.actionDialogs}
       <TaskBulkActionDialogs
         controller={taskBulkActions}
         onComplete={() => table.resetRowSelection()}
       />
-    </EntityActionsProvider>
+    </>
   );
 }
 
@@ -1137,7 +1135,7 @@ export function ExpenseList({
 
   return (
     <ExpenseProductImages rows={expenses}>
-      <EntityActionsProvider value={selection.rowActions}>
+      <>
         <RTable
           table={table}
           embedded
@@ -1146,12 +1144,11 @@ export function ExpenseList({
         />
         {deleteDialog}
         {rowActions.dialogs}
-        {selection.actionDialogs}
         <ExpenseBulkActionDialogs
           controller={expenseBulkActions}
           onComplete={() => table.resetRowSelection()}
         />
-      </EntityActionsProvider>
+      </>
     </ExpenseProductImages>
   );
 }

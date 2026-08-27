@@ -23,7 +23,6 @@ describe("useEntitySelection", () => {
     expect(result.current.selectColumns.map((c) => c.id)).toEqual(["select"]);
     expect(result.current.enableRowSelection).toBe(true);
     expect(result.current.selectedCount).toBe(0);
-    expect(result.current.rowActions.entity).toBe("task");
   });
 
   // The reason the predicate exists: a projection sub-row is not a record, so

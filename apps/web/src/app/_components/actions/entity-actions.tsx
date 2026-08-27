@@ -140,8 +140,15 @@ const appliesTo = (
 export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
   /** For the selection bar. Only `multi`/`both` verbs reach this. */
   bulkActions: BulkAction<TRow>[];
-  /** For the row menu. Only `single`/`both` verbs reach this. */
-  rowMenuItems: (row: TRow) => ReactNode;
+  /**
+   * For the row menu. Only `single`/`both` verbs reach this.
+   *
+   * Typed against the base row rather than `TRow`: definitions only ever see
+   * `EntityActionRow`, and parameterizing it here made the value unassignable
+   * to the context it is published through, which cost every consumer a cast.
+   * The generic stays on `bulkActions`, where the caller's row type is real.
+   */
+  rowMenuItems: (row: EntityActionRow) => ReactNode;
   /** Render once per surface, outside the table. */
   dialogs: ReactNode;
   /**
@@ -234,7 +241,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
   // Keyed by verb, not by array position: a definition's handles are rendered
   // as siblings, and a registry entry that appears conditionally (an action
   // with no `run` this render) would otherwise shift every later key.
-  const rowMenuItems = (row: TRow) =>
+  const rowMenuItems = (row: EntityActionRow) =>
     rowCapable.map(({ definition, handles }) => (
       <Fragment key={definition.verb}>{handles.rowMenuItem(row)}</Fragment>
     ));

@@ -447,8 +447,6 @@ export function useEntityList<
       timing,
       bulkActionBar,
       deleteDialog: presentationState.deleteDialog,
-      rowActions: presentationState.listBulkActions.rowActions,
-      actionDialogs: presentationState.listBulkActions.actionDialogs,
       infiniteScroll: infiniteResult.infiniteScroll,
       refreshControls,
       grouped,

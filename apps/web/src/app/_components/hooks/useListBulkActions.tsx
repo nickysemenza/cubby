@@ -1,14 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 import { copyShortcodes } from "~/lib/clipboard";
 import { verbBulkAction } from "../actions/action-verb-ui";
-import {
-  type EntityActionRow,
-  type EntityActionsContextValue,
-  useEntityActions,
-} from "../actions/entity-actions";
+import { useEntityActions } from "../actions/entity-actions";
 import {
   BulkActionBar,
   type BulkActionBarProps,
@@ -108,22 +103,13 @@ export function useListBulkActions<TData extends { id: string }>({
   );
   const state = useBulkActions({ config: config ?? emptyConfig });
 
-  // The cast is the documented shape of `EntityActionRow`: definitions write
-  // `rowMenuItem` against the base row, and the generic exists only so the
-  // BAR's actions come back at the caller's row type.
-  const rowMenuItems = registered.rowMenuItems as (
-    row: EntityActionRow,
-  ) => ReactNode;
+  const rowMenuItems = registered.rowMenuItems;
   const latestRowMenuItems = useRef(rowMenuItems);
   latestRowMenuItems.current = rowMenuItems;
   // Stable for the component's life — `entity` is constant by
   // `useEntityActions`' own invariant, and reading the items through a ref
   // stops a fresh closure each render from invalidating the context for every
   // actions cell in the table.
-  const rowActions = useMemo<EntityActionsContextValue>(
-    () => ({ entity, rowMenuItems: (row) => latestRowMenuItems.current(row) }),
-    [entity],
-  );
 
   return {
     config,
@@ -131,10 +117,7 @@ export function useListBulkActions<TData extends { id: string }>({
     enableRowSelection: config !== undefined,
     rowSelection: config ? state.rowSelection : {},
     onRowSelectionChange: config ? state.onRowSelectionChange : undefined,
-    /** Publish via `EntityActionsProvider` to light up the row menus. */
-    rowActions,
     /** Render once, outside the table. */
-    actionDialogs: registered.dialogs,
   };
 }
 

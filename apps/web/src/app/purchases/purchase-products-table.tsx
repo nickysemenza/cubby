@@ -4,7 +4,6 @@ import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -212,7 +211,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   });
 
   return (
-    <EntityActionsProvider value={selection.rowActions}>
+    <>
       <RTable
         table={table}
         entity="product"
@@ -233,7 +232,6 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
           </Empty>
         }
       />
-      {selection.actionDialogs}
-    </EntityActionsProvider>
+    </>
   );
 }

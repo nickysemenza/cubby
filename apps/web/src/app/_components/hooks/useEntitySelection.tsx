@@ -2,7 +2,6 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { OnChangeFn, RowSelectionState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import type { EntityActionsContextValue } from "../actions/entity-actions";
 import type {
   BulkAction,
   BulkActionsConfig,
@@ -47,10 +46,6 @@ interface UseEntitySelectionReturn<TData extends { id: string }> {
    * from the columns this hook contributes to.
    */
   renderBulkActionBar: (table: Table<TData>) => ReactNode;
-  /** Publish via `EntityActionsProvider` to light up the row menus. */
-  rowActions: EntityActionsContextValue;
-  /** Render once, outside the table. */
-  actionDialogs: ReactNode;
 }
 
 const NO_SELECT_COLUMNS: ColumnDef<never>[] = [];
@@ -107,7 +102,5 @@ export function useEntitySelection<TData extends { id: string }>({
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     selectedCount: state.selectedCount,
     renderBulkActionBar,
-    rowActions: listBulkActions.rowActions,
-    actionDialogs: listBulkActions.actionDialogs,
   };
 }

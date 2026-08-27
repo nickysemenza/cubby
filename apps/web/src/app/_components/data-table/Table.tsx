@@ -3,6 +3,7 @@ import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -22,6 +23,11 @@ import {
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
+import {
+  type EntityActionsContextValue,
+  EntityActionsProvider,
+  useEntityActions,
+} from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { CellSelectionContext } from "./cell-selection-context";
 import { DesktopDataRow as DataRow } from "./DesktopDataRow";
@@ -157,9 +163,59 @@ export interface RTableProps<TItem extends RowData> {
   >;
 }
 
+/**
+ * Publishes the table's entity actions so its actions column can reach them,
+ * and mounts their dialogs.
+ *
+ * Here rather than at each call site because a surface that forgot the provider
+ * got no error — its row menu just silently omitted every declared action, and
+ * that is exactly how the product-detail kit tables ended up without
+ * "Add to inventory". Every table already tells `RTable` its entity, so no
+ * table has to remember anything.
+ *
+ * Split into its own component and keyed on `entity` by the caller:
+ * `useEntityActions` runs one hook per matching definition, so the entity has
+ * to be constant for an instance.
+ */
+function TableWithEntityActions({
+  entity,
+  children,
+}: {
+  entity: Entity;
+  children: (rowActions: EntityActionsContextValue) => ReactNode;
+}) {
+  const { rowMenuItems, dialogs } = useEntityActions(entity);
+  const rowActions = useMemo<EntityActionsContextValue>(
+    () => ({ entity, rowMenuItems }),
+    // `rowMenuItems` is a fresh closure each render by design (it reads the
+    // current handles); the context value must not churn with it or every
+    // actions cell re-renders on every parent render.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+    [entity],
+  );
+  return (
+    <EntityActionsProvider value={rowActions}>
+      {children(rowActions)}
+      {dialogs}
+    </EntityActionsProvider>
+  );
+}
+
 export default function RTable<TItem extends RowData>(
   props: RTableProps<TItem>,
 ) {
+  const { entity } = props;
+  if (entity) {
+    return (
+      <TableWithEntityActions key={entity} entity={entity}>
+        {() => <RTableInner {...props} />}
+      </TableWithEntityActions>
+    );
+  }
+  return <RTableInner {...props} />;
+}
+
+function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const {
     table,
     additionalToolbarContent,
