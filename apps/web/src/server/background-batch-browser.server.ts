@@ -5,10 +5,14 @@ import {
   backgroundBatchIdInputSchema,
   backgroundBatchJobsInputSchema,
   backgroundBatchListInputSchema,
+  backgroundClearStrandedInputSchema,
+  backgroundClearStrandedOutSchema,
   backgroundDrainInputSchema,
   backgroundDrainOutSchema,
   backgroundJobActionOutSchema,
   backgroundJobIdInputSchema,
+  backgroundStrandedCountInputSchema,
+  backgroundStrandedCountOutSchema,
 } from "@cubby/schemas/background-jobs";
 import type { z } from "zod";
 import {
@@ -17,6 +21,8 @@ import {
 } from "~/server/start-operation.server";
 import {
   cancelBackgroundBatchWorkflow,
+  clearStrandedBackgroundJobsWorkflow,
+  countStrandedBackgroundJobsWorkflow,
   drainBackgroundJobsWorkflow,
   getBackgroundBatchSummaryWorkflow,
   listBackgroundBatchesWorkflow,
@@ -125,4 +131,34 @@ export const drainBackgroundJobsForBrowser = async (options: {
     outputSchema: backgroundDrainOutSchema,
     request: options.request,
     run: (context, input) => drainBackgroundJobsWorkflow(context.db, input),
+  });
+
+export const countStrandedBackgroundJobsForBrowser = async (options: {
+  data: z.input<typeof backgroundStrandedCountInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-job.strandedCount",
+    type: "query",
+    input: options.data,
+    inputSchema: backgroundStrandedCountInputSchema,
+    outputSchema: backgroundStrandedCountOutSchema,
+    request: options.request,
+    readPolicy: "strong",
+    run: (context) => countStrandedBackgroundJobsWorkflow(context.db),
+  });
+
+export const clearStrandedBackgroundJobsForBrowser = async (options: {
+  data: z.input<typeof backgroundClearStrandedInputSchema>;
+  request: StartOperationRequest;
+}) =>
+  await runStartOperation({
+    operation: "background-job.clearStranded",
+    type: "mutation",
+    input: options.data,
+    inputSchema: backgroundClearStrandedInputSchema,
+    outputSchema: backgroundClearStrandedOutSchema,
+    request: options.request,
+    run: (context, input) =>
+      clearStrandedBackgroundJobsWorkflow(context.db, input),
   });

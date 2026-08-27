@@ -105,9 +105,13 @@
         // ack/retry isolation in cf-server.ts.
         "max_batch_size": 10,
         "max_batch_timeout": 0,
-        // Keep one invocation in flight for v1. Recipe parent-cascade stays
-        // simple, and AI/embedding jobs are easier to reason about serially.
-        "max_concurrency": 1,
+        // Serial delivery is not what makes this safe: the job claim is an
+        // atomic conditional UPDATE (markBackgroundJobRunning) and the workflow
+        // parent-cascade takes a SELECT ... FOR UPDATE on the batch row, so a
+        // duplicate delivery is already rejected rather than raced. Held low
+        // anyway because each concurrent invocation holds its own Hyperdrive
+        // client, and Neon's connection ceiling is the real limit here.
+        "max_concurrency": 3,
         "max_retries": 3,
         "dead_letter_queue": "cubby-background-dlq"
       },

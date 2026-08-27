@@ -352,3 +352,21 @@ export const backgroundDrainOutSchema = z.object({
 export const backgroundJobActionOutSchema = z.object({
   ok: z.literal(true),
 });
+
+// Abandoned jobs are rows the queue never delivered and that are now too old to
+// redispatch without a decision — replaying them costs a provider call each to
+// discover nothing changed. The recoverable window heals unattended instead.
+export const backgroundStrandedCountInputSchema = z.object({});
+
+export const backgroundStrandedCountOutSchema = z.object({
+  abandoned: z.number().int().nonnegative(),
+});
+
+export const backgroundClearStrandedInputSchema = z.object({
+  limit: z.number().int().min(1).max(10_000).default(2_000),
+});
+
+export const backgroundClearStrandedOutSchema = z.object({
+  cancelled: z.number().int().nonnegative(),
+  batchesSettled: z.number().int().nonnegative(),
+});

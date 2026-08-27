@@ -64,6 +64,39 @@ type EmbeddingTextLoader = (
   options?: EmbeddingLoadOptions,
 ) => Promise<SearchableEntityText[]>;
 
+/**
+ * The stored hash for an entity under the current model, or null when there is
+ * no live row.
+ *
+ * Exposed so callers can decide BEFORE paying for an embedding.
+ * `upsertEntityEmbedding` runs the same comparison, but only after the provider
+ * has already been called and billed — that check saves the HNSW write, not the
+ * request. Mutation-sourced refreshes carry no expected hash and fan out on
+ * every edit, so without a pre-call gate an entity is re-embedded whenever any
+ * of its projected text is rewritten, identical or not.
+ */
+export async function getStoredEmbeddingHash(
+  db: Database,
+  input: {
+    entityType: SearchableEntity;
+    entityId: string;
+    config: SemanticEmbeddingConfig;
+  },
+): Promise<string | null> {
+  const existing = await getDb(db).query.entityEmbedding.findFirst({
+    where: and(
+      eq(entityEmbedding.entityType, input.entityType),
+      eq(entityEmbedding.entityId, input.entityId),
+      eq(entityEmbedding.provider, input.config.provider),
+      eq(entityEmbedding.model, input.config.model),
+      eq(entityEmbedding.dimensions, input.config.dimensions),
+      notDeleted(entityEmbedding),
+    ),
+    columns: { embeddingHash: true },
+  });
+  return existing?.embeddingHash ?? null;
+}
+
 export async function upsertEntityEmbedding(
   db: Database,
   input: SearchableEntityText & {

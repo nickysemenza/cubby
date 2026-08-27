@@ -75,6 +75,7 @@ const mcpContractTests = [
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
 ];
 const pgliteIntegrationTests = [
+  "src/server/background-queue-embedding-gate.integration.test.ts",
   "src/server/repo/calendar.integration.test.ts",
   "src/server/repo/collection.integration.test.ts",
   "src/server/repo/meal.integration.test.ts",

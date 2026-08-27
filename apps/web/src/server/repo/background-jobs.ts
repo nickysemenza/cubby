@@ -11,7 +11,18 @@ import type {
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
-import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { backgroundBatch, backgroundJob } from "~/server/db/schema";
 import {
@@ -543,10 +554,19 @@ export async function getBackgroundBatchSummary(
   return batch ? toBatchSummary(batch) : null;
 }
 
+/**
+ * Bounded so a manual retry on a very large batch cannot recreate the failure it
+ * is repairing: an unbounded read here fans out to one sequential sendBatch per
+ * 100 jobs inside a single invocation, which is exactly how jobs get stranded.
+ * Callers redispatch a page at a time; the sweeper picks up any remainder.
+ */
+const MAX_REDISPATCH_JOBS = 1_000;
+
 /** The only fields redispatch needs; it must never materialize job payloads. */
 export async function getQueuedBackgroundBatchDispatch(
   db: Database,
   batchId: string,
+  limit: number = MAX_REDISPATCH_JOBS,
 ): Promise<{ kind: BackgroundJobKind; jobIds: string[] } | null> {
   const batch = await getDb(db).query.backgroundBatch.findFirst({
     where: and(eq(backgroundBatch.id, batchId), notDeleted(backgroundBatch)),
@@ -561,6 +581,7 @@ export async function getQueuedBackgroundBatchDispatch(
     ),
     columns: { id: true },
     orderBy: desc(backgroundJob.createdAt),
+    limit,
   });
   return { kind: batch.kind, jobIds: jobs.map((job) => job.id) };
 }
@@ -733,6 +754,122 @@ export async function cancelQueuedJobsForBatch(
         ),
       );
     await recalculateBackgroundBatchSummaryTx(tx, batchId);
+  });
+}
+
+/**
+ * A stranded job is one Postgres still holds as work-to-do but the queue never
+ * delivered: `attempts` never left 0 because no consumer ever leased it. Bulk
+ * dispatch is how this happens — sendBackgroundMessages awaits sendBatch in
+ * sequential chunks inside the caller's invocation, so an invocation killed
+ * mid-sweep strands every remaining row without throwing anything.
+ *
+ * Age splits them into two populations needing OPPOSITE handling, which is why
+ * both bounds exist rather than one cutoff:
+ *  - recoverable (MIN..MAX): redispatch. Real work, briefly lost.
+ *  - abandoned (older than MAX): a human decides. Replaying month-old refreshes
+ *    costs one provider call each to discover nothing changed.
+ * Without the MIN bound the sweeper would race messages still legitimately in
+ * flight; without MAX it would re-drive an old backlog nobody wants paid for.
+ */
+export const STRANDED_JOB_MIN_AGE_MS = 10 * 60 * 1_000;
+export const STRANDED_JOB_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+
+const ageCutoff = (now: Date, ageMs: number): Date =>
+  new Date(now.getTime() - ageMs);
+
+/** Never-delivered rows inside the redispatch window, plus leases a dead worker left open. */
+const recoverableStrandedWhere = (now: Date) =>
+  and(
+    notDeleted(backgroundJob),
+    or(
+      and(
+        eq(backgroundJob.status, "queued"),
+        eq(backgroundJob.attempts, 0),
+        lt(backgroundJob.createdAt, ageCutoff(now, STRANDED_JOB_MIN_AGE_MS)),
+        gte(backgroundJob.createdAt, ageCutoff(now, STRANDED_JOB_MAX_AGE_MS)),
+      ),
+      and(
+        eq(backgroundJob.status, "running"),
+        lt(backgroundJob.startedAt, ageCutoff(now, BACKGROUND_JOB_LEASE_MS)),
+      ),
+    ),
+  );
+
+/** Never-delivered rows too old to redispatch without an explicit decision. */
+const abandonedStrandedWhere = (now: Date) =>
+  and(
+    eq(backgroundJob.status, "queued"),
+    eq(backgroundJob.attempts, 0),
+    lt(backgroundJob.createdAt, ageCutoff(now, STRANDED_JOB_MAX_AGE_MS)),
+    notDeleted(backgroundJob),
+  );
+
+export interface StrandedBackgroundJobRef {
+  id: string;
+  batchId: string;
+  kind: BackgroundJobKind;
+}
+
+/**
+ * Redispatch candidates. Returns only the fields the dispatcher needs — job
+ * payloads are potentially wide and never belong in a sweep.
+ */
+export async function findRecoverableStrandedJobs(
+  db: Database,
+  limit: number,
+  now: Date = new Date(),
+): Promise<StrandedBackgroundJobRef[]> {
+  return await getDb(db).query.backgroundJob.findMany({
+    where: recoverableStrandedWhere(now),
+    columns: { id: true, batchId: true, kind: true },
+    orderBy: asc(backgroundJob.createdAt),
+    limit,
+  });
+}
+
+export async function countAbandonedStrandedJobs(
+  db: Database,
+  now: Date = new Date(),
+): Promise<number> {
+  return await countWhere(db, backgroundJob, abandonedStrandedWhere(now));
+}
+
+/**
+ * Cancel abandoned rows and settle their parents. `cancelled` rather than a
+ * DELETE: it is an existing terminal status, keeps the history, and sidesteps
+ * the BackgroundJob.batchId -> BackgroundBatch FK ordering a hard delete needs.
+ * Batches must be recalculated or they keep counting these as queued forever.
+ */
+export async function cancelAbandonedStrandedJobs(
+  db: Database,
+  limit: number,
+  now: Date = new Date(),
+): Promise<{ cancelled: number; batchesSettled: number }> {
+  return await withTransaction(db, async (tx) => {
+    const targets = await tx
+      .select({ id: backgroundJob.id, batchId: backgroundJob.batchId })
+      .from(backgroundJob)
+      .where(abandonedStrandedWhere(now))
+      .orderBy(asc(backgroundJob.createdAt))
+      .limit(limit);
+    if (targets.length === 0) return { cancelled: 0, batchesSettled: 0 };
+
+    await tx
+      .update(backgroundJob)
+      .set({ status: "cancelled", finishedAt: now })
+      .where(
+        inArray(
+          backgroundJob.id,
+          targets.map((job) => job.id),
+        ),
+      );
+
+    const batchIds = [...new Set(targets.map((job) => job.batchId))];
+    for (const batchId of batchIds) {
+      await recalculateBackgroundBatchSummaryTx(tx, batchId);
+    }
+    return { cancelled: targets.length, batchesSettled: batchIds.length };
   });
 }
 

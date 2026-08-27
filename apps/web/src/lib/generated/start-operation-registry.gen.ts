@@ -60,8 +60,18 @@ export const START_OPERATIONS = {
     entities: [],
     productPhases: [],
   },
+  "background-job.clearStranded": {
+    kind: "mutation",
+    entities: [],
+    productPhases: [],
+  },
   "background-job.drain": { kind: "mutation", entities: [], productPhases: [] },
   "background-job.retry": { kind: "mutation", entities: [], productPhases: [] },
+  "background-job.strandedCount": {
+    kind: "query",
+    entities: [],
+    productPhases: [],
+  },
   "calendar.getFeed": { kind: "query", entities: [], productPhases: [] },
   "calendar.range": { kind: "query", entities: [], productPhases: [] },
   "calendar.rotateFeed": { kind: "mutation", entities: [], productPhases: [] },

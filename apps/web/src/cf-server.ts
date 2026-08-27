@@ -24,7 +24,7 @@ import {
   startOperationTraceName,
 } from "./lib/start-operation-observability";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
-import { setCfEnv } from "./server/cf-env";
+import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -85,7 +85,11 @@ console.error = (...args: unknown[]) => {
 };
 
 const handler = {
-  async fetch(request: Request, env: Env) {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: { waitUntil(promise: Promise<unknown>): void },
+  ) {
     // Bridge CF secrets → process.env for libraries that read from it
     // (better-auth reads BETTER_AUTH_SECRET from process.env at init time)
     process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
@@ -147,8 +151,11 @@ const handler = {
                   "cf.importHandler",
                   () => getHandler(),
                 );
+                // Scoped here rather than around the whole handler body: this
+                // is the only region where request-scoped work runs, and
+                // waitUntil must belong to THIS request's context.
                 const response = await withTrace("cf.handler", async () =>
-                  handler.fetch(request),
+                  runWithExecutionCtx(ctx, async () => handler.fetch(request)),
                 );
                 span.setAttribute("http.response.status_code", response.status);
 
@@ -308,15 +315,47 @@ const handler = {
       "cf.scheduled",
       async () => {
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-          const [{ db }, { dispatchProblemCountsRefresh }] = await Promise.all([
+          const [
+            { db },
+            { dispatchProblemCountsRefresh, sweepStrandedBackgroundJobs },
+          ] = await Promise.all([
             import("./server/db"),
             import("./server/background-dispatch"),
           ]);
-          await dispatchProblemCountsRefresh(
-            db,
-            "maintenance",
-            "cron.problem-counts",
-            new Date(controller.scheduledTime).toISOString(),
+
+          // Each job carries its own `cubby.scheduled.job`: the attribute moved
+          // off the parent once this handler ran more than one thing, or every
+          // tick would report itself as whichever job was hardcoded there.
+          await withTrace(
+            "cf.scheduled.job",
+            async () =>
+              await dispatchProblemCountsRefresh(
+                db,
+                "maintenance",
+                "cron.problem-counts",
+                new Date(controller.scheduledTime).toISOString(),
+              ),
+            { "cubby.scheduled.job": "problem-counts" },
+          );
+
+          // Reconciles wakeups the queue never delivered. Isolated so a failure
+          // here cannot suppress the problem-counts refresh above, which is the
+          // job users actually see.
+          await withTrace(
+            "cf.scheduled.job",
+            async (span) => {
+              try {
+                const swept = await sweepStrandedBackgroundJobs(db);
+                span.setAttributes({
+                  "cubby.stranded.redispatched": swept.redispatched,
+                  "cubby.stranded.batches": swept.batches,
+                });
+              } catch (error) {
+                span.setError("Stranded background job sweep failed");
+                Sentry.captureException(error);
+              }
+            },
+            { "cubby.scheduled.job": "stranded-sweep" },
           );
         });
       },
@@ -327,7 +366,6 @@ const handler = {
         // second cron the day one is added, since this handler receives every
         // trigger on the worker.
         "cloudflare.cron": controller.cron,
-        "cubby.scheduled.job": "problem-counts",
       },
     );
   },

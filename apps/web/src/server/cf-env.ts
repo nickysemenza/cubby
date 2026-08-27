@@ -5,8 +5,30 @@
 // dev server (plain Node via vite) setCfEnv is never called, so accessors
 // return undefined and callers fall back to public URLs + global fetch.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { BackgroundQueueProducer } from "./background-queue-types";
 import type { TelemetryQueueProducer } from "./telemetry-queue-types";
+
+interface WaitUntilContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+/**
+ * AsyncLocalStorage rather than the module-level slot `env` uses above: the
+ * execution context is PER REQUEST. A module-level one would be overwritten by
+ * whichever request landed last in the isolate, and calling waitUntil on a
+ * context whose request already settled throws.
+ */
+const executionCtxStore = new AsyncLocalStorage<WaitUntilContext>();
+
+export const runWithExecutionCtx = <T>(
+  ctx: WaitUntilContext,
+  fn: () => Promise<T>,
+): Promise<T> => executionCtxStore.run(ctx, fn);
+
+/** Undefined outside a CF request (queue/cron invocations, the Node dev server). */
+export const getExecutionCtx = (): WaitUntilContext | undefined =>
+  executionCtxStore.getStore();
 
 export interface ProblemCountsCacheAdapter {
   get(key: string): Promise<string | null>;

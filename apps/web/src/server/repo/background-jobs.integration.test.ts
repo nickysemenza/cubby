@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   dispatchBackgroundJobs,
   dispatchQueuedBackgroundJobs,
+  sweepStrandedBackgroundJobs,
 } from "~/server/background-dispatch";
 import {
   processBackgroundJob,
@@ -15,6 +16,8 @@ import { backgroundJob } from "~/server/db/schema";
 import {
   appendBackgroundJobsToWorkflow,
   BACKGROUND_JOB_LEASE_MS,
+  cancelAbandonedStrandedJobs,
+  countAbandonedStrandedJobs,
   createBackgroundBatchWithJobs,
   failOrRetryBackgroundJob,
   finishBackgroundJob,
@@ -24,6 +27,8 @@ import {
   listBackgroundBatchJobs,
   markBackgroundJobRunning,
   promotePendingBackgroundWorkflowContinuation,
+  STRANDED_JOB_MAX_AGE_MS,
+  STRANDED_JOB_MIN_AGE_MS,
   startOrReuseBackgroundWorkflow,
 } from "~/server/repo/background-jobs";
 import { getDb } from "~/server/repo/database-helpers";
@@ -488,5 +493,115 @@ describe("background job persistence", () => {
     expect(detail?.failedJobs).toBe(0);
     expect(detail?.jobs[0]?.status).toBe("skipped");
     expect(detail?.jobs[0]?.lastError).toBeNull();
+  });
+
+  // A dispatch whose invocation dies mid-sendBatch leaves the durable row at
+  // queued/attempts=0 with no wakeup and nothing thrown. These pin the
+  // reconciliation that repairs it, and the age split that stops it from
+  // re-driving an old backlog nobody wants paid for.
+  describe("stranded job reconciliation", () => {
+    const stubQueue = () => {
+      const sent: Array<Array<{ body: { batchId: string; jobId: string } }>> =
+        [];
+      setCfEnv({
+        BACKGROUND_QUEUE: {
+          send: vi.fn(),
+          sendBatch: vi.fn(
+            async (
+              messages: Iterable<{ body: { batchId: string; jobId: string } }>,
+            ) => sent.push([...messages]),
+          ),
+        },
+      } as unknown as Env);
+      return sent;
+    };
+
+    const ageJob = async (jobId: string, ageMs: number) =>
+      await getDb(ctx.db)
+        .update(backgroundJob)
+        .set({ createdAt: new Date(Date.now() - ageMs) })
+        .where(eq(backgroundJob.id, jobId));
+
+    const makeJobs = async (count: number, tag: string) =>
+      await createBackgroundBatchWithJobs(ctx.db, {
+        kind: "entity-embedding.refresh",
+        source: "mutation",
+        jobs: Array.from({ length: count }, (_, index) => ({
+          kind: "entity-embedding.refresh" as const,
+          dedupeKey: `test:stranded:${tag}:${index}`,
+          payload: { entityType: "product", entityId: crypto.randomUUID() },
+        })),
+      });
+
+    it("redispatches lost wakeups and leaves in-flight ones alone", async () => {
+      const { batchId, jobIds } = await makeJobs(2, "mixed");
+      const [stranded, inFlight] = jobIds;
+      if (!stranded || !inFlight) throw new Error("expected two jobs");
+      // Only the first is old enough to conclude its message is gone; the
+      // second is indistinguishable from a message still being delivered.
+      await ageJob(stranded, STRANDED_JOB_MIN_AGE_MS * 2);
+
+      const sent = stubQueue();
+      const result = await sweepStrandedBackgroundJobs(ctx.db);
+
+      expect(result).toEqual({ redispatched: 1, batches: 1 });
+      expect(sent.flat().map((message) => message.body.jobId)).toEqual([
+        stranded,
+      ]);
+      expect(sent.flat()[0]?.body.batchId).toBe(batchId);
+    });
+
+    it("leaves abandoned jobs for an explicit decision", async () => {
+      const { jobIds } = await makeJobs(1, "abandoned");
+      const [jobId] = jobIds;
+      if (!jobId) throw new Error("expected a job");
+      await ageJob(jobId, STRANDED_JOB_MAX_AGE_MS * 2);
+
+      const sent = stubQueue();
+      // Redispatching these would pay a provider call each to rediscover that
+      // nothing changed, which is the whole reason for the upper bound.
+      expect(await sweepStrandedBackgroundJobs(ctx.db)).toEqual({
+        redispatched: 0,
+        batches: 0,
+      });
+      expect(sent).toEqual([]);
+      expect(await countAbandonedStrandedJobs(ctx.db)).toBe(1);
+    });
+
+    it("reclaims a lease a dead worker left open", async () => {
+      const { jobIds } = await makeJobs(1, "lease");
+      const [jobId] = jobIds;
+      if (!jobId) throw new Error("expected a job");
+      await markBackgroundJobRunning(ctx.db, jobId);
+      await getDb(ctx.db)
+        .update(backgroundJob)
+        .set({ startedAt: new Date(Date.now() - BACKGROUND_JOB_LEASE_MS * 2) })
+        .where(eq(backgroundJob.id, jobId));
+
+      const sent = stubQueue();
+      const result = await sweepStrandedBackgroundJobs(ctx.db);
+
+      expect(result.redispatched).toBe(1);
+      expect(sent.flat().map((message) => message.body.jobId)).toEqual([jobId]);
+    });
+
+    it("cancelling abandoned jobs settles their parent batch", async () => {
+      const { batchId, jobIds } = await makeJobs(3, "settle");
+      for (const jobId of jobIds) {
+        await ageJob(jobId, STRANDED_JOB_MAX_AGE_MS * 2);
+      }
+
+      expect(await cancelAbandonedStrandedJobs(ctx.db, 100)).toEqual({
+        cancelled: 3,
+        batchesSettled: 1,
+      });
+      expect(await countAbandonedStrandedJobs(ctx.db)).toBe(0);
+      // Without the recalculation these rows keep counting as queued and the
+      // batch stays open forever, which is how the UI reported live work that
+      // no longer existed.
+      const summary = await getBackgroundBatchSummary(ctx.db, batchId);
+      expect(summary?.status).toBe("cancelled");
+      expect(summary?.queuedJobs).toBe(0);
+    });
   });
 });
