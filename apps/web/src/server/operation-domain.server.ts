@@ -18,7 +18,7 @@ import {
  * generated loader needs no casts.
  */
 
-export type OperationHandlerContext = AuthenticatedStartOperationContext & {
+type OperationHandlerContext = AuthenticatedStartOperationContext & {
   /** Aborts when the browser cancels the request; pass it into workflows. */
   signal: AbortSignal;
 };

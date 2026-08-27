@@ -1,36 +1,20 @@
-import {
-  aiBackfillLocationDescriptionsEventSchema,
-  aiEnrichmentProposalEventSchema,
+import type {
   aiLocationIdInput,
   aiUsageRecentInput,
-  aiUsageRecentOut,
   aiUsageSummaryInput,
-  aiUsageSummaryOut,
   approveDetectedInventoryItemInput,
-  approveDetectedInventoryItemOut,
-  categoryAuditSchema,
   categorySuggestionInput,
-  categorySuggestionSchema,
-  detectedInventorySchema,
   enrichmentProposalPrecomputeInput,
   ingredientMergeSuggestionBatchInput,
-  ingredientMergeSuggestionBatchOut,
-  locationDescriptionSchema,
   locationSuggestionInput,
-  locationSuggestionSchema,
   locationTypeSuggestionInput,
-  locationTypeSuggestionSchema,
-  parsedSearchSchema,
   parseSearchInput,
   productIdentificationInput,
-  productIdentificationSchema,
   usdaFoodSuggestionBatchInput,
-  usdaFoodSuggestionBatchOut,
   usdaFoodSuggestionInput,
-  usdaFoodSuggestionOut,
 } from "@cubby/schemas/ai";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { z } from "zod";
+import type { z } from "zod";
 import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
@@ -59,62 +43,6 @@ import {
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment/usda-match";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-
-export const aiWorkflowSchemas = {
-  suggestCategory: {
-    input: categorySuggestionInput,
-    output: categorySuggestionSchema,
-  },
-  suggestLocationType: {
-    input: locationTypeSuggestionInput,
-    output: locationTypeSuggestionSchema,
-  },
-  suggestLocation: {
-    input: locationSuggestionInput,
-    output: locationSuggestionSchema,
-  },
-  describeLocation: {
-    input: aiLocationIdInput,
-    output: locationDescriptionSchema,
-  },
-  detectInventoryItems: {
-    input: aiLocationIdInput,
-    output: detectedInventorySchema,
-  },
-  approveDetectedInventoryItem: {
-    input: approveDetectedInventoryItemInput,
-    output: approveDetectedInventoryItemOut,
-  },
-  identifyProduct: {
-    input: productIdentificationInput,
-    output: productIdentificationSchema,
-  },
-  suggestUsdaFood: {
-    input: usdaFoodSuggestionInput,
-    output: usdaFoodSuggestionOut,
-  },
-  suggestUsdaFoodBatch: {
-    input: usdaFoodSuggestionBatchInput,
-    output: usdaFoodSuggestionBatchOut,
-  },
-  suggestIngredientMergeBatch: {
-    input: ingredientMergeSuggestionBatchInput,
-    output: ingredientMergeSuggestionBatchOut,
-  },
-  precomputeEnrichmentProposals: {
-    input: enrichmentProposalPrecomputeInput,
-    output: aiEnrichmentProposalEventSchema,
-  },
-  parseSearch: { input: parseSearchInput, output: parsedSearchSchema },
-  auditCategories: { input: z.undefined(), output: categoryAuditSchema },
-  usageRecent: { input: aiUsageRecentInput, output: aiUsageRecentOut },
-  usageSummary: { input: aiUsageSummaryInput, output: aiUsageSummaryOut },
-  backfillLocationDescriptions: {
-    input: z.undefined(),
-    output: aiBackfillLocationDescriptionsEventSchema,
-  },
-} as const;
-
 export const suggestCategoryWorkflow = (
   db: Database,
   input: z.output<typeof categorySuggestionInput>,
