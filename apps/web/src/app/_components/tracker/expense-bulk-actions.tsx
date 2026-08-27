@@ -1,16 +1,15 @@
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { expense } from "~/app/expenses/expense.functions";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
-import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
   BulkAction,
   BulkActionsConfig,
 } from "../data-table/bulk-actions.types";
-import { useActionMutation } from "../hooks/useActionMutation";
+import { useStagedBulkAction } from "../hooks/useStagedBulkAction";
 import { MoveToProjectDialog } from "./move-to-project-dialog";
 import { SetFieldDialog } from "./set-field-dialog";
 
@@ -21,51 +20,54 @@ export function useExpenseBulkActions({
 }: {
   extraActions?: BulkAction<ExpenseOut>[];
 } = {}) {
-  const [moveItems, setMoveItems] = useState<ExpenseOut[]>([]);
-  const [tradeItems, setTradeItems] = useState<ExpenseOut[]>([]);
-  const [costTypeItems, setCostTypeItems] = useState<ExpenseOut[]>([]);
+  const expenseCount = (data: { items: unknown[] }) =>
+    `${data.items.length} expense${data.items.length !== 1 ? "s" : ""}`;
+  const updated = (data: {
+    items: unknown[];
+    sideEffects: Parameters<typeof savedWithBackgroundWork>[0];
+  }) =>
+    savedWithBackgroundWork(data.sideEffects, `Updated ${expenseCount(data)}`);
+
+  const move = useStagedBulkAction<
+    ExpenseOut,
+    typeof expense.bulkMove.mutationOptions
+  >({
+    verb: "moveToProject",
+    // The existing id is load-bearing: layouts persist per action id.
+    id: "move",
+    mutationFn: expense.bulkMove.mutationOptions,
+    invalidateKeys: invalidatesFor("expense"),
+    success: (data) =>
+      savedWithBackgroundWork(data.sideEffects, `Moved ${expenseCount(data)}`),
+  });
+  const trade = useStagedBulkAction<
+    ExpenseOut,
+    typeof expense.bulkSetTrade.mutationOptions
+  >({
+    verb: "setTrade",
+    mutationFn: expense.bulkSetTrade.mutationOptions,
+    invalidateKeys: invalidatesFor("expense"),
+    success: updated,
+  });
+  const costType = useStagedBulkAction<
+    ExpenseOut,
+    typeof expense.bulkSetCostType.mutationOptions
+  >({
+    verb: "setCostType",
+    mutationFn: expense.bulkSetCostType.mutationOptions,
+    invalidateKeys: invalidatesFor("expense"),
+    success: updated,
+  });
 
   const config = useMemo<BulkActionsConfig<ExpenseOut>>(
     () => ({
-      actions: [
-        verbBulkAction<ExpenseOut>("moveToProject", {
-          id: "move",
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setMoveItems(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-        verbBulkAction<ExpenseOut>("setTrade", {
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setTradeItems(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-        verbBulkAction<ExpenseOut>("setCostType", {
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setCostTypeItems(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-        ...extraActions,
-      ],
+      actions: [move.action, trade.action, costType.action, ...extraActions],
       clearSelectionOnComplete: false,
     }),
-    [extraActions],
+    [extraActions, move.action, trade.action, costType.action],
   );
 
-  return {
-    config,
-    moveItems,
-    setMoveItems,
-    tradeItems,
-    setTradeItems,
-    costTypeItems,
-    setCostTypeItems,
-  };
+  return { config, move, trade, costType };
 }
 
 export type ExpenseBulkActionsController = ReturnType<
@@ -77,109 +79,56 @@ export function ExpenseBulkActionDialogs({
   onComplete,
 }: {
   controller: ExpenseBulkActionsController;
+  /** Runs after a successful write — the surface clears its row selection. */
   onComplete: () => void;
 }) {
-  const {
-    moveItems,
-    setMoveItems,
-    tradeItems,
-    setTradeItems,
-    costTypeItems,
-    setCostTypeItems,
-  } = controller;
-  const resultMessage =
-    (verb: "Moved" | "Updated") =>
-    (data: {
-      items: unknown[];
-      sideEffects: Parameters<typeof savedWithBackgroundWork>[0];
-    }) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `${verb} ${data.items.length} expense${data.items.length !== 1 ? "s" : ""}`,
-      );
-
-  const moveMutation = useActionMutation({
-    mutationFn: expense.bulkMove.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
-    success: resultMessage("Moved"),
-    onSuccess: () => {
-      setMoveItems([]);
-      onComplete();
-    },
-  });
-  const tradeMutation = useActionMutation({
-    mutationFn: expense.bulkSetTrade.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
-    success: resultMessage("Updated"),
-    onSuccess: () => {
-      setTradeItems([]);
-      onComplete();
-    },
-  });
-  const costTypeMutation = useActionMutation({
-    mutationFn: expense.bulkSetCostType.mutationOptions,
-    invalidateKeys: invalidatesFor("expense"),
-    success: resultMessage("Updated"),
-    onSuccess: () => {
-      setCostTypeItems([]);
-      onComplete();
-    },
-  });
+  const { move, trade, costType } = controller;
+  const closed = (staged: { cancel: () => void }) => (open: boolean) => {
+    if (!open) staged.cancel();
+  };
 
   return (
     <>
-      {moveItems.length > 0 && (
+      {move.items.length > 0 && (
         <MoveToProjectDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setMoveItems([]);
-          }}
-          items={moveItems}
+          onOpenChange={closed(move)}
+          items={move.items}
           entityLabel="Expense"
-          isPending={moveMutation.isPending}
+          isPending={move.isPending}
           onConfirm={async (projectId) => {
-            await moveMutation.mutateAsync({
-              ids: moveItems.map((expense) => expense.id),
-              projectId,
-            });
+            await move.submit({ projectId });
+            onComplete();
           }}
         />
       )}
-      {tradeItems.length > 0 && (
+      {trade.items.length > 0 && (
         <SetFieldDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setTradeItems([]);
-          }}
-          items={tradeItems}
-          isPending={tradeMutation.isPending}
+          onOpenChange={closed(trade)}
+          items={trade.items}
+          isPending={trade.isPending}
           options={tradeOptions}
           fieldLabel="Trade"
           itemNoun="Expense"
-          onConfirm={async (trade) => {
-            await tradeMutation.mutateAsync({
-              ids: tradeItems.map((expense) => expense.id),
-              trade: trade as Trade,
-            });
+          onConfirm={async (nextTrade) => {
+            await trade.submit({ trade: nextTrade as Trade });
+            onComplete();
           }}
         />
       )}
-      {costTypeItems.length > 0 && (
+      {costType.items.length > 0 && (
         <SetFieldDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setCostTypeItems([]);
-          }}
-          items={costTypeItems}
-          isPending={costTypeMutation.isPending}
+          onOpenChange={closed(costType)}
+          items={costType.items}
+          isPending={costType.isPending}
           options={costTypeOptions}
           fieldLabel="Cost Type"
           itemNoun="Expense"
-          onConfirm={async (costType) => {
-            await costTypeMutation.mutateAsync({
-              ids: costTypeItems.map((expense) => expense.id),
-              costType: costType as CostType,
-            });
+          onConfirm={async (nextCostType) => {
+            await costType.submit({ costType: nextCostType as CostType });
+            onComplete();
           }}
         />
       )}
