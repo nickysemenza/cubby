@@ -4,6 +4,8 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
+import { executeEntity } from "~/server/entity-kernel";
+import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import {
@@ -25,11 +27,9 @@ import {
   updateTask,
 } from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
-import {
-  taskBulkMoveWorkflow,
-  taskBulkSetStatusWorkflow,
-  taskListActionableWorkflow,
-} from "~/server/workflows/task.server";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import { taskListActionableWorkflow } from "~/server/workflows/task.server";
 import { makeProductInput } from "./repo.fixtures";
 
 describe("task repository — listActionableTasks", () => {
@@ -1582,53 +1582,121 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
   });
 });
 
-describe("task workflow — bulkMove / bulkSetStatus", () => {
+describe("task kernel — bulkUpdate", () => {
   const ctx = withTestDb();
+  const kernelContext = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+  // The patch shape is exactly what is under test (including the undeclared
+  // field the kernel must refuse), so it stays a loose record here and the
+  // command is asserted onto the mutation union rather than narrowed away.
+  const bulkUpdate = async (ids: string[], data: Record<string, unknown>) => {
+    const result = await executeEntity(kernelContext(), {
+      action: "bulkUpdate",
+      entity: "task",
+      ids,
+      data,
+    } as EntityMutationCommand);
+    if (result.action !== "bulkUpdate") throw new Error("unreachable");
+    return result;
+  };
 
-  it("bulkMove returns items + sideEffects", async () => {
+  it("moves tasks to another project and reports the count + sideEffects", async () => {
     const { output: projectA } = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "router bulk move a" }),
+      projectCreateInput.parse({ name: "kernel bulk move a" }),
       ctx.actor,
     );
     const { output: projectB } = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "router bulk move b" }),
+      projectCreateInput.parse({ name: "kernel bulk move b" }),
       ctx.actor,
     );
     const { output: t } = await createTask(
       ctx.db,
       taskCreateInput.parse({
         trade: "other",
-        name: "router move me",
+        name: "kernel move me",
         projectId: projectA.id,
       }),
       ctx.actor,
     );
 
-    const result = await taskBulkMoveWorkflow(
-      ctx.db,
-      { ids: [t.id], projectId: projectB.id },
-      ctx.actor,
-    );
-    expect(result.items.map((i) => i.projectId)).toEqual([projectB.id]);
+    const result = await bulkUpdate([t.id], { projectId: projectB.id });
+    expect(result.updated).toBe(1);
+    expect(result.updatedIds).toEqual([t.id]);
+    // The kernel does NOT run side effects for bulkUpdate; the repository does.
     expect(result.sideEffects).toBeDefined();
+    expect((await getTaskByShortcode(ctx.db, t.id))?.projectId).toBe(
+      projectB.id,
+    );
   });
 
-  it("bulkSetStatus returns items + sideEffects", async () => {
+  it("sets status", async () => {
     const { output: t } = await createTask(
       ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "router status me" }),
+      taskCreateInput.parse({ trade: "other", name: "kernel status me" }),
       ctx.actor,
     );
 
-    const result = await taskBulkSetStatusWorkflow(
+    expect((await bulkUpdate([t.id], { status: "done" })).updated).toBe(1);
+    expect((await getTaskByShortcode(ctx.db, t.id))?.status).toBe("done");
+  });
+
+  it("applies several declared fields in one patch", async () => {
+    const { output: t } = await createTask(
       ctx.db,
-      { ids: [t.id], status: "done" },
+      taskCreateInput.parse({ trade: "other", name: "kernel two fields" }),
       ctx.actor,
     );
-    expect(result.items.map((i) => i.status)).toEqual(["done"]);
-    expect(result.sideEffects).toBeDefined();
+
+    expect(
+      (await bulkUpdate([t.id], { status: "in_progress", trade: "drywall" }))
+        .updated,
+    ).toBe(1);
+    const reread = await getTaskByShortcode(ctx.db, t.id);
+    expect(reread?.status).toBe("in_progress");
+    expect(reread?.trade).toBe("drywall");
+  });
+
+  it("refuses half a due-date window rather than nulling the other half", async () => {
+    const { output: t } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "kernel due window",
+        dueDate: "2024-03-01",
+        dueEndDate: "2024-03-05",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      bulkUpdate([t.id], { dueDate: "2024-04-01" }),
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+    expect((await getTaskByShortcode(ctx.db, t.id))?.dueEndDate).toBe(
+      "2024-03-05",
+    );
+
+    expect(
+      (
+        await bulkUpdate([t.id], {
+          dueDate: "2024-04-01",
+          dueEndDate: "2024-04-03",
+        })
+      ).updated,
+    ).toBe(1);
+  });
+
+  it("refuses a field the entity never declared as bulk-updatable", async () => {
+    const { output: t } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "kernel undeclared" }),
+      ctx.actor,
+    );
+
+    await expect(bulkUpdate([t.id], { name: "Renamed" })).rejects.toThrow();
   });
 });
 

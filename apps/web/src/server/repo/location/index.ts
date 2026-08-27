@@ -44,6 +44,7 @@ export {
   type LocationPutAwayCandidate,
   locationParentOptions,
 } from "./lookup";
+export { reparentLocationsInBulk } from "./reparent";
 // Tree and hierarchy operations
 // `loadLocationAncestors` / `wouldCreateParentCycle` stay module-internal —
 // they're inputs to the reads below, not operations of their own.

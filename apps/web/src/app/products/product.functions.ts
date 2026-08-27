@@ -139,10 +139,6 @@ export const product = defineOperationDomain("product", {
     ...productWorkflowSchemas.discard,
     invalidates: ripple.expense,
   }),
-  bulkSetStockTracked: mutation({
-    ...productWorkflowSchemas.bulkSetStockTracked,
-    invalidates: ripple.product,
-  }),
 });
 
 export const createManyProductsStream = (

@@ -1,7 +1,7 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import type { z } from "zod";
-import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
 import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import {
   entityMutation,
@@ -19,12 +19,22 @@ import {
  * descriptor (and re-registers its invalidation policy) on every call, and this
  * runs inside a render.
  */
-const kernelOptionsByEntity = new Map<
-  StandardEntity,
-  Record<string, unknown>
->();
-const kernelOptionsFor = (entity: StandardEntity) => {
-  const cached = kernelOptionsByEntity.get(entity);
+const kernelOptionsByEntity = new Map<string, Record<string, unknown>>();
+
+/**
+ * Reparenting a location moves inventory, product and problem views, not just
+ * the location tree — the fan-out `location.bulkUpdateParent` has always
+ * declared. `entityRipple("location")` is the narrow one, so without this a
+ * kernel-path reparent would leave those surfaces stale with nothing failing.
+ */
+const writeRipple = (entity: StandardEntity, action: StandardAction) =>
+  entity === "location" && action === "bulkUpdate"
+    ? ripple.locationReparent
+    : entityRipple(entity);
+
+const kernelOptionsFor = (entity: StandardEntity, action: StandardAction) => {
+  const cacheKey = `${entity}:${action}`;
+  const cached = kernelOptionsByEntity.get(cacheKey);
   if (cached) return cached;
   const base = entityMutation.mutate
     .forEntity(entity)
@@ -37,19 +47,22 @@ const kernelOptionsFor = (entity: StandardEntity) => {
     // is what lets the root MutationCache invalidate anything at all — before
     // this, `meta` was absent entirely and every entity CRUD write in the app
     // fell through to the legacy key path.
-    meta: { ...(base.meta as object), invalidates: entityRipple(entity) },
+    meta: {
+      ...(base.meta as object),
+      invalidates: writeRipple(entity, action),
+    },
   };
-  kernelOptionsByEntity.set(entity, options);
+  kernelOptionsByEntity.set(cacheKey, options);
   return options;
 };
 
 function kernelMutationOptions(
   entity: StandardEntity,
-  action: "create" | "update" | "delete",
+  action: StandardAction,
   callbacks: unknown,
 ) {
   return {
-    ...kernelOptionsFor(entity),
+    ...kernelOptionsFor(entity, action),
     ...(callbacks as Record<string, unknown>),
     mutationFn: async (variables: unknown) => {
       const input = variables as {
@@ -62,7 +75,9 @@ function kernelMutationOptions(
           ? { action, entity, data: variables as Record<string, unknown> }
           : action === "update"
             ? { action, entity, id: input.id, data: input.data }
-            : { action, entity, ids: input.ids };
+            : action === "bulkUpdate"
+              ? { action, entity, ids: input.ids, data: input.data }
+              : { action, entity, ids: input.ids };
       const result = await executeEntityMutation({
         data: command as z.input<typeof entityBrowserMutationCommandSchema>,
       });
@@ -78,7 +93,7 @@ export const isGeneratedBrowserCrudEntity = (
 ): entity is GeneratedBrowserCrudEntity =>
   (generatedBrowserCrudEntities as readonly string[]).includes(entity);
 
-type StandardAction = "create" | "update" | "delete";
+type StandardAction = "create" | "update" | "delete" | "bulkUpdate";
 type CommandFor<
   E extends StandardEntity,
   A extends Exclude<StandardAction, "delete">,
@@ -97,13 +112,19 @@ type VariablesFor<
     ? CommandFor<E, "update"> extends { id: infer Id; data: infer Data }
       ? { id: Id; data: Data }
       : never
-    : { ids: string[] };
+    : A extends "bulkUpdate"
+      ? CommandFor<E, "bulkUpdate"> extends { data: infer Data }
+        ? { ids: string[]; data: Data }
+        : never
+      : { ids: string[] };
 type MutationDataFor<
   E extends StandardEntity,
   A extends StandardAction,
 > = A extends "delete"
   ? { deleted: number; sideEffects: MutationSideEffects }
-  : EntityDetailByEntity[E] & { sideEffects: MutationSideEffects };
+  : A extends "bulkUpdate"
+    ? { updated: number; sideEffects: MutationSideEffects }
+    : EntityDetailByEntity[E] & { sideEffects: MutationSideEffects };
 
 /** Typed Start mutation-options factory for compiled CRUD entities. */
 export function entityMutationOptionsFactory<

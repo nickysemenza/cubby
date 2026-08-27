@@ -1,14 +1,20 @@
+import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
 import {
   expenseFiltersSchema,
   expenseSortableFields,
 } from "@cubby/schemas/project";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
+import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import {
   createExpense,
   deleteExpensesWithPurchaseEffects,
   EXPENSE_DELETE_EDGE_POLICY,
   getExpenseByShortcode,
+  moveExpenses,
+  setExpensesCostType,
+  setExpensesTrade,
   updateExpense,
 } from "./crud";
 import { expenseList } from "./lookup";
@@ -56,6 +62,57 @@ export const expenseEntityAdapter = defineEntityAdapter({
         "expense.delete",
       );
       return { deleted: result.deleted, backgroundBatches };
+    },
+    /**
+     * The kernel's `bulkUpdate` branch runs no side effects (it is shaped like
+     * `delete`, not `update`), so the per-row fan-out that used to live in
+     * `expense.server.ts`'s `bulkExpense` wrapper is dispatched here. No price
+     * recompute: none of the declared fields feeds a product price, which is
+     * why the bulk writes were never routed through `updateExpense`.
+     */
+    bulkUpdate: async (ctx, ids, data) => {
+      const touched = new Set<ExpenseShortcode>();
+      const collect = async (rows: Promise<{ id: ExpenseShortcode }[]>) => {
+        for (const row of await rows) touched.add(row.id);
+      };
+      if (data.projectId !== undefined) {
+        await collect(
+          moveExpenses(
+            ctx.db,
+            { ids, projectId: data.projectId },
+            ctx.actorContext,
+          ),
+        );
+      }
+      if (data.trade !== undefined) {
+        await collect(
+          setExpensesTrade(
+            ctx.db,
+            { ids, trade: data.trade },
+            ctx.actorContext,
+          ),
+        );
+      }
+      if (data.costType !== undefined) {
+        await collect(
+          setExpensesCostType(
+            ctx.db,
+            { ids, costType: data.costType },
+            ctx.actorContext,
+          ),
+        );
+      }
+      const shortcodes = [...touched];
+      const entityIds = await resolveAllPresent(ctx.db, "expense", shortcodes);
+      const backgroundBatches = await runMutationSideEffectsForEntities(
+        ctx.db,
+        entityIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entityType: "expense" as const, entityId },
+          source: "expense.bulkUpdate",
+        })),
+      );
+      return { updated: shortcodes.length, backgroundBatches };
     },
   },
 });

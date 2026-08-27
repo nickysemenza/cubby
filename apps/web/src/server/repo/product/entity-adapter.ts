@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import { createAppError } from "~/server/errors/app-error";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
@@ -27,6 +28,7 @@ import {
   getProductByShortcode,
   getProductsByShortcodes,
   productList,
+  setProductsStockTracked,
 } from "./crud";
 import {
   PRODUCT_DETAIL_READER,
@@ -151,6 +153,40 @@ export const productEntityAdapter = defineEntityAdapter({
         detachedImageKeys,
         backgroundBatches: [...backgroundBatches, ...recipeBatches],
       };
+    },
+    /**
+     * The kernel's `bulkUpdate` branch runs no side effects (it is shaped like
+     * `delete`, not `update`), so the fan-out that used to live in
+     * `bulkSetProductStockTrackedWorkflow` is dispatched here. Deliberately
+     * NOT routed through `updateProduct`: `stockTracked` feeds no price, unit
+     * mapping or quantity, so none of that recompute cascade has anything to
+     * react to over a several-hundred-row sweep.
+     */
+    bulkUpdate: async (ctx, shortcodes, data) => {
+      if (data.stockTracked === undefined) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "A bulk product patch must supply stockTracked.",
+        );
+      }
+      const items = await setProductsStockTracked(
+        ctx.db,
+        { ids: shortcodes, stockTracked: data.stockTracked },
+        ctx.actorContext,
+      );
+      const ids = await productShortcodes.present(
+        ctx.db,
+        items.map((item) => item.id),
+      );
+      const backgroundBatches = await runMutationSideEffectsForEntities(
+        ctx.db,
+        ids.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entityType: "product" as const, entityId },
+          source: "product.bulkUpdate",
+        })),
+      );
+      return { updated: items.length, backgroundBatches };
     },
   },
   merge: {

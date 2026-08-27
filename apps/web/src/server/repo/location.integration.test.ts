@@ -15,6 +15,10 @@ import {
   product,
   productImage,
 } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import {
@@ -563,6 +567,91 @@ describe("bulkReparentLocations", () => {
     await expect(
       bulkReparentLocations(ctx.db, [TEST_HOME_ID], childId, ctx.actor),
     ).rejects.toThrow("Home cannot be reparented");
+  });
+});
+
+describe("location kernel — bulkUpdate (the guards, through the kernel)", () => {
+  const ctx = withTestDb();
+  const kernelContext = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+  const bulkUpdate = async (
+    ids: LocationShortcode[],
+    parentId: LocationShortcode | null,
+  ) => {
+    const result = await executeEntity(kernelContext(), {
+      action: "bulkUpdate",
+      entity: "location",
+      ids,
+      data: { parentId },
+    } as EntityMutationCommand);
+    if (result.action !== "bulkUpdate") throw new Error("unreachable");
+    return result;
+  };
+  const idOf = async (shortcode: LocationShortcode) =>
+    parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, shortcode, "location"))!,
+    );
+
+  it("maps an explicit null parent to Home rather than SQL NULL", async () => {
+    const parent = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Kernel Temporary Parent" }),
+      ctx.actor,
+    );
+    const child = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Kernel Back Home", parentId: parent.id }),
+      ctx.actor,
+    );
+
+    expect((await bulkUpdate([child.id], null)).updated).toBe(1);
+    expect(
+      (await getLocationById(ctx.db, await idOf(child.id))).parent?.id,
+    ).toBe(TEST_HOME_SHORTCODE);
+  });
+
+  it("refuses to reparent Home", async () => {
+    const other = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Kernel Not Home" }),
+      ctx.actor,
+    );
+
+    await expect(bulkUpdate([TEST_HOME_SHORTCODE], other.id)).rejects.toThrow(
+      "Home cannot be reparented",
+    );
+  });
+
+  it("refuses a location moved under itself", async () => {
+    const self = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Kernel Self Parent" }),
+      ctx.actor,
+    );
+
+    await expect(bulkUpdate([self.id], self.id)).rejects.toMatchObject({
+      reason: "CONSTRAINT_VIOLATION",
+    });
+  });
+
+  it("refuses a parent that is a descendant of the selection (cycle)", async () => {
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Kernel Cycle Room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Kernel Cycle Shelf", parentId: room.id }),
+      ctx.actor,
+    );
+
+    await expect(bulkUpdate([room.id], shelf.id)).rejects.toMatchObject({
+      cause: { reason: "LOCATION_CYCLE_DETECTED" },
+    });
   });
 });
 

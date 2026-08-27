@@ -3,7 +3,6 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   applyProductUpcDataWorkflow,
   attachProductComponentsWorkflow,
-  bulkSetProductStockTrackedWorkflow,
   detachProductComponentsWorkflow,
   discardProductWorkflow,
   findOrCreateProductByCodeWorkflow,
@@ -55,5 +54,4 @@ export const productHandlers = implementOperationDomain(product, {
   detachComponents: detachProductComponentsWorkflow,
   setProjectUses: setProductProjectUsesWorkflow,
   discard: discardProductWorkflow,
-  bulkSetStockTracked: bulkSetProductStockTrackedWorkflow,
 });
