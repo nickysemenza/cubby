@@ -176,7 +176,6 @@ export function IngredientList() {
   const deletableConfig = useDeletableConfig({
     mutationFn: entityMutationOptionsFactory("ingredient", "delete"),
     entityLabel: "Ingredient",
-    invalidateKeys: invalidatesFor("ingredient", "list"),
     entity: "ingredient",
   });
 

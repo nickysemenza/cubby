@@ -10,10 +10,12 @@ import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import {
-  cancelQueryRoots,
-  invalidateQueryRoots,
-  normalizeQueryRoot,
-} from "~/lib/query-keys";
+  cancelQueriesByTags,
+  restoreQueries,
+  snapshotQueriesByTags,
+  updateQueriesByTags,
+} from "~/integrations/tanstack-query/operation-cache";
+import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 
@@ -24,7 +26,6 @@ interface DeletableConfig {
     onError: (err: { message?: string }) => void;
   }) => unknown;
   entityLabel: string;
-  invalidateKeys: readonly QueryKey[];
   /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
   entity: Entity;
 }
@@ -170,11 +171,12 @@ export function useOptimisticDelete<
   const deleteMutationOptions = useMemo(() => {
     if (!deletable) return null;
 
+    // No invalidation here. The root MutationCache owns it, from the
+    // descriptor's own fan-out — which is WIDER than the surface patched below,
+    // and correctly so. Coupling the two is what forced the patch to walk a
+    // whole entity fan-out and rewrite unrelated caches on the way past.
     const onSuccess = () => {
       toast.success(`${deletable.entityLabel} deleted`);
-      if (!registeredDelete) {
-        invalidateQueryRoots(queryClient, deletable.invalidateKeys);
-      }
     };
     const onError = (err: { message?: string }) => {
       toast.error(
@@ -203,27 +205,18 @@ export function useOptimisticDelete<
     return {
       ...baseMutationOptions,
       onMutate: async (variables: { ids: string[] }) => {
-        await cancelQueryRoots(queryClient, deletable.invalidateKeys);
-
-        // Snapshot the previous value for rollback
-        const previousData: Array<[QueryKey, unknown]> = [];
-        for (const key of deletable.invalidateKeys) {
-          previousData.push(
-            ...queryClient.getQueriesData({
-              queryKey: normalizeQueryRoot(key),
-            }),
-          );
-        }
-
-        // Optimistically remove deleted items from all relevant queries
+        // The NARROW surface: only queries that list this entity's own rows can
+        // have a deleted id spliced out of them. A product delete ripples to
+        // recipes and dashboards too, but `removeDeletedIdsFromCache` has
+        // nothing sensible to say about those — it would walk them, match no
+        // id, and hand back the same object.
+        const patched: readonly OperationCacheTag[] = [[deletable.entity]];
+        await cancelQueriesByTags(queryClient, patched);
+        const previousData = snapshotQueriesByTags(queryClient, patched);
         const deletedIds = new Set(variables.ids);
-        for (const key of deletable.invalidateKeys) {
-          queryClient.setQueriesData(
-            { queryKey: normalizeQueryRoot(key) },
-            (old: unknown) => removeDeletedIdsFromCache(old, deletedIds),
-          );
-        }
-
+        updateQueriesByTags(queryClient, patched, (old) =>
+          removeDeletedIdsFromCache(old, deletedIds),
+        );
         return { previousData };
       },
       onError: (
@@ -232,11 +225,8 @@ export function useOptimisticDelete<
         context: { previousData?: Array<[QueryKey, unknown]> } | undefined,
       ) => {
         // Roll back optimistic update on error
-        if (context?.previousData) {
-          for (const [key, data] of context.previousData) {
-            queryClient.setQueryData(key, data);
-          }
-        }
+        if (context?.previousData)
+          restoreQueries(queryClient, context.previousData);
         // Call the mutation factory's base error callback.
         if (baseMutationOptions.onError) {
           (

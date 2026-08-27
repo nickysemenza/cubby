@@ -492,7 +492,6 @@ export function RecipeList({
   const deletableConfig = useDeletableConfig({
     mutationFn: entityMutationOptionsFactory("recipe", "delete"),
     entityLabel: "Recipe",
-    invalidateKeys: invalidatesFor("recipe", "list"),
     entity: "recipe",
   });
 
