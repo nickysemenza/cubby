@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
+import type { z } from "zod";
 import {
   entityMutation,
   executeEntityMutation,
@@ -7,6 +8,7 @@ import {
   parseEntityMutationResultFor,
 } from "~/entities/entity-mutation.functions";
 import { getAppErrorDetails } from "~/lib/error-utils";
+import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
@@ -86,7 +88,9 @@ function useEntityMutationPort(): EntityMutationPort {
                   data: command.data,
                 };
         const result = await executeEntityMutation({
-          data: startCommand as never,
+          data: startCommand as z.input<
+            typeof entityBrowserMutationCommandSchema
+          >,
         });
         const resultId =
           result && typeof result === "object" && "item" in result
