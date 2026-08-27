@@ -5,6 +5,7 @@ import {
   locationSortableFields,
 } from "@cubby/schemas/location";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   runMutationSideEffects,
@@ -20,6 +21,7 @@ import {
   updateLocationAiDescription,
 } from "./crud";
 import { getLocationByShortcode } from "./lookup";
+import { reparentLocationsInBulk } from "./reparent";
 
 const locationShortcodes = bindShortcodeResolver("location");
 
@@ -99,6 +101,29 @@ export const locationEntityAdapter = defineEntityAdapter({
         })),
       );
       return { deleted, detachedImageKeys, backgroundBatches };
+    },
+    /**
+     * The field mask says `parentId`; the semantics behind it stay
+     * hand-written. See {@link reparentLocationsInBulk} — a declarative column
+     * patch would drop the Home mapping, the cycle check and the race guard.
+     *
+     * An ABSENT `parentId` is refused rather than defaulted: an explicit
+     * `null` means "move to Home", so silently reading `undefined` as `null`
+     * would move a selection to Home on an empty patch.
+     */
+    bulkUpdate: async (ctx, shortcodes, data) => {
+      if (data.parentId === undefined) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "A bulk location patch must supply parentId (null moves to Home).",
+        );
+      }
+      return await reparentLocationsInBulk(
+        ctx.db,
+        ctx.actorContext,
+        shortcodes,
+        data.parentId,
+      );
     },
   },
 });

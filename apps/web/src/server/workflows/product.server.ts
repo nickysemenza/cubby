@@ -9,7 +9,6 @@ import {
   type ProductListInventoryEntryOut,
   type ProductQuantitySummaryOut,
   type productApplyUpcInput,
-  type productBulkStockTrackedInput,
   type productCreateManyInput,
   type productDiscardInput,
   type productFindOrCreateByCodeInput,
@@ -59,7 +58,6 @@ import {
   getProductTagOptions,
   productSearch,
   quickCreateProduct,
-  setProductsStockTracked,
 } from "~/server/repo/product";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
@@ -77,14 +75,12 @@ import {
 import { listProductPurchases } from "~/server/repo/purchase-products";
 import {
   bindShortcodeResolver,
-  resolveAllPresent,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import type { requireActor } from "~/server/request-context";
 import { shouldUseSemanticComboboxFallback } from "~/server/semantic/combobox-fallback";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import {
-  mutationSideEffectEventSchema,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -162,33 +158,6 @@ export async function searchProductsWorkflow(
     data,
     Math.max(lexical.count, lexical.data.length + semanticItems.length),
   );
-}
-
-export async function bulkSetProductStockTrackedWorkflow(
-  context: ProductWorkflowContext,
-  input: z.output<typeof productBulkStockTrackedInput>,
-) {
-  const items = await setProductsStockTracked(
-    context.db,
-    input,
-    context.actorContext,
-  );
-  const ids = await resolveAllPresent(
-    context.db,
-    "product",
-    items.map((item) => item.id),
-  );
-  const backgroundBatches = await runMutationSideEffectsForEntities(
-    context.db,
-    ids.map((entityId) =>
-      mutationSideEffectEventSchema.parse({
-        action: "updated",
-        entity: { entityType: "product", entityId },
-        source: "product.bulkSetStockTracked",
-      }),
-    ),
-  );
-  return { items, sideEffects: { backgroundBatches } };
 }
 
 export async function applyProductUpcDataWorkflow(

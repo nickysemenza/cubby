@@ -51,17 +51,23 @@ export const entityMutation = defineOperationDomain("entity", {
      * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
      * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,
      * both entity-AGNOSTIC, so the bare root would nuke every list and detail
-     * query for every entity on every write. The fan-out is action-independent —
-     * a create, an update and a delete of one entity move the same surfaces — so
-     * an `(entity, action)` table would be five times the rows with identical
-     * values. `product` is the one exception: its OWN input can carry an
-     * ingredient/usda-food link, so it widens dynamically off that input
-     * rather than off component-local state (see `productWriteTags`).
+     * query for every entity on every write. The fan-out is action-independent
+     * for create/update/delete — those move the same surfaces — so an
+     * `(entity, action)` table would be rows of identical values. Two
+     * exceptions widen dynamically off the input rather than off
+     * component-local state: `product`, whose OWN input can carry an
+     * ingredient/usda-food link (see `productWriteTags`), and a `location`
+     * bulk reparent, which moves inventory and problem views too.
      */
     invalidates: (input) =>
       input.entity === "product"
         ? productWriteTags(input)
-        : entityRipple(input.entity),
+        : // A location reparent moves inventory, product and problem views
+          // too — the wide fan-out `location.bulkUpdateParent` declares.
+          // `entityRipple("location")` is the narrow one.
+          input.entity === "location" && input.action === "bulkUpdate"
+          ? ripple.locationReparent
+          : entityRipple(input.entity),
   }),
 });
 

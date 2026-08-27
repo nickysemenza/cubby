@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { OnChangeFn, RowSelectionState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
-import type { EntityActionsContextValue } from "../actions/entity-actions";
+import type { EntityActionsEntry } from "../actions/entity-actions";
 import type {
   BulkAction,
   BulkActionsConfig,
@@ -47,10 +47,17 @@ interface UseEntitySelectionReturn<TData extends { id: string }> {
    * from the columns this hook contributes to.
    */
   renderBulkActionBar: (table: Table<TData>) => ReactNode;
-  /** Publish via `EntityActionsProvider` to light up the row menus. */
-  rowActions: EntityActionsContextValue;
-  /** Render once, outside the table. */
-  actionDialogs: ReactNode;
+  /**
+   * Spread into `RTable`. A bundle rather than two props because wiring only
+   * half of it is silent: the bar's actions and their dialogs must come from
+   * one `useEntityActions` instance, and a surface that published the row
+   * items but not the dialogs would show a bar whose every action opens
+   * nothing.
+   */
+  tableProps: {
+    rowActions: EntityActionsEntry;
+    actionDialogs: ReactNode;
+  };
 }
 
 const NO_SELECT_COLUMNS: ColumnDef<never>[] = [];
@@ -103,11 +110,20 @@ export function useEntitySelection<TData extends { id: string }>({
   return {
     selectColumns,
     enableRowSelection,
+    /**
+     * Spread into `RTable`. A bundle rather than two props because wiring only
+     * half of it is silent: the bar's actions and their dialogs must come from
+     * one `useEntityActions` instance, and a surface that published the row
+     * items but not the dialogs would show a bar whose every action opens
+     * nothing.
+     */
+    tableProps: {
+      rowActions: listBulkActions.rowActions,
+      actionDialogs: listBulkActions.actionDialogs,
+    },
     rowSelection: listBulkActions.rowSelection,
     onRowSelectionChange: listBulkActions.onRowSelectionChange,
     selectedCount: state.selectedCount,
     renderBulkActionBar,
-    rowActions: listBulkActions.rowActions,
-    actionDialogs: listBulkActions.actionDialogs,
   };
 }

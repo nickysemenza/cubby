@@ -19,6 +19,8 @@ import {
 } from "./kernel";
 import type {
   EditableEntity,
+  EntityBulkUpdateOutcome,
+  EntityBulkUpdateResult,
   EntityEditBuildResult,
   EntityEditCommand,
   EntityEditIssue,
@@ -160,7 +162,7 @@ export interface EntityCommands<E extends EditableEntity> {
   bulkUpdate(
     ids: readonly string[],
     data: Readonly<object>,
-  ): Promise<EntityEditResult<E>>;
+  ): Promise<EntityBulkUpdateOutcome>;
   commitFields(input: {
     record: EntityEditRecord;
     values: Readonly<Partial<EntityEditDraft<E>>>;
@@ -274,7 +276,7 @@ export function useEntityCommands<E extends EditableEntity>(
     async (
       ids: readonly string[],
       data: Readonly<object>,
-    ): Promise<EntityEditResult<E>> => {
+    ): Promise<EntityBulkUpdateOutcome> => {
       setIssues([]);
       try {
         const execution = await executeCommand({
@@ -284,8 +286,15 @@ export function useEntityCommands<E extends EditableEntity>(
           ids,
           data,
         });
-        // The count envelope is deliberately not parsed as an entity output.
-        return { ok: true, entity, id: execution.id, changed: true };
+        // The count envelope is deliberately not parsed as an entity output,
+        // but it IS the result — a caller's success callback reads `updated`
+        // and `sideEffects` off it, and dropping it here resolved every one
+        // of them with `undefined`.
+        return {
+          ok: true,
+          entity,
+          result: execution.result as EntityBulkUpdateResult,
+        };
       } catch (error) {
         const nextIssues = issuesFromRefusal(error);
         setIssues(nextIssues);

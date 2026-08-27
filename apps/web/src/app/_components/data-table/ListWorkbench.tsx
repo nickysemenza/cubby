@@ -2,10 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
-import {
-  type EntityActionsContextValue,
-  EntityActionsProvider,
-} from "../actions/entity-actions";
+import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import RTable, { type RTableProps } from "./Table";
 import type { CubbyTable } from "./table-features";
@@ -25,19 +22,15 @@ export interface ListWorkbenchModel<TItem extends RowData> {
   error?: unknown;
   timing?: QueryTiming;
   bulkActionBar?: ReactNode;
-  deleteDialog?: ReactNode;
   /**
-   * The entity's registered actions, published so the actions column's cells
-   * can reach the row items, and rendered so their dialogs have a mount point.
-   * Threaded here rather than per page: that is what lets a verb declared once
-   * light up every list of that entity without any of them wiring it.
-   *
-   * Optional so a hand-built model (a preview table, a test) still satisfies
-   * the type; with no value published the row menus render exactly what they
-   * rendered before the registry existed.
+   * The entity each row is *about*, when different from `entity`. Publishing
+   * it is what makes that entity's actions reachable from these rows.
    */
-  rowActions?: EntityActionsContextValue;
+  subjectEntity?: Entity;
+  /** Published so the bar's actions and their dialogs share one instance. */
+  rowActions?: EntityActionsEntry;
   actionDialogs?: ReactNode;
+  deleteDialog?: ReactNode;
   infiniteScroll?: InfiniteScrollControls;
   refreshControls?: {
     onRefresh: () => Promise<void>;
@@ -107,10 +100,13 @@ export function ListWorkbench<TItem extends RowData>({
 }: ListWorkbenchProps<TItem>) {
   const embedded = mode === "embedded";
   return (
-    <EntityActionsProvider value={model.rowActions ?? null}>
+    <>
       <RTable
         table={model.table}
         entity={model.entity}
+        subjectEntity={model.subjectEntity}
+        rowActions={model.rowActions}
+        actionDialogs={model.actionDialogs}
         isLoading={model.isLoading}
         error={model.error}
         timing={model.timing}
@@ -126,7 +122,6 @@ export function ListWorkbench<TItem extends RowData>({
         {...callerOwned}
       />
       {model.deleteDialog}
-      {model.actionDialogs}
-    </EntityActionsProvider>
+    </>
   );
 }

@@ -1,7 +1,4 @@
-import type {
-  InventoryShortcode,
-  ProductShortcode,
-} from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
@@ -33,7 +30,6 @@ import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { ShelfEmpty } from "../data-table/shelf";
 import { EntityInlineLink } from "../EntityInlineLink";
-import { ProductDiscardDialog } from "./product-discard-dialog";
 import { buildProductLocationBreakdown } from "./product-location-breakdown";
 
 type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
@@ -118,8 +114,7 @@ const rowIsEntity = (row: StockedRow) => row.kind === "stock";
 
 type DialogState =
   | { type: null }
-  | { type: "move" | "delete"; items: StockRow[] }
-  | { type: "discard"; entryId: InventoryShortcode };
+  | { type: "move" | "delete"; items: StockRow[] };
 
 const CLOSED: DialogState = { type: null };
 
@@ -321,8 +316,24 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     [flipTo],
   );
 
+  // Every row here is an entry for the ONE product this page is about, so the
+  // subject is constant rather than read per row — the identity rows do not
+  // even carry a product id. Memoized because it feeds a hook dependency
+  // contract; a fresh literal rebuilds every column each render.
+  const subject = useMemo(
+    () => ({
+      entity: "product" as const,
+      resolve: () => ({
+        entity: "product" as const,
+        id: product.id,
+        name: product.name,
+      }),
+    }),
+    [product.id, product.name],
+  );
   const { workbench } = useClientEntityList<StockedRow>({
     entity: "inventory",
+    subject,
     data: rows,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
@@ -342,16 +353,6 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
             onSelect={(event) => {
               event.stopPropagation();
               setDialog({ type: "move", items: [entry] });
-            }}
-          />
-          {/* Discard writes a ledger row and can clear the shelf in the same
-            transaction — the honest verb for "used it up", where Delete just
-            says the entry should never have existed. */}
-          <VerbMenuItem
-            verb="discard"
-            onSelect={(event) => {
-              event.stopPropagation();
-              setDialog({ type: "discard", entryId: entry.id });
             }}
           />
           <VerbMenuItem
@@ -425,20 +426,6 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
         }}
         items={dialog.type === "delete" ? dialog.items : []}
         onSuccess={closeAndClear}
-      />
-
-      {/* Keyed so a second row's Discard remounts the form with its own shelf
-          preselected (see `defaultInventoryEntryId`). */}
-      <ProductDiscardDialog
-        key={dialog.type === "discard" ? dialog.entryId : "discard"}
-        open={dialog.type === "discard"}
-        onOpenChange={(open) => {
-          if (!open) setDialog(CLOSED);
-        }}
-        product={product}
-        defaultInventoryEntryId={
-          dialog.type === "discard" ? dialog.entryId : undefined
-        }
       />
     </>
   );

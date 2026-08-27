@@ -1,8 +1,8 @@
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useMemo } from "react";
-import { expense } from "~/app/expenses/expense.functions";
 import { costTypeOptions } from "~/app/expenses/expense-options";
 import { tradeOptions } from "~/app/projects/trade-options";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type {
   BulkAction,
@@ -14,44 +14,55 @@ import { SetFieldDialog } from "./set-field-dialog";
 
 const NO_EXTRA_ACTIONS: BulkAction<ExpenseOut>[] = [];
 
+/**
+ * Every expense bulk verb here is one kernel `bulkUpdate` over a declared
+ * field mask — the id set differs, the patch differs, the command does not.
+ */
+const expenseBulkUpdateOptions = entityMutationOptionsFactory(
+  "expense",
+  "bulkUpdate",
+);
+
 export function useExpenseBulkActions({
   extraActions = NO_EXTRA_ACTIONS,
 }: {
   extraActions?: BulkAction<ExpenseOut>[];
 } = {}) {
-  const expenseCount = (data: { items: unknown[] }) =>
-    `${data.items.length} expense${data.items.length !== 1 ? "s" : ""}`;
+  const expenseCount = (data: { updated: number }) =>
+    `${data.updated} expense${data.updated !== 1 ? "s" : ""}`;
   const updated = (data: {
-    items: unknown[];
+    updated: number;
     sideEffects: Parameters<typeof savedWithBackgroundWork>[0];
   }) =>
     savedWithBackgroundWork(data.sideEffects, `Updated ${expenseCount(data)}`);
 
-  const move = useStagedBulkAction<
-    ExpenseOut,
-    typeof expense.bulkMove.mutationOptions
-  >({
-    verb: "moveToProject",
-    // The existing id is load-bearing: layouts persist per action id.
-    id: "move",
-    mutationFn: expense.bulkMove.mutationOptions,
-    success: (data) =>
-      savedWithBackgroundWork(data.sideEffects, `Moved ${expenseCount(data)}`),
-  });
+  const move = useStagedBulkAction<ExpenseOut, typeof expenseBulkUpdateOptions>(
+    {
+      verb: "moveToProject",
+      // The existing id is load-bearing: layouts persist per action id.
+      id: "move",
+      mutationFn: expenseBulkUpdateOptions,
+      success: (data) =>
+        savedWithBackgroundWork(
+          data.sideEffects,
+          `Moved ${expenseCount(data)}`,
+        ),
+    },
+  );
   const trade = useStagedBulkAction<
     ExpenseOut,
-    typeof expense.bulkSetTrade.mutationOptions
+    typeof expenseBulkUpdateOptions
   >({
     verb: "setTrade",
-    mutationFn: expense.bulkSetTrade.mutationOptions,
+    mutationFn: expenseBulkUpdateOptions,
     success: updated,
   });
   const costType = useStagedBulkAction<
     ExpenseOut,
-    typeof expense.bulkSetCostType.mutationOptions
+    typeof expenseBulkUpdateOptions
   >({
     verb: "setCostType",
-    mutationFn: expense.bulkSetCostType.mutationOptions,
+    mutationFn: expenseBulkUpdateOptions,
     success: updated,
   });
 
@@ -91,9 +102,14 @@ export function ExpenseBulkActionDialogs({
           onOpenChange={closed(move)}
           items={move.items}
           entityLabel="Expense"
+          currentProject={(item) =>
+            item.projectId
+              ? { id: item.projectId, name: item.projectName ?? item.projectId }
+              : null
+          }
           isPending={move.isPending}
           onConfirm={async (projectId) => {
-            await move.submit({ projectId });
+            await move.submit({ data: { projectId } });
             onComplete();
           }}
         />
@@ -104,11 +120,12 @@ export function ExpenseBulkActionDialogs({
           onOpenChange={closed(trade)}
           items={trade.items}
           isPending={trade.isPending}
+          currentValue={(item) => item.trade}
           options={tradeOptions}
           fieldLabel="Trade"
           itemNoun="Expense"
           onConfirm={async (nextTrade) => {
-            await trade.submit({ trade: nextTrade as Trade });
+            await trade.submit({ data: { trade: nextTrade as Trade } });
             onComplete();
           }}
         />
@@ -119,11 +136,14 @@ export function ExpenseBulkActionDialogs({
           onOpenChange={closed(costType)}
           items={costType.items}
           isPending={costType.isPending}
+          currentValue={(item) => item.costType}
           options={costTypeOptions}
           fieldLabel="Cost Type"
           itemNoun="Expense"
           onConfirm={async (nextCostType) => {
-            await costType.submit({ costType: nextCostType as CostType });
+            await costType.submit({
+              data: { costType: nextCostType as CostType },
+            });
             onComplete();
           }}
         />

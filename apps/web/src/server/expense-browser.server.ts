@@ -3,9 +3,6 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   expenseAnalyticsWorkflow,
   expenseAnalyzeWorkflow,
-  expenseBulkMoveWorkflow,
-  expenseBulkSetCostTypeWorkflow,
-  expenseBulkSetTradeWorkflow,
   expenseChargeContextWorkflow,
   expenseChartDataWorkflow,
   expenseFacetCountsWorkflow,
@@ -24,10 +21,4 @@ export const expenseHandlers = implementOperationDomain(expense, {
   tradeAffinity: (context) => expenseTradeAffinityWorkflow(context.db),
   chargeContext: (context, input) =>
     expenseChargeContextWorkflow(context.db, input),
-  bulkMove: (context, input) =>
-    expenseBulkMoveWorkflow(context.db, input, context.actorContext),
-  bulkSetTrade: (context, input) =>
-    expenseBulkSetTradeWorkflow(context.db, input, context.actorContext),
-  bulkSetCostType: (context, input) =>
-    expenseBulkSetCostTypeWorkflow(context.db, input, context.actorContext),
 });

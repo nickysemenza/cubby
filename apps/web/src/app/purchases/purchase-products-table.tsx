@@ -3,8 +3,10 @@ import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -128,7 +130,36 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   });
   // A kit component is shown here as part of its kit, not in its own right —
   // the same reason productlist's tree excludes them from selection.
+  // Table-local, not a registry entry: the mutation is
+  // `detachProducts({ purchaseId, productIds[] })`, and the purchase is known
+  // to this table rather than to any row — so it is already a bulk operation,
+  // it simply had no bulk affordance. Only explicitly linked rows are
+  // detachable; an expense-derived row has no link to remove.
+  // `mutateAsync` is referentially stable; the mutation object is not.
+  const detachAsync = detach.mutateAsync;
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        verbBulkAction<PurchaseProductRow>("removeFromPurchase", {
+          minSelection: 1,
+          onExecute: async (rows) => {
+            const linked = rows
+              .map((row) => row.original)
+              .filter((row) => row.linked);
+            if (linked.length === 0) return { success: false };
+            await detachAsync({
+              purchaseId,
+              productIds: linked.map((row) => row.id),
+            });
+            return { success: true };
+          },
+        }),
+      ],
+    }),
+    [purchaseId, detachAsync],
+  );
   const selection = useEntitySelection<PurchaseProductRow>({
+    bulkActions,
     entity: "product",
     canSelectRow: (row) => !row.isComponent,
   });
@@ -212,28 +243,26 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   });
 
   return (
-    <EntityActionsProvider value={selection.rowActions}>
-      <RTable
-        table={table}
-        entity="product"
-        bulkActionBar={selection.renderBulkActionBar(table)}
-        ariaLabel="Products linked to this purchase"
-        embedded
-        isLoading={query.isPending}
-        emptyState={
-          <Empty variant="minimal" className="py-6">
-            <EmptyHeader>
-              <EmptyTitle>No products recorded</EmptyTitle>
-              <EmptyDescription>
-                No expense on this order names a product, and none has been
-                attached directly. Attaching is most useful for lump-sum or
-                installment orders whose expenses can&apos;t carry a product.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        }
-      />
-      {selection.actionDialogs}
-    </EntityActionsProvider>
+    <RTable
+      table={table}
+      entity="product"
+      bulkActionBar={selection.renderBulkActionBar(table)}
+      {...selection.tableProps}
+      ariaLabel="Products linked to this purchase"
+      embedded
+      isLoading={query.isPending}
+      emptyState={
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No products recorded</EmptyTitle>
+            <EmptyDescription>
+              No expense on this order names a product, and none has been
+              attached directly. Attaching is most useful for lump-sum or
+              installment orders whose expenses can&apos;t carry a product.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      }
+    />
   );
 }

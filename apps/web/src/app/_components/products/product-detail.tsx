@@ -15,7 +15,6 @@ import {
   Link2,
   ListChecks,
   MapPin,
-  Package,
   PackageX,
   Plus,
   Receipt,
@@ -23,7 +22,8 @@ import {
   Scale,
   Wrench,
 } from "lucide-react";
-import { type FC, useCallback, useMemo, useState } from "react";
+import { type FC, useCallback, useState } from "react";
+import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -51,7 +51,6 @@ import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { RelatednessRail } from "../relatedness/relatedness-rail";
 import { RelationshipSummaryTable } from "../relationships/relationship-summary-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
-import { ProductAddToInventoryDialog } from "./product-add-to-inventory-dialog";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductCookbook } from "./product-cookbook";
 import { ProductDiscardDialog } from "./product-discard-dialog";
@@ -104,7 +103,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     setManualTarget({ documentId, page, nonce: Date.now() });
   }, []);
 
-  const [addToInventoryOpen, setAddToInventoryOpen] = useState(false);
   const [recordSaleOpen, setRecordSaleOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -147,15 +145,14 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Stocked At",
       icon: MapPin,
       placement: "primary" as const,
+      // From the registry, so the same verb the row menus and the palette offer
+      // is the one this page offers — including its kit over-accounting
+      // warning, which the action now derives itself.
       headerAction: (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAddToInventoryOpen(true)}
-        >
-          <Package className="mr-2 size-4" />
-          Add to Inventory
-        </Button>
+        <EntityActionButtons
+          entity="product"
+          record={{ id: product.id, name: product.name }}
+        />
       ),
       content: <ProductStockedAt product={product} />,
     },
@@ -442,21 +439,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     identityLocationIds: product.servingAsLocations.map((loc) => loc.id),
     componentCount: product.componentCount,
   });
-  // Stable identity: the dialog feeds this straight into a `useMemo`, and a
-  // fresh literal per render would recompute it on every unrelated state change
-  // (each dialog toggle re-renders this whole component).
-  const stockAccounting = useMemo(
-    () => ({
-      expectedQuantity: product.quantityLedger.expectedQuantity,
-      ownOnHandUnits: onHandUnits,
-      componentCount: product.componentCount,
-    }),
-    [
-      product.quantityLedger.expectedQuantity,
-      onHandUnits,
-      product.componentCount,
-    ],
-  );
 
   const onHandStat: DetailHeroStat =
     presence.onHand.kind === "amount"
@@ -530,12 +512,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             />
           </div>
         }
-      />
-      <ProductAddToInventoryDialog
-        open={addToInventoryOpen}
-        onOpenChange={setAddToInventoryOpen}
-        product={product}
-        accounting={stockAccounting}
       />
       <EntityEditDialog
         open={recordSaleOpen}

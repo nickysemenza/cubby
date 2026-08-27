@@ -38,26 +38,6 @@ export const task = defineOperationDomain("task", {
     output: schemas.taskTimelineOut,
     tags: [["task", "timeline"]],
   }),
-  bulkMove: mutation({
-    input: schemas.taskBulkMoveInput,
-    output: schemas.taskBulkMutationOut,
-    invalidates: ripple.task,
-  }),
-  bulkSetStatus: mutation({
-    input: schemas.taskBulkStatusInput,
-    output: schemas.taskBulkMutationOut,
-    invalidates: ripple.task,
-  }),
-  bulkSetTrade: mutation({
-    input: schemas.taskBulkTradeInput,
-    output: schemas.taskBulkMutationOut,
-    invalidates: ripple.task,
-  }),
-  bulkSetDueDate: mutation({
-    input: schemas.taskBulkDueDateInput,
-    output: schemas.taskBulkMutationOut,
-    invalidates: ripple.task,
-  }),
   bulkReorder: mutation({
     input: schemas.taskBulkReorderInput,
     output: schemas.taskBulkMutationOut,

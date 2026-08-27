@@ -2,6 +2,8 @@ import {
   bulkMovePayload,
   inventoryBulkAddOut,
   inventoryBulkAddPayload,
+  inventoryBulkDiscardOut,
+  inventoryBulkDiscardPayload,
   inventoryBulkOperationPayload,
   inventoryDuplicateUniqueProductsOut,
   inventoryFindDuplicatesInput,
@@ -34,6 +36,15 @@ export const inventory = defineOperationDomain("inventory", {
     input: inventoryBulkAddPayload,
     output: inventoryBulkAddOut,
     invalidates: [["inventory"]],
+  }),
+  // `ripple.expense`, not `ripple.inventory`: a discard mints a $0 Expense per
+  // row, and that ripple already carries the stock surfaces (see `costAndStock`)
+  // alongside the ledger ones the narrower inventory ripple omits. Same choice
+  // as the single-row `product.discard`.
+  bulkDiscard: mutation({
+    input: inventoryBulkDiscardPayload,
+    output: inventoryBulkDiscardOut,
+    invalidates: ripple.expense,
   }),
   bulkMove: mutation({
     input: bulkMovePayload,

@@ -5,7 +5,6 @@ import {
   applyProductUpcDataWorkflow,
   attachProductComponentsWorkflow,
   backfillProductUpcImagesWorkflow,
-  bulkSetProductStockTrackedWorkflow,
   createManyProductsWorkflow,
   detachProductComponentsWorkflow,
   discardProductWorkflow,
@@ -59,7 +58,6 @@ export const productHandlers = implementOperationDomain(product, {
   detachComponents: detachProductComponentsWorkflow,
   setProjectUses: setProductProjectUsesWorkflow,
   discard: discardProductWorkflow,
-  bulkSetStockTracked: bulkSetProductStockTrackedWorkflow,
 });
 
 export const productStreamHandlers = implementSubscriptionDomain(

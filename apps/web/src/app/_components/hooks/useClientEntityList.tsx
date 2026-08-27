@@ -55,6 +55,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "legacyLayoutSizingKey"
   | "deleteEmptyLabel"
   | "hiddenFilterColumns"
+  | "subject"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -125,6 +126,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   rowIsEntity,
   bulkActions,
   deleteEmptyLabel,
+  subject,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
   const clientTableStateOptions = useMemo(
     () => ({
@@ -159,6 +161,10 @@ export function useClientEntityList<TData extends BaseListRow>({
     nameEditable,
     nameSuffix,
     expandable: tree?.expandable,
+    // Both halves or neither: `subjectEntity` alone publishes the actions and
+    // nothing looks them up, which is a row menu that silently offers less
+    // than it should.
+    subject: subject?.resolve,
   });
   const {
     allColumns,
@@ -220,9 +226,10 @@ export function useClientEntityList<TData extends BaseListRow>({
       isLoading,
       error,
       bulkActionBar,
-      deleteDialog: presentationState.deleteDialog,
       rowActions: presentationState.listBulkActions.rowActions,
       actionDialogs: presentationState.listBulkActions.actionDialogs,
+      subjectEntity: subject?.entity,
+      deleteDialog: presentationState.deleteDialog,
     },
     requestDelete: presentationState.requestDelete,
   };

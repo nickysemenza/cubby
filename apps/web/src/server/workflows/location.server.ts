@@ -6,23 +6,19 @@ import {
 } from "@cubby/schemas/location";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
 import {
   buildLocationTree,
-  bulkReparentLocations,
   ensureGlobalUnknownLocation,
   getLocationInventoryBreakdown,
   getLocationsByShortcodes,
   getLocationValuationSummary,
   locationParentOptions,
   locationSearch,
+  reparentLocationsInBulk,
 } from "~/server/repo/location";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
-import {
-  runMutationSideEffects,
-  runMutationSideEffectsForEntities,
-} from "~/server/services/mutation-side-effects";
+import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 
 export type LocationWorkflowContext = {
   db: Database;
@@ -92,30 +88,24 @@ export const ensureGlobalUnknownWorkflow = async (
   return location;
 };
 
+/**
+ * Kept alongside the kernel's `location.bulkUpdate`: the arrange surface, the
+ * location sweep and the reparent dialog all drive this operation, and all
+ * three share {@link reparentLocationsInBulk} with the kernel path. Its `ids`
+ * bound is 3000, where the kernel's shared id schema caps at 500.
+ */
 export const bulkUpdateParentWorkflow = async (
   ctx: LocationWorkflowContext,
   input: z.input<typeof locationBulkUpdateParentInput>,
 ) => {
   const values = locationBulkUpdateParentInput.parse(input);
-  if (values.parentId && values.ids.includes(values.parentId))
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Cannot move a location under itself.",
-    );
-  const ids = [...new Set(await shortcodes.all(ctx.db, values.ids))];
-  const parentId = values.parentId
-    ? await shortcodes.one(ctx.db, values.parentId)
-    : null;
-  await bulkReparentLocations(ctx.db, ids, parentId, ctx.actorContext);
-  await runMutationSideEffectsForEntities(
+  const { updated } = await reparentLocationsInBulk(
     ctx.db,
-    ids.map((id) => ({
-      action: "updated" as const,
-      entity: { entityType: "location" as const, entityId: id },
-      source: "location.bulkUpdateParent",
-    })),
+    ctx.actorContext,
+    values.ids,
+    values.parentId ?? null,
   );
-  return { updated: ids.length };
+  return { updated };
 };
 
 export const getByShortcodesWorkflow = async (

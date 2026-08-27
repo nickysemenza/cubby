@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import {
   type expenseShortcode,
   parseEntityId,
@@ -6,14 +5,10 @@ import {
 import {
   expenseAnalyzeInput,
   expenseAnalyzeOut,
-  expenseBulkCostTypeInput,
-  expenseBulkMoveInput,
-  expenseBulkTradeInput,
   expenseFacetCountsInput,
   expenseFacetCountsOut,
   expenseFiltersSchema,
   expenseMatchInput,
-  expenseOut,
 } from "@cubby/schemas/project";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
@@ -26,33 +21,24 @@ import {
   expenseTradeAffinity,
   getExpenseByID,
   matchExpenses,
-  moveExpenses,
-  setExpensesCostType,
-  setExpensesTrade,
 } from "~/server/repo/expense";
 import {
   getPurchaseExpenses,
   getPurchaseLinkIdentityByID,
 } from "~/server/repo/purchase";
 import {
-  resolveAllPresent,
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 export {
   expenseAnalyzeInput,
   expenseAnalyzeOut,
-  expenseBulkCostTypeInput,
-  expenseBulkMoveInput,
-  expenseBulkTradeInput,
   expenseFacetCountsInput,
   expenseFacetCountsOut,
   expenseFiltersSchema,
   expenseMatchInput,
-  expenseOut,
 };
 
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
@@ -171,59 +157,3 @@ export const expenseChargeContextWorkflow = async (
   if (!purchase) return null;
   return { purchase, siblings: lines.filter((row) => row.id !== input) };
 };
-
-const bulkExpense = async <T extends z.ZodTypeAny>(
-  db: Database,
-  input: unknown,
-  schema: T,
-  source: string,
-  mutate: (parsed: z.output<T>) => Promise<z.output<typeof expenseOut>[]>,
-) => {
-  const items = await mutate(schema.parse(input));
-  const entityIds = await resolveAllPresent(
-    db,
-    "expense",
-    items.map((item) => item.id),
-  );
-  const backgroundBatches = await runMutationSideEffectsForEntities(
-    db,
-    [...entityIds.values()].map((entityId) => ({
-      action: "updated" as const,
-      entity: { entityType: "expense" as const, entityId },
-      source,
-    })),
-  );
-  return { items, sideEffects: { backgroundBatches } };
-};
-export const expenseBulkMoveWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseBulkMoveInput>,
-  actorContext: ActorContext,
-) =>
-  bulkExpense(db, input, expenseBulkMoveInput, "expense.bulkMove", (parsed) =>
-    moveExpenses(db, parsed, actorContext),
-  );
-export const expenseBulkSetTradeWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseBulkTradeInput>,
-  actorContext: ActorContext,
-) =>
-  bulkExpense(
-    db,
-    input,
-    expenseBulkTradeInput,
-    "expense.bulkSetTrade",
-    (parsed) => setExpensesTrade(db, parsed, actorContext),
-  );
-export const expenseBulkSetCostTypeWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseBulkCostTypeInput>,
-  actorContext: ActorContext,
-) =>
-  bulkExpense(
-    db,
-    input,
-    expenseBulkCostTypeInput,
-    "expense.bulkSetCostType",
-    (parsed) => setExpensesCostType(db, parsed, actorContext),
-  );

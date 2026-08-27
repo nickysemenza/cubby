@@ -1,4 +1,3 @@
-import type { ActorContext } from "@cubby/schemas/context";
 import type {
   ExpenseId,
   PurchaseId,
@@ -25,6 +24,8 @@ import {
 } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense as expenseTable, product, project } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
 import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
@@ -62,9 +63,10 @@ import {
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { vendorOptions } from "~/server/repo/vendor";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   expenseAnalyticsWorkflow,
-  expenseBulkMoveWorkflow,
   expenseChargeContextWorkflow,
   expenseChartDataWorkflow,
   expenseTradeAffinityWorkflow,
@@ -73,7 +75,7 @@ import {
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
 
-const createExpenseWorkflowCaller = (db: Database, actor: ActorContext) => ({
+const createExpenseWorkflowCaller = (db: Database) => ({
   chartData: (input: Parameters<typeof expenseChartDataWorkflow>[1]) =>
     expenseChartDataWorkflow(db, input),
   analytics: (input: Parameters<typeof expenseAnalyticsWorkflow>[1]) =>
@@ -81,8 +83,6 @@ const createExpenseWorkflowCaller = (db: Database, actor: ActorContext) => ({
   chargeContext: (input: Parameters<typeof expenseChargeContextWorkflow>[1]) =>
     expenseChargeContextWorkflow(db, input),
   tradeAffinity: () => expenseTradeAffinityWorkflow(db),
-  bulkMove: (input: Parameters<typeof expenseBulkMoveWorkflow>[1]) =>
-    expenseBulkMoveWorkflow(db, input, actor),
 });
 
 const vendorIdOf = (expense: ExpenseOut): VendorShortcode => {
@@ -1313,7 +1313,7 @@ describe("expense workflow", () => {
   const ctx = withTestDb();
 
   it("chartData returns the filtered set", async () => {
-    const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+    const caller = createExpenseWorkflowCaller(ctx.db);
     await createExpense(
       ctx.db,
       expenseCreateInput.parse({
@@ -1374,7 +1374,7 @@ describe("expense workflow", () => {
     };
 
     it("'none' returns only unassigned expenses", async () => {
-      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+      const caller = createExpenseWorkflowCaller(ctx.db);
       await seedProjectMix();
 
       const rows = await caller.chartData({ projectPresenceFilter: "none" });
@@ -1385,7 +1385,7 @@ describe("expense workflow", () => {
     });
 
     it("'has' returns only assigned expenses", async () => {
-      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+      const caller = createExpenseWorkflowCaller(ctx.db);
       await seedProjectMix();
 
       const names = (
@@ -1398,7 +1398,7 @@ describe("expense workflow", () => {
     });
 
     it("combines with projectId as OR — that project plus the unassigned", async () => {
-      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+      const caller = createExpenseWorkflowCaller(ctx.db);
       const { projA } = await seedProjectMix();
 
       const names = (
@@ -1416,7 +1416,7 @@ describe("expense workflow", () => {
     // buildExpenseWhereClause backs BOTH the ledger list and the analytics
     // aggregates; this pins that they still agree through the new OR branch.
     it("keeps ledger totals and analytics totals in agreement", async () => {
-      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+      const caller = createExpenseWorkflowCaller(ctx.db);
       const { projA } = await seedProjectMix();
       const filters = {
         projectId: [projA.id],
@@ -1438,7 +1438,7 @@ describe("expense workflow", () => {
 
   describe("chargeContext", () => {
     it("returns canonical charge identity and the other lines, excluding the expense itself", async () => {
-      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+      const caller = createExpenseWorkflowCaller(ctx.db);
       const orderId = "111-siblings-0000001";
       const [{ output: self }, { output: sibling }] = await Promise.all([
         createExpense(
@@ -1489,7 +1489,7 @@ describe("expense workflow", () => {
     });
 
     it("returns null for an expense with no charge — without early-returning on a missing order id", async () => {
-      const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+      const caller = createExpenseWorkflowCaller(ctx.db);
       const { output: chargeless } = await createExpense(
         ctx.db,
         makeExpenseInput({ name: "cash, no vendor" }),
@@ -1520,7 +1520,7 @@ describe("expense workflow", () => {
   });
 
   it("tradeAffinity counts assigned expenses per project and trade", async () => {
-    const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+    const caller = createExpenseWorkflowCaller(ctx.db);
     const { output: proj } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "affinity project" }),
@@ -1567,58 +1567,102 @@ describe("expense workflow", () => {
     expect(forProject.find((row) => row.trade === "drywall")?.count).toBe(2);
     expect(forProject.find((row) => row.trade === "electrical")?.count).toBe(1);
   });
+});
 
-  it("bulkMove moves expenses to another project and to the inbox (null), returning items + sideEffects", async () => {
-    const caller = createExpenseWorkflowCaller(ctx.db, ctx.actor);
+describe("expense kernel — bulkUpdate", () => {
+  const ctx = withTestDb();
+  const kernelContext = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+  // The patch shape is exactly what is under test, so it stays a loose record
+  // here and the command is asserted onto the mutation union.
+  const bulkUpdate = async (ids: string[], data: Record<string, unknown>) => {
+    const result = await executeEntity(kernelContext(), {
+      action: "bulkUpdate",
+      entity: "expense",
+      ids,
+      data,
+    } as EntityMutationCommand);
+    if (result.action !== "bulkUpdate") throw new Error("unreachable");
+    return result;
+  };
+
+  it("moves expenses to another project and to the inbox (null)", async () => {
     const { output: projectA } = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "bulk move a" }),
+      projectCreateInput.parse({ name: "kernel bulk move a" }),
       ctx.actor,
     );
     const { output: projectB } = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "bulk move b" }),
+      projectCreateInput.parse({ name: "kernel bulk move b" }),
       ctx.actor,
     );
-    const { output: p1 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "bulk move expense 1",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-    const { output: p2 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "bulk move expense 2",
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
+    const make = async (name: string) =>
+      (
+        await createExpense(
+          ctx.db,
+          expenseCreateInput.parse({
+            date: "2024-01-15",
+            trade: "other",
+            costType: "materials",
+            name,
+            projectId: projectA.id,
+          }),
+          ctx.actor,
+        )
+      ).output;
+    const p1 = await make("kernel bulk move expense 1");
+    const p2 = await make("kernel bulk move expense 2");
 
-    const toB = await caller.bulkMove({
-      ids: [p1.id, p2.id],
-      projectId: projectB.id,
-    });
-    expect(toB.items.map((i) => i.projectId)).toEqual([
-      projectB.id,
-      projectB.id,
-    ]);
+    const toB = await bulkUpdate([p1.id, p2.id], { projectId: projectB.id });
+    expect(toB.updated).toBe(2);
+    // The kernel does NOT run side effects for bulkUpdate; the repository does.
     expect(toB.sideEffects).toBeDefined();
+    expect((await getExpenseByShortcode(ctx.db, p1.id))?.projectId).toBe(
+      projectB.id,
+    );
 
-    const toInbox = await caller.bulkMove({
-      ids: [p1.id, p2.id],
-      projectId: null,
-    });
-    expect(toInbox.items.every((i) => i.projectId === null)).toBe(true);
-    expect(toInbox.sideEffects).toBeDefined();
+    const toInbox = await bulkUpdate([p1.id, p2.id], { projectId: null });
+    expect(toInbox.updated).toBe(2);
+    expect((await getExpenseByShortcode(ctx.db, p2.id))?.projectId).toBeNull();
+  });
+
+  it("applies trade and cost type in one patch", async () => {
+    const { output: e } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "kernel two fields",
+      }),
+      ctx.actor,
+    );
+
+    expect(
+      (await bulkUpdate([e.id], { trade: "drywall", costType: "services" }))
+        .updated,
+    ).toBe(1);
+    const reread = await getExpenseByShortcode(ctx.db, e.id);
+    expect(reread?.trade).toBe("drywall");
+    expect(reread?.costType).toBe("services");
+  });
+
+  it("refuses a field the entity never declared as bulk-updatable", async () => {
+    const { output: e } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "kernel undeclared",
+      }),
+      ctx.actor,
+    );
+
+    await expect(bulkUpdate([e.id], { name: "Renamed" })).rejects.toThrow();
   });
 });
 

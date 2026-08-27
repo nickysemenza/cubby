@@ -13,8 +13,10 @@ import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Plus, Search, Wrench } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -116,7 +118,31 @@ function ResourcesTable({
       toast.error(getErrorMessage(error));
     },
   });
-  const selection = useEntitySelection<ResourceRow>({ entity: "product" });
+  // Table-local for the same reason as the purchase twin: the project is known
+  // to the table, not to a row, and `detachResources` already takes an array.
+  // `mutateAsync` is referentially stable; the mutation object is not.
+  const detachAsync = detach.mutateAsync;
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        verbBulkAction<ResourceRow>("removeFromProject", {
+          minSelection: 1,
+          onExecute: async (rows) => {
+            await detachAsync({
+              projectId,
+              productIds: rows.map((row) => row.original.id),
+            });
+            return { success: true };
+          },
+        }),
+      ],
+    }),
+    [projectId, detachAsync],
+  );
+  const selection = useEntitySelection<ResourceRow>({
+    entity: "product",
+    bulkActions,
+  });
   const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
   const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
     () => [
@@ -189,28 +215,26 @@ function ResourcesTable({
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
   return (
-    <EntityActionsProvider value={selection.rowActions}>
-      <RTable
-        table={table}
-        entity="product"
-        bulkActionBar={selection.renderBulkActionBar(table)}
-        ariaLabel="Reusable project resources"
-        embedded
-        isLoading={isLoading}
-        emptyState={
-          <Empty variant="minimal" className="py-6">
-            <EmptyHeader>
-              <EmptyTitle>No reusable resources recorded</EmptyTitle>
-              <EmptyDescription>
-                Add meaningful durable tools and shared software. Small
-                consumables do not need to become project-use records.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        }
-      />
-      {selection.actionDialogs}
-    </EntityActionsProvider>
+    <RTable
+      table={table}
+      entity="product"
+      bulkActionBar={selection.renderBulkActionBar(table)}
+      {...selection.tableProps}
+      ariaLabel="Reusable project resources"
+      embedded
+      isLoading={isLoading}
+      emptyState={
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No reusable resources recorded</EmptyTitle>
+            <EmptyDescription>
+              Add meaningful durable tools and shared software. Small
+              consumables do not need to become project-use records.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      }
+    />
   );
 }
 

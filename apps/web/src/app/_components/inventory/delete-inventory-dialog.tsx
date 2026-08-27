@@ -46,9 +46,13 @@ export function DeleteInventoryDialog({
       action="Delete"
       pendingLabel="Deleting..."
       description={`This action cannot be undone. The following ${pluralize("inventory item", items.length)} will be permanently deleted.`}
-      renderItem={(item) =>
-        `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
-      }
+      renderItem={(item) => item.product.name}
+      // The amount and shelf move into the projection: what the row loses is
+      // those units at that location, and the entry itself.
+      effect={(item) => ({
+        from: `${item.amount.value} ${item.amount.unit} at ${item.location.name}`,
+        to: "removed",
+      })}
       onSubmit={handleDelete}
       isPending={commands.isPending}
       variant="destructive"

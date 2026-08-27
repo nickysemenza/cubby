@@ -1,12 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
 import { copyShortcodes } from "~/lib/clipboard";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import {
-  type EntityActionRow,
-  type EntityActionsContextValue,
+  type EntityActionsEntry,
   useEntityActions,
 } from "../actions/entity-actions";
 import {
@@ -108,22 +106,20 @@ export function useListBulkActions<TData extends { id: string }>({
   );
   const state = useBulkActions({ config: config ?? emptyConfig });
 
-  // The cast is the documented shape of `EntityActionRow`: definitions write
-  // `rowMenuItem` against the base row, and the generic exists only so the
-  // BAR's actions come back at the caller's row type.
-  const rowMenuItems = registered.rowMenuItems as (
-    row: EntityActionRow,
-  ) => ReactNode;
+  const rowMenuItems = registered.rowMenuItems;
   const latestRowMenuItems = useRef(rowMenuItems);
   latestRowMenuItems.current = rowMenuItems;
+  const rowActions = useMemo<EntityActionsEntry>(
+    () => ({
+      entity,
+      rowMenuItems: (row) => latestRowMenuItems.current(row),
+    }),
+    [entity],
+  );
   // Stable for the component's life — `entity` is constant by
   // `useEntityActions`' own invariant, and reading the items through a ref
   // stops a fresh closure each render from invalidating the context for every
   // actions cell in the table.
-  const rowActions = useMemo<EntityActionsContextValue>(
-    () => ({ entity, rowMenuItems: (row) => latestRowMenuItems.current(row) }),
-    [entity],
-  );
 
   return {
     config,
@@ -131,9 +127,16 @@ export function useListBulkActions<TData extends { id: string }>({
     enableRowSelection: config !== undefined,
     rowSelection: config ? state.rowSelection : {},
     onRowSelectionChange: config ? state.onRowSelectionChange : undefined,
-    /** Publish via `EntityActionsProvider` to light up the row menus. */
+    /**
+     * The registry half, from THIS hook's `useEntityActions` instance.
+     *
+     * It has to be the same instance the bar's actions came from: an action
+     * stages its rows in the hook that owns its dialog, so resolving the bar
+     * here and the dialogs somewhere else leaves every bulk action opening
+     * nothing at all. Surfaces publish these rather than letting `RTable`
+     * resolve its own — `RTable` only falls back when nobody does.
+     */
     rowActions,
-    /** Render once, outside the table. */
     actionDialogs: registered.dialogs,
   };
 }

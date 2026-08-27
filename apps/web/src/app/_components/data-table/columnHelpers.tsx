@@ -25,7 +25,10 @@ import {
   Sigma,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { EntityActionRowMenuItems } from "~/app/_components/actions/entity-actions";
+import {
+  EntityActionRowMenuItems,
+  type EntityActionSubject,
+} from "~/app/_components/actions/entity-actions";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -696,6 +699,16 @@ interface ActionsColumnOptions<T> {
    * the row the user clicked.
    */
   rowLink?: RowLinkResolver<T>;
+  /**
+   * What each row is *about*, when that is a different record — an inventory
+   * entry is about its product. Its entity's actions then appear in this row's
+   * menu, which is how "Add to inventory" is reachable from a shelf without
+   * the inventory table re-declaring a product verb.
+   *
+   * The table must also pass `subjectEntity` to `RTable`, or nothing publishes
+   * that entity's actions for this column to find.
+   */
+  subject?: (row: T) => EntityActionSubject | null;
 }
 
 export function createActionsColumn<T extends { id: string | number }>(
@@ -715,7 +728,11 @@ export function createActionsColumn<T extends { id: string | number }>(
     // has the menu it always had.
     (row) => (
       <>
-        <EntityActionRowMenuItems entity={entity} row={row} />
+        <EntityActionRowMenuItems
+          entity={entity}
+          row={row}
+          subject={options?.subject?.(row)}
+        />
         {extraActions?.(row)}
       </>
     ),

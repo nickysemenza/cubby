@@ -144,15 +144,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "expense.analyze": async () =>
     (await import("~/server/expense-browser.server")).expenseHandlers.operations
       .analyze,
-  "expense.bulkMove": async () =>
-    (await import("~/server/expense-browser.server")).expenseHandlers.operations
-      .bulkMove,
-  "expense.bulkSetCostType": async () =>
-    (await import("~/server/expense-browser.server")).expenseHandlers.operations
-      .bulkSetCostType,
-  "expense.bulkSetTrade": async () =>
-    (await import("~/server/expense-browser.server")).expenseHandlers.operations
-      .bulkSetTrade,
   "expense.chargeContext": async () =>
     (await import("~/server/expense-browser.server")).expenseHandlers.operations
       .chargeContext,
@@ -237,6 +228,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "inventory.bulkAdd": async () =>
     (await import("~/server/inventory-browser.server")).inventoryHandlers
       .operations.bulkAdd,
+  "inventory.bulkDiscard": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.bulkDiscard,
   "inventory.bulkMove": async () =>
     (await import("~/server/inventory-browser.server")).inventoryHandlers
       .operations.bulkMove,
@@ -378,9 +372,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "product.attachComponents": async () =>
     (await import("~/server/product-browser.server")).productHandlers.operations
       .attachComponents,
-  "product.bulkSetStockTracked": async () =>
-    (await import("~/server/product-browser.server")).productHandlers.operations
-      .bulkSetStockTracked,
   "product.categoryDistribution": async () =>
     (await import("~/server/product-browser.server")).productHandlers.operations
       .categoryDistribution,
@@ -639,21 +630,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "task.board": async () =>
     (await import("~/server/task-browser.server")).taskHandlers.operations
       .board,
-  "task.bulkMove": async () =>
-    (await import("~/server/task-browser.server")).taskHandlers.operations
-      .bulkMove,
   "task.bulkReorder": async () =>
     (await import("~/server/task-browser.server")).taskHandlers.operations
       .bulkReorder,
-  "task.bulkSetDueDate": async () =>
-    (await import("~/server/task-browser.server")).taskHandlers.operations
-      .bulkSetDueDate,
-  "task.bulkSetStatus": async () =>
-    (await import("~/server/task-browser.server")).taskHandlers.operations
-      .bulkSetStatus,
-  "task.bulkSetTrade": async () =>
-    (await import("~/server/task-browser.server")).taskHandlers.operations
-      .bulkSetTrade,
   "task.chartData": async () =>
     (await import("~/server/task-browser.server")).taskHandlers.operations
       .chartData,

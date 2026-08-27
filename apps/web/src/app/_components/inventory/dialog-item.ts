@@ -17,7 +17,8 @@ import type {
 export interface InventoryDialogItem {
   id: InventoryShortcode;
   amount: Amount;
-  location: { id: LocationShortcode };
+  /** `name` renders the `current → target` projection, not just the row. */
+  location: { id: LocationShortcode; name: string };
   /** Names the row in the delete confirmation. */
   product: { name: string };
 }

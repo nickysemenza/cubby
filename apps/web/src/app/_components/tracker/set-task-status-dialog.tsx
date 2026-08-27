@@ -10,12 +10,18 @@ interface SetTaskStatusItem {
   name: string;
 }
 
-interface SetTaskStatusDialogProps {
+interface SetTaskStatusDialogProps<T extends SetTaskStatusItem> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: SetTaskStatusItem[];
+  items: T[];
   onConfirm: (status: TaskStatus) => Promise<void>;
   isPending: boolean;
+  /**
+   * The row's current status. Supplying it previews `current → next` and dims
+   * the rows already in the chosen status — the reason this dialog is generic
+   * over its row type rather than narrowing to `{ id, name }`.
+   */
+  currentStatus?: (item: T) => TaskStatus;
 }
 
 /**
@@ -24,13 +30,14 @@ interface SetTaskStatusDialogProps {
  * the project combobox for the task status enum. Expenses have no status
  * field, so this stays task-only (unlike the shared move dialog).
  */
-export function SetTaskStatusDialog({
+export function SetTaskStatusDialog<T extends SetTaskStatusItem>({
   open,
   onOpenChange,
   items,
   onConfirm,
   isPending,
-}: SetTaskStatusDialogProps) {
+  currentStatus,
+}: SetTaskStatusDialogProps<T>) {
   const [status, setStatus] = useState<string | null>(null);
 
   const handleOpenChange = (next: boolean) => {
@@ -45,6 +52,8 @@ export function SetTaskStatusDialog({
   };
 
   const count = items.length;
+  const labelOf = (value: string) =>
+    taskStatusOptions.find((option) => option.value === value)?.label ?? value;
 
   return (
     <BulkActionDialog
@@ -57,6 +66,20 @@ export function SetTaskStatusDialog({
       itemNoun="Task"
       description={`Set a new status for ${count} task${count !== 1 ? "s" : ""}.`}
       renderItem={(item) => item.name}
+      // Nothing to project until the picker holds a value.
+      effect={
+        currentStatus && status !== null
+          ? (item) => {
+              const current = currentStatus(item);
+              return {
+                from: labelOf(current),
+                to: labelOf(status),
+                unchanged: current === status,
+              };
+            }
+          : undefined
+      }
+      unchangedLabel="already in this status"
       onSubmit={handleSubmit}
       isPending={isPending}
     >

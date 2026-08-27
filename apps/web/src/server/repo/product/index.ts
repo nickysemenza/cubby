@@ -55,7 +55,7 @@ export {
 } from "./crud";
 // Discard (a $0, negative-quantity exit — see the module doc for why it
 // carries no Purchase and how it treats the shelf).
-export { discardProductUnits } from "./discard";
+export { discardFromInventoryEntries, discardProductUnits } from "./discard";
 export { foodLookupParamFromProduct } from "./helpers";
 export {
   findProductByGtin,

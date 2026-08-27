@@ -239,3 +239,19 @@ export type EntityEditResult<E extends EditableEntity> =
       result?: EntityEditResultFor<E>;
     }
   | { ok: false; issues: readonly EntityEditIssue[] };
+
+/**
+ * A bulk patch reports a count over N rows, so it has no single entity output
+ * to recover through the entity's own schema. It gets its own outcome rather
+ * than widening {@link EntityEditResult}: every other consumer of that type
+ * reads an entity-shaped `result`.
+ */
+export interface EntityBulkUpdateResult {
+  updated: number;
+  updatedIds: readonly string[];
+  sideEffects: { backgroundBatches: readonly unknown[] };
+}
+
+export type EntityBulkUpdateOutcome =
+  | { ok: true; entity: EditableEntity; result: EntityBulkUpdateResult }
+  | { ok: false; issues: readonly EntityEditIssue[] };

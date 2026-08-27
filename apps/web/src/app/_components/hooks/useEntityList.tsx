@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
@@ -17,6 +18,7 @@ import {
   listEntities,
 } from "~/entities/generated/entity-lists.gen";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import type { EntityActionSubject } from "../actions/entity-actions";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
@@ -120,6 +122,16 @@ export interface UseEntityListOptions<
   tableStateOptions?: Parameters<typeof useTableState>[0];
   bulkActions?: BulkActionsConfig<TData>;
   extraActions?: (row: TData) => ReactNode;
+  /**
+   * What each row is *about*, when that is a different record — an inventory
+   * entry is about its product. That entity's actions then appear in the row
+   * menu, so a verb registered once is reachable from every table that names
+   * its subject rather than only from the subject's own list.
+   */
+  subject?: {
+    entity: Entity;
+    resolve: (row: TData) => EntityActionSubject | null;
+  };
   initialColumnVisibility?: Record<string, boolean>;
   layoutKey?: string;
   legacyLayoutVisibilityKey?: string;
@@ -191,6 +203,7 @@ export function useEntityList<
   hiddenFilterColumns,
   groupConfig,
   tree,
+  subject,
 }: UseEntityListOptions<TData, TFilters, TRow>): UseEntityListReturn<
   TData,
   TFilters,
@@ -331,6 +344,7 @@ export function useEntityList<
     hiddenFilterColumns,
     expandable: tree?.expandable,
     rowLink: tree?.rowLink,
+    subject: subject?.resolve,
     rowActionGuard: rowActionsGuard,
   });
   const {
@@ -446,9 +460,10 @@ export function useEntityList<
       error,
       timing,
       bulkActionBar,
-      deleteDialog: presentationState.deleteDialog,
       rowActions: presentationState.listBulkActions.rowActions,
       actionDialogs: presentationState.listBulkActions.actionDialogs,
+      subjectEntity: subject?.entity,
+      deleteDialog: presentationState.deleteDialog,
       infiniteScroll: infiniteResult.infiniteScroll,
       refreshControls,
       grouped,

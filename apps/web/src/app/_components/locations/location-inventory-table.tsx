@@ -1,8 +1,4 @@
-import type {
-  InventoryShortcode,
-  LocationShortcode,
-  ProductShortcode,
-} from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
@@ -25,7 +21,6 @@ import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
-import { InventoryDiscardDialog } from "../inventory/inventory-discard-dialog";
 import { InventoryShelf } from "../inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import {
@@ -78,6 +73,20 @@ const EMBEDDED_TABLE_STATE = {
 } as const;
 const NO_TABLE_FILTERS = () => ({}) as Record<string, never>;
 
+/**
+ * An inventory entry is about its product, so product verbs reach this row
+ * without the inventory table declaring any. Module-level: a fresh literal
+ * per render feeds a hook dependency contract and rebuilds every column.
+ */
+const PRODUCT_SUBJECT = {
+  entity: "product" as const,
+  resolve: (row: { product: { id: string; name: string } }) => ({
+    entity: "product" as const,
+    id: row.product.id,
+    name: row.product.name,
+  }),
+};
+
 export function LocationInventoryTable({
   locationId,
   view,
@@ -103,12 +112,6 @@ export function LocationInventoryTable({
     type: "move" | "delete" | null;
     items: InventoryItem[];
   }>({ type: null, items: [] });
-  // Discard is single-row only: it writes one ledger line against one product.
-  const [discardTarget, setDiscardTarget] = useState<{
-    productId: ProductShortcode;
-    entryId: InventoryShortcode;
-  } | null>(null);
-
   // `updateMutation` is intentionally absent from the dep array: useMutation
   // returns a new object every render, but the closure captures mutateAsync
   // correctly and it is functionally stable — same reasoning as the columns
@@ -239,6 +242,7 @@ export function LocationInventoryTable({
   >({
     entity: "inventory",
     layoutKey: "inventory:location-detail",
+    subject: PRODUCT_SUBJECT,
     // Forward the table's own sort/pagination — dropping the argument left the
     // Product/Amount sort headers doing nothing (manualSorting is on, so
     // TanStack doesn't sort client-side either) and made every page of a
@@ -255,18 +259,6 @@ export function LocationInventoryTable({
         <VerbMenuItem
           verb="moveTo"
           onSelect={() => setDialogState({ type: "move", items: [item] })}
-        />
-        {/* Discard writes a ledger row and can clear the shelf in the same
-            transaction — the honest verb for "used it up", where Delete just
-            says the entry should never have existed. */}
-        <VerbMenuItem
-          verb="discard"
-          onSelect={() =>
-            setDiscardTarget({
-              productId: item.product.id,
-              entryId: item.id,
-            })
-          }
         />
         <VerbMenuItem
           verb="delete"
@@ -311,17 +303,6 @@ export function LocationInventoryTable({
           workbench.table.resetRowSelection();
         }}
       />
-
-      {/* Discard dialog — fetches the product so the operator sees every shelf.
-          Mounted only while targeted, so the fetch never runs at rest. */}
-      {discardTarget && (
-        <InventoryDiscardDialog
-          onOpenChange={(open) => {
-            if (!open) setDiscardTarget(null);
-          }}
-          target={discardTarget}
-        />
-      )}
 
       {/* Delete dialog */}
       <DeleteInventoryDialog
