@@ -125,6 +125,3 @@ export function entityDetailFor<E extends DetailEntity>(entity: E) {
 export type EntityDetailScoped<E extends DetailEntity> = ReturnType<
   typeof entityDetailFor<E>
 >;
-
-export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
-  entityDetailFor(entity).queryKey("").slice(0, 2);
