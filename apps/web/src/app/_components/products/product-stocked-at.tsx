@@ -333,6 +333,8 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   );
   const { workbench } = useClientEntityList<StockedRow>({
     entity: "inventory",
+    // This embedded relationship table owns placement-aware Inventory actions.
+    includeCatalogActions: false,
     subject,
     data: rows,
     columns,

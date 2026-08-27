@@ -4,13 +4,9 @@ import {
   locationCoverImage,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
-import { Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
-import {
-  VerbMenuItem,
-  verbBulkAction,
-} from "~/app/_components/actions/action-verb-ui";
+import { Link } from "@tanstack/react-router";
+import { useCallback, useMemo } from "react";
+import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import {
@@ -29,11 +25,9 @@ import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilter
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useLocationParentOptions } from "../_components/hooks/useLocationParentOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { BulkReparentLocationsDialog } from "../_components/locations/bulk-reparent-locations-dialog";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
-import { typeSupportsQrCode } from "../_components/locations/location-type-theme";
 
 /**
  * Module-level: `initialColumnVisibility` sits in the merged-visibility
@@ -48,14 +42,10 @@ const LOCATION_INITIAL_COLUMN_VISIBILITY = {
 };
 
 export function LocationList() {
-  const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<LocationListItemOut>(),
     [],
   );
-  const [reparentLocations, setReparentLocations] = useState<
-    LocationListItemOut[]
-  >([]);
 
   // Runtime picklist for the manifest's `parent` spec (optionsKey: "parentLocation").
   const { options: parentLocationOptions } = useLocationParentOptions();
@@ -191,51 +181,6 @@ export function LocationList() {
     [columnHelper],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
-  const bulkActions = useMemo(
-    () => ({
-      actions: [
-        verbBulkAction<LocationListItemOut>("printLabels", {
-          id: "print-labels",
-          minSelection: 1,
-          onExecute: async (rows) => {
-            const eligible = rows.filter((r) =>
-              typeSupportsQrCode(r.original.type),
-            );
-            const skipped = rows.length - eligible.length;
-
-            if (eligible.length === 0) {
-              toast.error(
-                "None of the selected locations support QR code labels (rooms and areas are excluded)",
-              );
-              return { success: false };
-            }
-
-            if (skipped > 0) {
-              toast.info(
-                `Skipped ${skipped} location${skipped === 1 ? "" : "s"} without QR support (rooms/areas)`,
-              );
-            }
-
-            const codes = eligible.map((r) => r.original.id).join(",");
-            navigate({ to: "/labels", search: { codes } });
-            return { success: true };
-          },
-        }),
-        verbBulkAction<LocationListItemOut>("moveUnder", {
-          id: "move-parent",
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setReparentLocations(rows.map((r) => r.original));
-            return { success: true };
-          },
-        }),
-      ],
-      clearSelectionOnComplete: false,
-    }),
-    [],
-  );
-
   const extraActions = useCallback(
     (row: LocationListItemOut) => (
       <>
@@ -249,12 +194,6 @@ export function LocationList() {
             <Link to="/locations/photo-pass" search={{ parent: row.id }} />
           }
         />
-        {row.id && typeSupportsQrCode(row.type) && (
-          <VerbMenuItem
-            verb="printLabel"
-            render={<Link to="/labels" search={{ codes: row.id }} />}
-          />
-        )}
       </>
     ),
     [],
@@ -279,27 +218,10 @@ export function LocationList() {
       entity="location"
       filterOptions={filterOptions}
       columns={columns}
-      bulkActions={bulkActions}
       extraActions={extraActions}
       initialColumnVisibility={LOCATION_INITIAL_COLUMN_VISIBILITY}
       groupConfig={groupConfig}
       ariaLabel="Locations Table"
-    >
-      {/* Needs the table itself: a completed bulk reparent clears the row
-          selection it acted on. */}
-      {({ workbench }) => (
-        <BulkReparentLocationsDialog
-          open={reparentLocations.length > 0}
-          onOpenChange={(open) => {
-            if (!open) setReparentLocations([]);
-          }}
-          locations={reparentLocations}
-          onSuccess={() => {
-            setReparentLocations([]);
-            workbench.table.resetRowSelection();
-          }}
-        />
-      )}
-    </EntityListPage>
+    />
   );
 }

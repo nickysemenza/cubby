@@ -1,13 +1,8 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { RotateCcw } from "lucide-react";
-import { type ReactNode, useCallback, useMemo } from "react";
-import {
-  VerbMenuItem,
-  verbBulkAction,
-} from "~/app/_components/actions/action-verb-ui";
+import { type ReactNode, useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
 
@@ -45,7 +40,6 @@ import {
   perServingRange,
   perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
-import { useDuplicateRecipe } from "../_components/recipe/use-duplicate-recipe";
 import { TruncatedList } from "../_components/TruncatedList";
 import { recipe as recipeOperations } from "./recipe.functions";
 import { totalsLookStuck } from "./recipe-totals-staleness";
@@ -146,7 +140,6 @@ export function RecipeList({
   cookbookIdFilter,
   hiddenFilterColumns,
 }: RecipeListProps) {
-  const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<RecipeListItem>(),
     [],
@@ -492,35 +485,6 @@ export function RecipeList({
     entity: "recipe",
   });
 
-  const { duplicateRecipe, isPending: isDuplicating } = useDuplicateRecipe();
-  const extraActions = useCallback(
-    (row: RecipeListItem) => (
-      <VerbMenuItem
-        verb="duplicate"
-        disabled={isDuplicating}
-        onSelect={() => duplicateRecipe(row.id)}
-      />
-    ),
-    [duplicateRecipe, isDuplicating],
-  );
-
-  const bulkActions = useMemo(
-    () => ({
-      actions: [
-        verbBulkAction<RecipeListItem>("compare", {
-          minSelection: 2,
-          onExecute: (rows) => {
-            const ids = rows.map((r) => r.original.id).join(",");
-            navigate({ to: "/recipes/compare", search: { ids } });
-            return Promise.resolve({ success: true });
-          },
-        }),
-      ],
-      clearSelectionOnComplete: false, // Don't clear selection after navigating
-    }),
-    [navigate],
-  );
-
   return (
     <EntityListPage
       entity="recipe"
@@ -531,8 +495,6 @@ export function RecipeList({
       columns={columns}
       nameClassName="w-64"
       hiddenFilterColumns={hiddenFilterColumns}
-      extraActions={extraActions}
-      bulkActions={bulkActions}
       // Its own config, not the contract default: a recipe write from this
       // table only moves `recipe.list`, not the meal rollups the contract's
       // broader fan-out covers.

@@ -1,9 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { useMemo, useRef } from "react";
-import { copyShortcodes } from "~/lib/clipboard";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import {
+  type EntityActionDefinition,
   type EntityActionsEntry,
   useEntityActions,
 } from "../actions/entity-actions";
@@ -25,54 +24,53 @@ import {
 } from "../data-table/useBulkActions";
 
 /**
- * "Copy shortcodes" for every shortcode-bearing entity list.
- *
- * Generic because a list row's `id` IS its public shortcode (see
- * `nameColumnParams` in columnHelpers.tsx, which builds every detail link as
- * `{ shortcode: String(row.id) }`). Gated on the `shortcodeEntities` roster
- * rather than a second hand-kept list — which is why `image` picked this action
- * up for free the moment it was given an `IMG-` code, and why `usda-food` (an
- * external `fdc_id`, no local table) still does not get it.
- *
- * Foreign child rows in a tree can't reach this: `EntityListTreeConfig.rowIsEntity`
- * already turns selection off for them, so their synthetic `parent:child` ids
- * never enter a selection.
- */
-function useCopyShortcodesAction<TData extends { id: string }>(
-  entity: Entity,
-): BulkAction<TData> | null {
-  return useMemo(() => {
-    if (!(shortcodeEntities as readonly Entity[]).includes(entity)) return null;
-    return verbBulkAction<TData>("copyCodes", {
-      // The id predates the registry and is the one every list already ships.
-      id: "copy-shortcodes",
-      preserveSelection: true,
-      onExecute: async (rows) => ({
-        success: await copyShortcodes(rows.map((row) => row.original.id)),
-      }),
-    });
-  }, [entity]);
-}
-
-/**
  * A list with no registered actions must keep a stable `config`: the hook
  * rebuilds its arrays every render (each definition's `use()` is a hook), so
  * an empty result has to collapse to one module value or the memo below churns
  * on every render for every list in the app.
  */
 const NO_REGISTERED_ACTIONS: readonly never[] = [];
+const NO_ENTITY_ACTION_DEFINITIONS: readonly EntityActionDefinition[] = [];
 
 export function useListBulkActions<TData extends { id: string }>({
   entity,
   bulkActions,
   deleteBulkAction,
+  additionalActions,
+  onInspectRow,
+  includeCatalogActions = true,
 }: {
   entity: Entity;
   bulkActions?: BulkActionsConfig<TData>;
   deleteBulkAction?: BulkAction<TData> | null;
+  /** Surface-owned lifecycle definitions resolved by the same catalog. */
+  additionalActions?: readonly EntityActionDefinition[];
+  /** Presentation-only action for the one checked canonical record. */
+  onInspectRow?: (row: Row<TData>) => void;
+  /** Embedded specialist tables may keep their contextual action vocabulary. */
+  includeCatalogActions?: boolean;
 }) {
-  const copyAction = useCopyShortcodesAction<TData>(entity);
-  const registered = useEntityActions<TData>(entity);
+  const inspectAction = useMemo<BulkAction<TData> | null>(
+    () =>
+      onInspectRow
+        ? verbBulkAction<TData>("inspect", {
+            maxSelection: 1,
+            preserveSelection: true,
+            onExecute: async (rows) => {
+              const selected = rows[0];
+              if (!selected) return { success: false };
+              onInspectRow(selected);
+              return { success: true };
+            },
+          })
+        : null,
+    [onInspectRow],
+  );
+  const registered = useEntityActions<TData>(
+    entity,
+    includeCatalogActions ? undefined : NO_ENTITY_ACTION_DEFINITIONS,
+    additionalActions,
+  );
   const registeredActions = registered.bulkActions.length
     ? registered.bulkActions
     : (NO_REGISTERED_ACTIONS as readonly BulkAction<TData>[]);
@@ -81,7 +79,7 @@ export function useListBulkActions<TData extends { id: string }>({
     if (
       !deleteBulkAction &&
       !bulkActions &&
-      !copyAction &&
+      !inspectAction &&
       registeredActions.length === 0
     )
       return undefined;
@@ -93,13 +91,13 @@ export function useListBulkActions<TData extends { id: string }>({
       // the entity-wide vocabulary before the local additions, matching the row
       // menu in `createActionsColumn`.
       actions: [
-        ...(copyAction ? [copyAction] : []),
+        ...(inspectAction ? [inspectAction] : []),
         ...registeredActions,
         ...(bulkActions?.actions ?? []),
         ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
     };
-  }, [bulkActions, copyAction, deleteBulkAction, registeredActions]);
+  }, [bulkActions, deleteBulkAction, inspectAction, registeredActions]);
   const emptyConfig = useMemo<BulkActionsConfig<TData>>(
     () => ({ actions: [] }),
     [],

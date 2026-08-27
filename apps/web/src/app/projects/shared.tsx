@@ -74,15 +74,6 @@ import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
 import {
-  ExpenseBulkActionDialogs,
-  useExpenseBulkActions,
-} from "~/app/_components/tracker/expense-bulk-actions";
-import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
-import {
-  TaskBulkActionDialogs,
-  useTaskBulkActions,
-} from "~/app/_components/tracker/task-bulk-actions";
-import {
   costTypeOptions,
   expenseFutureOptions,
   expenseLineBasisOptions,
@@ -282,10 +273,8 @@ export function TaskList({
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
     useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
 
-  const taskBulkActions = useTaskBulkActions();
   const selection = useEntitySelection<TaskOut>({
     entity: "task",
-    bulkActions: taskBulkActions.config,
     deleteBulkAction,
   });
 
@@ -470,10 +459,6 @@ export function TaskList({
         {...selection.tableProps}
       />
       {deleteDialog}
-      <TaskBulkActionDialogs
-        controller={taskBulkActions}
-        onComplete={() => table.resetRowSelection()}
-      />
     </>
   );
 }
@@ -918,22 +903,11 @@ export function ExpenseList({
     entityLabel: "Expense",
     entity: "expense",
   });
-  // Only parent views may move rows among sub-projects.
-  const rowActions = useExpenseRowActions({
-    moveDisabledReason: showProjectColumn
-      ? undefined
-      : "Already in this project",
-  });
   const { deleteBulkAction, combinedExtraActions, deleteDialog } =
-    useOptimisticDelete<ExpenseOut>({
-      deletable: deletableConfig,
-      extraActions: rowActions.extraActions,
-    });
+    useOptimisticDelete<ExpenseOut>({ deletable: deletableConfig });
 
-  const expenseBulkActions = useExpenseBulkActions();
   const selection = useEntitySelection<ExpenseOut>({
     entity: "expense",
-    bulkActions: expenseBulkActions.config,
     deleteBulkAction,
   });
 
@@ -1144,11 +1118,6 @@ export function ExpenseList({
         {...selection.tableProps}
       />
       {deleteDialog}
-      {rowActions.dialogs}
-      <ExpenseBulkActionDialogs
-        controller={expenseBulkActions}
-        onComplete={() => table.resetRowSelection()}
-      />
     </ExpenseProductImages>
   );
 }
@@ -1214,6 +1183,7 @@ export function ProjectTable({
   });
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -1378,6 +1348,7 @@ export function ProjectTable({
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
   const { workbench, data, totalCount } = useEntityList({
     entity: "project",
+    onInspectRow: inspectRow,
     queryOptions: isTree ? project.tree.queryOptions : undefined,
     columns,
     filterOptions,

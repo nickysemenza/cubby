@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
+import { EntityActionsProvider } from "../actions/entity-actions";
 import {
   createActionsColumn,
   createBooleanColumn,
@@ -125,6 +126,7 @@ type ProjectRow = {
 function renderColumn<TRow extends RowData, TValue = ParentValue>(
   column: ColumnDef<TRow, TValue>,
   row: TRow,
+  wrap?: (children: ReactNode) => ReactNode,
 ) {
   function Harness() {
     const table = useTable({
@@ -134,7 +136,7 @@ function renderColumn<TRow extends RowData, TValue = ParentValue>(
     });
     const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
     if (!cell) throw new Error("expected one row with one cell");
-    return (
+    const markup = (
       <table>
         <tbody>
           <tr>
@@ -143,6 +145,7 @@ function renderColumn<TRow extends RowData, TValue = ParentValue>(
         </tbody>
       </table>
     );
+    return wrap?.(markup) ?? markup;
   }
   return render(<Harness />);
 }
@@ -453,20 +456,51 @@ describe("createActionsColumn", () => {
       entity,
     ) as ColumnDef<ActionRow, unknown>;
 
-  it("offers the row's own code, and copies exactly that", () => {
-    renderColumn<ActionRow, unknown>(actionsColumn("product"), {
-      id: "PRD-4K7M",
-    });
+  const withCopyActions = (entity: "product" | "image") =>
+    function CopyActionsProvider({ children }: { children: ReactNode }) {
+      return (
+        <EntityActionsProvider
+          value={{
+            entity,
+            rowMenuItems: (row) => (
+              <button
+                type="button"
+                onClick={() => void clipboardMocks.copyShortcodes([row.id])}
+              >
+                Copy {row.id}
+              </button>
+            ),
+          }}
+        >
+          {children}
+        </EntityActionsProvider>
+      );
+    };
+
+  it("publishes the row's own code to its registered action presenter", () => {
+    renderColumn<ActionRow, unknown>(
+      actionsColumn("product"),
+      { id: "PRD-4K7M" },
+      (children) => {
+        const CopyActionsProvider = withCopyActions("product");
+        return <CopyActionsProvider>{children}</CopyActionsProvider>;
+      },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /Copy PRD-4K7M/ }));
 
     expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M"]);
   });
 
-  it("offers the copy item for an image, which is shortcode-routed like the rest", () => {
-    renderColumn<ActionRow, unknown>(actionsColumn("image"), {
-      id: "IMG-4K7M",
-    });
+  it("uses the image action presenter for a shortcode-routed image", () => {
+    renderColumn<ActionRow, unknown>(
+      actionsColumn("image"),
+      { id: "IMG-4K7M" },
+      (children) => {
+        const CopyActionsProvider = withCopyActions("image");
+        return <CopyActionsProvider>{children}</CopyActionsProvider>;
+      },
+    );
 
     expect(screen.getByRole("link", { name: /View details/ })).toBeVisible();
 

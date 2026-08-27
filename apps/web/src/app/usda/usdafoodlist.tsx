@@ -70,6 +70,7 @@ export const withUSDAListIdentity = <
 export function USDAFoodList() {
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -263,6 +264,7 @@ export function USDAFoodList() {
 
   const { workbench } = useEntityList<USDAListRow, USDAListFilters>({
     entity: "usda-food",
+    onInspectRow: inspectRow,
     queryOptions,
     buildFilters: buildUSDAFilters,
     columns,

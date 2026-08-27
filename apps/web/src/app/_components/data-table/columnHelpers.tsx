@@ -17,7 +17,6 @@ import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import {
   ChevronRight,
-  ClipboardCopy,
   Eye,
   ImageIcon,
   MoreHorizontal,
@@ -56,7 +55,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
-import { copyShortcodes } from "~/lib/clipboard";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
 import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -759,15 +757,6 @@ export function createActionsColumnBase<T extends RowData>(
     cell: (info) => {
       const row = info.row.original;
       const linkProps = getLinkProps(row);
-      // Read the code off the row's OWN link params rather than `row.id` + the
-      // table's entity: that makes it right for polymorphic rows (global
-      // search) and absent for `image` — the one entity routed by uuid — with
-      // no second roster to keep in sync.
-      const shortcode =
-        linkProps && "shortcode" in linkProps.params
-          ? linkProps.params.shortcode
-          : null;
-
       return (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -792,14 +781,6 @@ export function createActionsColumnBase<T extends RowData>(
               >
                 <Eye />
                 View details
-              </DropdownMenuItem>
-            )}
-            {shortcode && (
-              <DropdownMenuItem
-                onClick={() => void copyShortcodes([shortcode])}
-              >
-                <ClipboardCopy />
-                Copy {shortcode}
               </DropdownMenuItem>
             )}
             {extraActions?.(row)}

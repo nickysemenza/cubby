@@ -7,9 +7,17 @@ import type { CubbyRow as Row } from "../data-table/table-features";
 
 const mocks = vi.hoisted(() => ({
   copyShortcodes: vi.fn(async () => true),
+  copyIdentifiers: vi.fn(async () => true),
+  navigate: vi.fn(async () => undefined),
 }));
 
-vi.mock("~/lib/clipboard", () => ({ copyShortcodes: mocks.copyShortcodes }));
+vi.mock("~/lib/clipboard", () => ({
+  copyShortcodes: mocks.copyShortcodes,
+  copyIdentifiers: mocks.copyIdentifiers,
+}));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => mocks.navigate,
+}));
 
 import { useListBulkActions } from "./useListBulkActions";
 
@@ -64,6 +72,8 @@ describe("useListBulkActions", () => {
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
       "add-to-inventory",
+      "print-labels",
+      "set-stock-tracking",
     ]);
   });
 
@@ -95,11 +105,28 @@ describe("useListBulkActions", () => {
     expect(result.current.enableRowSelection).toBe(true);
   });
 
+  it("copies USDA external identifiers with their truthful label", async () => {
+    const { result } = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "usda-food" }),
+      { wrapper },
+    );
+
+    expect(result.current.config?.actions.map((action) => action.id)).toEqual([
+      "copy-identifiers",
+    ]);
+    const selected = rows("12345", "67890");
+    const action = result.current.config?.actions[0];
+    await act(async () => {
+      await result.current.state.executeAction(action!, selected);
+    });
+    expect(mocks.copyIdentifiers).toHaveBeenCalledWith(["12345", "67890"]);
+  });
+
   it("leads with Copy and trails with Delete", () => {
     const { result } = renderHook(
       () =>
         useListBulkActions<TestRow>({
-          entity: "task",
+          entity: "location",
           bulkActions: {
             actions: [
               {
@@ -119,6 +146,42 @@ describe("useListBulkActions", () => {
       "move",
       "delete",
     ]);
+  });
+
+  it("puts Inspect first and limits it to one selected record", async () => {
+    const inspect = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useListBulkActions<TestRow>({
+          entity: "product",
+          onInspectRow: inspect,
+        }),
+      { wrapper },
+    );
+
+    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
+      "inspect",
+      "copy-shortcodes",
+      "add-to-inventory",
+      "print-labels",
+      "set-stock-tracking",
+    ]);
+    expect(
+      result.current.state
+        .getAvailableActions(rows("PRD-4K7M", "PRD-9X2A"))
+        .map((action) => action.id),
+    ).not.toContain("inspect");
+
+    const selected = rows("PRD-4K7M");
+    const action = result.current.config?.actions[0];
+    expect(action).toBeDefined();
+    await act(async () => {
+      result.current.state.onRowSelectionChange({ "PRD-4K7M": true });
+      await result.current.state.executeAction(action!, selected);
+    });
+
+    expect(inspect).toHaveBeenCalledWith(selected[0]);
+    expect(result.current.state.selectedCount).toBe(1);
   });
 
   it("copies the selected rows' ids and keeps the selection", async () => {

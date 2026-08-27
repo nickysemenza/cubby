@@ -1,10 +1,9 @@
-import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   taskDueColumn,
@@ -28,11 +27,6 @@ import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useSeededFilter } from "../_components/hooks/useSeededFilter";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import {
-  TaskBulkActionDialogs,
-  useTaskBulkActions,
-} from "../_components/tracker/task-bulk-actions";
-import { CreateProjectFromTasksDialog } from "./create-project-from-tasks-dialog";
 
 /**
  * `N/M` checklist chip after a parent task's name. Module-level because
@@ -62,13 +56,6 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   const columnHelper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const productOptions = useDeferredFilterOptions("product");
-  const [createProjectTaskIds, setCreateProjectTaskIds] = useState<
-    TaskShortcode[] | null
-  >(null);
-  const taskBulkActions = useTaskBulkActions({
-    includeDueDate: true,
-    onCreateProject: setCreateProjectTaskIds,
-  });
 
   const updateTaskMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("task", "update"),
@@ -201,30 +188,9 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       columns={columns}
       nameEditable={nameEditable}
       nameSuffix={subtaskCountSuffix}
-      bulkActions={taskBulkActions.config}
       tableStateOptions={tableStateOptions}
       ariaLabel="Tasks Table"
       actions={toolbarActions}
-    >
-      {/* The bulk dialogs need the table itself: every bulk write clears the
-          row selection when it completes. */}
-      {({ workbench }) => (
-        <>
-          <TaskBulkActionDialogs
-            controller={taskBulkActions}
-            onComplete={() => workbench.table.resetRowSelection()}
-          />
-          {createProjectTaskIds && (
-            <CreateProjectFromTasksDialog
-              open
-              onOpenChange={(open) => {
-                if (!open) setCreateProjectTaskIds(null);
-              }}
-              taskIds={createProjectTaskIds}
-            />
-          )}
-        </>
-      )}
-    </EntityListPage>
+    />
   );
 }

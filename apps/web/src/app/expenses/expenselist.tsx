@@ -35,11 +35,6 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import {
-  ExpenseBulkActionDialogs,
-  useExpenseBulkActions,
-} from "../_components/tracker/expense-bulk-actions";
-import { useExpenseRowActions } from "../_components/tracker/expense-row-actions";
 import { expense } from "./expense.functions";
 import {
   createExpenseProductImageColumn,
@@ -87,7 +82,6 @@ export function ExpenseList() {
   // label: the label is what filter chips and the collapsed multi-select
   // summary interpolate, and what the type-ahead matches on.
   const vendorOptions = useDeferredFilterOptions("vendor");
-  const expenseBulkActions = useExpenseBulkActions();
 
   const updateExpenseMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("expense", "update"),
@@ -97,8 +91,6 @@ export function ExpenseList() {
   const nameEditable = useNameEditable<ExpenseOut>(
     updateExpenseMutation.mutateAsync,
   );
-
-  const { extraActions, dialogs: rowActionDialogs } = useExpenseRowActions();
 
   // Runtime picklists for the manifest's `project`/`vendor` specs (optionsKey).
   const projectFilterOptions = useFilterOptions({
@@ -386,6 +378,7 @@ export function ExpenseList() {
 
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -403,13 +396,12 @@ export function ExpenseList() {
     ExpenseFilters
   >({
     entity: "expense",
+    onInspectRow: inspectRow,
     filterOptions: projectFilterOptions,
     columns,
     // The expense contract's own list query, delete, and invalidation fan-out.
     deletable: true,
     nameEditable,
-    bulkActions: expenseBulkActions.config,
-    extraActions,
     // Purchase is visible by default; its Order # detail remains opt-in.
     // `lineBasis` reads "Line item" on all but a handful of rows, so the column
     // is dead weight by default; its header filter is the surface that matters.
@@ -480,11 +472,6 @@ export function ExpenseList() {
         />
       </ExpenseProductImages>
       <PreviewSheet />
-      <ExpenseBulkActionDialogs
-        controller={expenseBulkActions}
-        onComplete={() => workbench.table.resetRowSelection()}
-      />
-      {rowActionDialogs}
     </div>
   );
 }

@@ -44,6 +44,7 @@ import {
 export function MealTable() {
   const {
     onRowClick,
+    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
@@ -199,6 +200,7 @@ export function MealTable() {
   // server `MealFilters` object, and the URL round-trip at once.
   const { workbench } = useEntityList<MealOut, MealFilters>({
     entity: "meal",
+    onInspectRow: inspectRow,
     columns,
     deletable: deletableConfig,
     // Same fallback the Name column uses, so the confirm dialog names an

@@ -53,6 +53,8 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   deletable,
   extraActions,
   bulkActions,
+  onInspectRow,
+  includeCatalogActions,
   deleteEmptyLabel,
   selectionScope,
 }: {
@@ -61,23 +63,27 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   deletable?: DeleteConfig;
   extraActions?: (row: TData) => ReactNode;
   bulkActions?: BulkActionsConfig<TData>;
+  onInspectRow?: (row: { id?: string; original: TData }) => void;
+  includeCatalogActions?: boolean;
   deleteEmptyLabel?: (row: TData) => string;
   selectionScope: (tableState: TableStateReturn) => unknown;
 }) {
-  const {
-    deleteBulkAction,
-    combinedExtraActions,
-    deleteDialog,
-    requestDelete,
-  } = useOptimisticDelete<TData>({
-    deletable,
-    extraActions,
-    emptyLabel: deleteEmptyLabel,
-  });
+  const { deleteActionDefinition, deleteDialog, requestDelete } =
+    useOptimisticDelete<TData>({
+      deletable,
+      extraActions,
+      emptyLabel: deleteEmptyLabel,
+    });
+  const additionalActions = useMemo(
+    () => (deleteActionDefinition ? [deleteActionDefinition] : []),
+    [deleteActionDefinition],
+  );
   const listBulkActions = useListBulkActions({
     entity,
     bulkActions,
-    deleteBulkAction,
+    additionalActions,
+    onInspectRow,
+    includeCatalogActions,
   });
   const listConfig = useMemo(
     () => browserEntityDefinition(entity).list,
@@ -113,7 +119,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     tableState,
     currentSelectionScope,
     listBulkActions,
-    combinedExtraActions,
+    combinedExtraActions: extraActions,
     deleteDialog,
     requestDelete,
     urlSync: mergedTableStateOptions.urlSync,

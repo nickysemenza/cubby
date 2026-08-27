@@ -22,15 +22,6 @@ import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import {
-  ExpenseBulkActionDialogs,
-  useExpenseBulkActions,
-} from "~/app/_components/tracker/expense-bulk-actions";
-import { useExpenseRowActions } from "~/app/_components/tracker/expense-row-actions";
-import {
-  TaskBulkActionDialogs,
-  useTaskBulkActions,
-} from "~/app/_components/tracker/task-bulk-actions";
-import {
   expenseCostColumn,
   expenseDateColumn,
   expenseFutureColumn,
@@ -79,7 +70,6 @@ export function ProjectDataTaskList({
     entityLabel: "Task",
     entity: "task",
   });
-  const bulk = useTaskBulkActions({ includeDueDate: true });
   const scopeFilters = useMemo<TaskFilters>(
     () => ({ projectScope }),
     [projectScope],
@@ -123,7 +113,6 @@ export function ProjectDataTaskList({
     filterOptions,
     deletable,
     nameEditable,
-    bulkActions: bulk.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     layoutKey: "task:projects-data",
     legacyLayoutSizingKey: "task",
@@ -139,10 +128,6 @@ export function ProjectDataTaskList({
         onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
-      <TaskBulkActionDialogs
-        controller={bulk}
-        onComplete={() => list.workbench.table.resetRowSelection()}
-      />
     </>
   );
 }
@@ -170,7 +155,6 @@ export function ProjectDataExpenseList({
     entityLabel: "Expense",
     entity: "expense",
   });
-  const bulk = useExpenseBulkActions();
   const scopeFilters = useMemo<ExpenseFilters>(
     () => ({ projectScope }),
     [projectScope],
@@ -214,7 +198,6 @@ export function ProjectDataExpenseList({
 
   // The Data view spans several projects, so a move is a real relocation
   // rather than a no-op — but the moved row leaves this scoped table on success.
-  const rowActions = useExpenseRowActions();
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: listQueryOptions,
@@ -223,8 +206,6 @@ export function ProjectDataExpenseList({
     filterOptions,
     deletable,
     nameEditable,
-    extraActions: rowActions.extraActions,
-    bulkActions: bulk.config,
     tableStateOptions: EMBEDDED_TABLE_STATE,
     layoutKey: "expense:projects-data",
     legacyLayoutSizingKey: "expense",
@@ -240,11 +221,6 @@ export function ProjectDataExpenseList({
         onRowHoverEnd={onRowHoverEnd}
       />
       <PreviewSheet />
-      {rowActions.dialogs}
-      <ExpenseBulkActionDialogs
-        controller={bulk}
-        onComplete={() => list.workbench.table.resetRowSelection()}
-      />
     </>
   );
 }
