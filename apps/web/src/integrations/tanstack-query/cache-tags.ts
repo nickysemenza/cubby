@@ -11,6 +11,18 @@ import type { OperationCacheTag } from "./operation-meta";
  * `[key[0]]` and deduped. Refetch-neutral by construction.
  */
 
+/**
+ * Every ripple carries the filter-option roster. This is a deliberate DEPARTURE
+ * from the legacy table, not part of the translation: nothing invalidated
+ * `entity.filterOptions` at all, because `operationTagForQueryRoot` only ever
+ * produced one-segment roots like `["product"]`, and `["product"]` does not
+ * prefix-match `["entity","filterOptions"]`. Filter bars therefore went stale
+ * after a mutation and stayed stale until a hard reload. Any write can change a
+ * facet roster — a rename moves a manufacturer option, a delete empties a
+ * bucket — so the rule is uniform rather than a per-row judgement call.
+ */
+const ENTITY_FILTER_OPTIONS: OperationCacheTag = ["entity", "filterOptions"];
+
 /** Dedupe by tag content — tags are fresh arrays rather than the stable
  * references `queryKeys` handed out, so a group spread into a fan-out that
  * already names one of its tags collapses instead of invalidating the same
@@ -19,7 +31,12 @@ const rippleTags = (
   ...groups: readonly (readonly OperationCacheTag[])[]
 ): readonly OperationCacheTag[] =>
   Object.freeze([
-    ...new Map(groups.flat().map((tag) => [tag.join(" "), tag])).values(),
+    ...new Map(
+      [...groups.flat(), ENTITY_FILTER_OPTIONS].map((tag) => [
+        tag.join(" "),
+        tag,
+      ]),
+    ).values(),
   ]);
 
 /**
