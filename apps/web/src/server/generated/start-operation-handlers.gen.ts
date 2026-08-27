@@ -70,10 +70,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/ai-browser.server");
     return module.summarizeAiUsageForBrowser as unknown as StartOperationHandler;
   },
-  "auditLog.list": async () => {
-    const module = await import("~/server/audit-log-browser.server");
-    return module.getAuditLogForBrowser as unknown as StartOperationHandler;
-  },
+  "auditLog.list": async () =>
+    (await import("~/server/audit-log-browser.server")).auditLogHandlers
+      .operations.list,
   "background-batch.cancel": async () => {
     const module = await import("~/server/background-batch-browser.server");
     return module.cancelBackgroundBatchForBrowser as unknown as StartOperationHandler;
@@ -110,18 +109,15 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/background-batch-browser.server");
     return module.countStrandedBackgroundJobsForBrowser as unknown as StartOperationHandler;
   },
-  "calendar.getFeed": async () => {
-    const module = await import("~/server/calendar-browser.server");
-    return module.getCalendarFeedForBrowser as unknown as StartOperationHandler;
-  },
-  "calendar.range": async () => {
-    const module = await import("~/server/calendar-browser.server");
-    return module.getCalendarRangeForBrowser as unknown as StartOperationHandler;
-  },
-  "calendar.rotateFeed": async () => {
-    const module = await import("~/server/calendar-browser.server");
-    return module.rotateCalendarFeedForBrowser as unknown as StartOperationHandler;
-  },
+  "calendar.getFeed": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.getFeed,
+  "calendar.range": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.range,
+  "calendar.rotateFeed": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.rotateFeed,
   "collection.create": async () => {
     const module = await import("~/server/collection-browser.server");
     return module.createCollectionForBrowser as unknown as StartOperationHandler;

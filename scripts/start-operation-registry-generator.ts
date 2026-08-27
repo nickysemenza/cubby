@@ -1,4 +1,9 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { parseSync } from "oxc-parser";
@@ -20,6 +25,12 @@ type HandlerDefinition = {
   kind?: Exclude<Kind, "subscription">;
   module: string;
   exportName: string;
+  /**
+   * Set for `implementOperationDomain` tables: the handler is
+   * `<exportName>.operations[<member>]`, already `StartOperationHandler`-shaped,
+   * so the emitted loader needs no cast.
+   */
+  member?: string;
 };
 type AstNode = { type: string; [key: string]: unknown };
 
@@ -216,6 +227,58 @@ export const collectDomainDeclarations = (): DomainDeclarations => {
   return cachedDomainDeclarations;
 };
 
+/** Named-import bindings of a module: local name -> imported name + source. */
+const importBindings = (
+  body: AstNode[],
+): Map<string, { source: string; imported: string }> => {
+  const bindings = new Map<string, { source: string; imported: string }>();
+  for (const statement of body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    const source = (statement.source as AstNode | undefined)?.value;
+    if (typeof source !== "string") continue;
+    const specifiers = Array.isArray(statement.specifiers)
+      ? (statement.specifiers as AstNode[])
+      : [];
+    for (const specifier of specifiers) {
+      if (specifier.type !== "ImportSpecifier") continue;
+      const local = (specifier.local as AstNode | undefined)?.name;
+      const importedNode = specifier.imported as AstNode | undefined;
+      const imported = importedNode?.name ?? importedNode?.value;
+      if (typeof local === "string" && typeof imported === "string") {
+        bindings.set(local, { source, imported });
+      }
+    }
+  }
+  return bindings;
+};
+
+/** Resolve an `implementOperationDomain` argument to its client declaration. */
+const resolveDomainBinding = (
+  path: string,
+  bindings: Map<string, { source: string; imported: string }>,
+  identifier: string,
+): DomainDeclaration => {
+  const binding = bindings.get(identifier);
+  if (!binding || !binding.source.startsWith("~/")) {
+    throw new Error(
+      `${relative(ROOT, path)} passes ${identifier} to implementOperationDomain, but it is not a named import from a "~/" module.`,
+    );
+  }
+  const base = join(SOURCE_ROOT, binding.source.slice(2));
+  const target = [".ts", ".tsx"]
+    .map((extension) => `${base}${extension}`)
+    .find((candidate) => existsSync(candidate));
+  const declaration = target
+    ? collectDomainDeclarations().byBinding.get(`${target}#${binding.imported}`)
+    : undefined;
+  if (!declaration) {
+    throw new Error(
+      `${relative(ROOT, path)} implements ${identifier}, but ${binding.source} does not export a defineOperationDomain declaration named ${binding.imported}.`,
+    );
+  }
+  return declaration;
+};
+
 /**
  * Browser projections already declare the authoritative operation id inside
  * each exported handler. Compile those declarations into lazy adapters rather
@@ -226,9 +289,19 @@ export const collectStartOperationHandlers = (): Map<
   HandlerDefinition
 > => {
   const handlers = new Map<string, HandlerDefinition>();
+  const register = (operation: string, definition: HandlerDefinition) => {
+    const existing = handlers.get(operation);
+    if (existing) {
+      throw new Error(
+        `Duplicate browser operation ${operation}: ${existing.module}.${existing.exportName} and ${definition.module}.${definition.exportName}`,
+      );
+    }
+    handlers.set(operation, definition);
+  };
   for (const path of sourceFiles(SOURCE_ROOT).filter(serverHandlerSource)) {
     const program = parseFile(path);
     const body = Array.isArray(program.body) ? (program.body as AstNode[]) : [];
+    const bindings = importBindings(body);
     for (const statement of body) {
       const declaration =
         statement.type === "ExportNamedDeclaration"
@@ -256,6 +329,54 @@ export const collectStartOperationHandlers = (): Map<
       }
 
       for (const candidate of exports) {
+        const implementation = candidate.implementation;
+        if (
+          implementation.type === "CallExpression" &&
+          calledName(implementation.callee as AstNode) ===
+            "implementOperationDomain"
+        ) {
+          const args = Array.isArray(implementation.arguments)
+            ? (implementation.arguments as AstNode[])
+            : [];
+          const [domainArg, tableArg] = args;
+          if (
+            domainArg?.type !== "Identifier" ||
+            typeof domainArg.name !== "string" ||
+            tableArg?.type !== "ObjectExpression"
+          ) {
+            throw new Error(
+              `Unable to compile ${relative(ROOT, path)}:${candidate.exportName} — implementOperationDomain takes an imported domain identifier and an inline handler table.`,
+            );
+          }
+          const declaration = resolveDomainBinding(
+            path,
+            bindings,
+            domainArg.name,
+          );
+          const properties = Array.isArray(tableArg.properties)
+            ? (tableArg.properties as AstNode[])
+            : [];
+          for (const property of properties) {
+            if (property.type !== "Property") continue;
+            const key = property.key as AstNode | undefined;
+            const memberName = key?.name ?? key?.value;
+            if (typeof memberName !== "string") continue;
+            const member = declaration.members.get(memberName);
+            if (!member) {
+              throw new Error(
+                `${relative(ROOT, path)}:${candidate.exportName} implements ${declaration.domain}.${memberName}, which is not declared in ${relative(ROOT, declaration.path)}.`,
+              );
+            }
+            register(member.operation, {
+              kind: member.kind,
+              module: moduleSpecifier(path),
+              exportName: candidate.exportName,
+              member: memberName,
+            });
+          }
+          continue;
+        }
+
         const operationIds = new Set<string>();
         const kinds = new Set<Exclude<Kind, "subscription">>();
         walk(candidate.implementation, (node) => {
@@ -287,18 +408,11 @@ export const collectStartOperationHandlers = (): Map<
         }
         const operation = [...operationIds][0];
         if (!operation) continue;
-        const definition = {
+        register(operation, {
           kind: [...kinds][0],
           module: moduleSpecifier(path),
           exportName: candidate.exportName,
-        } satisfies HandlerDefinition;
-        const existing = handlers.get(operation);
-        if (existing) {
-          throw new Error(
-            `Duplicate browser operation ${operation}: ${existing.module}.${existing.exportName} and ${definition.module}.${definition.exportName}`,
-          );
-        }
-        handlers.set(operation, definition);
+        });
       }
     }
   }
@@ -460,9 +574,14 @@ export const renderStartOperationHandlers = (): string => {
     `\nexport type StartOperationHandler = (options: { data: unknown; request: StartOperationRequest }) => Promise<StartOperationResult<unknown>>;\n` +
     `export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;\n` +
     `\nexport const START_OPERATION_HANDLER_LOADERS = {\n${handlers
-      .map(
-        ([operation, handler]) =>
-          `  ${JSON.stringify(operation)}: async () => { const module = await import(${JSON.stringify(handler.module)}); return module.${handler.exportName} as unknown as StartOperationHandler; },`,
+      .map(([operation, handler]) =>
+        handler.member !== undefined
+          ? `  ${JSON.stringify(operation)}: async () => (await import(${JSON.stringify(handler.module)})).${handler.exportName}.operations${
+              /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(handler.member)
+                ? `.${handler.member}`
+                : `[${JSON.stringify(handler.member)}]`
+            },`
+          : `  ${JSON.stringify(operation)}: async () => { const module = await import(${JSON.stringify(handler.module)}); return module.${handler.exportName} as unknown as StartOperationHandler; },`,
       )
       .join("\n")}\n} as const satisfies Record<StartOperationIdOfKind<"query" | "mutation">, StartOperationHandlerLoader>;\n`
   );
