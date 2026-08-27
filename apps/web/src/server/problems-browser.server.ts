@@ -1,6 +1,7 @@
 import { integrityProblems } from "~/entities/entity-integrity.functions";
-import { problems } from "~/lib/problems.functions";
+import { problems, problemsStreams } from "~/lib/problems.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   cleanupOrphanedEmbeddingsWorkflow,
   deleteUnusedIngredientsWorkflow,
@@ -15,7 +16,9 @@ import {
   findTrackerProblemsWorkflow,
   findUpcProblemsWorkflow,
   findViewProblemsWorkflow,
+  pruneAllUnusedAliasesWorkflow,
   recipeUsageByProductWorkflow,
+  reparseStaleWorkflow,
 } from "~/server/workflows/problems.server";
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
@@ -77,5 +80,13 @@ export const integrityProblemsHandlers = implementOperationDomain(
       readPolicy: "strong",
       run: (context, input) => findProblemByTypeWorkflow(context, input),
     },
+  },
+);
+
+export const problemsStreamHandlers = implementSubscriptionDomain(
+  problemsStreams,
+  {
+    reparseStale: (context) => reparseStaleWorkflow(context),
+    pruneAllUnusedAliases: (context) => pruneAllUnusedAliasesWorkflow(context),
   },
 );

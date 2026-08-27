@@ -1,9 +1,12 @@
-import { product } from "~/app/products/product.functions";
+import { product, productStreams } from "~/app/products/product.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   applyProductUpcDataWorkflow,
   attachProductComponentsWorkflow,
+  backfillProductUpcImagesWorkflow,
   bulkSetProductStockTrackedWorkflow,
+  createManyProductsWorkflow,
   detachProductComponentsWorkflow,
   discardProductWorkflow,
   findOrCreateProductByCodeWorkflow,
@@ -23,6 +26,7 @@ import {
   listProductComponentsWorkflow,
   listProductProjectUsesWorkflow,
   listProductPurchasesWorkflow,
+  markProductsUsdaUnavailableWorkflow,
   mergeProductsWorkflow,
   quickCreateProductWorkflow,
   searchProductsWorkflow,
@@ -57,3 +61,13 @@ export const productHandlers = implementOperationDomain(product, {
   discard: discardProductWorkflow,
   bulkSetStockTracked: bulkSetProductStockTrackedWorkflow,
 });
+
+export const productStreamHandlers = implementSubscriptionDomain(
+  productStreams,
+  {
+    createMany: (context, input) => createManyProductsWorkflow(context, input),
+    markUsdaUnavailableMany: (context, input) =>
+      markProductsUsdaUnavailableWorkflow(context, input),
+    backfillUPCImages: (context) => backfillProductUpcImagesWorkflow(context),
+  },
+);

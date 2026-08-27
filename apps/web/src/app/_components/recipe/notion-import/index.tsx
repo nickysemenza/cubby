@@ -1,14 +1,11 @@
-import {
-  notionImportEventSchema,
-  type notionPreviewOut,
-} from "@cubby/schemas/import-recipe";
+import type { notionPreviewOut } from "@cubby/schemas/import-recipe";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertCircle, Import, RotateCcw, Search } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import { recipe } from "~/app/recipes/recipe.functions";
+import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -22,7 +19,6 @@ import { Spinner } from "~/components/ui/spinner";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 import {
@@ -116,14 +112,7 @@ export function NotionImport() {
     // a single batched recompute; per-page results + overall progress stream back.
     await startNotionImport(
       (signal) =>
-        openWorkflowStream({
-          operation: "recipe.importNotionSyncStream",
-          kind: "mutation",
-          url: "/api/recipe-stream/import-notion",
-          input: { pageIds },
-          eventSchema: notionImportEventSchema,
-          signal,
-        }),
+        recipeStreams.importNotionSyncStream.open({ pageIds }, { signal }),
       {
         onItem: (item) =>
           setResults((m) =>

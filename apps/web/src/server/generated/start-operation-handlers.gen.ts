@@ -700,6 +700,46 @@ export const START_OPERATION_HANDLER_LOADERS = {
  * member and its module. What this annotation still buys is key validity — a
  * loader keyed to an id the registry does not carry as a subscription.
  */
-export const WORKFLOW_STREAM_HANDLER_LOADERS = {} as const satisfies Partial<
+export const WORKFLOW_STREAM_HANDLER_LOADERS = {
+  "agent.askStream": async () =>
+    (await import("~/server/agent-browser.server")).agentStreamHandlers.streams
+      .askStream,
+  "ai.backfillLocationDescriptions": async () =>
+    (await import("~/server/ai-browser.server")).aiStreamHandlers.streams
+      .backfillLocationDescriptions,
+  "ai.precomputeEnrichmentProposals": async () =>
+    (await import("~/server/ai-browser.server")).aiStreamHandlers.streams
+      .precomputeEnrichmentProposals,
+  "problems.pruneAllUnusedAliases": async () =>
+    (await import("~/server/problems-browser.server")).problemsStreamHandlers
+      .streams.pruneAllUnusedAliases,
+  "problems.reparseStale": async () =>
+    (await import("~/server/problems-browser.server")).problemsStreamHandlers
+      .streams.reparseStale,
+  "product.backfillUPCImages": async () =>
+    (await import("~/server/product-browser.server")).productStreamHandlers
+      .streams.backfillUPCImages,
+  "product.createMany": async () =>
+    (await import("~/server/product-browser.server")).productStreamHandlers
+      .streams.createMany,
+  "product.markUsdaUnavailableMany": async () =>
+    (await import("~/server/product-browser.server")).productStreamHandlers
+      .streams.markUsdaUnavailableMany,
+  "recipe.importCookbookStream": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.importCookbookStream,
+  "recipe.importNotionSyncStream": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.importNotionSyncStream,
+  "recipe.recomputeAllDurable": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.recomputeAllDurable,
+  "recipe.recomputeStaleDurable": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.recomputeStaleDurable,
+  "recipe.reprocessCookbook": async () =>
+    (await import("~/server/recipe-browser.server")).recipeStreamHandlers
+      .streams.reprocessCookbook,
+} as const satisfies Partial<
   Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>
 >;

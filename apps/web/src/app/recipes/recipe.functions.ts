@@ -7,9 +7,14 @@ import {
   cookbookDiffOut,
   cookbookIdInput,
   cookbookIdOut,
+  cookbookImportEventSchema,
+  cookbookReprocessEventSchema,
   cookbookSourceOut,
   deleteCookbookOut,
+  importCookbookStreamInput,
+  importNotionSyncInput,
   importRecipeSchema,
+  notionImportEventSchema,
   notionPreviewOut,
   parseRecipeHtmlInput,
   scrapeRecipeInput,
@@ -50,9 +55,9 @@ import {
   defineOperationDomain,
   mutation,
   query,
+  subscription,
 } from "~/integrations/tanstack-query/operation-catalog";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 
 export const recipe = defineOperationDomain("recipe", {
   getManyByIDs: query({
@@ -187,21 +192,30 @@ type RecipeRecomputeDurableResult = {
 const recomputeEventSchema = recipeRecomputeDurableEventSchema as z.ZodType<
   BulkProgressEvent<unknown, RecipeRecomputeDurableResult>
 >;
+export const recipeStreams = defineOperationDomain("recipe", {
+  recomputeAllDurable: subscription({
+    input: z.undefined(),
+    event: recomputeEventSchema,
+  }),
+  recomputeStaleDurable: subscription({
+    input: z.undefined(),
+    event: recomputeEventSchema,
+  }),
+  importCookbookStream: subscription({
+    input: importCookbookStreamInput,
+    event: cookbookImportEventSchema,
+  }),
+  importNotionSyncStream: subscription({
+    input: importNotionSyncInput,
+    event: notionImportEventSchema,
+  }),
+  reprocessCookbook: subscription({
+    input: cookbookIdInput,
+    event: cookbookReprocessEventSchema,
+  }),
+});
+
 export const openRecipeRecomputeAllStream = (signal?: AbortSignal) =>
-  openWorkflowStream({
-    operation: "recipe.recomputeAllDurable",
-    kind: "mutation",
-    url: "/api/recipe-stream/recompute-all",
-    input: undefined,
-    eventSchema: recomputeEventSchema,
-    signal,
-  });
+  recipeStreams.recomputeAllDurable.open(undefined, { signal });
 export const openRecipeRecomputeStaleStream = (signal?: AbortSignal) =>
-  openWorkflowStream({
-    operation: "recipe.recomputeStaleDurable",
-    kind: "mutation",
-    url: "/api/recipe-stream/recompute-stale",
-    input: undefined,
-    eventSchema: recomputeEventSchema,
-    signal,
-  });
+  recipeStreams.recomputeStaleDurable.open(undefined, { signal });

@@ -1,5 +1,4 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
-import { cookbookReprocessEventSchema } from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
@@ -15,6 +14,7 @@ import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-us
 import { notFoundPage } from "~/app/_components/routing/entity-routes";
 import { CookbookPhysicalCopy } from "~/app/cookbooks/cookbook-physical-copy";
 import { useCookbookDelete } from "~/app/cookbooks/use-cookbook-delete";
+import { recipeStreams } from "~/app/recipes/recipe.functions";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -32,7 +32,6 @@ import { useTabParam } from "~/hooks/useTabParam";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { shortcodeHead } from "~/lib/page-title";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
@@ -110,14 +109,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
   const runReprocess = (id: CookbookShortcode) =>
     reprocess.start(
       (signal) =>
-        openWorkflowStream({
-          operation: "recipe.reprocessCookbook",
-          kind: "mutation",
-          url: "/api/recipe-stream/reprocess-cookbook",
-          input: { cookbookId: id },
-          eventSchema: cookbookReprocessEventSchema,
-          signal,
-        }),
+        recipeStreams.reprocessCookbook.open({ cookbookId: id }, { signal }),
       {
         successToast: ({ reprocessed, importableExtras }) => {
           const extra =
