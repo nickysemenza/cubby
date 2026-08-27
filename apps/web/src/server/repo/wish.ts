@@ -199,7 +199,8 @@ const resolveWishSort = (sort: SortParams) => {
   ];
 };
 
-const buildWishWhere = async (
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildWishWhere = async (
   db: Database | DrizzleTransaction,
   filters: WishFilters,
 ) => {

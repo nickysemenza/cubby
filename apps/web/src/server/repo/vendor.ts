@@ -230,7 +230,8 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   updatedAt: row.updatedAt,
 });
 
-const buildVendorWhereClause = (filters: VendorFilters) =>
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildVendorWhereClause = (filters: VendorFilters) =>
   buildSearchConditions(
     vendor,
     [],

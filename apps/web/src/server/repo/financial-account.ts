@@ -167,7 +167,8 @@ const aliasCondition = (
   )`;
 };
 
-const whereFor = (filters: FinancialAccountFilters) =>
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
   buildSearchConditions(
     financialAccount,
     [{ column: financialAccount.name, term: filters.search }],
@@ -213,7 +214,7 @@ export async function listFinancialAccounts(
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: FinancialAccountOut[]; count: number }> {
-  const where = whereFor(filters);
+  const where = buildFinancialAccountWhere(filters);
   const { take, skip } = buildTakeSkip(pagination);
   const { data: rows, count } = await executeListQueryWithCount(
     getDb(db)
