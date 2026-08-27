@@ -76,15 +76,18 @@ describe("cached-read policy", () => {
     expect(runtime).toContain("executeEntity(context");
     expect(runtime).toContain('action: "list"');
     expect(runtime).toContain('action: "get"');
-    // entity.detail rides the query-default "context" policy (bounded-stale
-    // for browser reads); forcing it strong would be a regression.
+    // entity.detail rides the query-default "context" policy, so it declares
+    // no `readPolicy` at all; forcing it strong would be the regression. The
+    // positive assertion anchors on the handler body rather than the comment
+    // above it, so the negative one below can never pass vacuously against a
+    // section that moved or got renamed.
     const detail = between(
       runtime,
       "entityDetailHandlers",
       "entityFilterOptionsHandlers",
     );
-    expect(detail).toContain("bounded-stale");
-    expect(detail).not.toContain('readPolicy: "strong"');
+    expect(detail).toContain('action: "get"');
+    expect(detail).not.toContain("readPolicy:");
   });
 
   it("keeps correctness-sensitive and non-browser API surfaces authoritative", () => {
