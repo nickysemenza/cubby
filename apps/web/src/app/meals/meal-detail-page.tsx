@@ -38,7 +38,6 @@ import {
 } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { cancelQueryRoots } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { meal as mealOperations } from "./meal.functions";
@@ -73,10 +72,9 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   });
   const addRecipeBase = mealOperations.addRecipe.mutationOptions();
   const addRecipe = useMutation({
-    mutationKey: addRecipeBase.mutationKey,
-    mutationFn: addRecipeBase.mutationFn,
+    ...addRecipeBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [mealKey]);
+      await queryClient.cancelQueries({ queryKey: mealKey });
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       setPendingRecipeName(variables.recipeId);
       return { previous };
@@ -375,10 +373,9 @@ function RecipeRow({
   };
   const updateBase = mealOperations.updateRecipe.mutationOptions();
   const updateRecipe = useMutation({
-    mutationKey: updateBase.mutationKey,
-    mutationFn: updateBase.mutationFn,
+    ...updateBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [mealKey]);
+      await queryClient.cancelQueries({ queryKey: mealKey });
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       patchMeal((meal) => ({
         ...meal,
@@ -405,10 +402,9 @@ function RecipeRow({
   });
   const removeBase = mealOperations.removeRecipe.mutationOptions();
   const removeRecipe = useMutation({
-    mutationKey: removeBase.mutationKey,
-    mutationFn: removeBase.mutationFn,
+    ...removeBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [mealKey]);
+      await queryClient.cancelQueries({ queryKey: mealKey });
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       patchMeal((meal) => ({
         ...meal,

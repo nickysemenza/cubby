@@ -24,7 +24,6 @@ import { entityListRootKey } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { patchListItem } from "~/lib/optimistic-list";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import {
   type DetailSection,
@@ -93,8 +92,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   const wishListKey = entityListRootKey("wish");
   const acquiredBase = entityMutationOptionsFactory("wish", "update")();
   const acquiredMutation = useMutation({
-    mutationKey: acquiredBase.mutationKey,
-    mutationFn: acquiredBase.mutationFn,
+    ...acquiredBase,
     onMutate: async (variables) => {
       await Promise.all([
         queryClient.cancelQueries({ queryKey: wishKey }),
@@ -134,7 +132,6 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       }
       toast.error(getErrorMessage(error));
     },
-    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("wish")),
   });
 
   const toggleAcquired = () =>

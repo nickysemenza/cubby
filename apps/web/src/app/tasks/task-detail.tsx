@@ -38,11 +38,6 @@ import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
-import {
-  cancelQueryRoots,
-  invalidateQueryRoots,
-  invalidatesFor,
-} from "~/lib/query-keys";
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
   type DetailSection,
@@ -110,10 +105,9 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
   // query, so its update never blocks or patches the rest of the detail page.
   const toggleBase = entityMutationOptionsFactory("task", "update")();
   const toggleMutation = useMutation({
-    mutationKey: toggleBase.mutationKey,
-    mutationFn: toggleBase.mutationFn,
+    ...toggleBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [subtasksKey]);
+      await queryClient.cancelQueries({ queryKey: subtasksKey });
       const previous =
         queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
       queryClient.setQueryData<typeof subtasksPage>(subtasksKey, (current) =>
@@ -131,15 +125,13 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
       }
       toast.error(getErrorMessage(error));
     },
-    onSettled: () => invalidateQueryRoots(queryClient, invalidatesFor("task")),
   });
 
   const createBase = entityMutationOptionsFactory("task", "create")();
   const createMutation = useMutation({
-    mutationKey: createBase.mutationKey,
-    mutationFn: createBase.mutationFn,
+    ...createBase,
     onMutate: async () => {
-      await cancelQueryRoots(queryClient, [subtasksKey]);
+      await queryClient.cancelQueries({ queryKey: subtasksKey });
       const previous =
         queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
       const name = newSubtaskName.trim();
@@ -171,7 +163,6 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
     },
     onSettled: () => {
       setPendingSubtaskName(null);
-      invalidateQueryRoots(queryClient, invalidatesFor("task"));
     },
   });
 

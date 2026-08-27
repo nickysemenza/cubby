@@ -155,14 +155,23 @@ export const ripple = {
   /**
    * Reparenting changes tree SHAPE, so the list prefix is not enough: the
    * detail page's subtree, the arrange forest, and both ends' parent chains
-   * all re-read. Nothing here touches stock — no inventory tags.
+   * all re-read.
    *
-   * (In tag space this is identical to the `location` row: the legacy rows
-   * differed only in `location.list` vs `location.all`, and both collapse to
-   * `["location"]`. Kept as its own name so the reparent descriptors stay
-   * self-documenting.)
+   * It carries the stock surfaces too, which the fan-out table's `reparent` row
+   * did not. The arrange surface — the only place a subtree actually moves —
+   * settled its reparent with `invalidatesFor("inventory")` rather than the
+   * reparent row, because moving a bin moves every descendant's
+   * `location.inventoryBreakdown` and its valuation rollup with it. This row is
+   * the union of what the two reparent call sites named.
    */
-  locationReparent: rippleTags([["location"], ["dashboard"]]),
+  locationReparent: rippleTags([
+    ["location"],
+    ["inventory"],
+    ["product"],
+    ["problems"],
+    ["search"],
+    ["dashboard"],
+  ]),
   /** Rebuilding every location's persisted valuation rollup also resolves the
    * Maintenance card that offered it. */
   locationValuation: rippleTags([["location"], ["problems"], ["dashboard"]]),
