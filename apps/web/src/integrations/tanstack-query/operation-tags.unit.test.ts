@@ -26,6 +26,12 @@ type AnyDescriptor = {
       | readonly OperationCacheTag[]
       | ((input: never) => readonly OperationCacheTag[]);
   };
+  /**
+   * `buildDescriptor` puts a resolved policy on every mutation descriptor —
+   * static or dynamic, it is always a function of the input. That is the one
+   * handle the replay below can pull on.
+   */
+  invalidates?: (input: never) => readonly OperationCacheTag[];
 };
 
 /**
@@ -154,9 +160,9 @@ describe("operation cache tags", () => {
 
   /**
    * Invariant 3, at the descriptors themselves rather than at the shared table.
-   * A STATIC `invalidates:` array is checkable here; the one dynamic policy
-   * (`entity.mutate`) is covered by the `entityRipple` case below, which walks
-   * every manifest entity it can be called with.
+   * Only a STATIC `invalidates:` array is readable without calling anything;
+   * function-valued policies are skipped here and picked up by invariant 4,
+   * which replays them against sampled inputs.
    */
   it("only ever invalidates tags some query declares, at every descriptor", () => {
     const dead: string[] = [];
@@ -166,6 +172,108 @@ describe("operation cache tags", () => {
       for (const tag of declared)
         if (!invalidatesSomething(tag))
           dead.push(`${descriptor.id} (${path}) -> ${show(tag)}`);
+    }
+    expect(dead).toEqual([]);
+  });
+
+  /**
+   * Invariant 4. A function-valued `invalidates` names its tags only when it is
+   * CALLED, which makes it invisible to every other rule in this file (they read
+   * declarations) and to `check-invalidation-authority.ts` (it reads syntax).
+   * That script counts dynamic policies and defers them here; the registry below
+   * is where the deferral is paid off. A policy with no sample entry is a policy
+   * nothing checks, so the first test fails rather than skipping it.
+   *
+   * `entity.mutate` samples all four branches of `productWriteTags`, because the
+   * two widened branches are the only place in the app where an invalidation is
+   * chosen from the mutation's own payload.
+   */
+  const dynamicPolicyInputs: Record<string, readonly unknown[]> = {
+    "entity.mutate": [
+      // A product create naming an ingredient link AND an explicit fdc_id.
+      {
+        action: "create",
+        entity: "product",
+        data: {
+          name: "Flour",
+          upc: null,
+          manufacturer: "generic",
+          expectedQuantity: null,
+          ingredientId: "ING-4K7M",
+          fdc_id: 12345,
+          category: "food",
+        },
+      },
+      // The same create with the ingredient link only.
+      {
+        action: "create",
+        entity: "product",
+        data: {
+          name: "Flour",
+          upc: null,
+          manufacturer: "generic",
+          expectedQuantity: null,
+          ingredientId: "ING-4K7M",
+          fdc_id: null,
+          category: null,
+        },
+      },
+      // A plain product create: neither link, so the narrow fan-out.
+      {
+        action: "create",
+        entity: "product",
+        data: {
+          name: "Widget",
+          upc: null,
+          manufacturer: "generic",
+          expectedQuantity: null,
+          ingredientId: null,
+          fdc_id: null,
+          category: null,
+        },
+      },
+      // A non-product entity, which never reaches `productWriteTags`.
+      { action: "create", entity: "vendor", data: { name: "Acme Supply" } },
+    ],
+  };
+
+  const dynamicPolicies = descriptors.filter(
+    ({ descriptor }) => typeof descriptor.definition.invalidates === "function",
+  );
+
+  it("has a sampled input for every dynamic invalidation policy", () => {
+    expect(dynamicPolicies.length).toBeGreaterThan(0);
+    const unsampled = dynamicPolicies
+      .filter(({ descriptor }) => !(descriptor.id in dynamicPolicyInputs))
+      .map(({ path, descriptor }) => `${descriptor.id} (${path})`);
+    expect(unsampled).toEqual([]);
+  });
+
+  it("only ever invalidates live, non-root tags when a dynamic policy is replayed", () => {
+    const dead: string[] = [];
+    for (const { path, descriptor } of dynamicPolicies) {
+      const policy = descriptor.invalidates as
+        | ((input: unknown) => readonly OperationCacheTag[])
+        | undefined;
+      if (typeof policy !== "function") {
+        dead.push(
+          `${descriptor.id} (${path}) exposes no runtime invalidates()`,
+        );
+        continue;
+      }
+      const samples = dynamicPolicyInputs[descriptor.id] ?? [];
+      samples.forEach((sample, index) => {
+        const at = `${descriptor.id} sample #${index}`;
+        const tags = policy(sample);
+        if (tags.length === 0) dead.push(`${at} -> no tags at all`);
+        for (const tag of tags) {
+          if (!invalidatesSomething(tag))
+            dead.push(`${at} -> ${show(tag)}, which no query declares`);
+          // Invariant 2, for the tags only a call can reveal.
+          if (tag.length === 1 && tag[0] === "entity")
+            dead.push(`${at} -> the bare ["entity"] root`);
+        }
+      });
     }
     expect(dead).toEqual([]);
   });

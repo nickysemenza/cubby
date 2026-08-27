@@ -1,11 +1,7 @@
 import { testShortcode } from "@cubby/schemas/testing";
 
 import { describe, expect, it } from "vitest";
-import {
-  EntityDetailError,
-  entityDetailFor,
-  entityDetailRootKey,
-} from "./entity-detail.functions";
+import { EntityDetailError, entityDetailFor } from "./entity-detail.functions";
 
 describe("entity detail transport contract", () => {
   it("uses the normalized operation detail query key", () => {
@@ -18,10 +14,6 @@ describe("entity detail transport contract", () => {
         entity: "product",
         input: { entity: "product", shortcode: "PRD-4K7M" },
       },
-    ]);
-    expect(entityDetailRootKey("product")).toEqual([
-      "operation",
-      "entity.detail",
     ]);
   });
 

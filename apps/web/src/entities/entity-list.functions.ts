@@ -97,9 +97,6 @@ export function compileEntityListInput(
   };
 }
 
-export const entityListRootKey = <E extends ListEntity>(_entity: E) =>
-  ["operation", entityList.list.id] as const;
-
 /**
  * A catalog descriptor is parameterized by one schema pair, so its
  * `forEntity(entity: string)` cannot narrow `entity.list` to a single entity's

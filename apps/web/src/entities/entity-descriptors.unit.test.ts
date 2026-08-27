@@ -3,13 +3,8 @@ import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-
 import {
   type EntityDetailScoped,
   entityDetailFor,
-  entityDetailRootKey,
 } from "./entity-detail.functions";
-import {
-  type EntityListScoped,
-  entityListFor,
-  entityListRootKey,
-} from "./entity-list.functions";
+import { type EntityListScoped, entityListFor } from "./entity-list.functions";
 import type {
   DetailEntity,
   EntityDetailByEntity,
@@ -60,7 +55,6 @@ const KEYS = {
       input: { entity: "ingredient", shortcode: "ING-2222" },
     },
   ],
-  detailRoot: ["operation", "entity.detail"],
   list: [
     "operation",
     "entity.list",
@@ -120,7 +114,6 @@ const KEYS = {
       },
     },
   ],
-  listRoot: ["operation", "entity.list"],
 } as const;
 
 const DETAIL_POLICY = {
@@ -216,7 +209,6 @@ describe("entity detail query keys", () => {
     expect(entityDetailFor("product").queryOptions("p-4k7m").queryKey).toEqual(
       KEYS.detailCanonical,
     );
-    expect(entityDetailRootKey("product")).toEqual(KEYS.detailRoot);
   });
 
   it("builds a key for a disabled query without validating it", () => {
@@ -271,9 +263,6 @@ describe("entity list query keys", () => {
         groupBy: "vendor",
       }).queryKey,
     ).toEqual(KEYS.listGroupBy);
-    expect(entityListRootKey("product")).toEqual(KEYS.listRoot);
-    // Documented current behavior: the root key ignores its entity argument.
-    expect(entityListRootKey("wish")).toEqual(KEYS.listRoot);
   });
 
   it("falls back to the raw input when a conditional query cannot parse", () => {
