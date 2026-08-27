@@ -192,6 +192,16 @@ export const ripple = {
   ingredientList: rippleTags([["ingredient"], ["dashboard"]]),
   /** Ingredient↔Product link: visible from both ends. */
   ingredientProduct: rippleTags(ingredientAll, productBase),
+  /**
+   * Ingredient↔Product link where the product also names an explicit USDA
+   * food (`fdc_id`) — the usda-food detail query embeds its own
+   * `linkedProducts` roster, so it goes stale alongside the ingredient and
+   * product ends. Used by `entity-mutation.functions.ts`'s dynamic product
+   * widening, not by a static per-entity write.
+   */
+  ingredientProductUsdaFood: rippleTags(ingredientAll, productBase, [
+    ["usda-food"],
+  ]),
   /** Merge re-points recipes, products, and stock at the keeper. */
   ingredientMerge: rippleTags([["ingredient"]], costAndStock, [["dashboard"]]),
   /**
