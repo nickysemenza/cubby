@@ -118,6 +118,18 @@ describe("useEntityPreview intent prefetch", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it("publishes the responsive presentation for card rosters that retain phone navigation", () => {
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
+
+    expect(result.current.presentation).toBe("mobile");
+    act(() => setViewport("sheet"));
+    expect(result.current.presentation).toBe("sheet");
+    act(() => setViewport("dock"));
+    expect(result.current.presentation).toBe("dock");
+  });
+
   it("sends a selected USDA record to its canonical phone route", () => {
     viewport = "mobile";
     const { result } = renderHook(() =>

@@ -45,7 +45,7 @@ const PREVIEW_INTENT_DELAY_MS = 200;
 const DOCK_MEDIA_QUERY = "(min-width: 1280px)";
 const SHEET_MEDIA_QUERY = "(min-width: 768px) and (max-width: 1279px)";
 
-type PreviewPresentation = "dock" | "sheet" | "mobile";
+export type PreviewPresentation = "dock" | "sheet" | "mobile";
 
 const previewPresentation = (): PreviewPresentation => {
   if (typeof window === "undefined") return "mobile";
@@ -395,5 +395,6 @@ export function useEntityPreview(
     setPreview,
     closePreview,
     isInspectorOpen,
+    presentation,
   };
 }
