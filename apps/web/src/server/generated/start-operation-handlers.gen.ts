@@ -10,10 +10,9 @@ export type StartOperationHandler = (options: {
 export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;
 
 export const START_OPERATION_HANDLER_LOADERS = {
-  "agent.ask": async () => {
-    const module = await import("~/server/agent-browser.server");
-    return module.askAgentForBrowser as unknown as StartOperationHandler;
-  },
+  "agent.ask": async () =>
+    (await import("~/server/agent-browser.server")).agentHandlers.operations
+      .ask,
   "ai.approveDetectedInventoryItem": async () => {
     const module = await import("~/server/ai-browser.server");
     return module.approveDetectedInventoryItemForBrowser as unknown as StartOperationHandler;
@@ -118,38 +117,30 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "calendar.rotateFeed": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.rotateFeed,
-  "collection.create": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.createCollectionForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.detail": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.getCollectionDetailForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.list": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.listCollectionsForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.matrix": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.getCollectionMatrixForBrowser as unknown as StartOperationHandler;
-  },
-  "collection.set": async () => {
-    const module = await import("~/server/collection-browser.server");
-    return module.setCollectionMembershipForBrowser as unknown as StartOperationHandler;
-  },
-  "cookbook.detail": async () => {
-    const module = await import("~/server/cookbook-browser.server");
-    return module.getCookbookDetail as unknown as StartOperationHandler;
-  },
-  "cookbook.list": async () => {
-    const module = await import("~/server/cookbook-browser.server");
-    return module.listCookbookSummaries as unknown as StartOperationHandler;
-  },
-  "dashboard.counts": async () => {
-    const module = await import("~/server/dashboard-browser.server");
-    return module.getDashboardCountsForBrowser as unknown as StartOperationHandler;
-  },
+  "collection.create": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.create,
+  "collection.detail": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.detail,
+  "collection.list": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.list,
+  "collection.matrix": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.matrix,
+  "collection.set": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.set,
+  "cookbook.detail": async () =>
+    (await import("~/server/cookbook-browser.server")).cookbookHandlers
+      .operations.detail,
+  "cookbook.list": async () =>
+    (await import("~/server/cookbook-browser.server")).cookbookHandlers
+      .operations.list,
+  "dashboard.counts": async () =>
+    (await import("~/server/dashboard-browser.server")).dashboardHandlers
+      .operations.counts,
   "entity.detail": async () => {
     const module = await import("~/server/entity-runtime.server");
     return module.getEntityDetail as unknown as StartOperationHandler;
@@ -214,26 +205,18 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/expense-browser.server");
     return module.getExpenseTradeAffinityForBrowser as unknown as StartOperationHandler;
   },
-  "financialAccount.options": async () => {
-    const module = await import("~/server/finance-browser.server");
-    return module.financialAccountOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "financialTransaction.sourceOptions": async () => {
-    const module = await import("~/server/finance-browser.server");
-    return module.financialTransactionSourceOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "householdContribution.ledger": async () => {
-    const module = await import(
-      "~/server/household-contribution-browser.server"
-    );
-    return module.householdContributionLedgerForBrowser as unknown as StartOperationHandler;
-  },
-  "householdContribution.project": async () => {
-    const module = await import(
-      "~/server/household-contribution-browser.server"
-    );
-    return module.projectContributionForBrowser as unknown as StartOperationHandler;
-  },
+  "financialAccount.options": async () =>
+    (await import("~/server/finance-browser.server")).financialAccountHandlers
+      .operations.options,
+  "financialTransaction.sourceOptions": async () =>
+    (await import("~/server/finance-browser.server"))
+      .financialTransactionHandlers.operations.sourceOptions,
+  "householdContribution.ledger": async () =>
+    (await import("~/server/household-contribution-browser.server"))
+      .householdContributionHandlers.operations.ledger,
+  "householdContribution.project": async () =>
+    (await import("~/server/household-contribution-browser.server"))
+      .householdContributionHandlers.operations.project,
   "image.cleanupUnreferencedImages": async () => {
     const module = await import("~/server/image-browser.server");
     return module.cleanupUnreferencedImagesForBrowser as unknown as StartOperationHandler;
@@ -378,18 +361,15 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/location-browser.server");
     return module.valuationSummaryForBrowser as unknown as StartOperationHandler;
   },
-  "mcp.listTools": async () => {
-    const module = await import("~/server/mcp-browser.server");
-    return module.listMcpCatalogForBrowser as unknown as StartOperationHandler;
-  },
-  "mcp.usageActivity": async () => {
-    const module = await import("~/server/mcp-browser.server");
-    return module.listMcpUsageActivityForBrowser as unknown as StartOperationHandler;
-  },
-  "mcp.usageDashboard": async () => {
-    const module = await import("~/server/mcp-browser.server");
-    return module.getMcpUsageDashboardForBrowser as unknown as StartOperationHandler;
-  },
+  "mcp.listTools": async () =>
+    (await import("~/server/mcp-browser.server")).mcpHandlers.operations
+      .listTools,
+  "mcp.usageActivity": async () =>
+    (await import("~/server/mcp-browser.server")).mcpHandlers.operations
+      .usageActivity,
+  "mcp.usageDashboard": async () =>
+    (await import("~/server/mcp-browser.server")).mcpHandlers.operations
+      .usageDashboard,
   "meal.addRecipe": async () => {
     const module = await import("~/server/meal-browser.server");
     return module.addRecipeToMealForBrowser as unknown as StartOperationHandler;
@@ -414,22 +394,18 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/meal-browser.server");
     return module.updateMealRecipeForBrowser as unknown as StartOperationHandler;
   },
-  "oauth.countOrphanedClients": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.countOrphanedOAuthClientsForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.listConnectedApps": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.listConnectedAppsForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.pruneOrphanedClients": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.pruneOrphanedOAuthClientsForBrowser as unknown as StartOperationHandler;
-  },
-  "oauth.revokeConnectedApp": async () => {
-    const module = await import("~/server/oauth-browser.server");
-    return module.revokeConnectedAppForBrowser as unknown as StartOperationHandler;
-  },
+  "oauth.countOrphanedClients": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .countOrphanedClients,
+  "oauth.listConnectedApps": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .listConnectedApps,
+  "oauth.pruneOrphanedClients": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .pruneOrphanedClients,
+  "oauth.revokeConnectedApp": async () =>
+    (await import("~/server/oauth-browser.server")).oauthHandlers.operations
+      .revokeConnectedApp,
   "problems.cleanupOrphanedEmbeddings": async () => {
     const module = await import("~/server/problems-browser.server");
     return module.cleanupOrphanedEmbeddingsForBrowser as unknown as StartOperationHandler;
@@ -770,22 +746,18 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/recommendations-browser.server");
     return module.getTagPropagationRecommendationForBrowser as unknown as StartOperationHandler;
   },
-  "relatedData.branch": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedBranchForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.options": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedOptionsForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.previews": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedPreviewsForBrowser as unknown as StartOperationHandler;
-  },
-  "relatedData.summary": async () => {
-    const module = await import("~/server/related-data-browser.server");
-    return module.loadRelatedSummaryForBrowser as unknown as StartOperationHandler;
-  },
+  "relatedData.branch": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.branch,
+  "relatedData.options": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.options,
+  "relatedData.previews": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.previews,
+  "relatedData.summary": async () =>
+    (await import("~/server/related-data-browser.server")).relatedDataHandlers
+      .operations.summary,
   "relatedness.product": async () => {
     const module = await import("~/server/recommendations-browser.server");
     return module.getProductRelatednessForBrowser as unknown as StartOperationHandler;
@@ -818,18 +790,15 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/search-browser.server");
     return module.requestEmbeddingRefreshForBrowser as unknown as StartOperationHandler;
   },
-  "statementRow.imports": async () => {
-    const module = await import("~/server/statement-row-browser.server");
-    return module.listStatementImportsForBrowser as unknown as StartOperationHandler;
-  },
-  "statementRow.list": async () => {
-    const module = await import("~/server/statement-row-browser.server");
-    return module.listStatementRowsForBrowser as unknown as StartOperationHandler;
-  },
-  "statementRow.summary": async () => {
-    const module = await import("~/server/statement-row-browser.server");
-    return module.getStatementRowSummaryForBrowser as unknown as StartOperationHandler;
-  },
+  "statementRow.imports": async () =>
+    (await import("~/server/statement-row-browser.server")).statementRowHandlers
+      .operations.imports,
+  "statementRow.list": async () =>
+    (await import("~/server/statement-row-browser.server")).statementRowHandlers
+      .operations.list,
+  "statementRow.summary": async () =>
+    (await import("~/server/statement-row-browser.server")).statementRowHandlers
+      .operations.summary,
   "suggestions.getMakeable": async () => {
     const module = await import("~/server/recipe-browser.server");
     return module.suggestionMakeable as unknown as StartOperationHandler;
@@ -882,10 +851,8 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/task-browser.server");
     return module.getTaskTodayBriefingForBrowser as unknown as StartOperationHandler;
   },
-  "upc.lookup": async () => {
-    const module = await import("~/server/upc-browser.server");
-    return module.lookupUpcForBrowser as unknown as StartOperationHandler;
-  },
+  "upc.lookup": async () =>
+    (await import("~/server/upc-browser.server")).upcHandlers.operations.lookup,
   "usda-food.alternateId": async () => {
     const module = await import("~/server/usda-browser.server");
     return module.getUsdaFoodByAlternateId as unknown as StartOperationHandler;
@@ -898,18 +865,15 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/usda-browser.server");
     return module.listUsdaFoods as unknown as StartOperationHandler;
   },
-  "vendor.fetchLogo": async () => {
-    const module = await import("~/server/vendor-browser.server");
-    return module.fetchVendorLogoForBrowser as unknown as StartOperationHandler;
-  },
-  "vendor.merge": async () => {
-    const module = await import("~/server/vendor-browser.server");
-    return module.mergeVendorsForBrowser as unknown as StartOperationHandler;
-  },
-  "vendor.options": async () => {
-    const module = await import("~/server/vendor-browser.server");
-    return module.vendorOptionsForBrowser as unknown as StartOperationHandler;
-  },
+  "vendor.fetchLogo": async () =>
+    (await import("~/server/vendor-browser.server")).vendorHandlers.operations
+      .fetchLogo,
+  "vendor.merge": async () =>
+    (await import("~/server/vendor-browser.server")).vendorHandlers.operations
+      .merge,
+  "vendor.options": async () =>
+    (await import("~/server/vendor-browser.server")).vendorHandlers.operations
+      .options,
 } as const satisfies Record<
   StartOperationIdOfKind<"query" | "mutation">,
   StartOperationHandlerLoader
