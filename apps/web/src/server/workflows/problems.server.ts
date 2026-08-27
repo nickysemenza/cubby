@@ -61,7 +61,7 @@ const problemByTypeSchema = z.object({
   total: z.number().int().nonnegative(),
 });
 const noInput = z.undefined();
-export const problemsWorkflowSchemas = {
+const problemsWorkflowSchemas = {
   getFast: { input: noInput, output: problemsFastSchema },
   getCounts: { input: noInput, output: problemsCountSchema },
   getByType: {

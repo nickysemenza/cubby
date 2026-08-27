@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { cookbook } from "./cookbook.functions";
-import { entityDetailQueryOptions } from "./entity-detail.functions";
+import { entityDetailFor } from "./entity-detail.functions";
 import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
@@ -29,7 +29,7 @@ export function entityPreviewQueryOptions(entity: Entity, id: string) {
   if (entity === "cookbook")
     return cookbook.detail.queryOptions({ shortcode: id });
   if (isGeneratedBrowserCrudEntity(entity)) {
-    return entityDetailQueryOptions(entity, id);
+    return entityDetailFor(entity).queryOptions(id);
   }
   throw new Error(`Entity ${entity} has no browser detail transport`);
 }

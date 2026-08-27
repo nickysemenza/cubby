@@ -25,6 +25,7 @@ import {
   Sigma,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { EntityActionRowMenuItems } from "~/app/_components/actions/entity-actions";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -702,10 +703,22 @@ export function createActionsColumn<T extends { id: string | number }>(
   entity: Entity,
   options?: ActionsColumnOptions<T>,
 ) {
+  const extraActions = options?.extraActions;
   return createActionsColumnBase(
     columnHelper,
     options?.rowLink ?? defaultRowLink<T>(entity),
-    options?.extraActions,
+    // Registered actions lead, the surface's own hand-wired ones follow: the
+    // same shape the selection bar has (generic first, `extraActions`' trailing
+    // Delete last), and the only order that keeps the destructive item at the
+    // bottom of the menu. Renders nothing until a surface publishes an
+    // `EntityActionsProvider` for this entity, so a table that never mounts one
+    // has the menu it always had.
+    (row) => (
+      <>
+        <EntityActionRowMenuItems entity={entity} row={row} />
+        {extraActions?.(row)}
+      </>
+    ),
   );
 }
 
@@ -2155,11 +2168,22 @@ export function createParentLinkColumn<
       cell: (info) => {
         const { id, name } = info.getValue();
         if (!id || !name) return <NoneValue />;
-        return (
+        // `{ id, name }` structurally satisfies both branches of
+        // EntityInlineLinkProps; only `entity: TEntity` being a generic
+        // parameter (not a literal) blocks narrowing. Dispatching on the
+        // literal here needs no assertion at all.
+        return entity === "task" ? (
           <EntityInlineLink
             displayImage={undefined}
-            entity={entity}
-            data={{ id, name } as never}
+            entity="task"
+            data={{ id, name }}
+            truncate
+          />
+        ) : (
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="project"
+            data={{ id, name }}
             truncate
           />
         );

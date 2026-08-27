@@ -1,15 +1,10 @@
-import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { UseMutationOptions } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import {
-  makeBatchStatusFetcher,
-  watchBatchesAndInvalidate,
-} from "~/lib/background-batch-polling";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 
 /** A mutation-options factory supplied by either Start or a specialized transport. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<
@@ -38,10 +33,15 @@ export type VariablesOf<TFn extends MutationOptionsFn> =
 
 /**
  * The common write-mutation shape: on success toast a message (optionally
- * derived from the result), invalidate caches, and run any side effect (close a
- * dialog, resolve a value, navigate); on error toast a message. `TData`/
- * `TVariables` are inferred from the passed `*.mutationOptions` reference, so
- * callers need no generics.
+ * derived from the result), and run any side effect (close a dialog, resolve a
+ * value, navigate); on error toast a message. `TData`/`TVariables` are inferred
+ * from the passed `*.mutationOptions` reference, so callers need no generics.
+ *
+ * Invalidation is deliberately NOT a parameter. The operation descriptor behind
+ * `mutationFn` declares what its write moves, and the root `MutationCache`
+ * acts on it — including the re-invalidation once any background batch the
+ * write enqueued drains. A per-call-site key list could only restate that, or
+ * silently disagree with it.
  *
  * For the fixed "{Entity} updated" toast use {@link useUpdateMutation}; for the
  * Problems-page "fix all" buttons use `useProblemBackfill`.
@@ -50,7 +50,6 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
   mutationFn,
   success,
   successToastId,
-  invalidateKeys = [],
   onSuccess,
   error,
   entity,
@@ -71,18 +70,15 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
    * next to the paste-summary toast.
    */
   successToastId?: string;
-  /** Entity lists to invalidate, using the shared nested query-key structure. */
-  invalidateKeys?: readonly QueryKey[];
-  /** Side effect after the toast + invalidations (close dialog, resolve, navigate). */
+  /** Side effect after the toast (close dialog, resolve, navigate). */
   onSuccess?: (data: DataOf<TFn>) => void;
   /** Error toast — defaults to `getErrorMessage(err)`. */
   error?: string | ((err: unknown) => string);
   /** Route ordinary CRUD through the entity editing command lifecycle. */
   entity?: EditableEntity;
-  operation?: "create" | "update" | "delete";
+  operation?: "create" | "update" | "delete" | "bulkUpdate";
   intent?: string;
 }) {
-  const queryClient = useQueryClient();
   const commands = useEntityCommands(entity ?? "product");
 
   const mutationOptions = mutationFn({
@@ -92,16 +88,6 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
           typeof success === "function" ? success(data) : success,
           successToastId === undefined ? undefined : { id: successToastId },
         );
-      }
-      if (!entity) {
-        invalidateQueryRoots(queryClient, invalidateKeys);
-        // Re-invalidate once any queued background work the action enqueued drains.
-        void watchBatchesAndInvalidate({
-          queryClient,
-          result: data,
-          invalidateKeys,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
-        });
       }
       onSuccess?.(data);
     },
@@ -131,6 +117,18 @@ export function useActionMutation<TFn extends MutationOptionsFn>({
             );
             if (!result.ok) {
               throw new Error(result.issues[0]?.message ?? "Delete failed");
+            }
+            return result.result as DataOf<TFn>;
+          }
+          if (operation === "bulkUpdate") {
+            const result = await commands.bulkUpdate(
+              input.ids ?? (input.id ? [input.id] : []),
+              input.data ?? {},
+            );
+            if (!result.ok) {
+              throw new Error(
+                result.issues[0]?.message ?? "Bulk update failed",
+              );
             }
             return result.result as DataOf<TFn>;
           }

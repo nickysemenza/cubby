@@ -1,7 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { LocationListItemOut } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -15,11 +15,6 @@ import { location } from "~/app/locations/location.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
-import {
-  invalidateQueryRoots,
-  invalidatesFor,
-  queryKeys,
-} from "~/lib/query-keys";
 
 const formSchema = z.object({
   targetParent: requiredLocationField,
@@ -40,7 +35,6 @@ export function BulkReparentLocationsDialog({
   locations,
   onSuccess,
 }: BulkReparentLocationsDialogProps) {
-  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const selectedIds = new Set<LocationShortcode>(
     locations.map((location) => location.id),
@@ -54,10 +48,6 @@ export function BulkReparentLocationsDialog({
   const bulkUpdateParent = useMutation({
     ...location.bulkUpdateParent.mutationOptions(),
     onSuccess: ({ updated }) => {
-      invalidateQueryRoots(queryClient, [
-        ...invalidatesFor("location"),
-        queryKeys.location.all,
-      ]);
       toast.success(
         `Moved ${updated} location${updated === 1 ? "" : "s"} to the new parent.`,
       );

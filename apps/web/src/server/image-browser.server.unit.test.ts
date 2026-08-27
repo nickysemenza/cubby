@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { updateImage } from "./image-browser.server";
+import { imageHandlers } from "./image-browser.server";
 
 const mocks = vi.hoisted(() => ({ executeEntity: vi.fn() }));
 
@@ -35,7 +35,7 @@ describe("Image browser operations", () => {
       });
 
     await expect(
-      updateImage({
+      imageHandlers.operations.update({
         data: { id: "IMG-4K7M", data: { filename: "renamed.jpg" } },
         request: {
           headers: new Headers(),
@@ -52,7 +52,8 @@ describe("Image browser operations", () => {
 
     expect(mocks.executeEntity).toHaveBeenNthCalledWith(
       2,
-      {},
+      // The domain wrapper adds the request's abort signal to the context.
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
       expect.objectContaining({
         action: "get",
         entity: "image",

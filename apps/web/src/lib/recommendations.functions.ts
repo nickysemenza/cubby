@@ -24,7 +24,7 @@ export const relatedness = defineOperationDomain("relatedness", {
   product: query({
     input: productShortcode,
     output: relatednessOutSchema,
-    tags: [["relatedness"], ["relatedness", "product"]],
+    tags: [["relatedness", "product"]],
   }),
 });
 
@@ -32,22 +32,22 @@ export const recommendations = defineOperationDomain("recommendations", {
   placement: query({
     input: placementRecommendationInput,
     output: placementRecommendationOut,
-    tags: [["recommendations"], ["recommendations", "placement"]],
+    tags: [["recommendations", "placement"]],
   }),
   product: query({
     input: recommendationWorkbenchInput,
     output: recommendationWorkbenchOut,
-    tags: [["recommendations"], ["recommendations", "product"]],
+    tags: [["recommendations", "product"]],
   }),
   duplicateProduct: query({
     input: duplicateProductRecommendationInput,
     output: duplicateProductRecommendationOut,
-    tags: [["recommendations"], ["recommendations", "duplicateProduct"]],
+    tags: [["recommendations", "duplicateProduct"]],
   }),
   tagPropagation: query({
     input: tagPropagationRecommendationInput,
     output: tagPropagationRecommendationOut,
-    tags: [["recommendations"], ["recommendations", "tagPropagation"]],
+    tags: [["recommendations", "tagPropagation"]],
   }),
   dismissDuplicateProduct: mutation({
     input: dismissDuplicateProductRecommendationInput,

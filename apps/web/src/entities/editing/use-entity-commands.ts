@@ -1,16 +1,14 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
+import type { z } from "zod";
 import {
+  entityMutation,
   executeEntityMutation,
   flattenEntityMutationResult,
   parseEntityMutationResultFor,
 } from "~/entities/entity-mutation.functions";
-import {
-  makeBatchStatusFetcher,
-  watchBatchesAndInvalidate,
-} from "~/lib/background-batch-polling";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { invalidateQueryRoots } from "~/lib/query-keys";
+import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
@@ -19,7 +17,6 @@ import {
   isResolvedEntityEdit,
   resolveEntityEdit,
 } from "./kernel";
-import { getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
   EntityEditBuildResult,
@@ -68,8 +65,6 @@ function issuesFromRefusal(error: unknown): EntityEditIssue[] {
  * transport-neutral while this adapter maps them to the Start command shape.
  */
 function useEntityMutationPort(): EntityMutationPort {
-  const queryClient = useQueryClient();
-
   return useMemo(
     () => ({
       execute: async (command) => {
@@ -86,15 +81,29 @@ function useEntityMutationPort(): EntityMutationPort {
                   entity: command.entity,
                   ids: [...(command.ids ?? (command.id ? [command.id] : []))],
                 }
-              : {
-                  action: command.operation,
-                  entity: command.entity,
-                  id: command.id,
-                  data: command.data,
-                };
+              : command.operation === "bulkUpdate"
+                ? {
+                    action: command.operation,
+                    entity: command.entity,
+                    ids: [...(command.ids ?? (command.id ? [command.id] : []))],
+                    data: command.data,
+                  }
+                : {
+                    action: command.operation,
+                    entity: command.entity,
+                    id: command.id,
+                    data: command.data,
+                  };
         const result = await executeEntityMutation({
-          data: startCommand as never,
+          data: startCommand as z.input<
+            typeof entityBrowserMutationCommandSchema
+          >,
         });
+        if (command.operation === "bulkUpdate") {
+          // A bulk patch reports a count over N rows, so there is no single
+          // entity output to recover through the entity's own schema.
+          return { id: command.ids?.[0] ?? "", result };
+        }
         const resultId =
           result && typeof result === "object" && "item" in result
             ? String(result.item.id)
@@ -112,21 +121,23 @@ function useEntityMutationPort(): EntityMutationPort {
           ),
         };
       },
-      invalidate: async (keys) => {
-        invalidateQueryRoots(queryClient, keys);
-      },
-      watchBackgroundWork: ({ result, invalidateKeys }) => {
-        void watchBatchesAndInvalidate({
-          queryClient,
-          result,
-          invalidateKeys,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
-        });
-      },
     }),
-    [queryClient],
+    [],
   );
 }
+
+/**
+ * One descriptor per entity, built once: `forEntity` rebuilds the descriptor and
+ * re-registers its invalidation policy on every call, and this runs per render.
+ */
+const kernelOptionsByEntity = new Map<string, object>();
+const kernelOptionsFor = (entity: string) => {
+  const cached = kernelOptionsByEntity.get(entity);
+  if (cached) return cached;
+  const options = entityMutation.mutate.forEntity(entity).mutationOptions();
+  kernelOptionsByEntity.set(entity, options);
+  return options;
+};
 
 export interface EntityCommands<E extends EditableEntity> {
   readonly isPending: boolean;
@@ -145,6 +156,11 @@ export interface EntityCommands<E extends EditableEntity> {
     surface?: "create-page" | "dialog" | "quick-create";
   }): Promise<EntityEditResult<E>>;
   remove(ids: readonly string[]): Promise<EntityEditResult<E>>;
+  /** Patch one declared field set across a bounded id set, as `remove` deletes. */
+  bulkUpdate(
+    ids: readonly string[],
+    data: Readonly<object>,
+  ): Promise<EntityEditResult<E>>;
   commitFields(input: {
     record: EntityEditRecord;
     values: Readonly<Partial<EntityEditDraft<E>>>;
@@ -176,24 +192,23 @@ export function useEntityCommands<E extends EditableEntity>(
   entity: E,
 ): EntityCommands<E> {
   const port = useEntityMutationPort();
-  const definition = getEntityEditDefinition(entityEditRegistry, entity);
   const [issues, setIssues] = useState<readonly EntityEditIssue[]>([]);
+  // Spreading the descriptor's options is what carries `meta` — and with it the
+  // operation id the root MutationCache resolves the fan-out from. The kernel
+  // descriptor's policy reads the COMMAND's `entity`, which is exactly what
+  // this mutation is given, so invalidation (and the background-batch re-poll
+  // that used to live on `port.watchBackgroundWork`) happen there, once, for
+  // every write in the app rather than per call site.
   const mutation = useMutation({
+    ...kernelOptionsFor(entity),
     mutationFn: async (command: EntityEditCommand<E>) =>
       await port.execute(command),
   });
 
   const executeCommand = useCallback(
-    async (command: EntityEditCommand<E>) => {
-      const execution = await mutation.mutateAsync(command);
-      await port.invalidate(definition.invalidationKeys);
-      port.watchBackgroundWork?.({
-        result: execution.result,
-        invalidateKeys: definition.invalidationKeys,
-      });
-      return execution;
-    },
-    [definition.invalidationKeys, mutation, port],
+    async (command: EntityEditCommand<E>) =>
+      await mutation.mutateAsync(command),
+    [mutation],
   );
 
   const submit = useCallback(
@@ -253,6 +268,31 @@ export function useEntityCommands<E extends EditableEntity>(
         data: {},
       }),
     [entity, executeResult],
+  );
+
+  const bulkUpdate = useCallback(
+    async (
+      ids: readonly string[],
+      data: Readonly<object>,
+    ): Promise<EntityEditResult<E>> => {
+      setIssues([]);
+      try {
+        const execution = await executeCommand({
+          entity,
+          operation: "bulkUpdate",
+          intent: "bulkUpdate",
+          ids,
+          data,
+        });
+        // The count envelope is deliberately not parsed as an entity output.
+        return { ok: true, entity, id: execution.id, changed: true };
+      } catch (error) {
+        const nextIssues = issuesFromRefusal(error);
+        setIssues(nextIssues);
+        return { ok: false, issues: nextIssues };
+      }
+    },
+    [entity, executeCommand],
   );
 
   const create = useCallback(
@@ -365,6 +405,7 @@ export function useEntityCommands<E extends EditableEntity>(
     submit,
     create,
     remove,
+    bulkUpdate,
     commitFields,
     commitRuntimeFields: commitFields,
     commitField,

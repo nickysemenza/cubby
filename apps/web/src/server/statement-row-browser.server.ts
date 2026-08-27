@@ -1,55 +1,22 @@
-import type { z } from "zod";
-import {
-  runStartOperation,
-  type StartOperationRequest,
-} from "~/server/start-operation.server";
+import { statementRow } from "~/lib/statement-row.functions";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getStatementRowSummaryWorkflow,
   listStatementImportsWorkflow,
   listStatementRowsWorkflow,
-  statementRowWorkflowSchemas,
 } from "~/server/workflows/statement-row.server";
 
-const schemas = statementRowWorkflowSchemas;
-export const listStatementRowsForBrowser = (o: {
-  data: z.input<typeof schemas.list.input>;
-  request: StartOperationRequest;
-}) =>
-  runStartOperation({
-    operation: "statementRow.list",
-    type: "query",
-    input: o.data,
-    inputSchema: schemas.list.input,
-    outputSchema: schemas.list.output,
-    request: o.request,
+export const statementRowHandlers = implementOperationDomain(statementRow, {
+  list: {
     readPolicy: "strong",
-    run: (c, input) => listStatementRowsWorkflow(c.db, input),
-  });
-export const getStatementRowSummaryForBrowser = (o: {
-  data: z.input<typeof schemas.summary.input>;
-  request: StartOperationRequest;
-}) =>
-  runStartOperation({
-    operation: "statementRow.summary",
-    type: "query",
-    input: o.data,
-    inputSchema: schemas.summary.input,
-    outputSchema: schemas.summary.output,
-    request: o.request,
+    run: (context, input) => listStatementRowsWorkflow(context.db, input),
+  },
+  summary: {
     readPolicy: "strong",
-    run: (c, input) => getStatementRowSummaryWorkflow(c.db, input),
-  });
-export const listStatementImportsForBrowser = (o: {
-  data: z.input<typeof schemas.imports.input>;
-  request: StartOperationRequest;
-}) =>
-  runStartOperation({
-    operation: "statementRow.imports",
-    type: "query",
-    input: o.data,
-    inputSchema: schemas.imports.input,
-    outputSchema: schemas.imports.output,
-    request: o.request,
+    run: (context, input) => getStatementRowSummaryWorkflow(context.db, input),
+  },
+  imports: {
     readPolicy: "strong",
-    run: (c, input) => listStatementImportsWorkflow(c.db, input),
-  });
+    run: (context, input) => listStatementImportsWorkflow(context.db, input),
+  },
+});

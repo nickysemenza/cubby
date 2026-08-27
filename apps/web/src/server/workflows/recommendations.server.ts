@@ -1,19 +1,13 @@
-import { productShortcode } from "@cubby/schemas/identifiers";
-import {
+import type { productShortcode } from "@cubby/schemas/identifiers";
+import type {
   dismissDuplicateProductRecommendationInput,
   dismissProductRecommendationInput,
   dismissTagPropagationInput,
   duplicateProductRecommendationInput,
-  duplicateProductRecommendationOut,
   placementRecommendationInput,
-  placementRecommendationOut,
-  recommendationOkSchema,
   recommendationWorkbenchInput,
-  recommendationWorkbenchOut,
   tagPropagationRecommendationInput,
-  tagPropagationRecommendationOut,
 } from "@cubby/schemas/recommendations";
-import { relatednessOutSchema } from "@cubby/schemas/relatedness";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -29,39 +23,6 @@ import {
   getProductRelatedness,
   getProductTagPropagation,
 } from "~/server/services/relatedness.service";
-
-export const recommendationWorkflowSchemas = {
-  relatedness: { input: productShortcode, output: relatednessOutSchema },
-  placement: {
-    input: placementRecommendationInput,
-    output: placementRecommendationOut,
-  },
-  product: {
-    input: recommendationWorkbenchInput,
-    output: recommendationWorkbenchOut,
-  },
-  duplicateProduct: {
-    input: duplicateProductRecommendationInput,
-    output: duplicateProductRecommendationOut,
-  },
-  dismissDuplicateProduct: {
-    input: dismissDuplicateProductRecommendationInput,
-    output: recommendationOkSchema,
-  },
-  tagPropagation: {
-    input: tagPropagationRecommendationInput,
-    output: tagPropagationRecommendationOut,
-  },
-  dismissTagPropagation: {
-    input: dismissTagPropagationInput,
-    output: recommendationOkSchema,
-  },
-  dismissProduct: {
-    input: dismissProductRecommendationInput,
-    output: recommendationOkSchema,
-  },
-} as const;
-
 export const getProductRelatednessWorkflow = (
   db: Database,
   sourceId: z.output<typeof productShortcode>,

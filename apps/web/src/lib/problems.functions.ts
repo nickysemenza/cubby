@@ -19,6 +19,7 @@ import {
   recipeUsageByProductOut,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -32,62 +33,62 @@ export const problems = defineOperationDomain("problems", {
   getFast: query({
     input: noInput,
     output: problemsFastSchema,
-    tags: [["problems"], ["problems", "getFast"]],
+    tags: [["problems", "getFast"]],
   }),
   getCounts: query({
     input: noInput,
     output: problemsCountSchema,
-    tags: [["problems"], ["problems", "getCounts"]],
+    tags: [["problems", "getCounts"]],
   }),
   getViews: query({
     input: noInput,
     output: problemsViewsSchema,
-    tags: [["problems"], ["problems", "getViews"]],
+    tags: [["problems", "getViews"]],
   }),
   getCoverage: query({
     input: noInput,
     output: problemsCoverageSchema,
-    tags: [["problems"], ["problems", "getCoverage"]],
+    tags: [["problems", "getCoverage"]],
   }),
   getUpc: query({
     input: noInput,
     output: problemsUpcSchema,
-    tags: [["problems"], ["problems", "getUpc"]],
+    tags: [["problems", "getUpc"]],
   }),
   getTracker: query({
     input: noInput,
     output: problemsTrackerSchema,
-    tags: [["problems"], ["problems", "getTracker"]],
+    tags: [["problems", "getTracker"]],
   }),
   getCoverageTotals: query({
     input: noInput,
     output: coverageTotalsSchema,
-    tags: [["problems"], ["problems", "getCoverageTotals"]],
+    tags: [["problems", "getCoverageTotals"]],
   }),
   getMaintenanceCounts: query({
     input: noInput,
     output: maintenanceCountsSchema,
-    tags: [["problems"], ["problems", "getMaintenanceCounts"]],
+    tags: [["problems", "getMaintenanceCounts"]],
   }),
   dryRunReparse: query({
     input: noInput,
     output: dryRunReparseOut,
-    tags: [["problems"], ["problems", "dryRunReparse"]],
+    tags: [["problems", "dryRunReparse"]],
   }),
   dryRunPruneAliases: query({
     input: noInput,
     output: dryRunPruneAliasesOut,
-    tags: [["problems"], ["problems", "dryRunPruneAliases"]],
+    tags: [["problems", "dryRunPruneAliases"]],
   }),
   recipeUsageByProduct: query({
     input: recipeUsageByProductInput,
     output: recipeUsageByProductOut,
-    tags: [["problems"], ["problems", "recipeUsageByProduct"]],
+    tags: [["problems", "recipeUsageByProduct"]],
   }),
   deleteUnused: mutation({
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
-    invalidates: [["problems"], ["ingredient"]],
+    invalidates: ripple.ingredientCleanup,
   }),
   cleanupOrphanedEmbeddings: mutation({
     input: cleanupOrphanedEntityEmbeddingsInput,

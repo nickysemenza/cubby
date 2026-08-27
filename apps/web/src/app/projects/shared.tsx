@@ -21,6 +21,7 @@ import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
+import { EntityActionsProvider } from "~/app/_components/actions/entity-actions";
 import {
   type VendorName,
   WithVendorSearch,
@@ -52,7 +53,6 @@ import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { InventoryEntriesCell } from "~/app/_components/data-table/inventory-entries-cell";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnHelper as ColumnHelper,
@@ -67,11 +67,8 @@ import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFil
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import {
-  ListBulkActionBar,
-  useListBulkActions,
-} from "~/app/_components/hooks/useListBulkActions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -287,13 +284,11 @@ export function TaskList({
     useOptimisticDelete<TaskOut>({ deletable: deletableConfig });
 
   const taskBulkActions = useTaskBulkActions();
-  // `useListBulkActions` supplies the shared Copy codes and Delete actions.
-  const listBulkActions = useListBulkActions<TaskOut>({
+  const selection = useEntitySelection<TaskOut>({
     entity: "task",
     bulkActions: taskBulkActions.config,
     deleteBulkAction,
   });
-  const bulkActionsState = listBulkActions.state;
 
   // One grouped companion read avoids adding stock to every TaskOut producer.
   const subjectProductIds = useMemo(
@@ -316,7 +311,7 @@ export function TaskList({
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<TaskOut>[]>(
     () => [
-      buildSelectColumn<TaskOut>(),
+      ...selection.selectColumns,
       taskStatusColumn(
         taskHelper,
         async (status, task) => {
@@ -407,7 +402,13 @@ export function TaskList({
         extraActions: combinedExtraActions,
       }),
     ],
-    [showProjectColumn, nameEditable, combinedExtraActions, inventoryByProduct],
+    [
+      showProjectColumn,
+      nameEditable,
+      combinedExtraActions,
+      inventoryByProduct,
+      selection.selectColumns,
+    ],
   );
   const sortedData = useMemo(() => {
     const [activeTasks, done] = partition(tasks, (t) => t.status !== "done");
@@ -436,13 +437,13 @@ export function TaskList({
     meta: { defaultLayout: layout.defaultLayout },
     // The table holds its full scoped set, so client-side facet counts are exact.
     getRowId: (row) => row.id,
-    enableRowSelection: true,
+    enableRowSelection: selection.enableRowSelection,
     enableRowRangeSelection: true,
     state: {
-      rowSelection: bulkActionsState.rowSelection,
+      rowSelection: selection.rowSelection,
       columnFilters,
     },
-    onRowSelectionChange: bulkActionsState.onRowSelectionChange,
+    onRowSelectionChange: selection.onRowSelectionChange,
     onColumnFiltersChange: setColumnFilters,
     initialState: {
       pagination: { pageIndex: 0, pageSize: 25 },
@@ -460,29 +461,21 @@ export function TaskList({
     );
   }
 
-  const bulkActionBar =
-    bulkActionsState.selectedCount > 0 ? (
-      <ListBulkActionBar
-        table={table}
-        config={listBulkActions.config}
-        state={bulkActionsState}
-      />
-    ) : null;
-
   return (
-    <>
+    <EntityActionsProvider value={selection.rowActions}>
       <RTable
         table={table}
         embedded
         showColumnMenu
-        bulkActionBar={bulkActionBar}
+        bulkActionBar={selection.renderBulkActionBar(table)}
       />
       {deleteDialog}
+      {selection.actionDialogs}
       <TaskBulkActionDialogs
         controller={taskBulkActions}
         onComplete={() => table.resetRowSelection()}
       />
-    </>
+    </EntityActionsProvider>
   );
 }
 
@@ -939,18 +932,16 @@ export function ExpenseList({
     });
 
   const expenseBulkActions = useExpenseBulkActions();
-  // See TaskList: `useListBulkActions` is what supplies "Copy codes" + Delete.
-  const listBulkActions = useListBulkActions<ExpenseOut>({
+  const selection = useEntitySelection<ExpenseOut>({
     entity: "expense",
     bulkActions: expenseBulkActions.config,
     deleteBulkAction,
   });
-  const bulkActionsState = listBulkActions.state;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
     () => [
-      buildSelectColumn<ExpenseOut>(),
+      ...selection.selectColumns,
       createExpenseProductImageColumn(expenseHelper),
       createNameColumn(expenseHelper, "expense", "name", {
         header: "Expense",
@@ -1077,7 +1068,13 @@ export function ExpenseList({
         extraActions: combinedExtraActions,
       }),
     ],
-    [showProjectColumn, nameEditable, combinedExtraActions, rowVendorOptions],
+    [
+      showProjectColumn,
+      nameEditable,
+      combinedExtraActions,
+      rowVendorOptions,
+      selection.selectColumns,
+    ],
   );
 
   // Embedded and ledger column layouts must not share storage.
@@ -1095,13 +1092,13 @@ export function ExpenseList({
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
-    enableRowSelection: true,
+    enableRowSelection: selection.enableRowSelection,
     enableRowRangeSelection: true,
     state: {
-      rowSelection: bulkActionsState.rowSelection,
+      rowSelection: selection.rowSelection,
       columnFilters,
     },
-    onRowSelectionChange: bulkActionsState.onRowSelectionChange,
+    onRowSelectionChange: selection.onRowSelectionChange,
     onColumnFiltersChange: setColumnFilters,
     initialState: {
       pagination: { pageIndex: 0, pageSize: 25 },
@@ -1138,29 +1135,23 @@ export function ExpenseList({
     );
   }
 
-  const bulkActionBar =
-    bulkActionsState.selectedCount > 0 ? (
-      <ListBulkActionBar
-        table={table}
-        config={listBulkActions.config}
-        state={bulkActionsState}
-      />
-    ) : null;
-
   return (
     <ExpenseProductImages rows={expenses}>
-      <RTable
-        table={table}
-        embedded
-        showColumnMenu
-        bulkActionBar={bulkActionBar}
-      />
-      {deleteDialog}
-      {rowActions.dialogs}
-      <ExpenseBulkActionDialogs
-        controller={expenseBulkActions}
-        onComplete={() => table.resetRowSelection()}
-      />
+      <EntityActionsProvider value={selection.rowActions}>
+        <RTable
+          table={table}
+          embedded
+          showColumnMenu
+          bulkActionBar={selection.renderBulkActionBar(table)}
+        />
+        {deleteDialog}
+        {rowActions.dialogs}
+        {selection.actionDialogs}
+        <ExpenseBulkActionDialogs
+          controller={expenseBulkActions}
+          onComplete={() => table.resetRowSelection()}
+        />
+      </EntityActionsProvider>
     </ExpenseProductImages>
   );
 }

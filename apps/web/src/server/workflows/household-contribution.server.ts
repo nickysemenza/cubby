@@ -1,9 +1,7 @@
-import {
+import type {
   householdContributionLedgerInput,
-  householdContributionLedgerOut,
   projectContributionInput,
-  projectContributionOut,
-  type suggestFinancialTransferPairsInput,
+  suggestFinancialTransferPairsInput,
 } from "@cubby/schemas/household-contribution";
 import type { Database } from "~/server/db";
 import { suggestFinancialTransferPairs } from "~/server/repo/financial-transfer-pairing";
@@ -11,14 +9,6 @@ import {
   householdContributionLedger,
   projectContribution,
 } from "~/server/repo/household-contribution";
-
-export {
-  householdContributionLedgerInput,
-  householdContributionLedgerOut,
-  projectContributionInput,
-  projectContributionOut,
-};
-
 export const householdContributionLedgerWorkflow = (
   db: Database,
   input: typeof householdContributionLedgerInput._output,

@@ -26,8 +26,11 @@ const noop: BulkAction<TestRow> = {
 
 describe("useListBulkActions", () => {
   it("offers Copy codes on a shortcode entity with no other actions", () => {
+    // `ledgerParty` has a shortcode but declares no entity actions, so it
+    // isolates the generic half. Product is covered below, where the registry
+    // contributes.
     const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({ entity: "product" }),
+      useListBulkActions<TestRow>({ entity: "ledgerParty" }),
     );
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
@@ -36,6 +39,19 @@ describe("useListBulkActions", () => {
     // Copy alone is enough to earn the checkbox column — that's what turns
     // selection on for lists that have no bulk actions of their own.
     expect(result.current.enableRowSelection).toBe(true);
+  });
+
+  // The payoff of the registry: no product list asks for this action, and
+  // every one of them offers it.
+  it("adds the entity's declared actions without the list declaring them", () => {
+    const { result } = renderHook(() =>
+      useListBulkActions<TestRow>({ entity: "product" }),
+    );
+
+    expect(result.current.config?.actions.map((a) => a.id)).toEqual([
+      "copy-shortcodes",
+      "add-to-inventory",
+    ]);
   });
 
   it("offers Copy codes for image now that it has a shortcode", () => {

@@ -9,6 +9,7 @@ import {
   projectImageSummariesOut,
 } from "@cubby/schemas/image";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -29,12 +30,12 @@ export const image = defineOperationDomain("image", {
   update: mutation({
     input: imageBrowserUpdateInput,
     output: imageWithEntitySchema,
-    invalidates: [["image"]],
+    invalidates: ripple.image,
   }),
   delete: mutation({
     input: imageBrowserDeleteInput,
     output: imageBrowserDeleteOut,
-    invalidates: [["image"]],
+    invalidates: ripple.image,
   }),
   projectSummaries: query({
     input: projectImageSummariesInput,

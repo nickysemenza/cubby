@@ -43,7 +43,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
-import { invalidatesFor } from "~/lib/query-keys";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { formatCurrency } from "~/lib/utils";
 
@@ -102,7 +101,6 @@ export function ProductProjectUses({ productId }: { productId: string }) {
   const detach = useActionMutation({
     mutationFn: project.setToolUsage.mutationOptions,
     success: "Removed from project",
-    invalidateKeys: invalidatesFor("project", "resource"),
   });
 
   const rows = useMemo<ProjectUseRow[]>(
@@ -316,7 +314,6 @@ function ProjectUsesDialog({
   const save = useActionMutation({
     mutationFn: productOperations.setProjectUses.mutationOptions,
     success: "Project uses updated",
-    invalidateKeys: invalidatesFor("project", "resource"),
     onSuccess: () => resetAndClose(false),
   });
 

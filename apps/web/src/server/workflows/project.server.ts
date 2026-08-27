@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/pagination";
 import {
   createProjectFromTasksInput,
-  createProjectFromTasksOut,
   projectDashboardFiltersSchema,
   projectDashboardSummaryOut,
   projectOptionsOut,
@@ -20,7 +19,6 @@ import {
   projectToolUsageSetInput,
   projectToolUsageSetOut,
   projectTreeInput,
-  projectTreeOut,
   repointProjectUsesInput,
 } from "@cubby/schemas/project";
 import type { z } from "zod";
@@ -48,22 +46,12 @@ import { runMutationSideEffectsForEntities } from "~/server/services/mutation-si
 
 export {
   createProjectFromTasksInput,
-  createProjectFromTasksOut,
   projectDashboardFiltersSchema,
-  projectDashboardSummaryOut,
-  projectOptionsOut,
-  projectPortfolioAnalyticsOut,
   projectResourceMutationInput,
-  projectResourceMutationOut,
   projectResourceProjectInput,
-  projectResourcesOut,
   projectToolMatrixInput,
-  projectToolMatrixOut,
-  projectToolSuggestionsOut,
   projectToolUsageSetInput,
-  projectToolUsageSetOut,
   projectTreeInput,
-  projectTreeOut,
   repointProjectUsesInput,
 };
 

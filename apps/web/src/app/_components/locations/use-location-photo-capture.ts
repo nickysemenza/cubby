@@ -54,23 +54,13 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   makeBatchStatusFetcher,
-  watchBatchesAndInvalidate,
+  watchBatchesAndInvalidateTags,
 } from "~/lib/background-batch-polling";
 import { imageUpload } from "~/lib/image.functions";
-import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
-
-/**
- * Broad prefixes on purpose. `invalidatesFor("location")` covers only
- * `location.list`, which leaves detail / `makeTree` / `subtree` stale —
- * and those are exactly what a photo pass queue, the scan landing, and the
- * recount workbench read.
- */
-const PHOTO_INVALIDATE_KEYS = [
-  queryKeys.location.all,
-  queryKeys.dashboard.counts,
-] as const;
 
 export function useLocationPhotoCapture() {
   const queryClient = useQueryClient();
@@ -81,13 +71,13 @@ export function useLocationPhotoCapture() {
 
   const invalidate = useCallback(
     (result?: unknown) => {
-      invalidateQueryRoots(queryClient, PHOTO_INVALIDATE_KEYS);
+      void invalidateOperationTags(queryClient, ripple.location);
       // The AI description lands later, off the background queue — re-invalidate
       // when it drains so the description fills in without a reload.
-      void watchBatchesAndInvalidate({
+      void watchBatchesAndInvalidateTags({
         queryClient,
         result,
-        invalidateKeys: PHOTO_INVALIDATE_KEYS,
+        invalidateTags: ripple.location,
         fetchBatchStatus: makeBatchStatusFetcher(queryClient),
       });
     },

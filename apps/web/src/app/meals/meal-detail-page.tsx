@@ -32,13 +32,9 @@ import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityDetailLink } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import {
-  entityDetailQueryKey,
-  entityDetailQueryOptions,
-} from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { cancelQueryRoots } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { EditableCell } from "../_components/data-table/editable-cell";
 import { meal as mealOperations } from "./meal.functions";
@@ -54,7 +50,7 @@ type MealDetail = EntityDetailByEntity["meal"];
 export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateMeals();
-  const mealKey = entityDetailQueryKey("meal", mealId);
+  const mealKey = entityDetailFor("meal").queryKey(mealId);
   const [pendingRecipeName, setPendingRecipeName] = useState<string | null>(
     null,
   );
@@ -65,7 +61,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     isError,
     error,
     refetch,
-  } = useQuery(entityDetailQueryOptions("meal", mealId));
+  } = useQuery(entityDetailFor("meal").queryOptions(mealId));
 
   const updateMeal = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("meal", "update"),
@@ -73,10 +69,9 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   });
   const addRecipeBase = mealOperations.addRecipe.mutationOptions();
   const addRecipe = useMutation({
-    mutationKey: addRecipeBase.mutationKey,
-    mutationFn: addRecipeBase.mutationFn,
+    ...addRecipeBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [mealKey]);
+      await queryClient.cancelQueries({ queryKey: mealKey });
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       setPendingRecipeName(variables.recipeId);
       return { previous };
@@ -375,10 +370,9 @@ function RecipeRow({
   };
   const updateBase = mealOperations.updateRecipe.mutationOptions();
   const updateRecipe = useMutation({
-    mutationKey: updateBase.mutationKey,
-    mutationFn: updateBase.mutationFn,
+    ...updateBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [mealKey]);
+      await queryClient.cancelQueries({ queryKey: mealKey });
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       patchMeal((meal) => ({
         ...meal,
@@ -405,10 +399,9 @@ function RecipeRow({
   });
   const removeBase = mealOperations.removeRecipe.mutationOptions();
   const removeRecipe = useMutation({
-    mutationKey: removeBase.mutationKey,
-    mutationFn: removeBase.mutationFn,
+    ...removeBase,
     onMutate: async (variables) => {
-      await cancelQueryRoots(queryClient, [mealKey]);
+      await queryClient.cancelQueries({ queryKey: mealKey });
       const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
       patchMeal((meal) => ({
         ...meal,

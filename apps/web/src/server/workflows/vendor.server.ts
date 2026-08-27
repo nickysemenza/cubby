@@ -1,24 +1,13 @@
 import {
-  fetchVendorLogoInput,
-  mergeVendorsInput,
+  type fetchVendorLogoInput,
+  type mergeVendorsInput,
   mergeVendorsOut,
-  vendorOptionsOut,
-  vendorOut,
 } from "@cubby/schemas/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { vendorOptions } from "~/server/repo/vendor";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { fetchAndAttachVendorLogo } from "~/server/services/vendor-logo.service";
-
-export {
-  fetchVendorLogoInput,
-  mergeVendorsInput,
-  mergeVendorsOut,
-  vendorOptionsOut,
-  vendorOut,
-};
-
 export const vendorOptionsWorkflow = (ctx: EntityKernelContext) =>
   vendorOptions(ctx.readDb);
 

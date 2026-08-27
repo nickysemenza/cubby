@@ -7,14 +7,14 @@ import {
 } from "~/app/_components/routing/entity-routes";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
 // Bound to consts, not inlined into the options object: the router plugin's
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const IngredientDetailPage = detailPage({
-  query: (shortcode) => entityDetailQueryOptions("ingredient", shortcode),
+  query: (shortcode) => entityDetailFor("ingredient").queryOptions(shortcode),
   render: (ingredient, shortcode) => (
     <IngredientDetail key={shortcode} ingredient={ingredient} />
   ),
@@ -31,7 +31,7 @@ export const Route = createFileRoute("/_authenticated/ingredients/$shortcode")({
   loader: ({ params, context }) =>
     ensureDetailRecord(
       context.queryClient,
-      entityDetailQueryOptions("ingredient", params.shortcode),
+      entityDetailFor("ingredient").queryOptions(params.shortcode),
     ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

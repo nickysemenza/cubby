@@ -40,7 +40,7 @@ import {
   taskTradeColumn,
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 
 const EMBEDDED_TABLE_STATE = {
@@ -59,7 +59,7 @@ export function ProjectDataTaskList({
   projectScope: EmbeddedProjectScope;
 }) {
   const listQueryOptions: ListQueryOptionsFn<TaskFilters> = useCallback(
-    (params) => entityListQueryOptions("task", params),
+    (params) => entityListFor("task").queryOptions(params),
     [],
   );
   const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
@@ -154,7 +154,7 @@ export function ProjectDataExpenseList({
   projectScope: EmbeddedProjectScope;
 }) {
   const listQueryOptions: ListQueryOptionsFn<ExpenseFilters> = useCallback(
-    (params) => entityListQueryOptions("expense", params),
+    (params) => entityListFor("expense").queryOptions(params),
     [],
   );
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);

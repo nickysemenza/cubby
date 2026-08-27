@@ -45,6 +45,7 @@ import {
   recipeAvailabilityInput,
 } from "@cubby/schemas/suggestions";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -67,7 +68,7 @@ export const recipe = defineOperationDomain("recipe", {
   duplicate: mutation({
     input: recipeIdInput,
     output: recipeWithSideEffectsOut,
-    invalidates: [["recipe", "list"]],
+    invalidates: ripple.recipeList,
   }),
   getIngredientCooccurrence: query({
     input: recipeCooccurrenceInput,
@@ -87,7 +88,7 @@ export const recipe = defineOperationDomain("recipe", {
   recomputeOne: mutation({
     input: recipeIdInput,
     output: recipeRecomputeAllOut,
-    invalidates: [["recipe"]],
+    invalidates: ripple.recipe,
   }),
   dryRunRecomputeTotals: query({
     input: z.undefined(),
@@ -107,7 +108,11 @@ export const recipe = defineOperationDomain("recipe", {
   generateFlow: mutation({
     input: recipeFlowGenerateInputSchema,
     output: recipeFlowArtifactSchema,
-    invalidates: [["recipe", "flow"]],
+    // The whole `recipe` prefix, not just the flow query: that is what the
+    // legacy call site produced (its two-level key collapsed to the `["recipe"]`
+    // root), and a generated flow can restate step order the costing and
+    // dependency views read.
+    invalidates: [["recipe"]],
   }),
   harvestEquivalences: query({
     input: z.undefined(),
@@ -127,7 +132,7 @@ export const recipe = defineOperationDomain("recipe", {
   upsertCookbook: mutation({
     input: upsertCookbookInput,
     output: cookbookIdOut,
-    invalidates: [["cookbook"]],
+    invalidates: ripple.cookbook,
   }),
   getCookbookSource: query({
     input: cookbookIdInput,
@@ -147,12 +152,12 @@ export const recipe = defineOperationDomain("recipe", {
   setCookbookProduct: mutation({
     input: setCookbookProductInput,
     output: cookbookSummary,
-    invalidates: [["cookbook"], ["product"]],
+    invalidates: ripple.cookbookProductLink,
   }),
   deleteCookbook: mutation({
     input: cookbookIdInput,
     output: deleteCookbookOut,
-    invalidates: [["recipe", "cookbook"]],
+    invalidates: ripple.recipeCookbook,
   }),
   extractCookbookChunk: mutation({
     input: chunkRequestInput,

@@ -18,7 +18,7 @@ import { Row } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListQueryOptions } from "~/entities/entity-list.functions";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -36,7 +36,7 @@ const EMBEDDED_TABLE_STATE = {
  */
 export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
   const listQueryOptions: ListQueryOptionsFn<PurchaseFilters> = useCallback(
-    (params) => entityListQueryOptions("purchase", params),
+    (params) => entityListFor("purchase").queryOptions(params),
     [],
   );
   const helper = useMemo(() => createCubbyColumnHelper<PurchaseOut>(), []);

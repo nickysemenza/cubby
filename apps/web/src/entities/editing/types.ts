@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { QueryKey } from "@tanstack/react-query";
 import type {
   EntityEditDraft,
   EntityEditRecordFor,
@@ -31,6 +30,12 @@ void _editableEntityCatalogIsExhaustive;
 
 /** The transport-level operation executed against the entity router. */
 export type EntityEditOperation = "create" | "update" | "delete";
+
+/**
+ * Commands also carry the bulk forms, which act on `ids` rather than one
+ * record and so have no semantic intent definition of their own.
+ */
+type EntityEditCommandOperation = EntityEditOperation | "bulkUpdate";
 
 /**
  * A semantic editing capability such as `full`, `capture`, `schedule`, or
@@ -118,7 +123,7 @@ export interface EntityEditField<
 
 export interface EntityEditCommand<E extends EditableEntity> {
   entity: E;
-  operation: EntityEditOperation;
+  operation: EntityEditCommandOperation;
   intent: RuntimeEntityEditIntent;
   /** Present only for updates; server payload construction remains entity-owned. */
   id?: string;
@@ -184,7 +189,6 @@ export interface EntityEditDefinition<
   readonly operations: Partial<{
     [O in EntityEditOperation]: EntityEditOperationDefinition<E, R>;
   }>;
-  readonly invalidationKeys: readonly QueryKey[];
 }
 
 /**
@@ -195,12 +199,6 @@ export interface EntityMutationPort {
   execute<E extends EditableEntity>(
     command: EntityEditCommand<E>,
   ): Promise<{ id: string; result: unknown }>;
-  invalidate(keys: readonly QueryKey[]): Promise<void>;
-  /** Re-invalidate after queued background work completes, when applicable. */
-  watchBackgroundWork?(input: {
-    result: unknown;
-    invalidateKeys: readonly QueryKey[];
-  }): void;
 }
 
 export interface EntityEditRequest<

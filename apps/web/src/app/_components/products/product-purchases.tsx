@@ -28,7 +28,6 @@ import {
 } from "~/components/ui/empty";
 import { parsePlainDate } from "~/lib/plain-date";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { invalidatesFor } from "~/lib/query-keys";
 
 const EMPTY_PURCHASES: ProductPurchaseOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
@@ -64,7 +63,6 @@ export function ProductPurchases({ productId }: { productId: string }) {
     // reading `source: "expense"`. Claiming removal would be a lie on exactly
     // the rows where the distinction matters.
     success: "Link removed — any itemized expense still relates these",
-    invalidateKeys: invalidatesFor("purchase", "product"),
   });
   const helper = useMemo(() => createCubbyColumnHelper<PurchaseRow>(), []);
   const columns = useMemo<CubbyColumnDef<PurchaseRow>[]>(

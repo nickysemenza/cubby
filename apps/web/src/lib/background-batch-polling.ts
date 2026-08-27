@@ -2,15 +2,15 @@ import type {
   BackgroundBatchStatus,
   MutationSideEffects,
 } from "@cubby/schemas/background-jobs";
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { backgroundBatch } from "~/lib/background-batch.functions";
-import { invalidateQueryRoots } from "~/lib/query-keys";
 
 /**
- * The standard `fetchBatchStatus` poller passed to {@link watchBatchesAndInvalidate}:
+ * The standard `fetchBatchStatus` poller passed to
+ * {@link watchBatchesAndInvalidateTags}:
  * a fresh summary query (staleTime 0) reduced to its status. It deliberately
  * never loads the batch's jobs: large mutation batches can contain thousands
  * of rows, while this watcher needs one status field.
@@ -42,8 +42,14 @@ const sleep = (ms: number) =>
 
 /** Pull a mutation result's side-effects, if it carries any (many don't). */
 function extractSideEffects(result: unknown): MutationSideEffects | undefined {
-  if (result && typeof result === "object" && "sideEffects" in result) {
+  if (!result || typeof result !== "object") return undefined;
+  if ("sideEffects" in result) {
     return (result as { sideEffects?: MutationSideEffects }).sideEffects;
+  }
+  // The entity command port answers `{ id, result }` — the side-effects ride on
+  // the parsed entity result inside it, one level down.
+  if ("result" in result) {
+    return extractSideEffects((result as { result: unknown }).result);
   }
   return undefined;
 }
@@ -51,7 +57,7 @@ function extractSideEffects(result: unknown): MutationSideEffects | undefined {
 /**
  * Mutations enqueue background work (recipe totals, location valuation, location
  * AI) whose results land *after* the mutation resolves. The mutation's immediate
- * `invalidateQueryRoots` therefore refetches pre-recompute data and never sees
+ * invalidation therefore refetches pre-recompute data and never sees
  * the fresh values. This polls the returned batches and invalidates again once
  * they drain, so the UI self-heals without a manual refresh.
  *
@@ -97,24 +103,6 @@ async function watchBatches({
   }
 
   await afterSettled();
-}
-
-export async function watchBatchesAndInvalidate({
-  queryClient,
-  result,
-  invalidateKeys,
-  fetchBatchStatus,
-}: {
-  queryClient: QueryClient;
-  result: unknown;
-  invalidateKeys: readonly QueryKey[];
-  fetchBatchStatus: (batchId: string) => Promise<BackgroundBatchStatus>;
-}): Promise<void> {
-  await watchBatches({
-    result,
-    fetchBatchStatus,
-    afterSettled: () => invalidateQueryRoots(queryClient, invalidateKeys),
-  });
 }
 
 export async function watchBatchesAndInvalidateTags({

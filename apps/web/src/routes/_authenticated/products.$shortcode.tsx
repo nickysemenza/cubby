@@ -7,7 +7,7 @@ import {
 } from "~/app/_components/routing/entity-routes";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
-import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
 
 const PRODUCT_SSR_TIMING = "cubby-product-ssr";
@@ -16,7 +16,7 @@ const PRODUCT_SSR_TIMING = "cubby-product-ssr";
 // splitter re-parses an inlined call expression with a JSX-less babel config,
 // so only the identifier path survives a page body that renders JSX.
 const ProductDetailPage = detailPage({
-  query: (shortcode) => entityDetailQueryOptions("product", shortcode),
+  query: (shortcode) => entityDetailFor("product").queryOptions(shortcode),
   // ProductDetail renders its own <Page> shell (which owns the page container).
   render: (product, shortcode) => (
     <ProductDetail key={shortcode} product={product} />
@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/products/$shortcode")({
     // The Start function is the same detail boundary during SSR and hydration.
     await ensureDetailRecord(
       context.queryClient,
-      entityDetailQueryOptions("product", params.shortcode),
+      entityDetailFor("product").queryOptions(params.shortcode),
     );
 
     return {

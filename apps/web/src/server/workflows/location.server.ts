@@ -1,17 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
-  infLocation,
-  infLocationListOut,
   locationBulkUpdateParentInput,
-  locationBulkUpdateParentOut,
   locationFiltersSchema,
-  locationInventoryBreakdownOut,
-  locationParentOptionsOut,
   locationPickerItemOut,
   locationShortcodesInput,
-  locationsWithParentNameOut,
-  locationValuationSummaryOut,
-  recomputeLocationValuationsOut,
 } from "@cubby/schemas/location";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
@@ -140,16 +132,8 @@ export const recomputeValuationsWorkflow = async (
 ) => ({ updated: await ctx.services.locationValuation.recompute() });
 
 export {
-  infLocation,
-  infLocationListOut,
   locationBulkUpdateParentInput,
-  locationBulkUpdateParentOut,
   locationFiltersSchema,
-  locationInventoryBreakdownOut,
-  locationParentOptionsOut,
   locationPickerItemOut,
   locationShortcodesInput,
-  locationsWithParentNameOut,
-  locationValuationSummaryOut,
-  recomputeLocationValuationsOut,
 };

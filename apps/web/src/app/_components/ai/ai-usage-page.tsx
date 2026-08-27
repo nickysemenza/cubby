@@ -1,4 +1,5 @@
 import type { AiUsageEntry, AiUsageSummaryRow } from "@cubby/schemas/ai";
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -146,7 +147,8 @@ export function AiUsageTableStatus({
   );
 }
 
-function UsageEntityLink({
+/** Exported for the UUID-boundary regression test; not part of the page's public surface. */
+export function UsageEntityLink({
   row,
 }: {
   row: Pick<AiUsageEntry, "entityType" | "entityId">;
@@ -156,6 +158,18 @@ function UsageEntityLink({
   }
   if (!isSupportedEntityType(row.entityType)) {
     return <span className="text-muted-foreground">{row.entityType}</span>;
+  }
+
+  // AiUsage.entityId is recorded from queue/side-effect payloads that carry
+  // private uuids, while EntityInlineLinkById expects a public shortcode.
+  // Never send a uuid into that boundary — mirrors the same guard in
+  // background-jobs-table.tsx's EntityTarget.
+  if (parseShortcode(row.entityId)?.type !== row.entityType) {
+    return (
+      <span className="text-muted-foreground">
+        {row.entityType} · {row.entityId.slice(0, 8)}
+      </span>
+    );
   }
 
   return (

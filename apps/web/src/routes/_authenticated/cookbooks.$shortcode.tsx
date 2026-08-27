@@ -29,8 +29,9 @@ import { cookbook as cookbookOperations } from "~/entities/cookbook.functions";
 import { entityFilterSearchFields } from "~/entities/filter-search-fields";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { shortcodeHead } from "~/lib/page-title";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 
 const searchSchema = z.object({
@@ -126,7 +127,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },
         onDone: () => {
-          invalidateQueryRoots(queryClient, invalidatesFor("recipe", "list"));
+          void invalidateOperationTags(queryClient, ripple.recipeList);
         },
       },
     );

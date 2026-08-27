@@ -1,8 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { useMemo } from "react";
+import type { ReactNode } from "react";
+import { useMemo, useRef } from "react";
 import { copyShortcodes } from "~/lib/clipboard";
 import { verbBulkAction } from "../actions/action-verb-ui";
+import {
+  type EntityActionRow,
+  type EntityActionsContextValue,
+  useEntityActions,
+} from "../actions/entity-actions";
 import {
   BulkActionBar,
   type BulkActionBarProps,
@@ -50,6 +56,14 @@ function useCopyShortcodesAction<TData extends { id: string }>(
   }, [entity]);
 }
 
+/**
+ * A list with no registered actions must keep a stable `config`: the hook
+ * rebuilds its arrays every render (each definition's `use()` is a hook), so
+ * an empty result has to collapse to one module value or the memo below churns
+ * on every render for every list in the app.
+ */
+const NO_REGISTERED_ACTIONS: readonly never[] = [];
+
 export function useListBulkActions<TData extends { id: string }>({
   entity,
   bulkActions,
@@ -60,25 +74,56 @@ export function useListBulkActions<TData extends { id: string }>({
   deleteBulkAction?: BulkAction<TData> | null;
 }) {
   const copyAction = useCopyShortcodesAction<TData>(entity);
+  const registered = useEntityActions<TData>(entity);
+  const registeredActions = registered.bulkActions.length
+    ? registered.bulkActions
+    : (NO_REGISTERED_ACTIONS as readonly BulkAction<TData>[]);
 
   const config = useMemo((): BulkActionsConfig<TData> | undefined => {
-    if (!deleteBulkAction && !bulkActions && !copyAction) return undefined;
+    if (
+      !deleteBulkAction &&
+      !bulkActions &&
+      !copyAction &&
+      registeredActions.length === 0
+    )
+      return undefined;
     return {
       ...bulkActions,
       // Copy leads and delete trails: the cheap, reversible action sits where
       // the pointer already is, the destructive one stays furthest from it.
+      // Declared actions sit between the generic copy and the surface's own —
+      // the entity-wide vocabulary before the local additions, matching the row
+      // menu in `createActionsColumn`.
       actions: [
         ...(copyAction ? [copyAction] : []),
+        ...registeredActions,
         ...(bulkActions?.actions ?? []),
         ...(deleteBulkAction ? [deleteBulkAction] : []),
       ],
     };
-  }, [bulkActions, copyAction, deleteBulkAction]);
+  }, [bulkActions, copyAction, deleteBulkAction, registeredActions]);
   const emptyConfig = useMemo<BulkActionsConfig<TData>>(
     () => ({ actions: [] }),
     [],
   );
   const state = useBulkActions({ config: config ?? emptyConfig });
+
+  // The cast is the documented shape of `EntityActionRow`: definitions write
+  // `rowMenuItem` against the base row, and the generic exists only so the
+  // BAR's actions come back at the caller's row type.
+  const rowMenuItems = registered.rowMenuItems as (
+    row: EntityActionRow,
+  ) => ReactNode;
+  const latestRowMenuItems = useRef(rowMenuItems);
+  latestRowMenuItems.current = rowMenuItems;
+  // Stable for the component's life — `entity` is constant by
+  // `useEntityActions`' own invariant, and reading the items through a ref
+  // stops a fresh closure each render from invalidating the context for every
+  // actions cell in the table.
+  const rowActions = useMemo<EntityActionsContextValue>(
+    () => ({ entity, rowMenuItems: (row) => latestRowMenuItems.current(row) }),
+    [entity],
+  );
 
   return {
     config,
@@ -86,6 +131,10 @@ export function useListBulkActions<TData extends { id: string }>({
     enableRowSelection: config !== undefined,
     rowSelection: config ? state.rowSelection : {},
     onRowSelectionChange: config ? state.onRowSelectionChange : undefined,
+    /** Publish via `EntityActionsProvider` to light up the row menus. */
+    rowActions,
+    /** Render once, outside the table. */
+    actionDialogs: registered.dialogs,
   };
 }
 

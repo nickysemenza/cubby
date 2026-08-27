@@ -4,11 +4,11 @@ import { imageOut } from "@cubby/schemas/image";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { DataOf } from "~/app/_components/hooks/useActionMutation";
-import { invalidatesFor, queryKeys } from "~/lib/query-keys";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import { entityMutationResultSchema } from "~/server/entity-kernel/contracts";
 import { entityMutationOptionsFactory } from "./entity-contracts";
-import { entityListQueryOptions } from "./entity-list.functions";
+import { entityListFor } from "./entity-list.functions";
 import { flattenEntityMutationResult } from "./entity-mutation.functions";
 
 const mutationTransport = vi.hoisted(() => vi.fn());
@@ -23,9 +23,21 @@ describe("entity-contracts drift guard", () => {
   it.each(countableEntities)(
     "%s mutations invalidate the shared dashboard count",
     (entity) => {
-      expect(invalidatesFor(entity)).toContainEqual(queryKeys.dashboard.counts);
+      expect(entityRipple(entity)).toContainEqual(["dashboard"]);
     },
   );
+
+  it("hangs the entity's ripple on the options every CRUD call site uses", () => {
+    // The regression this guards: the factory set no `meta` at all, so the root
+    // MutationCache read `undefined` and every entity create/update/delete
+    // invalidated nothing through the tag path.
+    const options = entityMutationOptionsFactory("product", "update")();
+    expect(options.meta).toMatchObject({
+      operation: "entity.mutate",
+      entity: "product",
+      invalidates: entityRipple("product"),
+    });
+  });
 });
 
 describe("kernel browser transport", () => {
@@ -58,7 +70,7 @@ describe("kernel browser transport", () => {
       pagination: { pageIndex: 0, pageSize: 10 },
     };
 
-    const options = entityListQueryOptions("product", params);
+    const options = entityListFor("product").queryOptions(params);
 
     expect(options.queryKey).toEqual([
       "operation",

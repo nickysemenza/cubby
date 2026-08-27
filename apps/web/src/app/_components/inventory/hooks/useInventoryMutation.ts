@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import {
   makeBatchStatusFetcher,
-  watchBatchesAndInvalidate,
+  watchBatchesAndInvalidateTags,
 } from "~/lib/background-batch-polling";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 
 /**
  * Returns a callback that invalidates inventory queries and — given the mutation
@@ -17,11 +18,11 @@ export function useInventoryInvalidation() {
   const queryClient = useQueryClient();
 
   return (result?: unknown) => {
-    invalidateQueryRoots(queryClient, invalidatesFor("inventory"));
-    void watchBatchesAndInvalidate({
+    void invalidateOperationTags(queryClient, ripple.inventory);
+    void watchBatchesAndInvalidateTags({
       queryClient,
       result,
-      invalidateKeys: invalidatesFor("inventory"),
+      invalidateTags: ripple.inventory,
       fetchBatchStatus: makeBatchStatusFetcher(queryClient),
     });
   };
@@ -54,6 +55,6 @@ export function useProductLookupInvalidation() {
   const queryClient = useQueryClient();
 
   return () => {
-    invalidateQueryRoots(queryClient, invalidatesFor("product", "lookup"));
+    void invalidateOperationTags(queryClient, ripple.productLookup);
   };
 }

@@ -1,11 +1,5 @@
 import type { UserId } from "@cubby/schemas/identifiers";
-import {
-  connectedAppsOut,
-  orphanedOAuthClientsOut,
-  pruneOrphanedOAuthClientsOut,
-  revokeConnectedAppInput,
-  revokeConnectedAppOut,
-} from "@cubby/schemas/oauth";
+import { revokeConnectedAppInput } from "@cubby/schemas/oauth";
 import type { z } from "zod";
 import type { Database } from "~/server/db";
 import {
@@ -15,13 +9,7 @@ import {
   revokeConnectedApp,
 } from "~/server/repo/oauth-consent";
 
-export {
-  connectedAppsOut,
-  orphanedOAuthClientsOut,
-  pruneOrphanedOAuthClientsOut,
-  revokeConnectedAppInput,
-  revokeConnectedAppOut,
-};
+export { revokeConnectedAppInput };
 
 export const listConnectedAppsWorkflow = async (db: Database, userId: UserId) =>
   await listConnectedApps(db, userId);

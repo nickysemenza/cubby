@@ -79,18 +79,24 @@ vi.mock("~/app/_components/data-table/Table", () => ({
   default: () => <div data-testid="rtable" />,
 }));
 
-vi.mock("~/app/_components/tracker/expense-bulk-actions", () => ({
-  useExpenseBulkActions: () => ({
-    config: {},
-    moveItems: [],
-    setMoveItems: vi.fn(),
-    tradeItems: [],
-    setTradeItems: vi.fn(),
-    costTypeItems: [],
-    setCostTypeItems: vi.fn(),
-  }),
-  ExpenseBulkActionDialogs: () => null,
-}));
+vi.mock("~/app/_components/tracker/expense-bulk-actions", () => {
+  const staged = () => ({
+    items: [],
+    action: { id: "stub", label: "stub", onExecute: vi.fn() },
+    isPending: false,
+    cancel: vi.fn(),
+    submit: vi.fn(),
+  });
+  return {
+    useExpenseBulkActions: () => ({
+      config: {},
+      move: staged(),
+      trade: staged(),
+      costType: staged(),
+    }),
+    ExpenseBulkActionDialogs: () => null,
+  };
+});
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, to }: { children?: ReactNode; to: string }) => (

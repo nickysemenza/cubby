@@ -23,7 +23,6 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { WithVendorShortcodeSearch } from "../_components/combobox/with-vendor-search";
 import {
@@ -86,7 +85,6 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
   const mergeMutation = useActionMutation({
     mutationFn: purchaseOperations.merge.mutationOptions,
     success: "Purchases merged",
-    invalidateKeys: invalidatesFor("purchase"),
     onSuccess: () => setMergeOpen(false),
   });
 

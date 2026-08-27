@@ -1,16 +1,15 @@
 import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { task } from "~/app/tasks/task.functions";
-import { invalidatesFor } from "~/lib/query-keys";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
   BulkAction,
   BulkActionsConfig,
 } from "../data-table/bulk-actions.types";
-import { useActionMutation } from "../hooks/useActionMutation";
+import { useStagedBulkAction } from "../hooks/useStagedBulkAction";
 import { MoveToProjectDialog } from "./move-to-project-dialog";
 import { SetDueDateDialog } from "./set-due-date-dialog";
 import { SetFieldDialog } from "./set-field-dialog";
@@ -27,47 +26,57 @@ export function useTaskBulkActions({
   onCreateProject?: (ids: TaskShortcode[]) => void;
   extraActions?: BulkAction<TaskOut>[];
 } = {}) {
-  const [moveItems, setMoveItems] = useState<TaskOut[]>([]);
-  const [statusItems, setStatusItems] = useState<TaskOut[]>([]);
-  const [tradeItems, setTradeItems] = useState<TaskOut[]>([]);
-  const [dueDateItems, setDueDateItems] = useState<TaskOut[]>([]);
+  const taskCount = (data: { items: unknown[] }) =>
+    `${data.items.length} task${data.items.length !== 1 ? "s" : ""}`;
+  const updated = (data: {
+    items: unknown[];
+    sideEffects: Parameters<typeof savedWithBackgroundWork>[0];
+  }) => savedWithBackgroundWork(data.sideEffects, `Updated ${taskCount(data)}`);
+
+  const move = useStagedBulkAction<
+    TaskOut,
+    typeof task.bulkMove.mutationOptions
+  >({
+    verb: "moveToProject",
+    // The existing id is load-bearing: layouts persist per action id.
+    id: "move",
+    mutationFn: task.bulkMove.mutationOptions,
+    success: (data) =>
+      savedWithBackgroundWork(data.sideEffects, `Moved ${taskCount(data)}`),
+  });
+  const status = useStagedBulkAction<
+    TaskOut,
+    typeof task.bulkSetStatus.mutationOptions
+  >({
+    verb: "setStatus",
+    mutationFn: task.bulkSetStatus.mutationOptions,
+    success: updated,
+  });
+  const trade = useStagedBulkAction<
+    TaskOut,
+    typeof task.bulkSetTrade.mutationOptions
+  >({
+    verb: "setTrade",
+    mutationFn: task.bulkSetTrade.mutationOptions,
+    success: updated,
+  });
+  const dueDate = useStagedBulkAction<
+    TaskOut,
+    typeof task.bulkSetDueDate.mutationOptions
+  >({
+    verb: "setDueDate",
+    mutationFn: task.bulkSetDueDate.mutationOptions,
+    success: updated,
+  });
 
   const config = useMemo<BulkActionsConfig<TaskOut>>(
     () => ({
       actions: [
-        verbBulkAction<TaskOut>("moveToProject", {
-          id: "move",
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setMoveItems(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-        verbBulkAction<TaskOut>("setStatus", {
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setStatusItems(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-        verbBulkAction<TaskOut>("setTrade", {
-          minSelection: 1,
-          onExecute: async (rows) => {
-            setTradeItems(rows.map((row) => row.original));
-            return { success: true };
-          },
-        }),
-        ...(includeDueDate
-          ? [
-              verbBulkAction<TaskOut>("setDueDate", {
-                minSelection: 1,
-                onExecute: async (rows) => {
-                  setDueDateItems(rows.map((row) => row.original));
-                  return { success: true };
-                },
-              }),
-            ]
-          : []),
+        move.action,
+        status.action,
+        trade.action,
+        ...(includeDueDate ? [dueDate.action] : []),
+        // Not a staged mutation: the caller owns the project-creation flow.
         ...(onCreateProject
           ? [
               verbBulkAction<TaskOut>("createProjectFrom", {
@@ -84,20 +93,18 @@ export function useTaskBulkActions({
       ],
       clearSelectionOnComplete: false,
     }),
-    [extraActions, includeDueDate, onCreateProject],
+    [
+      extraActions,
+      includeDueDate,
+      onCreateProject,
+      move.action,
+      status.action,
+      trade.action,
+      dueDate.action,
+    ],
   );
 
-  return {
-    config,
-    moveItems,
-    setMoveItems,
-    statusItems,
-    setStatusItems,
-    tradeItems,
-    setTradeItems,
-    dueDateItems,
-    setDueDateItems,
-  };
+  return { config, move, status, trade, dueDate };
 }
 
 export type TaskBulkActionsController = ReturnType<typeof useTaskBulkActions>;
@@ -107,134 +114,65 @@ export function TaskBulkActionDialogs({
   onComplete,
 }: {
   controller: TaskBulkActionsController;
+  /** Runs after a successful write — the surface clears its row selection. */
   onComplete: () => void;
 }) {
-  const {
-    moveItems,
-    setMoveItems,
-    statusItems,
-    setStatusItems,
-    tradeItems,
-    setTradeItems,
-    dueDateItems,
-    setDueDateItems,
-  } = controller;
-  const success =
-    (verb: "Moved" | "Updated") =>
-    (data: {
-      items: unknown[];
-      sideEffects: Parameters<typeof savedWithBackgroundWork>[0];
-    }) =>
-      savedWithBackgroundWork(
-        data.sideEffects,
-        `${verb} ${data.items.length} task${data.items.length !== 1 ? "s" : ""}`,
-      );
-
-  const moveMutation = useActionMutation({
-    mutationFn: task.bulkMove.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
-    success: success("Moved"),
-    onSuccess: () => {
-      setMoveItems([]);
-      onComplete();
-    },
-  });
-  const statusMutation = useActionMutation({
-    mutationFn: task.bulkSetStatus.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
-    success: success("Updated"),
-    onSuccess: () => {
-      setStatusItems([]);
-      onComplete();
-    },
-  });
-  const tradeMutation = useActionMutation({
-    mutationFn: task.bulkSetTrade.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
-    success: success("Updated"),
-    onSuccess: () => {
-      setTradeItems([]);
-      onComplete();
-    },
-  });
-  const dueDateMutation = useActionMutation({
-    mutationFn: task.bulkSetDueDate.mutationOptions,
-    invalidateKeys: invalidatesFor("task"),
-    success: success("Updated"),
-    onSuccess: () => {
-      setDueDateItems([]);
-      onComplete();
-    },
-  });
+  const { move, status, trade, dueDate } = controller;
+  const closed = (staged: { cancel: () => void }) => (open: boolean) => {
+    if (!open) staged.cancel();
+  };
 
   return (
     <>
-      {moveItems.length > 0 && (
+      {move.items.length > 0 && (
         <MoveToProjectDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setMoveItems([]);
-          }}
-          items={moveItems}
+          onOpenChange={closed(move)}
+          items={move.items}
           entityLabel="Task"
-          isPending={moveMutation.isPending}
+          isPending={move.isPending}
           onConfirm={async (projectId) => {
-            await moveMutation.mutateAsync({
-              ids: moveItems.map((task) => task.id),
-              projectId,
-            });
+            await move.submit({ projectId });
+            onComplete();
           }}
         />
       )}
-      {statusItems.length > 0 && (
+      {status.items.length > 0 && (
         <SetTaskStatusDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setStatusItems([]);
-          }}
-          items={statusItems}
-          isPending={statusMutation.isPending}
-          onConfirm={async (status) => {
-            await statusMutation.mutateAsync({
-              ids: statusItems.map((task) => task.id),
-              status,
-            });
+          onOpenChange={closed(status)}
+          items={status.items}
+          isPending={status.isPending}
+          onConfirm={async (nextStatus) => {
+            await status.submit({ status: nextStatus });
+            onComplete();
           }}
         />
       )}
-      {tradeItems.length > 0 && (
+      {trade.items.length > 0 && (
         <SetFieldDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setTradeItems([]);
-          }}
-          items={tradeItems}
-          isPending={tradeMutation.isPending}
+          onOpenChange={closed(trade)}
+          items={trade.items}
+          isPending={trade.isPending}
           options={tradeOptions}
           fieldLabel="Trade"
           itemNoun="Task"
-          onConfirm={async (trade) => {
-            await tradeMutation.mutateAsync({
-              ids: tradeItems.map((task) => task.id),
-              trade: trade as Trade,
-            });
+          onConfirm={async (nextTrade) => {
+            await trade.submit({ trade: nextTrade as Trade });
+            onComplete();
           }}
         />
       )}
-      {dueDateItems.length > 0 && (
+      {dueDate.items.length > 0 && (
         <SetDueDateDialog
           open
-          onOpenChange={(open) => {
-            if (!open) setDueDateItems([]);
-          }}
-          items={dueDateItems}
-          isPending={dueDateMutation.isPending}
-          onConfirm={async (dueDate, dueEndDate) => {
-            await dueDateMutation.mutateAsync({
-              ids: dueDateItems.map((task) => task.id),
-              dueDate,
-              dueEndDate,
-            });
+          onOpenChange={closed(dueDate)}
+          items={dueDate.items}
+          isPending={dueDate.isPending}
+          onConfirm={async (nextDueDate, dueEndDate) => {
+            await dueDate.submit({ dueDate: nextDueDate, dueEndDate });
+            onComplete();
           }}
         />
       )}

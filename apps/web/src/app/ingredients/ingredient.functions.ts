@@ -1,6 +1,7 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import * as schemas from "@cubby/schemas/ingredient";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -17,36 +18,36 @@ export const ingredient = defineOperationDomain("ingredient", {
   getByName: query({
     input: schemas.ingredientNameFilterInput,
     output: schemas.ingredientWithFoodOut.nullable(),
-    tags: [["ingredient"], ["ingredient", "getByName"]],
+    tags: [["ingredient", "getByName"]],
   }),
   matchNames: query({
     input: schemas.ingredientNamesInput,
     output: schemas.ingredientMatchesOut,
-    tags: [["ingredient"], ["ingredient", "matchNames"]],
+    tags: [["ingredient", "matchNames"]],
   }),
   getManyByIDs: query({
     input: schemas.ingredientIdsInput,
     output: schemas.ingredientWithFoodLeanListOut,
-    tags: [["ingredient"], ["ingredient", "getManyByIDs"]],
+    tags: [["ingredient", "getManyByIDs"]],
   }),
   recipeUsages: query({
     input: schemas.ingredientIdInput,
     output: schemas.ingredientRecipeUsagesOut,
-    tags: [["ingredient"], ["ingredient", "recipeUsages"], ["recipe"]],
+    tags: [["ingredient", "recipeUsages"], ["recipe"]],
   }),
   resolveOrCreate: mutation({
     input: schemas.ingredientResolvableNamesInput,
     output: schemas.ingredientResolveOrCreateOut,
-    invalidates: [["ingredient"]],
+    invalidates: ripple.ingredient,
   }),
   enrichmentWorkbench: query({
     input: schemas.enrichmentWorkbenchInput,
     output: schemas.enrichmentRowsOut,
-    tags: [["ingredient"], ["ingredient", "enrichmentWorkbench"]],
+    tags: [["ingredient", "enrichmentWorkbench"]],
   }),
   merge: mutation({
     input: schemas.ingredientMergeInput,
     output: mergeOutput,
-    invalidates: [["ingredient", "merge"]],
+    invalidates: ripple.ingredientMerge,
   }),
 });

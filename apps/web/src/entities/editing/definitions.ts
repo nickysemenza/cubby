@@ -1,7 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
-import { invalidatesFor } from "~/lib/query-keys";
 import { defineEntityEditRegistry } from "./registry";
 import type {
   EditableEntity,
@@ -228,12 +227,10 @@ const operations = <E extends EditableEntity>(
 const definition = <E extends EditableEntity>(
   entity: E,
   fields: readonly EntityEditField<E, EntityEditRecord, unknown, object>[],
-  invalidationKeys: EntityEditDefinition<E>["invalidationKeys"],
   definitionOperations: EntityEditDefinition<E>["operations"],
 ): EntityEditDefinition<E> => ({
   entity,
   fields,
-  invalidationKeys,
   operations: definitionOperations,
 });
 
@@ -684,7 +681,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("product", "unitMappings"),
       nullableText("product", "notes"),
     ],
-    invalidatesFor("product"),
     operations("product", {
       create: ["capture", "full"],
       update: standardUpdate("product", ["full", "identity", "price", "stock"]),
@@ -697,7 +693,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("ingredient", "aliases"),
       field("ingredient", "naKinds"),
     ],
-    invalidatesFor("ingredient"),
     operations("ingredient", {
       create: ["capture", "full"],
       update: standardUpdate("ingredient", ["full", "identity"]),
@@ -711,7 +706,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("inventory", "locationId"),
       field("inventory", "placement"),
     ],
-    invalidatesFor("inventory"),
     operations("inventory", {
       create: ["capture", "full"],
       update: standardUpdate("inventory", [
@@ -732,7 +726,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("location", "productId"),
       field("location", "parentId"),
     ],
-    invalidatesFor("location"),
     operations("location", {
       create: ["capture", "full"],
       update: standardUpdate("location", ["full", "identity", "parent"]),
@@ -747,7 +740,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       nullableText("recipe", "notes"),
       field("recipe", "sections"),
     ],
-    invalidatesFor("recipe"),
     operations("recipe", {
       create: ["capture", "full"],
       update: standardUpdate("recipe", ["full", "identity"]),
@@ -762,7 +754,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("meal", "mealKind"),
       field("meal", "sortOrder"),
     ],
-    invalidatesFor("meal"),
     operations("meal", {
       create: {
         capture: createIntent("meal", "capture", fieldsFor("meal", "capture"), {
@@ -789,7 +780,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
   project: definition(
     "project",
     projectFields,
-    invalidatesFor("project"),
     operations("project", {
       create: {
         capture: createIntent(
@@ -823,7 +813,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
   task: definition(
     "task",
     taskFields,
-    invalidatesFor("task"),
     operations("task", {
       create: {
         capture: createIntent("task", "capture", fieldsFor("task", "capture"), {
@@ -867,7 +856,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
   expense: definition(
     "expense",
     [...expenseFields, field("expense", "lineBasis")],
-    invalidatesFor("expense"),
     operations("expense", {
       create: {
         capture: createIntent(
@@ -946,7 +934,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       nullableText("vendor", "orderUrlTemplate"),
       nullableText("vendor", "notes"),
     ],
-    invalidatesFor("vendor"),
     operations("vendor", {
       create: {
         capture: createIntent(
@@ -972,7 +959,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("purchase", "statedTotal"),
       nullableText("purchase", "notes"),
     ],
-    invalidatesFor("purchase"),
     operations("purchase", {
       create: {
         capture: createIntent(
@@ -1004,7 +990,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
   financialAccount: definition(
     "financialAccount",
     financialAccountFields,
-    invalidatesFor("financialAccount"),
     operations("financialAccount", {
       create: {
         capture: createIntent(
@@ -1116,7 +1101,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("financialTransaction", "sourceRefs"),
       nullableText("financialTransaction", "notes"),
     ],
-    invalidatesFor("financialTransaction"),
     operations("financialTransaction", {
       create: {
         capture: createIntent(
@@ -1181,7 +1165,6 @@ export const entityEditRegistry = defineEntityEditRegistry({
       field("wish", "candidateProductIds"),
       field("wish", "acquired"),
     ],
-    invalidatesFor("wish"),
     operations("wish", {
       create: {
         capture: createIntent("wish", "capture", fieldsFor("wish", "full"), {

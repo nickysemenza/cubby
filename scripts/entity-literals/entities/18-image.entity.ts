@@ -78,6 +78,7 @@ export default literalEntity({
     countable: true,
     softDelete: true,
     delete: { mode: "hard", bulk: true },
+    bulkUpdate: null,
     merge: false,
     mcp: [],
   },

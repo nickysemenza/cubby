@@ -255,18 +255,12 @@ return productTopLevelOut.parse(result);
 
 ### 1. Branded ID Types
 
-Parse raw database projections at the repository mapper seam:
-
-```typescript
-import { locationId, productId } from "@cubby/schemas/identifiers";
-
-return {
-  id: productId.parse(rawProduct.id),
-  location: {
-    id: locationId.parse(rawLocation.id),
-  },
-};
-```
+See [IDs and runtime traps](../../../../../docs/agents/domain-rules.md#ids-and-runtime-traps)
+for the branding/parsing rules. The repo-specific addendum: a repo mapper
+reading a raw DB projection (untyped `id`/foreign-key columns off the driver
+row) is itself a genuine ingress seam, so parse there with `parseEntityId` /
+the named `<entity>Id` schema before the value reaches API-typed output —
+never pass the raw column straight through.
 
 ### 2. Extracting Images
 
@@ -330,16 +324,13 @@ const [results, [countResult]] = await Promise.all([
 - Add clear comments for complex queries
 - Use transactions for multi-step operations
 - Validate API output with Zod schemas
-- Use branded types for IDs
 - Extract images from join tables explicitly
 
 ### ❌ DON'T
 
 - Call database methods directly in services/routers
 - Use raw SQL unless necessary (prefer query builder)
-- Skip validation on untrusted data
 - Use `as unknown as` casts (use Zod or type helpers instead)
-- Bypass TypeScript with `any` types
 - Forget to handle null/undefined in optional fields
 
 ## Testing
@@ -368,3 +359,5 @@ See existing `.integration.test.ts` files for examples.
 - [Drizzle ORM Documentation](https://orm.drizzle.team/)
 - [Project CLAUDE.md](../../../../../CLAUDE.md) - Full architecture guidelines
 - [Schema Definitions](../db/schema.ts) - Database schema
+- [Agent domain rules](../../../../../docs/agents/domain-rules.md) - Production changes, data/layers/deletion, IDs and runtime traps
+- [Entity genericization](../../../../../docs/entities.md) - The manifest/binding spine and new-entity checklist

@@ -7,9 +7,15 @@ import {
   query,
 } from "~/integrations/tanstack-query/operation-catalog";
 import type {
-  DetailEntity,
-  EntityDetailByEntity,
-  EntityDetailInputByEntity,
+  CubbyOperationMeta,
+  OperationFreshnessPolicy,
+} from "~/integrations/tanstack-query/operation-meta";
+import {
+  type DetailEntity,
+  type EntityDetailByEntity,
+  type EntityDetailInputByEntity,
+  parseEntityDetailInput,
+  parseEntityDetailResult,
 } from "./generated/entity-details.gen";
 
 const persistedDetailEntities = new Set<DetailEntity>([
@@ -25,11 +31,6 @@ const stableDetailFreshness = {
   refetchOnWindowFocus: true,
   refetchOnReconnect: true,
 } as const;
-
-import {
-  parseEntityDetailInput,
-  parseEntityDetailResult,
-} from "./generated/entity-details.gen";
 
 /** Compatibility error shape for browser error renderers. */
 export class EntityDetailError extends Error {
@@ -59,53 +60,71 @@ export const entityDetail = defineOperationDomain("entity", {
   }),
 });
 
-export const entityDetailQueryKey = <E extends DetailEntity>(
-  entity: E,
-  shortcode: string,
-) => {
-  const parsed = parseShortcode(shortcode);
-  const canonical = parsed?.type === entity ? parsed.shortcode : shortcode;
-  return entityDetail.detail
-    .forEntity(entity)
-    .queryKey({ entity, shortcode: canonical });
+/**
+ * A catalog descriptor is parameterized by one schema pair, so its
+ * `forEntity(entity: string)` cannot narrow `entity.detail` to a single
+ * entity's input and output. This declaration plus the one cast in
+ * `entityDetailFor` buy that narrowing once, for every caller.
+ */
+type ScopedDetailOperation<E extends DetailEntity> = {
+  policy(input: EntityDetailInputByEntity[E]): {
+    meta: CubbyOperationMeta;
+    freshness?: OperationFreshnessPolicy;
+  };
+  queryKey(
+    input: EntityDetailInputByEntity[E],
+  ): OperationQueryKey<EntityDetailInputByEntity[E]>;
+  call(
+    input: EntityDetailInputByEntity[E],
+    options: { signal?: AbortSignal },
+  ): Promise<EntityDetailByEntity[E] | null>;
 };
 
-export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
-  entityDetail.detail
-    .forEntity(entity)
-    .queryKey({
-      entity,
-      shortcode: "",
-    })
-    .slice(0, 2);
-
-export function entityDetailQueryOptions<E extends DetailEntity>(
-  entity: E,
-  shortcode: EntityDetailInputByEntity[E]["shortcode"],
-  options?: { enabled?: boolean; staleTime?: number },
-) {
-  const queryKey = entityDetailQueryKey(entity, shortcode);
-  const operation = entityDetail.detail.forEntity(entity);
-  const input = {
+/**
+ * Bind `entity.detail` to one entity, so its shortcode, result, and cache key
+ * all carry that entity's types. Throws for an entity the operation is not
+ * registered for.
+ */
+export function entityDetailFor<E extends DetailEntity>(entity: E) {
+  const operation = entityDetail.detail.forEntity(
     entity,
-    shortcode: queryKey[2].input.shortcode,
-  } as EntityDetailInputByEntity[E];
-  const policy = operation.policy(input);
-  return queryOptions({
-    queryKey: queryKey as OperationQueryKey<EntityDetailInputByEntity[E]>,
-    // Some conditional detail queries use an empty placeholder while disabled.
-    // Validate when React Query actually executes, not while rendering options.
-    queryFn: async ({ signal }) => {
-      const parsed = parseEntityDetailInput(
-        entity,
-        input,
-      ) as EntityDetailInputByEntity[E];
-      return (await operation.call(parsed, { signal })) as
-        | EntityDetailByEntity[E]
-        | null;
+  ) as unknown as ScopedDetailOperation<E>;
+  // A physical label ("p-4k7m") and its canonical shortcode address the same
+  // row, so both have to resolve to a single cache entry.
+  const inputFor = (shortcode: string) => {
+    const parsed = parseShortcode(shortcode);
+    return {
+      entity,
+      shortcode: parsed?.type === entity ? parsed.shortcode : shortcode,
+    } as EntityDetailInputByEntity[E];
+  };
+  return {
+    entity,
+    queryKey: (shortcode: string) => operation.queryKey(inputFor(shortcode)),
+    queryOptions: (
+      shortcode: string,
+      options?: { enabled?: boolean; staleTime?: number },
+    ) => {
+      const input = inputFor(shortcode);
+      const policy = operation.policy(input);
+      return queryOptions({
+        queryKey: operation.queryKey(input),
+        // Some conditional detail queries use an empty placeholder while
+        // disabled. Validate when React Query actually executes, not while
+        // rendering options.
+        queryFn: async ({ signal }) =>
+          operation.call(parseEntityDetailInput(entity, input), { signal }),
+        meta: policy.meta,
+        ...policy.freshness,
+        ...options,
+      });
     },
-    meta: policy.meta,
-    ...policy.freshness,
-    ...options,
-  });
+  };
 }
+
+export type EntityDetailScoped<E extends DetailEntity> = ReturnType<
+  typeof entityDetailFor<E>
+>;
+
+export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
+  entityDetailFor(entity).queryKey("").slice(0, 2);
