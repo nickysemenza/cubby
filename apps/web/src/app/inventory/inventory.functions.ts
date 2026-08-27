@@ -15,6 +15,7 @@ import {
   scanAtLocationInput,
   scanAtLocationOut,
 } from "@cubby/schemas/scan";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -25,32 +26,32 @@ export const inventory = defineOperationDomain("inventory", {
   bulkProcess: mutation({
     input: inventoryBulkOperationPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   bulkMove: mutation({
     input: bulkMovePayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   moveEntries: mutation({
     input: moveInventoryEntriesPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   reconcileSession: mutation({
     input: reconcileSessionPayload,
     output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   scanAtLocation: mutation({
     input: scanAtLocationInput,
     output: scanAtLocationOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   resolveScanStrays: mutation({
     input: resolveScanStraysInput,
     output: resolveScanStraysOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   findDuplicates: query({
     input: inventoryFindDuplicatesInput,

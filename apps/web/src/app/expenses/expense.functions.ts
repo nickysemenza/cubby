@@ -1,6 +1,7 @@
 import { expenseShortcode } from "@cubby/schemas/identifiers";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -46,16 +47,16 @@ export const expense = defineOperationDomain("expense", {
   bulkMove: mutation({
     input: schemas.expenseBulkMoveInput,
     output: schemas.expenseBulkMutationOut,
-    invalidates: [["expense"]],
+    invalidates: ripple.expense,
   }),
   bulkSetTrade: mutation({
     input: schemas.expenseBulkTradeInput,
     output: schemas.expenseBulkMutationOut,
-    invalidates: [["expense"]],
+    invalidates: ripple.expense,
   }),
   bulkSetCostType: mutation({
     input: schemas.expenseBulkCostTypeInput,
     output: schemas.expenseBulkMutationOut,
-    invalidates: [["expense"]],
+    invalidates: ripple.expense,
   }),
 });

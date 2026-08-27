@@ -1,6 +1,7 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import * as schemas from "@cubby/schemas/ingredient";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -37,7 +38,7 @@ export const ingredient = defineOperationDomain("ingredient", {
   resolveOrCreate: mutation({
     input: schemas.ingredientResolvableNamesInput,
     output: schemas.ingredientResolveOrCreateOut,
-    invalidates: [["ingredient"]],
+    invalidates: ripple.ingredient,
   }),
   enrichmentWorkbench: query({
     input: schemas.enrichmentWorkbenchInput,
@@ -47,6 +48,6 @@ export const ingredient = defineOperationDomain("ingredient", {
   merge: mutation({
     input: schemas.ingredientMergeInput,
     output: mergeOutput,
-    invalidates: [["ingredient", "merge"]],
+    invalidates: ripple.ingredientMerge,
   }),
 });

@@ -48,7 +48,10 @@ export const search = defineOperationDomain("search", {
   enqueueEmbeddingBackfill: mutation({
     input: enqueueEmbeddingBackfillInputSchema,
     output: enqueueEmbeddingBackfillOutSchema,
-    invalidates: [["search"], ["background-batch"]],
+    // `["problems"]` too: the Problems page's "missing embeddings" card is the
+    // one surface that starts this, and it used to get that invalidation from
+    // the per-card hook rather than from the operation.
+    invalidates: [["search"], ["background-batch"], ["problems"]],
   }),
   requestEmbeddingRefresh: mutation({
     input: requestEmbeddingRefreshInputSchema,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -16,7 +17,16 @@ export const entityMutation = defineOperationDomain("entity", {
   mutate: mutation({
     input: z.custom<EntityBrowserMutationInput>(),
     output: z.custom<EntityBrowserMutationResult>(),
-    invalidates: [["entity"]],
+    /**
+     * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
+     * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,
+     * both entity-AGNOSTIC, so the bare root would nuke every list and detail
+     * query for every entity on every write. The fan-out is action-independent —
+     * a create, an update and a delete of one entity move the same surfaces — so
+     * an `(entity, action)` table would be five times the rows with identical
+     * values.
+     */
+    invalidates: (input) => entityRipple(input.entity),
   }),
 });
 

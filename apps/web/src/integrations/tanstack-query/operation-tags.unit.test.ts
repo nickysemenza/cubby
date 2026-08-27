@@ -19,7 +19,13 @@ const show = (tag: readonly string[]) => `[${tag.join(",")}]`;
 
 type AnyDescriptor = {
   id: string;
-  definition: { kind: string; tags?: readonly OperationCacheTag[] };
+  definition: {
+    kind: string;
+    tags?: readonly OperationCacheTag[];
+    invalidates?:
+      | readonly OperationCacheTag[]
+      | ((input: never) => readonly OperationCacheTag[]);
+  };
 };
 
 /**
@@ -147,6 +153,24 @@ describe("operation cache tags", () => {
       for (const tag of tags)
         if (!invalidatesSomething(tag))
           dead.push(`ripple.${name} -> ${show(tag)}`);
+    expect(dead).toEqual([]);
+  });
+
+  /**
+   * Invariant 3, at the descriptors themselves rather than at the shared table.
+   * A STATIC `invalidates:` array is checkable here; the one dynamic policy
+   * (`entity.mutate`) is covered by the `entityRipple` case below, which walks
+   * every manifest entity it can be called with.
+   */
+  it("only ever invalidates tags some query declares, at every descriptor", () => {
+    const dead: string[] = [];
+    for (const { path, descriptor } of descriptors) {
+      const declared = descriptor.definition.invalidates;
+      if (!declared || typeof declared === "function") continue;
+      for (const tag of declared)
+        if (!invalidatesSomething(tag))
+          dead.push(`${descriptor.id} (${path}) -> ${show(tag)}`);
+    }
     expect(dead).toEqual([]);
   });
 

@@ -1,5 +1,6 @@
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -40,26 +41,26 @@ export const task = defineOperationDomain("task", {
   bulkMove: mutation({
     input: schemas.taskBulkMoveInput,
     output: schemas.taskBulkMutationOut,
-    invalidates: [["task"]],
+    invalidates: ripple.task,
   }),
   bulkSetStatus: mutation({
     input: schemas.taskBulkStatusInput,
     output: schemas.taskBulkMutationOut,
-    invalidates: [["task"]],
+    invalidates: ripple.task,
   }),
   bulkSetTrade: mutation({
     input: schemas.taskBulkTradeInput,
     output: schemas.taskBulkMutationOut,
-    invalidates: [["task"]],
+    invalidates: ripple.task,
   }),
   bulkSetDueDate: mutation({
     input: schemas.taskBulkDueDateInput,
     output: schemas.taskBulkMutationOut,
-    invalidates: [["task"]],
+    invalidates: ripple.task,
   }),
   bulkReorder: mutation({
     input: schemas.taskBulkReorderInput,
     output: schemas.taskBulkMutationOut,
-    invalidates: [["task"]],
+    invalidates: ripple.task,
   }),
 });

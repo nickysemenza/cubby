@@ -1,5 +1,6 @@
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -30,7 +31,7 @@ export const project = defineOperationDomain("project", {
   createFromTasks: mutation({
     input: schemas.createProjectFromTasksInput,
     output: schemas.createProjectFromTasksOut,
-    invalidates: [["task"], ["project"]],
+    invalidates: ripple.taskProject,
   }),
   resources: query({
     input: schemas.projectResourceProjectInput,
@@ -49,12 +50,12 @@ export const project = defineOperationDomain("project", {
   attachResources: mutation({
     input: schemas.projectResourceMutationInput,
     output: schemas.projectResourceMutationOut,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
   detachResources: mutation({
     input: schemas.projectResourceMutationInput,
     output: schemas.projectResourceMutationOut,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
   toolMatrix: query({
     input: schemas.projectToolMatrixInput,
@@ -64,6 +65,6 @@ export const project = defineOperationDomain("project", {
   setToolUsage: mutation({
     input: schemas.projectToolUsageSetInput,
     output: schemas.projectToolUsageSetOut,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
 });

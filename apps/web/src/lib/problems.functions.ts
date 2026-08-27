@@ -19,6 +19,7 @@ import {
   recipeUsageByProductOut,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -87,7 +88,7 @@ export const problems = defineOperationDomain("problems", {
   deleteUnused: mutation({
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
-    invalidates: [["problems"], ["ingredient"]],
+    invalidates: ripple.ingredientCleanup,
   }),
   cleanupOrphanedEmbeddings: mutation({
     input: cleanupOrphanedEntityEmbeddingsInput,

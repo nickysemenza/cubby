@@ -64,9 +64,32 @@ const productBase = rippleTags([
   ["task"],
   ["dashboard"],
   ["wish"],
+  // DEPARTURE from the legacy row, deliberate: the Problems page's own fix
+  // cards (unit coverage, missing price, duplicate identity) write products
+  // through the generic entity kernel, and the always-`problems` invalidation
+  // used to come from `useProblemCardMutation` wrapping the call site rather
+  // than from the operation. With that wrapper gone the descriptor has to
+  // carry it, or a fixed card stays on screen. `productLookup`, `productMerge`
+  // and `inventory` already name it for the same reason. Costs nothing unless
+  // the Problems page is mounted — an inactive query is only marked stale.
+  ["problems"],
 ]);
 
 const ingredientAll = rippleTags([["ingredient"], ["dashboard"]]);
+
+/**
+ * Purchase mutations move MONEY-bearing rows around (`link` re-parents
+ * expenses, `split` replaces one with several, `merge` re-points a charge), so
+ * the expense and project rollups go stale alongside the vendor's own
+ * `purchaseCount`/`spend`. Splitting a purchase-owned Expense can also change
+ * Product quantity/cost basis, hence the ripple. Hoisted out of the table
+ * because a vendor merge ripples exactly like a purchase write.
+ */
+const purchaseRipple = rippleTags(
+  [["purchase"], ["relatedData"], ["vendor"], ["expense"], ["project"]],
+  costAndStock,
+  [["dashboard"]],
+);
 
 /**
  * Per-entity invalidation fan-out. The bare entity name is what an ordinary
@@ -140,10 +163,16 @@ export const ripple = {
    * self-documenting.)
    */
   locationReparent: rippleTags([["location"], ["dashboard"]]),
+  /** Rebuilding every location's persisted valuation rollup also resolves the
+   * Maintenance card that offered it. */
+  locationValuation: rippleTags([["location"], ["problems"], ["dashboard"]]),
 
   // The broad `image` prefix, not an image-list tag: a list-only invalidation
   // doesn't refresh the image DETAIL page after a rename.
   image: rippleTags([["image"], ["dashboard"]]),
+  /** Culling pending uploads / unreferenced files resolves the Problems
+   * "unreferenced files" section alongside the image list. */
+  imageCull: rippleTags([["image"], ["problems"], ["dashboard"]]),
 
   "usda-food": rippleTags([["usda-food"]]),
 
@@ -156,8 +185,19 @@ export const ripple = {
   ingredientProduct: rippleTags(ingredientAll, productBase),
   /** Merge re-points recipes, products, and stock at the keeper. */
   ingredientMerge: rippleTags([["ingredient"]], costAndStock, [["dashboard"]]),
-  /** Unused-ingredient sweep — resolves the detector card that offered it. */
-  ingredientCleanup: rippleTags([["problems"], ["ingredient"], ["dashboard"]]),
+  /**
+   * Unused-ingredient sweep — resolves the detector card that offered it.
+   * Carries the product fan-out UNCONDITIONALLY: the sweep takes an
+   * `alsoDeleteProducts` flag, and the legacy call sites added
+   * `invalidatesFor("product")` only when it was set. A flag-conditional
+   * invalidation set is a config that can drift; one refetch on the negative
+   * branch is the accepted price (decided during the cache-authority
+   * migration).
+   */
+  ingredientCleanup: rippleTags(
+    [["problems"], ["ingredient"], ["dashboard"]],
+    productBase,
+  ),
 
   /** Broad prefix + meal rollups, which read recipe totals. */
   recipe: rippleTags([["recipe"], ["meal"], ["dashboard"]]),
@@ -188,6 +228,14 @@ export const ripple = {
   projectResource: rippleTags([["project"], ["product"], ["relatedData"]]),
 
   task: rippleTags([["task"], ["project"], ["calendar"], ["dashboard"]]),
+  /** Promoting a task selection into a new project writes on both sides. */
+  taskProject: rippleTags([
+    ["task"],
+    ["project"],
+    ["relatedData"],
+    ["calendar"],
+    ["dashboard"],
+  ]),
 
   expense: rippleTags(
     [["expense"], ["relatedData"], ["project"], ["calendar"], ["dashboard"]],
@@ -212,17 +260,26 @@ export const ripple = {
     ["relatedData"],
     ["dashboard"],
   ]),
+  /**
+   * A vendor MERGE re-parents purchases (and folds any sharing an order id
+   * with the keeper), which re-parents their expenses in turn — so it ripples
+   * like a purchase write, not a vendor write. Both legacy call sites
+   * (`vendor-detail`, the Problems duplicate-vendor card) named
+   * `invalidatesFor("purchase")` for exactly that reason.
+   */
+  vendorMerge: purchaseRipple,
+  /** Fetching a logo writes the vendor's image, which the search index and the
+   * Problems "vendor without a logo" card both read. */
+  vendorLogo: rippleTags([
+    ["vendor"],
+    ["purchase"],
+    ["relatedData"],
+    ["search"],
+    ["problems"],
+    ["dashboard"],
+  ]),
 
-  // Purchase mutations move MONEY-bearing rows around (`link` re-parents
-  // expenses, `split` replaces one with several, `merge` re-points a charge),
-  // so the expense and project rollups go stale alongside the vendor's own
-  // `purchaseCount`/`spend`. Splitting a purchase-owned Expense can also
-  // change Product quantity/cost basis, hence the ripple.
-  purchase: rippleTags(
-    [["purchase"], ["relatedData"], ["vendor"], ["expense"], ["project"]],
-    costAndStock,
-    [["dashboard"]],
-  ),
+  purchase: purchaseRipple,
   /** A purchase-product link is visible from both ends, but it carries no
    * money or quantity — no spend, inventory, or calendar state. */
   purchaseProduct: rippleTags([["purchase"], ["product"], ["relatedData"]]),

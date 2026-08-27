@@ -9,6 +9,7 @@ import {
   productWorkflowSchemas,
 } from "@cubby/schemas/product-workflow";
 import type { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -35,19 +36,19 @@ export const product = defineOperationDomain("product", {
   }),
   quickCreate: mutation({
     ...productWorkflowSchemas.quickCreate,
-    invalidates: [["product"]],
+    invalidates: ripple.product,
   }),
   applyUpcData: mutation({
     ...productWorkflowSchemas.applyUpcData,
-    invalidates: [["product", "recipe"], ["problems"]],
+    invalidates: ripple.productRecipe,
   }),
   findOrCreateByUPC: mutation({
     ...productWorkflowSchemas.findOrCreateByUPC,
-    invalidates: [["product", "lookup"]],
+    invalidates: ripple.productLookup,
   }),
   findOrCreateByCode: mutation({
     ...productWorkflowSchemas.findOrCreateByCode,
-    invalidates: [["product", "lookup"]],
+    invalidates: ripple.productLookup,
   }),
   tagOptions: query({
     ...productWorkflowSchemas.tagOptions,
@@ -75,7 +76,7 @@ export const product = defineOperationDomain("product", {
   }),
   merge: mutation({
     ...productWorkflowSchemas.merge,
-    invalidates: [["product", "merge"]],
+    invalidates: ripple.productMerge,
   }),
   projectUses: query({
     ...productWorkflowSchemas.projectUses,
@@ -118,23 +119,23 @@ export const product = defineOperationDomain("product", {
   }),
   attachComponents: mutation({
     ...productWorkflowSchemas.attachComponents,
-    invalidates: [["product", "component"]],
+    invalidates: ripple.productComponent,
   }),
   detachComponents: mutation({
     ...productWorkflowSchemas.detachComponents,
-    invalidates: [["product", "component"]],
+    invalidates: ripple.productComponent,
   }),
   setProjectUses: mutation({
     ...productWorkflowSchemas.setProjectUses,
-    invalidates: [["project", "resource"]],
+    invalidates: ripple.projectResource,
   }),
   discard: mutation({
     ...productWorkflowSchemas.discard,
-    invalidates: [["expense"]],
+    invalidates: ripple.expense,
   }),
   bulkSetStockTracked: mutation({
     ...productWorkflowSchemas.bulkSetStockTracked,
-    invalidates: [["product"]],
+    invalidates: ripple.product,
   }),
 });
 

@@ -1,4 +1,5 @@
 import * as schemas from "@cubby/schemas/meal";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -24,16 +25,16 @@ export const meal = defineOperationDomain("meal", {
   addRecipe: mutation({
     input: schemas.mealAddRecipeInput,
     output: schemas.mealOut,
-    invalidates: [["meal"]],
+    invalidates: ripple.meal,
   }),
   updateRecipe: mutation({
     input: schemas.mealUpdateRecipeInput,
     output: schemas.mealOut,
-    invalidates: [["meal"]],
+    invalidates: ripple.meal,
   }),
   removeRecipe: mutation({
     input: schemas.mealRecipeIdInput,
     output: schemas.mealOut,
-    invalidates: [["meal"]],
+    invalidates: ripple.meal,
   }),
 });

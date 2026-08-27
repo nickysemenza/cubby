@@ -10,6 +10,7 @@ import {
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -31,13 +32,16 @@ export const imageUpload = defineOperationDomain("image", {
   importFromUrl: mutation({
     input: importImageFromUrlSchema,
     output: importImageFromUrlResponseSchema,
+    invalidates: ripple.image,
   }),
   cullPendingImages: mutation({
     input: cullPendingImagesSchema,
     output: cullPendingImagesResponseSchema,
+    invalidates: ripple.imageCull,
   }),
   cleanupUnreferencedImages: mutation({
     input: z.undefined(),
     output: cullPendingImagesResponseSchema,
+    invalidates: ripple.imageCull,
   }),
 });

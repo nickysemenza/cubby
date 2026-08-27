@@ -6,6 +6,7 @@ import {
   vendorOut,
 } from "@cubby/schemas/vendor";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -21,11 +22,11 @@ export const vendor = defineOperationDomain("vendor", {
   merge: mutation({
     input: mergeVendorsInput,
     output: mergeVendorsOut,
-    invalidates: [["vendor", "merge"]],
+    invalidates: ripple.vendorMerge,
   }),
   fetchLogo: mutation({
     input: fetchVendorLogoInput,
     output: vendorOut,
-    invalidates: [["vendor"]],
+    invalidates: ripple.vendorLogo,
   }),
 });

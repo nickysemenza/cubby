@@ -12,6 +12,7 @@ import {
   locationValuationSummaryOut,
 } from "@cubby/schemas/location";
 import { z } from "zod";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -47,12 +48,12 @@ export const location = defineOperationDomain("location", {
   ensureGlobalUnknown: mutation({
     input: z.undefined(),
     output: infLocation,
-    invalidates: [["location"]],
+    invalidates: ripple.location,
   }),
   bulkUpdateParent: mutation({
     input: locationBulkUpdateParentInput,
     output: locationBulkUpdateParentOut,
-    invalidates: [["location", "reparent"]],
+    invalidates: ripple.locationReparent,
   }),
   getByShortcodes: query({
     input: locationShortcodesInput,
@@ -62,7 +63,7 @@ export const location = defineOperationDomain("location", {
   recomputeValuations: mutation({
     input: z.undefined(),
     output: z.object({ updated: z.number() }),
-    invalidates: [["location"]],
+    invalidates: ripple.locationValuation,
   }),
   search: query({
     input: rosterInput,
