@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "ingredient",
-  names: { singular: "Ingredient" },
+  names: { singular: "Ingredient", plural: "Ingredients" },
   route: { basePath: "ingredients" },
   table: "Ingredient",
   identifiers: { brand: "IngredientId", shortcode: "ING-", legacy: null },

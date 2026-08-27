@@ -2,7 +2,7 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "financialAccount",
-  names: { singular: "Financial Account" },
+  names: { singular: "Financial Account", plural: "Accounts" },
   route: { basePath: "financial-accounts" },
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-", legacy: null },
