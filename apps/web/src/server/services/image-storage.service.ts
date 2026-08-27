@@ -1,9 +1,5 @@
-import type { ImageShortcode } from "@cubby/schemas/identifiers";
-import {
-  parseEntityId,
-  parseEntityRef,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import type { ImageId, ImageShortcode } from "@cubby/schemas/identifiers";
+import { parseEntityRef, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -294,26 +290,45 @@ export const createFileUpload = async (
  * already-attached image would duplicate the attachment and then destroy the
  * original. That mixup is easy to make rather than exotic: `attach_file`
  * RETURNS an `imageId` and `create_file_upload` returns an `uploadId`, both
- * bare uuids over the same table, so a retry that reaches for the wrong one
+ * `IMG-` codes over the same table, so a retry that reaches for the wrong one
  * looks identical. Requiring the staged state turns it into a clean error.
+ *
+ * Returns the resolved uuid so the caller's cleanup can hard-delete the staging
+ * row without resolving the code a second time.
  */
 const readStagedUpload = async (
   db: Database,
   uploadId: string,
-): Promise<{ bytes: Buffer; contentType: string; filename: string }> => {
-  const staged = await getImageById(db, uploadId).catch((error: unknown) => {
-    if (
-      (error as { cause?: { reason?: string } })?.cause?.reason !==
-      "IMAGE_NOT_FOUND"
-    ) {
-      throw error;
-    }
-    throw createAppError(
+): Promise<{
+  bytes: Buffer;
+  contentType: string;
+  filename: string;
+  stagedImageId: ImageId;
+}> => {
+  const notFound = (cause?: unknown) =>
+    createAppError(
       "IMAGE_ATTACH_FAILED",
       `Upload ${uploadId} not found. Call create_file_upload first.`,
-      error,
+      cause,
     );
-  });
+  // `uploadId` is the staged row's public `IMG-` code; `getImageById` is a raw
+  // uuid PK lookup, so the boundary has to be crossed here.
+  const stagedImageId = await resolveLiveShortcode(db, uploadId, "image");
+  if (!stagedImageId) throw notFound();
+  // Still reachable after a successful resolve: `deleteImages` is a HARD
+  // delete, so a concurrent attach of the same uploadId can take the row out
+  // between the two reads.
+  const staged = await getImageById(db, stagedImageId).catch(
+    (error: unknown) => {
+      if (
+        (error as { cause?: { reason?: string } })?.cause?.reason !==
+        "IMAGE_NOT_FOUND"
+      ) {
+        throw error;
+      }
+      throw notFound(error);
+    },
+  );
   if (staged.status !== "PENDING" || staged.entityType !== null) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
@@ -335,6 +350,7 @@ const readStagedUpload = async (
     // whether the bytes are what they claim to be.
     contentType: staged.contentType,
     filename: staged.filename,
+    stagedImageId,
   };
 };
 
@@ -393,12 +409,14 @@ export const attachFileToEntity = async (
   let bytes: Buffer;
   let contentType: string | undefined;
   let sourceFilename: string | undefined;
+  let stagedImageId: ImageId | undefined;
 
   if (input.uploadId) {
     ({
       bytes,
       contentType,
       filename: sourceFilename,
+      stagedImageId,
     } = await readStagedUpload(db, input.uploadId));
   } else if (input.data) {
     ({ bytes, contentType } = decodeBase64File(input.data, input.contentType));
@@ -530,12 +548,12 @@ export const attachFileToEntity = async (
   // owns its own copy. Best-effort: `findCullablePendingImages` sweeps an
   // unassociated PENDING row anyway, so a failure here strands bytes for a day
   // rather than leaking them, and must not fail an attachment that succeeded.
-  if (input.uploadId) {
+  if (stagedImageId) {
     try {
-      // The staging handle is a genuine raw `Image.id` uuid, not a shortcode.
-      const { deletedKeys } = await deleteImages(db, [
-        parseEntityId("image", input.uploadId),
-      ]);
+      // The uuid `readStagedUpload` already resolved from the `IMG-` code —
+      // `deleteImages` writes against the uuid PK, and a shortcode here would
+      // silently delete nothing and strand the staged object.
+      const { deletedKeys } = await deleteImages(db, [stagedImageId]);
       await deleteStoredObjects(deletedKeys);
     } catch (cleanupError) {
       console.error("Failed to clean up staged upload:", cleanupError);

@@ -249,10 +249,10 @@ export const attachFileFields = {
     .describe(
       "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url`, `data`, or `uploadId`. Unusable at photo sizes — stage the file with create_file_upload instead.",
     ),
-  uploadId: id
+  uploadId: imageShortcode
     .optional()
     .describe(
-      "Id from create_file_upload, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
+      "`IMG-` code from create_file_upload, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
     ),
   contentType: z
     .string()
@@ -361,8 +361,11 @@ export const createFileUploadInput = z.object({
 export type CreateFileUploadInput = z.infer<typeof createFileUploadInput>;
 
 export const createFileUploadResponse = z.object({
-  uploadId: id.describe(
-    "Pass to attach_file as `uploadId` once the PUT succeeds.",
+  // The staged row's public `IMG-` code, not its uuid: `Image` mints a
+  // shortcode at insert time like every other entity, and a raw uuid never
+  // crosses this API.
+  uploadId: imageShortcode.describe(
+    "`IMG-` code of the staged row. Pass to attach_file as `uploadId` once the PUT succeeds.",
   ),
   uploadUrl: z
     .url()

@@ -25,11 +25,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
   "remove_meal_recipe.recipes[].id",
   "update_meal_recipe.recipes[].id",
-  // The staged-upload handle is a transient raw Image UUID, deliberately
-  // returned by create_file_upload only so the caller can pass it to attach_file.
-  // Image records otherwise expose IMG- codes, so this is a narrow protocol
-  // handle rather than an internal-id leak.
-  "create_file_upload.uploadId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];
