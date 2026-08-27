@@ -187,7 +187,13 @@ export const ProductBulkAddToInventoryDialog: FC<
         </Button>
       }
     >
-      <Stack gap="md">
+      {/* `min-w-0` here and on every wrapper below is load-bearing, not tidying.
+          DialogContent is a `grid` whose items default to `min-width: auto`, so
+          one long product name sets a min-content width that spills past the
+          dialog's `max-w` — and the popup only scrolls on Y, so the overflow is
+          simply unreachable. Break the chain anywhere and `truncate` stops
+          working. */}
+      <Stack gap="md" className="min-w-0">
         <ComboboxFieldWithSearch
           form={form}
           name="location"
@@ -198,18 +204,25 @@ export const ProductBulkAddToInventoryDialog: FC<
         {locationId === null ? (
           <Description>Pick a location to stock these products.</Description>
         ) : (
-          <Stack gap="sm">
+          <Stack gap="sm" className="min-w-0">
             {fields.map((field, index) => {
               const onHand = onHandByProductId.get(field.productId);
               return (
                 <Row
                   key={field.id}
-                  align="end"
                   gap="sm"
-                  className="rounded border p-1"
+                  // Stacks on narrow: side by side, the name compresses to
+                  // "Akro-Mils 3…" — which cannot tell two bin sizes apart —
+                  // and the remove control runs off the sheet.
+                  className="min-w-0 flex-col items-stretch rounded border p-1 sm:flex-row sm:items-end"
                 >
                   <Stack gap="tight" className="min-w-0 flex-1">
-                    <span className="truncate text-sm">{field.label}</span>
+                    {/* The full name stays reachable on hover — a truncated
+                        "Akro-Mils 30210 Hang & Stack Storage Bin, Clear, 5-3/8
+                        in L…" is not enough to tell two bin sizes apart. */}
+                    <span className="truncate text-sm" title={field.label}>
+                      {field.label}
+                    </span>
                     {onHand && (
                       <Description size="xs">
                         already {onHand.value} {onHand.unit} here — adds to that
@@ -217,7 +230,7 @@ export const ProductBulkAddToInventoryDialog: FC<
                       </Description>
                     )}
                   </Stack>
-                  <div className="w-56">
+                  <div className="w-full sm:w-44 sm:shrink-0">
                     <AmountFieldGroup
                       form={form}
                       valuePath={`items.${index}.amount.value`}
@@ -230,7 +243,7 @@ export const ProductBulkAddToInventoryDialog: FC<
                     size="icon"
                     aria-label={`Remove ${field.label}`}
                     onClick={() => remove(index)}
-                    className="mb-1 shrink-0"
+                    className="self-end sm:mb-1 sm:shrink-0"
                   >
                     <X className="size-4" />
                   </Button>
