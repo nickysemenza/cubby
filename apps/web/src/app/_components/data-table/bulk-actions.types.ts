@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { CubbyRow as Row } from "./table-features";
 
 /** Result of a bulk action execution */
-interface BulkActionResult {
+export interface BulkActionResult {
   success: boolean;
 }
 
