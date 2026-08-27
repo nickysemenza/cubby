@@ -2155,11 +2155,22 @@ export function createParentLinkColumn<
       cell: (info) => {
         const { id, name } = info.getValue();
         if (!id || !name) return <NoneValue />;
-        return (
+        // `{ id, name }` structurally satisfies both branches of
+        // EntityInlineLinkProps; only `entity: TEntity` being a generic
+        // parameter (not a literal) blocks narrowing. Dispatching on the
+        // literal here needs no assertion at all.
+        return entity === "task" ? (
           <EntityInlineLink
             displayImage={undefined}
-            entity={entity}
-            data={{ id, name } as never}
+            entity="task"
+            data={{ id, name }}
+            truncate
+          />
+        ) : (
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="project"
+            data={{ id, name }}
             truncate
           />
         );
