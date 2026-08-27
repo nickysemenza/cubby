@@ -72,10 +72,9 @@ const purchases = (n: number) => `${n} purchase${n === 1 ? "" : "s"}`;
  * `(vendorId, orderId)` index would otherwise reject. Nothing here re-derives any
  * of that; it passes two ids.
  *
- * Invalidates the PURCHASE key set, not just the vendor one: folding a purchase
- * re-parents its expenses, so the expense/project/dashboard rollups go stale too
- * — the same reason `invalidatesFor("purchase")` is a superset of
- * `invalidatesFor("vendor")`.
+ * `vendor.merge` ripples as a PURCHASE write, not a vendor one: folding a
+ * purchase re-parents its expenses, so the expense/project/dashboard rollups go
+ * stale too. See `ripple.vendorMerge`.
  */
 export function DuplicateVendorMergeFix({
   variant,
@@ -138,10 +137,10 @@ export function DuplicateVendorMergeFix({
  * separate open state to track — Cancel or a successful merge both collapse
  * the card the same way.
  *
- * Invalidates the MERGE key set, not the plain product one — for the same
- * reason {@link DuplicateVendorMergeFix} reaches past `vendorMutation…`. A
- * merge re-parents inventory, expenses, and projectUses and recomputes
- * dependent recipe costs, none of which `invalidatesFor("product")` covers.
+ * `product.merge` carries `ripple.productMerge`, not the plain product one —
+ * for the same reason {@link DuplicateVendorMergeFix} reaches past the vendor
+ * set. A merge re-parents inventory, expenses, and projectUses and recomputes
+ * dependent recipe costs, none of which an ordinary product write touches.
  */
 export function DuplicateProductMergeFix({
   variant,

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 /**
  * Returns a callback that invalidates every meal query (calendar, detail,
@@ -10,6 +11,6 @@ import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 export function useInvalidateMeals() {
   const queryClient = useQueryClient();
   return useCallback(() => {
-    invalidateQueryRoots(queryClient, invalidatesFor("meal"));
+    void invalidateOperationTags(queryClient, ripple.meal);
   }, [queryClient]);
 }

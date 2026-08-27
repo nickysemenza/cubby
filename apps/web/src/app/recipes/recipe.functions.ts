@@ -109,9 +109,9 @@ export const recipe = defineOperationDomain("recipe", {
     input: recipeFlowGenerateInputSchema,
     output: recipeFlowArtifactSchema,
     // The whole `recipe` prefix, not just the flow query: that is what the
-    // legacy call site produced (`queryKeys.recipe.flow` collapsed to the
-    // `["recipe"]` root), and a generated flow can restate step order the
-    // costing and dependency views read.
+    // legacy call site produced (its two-level key collapsed to the `["recipe"]`
+    // root), and a generated flow can restate step order the costing and
+    // dependency views read.
     invalidates: [["recipe"]],
   }),
   harvestEquivalences: query({

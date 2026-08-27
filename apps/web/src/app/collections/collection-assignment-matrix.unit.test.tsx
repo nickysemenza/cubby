@@ -93,7 +93,6 @@ vi.mock("~/entities/entities", () => ({
 vi.mock("~/lib/error-utils", () => ({
   getErrorMessage: (error: Error) => error.message,
 }));
-vi.mock("~/lib/query-keys", () => ({ invalidateQueryRoots: vi.fn() }));
 vi.mock("./collection.functions", () => ({
   collection: {
     create: { mutationOptions: () => ({}) },

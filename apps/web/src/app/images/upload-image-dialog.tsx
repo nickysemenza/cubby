@@ -17,8 +17,9 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { imageUpload } from "~/lib/image.functions";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { useImageUpload } from "./use-image-upload";
 
 /**
@@ -45,7 +46,7 @@ export function UploadImageDialog() {
   const handleFilesSelected = async (files: File[]) => {
     const uploaded = await uploadFiles(files);
     if (uploaded.length > 0) {
-      invalidateQueryRoots(queryClient, invalidatesFor("image"));
+      void invalidateOperationTags(queryClient, ripple.image);
       toast.success(
         `${uploaded.length} image${uploaded.length === 1 ? "" : "s"} uploaded.`,
       );

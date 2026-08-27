@@ -13,7 +13,7 @@ import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes"
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { invalidateQueryRoots } from "~/lib/query-keys";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { recommendations } from "~/lib/recommendations.functions";
 
 function RetryAction({
@@ -90,9 +90,10 @@ function PlacementRecommendation({
   const accept = useMutation(
     inventory.moveEntries.mutationOptions({
       onSuccess: () => {
-        invalidateQueryRoots(queryClient, [
-          ["operation", "recommendations.placement"],
-          ["operation", "problems.getFast"],
+        // The move's own ripple covers `problems`; the placement suggestion
+        // that offered it is this page's alone.
+        void invalidateOperationTags(queryClient, [
+          ["recommendations", "placement"],
         ]);
       },
     }),
@@ -167,21 +168,15 @@ function TagPropagationRecommendation({
       "update",
     )({
       onSuccess: () => {
-        invalidateQueryRoots(queryClient, [
-          ["operation", "recommendations.tagPropagation"],
-          ["operation", "relatedness.product"],
+        void invalidateOperationTags(queryClient, [
+          ["recommendations", "tagPropagation"],
+          ["relatedness", "product"],
         ]);
       },
     }),
   );
   const dismiss = useMutation(
-    recommendations.dismissTagPropagation.mutationOptions({
-      onSuccess: () => {
-        invalidateQueryRoots(queryClient, [
-          ["operation", "recommendations.tagPropagation"],
-        ]);
-      },
-    }),
+    recommendations.dismissTagPropagation.mutationOptions({}),
   );
 
   if (recommendation.isLoading) {
@@ -285,18 +280,11 @@ function ProductRelatednessRecommendation({
 }: {
   sourceId: ProductShortcode;
 }) {
-  const queryClient = useQueryClient();
   const relatedness = useQuery(
     recommendations.product.queryOptions({ sourceId }),
   );
   const dismiss = useMutation(
-    recommendations.dismissProduct.mutationOptions({
-      onSuccess: () => {
-        invalidateQueryRoots(queryClient, [
-          ["operation", "recommendations.product"],
-        ]);
-      },
-    }),
+    recommendations.dismissProduct.mutationOptions({}),
   );
   const items = relatedness.data?.items ?? [];
 
@@ -379,19 +367,12 @@ function DuplicateProductRecommendation({
 }: {
   sourceId: ProductShortcode;
 }) {
-  const queryClient = useQueryClient();
   const [merged, setMerged] = useState(false);
   const recommendation = useQuery(
     recommendations.duplicateProduct.queryOptions({ sourceId }),
   );
   const dismiss = useMutation(
-    recommendations.dismissDuplicateProduct.mutationOptions({
-      onSuccess: () => {
-        invalidateQueryRoots(queryClient, [
-          ["operation", "recommendations.duplicateProduct"],
-        ]);
-      },
-    }),
+    recommendations.dismissDuplicateProduct.mutationOptions({}),
   );
 
   if (merged) {

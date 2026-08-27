@@ -1,7 +1,6 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 import { ingredient } from "~/app/ingredients/ingredient.functions";
-import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
 import type { IngredientMatch } from "./use-ingredient-matches";
 
 /**
@@ -26,7 +25,6 @@ export const ingredientNameKey = (name: string) => name.trim().toLowerCase();
  * case-insensitively and on aliases, which a per-name create cannot.
  */
 export function useResolveIngredientNames() {
-  const queryClient = useQueryClient();
   const resolveMutation = useMutation(
     ingredient.resolveOrCreate.mutationOptions(),
   );
@@ -42,12 +40,6 @@ export function useResolveIngredientNames() {
     if (unique.length === 0) return new Map();
 
     const results = await resolveMutation.mutateAsync({ names: unique });
-    if (results.some((result) => result.created)) {
-      invalidateQueryRoots(queryClient, [
-        queryKeys.ingredient.all,
-        queryKeys.dashboard.counts,
-      ]);
-    }
     // `canonicalName`/`aliases` are the matched row's own — the requested name
     // may be a casing variant of it, or one of its aliases.
     return new Map(

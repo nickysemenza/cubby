@@ -28,11 +28,6 @@ vi.mock("sonner", () => ({
   toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
 
-vi.mock("~/lib/query-keys", () => ({
-  invalidateQueryRoots: vi.fn(),
-  invalidatesFor: () => [["location"]],
-}));
-
 vi.mock("~/app/inventory/inventory.functions", () => ({
   inventory: {
     scanAtLocation: {

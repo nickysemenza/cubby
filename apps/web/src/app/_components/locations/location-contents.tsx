@@ -43,7 +43,7 @@ import {
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { invalidateQueryRoots, queryKeys } from "~/lib/query-keys";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { cn, formatCurrency } from "~/lib/utils";
 import {
   SHELF_VIEW_OPTIONS,
@@ -284,11 +284,9 @@ export function LocationContents({ location }: { location: InfLocation }) {
   }, [children, navigate]);
 
   const handleChildCreated = useCallback(() => {
-    invalidateQueryRoots(queryClient, [
-      // Children change every derived location view, including the count-only
-      // drill-down. Keep this broad instead of adding one-off query keys.
-      queryKeys.location.all,
-    ]);
+    // Children change every derived location view, including the count-only
+    // drill-down. Keep this broad instead of naming one-off queries.
+    void invalidateOperationTags(queryClient, [["location"]]);
   }, [queryClient]);
 
   const handleItemAdded = useCallback(() => {

@@ -19,8 +19,9 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Spinner } from "~/components/ui/spinner";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
-import { invalidateQueryRoots, invalidatesFor } from "~/lib/query-keys";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
@@ -137,10 +138,10 @@ export function NotionImport() {
         onDone: (r) => {
           // Refresh the recipe list + re-run the preview (flips new → will-update).
           if (r.succeeded > 0) {
-            invalidateQueryRoots(queryClient, invalidatesFor("recipe"));
-            invalidateQueryRoots(queryClient, [
-              recipe.previewNotionSync.queryOptions().queryKey,
-            ]);
+            // `["recipe"]` also prefix-matches the preview's own
+            // `["recipe","notionPreview"]`, which is what flips new →
+            // will-update.
+            void invalidateOperationTags(queryClient, ripple.recipe);
           }
         },
         successToast: (r) =>
