@@ -1,8 +1,17 @@
+import { productRelationshipRouteOut } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { expense, location, project as projectTable } from "~/server/db/schema";
+import {
+  expense,
+  location,
+  project as projectTable,
+  projectToolUsage,
+  purchase,
+  purchaseProduct,
+  task,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense";
 import { createProject } from "~/server/repo/project";
@@ -24,6 +33,42 @@ import { getProductRelationshipRoute } from "./relationship-route";
 
 describe("getProductRelationshipRoute", () => {
   const ctx = withTestDb();
+
+  it("returns a schema-valid empty route with zeroed counts", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Empty relationship route" }),
+      ctx.actor,
+    );
+
+    const route = await getProductRelationshipRoute(ctx.db, product.entityId);
+
+    expect(productRelationshipRouteOut.parse(route)).toEqual(route);
+    expect(route).toEqual({
+      productId: product.id,
+      direct: {
+        inventory: {
+          count: 0,
+          stockCount: 0,
+          installedCount: 0,
+          preview: [],
+        },
+        identityLocations: { count: 0, preview: [] },
+        expenses: { count: 0, netCost: 0, preview: [] },
+        purchases: { count: 0, preview: [] },
+        usedOnProjects: { count: 0, preview: [] },
+        tasks: { count: 0, openCount: 0, preview: [] },
+      },
+      derived: {
+        purchasedForProjects: {
+          count: 0,
+          unassignedExpenseCount: 0,
+          preview: [],
+        },
+        vendors: { count: 0, preview: [] },
+      },
+    });
+  });
 
   it("keeps direct and derived Product relationships distinct and bounds every preview", async () => {
     const product = await createProduct(
@@ -65,6 +110,37 @@ describe("getProductRelationshipRoute", () => {
       },
       ctx.actor,
     );
+    for (const name of [
+      "Alpha route shelf",
+      "Beta route shelf",
+      "Gamma route shelf",
+    ]) {
+      const extraStockLocation = await createLocation(
+        ctx.db,
+        makeLocationInput({ name }),
+        ctx.actor,
+      );
+      await createInventory(
+        ctx.db,
+        {
+          productId: product.id,
+          locationId: extraStockLocation.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+    for (const name of [
+      "Alpha identity location",
+      "Beta identity location",
+      "Gamma identity location",
+    ]) {
+      await createLocation(
+        ctx.db,
+        makeLocationInput({ name, productId: product.id }),
+        ctx.actor,
+      );
+    }
 
     for (const index of [1, 2, 3, 4]) {
       await createExpense(
@@ -210,20 +286,97 @@ describe("getProductRelationshipRoute", () => {
       }),
       ctx.actor,
     );
+    for (const name of [
+      "Alpha route project",
+      "Beta route project",
+      "Gamma route project",
+    ]) {
+      const extraProject = await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name }),
+        ctx.actor,
+      );
+      await attachProjectResources(
+        ctx.db,
+        extraProject.entityId,
+        [product.entityId],
+        ctx.actor,
+      );
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: `${name} acquisition`,
+          cost: 0,
+          date: "2026-03-05",
+          productId: product.id,
+          productQuantity: 1,
+          projectId: extraProject.output.id,
+          purchaseId: linkedExpense.output.purchaseId,
+        }),
+        ctx.actor,
+      );
+      await createTask(
+        ctx.db,
+        taskCreateInput.parse({
+          name: `${name} task`,
+          trade: "other",
+          projectId: extraProject.output.id,
+          subjectProductId: product.id,
+        }),
+        ctx.actor,
+      );
+    }
+    for (const [index, vendorName] of [
+      "Alpha vendor",
+      "Bravo vendor",
+    ].entries()) {
+      await createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: `${vendorName} acquisition`,
+          cost: 0,
+          date: `2026-02-0${index + 1}`,
+          productId: product.id,
+          productQuantity: 1,
+          vendor: vendorName,
+          orderId: `ROUTE-VENDOR-${index + 1}`,
+        }),
+        ctx.actor,
+      );
+    }
 
     const route = await getProductRelationshipRoute(ctx.db, product.entityId);
 
     expect(route.productId).toBe(product.id);
     expect(route.direct.inventory).toMatchObject({
-      count: 2,
-      stockCount: 1,
+      count: 5,
+      stockCount: 4,
       installedCount: 1,
     });
-    expect(route.direct.identityLocations).toMatchObject({ count: 1 });
-    expect(route.direct.expenses).toMatchObject({ count: 11, netCost: 69 });
+    expect(route.direct.inventory.preview).toHaveLength(3);
+    expect(
+      route.direct.inventory.preview.map((row) => row.location.name),
+    ).toEqual(["Alpha route shelf", "Beta route shelf", "Gamma route shelf"]);
+    expect(route.direct.identityLocations).toMatchObject({ count: 4 });
+    expect(route.direct.identityLocations.preview).toHaveLength(3);
+    expect(
+      route.direct.identityLocations.preview.map((row) => row.name),
+    ).toEqual([
+      "Alpha identity location",
+      "Beta identity location",
+      "Gamma identity location",
+    ]);
+    expect(route.direct.expenses).toMatchObject({ count: 16, netCost: 69 });
     expect(route.direct.expenses.preview).toHaveLength(3);
-    expect(route.direct.purchases).toMatchObject({ count: 7 });
+    expect(route.direct.purchases).toMatchObject({ count: 9 });
     expect(route.direct.purchases.preview).toHaveLength(3);
+    expect(
+      route.direct.purchases.preview.map((row) => [row.orderId, row.source]),
+    ).toEqual([
+      ["ROUTE-EXPENSE", "expense"],
+      [null, "link"],
+      ["ROUTE-BOTH", "both"],
+    ]);
     expect(
       route.direct.purchases.preview.find((row) => row.orderId === "ROUTE-BOTH")
         ?.source,
@@ -238,16 +391,34 @@ describe("getProductRelationshipRoute", () => {
         (row) => row.orderId === "ROUTE-EXPENSE",
       )?.source,
     ).toBe("expense");
-    expect(route.direct.usedOnProjects).toMatchObject({ count: 1 });
+    expect(route.direct.usedOnProjects).toMatchObject({ count: 4 });
+    expect(route.direct.usedOnProjects.preview).toHaveLength(3);
     expect(route.derived.purchasedForProjects).toMatchObject({
-      count: 1,
-      unassignedExpenseCount: 5,
+      count: 4,
+      unassignedExpenseCount: 7,
     });
-    expect(route.direct.tasks).toMatchObject({ count: 1, openCount: 1 });
-    expect(route.derived.vendors).toMatchObject({ count: 2 });
-    expect(route.derived.vendors.preview.map((vendor) => vendor.name)).toEqual(
-      expect.arrayContaining(["Route vendor", "Expense-only vendor"]),
-    );
+    expect(route.derived.purchasedForProjects.preview).toHaveLength(3);
+    expect(
+      route.derived.purchasedForProjects.preview.map((row) => row.name),
+    ).toEqual([
+      "Alpha route project",
+      "Beta route project",
+      "Gamma route project",
+    ]);
+    expect(route.direct.tasks).toMatchObject({ count: 4, openCount: 4 });
+    expect(route.direct.tasks.preview).toHaveLength(3);
+    expect(route.direct.tasks.preview.map((row) => row.name)).toEqual([
+      "Alpha route project task",
+      "Beta route project task",
+      "Gamma route project task",
+    ]);
+    expect(route.derived.vendors).toMatchObject({ count: 4 });
+    expect(route.derived.vendors.preview).toHaveLength(3);
+    expect(route.derived.vendors.preview.map((vendor) => vendor.name)).toEqual([
+      "Alpha vendor",
+      "Bravo vendor",
+      "Expense-only vendor",
+    ]);
     expect(
       route.derived.vendors.preview.map((vendor) => vendor.name),
     ).not.toContain("Future-only vendor");
@@ -270,12 +441,13 @@ describe("getProductRelationshipRoute", () => {
         }),
       }),
     );
+    expect(productRelationshipRouteOut.parse(route)).toEqual(route);
   });
 
   it("does not route through soft-deleted relationship records or targets", async () => {
     const product = await createProduct(
       ctx.db,
-      makeProductInput({ name: "Retired route product" }),
+      makeProductInput({ name: "Retired route product", category: "tools" }),
       ctx.actor,
     );
     const stockLocation = await createLocation(
@@ -317,7 +489,7 @@ describe("getProductRelationshipRoute", () => {
       projectCreateInput.parse({ name: "Retired route project" }),
       ctx.actor,
     );
-    await createExpense(
+    const retiredProjectExpense = await createExpense(
       ctx.db,
       makeExpenseInput({
         name: "Retired route project acquisition",
@@ -327,6 +499,33 @@ describe("getProductRelationshipRoute", () => {
         projectId: retiredProject.output.id,
         vendor: "Retired route project vendor",
         orderId: "RETIRED-PROJECT",
+      }),
+      ctx.actor,
+    );
+    const retiredLinkPurchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: await findOrCreateVendor(ctx.db, "Retired link vendor"),
+      date: "2026-01-01",
+      displayLabel: "Retired link purchase",
+    });
+    await attachPurchaseProducts(
+      ctx.db,
+      retiredLinkPurchase.id,
+      [product.entityId],
+      ctx.actor,
+    );
+    await attachProjectResources(
+      ctx.db,
+      retiredProject.entityId,
+      [product.entityId],
+      ctx.actor,
+    );
+    const retiredTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "Retired route task",
+        trade: "other",
+        projectId: retiredProject.output.id,
+        subjectProductId: product.id,
       }),
       ctx.actor,
     );
@@ -348,14 +547,41 @@ describe("getProductRelationshipRoute", () => {
       .update(projectTable)
       .set({ deletedAt })
       .where(eq(projectTable.id, retiredProject.entityId));
+    await getDb(ctx.db)
+      .update(purchaseProduct)
+      .set({ deletedAt })
+      .where(eq(purchaseProduct.purchaseId, retiredLinkPurchase.id));
+    await getDb(ctx.db)
+      .update(projectToolUsage)
+      .set({ deletedAt })
+      .where(eq(projectToolUsage.projectId, retiredProject.entityId));
+    await getDb(ctx.db)
+      .update(task)
+      .set({ deletedAt })
+      .where(eq(task.id, retiredTask.entityId));
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ deletedAt })
+      .where(
+        eq(
+          purchase.id,
+          await resolveOrThrow(
+            ctx.db,
+            "purchase",
+            retiredProjectExpense.output.purchaseId!,
+          ),
+        ),
+      );
 
     const route = await getProductRelationshipRoute(ctx.db, product.entityId);
     expect(route.direct.inventory.count).toBe(0);
     expect(route.direct.identityLocations.count).toBe(0);
     expect(route.direct.expenses).toMatchObject({ count: 1 });
     expect(route.direct.expenses.preview[0]?.project).toBeNull();
-    expect(route.direct.purchases.count).toBe(1);
-    expect(route.derived.vendors.count).toBe(1);
+    expect(route.direct.purchases.count).toBe(0);
+    expect(route.direct.usedOnProjects.count).toBe(0);
+    expect(route.direct.tasks.count).toBe(0);
+    expect(route.derived.vendors.count).toBe(0);
     expect(route.derived.purchasedForProjects).toMatchObject({
       count: 0,
       unassignedExpenseCount: 0,
