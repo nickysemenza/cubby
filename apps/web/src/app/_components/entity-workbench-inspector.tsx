@@ -2,25 +2,25 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
-import { Link } from "@tanstack/react-router";
-import { ExternalLink, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import {
+  EntityActionButtons,
+  type EntityActionRow,
+} from "~/app/_components/actions/entity-actions";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
-import { Button } from "~/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   EntityIcon,
-  entities,
-  entityDetailParams,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { EntityPreviewContent } from "./EntityPreviewContent";
-import type { HoverPreviewEntity } from "./preview/preview-entities";
+import { EntityInspectorFrame, type InspectorTab } from "./inspector-frame";
+import {
+  type HoverPreviewEntity,
+  hoverPreviewEntities,
+} from "./preview/preview-entities";
 import { RelationshipExplorer } from "./relationships/relationship-explorer";
 import { RelationshipRoutePreview } from "./relationships/relationship-route-preview";
-
-type InspectorTab = "overview" | "relations" | "activity";
 
 type EntityWorkbenchInspectorProps = {
   entity: Entity;
@@ -28,26 +28,9 @@ type EntityWorkbenchInspectorProps = {
   onClose?: () => void;
 };
 
-const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> =
-  new Set<HoverPreviewEntity>([
-    "recipe",
-    "ingredient",
-    "product",
-    "usda-food",
-    "cookbook",
-    "location",
-    "inventory",
-    "meal",
-    "project",
-    "task",
-    "expense",
-    "purchase",
-    "vendor",
-    "financialAccount",
-    "financialTransaction",
-    "wish",
-    "image",
-  ]);
+const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> = new Set(
+  hoverPreviewEntities,
+);
 
 const supportsCompactOverview = (
   entity: Entity,
@@ -56,42 +39,8 @@ const supportsCompactOverview = (
 const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
   entityManifest[entity].auditable;
 
-function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
-  if (!isBrowserRoutedEntity(entity)) return null;
-
-  if (entity === "usda-food") {
-    return (
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        mobileSize="compact"
-        nativeButton={false}
-        aria-label="Open full USDA food details"
-        render={<Link to="/usda/$id" params={{ id }} />}
-      >
-        <ExternalLink />
-      </Button>
-    );
-  }
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      mobileSize="compact"
-      nativeButton={false}
-      aria-label={`Open full ${entities[entity].label.toLowerCase()} details`}
-      render={
-        <Link
-          to={entities[entity].routes.detail}
-          params={entityDetailParams(id)}
-        />
-      }
-    >
-      <ExternalLink />
-    </Button>
-  );
-}
+const isEntityActionRecord = (record: object): record is EntityActionRow =>
+  "id" in record && typeof record.id === "string";
 
 function UnsupportedOverview({ entity, id }: { entity: Entity; id: string }) {
   const label = entityLabel(entity);
@@ -138,109 +87,86 @@ function EntityWorkbenchInspectorContent({
   onClose,
 }: EntityWorkbenchInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
+  const [resolvedName, setResolvedName] = useState<string | undefined>();
+  const [resolvedRecord, setResolvedRecord] = useState<
+    EntityActionRow | undefined
+  >();
   // Product has a page-owned relationship contract and a specialist inspector.
   // Do not add the generic graph beside that richer route.
   const hasRelations =
     entity !== "product" && relatedViewsFor(entity).length > 0;
   const hasActivity = isAuditableEntity(entity);
-  const label = entityLabel(entity);
-
-  const selectTab = (value: string) => {
-    if (
-      value === "overview" ||
-      (value === "relations" && hasRelations) ||
-      (value === "activity" && hasActivity)
-    ) {
-      setActiveTab(value);
+  const handleNameResolved = useCallback((name: string) => {
+    setResolvedName((current) => (current === name ? current : name));
+  }, []);
+  const handleRecordResolved = useCallback((record: object | undefined) => {
+    if (!record || !isEntityActionRecord(record)) {
+      setResolvedRecord(undefined);
+      return;
     }
-  };
+    setResolvedRecord((current) => (current === record ? current : record));
+  }, []);
 
   return (
-    <aside
-      aria-label={`${label} inspector`}
-      className="h-full w-full max-w-full overflow-y-auto bg-card text-foreground text-xs"
-    >
-      <header className="border-border border-b p-3">
-        <div className="flex items-start gap-2">
-          <EntityIcon entity={entity} colored className="mt-0.5 size-4" />
-          <div className="min-w-0 flex-1">
-            <span className="font-medium text-2xs text-muted-foreground">
-              {label}
-            </span>
-            <h2
-              className="truncate font-mono text-foreground text-xs"
-              title={id}
-            >
-              {id}
-            </h2>
-          </div>
-          <div className="flex items-center gap-1">
-            <OpenEntityLink entity={entity} id={id} />
-            {onClose ? (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                mobileSize="compact"
-                aria-label="Close inspector"
-                onClick={onClose}
-              >
-                <X />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <Tabs value={activeTab} onValueChange={selectTab}>
-        <TabsList
-          variant="line"
-          className="w-full justify-start border-border border-b px-2"
-        >
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          {hasRelations ? (
-            <TabsTrigger value="relations">Relations</TabsTrigger>
-          ) : null}
-          {hasActivity ? (
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-          ) : null}
-        </TabsList>
-        {activeTab === "overview" ? (
-          <TabsContent value="overview">
-            <div className="space-y-2">
-              {supportsCompactOverview(entity) ? (
-                <EntityPreviewContent
-                  entity={entity}
-                  id={id}
-                  showOpenAction={false}
-                />
-              ) : (
-                <UnsupportedOverview entity={entity} id={id} />
-              )}
-              {hasRelations ? (
-                <RelationshipRoutePreview entity={entity} sourceId={id} />
-              ) : null}
-            </div>
-          </TabsContent>
-        ) : null}
-        {activeTab === "relations" && hasRelations ? (
-          <TabsContent value="relations">
+    <EntityInspectorFrame
+      entity={entity}
+      id={id}
+      name={resolvedName}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onClose={onClose}
+      overview={
+        <div>
+          {supportsCompactOverview(entity) ? (
             <div className="px-3 py-3">
-              <RelationshipExplorer entity={entity} sourceId={id} />
-            </div>
-          </TabsContent>
-        ) : null}
-        {activeTab === "activity" && hasActivity ? (
-          <TabsContent value="activity">
-            <div className="px-3 py-3">
-              <AuditLogList
-                entityType={entity}
-                entityId={id}
-                showEntityLink={false}
+              <EntityPreviewContent
+                entity={entity}
+                id={id}
+                showOpenAction={false}
+                showIdentityHeader={false}
+                onNameResolved={handleNameResolved}
+                onRecordResolved={handleRecordResolved}
               />
             </div>
-          </TabsContent>
-        ) : null}
-      </Tabs>
-    </aside>
+          ) : (
+            <UnsupportedOverview entity={entity} id={id} />
+          )}
+          {hasRelations ? (
+            <RelationshipRoutePreview
+              entity={entity}
+              sourceId={id}
+              onViewAll={() => setActiveTab("relations")}
+            />
+          ) : null}
+          {entity !== "product" && resolvedRecord ? (
+            <div className="flex flex-wrap gap-2 px-3 pb-3">
+              <EntityActionButtons
+                entity={entity}
+                record={resolvedRecord}
+                surface="inspector"
+              />
+            </div>
+          ) : null}
+        </div>
+      }
+      relations={
+        hasRelations ? (
+          <div className="px-3 py-3">
+            <RelationshipExplorer entity={entity} sourceId={id} />
+          </div>
+        ) : undefined
+      }
+      activity={
+        hasActivity ? (
+          <div className="px-3 py-3">
+            <AuditLogList
+              entityType={entity}
+              entityId={id}
+              showEntityLink={false}
+            />
+          </div>
+        ) : undefined
+      }
+    />
   );
 }

@@ -1,9 +1,15 @@
 import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, renderHook, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { relatedData } from "~/lib/related-data.functions";
 import {
@@ -12,6 +18,19 @@ import {
   relationshipRouteSourceFromRecord,
   useRelationshipRouteSource,
 } from "./relationship-route-preview";
+
+const relatedPreviewsQuery = vi.hoisted(() => vi.fn());
+
+vi.mock("~/lib/related-data.functions", () => ({
+  relatedData: {
+    previews: {
+      queryOptions: (input: unknown) => ({
+        queryKey: ["related-previews", input],
+        queryFn: relatedPreviewsQuery,
+      }),
+    },
+  },
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -81,6 +100,10 @@ const mealGroups: RelatedPreviewGroup[] = [
   },
 ];
 
+beforeEach(() => {
+  relatedPreviewsQuery.mockReset();
+});
+
 function renderPreview() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -96,6 +119,38 @@ function renderPreview() {
     }).queryKey,
     groups,
   );
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RelationshipRoutePreview
+        entity="vendor"
+        sourceId={SOURCE_ID}
+        source={{ entity: "vendor", id: SOURCE_ID, label: "Fixture vendor" }}
+      />
+    </QueryClientProvider>,
+  );
+}
+
+function renderPreviewState({
+  groups: data,
+  queryFn,
+}: {
+  groups?: RelatedPreviewGroup[];
+  queryFn: () => Promise<RelatedPreviewGroup[]>;
+}) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
+    },
+  });
+  const views = relatedViewsFor("vendor");
+  const options = relatedData.previews.queryOptions({
+    source: "vendor",
+    sourceIds: [SOURCE_ID],
+    relationKeys: views.map((view) => view.key),
+  });
+  relatedPreviewsQuery.mockImplementation(queryFn);
+  if (data) queryClient.setQueryData(options.queryKey, data);
 
   return render(
     <QueryClientProvider client={queryClient}>
@@ -247,5 +302,36 @@ describe("RelationshipRoutePreview", () => {
       "href",
       "/products/PRD-TWO",
     );
+  });
+
+  it("keeps an empty relationship preview distinct from an unavailable strip", () => {
+    renderPreviewState({ groups: [], queryFn: async () => [] });
+
+    expect(
+      screen.getByTestId("relationship-route-preview-state"),
+    ).toHaveTextContent("No linked records.");
+  });
+
+  it("renders loading while the existing relationship query is pending", () => {
+    renderPreviewState({
+      queryFn: () => new Promise<RelatedPreviewGroup[]>(() => undefined),
+    });
+
+    expect(
+      screen.getByTestId("relationship-route-preview-state"),
+    ).toHaveTextContent("Loading relationships…");
+  });
+
+  it("offers local retry when the existing relationship query fails", async () => {
+    const queryFn = vi.fn(async () => {
+      throw new Error("Fixture failure");
+    });
+    renderPreviewState({ queryFn });
+
+    expect(
+      await screen.findByText("Relationships could not be loaded."),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
   });
 });

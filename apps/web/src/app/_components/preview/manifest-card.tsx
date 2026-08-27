@@ -67,6 +67,8 @@ export type ManifestCardProps = {
   body?: BodyBlock[];
   /** Inspector headers already own the canonical detail action. */
   showOpenAction?: boolean;
+  /** Inspector headers own the record identity; keep the body facts only. */
+  showIdentityHeader?: boolean;
 };
 
 const actionLink =
@@ -84,56 +86,59 @@ export function ManifestCard({
   crossLinks,
   body,
   showOpenAction = true,
+  showIdentityHeader = true,
 }: ManifestCardProps) {
   return (
     <div className="flex flex-col gap-2">
-      <Row align="start" gap="sm">
-        <span
-          className="mt-0.5 shrink-0 self-start" /* tight: icon optical-align nudge */
-        >
-          {icon}
-        </span>
-        <div className="min-w-0 flex-1">
-          <Row align="start" gap="sm">
-            <span className="min-w-0 flex-1 font-heading font-medium text-sm leading-tight">
-              {name}
-            </span>
-            <Row align="center" gap="sm" className="mt-px shrink-0">
-              {showOpenAction && entity === "usda-food" ? (
-                <Link
-                  to="/usda/$id"
-                  params={{ id: routeParam }}
-                  aria-label="Open"
-                  className={openIcon}
-                >
-                  <ArrowUpRight className="size-3.5" />
-                </Link>
-              ) : showOpenAction && isBrowserRoutedEntity(entity) ? (
-                <Link
-                  to={entities[entity].routes.detail}
-                  params={entityDetailParams(routeParam)}
-                  aria-label="Open"
-                  className={openIcon}
-                >
-                  <ArrowUpRight className="size-3.5" />
-                </Link>
-              ) : null}
-              <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs text-muted-foreground uppercase tracking-wide">
-                {tag}
+      {showIdentityHeader ? (
+        <Row align="start" gap="sm">
+          <span
+            className="mt-0.5 shrink-0 self-start" /* tight: icon optical-align nudge */
+          >
+            {icon}
+          </span>
+          <div className="min-w-0 flex-1">
+            <Row align="start" gap="sm">
+              <span className="min-w-0 flex-1 font-heading font-medium text-sm leading-tight">
+                {name}
               </span>
+              <Row align="center" gap="sm" className="mt-px shrink-0">
+                {showOpenAction && entity === "usda-food" ? (
+                  <Link
+                    to="/usda/$id"
+                    params={{ id: routeParam }}
+                    aria-label="Open"
+                    className={openIcon}
+                  >
+                    <ArrowUpRight className="size-3.5" />
+                  </Link>
+                ) : showOpenAction && isBrowserRoutedEntity(entity) ? (
+                  <Link
+                    to={entities[entity].routes.detail}
+                    params={entityDetailParams(routeParam)}
+                    aria-label="Open"
+                    className={openIcon}
+                  >
+                    <ArrowUpRight className="size-3.5" />
+                  </Link>
+                ) : null}
+                <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs text-muted-foreground uppercase tracking-wide">
+                  {tag}
+                </span>
+              </Row>
             </Row>
-          </Row>
-          {identity && (
-            <Row
-              align="center"
-              gap="sm"
-              className="mt-1 text-muted-foreground text-xs"
-            >
-              {identity}
-            </Row>
-          )}
-        </div>
-      </Row>
+            {identity && (
+              <Row
+                align="center"
+                gap="sm"
+                className="mt-1 text-muted-foreground text-xs"
+              >
+                {identity}
+              </Row>
+            )}
+          </div>
+        </Row>
+      ) : null}
       {crossLinks && crossLinks.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-border/60 border-y border-dashed py-2 text-xs">
           {crossLinks.map((cl) => (

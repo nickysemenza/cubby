@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import type { Mock } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,6 +69,10 @@ vi.mock("./audit-log/audit-log-list", () => ({
   },
 }));
 
+vi.mock("./actions/entity-actions", () => ({
+  EntityActionButtons: () => <div data-testid="inspector-actions" />,
+}));
+
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
 
 const VENDOR_ID = "VEN-WORKBENCH";
@@ -95,16 +99,29 @@ describe("EntityWorkbenchInspector", () => {
     );
 
     expect(screen.getByTestId("compact-preview")).toBeInTheDocument();
-    expect(mocks.preview).toHaveBeenCalledWith({
-      entity: "vendor",
-      id: VENDOR_ID,
-      showOpenAction: false,
-    });
+    expect(mocks.preview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "vendor",
+        id: VENDOR_ID,
+        showOpenAction: false,
+        showIdentityHeader: false,
+        onNameResolved: expect.any(Function),
+      }),
+    );
+    const previewProps = mocks.preview.mock.calls[0]?.[0] as {
+      onNameResolved: (name: string) => void;
+    };
+    act(() => previewProps.onNameResolved("Fixture vendor"));
+    expect(
+      screen.getByRole("heading", { name: "Fixture vendor" }),
+    ).toBeVisible();
     expect(mocks.relationships).not.toHaveBeenCalled();
-    expect(mocks.relationshipRoute).toHaveBeenCalledWith({
-      entity: "vendor",
-      sourceId: VENDOR_ID,
-    });
+    expect(mocks.relationshipRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "vendor",
+        sourceId: VENDOR_ID,
+      }),
+    );
     expect(mocks.activity).not.toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
@@ -137,11 +154,14 @@ describe("EntityWorkbenchInspector", () => {
     render(<EntityWorkbenchInspector entity="image" id={IMAGE_ID} />);
 
     expect(screen.getByTestId("compact-preview")).toBeInTheDocument();
-    expect(mocks.preview).toHaveBeenCalledWith({
-      entity: "image",
-      id: IMAGE_ID,
-      showOpenAction: false,
-    });
+    expect(mocks.preview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity: "image",
+        id: IMAGE_ID,
+        showOpenAction: false,
+        showIdentityHeader: false,
+      }),
+    );
     const openLink = screen.getByLabelText("Open full image details");
     expect(openLink.tagName).toBe("A");
     expect(openLink).toHaveAttribute("data-router-link", "true");

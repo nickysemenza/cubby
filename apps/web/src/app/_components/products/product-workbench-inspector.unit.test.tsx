@@ -87,6 +87,10 @@ vi.mock("~/app/_components/audit-log/audit-log-list", () => ({
     return <div data-testid="audit-log" />;
   },
 }));
+
+vi.mock("../actions/entity-actions", () => ({
+  EntityActionButtons: () => <div data-testid="product-inspector-actions" />,
+}));
 vi.mock("~/components/page/Page", () => ({
   Page: (props: unknown) => {
     mocks.nestedPage(props);
@@ -286,6 +290,10 @@ describe("ProductWorkbenchInspector", () => {
     render(<ProductWorkbenchInspector productId={product.id} />);
 
     expect(mocks.previewQuery).toHaveBeenCalledWith("product", product.id);
+    expect(mocks.relationshipQuery).toHaveBeenCalledTimes(1);
+    expect(mocks.relationshipQuery).toHaveBeenCalledWith({
+      productId: product.id,
+    });
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Overview",
       "Relations",
@@ -299,6 +307,14 @@ describe("ProductWorkbenchInspector", () => {
     expect(
       screen.queryByRole("heading", { name: "Relationship route" }),
     ).not.toBeInTheDocument();
+    const truth = screen.getByTestId("product-inspector-truth");
+    const relationshipStrip = screen.getByRole("navigation", {
+      name: `${product.name} direct relationships`,
+    });
+    expect(
+      truth.compareDocumentPosition(relationshipStrip) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(mocks.nestedPage).not.toHaveBeenCalled();
     expect(screen.queryByTestId("nested-page")).not.toBeInTheDocument();
   });
@@ -402,7 +418,7 @@ describe("ProductWorkbenchInspector", () => {
     expect(mocks.refetch).toHaveBeenCalledOnce();
   });
 
-  it("does not mount relation or activity query components until their tab is active", () => {
+  it("keeps the shared relationship result ready while activity stays lazy", () => {
     render(<ProductWorkbenchInspector productId={product.id} />);
 
     expect(mocks.auditLog).not.toHaveBeenCalled();

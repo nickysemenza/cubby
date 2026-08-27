@@ -1,18 +1,24 @@
-export type HoverPreviewEntity =
-  | "recipe"
-  | "ingredient"
-  | "product"
-  | "usda-food"
-  | "cookbook"
-  | "location"
-  | "inventory"
-  | "meal"
-  | "project"
-  | "task"
-  | "expense"
-  | "purchase"
-  | "vendor"
-  | "financialAccount"
-  | "financialTransaction"
-  | "wish"
-  | "image";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+
+/** The typed compact-preview capability roster, shared by every inspector. */
+export const hoverPreviewEntities = [
+  "recipe",
+  "ingredient",
+  "product",
+  "usda-food",
+  "cookbook",
+  "location",
+  "inventory",
+  "meal",
+  "project",
+  "task",
+  "expense",
+  "purchase",
+  "vendor",
+  "financialAccount",
+  "financialTransaction",
+  "wish",
+  "image",
+] as const satisfies readonly BrowserRoutedEntity[];
+
+export type HoverPreviewEntity = (typeof hoverPreviewEntities)[number];

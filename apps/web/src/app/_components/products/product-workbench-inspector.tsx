@@ -6,19 +6,25 @@ import {
 } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, X } from "lucide-react";
 import { type FC, type ReactNode, useMemo, useState } from "react";
+import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
+import {
+  EntityInspectorFrame,
+  type InspectorTab,
+} from "~/app/_components/inspector-frame";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { formatCurrency } from "~/lib/utils";
+import { tryFormatAmount } from "../inventory/format-amount";
 import { CategoryLabel } from "./CategoryLabel";
-import { ProductRelationshipRoute } from "./product-relationship-route";
-
-type InspectorTab = "overview" | "relations" | "activity";
+import { heroPresence } from "./product-hero-presence";
+import {
+  ProductRelationshipRouteContent,
+  useProductRelationshipRoute,
+} from "./product-relationship-route";
 
 const Field: FC<{ label: string; children: ReactNode }> = ({
   label,
@@ -30,12 +36,73 @@ const Field: FC<{ label: string; children: ReactNode }> = ({
   </div>
 );
 
-const Overview: FC<{ product: ProductWithFoodOut }> = ({ product }) => {
+const Overview: FC<{
+  product: ProductWithFoodOut;
+  relationshipQuery: ReturnType<typeof useProductRelationshipRoute>;
+  onViewRelations: () => void;
+}> = ({ product, relationshipQuery, onViewRelations }) => {
   const price = product.pricing.effectivePrice ?? product.price;
+  const presence = heroPresence({
+    entryCount: product.inventoryEntry.length,
+    entryUnit: product.inventoryEntry[0]?.amount.unit,
+    onHandUnits: product.onHandUnits,
+    stockedLocationIds: product.inventoryEntry.map(
+      (entry) => entry.location.id,
+    ),
+    identityLocationIds: product.servingAsLocations.map(
+      (location) => location.id,
+    ),
+    componentCount: product.componentCount,
+  });
+  const unknownLedgerLines =
+    product.quantityLedger.unknownAcquisitionLines +
+    product.quantityLedger.unknownExitLines;
 
   return (
     <div className="space-y-3 px-3 py-3">
-      <ProductRelationshipRoute product={product} variant="strip" />
+      <dl
+        data-testid="product-inspector-truth"
+        className="border-border border-y"
+      >
+        <Field label={presence.onHand.label}>
+          <span className="font-mono tabular-nums">
+            {presence.onHand.kind === "amount"
+              ? tryFormatAmount(presence.onHand.amount)
+              : `${presence.onHand.count} record${presence.onHand.count === 1 ? "" : "s"} (mixed units)`}
+          </span>
+        </Field>
+        <Field label="Expected">
+          <span className="font-mono tabular-nums">
+            {product.quantityLedger.expectedQuantity}
+          </span>
+          {unknownLedgerLines > 0 ? (
+            <span className="ml-1 text-muted-foreground">
+              ({unknownLedgerLines} unknown ledger line
+              {unknownLedgerLines === 1 ? "" : "s"})
+            </span>
+          ) : null}
+        </Field>
+        <Field label="Locations">
+          <span className="font-mono tabular-nums">
+            {presence.locationCount}
+          </span>
+        </Field>
+      </dl>
+
+      <ProductRelationshipRouteContent
+        product={product}
+        query={relationshipQuery}
+        variant="strip"
+        onViewAll={onViewRelations}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        <EntityActionButtons
+          entity="product"
+          record={{ id: product.id, name: product.name }}
+          surface="inspector"
+        />
+      </div>
 
       <dl className="border-border border-y">
         <Field label="Category">
@@ -89,40 +156,17 @@ const Overview: FC<{ product: ProductWithFoodOut }> = ({ product }) => {
             "—"
           )}
         </Field>
-      </dl>
-
-      <div className="grid grid-cols-2 divide-x divide-y divide-border border border-border text-xs">
-        <span className="p-2">
-          <strong className="block text-sm tabular-nums">
-            {product.inventoryEntry.length}
-          </strong>
-          Stock records
-        </span>
-        <span className="p-2">
-          <strong className="block text-sm tabular-nums">
-            {product.servingAsLocations.length}
-          </strong>
-          Location identities
-        </span>
-        <span className="p-2">
-          <strong className="block text-sm tabular-nums">
-            {product.ingredient ? 1 : 0}
-          </strong>
-          Ingredient
-        </span>
-        <span className="p-2">
-          <strong className="block text-sm tabular-nums">
+        <Field label="Recipe uses">
+          <span className="font-mono tabular-nums">
             {product.recipeUsages.length}
-          </strong>
-          Recipe uses
-        </span>
-        <span className="col-span-2 p-2">
-          <strong className="block text-sm tabular-nums">
+          </span>
+        </Field>
+        <Field label="Kit components">
+          <span className="font-mono tabular-nums">
             {product.componentCount}
-          </strong>
-          Kit components
-        </span>
-      </div>
+          </span>
+        </Field>
+      </dl>
 
       {product.notes ? (
         <section className="border-border border-t pt-2">
@@ -136,11 +180,97 @@ const Overview: FC<{ product: ProductWithFoodOut }> = ({ product }) => {
   );
 };
 
-const Relations: FC<{ product: ProductWithFoodOut }> = ({ product }) => (
+const Relations: FC<{
+  product: ProductWithFoodOut;
+  relationshipQuery: ReturnType<typeof useProductRelationshipRoute>;
+}> = ({ product, relationshipQuery }) => (
   <div className="px-3 py-3">
-    <ProductRelationshipRoute product={product} />
+    <ProductRelationshipRouteContent
+      product={product}
+      query={relationshipQuery}
+    />
   </div>
 );
+
+function ProductInspectorContent({
+  product,
+  onClose,
+}: {
+  product: ProductWithFoodOut;
+  onClose?: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
+  const relationshipQuery = useProductRelationshipRoute(product.id);
+  const coverImage = product.images.find(isDisplayableImageFile);
+
+  return (
+    <EntityInspectorFrame
+      entity="product"
+      id={product.id}
+      name={product.name}
+      eyebrow={
+        <span className="inline-flex items-center gap-1 font-medium text-2xs text-[var(--domain-pantry)]">
+          <span
+            aria-hidden
+            className="size-1.5 rounded-full bg-[var(--domain-pantry)]"
+          />
+          Pantry
+        </span>
+      }
+      leading={
+        <EntityCover
+          images={coverImage ? [coverImage] : []}
+          entity="product"
+          size={40}
+          className="rounded-md border border-border"
+        />
+      }
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      onClose={onClose}
+      overview={
+        <Overview
+          product={product}
+          relationshipQuery={relationshipQuery}
+          onViewRelations={() => setActiveTab("relations")}
+        />
+      }
+      relations={
+        <Relations product={product} relationshipQuery={relationshipQuery} />
+      }
+      activity={
+        <div className="px-3 py-3">
+          <AuditLogList
+            entityType="product"
+            entityId={product.id}
+            showEntityLink={false}
+          />
+        </div>
+      }
+    />
+  );
+}
+
+function ProductInspectorState({
+  productId,
+  onClose,
+  children,
+}: {
+  productId: string;
+  onClose?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <EntityInspectorFrame
+      entity="product"
+      id={productId}
+      activeTab="overview"
+      onTabChange={() => undefined}
+      onClose={onClose}
+      overview={<div className="p-3 text-sm">{children}</div>}
+    />
+  );
+}
 
 export function ProductWorkbenchInspector({
   productId,
@@ -149,7 +279,6 @@ export function ProductWorkbenchInspector({
   productId: string;
   onClose?: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const queryOptions = useMemo(
     () => entityPreviewQueryOptions("product", productId),
     [productId],
@@ -164,122 +293,46 @@ export function ProductWorkbenchInspector({
 
   if (query.isLoading) {
     return (
-      <aside
-        aria-label="Product inspector"
-        className="h-full w-full max-w-full bg-card p-3 text-muted-foreground text-sm"
-      >
-        Loading product…
-      </aside>
+      <ProductInspectorState productId={productId} onClose={onClose}>
+        <span className="text-muted-foreground">Loading product…</span>
+      </ProductInspectorState>
+    );
+  }
+
+  if (query.isError && !query.data) {
+    return (
+      <ProductInspectorState productId={productId} onClose={onClose}>
+        <p className="text-muted-foreground">Product could not be loaded.</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-2"
+          onClick={() => void query.refetch()}
+        >
+          Retry
+        </Button>
+      </ProductInspectorState>
+    );
+  }
+
+  if (!query.data) {
+    return (
+      <ProductInspectorState productId={productId} onClose={onClose}>
+        <span className="text-muted-foreground">Product (deleted)</span>
+      </ProductInspectorState>
     );
   }
 
   if (!product) {
     return (
-      <aside
-        aria-label="Product inspector"
-        className="h-full w-full max-w-full bg-card p-3 text-muted-foreground text-sm"
-      >
-        Product could not be loaded.
-      </aside>
+      <ProductInspectorState productId={productId} onClose={onClose}>
+        <span className="text-muted-foreground">
+          Product could not be loaded.
+        </span>
+      </ProductInspectorState>
     );
   }
 
-  const coverImage = product.images.find(isDisplayableImageFile);
-
-  return (
-    <aside
-      aria-label={`${product.name} inspector`}
-      className="h-full w-full max-w-full overflow-y-auto bg-card text-foreground text-xs"
-    >
-      <header className="border-border border-b p-3">
-        <div className="flex items-start gap-2">
-          <EntityCover
-            images={coverImage ? [coverImage] : []}
-            entity="product"
-            size={40}
-            className="rounded-md border border-border"
-          />
-          <div className="min-w-0 flex-1">
-            <span className="inline-flex items-center gap-1 font-medium text-2xs text-[var(--domain-pantry)]">
-              <span
-                aria-hidden
-                className="size-1.5 rounded-full bg-[var(--domain-pantry)]"
-              />
-              Pantry
-            </span>
-            <h2
-              className="truncate font-semibold text-foreground text-sm"
-              title={product.name}
-            >
-              {product.name}
-            </h2>
-            <p className="truncate text-muted-foreground">{product.id}</p>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              mobileSize="compact"
-              nativeButton={false}
-              aria-label="Open full product details"
-              render={
-                <Link
-                  to="/products/$shortcode"
-                  params={{ shortcode: product.id }}
-                />
-              }
-            >
-              <ExternalLink />
-            </Button>
-            {onClose ? (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                mobileSize="compact"
-                aria-label="Close inspector"
-                onClick={onClose}
-              >
-                <X />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </header>
-
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as InspectorTab)}
-      >
-        <TabsList
-          variant="line"
-          className="w-full justify-start border-border border-b px-2"
-        >
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="relations">Relations</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-        </TabsList>
-        {activeTab === "overview" ? (
-          <TabsContent value="overview">
-            <Overview product={product} />
-          </TabsContent>
-        ) : null}
-        {activeTab === "relations" ? (
-          <TabsContent value="relations">
-            <Relations product={product} />
-          </TabsContent>
-        ) : null}
-        {activeTab === "activity" ? (
-          <TabsContent value="activity">
-            <div className="px-3 py-3">
-              <AuditLogList
-                entityType="product"
-                entityId={product.id}
-                showEntityLink={false}
-              />
-            </div>
-          </TabsContent>
-        ) : null}
-      </Tabs>
-    </aside>
-  );
+  return <ProductInspectorContent product={product} onClose={onClose} />;
 }

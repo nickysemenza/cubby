@@ -8,9 +8,10 @@ import {
 } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
+import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
 import {
   entities,
@@ -244,18 +245,60 @@ export function RelationshipRoutePreview({
   sourceId,
   source,
   className,
+  onViewAll,
 }: {
   entity: Entity;
   sourceId: string | undefined;
   source?: RelationshipRouteSource | null;
   className?: string;
+  /** Inspector-owned mode switch; detail pages already expose the Relations tab. */
+  onViewAll?: () => void;
 }) {
   const cachedSource = useRelationshipRouteSource(entity, sourceId);
-  const { model } = useRelationshipRoutePreview(
+  const resolvedSource = source ?? cachedSource;
+  const { groups, model, query } = useRelationshipRoutePreview(
     entity,
     sourceId,
-    source ?? cachedSource,
+    resolvedSource,
   );
+  // The detail-preview owns unavailable/deleted state. Until it has supplied
+  // an honest identity, the relationship station must not imply one.
+  if (!resolvedSource) return null;
+
+  if (query.isLoading) {
+    return (
+      <RelationshipRoutePreviewState source={resolvedSource}>
+        Loading relationships…
+      </RelationshipRoutePreviewState>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <RelationshipRoutePreviewState source={resolvedSource}>
+        <div className="space-y-2">
+          <p>Relationships could not be loaded.</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void query.refetch()}
+          >
+            Retry
+          </Button>
+        </div>
+      </RelationshipRoutePreviewState>
+    );
+  }
+
+  if (groups.every((group) => group.totalCount === 0)) {
+    return (
+      <RelationshipRoutePreviewState source={resolvedSource}>
+        No linked records.
+      </RelationshipRoutePreviewState>
+    );
+  }
+
   if (!model) return null;
 
   return (
@@ -284,13 +327,43 @@ export function RelationshipRoutePreview({
               </li>
             ))}
             {model.relation.totalCount > model.relation.endpoints.length ? (
-              <li className="shrink-0 whitespace-nowrap font-mono text-2xs text-slate">
-                +{model.relation.totalCount - model.relation.endpoints.length}
+              <li className="flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-2xs text-slate">
+                <span>
+                  +{model.relation.totalCount - model.relation.endpoints.length}
+                </span>
+                {onViewAll ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={onViewAll}
+                  >
+                    View all
+                  </Button>
+                ) : null}
               </li>
             ) : null}
           </ul>
         </div>
       </div>
+    </section>
+  );
+}
+
+function RelationshipRoutePreviewState({
+  source,
+  children,
+}: {
+  source: RelationshipRouteSource;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={`${source.label} relationship preview`}
+      className="border-border border-y px-3 py-2 text-muted-foreground text-xs"
+      data-testid="relationship-route-preview-state"
+    >
+      {children}
     </section>
   );
 }

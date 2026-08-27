@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 type RouteTone = "direct" | "derived";
+const STRIP_DIRECT_DESTINATION_LIMIT = 3;
 
 type RouteSample = {
   id: string;
@@ -400,17 +401,25 @@ export function ProductRelationshipRouteFrame({
   direct,
   derived,
   variant = "ledger",
+  onViewAll,
 }: {
   product: Pick<ProductWithFoodOut, "id" | "name">;
   direct: RouteBranch[];
   derived: RouteBranch[];
   variant?: "ledger" | "strip";
+  /** Inspector callers can reveal the already-mounted Relations tab locally. */
+  onViewAll?: () => void;
 }) {
   const directHeadingId = useId();
   const derivedHeadingId = useId();
 
   if (variant === "strip") {
     const populatedDirect = direct.filter((branch) => branch.count > 0);
+    const visibleDirect = populatedDirect.slice(
+      0,
+      STRIP_DIRECT_DESTINATION_LIMIT,
+    );
+    const remainingDirect = populatedDirect.length - visibleDirect.length;
     return (
       <nav
         aria-label={`${product.name} direct relationships`}
@@ -431,7 +440,7 @@ export function ProductRelationshipRouteFrame({
               </span>
             </span>
           </li>
-          {populatedDirect.map((branch) => (
+          {visibleDirect.map((branch) => (
             <li key={branch.id} className="flex items-center gap-2">
               <span aria-hidden className="h-px w-3 bg-border" />
               <ProductSectionLink
@@ -447,6 +456,34 @@ export function ProductRelationshipRouteFrame({
               </ProductSectionLink>
             </li>
           ))}
+          {remainingDirect > 0 ? (
+            <li className="flex items-center gap-2">
+              <span aria-hidden className="h-px w-3 bg-border" />
+              <span className="font-mono text-[0.625rem] text-muted-foreground tabular-nums">
+                +{remainingDirect} more
+              </span>
+              {onViewAll ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-11 text-primary underline-offset-2 hover:underline md:min-h-8"
+                  onClick={onViewAll}
+                >
+                  View all
+                </Button>
+              ) : (
+                <ProductSectionLink
+                  productId={product.id}
+                  hash="relationships"
+                  className="inline-flex min-h-11 items-center text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+                  ariaLabel="View all direct relationships"
+                >
+                  View all
+                </ProductSectionLink>
+              )}
+            </li>
+          ) : null}
           {populatedDirect.length === 0 ? (
             <li className="text-muted-foreground">No direct records yet.</li>
           ) : null}
@@ -547,7 +584,8 @@ export const ProductRelationshipRouteContent: FC<{
   product: ProductWithFoodOut;
   query: ProductRelationshipRouteQuery;
   variant?: "ledger" | "strip";
-}> = ({ product, query, variant }) => {
+  onViewAll?: () => void;
+}> = ({ product, query, variant, onViewAll }) => {
   const model = useMemo(
     () => (query.data ? toRouteModel(product, query.data) : null),
     [product, query.data],
@@ -589,6 +627,7 @@ export const ProductRelationshipRouteContent: FC<{
         <ProductRelationshipRouteFrame
           product={product}
           variant={variant}
+          onViewAll={onViewAll}
           {...fallback}
         />
       </div>
@@ -599,6 +638,7 @@ export const ProductRelationshipRouteContent: FC<{
     <ProductRelationshipRouteFrame
       product={product}
       variant={variant}
+      onViewAll={onViewAll}
       {...model}
     />
   ) : null;
