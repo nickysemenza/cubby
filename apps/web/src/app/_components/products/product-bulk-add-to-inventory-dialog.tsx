@@ -20,7 +20,10 @@
  *   what it will become.
  */
 
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ProductShortcode,
+  productShortcode,
+} from "@cubby/schemas/identifiers";
 import { positiveAmount } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
@@ -49,7 +52,7 @@ const formSchema = z.object({
   items: z
     .array(
       z.object({
-        productId: z.string().min(1),
+        productId: productShortcode,
         label: z.string(),
         amount: positiveAmount,
       }),
@@ -163,7 +166,7 @@ export const ProductBulkAddToInventoryDialog: FC<
     await addMutation.mutateAsync({
       locationId: getLocationId(values.location),
       items: values.items.map((item) => ({
-        productId: item.productId as ProductShortcode,
+        productId: item.productId,
         amount: item.amount,
       })),
     });

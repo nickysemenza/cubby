@@ -366,7 +366,7 @@ const slotKey = (
   placement: InventoryPlacement,
 ) => `${productId}:${locationId}:${placement}`;
 
-export type ResolvedInventoryBulkAddItem = {
+type ResolvedInventoryBulkAddItem = {
   productId: ProductId;
   amount: InventoryBulkAddItem["amount"];
   placement?: InventoryPlacement;

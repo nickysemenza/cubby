@@ -30,8 +30,14 @@ vi.mock("~/server/generated/entity-kernel-bindings.gen", async (original) => {
   };
 });
 
-/** The bulkUpdate path never reads the context; the repository would. */
-const NO_CONTEXT = {} as EntityKernelContext;
+/**
+ * The bulkUpdate path never reads the context; the repository would, and every
+ * repository here is a stub. Widened through `never` rather than asserted onto
+ * the context type — `check-unsafe-identifiers` refuses an assertion onto a
+ * branded type, and a hand-built context would be a page of stubs the test
+ * never touches.
+ */
+const NO_CONTEXT: EntityKernelContext = {} as unknown as never;
 
 const idFor = (entity: string, suffix = "ABCD") =>
   `${SHORTCODE_PREFIX[entity as keyof typeof SHORTCODE_PREFIX]}${suffix}`;

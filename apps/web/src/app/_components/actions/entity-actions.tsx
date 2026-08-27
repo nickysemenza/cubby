@@ -48,7 +48,7 @@ export interface EntityActionRow {
 }
 
 /** Where a registered action is allowed to appear. */
-export type EntityActionSurface = "row" | "bar" | "detail" | ActionSurface;
+type EntityActionSurface = "row" | "bar" | "detail" | ActionSurface;
 
 const DEFAULT_SURFACES: readonly EntityActionSurface[] = [
   "row",
@@ -65,7 +65,7 @@ const DEFAULT_SURFACES: readonly EntityActionSurface[] = [
  * product). Recording that keeps a row-only verb an intentional decision
  * instead of an omission nobody got round to.
  */
-export type EntityActionArity = "single" | "multi" | "both";
+type EntityActionArity = "single" | "multi" | "both";
 
 export interface EntityActionHandles {
   /**
@@ -108,7 +108,7 @@ export interface EntityActionDefinition {
  * the generic "Copy codes" and before the contract's "Delete" (see
  * `useListBulkActions`).
  */
-export const entityActions: readonly EntityActionDefinition[] = [
+const entityActions: readonly EntityActionDefinition[] = [
   {
     verb: "addToInventory",
     entities: ["product"],
