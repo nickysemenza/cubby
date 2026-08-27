@@ -201,7 +201,6 @@ export function entityListQueryOptions<E extends ListEntity>(
   return entityListFor(entity).queryOptions(input);
 }
 
-/** Query options shared by SSR loaders and the mounted infinite table. */
 export function entityInfiniteListQueryOptions<E extends ListEntity>(
   entity: E,
   input: EntityListParams<E>,
