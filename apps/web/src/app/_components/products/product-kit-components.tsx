@@ -12,7 +12,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
+import type { BulkActionsConfig } from "~/app/_components/data-table/bulk-actions.types";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -29,6 +33,7 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -112,6 +117,7 @@ function KitTable({
   nameHeader,
   showPrice,
   showOnHand,
+  bulkActions,
 }: {
   rows: ProductRow[];
   ariaLabel: string;
@@ -122,10 +128,21 @@ function KitTable({
   showPrice: boolean;
   /** Off for the membership table: those rows are kits, not parts. */
   showOnHand: boolean;
+  /**
+   * Omitted by the membership table: each of its rows is a *different* kit,
+   * and `detachComponents` takes one parent, so removing from N kits is N
+   * calls rather than a bulk operation.
+   */
+  bulkActions?: BulkActionsConfig<ProductRow>;
 }) {
+  const selection = useEntitySelection<ProductRow>({
+    entity: "product",
+    bulkActions,
+  });
   const helper = useMemo(() => createCubbyColumnHelper<ProductRow>(), []);
   const columns = useMemo<CubbyColumnDef<ProductRow>[]>(
     () => [
+      ...selection.selectColumns,
       createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", {
         header: nameHeader,
@@ -177,7 +194,14 @@ function KitTable({
         : []),
       createActionsColumn(helper, "product", { extraActions: action }),
     ],
-    [action, helper, nameHeader, showPrice, showOnHand],
+    [
+      action,
+      helper,
+      nameHeader,
+      showPrice,
+      showOnHand,
+      selection.selectColumns,
+    ],
   );
   const layout = useCubbyTableLayout({ key: layoutKey, columns });
   const table = useCubbyTable({
@@ -186,12 +210,16 @@ function KitTable({
     atoms: layout.atoms,
     meta: { defaultLayout: layout.defaultLayout },
     getRowId: (row) => row.id,
+    enableRowSelection: selection.enableRowSelection,
+    state: { rowSelection: selection.rowSelection },
+    onRowSelectionChange: selection.onRowSelectionChange,
     initialState: TABLE_STATE,
   });
   return (
     <RTable
       table={table}
       entity="product"
+      bulkActionBar={selection.renderBulkActionBar(table)}
       ariaLabel={ariaLabel}
       embedded
       emptyState={emptyState}
@@ -466,6 +494,30 @@ export function ProductKitComponents({ productId }: { productId: string }) {
     mutationFn: productOperations.detachComponents.mutationOptions,
     success: "Removed from kit",
   });
+  // The one direction that is already a bulk operation:
+  // `detachComponents({ parentProductId, componentProductIds[] })` fixes the
+  // parent, and this table's rows are all parts of it. The membership table is
+  // the inverse — each row a different parent — so it gets no bulk action.
+  const componentBulkActions = useMemo(
+    () => ({
+      actions: [
+        verbBulkAction<ProductRow>("removeComponent", {
+          minSelection: 1,
+          onExecute: async (rows) => {
+            await detachComponent.mutateAsync({
+              parentProductId: productId,
+              componentProductIds: rows.map((row) => row.original.id),
+            });
+            return { success: true };
+          },
+        }),
+      ],
+    }),
+    // `detachComponent` is a fresh object each render; `mutateAsync` is stable.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+    [productId],
+  );
+
   const componentAction = useMemo(
     () => (row: ProductRow) => (
       <VerbMenuItem
@@ -526,6 +578,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
           ariaLabel="Kit components"
           layoutKey="product:kit-components"
           action={componentAction}
+          bulkActions={componentBulkActions}
           nameHeader="Product"
           showPrice
           showOnHand

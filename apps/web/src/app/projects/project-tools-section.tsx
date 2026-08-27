@@ -13,7 +13,10 @@ import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Plus, Search, Wrench } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -115,7 +118,31 @@ function ResourcesTable({
       toast.error(getErrorMessage(error));
     },
   });
-  const selection = useEntitySelection<ResourceRow>({ entity: "product" });
+  // Table-local for the same reason as the purchase twin: the project is known
+  // to the table, not to a row, and `detachResources` already takes an array.
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        verbBulkAction<ResourceRow>("removeFromProject", {
+          minSelection: 1,
+          onExecute: async (rows) => {
+            await detach.mutateAsync({
+              projectId,
+              productIds: rows.map((row) => row.original.id),
+            });
+            return { success: true };
+          },
+        }),
+      ],
+    }),
+    // `detach` is a fresh object each render but `mutateAsync` is stable.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+    [projectId],
+  );
+  const selection = useEntitySelection<ResourceRow>({
+    entity: "product",
+    bulkActions,
+  });
   const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
   const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
     () => [

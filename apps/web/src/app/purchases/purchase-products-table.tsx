@@ -3,7 +3,10 @@ import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
+import {
+  VerbMenuItem,
+  verbBulkAction,
+} from "~/app/_components/actions/action-verb-ui";
 import {
   createActionsColumn,
   createCurrencyColumn,
@@ -127,7 +130,36 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   });
   // A kit component is shown here as part of its kit, not in its own right —
   // the same reason productlist's tree excludes them from selection.
+  // Table-local, not a registry entry: the mutation is
+  // `detachProducts({ purchaseId, productIds[] })`, and the purchase is known
+  // to this table rather than to any row — so it is already a bulk operation,
+  // it simply had no bulk affordance. Only explicitly linked rows are
+  // detachable; an expense-derived row has no link to remove.
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        verbBulkAction<PurchaseProductRow>("removeFromPurchase", {
+          minSelection: 1,
+          onExecute: async (rows) => {
+            const linked = rows
+              .map((row) => row.original)
+              .filter((row) => row.linked);
+            if (linked.length === 0) return { success: false };
+            await detach.mutateAsync({
+              purchaseId,
+              productIds: linked.map((row) => row.id),
+            });
+            return { success: true };
+          },
+        }),
+      ],
+    }),
+    // `detach` is a fresh object each render but `mutateAsync` is stable.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+    [purchaseId],
+  );
   const selection = useEntitySelection<PurchaseProductRow>({
+    bulkActions,
     entity: "product",
     canSelectRow: (row) => !row.isComponent,
   });
