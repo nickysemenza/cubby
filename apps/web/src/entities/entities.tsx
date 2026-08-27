@@ -4,6 +4,7 @@ import type {
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { displayGtin } from "@cubby/schemas/external-id";
+import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import type { VendorOut } from "@cubby/schemas/vendor";
 import {
@@ -82,9 +83,29 @@ const newRouteExtensions = {
   recipe: { new: "/recipes/new" },
 } as const;
 
+/**
+ * Derives a Title Case UI label ("Financial Account") from the canonical
+ * sentence-case label a not-found/prose message calls the entity
+ * ("Financial account", `ENTITY_LABEL` in `@cubby/schemas/identifiers`).
+ *
+ * One canonical string, two castings for two audiences: server error prose
+ * reads sentence-initial ("Financial account not found"), while UI chrome
+ * here (nav, page headings, dialog titles, column headers) reads as a
+ * heading. Every `ShortcodeEntity` that also has a browser route goes
+ * through this rather than a hand-typed literal, so a new entity or a
+ * renamed `ENTITY_LABEL` can't reintroduce the "Inventory entry" vs.
+ * "Inventory Item" drift this replaced — `entities.unit.test.ts` pins the
+ * two sources to agree entity-by-entity as a belt-and-braces guard.
+ */
+const titleCaseEntityLabel = (entity: ShortcodeEntity): string =>
+  ENTITY_LABEL[entity]
+    .split(" ")
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+
 const entityDefinitions = {
   ingredient: {
-    label: "Ingredient",
+    label: titleCaseEntityLabel("ingredient"),
     pluralLabel: "Ingredients",
     ...generatedBrowserRoutes.ingredient,
     lucideIcon: Carrot,
@@ -130,7 +151,7 @@ const entityDefinitions = {
     },
   },
   product: {
-    label: "Product",
+    label: titleCaseEntityLabel("product"),
     pluralLabel: "Products",
     ...generatedBrowserRoutes.product,
     lucideIcon: Barcode,
@@ -199,7 +220,7 @@ const entityDefinitions = {
     },
   },
   recipe: {
-    label: "Recipe",
+    label: titleCaseEntityLabel("recipe"),
     pluralLabel: "Recipes",
     ...generatedBrowserRoutes.recipe,
     lucideIcon: ChefHat,
@@ -230,7 +251,7 @@ const entityDefinitions = {
     },
   },
   cookbook: {
-    label: "Cookbook",
+    label: titleCaseEntityLabel("cookbook"),
     pluralLabel: "Cookbooks",
     ...generatedBrowserRoutes.cookbook,
     lucideIcon: BookOpen,
@@ -240,7 +261,7 @@ const entityDefinitions = {
     sortableFields: [],
   },
   location: {
-    label: "Location",
+    label: titleCaseEntityLabel("location"),
     pluralLabel: "Locations",
     ...generatedBrowserRoutes.location,
     lucideIcon: MapPin,
@@ -269,7 +290,7 @@ const entityDefinitions = {
     },
   },
   inventory: {
-    label: "Inventory Item",
+    label: titleCaseEntityLabel("inventory"),
     pluralLabel: "Inventory",
     ...generatedBrowserRoutes.inventory,
     lucideIcon: Package,
@@ -297,7 +318,7 @@ const entityDefinitions = {
     },
   },
   meal: {
-    label: "Meal",
+    label: titleCaseEntityLabel("meal"),
     pluralLabel: "Meals",
     ...generatedBrowserRoutes.meal,
     lucideIcon: CalendarDays,
@@ -317,7 +338,7 @@ const entityDefinitions = {
     },
   },
   project: {
-    label: "Project",
+    label: titleCaseEntityLabel("project"),
     pluralLabel: "Projects",
     ...generatedBrowserRoutes.project,
     lucideIcon: Hammer,
@@ -340,7 +361,7 @@ const entityDefinitions = {
     },
   },
   task: {
-    label: "Task",
+    label: titleCaseEntityLabel("task"),
     pluralLabel: "Tasks",
     ...generatedBrowserRoutes.task,
     lucideIcon: ListChecks,
@@ -362,7 +383,7 @@ const entityDefinitions = {
     },
   },
   vendor: {
-    label: "Vendor",
+    label: titleCaseEntityLabel("vendor"),
     pluralLabel: "Vendors",
     ...generatedBrowserRoutes.vendor,
     lucideIcon: Store,
@@ -411,7 +432,7 @@ const entityDefinitions = {
     },
   },
   purchase: {
-    label: "Purchase",
+    label: titleCaseEntityLabel("purchase"),
     pluralLabel: "Purchases",
     ...generatedBrowserRoutes.purchase,
     lucideIcon: Receipt,
@@ -465,7 +486,7 @@ const entityDefinitions = {
     },
   },
   expense: {
-    label: "Expense",
+    label: titleCaseEntityLabel("expense"),
     pluralLabel: "Expenses",
     ...generatedBrowserRoutes.expense,
     lucideIcon: ReceiptText,
@@ -492,7 +513,7 @@ const entityDefinitions = {
     },
   },
   financialAccount: {
-    label: "Financial Account",
+    label: titleCaseEntityLabel("financialAccount"),
     dialogLabel: "Account",
     pluralLabel: "Accounts",
     ...generatedBrowserRoutes.financialAccount,
@@ -515,7 +536,7 @@ const entityDefinitions = {
     },
   },
   financialTransaction: {
-    label: "Financial Transaction",
+    label: titleCaseEntityLabel("financialTransaction"),
     dialogLabel: "Transaction",
     pluralLabel: "Transactions",
     ...generatedBrowserRoutes.financialTransaction,
@@ -539,7 +560,7 @@ const entityDefinitions = {
     },
   },
   wish: {
-    label: "Wish",
+    label: titleCaseEntityLabel("wish"),
     pluralLabel: "Wishlist",
     ...generatedBrowserRoutes.wish,
     lucideIcon: Heart,
@@ -577,7 +598,7 @@ const entityDefinitions = {
     },
   },
   image: {
-    label: "Image",
+    label: titleCaseEntityLabel("image"),
     pluralLabel: "Images",
     ...generatedBrowserRoutes.image,
     lucideIcon: Image,
@@ -619,8 +640,15 @@ export const getSortableFields = (entity: Entity): readonly string[] =>
 
 /**
  * Human-readable labels for generic surfaces that include route-less entities.
- * Routed entities keep their curated UI copy; route-less records deliberately
- * avoid growing a parallel browser registry just to appear in audit tooling.
+ * Routed entities' `.label` is `titleCaseEntityLabel` of the canonical
+ * `ENTITY_LABEL` (or, for the handful of browser-routed entities with no
+ * shortcode, e.g. `usda-food`, a hand-typed literal) — not independently
+ * curated, so it can't drift from the server's error-prose wording the way
+ * "Inventory Item" vs. "Inventory entry" once did. Route-less records
+ * deliberately avoid growing a parallel browser registry just to appear in
+ * audit tooling, so `ledgerParty`/`ledgerTransfer` fall back to their
+ * `ENTITY_LABEL` string verbatim (sentence case fits the audit-log prose
+ * they actually appear in).
  */
 export const entityLabel = (entity: Entity): string => {
   if (isBrowserRoutedEntity(entity)) return entities[entity].label;

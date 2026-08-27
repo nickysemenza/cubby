@@ -51,7 +51,7 @@ export function AddLabelsPopover({
     enabled: open,
   });
 
-  const locations = searchResults?.items ?? [];
+  const locations = searchResults?.data ?? [];
 
   function mergeCodes(newShortcodes: string[]) {
     const existing =

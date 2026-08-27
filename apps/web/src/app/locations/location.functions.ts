@@ -24,9 +24,10 @@ const rosterInput = z.object({
   sort: z.object({ orderBy: z.string(), direction: z.enum(["asc", "desc"]) }),
   pagination: z.object({ pageIndex: z.number(), pageSize: z.number() }),
 });
-const searchOutput = z
-  .object({ data: z.array(locationPickerItemOut), count: z.number() })
-  .transform((result) => ({ ...result, items: result.data }));
+const searchOutput = z.object({
+  data: z.array(locationPickerItemOut),
+  count: z.number(),
+});
 const shortcodeInput = z.object({ shortcode: z.string() });
 
 export const location = defineOperationDomain("location", {
