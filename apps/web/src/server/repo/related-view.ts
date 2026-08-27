@@ -401,6 +401,42 @@ export async function loadRelatedBranch(
 }
 
 /** Search targets for a relation, including the number of distinct sources. */
+/**
+ * ORDER BY expression for a `related:<key>` column, built from the SAME joins,
+ * sort expression, and `where` the cell reads — so a change to the view moves
+ * the sort with it.
+ *
+ * Before this, `product/crud.ts` restated all three of its related traversals
+ * by hand. That is how `product.purchases` came to need a second, manual edit
+ * the moment the view gained its acquisition predicate: the sort would
+ * otherwise have ranked rows by a disposal date absent from every cell it
+ * sorts.
+ *
+ * The aggregate follows the view's own `sortDirection`, which makes it "rank by
+ * the FIRST chip the cell shows": a DESC view (purchases, by date) previews its
+ * newest row, so `max`; an ASC view (vendors, by name) previews its
+ * alphabetically first, so `min`. `direction` then orders those keys. This is
+ * why a descending vendor sort reverses by each product's first vendor rather
+ * than ranking by its last — deliberate, and now derived rather than restated.
+ *
+ * `rootIdRef` is the enclosing query's id reference, hand-qualified by the
+ * caller (`"product"."id"` under the relational query builder). `renderJoins`
+ * emits `sql.raw` exclusively, so the whole clause survives both
+ * `buildSelection`'s prefix stripping and the RQB's alias rewriting.
+ */
+export const relatedSortExpression = (
+  relationKey: RelatedViewKey,
+  rootIdRef: string,
+): SQL => {
+  const view = sqlRelatedView(relationKey);
+  const aggregate = view.sortDirection === "DESC" ? "max" : "min";
+  return sql`(SELECT ${sql.raw(aggregate)}(${sql.raw(view.sort)})
+    FROM ${sql.raw(`"${view.sourceTable}"`)} s
+    ${COMPILED_RELATED_JOINS[relationKey]}
+    WHERE s."id" = ${sql.raw(rootIdRef)} AND s."deletedAt" IS NULL
+      ${viewWhere(view)})`;
+};
+
 export async function loadRelatedOptions(
   db: Database,
   input: RelatedOptionsInput,

@@ -30,6 +30,7 @@ import {
   type ProductUpdateInput,
   productSortableFields,
 } from "@cubby/schemas/product";
+import type { RelatedViewKey } from "@cubby/schemas/related-view";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -107,15 +108,21 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import {
-  expenseAcquisitionSql,
   productAcquisitionDateFilterSql,
   productAcquisitionDateSql,
+  productExpenseCountFilterSql,
+  productExpenseCountSql,
+  productExpenseTotalFilterSql,
+  productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
-import { relatedWhereConditions } from "~/server/repo/related-view";
+import {
+  relatedSortExpression,
+  relatedWhereConditions,
+} from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -200,25 +207,18 @@ const resolveProductSort = (sort: SortParams) => {
   }
 
   if (sort.orderBy === "expenseTotal") {
-    return [
-      sql.raw(
-        `(SELECT COALESCE(sum(e."cost"), 0)::double precision FROM "Expense" e ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
+    return [sql`${productExpenseTotalSql()} ${sql.raw(dirSql)}`];
   }
 
   if (sort.orderBy === "price") {
     return [sql.raw(`${effectiveProductPriceSql()} ${dirSql}`)];
   }
 
+  // `expenses` is the COLUMN id; `expenseCount` is the row field. See the note
+  // on the column in app/products/productlist.tsx for why the id is the half
+  // that cannot move.
   if (sort.orderBy === "expenses") {
-    return [
-      sql.raw(
-        `(SELECT count(*) FROM "Expense" e ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
+    return [sql`${productExpenseCountSql()} ${sql.raw(dirSql)}`];
   }
 
   if (sort.orderBy === "expectedQuantity") {
@@ -234,39 +234,18 @@ const resolveProductSort = (sort: SortParams) => {
     return [sql`${productAcquisitionDateSql()} ${sql.raw(dirSql)}`];
   }
 
-  if (sort.orderBy === "related:product.purchases") {
-    // Mirrors SQL_RELATED_VIEWS["product.purchases"] — same sort expression AND
-    // the same acquisition predicate. The view admits acquisitions only, so a
-    // sort that ranked by a disposal's date would order rows by a value absent
-    // from every cell it sorts.
+  // Every `related:` sort is the related-view registry's own joins, sort
+  // expression, and `where` — never a hand copy. See `relatedSortExpression`.
+  if (sort.orderBy.startsWith("related:")) {
+    const relationKey = sort.orderBy.slice("related:".length);
     return [
-      sql.raw(
-        `(SELECT max(COALESCE(p."date"::timestamp, p."createdAt")) FROM "Expense" e ` +
-          `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL ` +
-          `AND e."future" = false AND ${expenseAcquisitionSql("e")}) ${dirSql}`,
-      ),
-    ];
-  }
-
-  if (sort.orderBy === "related:product.projects") {
-    return [
-      sql.raw(
-        `(SELECT min(lower(pr."name")) FROM "Expense" e ` +
-          `JOIN "Project" pr ON pr."id" = e."projectId" AND pr."deletedAt" IS NULL ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
-      ),
-    ];
-  }
-
-  if (sort.orderBy === "related:product.vendors") {
-    return [
-      sql.raw(
-        `(SELECT min(lower(v."name")) FROM "Expense" e ` +
-          `JOIN "Purchase" p ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL ` +
-          `JOIN "Vendor" v ON v."id" = p."vendorId" AND v."deletedAt" IS NULL ` +
-          `WHERE e."productId" = "product"."id" AND e."deletedAt" IS NULL) ${dirSql}`,
-      ),
+      // Every `related:`-prefixed sortable field IS a registry key — the two
+      // lists are the same closed set — and `sqlRelatedView` throws loudly on
+      // one that is not.
+      sql`${relatedSortExpression(
+        relationKey as RelatedViewKey,
+        '"product"."id"',
+      )} ${sql.raw(dirSql)}`,
     ];
   }
 
@@ -781,12 +760,12 @@ export const productList = async (
           )
         : undefined,
       ...rangeConditions(
-        sql`(SELECT count(*) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL)`,
+        productExpenseCountFilterSql(product.id),
         filters,
         "expenseCount",
       ),
       ...rangeConditions(
-        sql`(SELECT COALESCE(sum(e."cost"), 0) FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL)`,
+        productExpenseTotalFilterSql(product.id),
         filters,
         "expenseTotal",
       ),
