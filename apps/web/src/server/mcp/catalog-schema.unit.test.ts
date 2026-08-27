@@ -179,8 +179,6 @@ describe("MCP catalog schemas", () => {
       "update_statement_rows.selector.externalIds",
       "update_statement_rows.data.supersededByExternalId",
       "delete_statement_rows.selector.externalIds",
-      "attach_file.uploadId",
-      "attach_files.items[].uploadId",
     ]);
     const freeTextIds = new Set([
       "orderId",
