@@ -536,7 +536,13 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
   const setHash = useCallback(
     (hash: string | undefined, replace: boolean) => {
-      void navigate({ to: ".", hash, replace });
+      void navigate({
+        to: ".",
+        hash,
+        replace,
+        resetScroll: false,
+        hashScrollIntoView: false,
+      });
     },
     [navigate],
   );

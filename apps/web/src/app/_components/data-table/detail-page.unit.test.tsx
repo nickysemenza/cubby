@@ -192,6 +192,8 @@ describe("DetailSections ledger", () => {
       to: ".",
       hash: "story",
       replace: true,
+      resetScroll: false,
+      hashScrollIntoView: false,
     });
   });
 
@@ -243,6 +245,8 @@ describe("DetailSections ledger", () => {
       to: ".",
       hash: "relationships",
       replace: false,
+      resetScroll: false,
+      hashScrollIntoView: false,
     });
   });
 
@@ -408,6 +412,8 @@ describe("DetailSections ledger", () => {
       to: ".",
       hash: undefined,
       replace: true,
+      resetScroll: false,
+      hashScrollIntoView: false,
     });
 
     mocks.navigate.mockClear();
@@ -420,6 +426,8 @@ describe("DetailSections ledger", () => {
       to: ".",
       hash: undefined,
       replace: true,
+      resetScroll: false,
+      hashScrollIntoView: false,
     });
   });
 
