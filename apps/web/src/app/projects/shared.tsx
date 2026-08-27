@@ -1231,6 +1231,7 @@ export function ProjectTable({
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview("project", { responsiveInspector: true });
 
   const updateProjectMutation = useUpdateMutation({
@@ -1438,6 +1439,7 @@ export function ProjectTable({
         onRowHoverEnd={onRowHoverEnd}
         currentRowId={preview?.rowKey ?? preview?.id}
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
       />
       {isTree && (
         <TreePaginationNote

@@ -57,6 +57,7 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "filterOptionHints"
   | "getRowClassName"
   | "getMobileDetailsHref"
+  | "inspectorToggle"
   | "currentRowId"
   | "defaultDensity"
   | "desktopInspector"

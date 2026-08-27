@@ -391,6 +391,7 @@ export function ExpenseList() {
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview("expense", { responsiveInspector: true });
 
   // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
@@ -468,6 +469,7 @@ export function ExpenseList() {
           onRowHoverEnd={onRowHoverEnd}
           currentRowId={preview?.id}
           desktopInspector={dockedInspector}
+          inspectorToggle={inspectorToggle}
           showCellSelectionStats
           filterOptionHints={facetOptionHints}
           getRowClassName={(row) =>

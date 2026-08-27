@@ -8,13 +8,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   VerbMenuItem,
   verbBulkAction,
@@ -32,7 +26,6 @@ import { usePageCount } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
-import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
@@ -41,7 +34,6 @@ import {
 } from "~/components/ui/tooltip";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useIsMobile } from "~/hooks/useMobile";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
@@ -69,7 +61,10 @@ import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import {
+  type EntityPreviewRendererProps,
+  useEntityPreview,
+} from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useProductTagOptions } from "../_components/hooks/useProductTagOptions";
@@ -117,23 +112,11 @@ const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
 /** Stable empty default so `nest` keeps its identity while kits load. */
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
-const DOCKED_INSPECTOR_QUERY = "(min-width: 1280px)";
-const subscribeDockedInspector = (onStoreChange: () => void) => {
-  if (!window.matchMedia) return () => {};
-  const query = window.matchMedia(DOCKED_INSPECTOR_QUERY);
-  query.addEventListener("change", onStoreChange);
-  return () => query.removeEventListener("change", onStoreChange);
-};
-const getDockedInspectorSnapshot = () =>
-  window.matchMedia?.(DOCKED_INSPECTOR_QUERY).matches ?? false;
-const getServerDockedInspectorSnapshot = () => false;
-
-function useDockedInspector(): boolean {
-  return useSyncExternalStore(
-    subscribeDockedInspector,
-    getDockedInspectorSnapshot,
-    getServerDockedInspectorSnapshot,
-  );
+function renderProductInspector({
+  preview,
+  onClose,
+}: EntityPreviewRendererProps) {
+  return <ProductWorkbenchInspector productId={preview.id} onClose={onClose} />;
 }
 
 // The generic tones fit here: tracked really is the resolved/good outcome.
@@ -254,22 +237,13 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     onRowHover,
     onRowHoverEnd,
     preview,
-    closePreview,
-  } = useEntityPreview("product");
-  const [currentRowId, setCurrentRowId] = useState<string | null>(null);
-  const dockedInspector = useDockedInspector();
-  const isMobile = useIsMobile();
-  const selectCurrentProduct = useCallback(
-    (row: { id: string; original: ProductTreeRow }) => {
-      setCurrentRowId(row.id);
-      selectPreview(row);
-    },
-    [selectPreview],
-  );
-  const closeCurrentProduct = useCallback(() => {
-    setCurrentRowId(null);
-    closePreview();
-  }, [closePreview]);
+    PreviewSheet,
+    dockedInspector,
+    inspectorToggle,
+  } = useEntityPreview("product", {
+    responsiveInspector: true,
+    renderInspector: renderProductInspector,
+  });
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
   const projectOptions = useDeferredFilterOptions("project");
@@ -1139,19 +1113,13 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           <ListWorkbench
             model={workbench}
             ariaLabel="Products Table"
-            onRowClick={selectCurrentProduct}
+            onRowClick={selectPreview}
             onRowHover={onRowHover}
             onRowHoverEnd={onRowHoverEnd}
-            currentRowId={currentRowId ?? undefined}
+            currentRowId={preview?.rowKey}
             defaultDensity="dense"
-            desktopInspector={
-              dockedInspector && preview ? (
-                <ProductWorkbenchInspector
-                  productId={preview.id}
-                  onClose={closeCurrentProduct}
-                />
-              ) : undefined
-            }
+            desktopInspector={dockedInspector}
+            inspectorToggle={inspectorToggle}
           />
         )}
         {view === "shelf" && (
@@ -1166,21 +1134,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           <ProductMovementViews filters={currentFilters} view={view} />
         )}
       </Stack>
-      {view === "table" && preview && !dockedInspector && !isMobile ? (
-        <Sheet open onOpenChange={(open) => !open && closeCurrentProduct()}>
-          <SheetContent
-            side="right"
-            className="!w-[25rem] !max-w-[calc(100vw-2rem)] p-0"
-            showCloseButton={false}
-          >
-            <SheetTitle className="sr-only">Product inspector</SheetTitle>
-            <ProductWorkbenchInspector
-              productId={preview.id}
-              onClose={closeCurrentProduct}
-            />
-          </SheetContent>
-        </Sheet>
-      ) : null}
+      {view === "table" && <PreviewSheet />}
       {view !== "table" && workbench.deleteDialog}
       {discardProduct && (
         <ProductDiscardDialog

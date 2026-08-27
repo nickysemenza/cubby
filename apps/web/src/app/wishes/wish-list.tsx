@@ -80,6 +80,7 @@ export function WishList() {
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview(undefined, {
     idField: "previewId",
     responsiveInspector: true,
@@ -311,6 +312,7 @@ export function WishList() {
           currentRowId={preview?.rowKey ?? preview?.id}
           defaultDensity="dense"
           desktopInspector={dockedInspector}
+          inspectorToggle={inspectorToggle}
           getMobileDetailsHref={wishMobileDetailsHref}
         />
         <PreviewSheet />

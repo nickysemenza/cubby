@@ -279,6 +279,7 @@ export function PurchaseList() {
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview("purchase", { responsiveInspector: true });
 
   const { workbench, data, totalCount } = useEntityList<
@@ -328,6 +329,7 @@ export function PurchaseList() {
         onRowHoverEnd={onRowHoverEnd}
         currentRowId={preview?.id}
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
       />
       <PreviewSheet />
     </div>

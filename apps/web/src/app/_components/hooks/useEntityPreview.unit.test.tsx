@@ -1,5 +1,11 @@
 import type * as TanStackQuery from "@tanstack/react-query";
-import { act, render, renderHook, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -42,7 +48,10 @@ vi.mock("../entity-workbench-inspector", () => ({
   ),
 }));
 
-import { useEntityPreview } from "./useEntityPreview";
+import {
+  type EntityPreviewRendererProps,
+  useEntityPreview,
+} from "./useEntityPreview";
 
 const row = (id: string) => ({ original: { id } });
 
@@ -156,6 +165,101 @@ describe("useEntityPreview intent prefetch", () => {
 
     expect(screen.getByTestId("workbench-inspector")).toHaveTextContent(
       "product:PRD-4K7M",
+    );
+  });
+
+  it("retains the selected row while closing and reopening the inspector", () => {
+    viewport = "dock";
+    const { result } = renderHook(() =>
+      useEntityPreview("product", { responsiveInspector: true }),
+    );
+    const view = render(
+      <>
+        {result.current.inspectorToggle}
+        {result.current.dockedInspector}
+      </>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Open inspector" }),
+    ).toBeDisabled();
+
+    act(() => result.current.onRowClick(row("PRD-4K7M")));
+    view.rerender(
+      <>
+        {result.current.inspectorToggle}
+        {result.current.dockedInspector}
+      </>,
+    );
+    expect(
+      screen.getByRole("button", { name: "Close inspector" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("workbench-inspector")).toHaveTextContent(
+      "product:PRD-4K7M",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
+    view.rerender(
+      <>
+        {result.current.inspectorToggle}
+        {result.current.dockedInspector}
+      </>,
+    );
+    expect(result.current.preview).toEqual({
+      entityType: "product",
+      id: "PRD-4K7M",
+      rowKey: "PRD-4K7M",
+    });
+    expect(result.current.dockedInspector).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Open inspector" }),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open inspector" }));
+    view.rerender(
+      <>
+        {result.current.inspectorToggle}
+        {result.current.dockedInspector}
+      </>,
+    );
+    expect(screen.getByTestId("workbench-inspector")).toHaveTextContent(
+      "product:PRD-4K7M",
+    );
+
+    act(() => result.current.onRowClick(row("PRD-9T2Q")));
+    expect(result.current.preview?.id).toBe("PRD-9T2Q");
+    expect(result.current.isInspectorOpen).toBe(true);
+  });
+
+  it("uses a list-owned inspector renderer through the shared presentation", () => {
+    viewport = "dock";
+    const renderInspector = vi.fn(({ preview }: EntityPreviewRendererProps) => (
+      <div data-testid="custom-inspector">{preview.id}</div>
+    ));
+    const { result } = renderHook(() =>
+      useEntityPreview("product", {
+        responsiveInspector: true,
+        renderInspector,
+      }),
+    );
+
+    act(() => result.current.onRowClick(row("PRD-4K7M")));
+    const docked = render(result.current.dockedInspector);
+
+    expect(screen.getByTestId("custom-inspector")).toHaveTextContent(
+      "PRD-4K7M",
+    );
+    expect(renderInspector).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preview: expect.objectContaining({ id: "PRD-4K7M" }),
+      }),
+    );
+
+    docked.unmount();
+    act(() => setViewport("sheet"));
+    render(<result.current.PreviewSheet />);
+    expect(screen.getByTestId("preview-sheet")).toContainElement(
+      screen.getByTestId("custom-inspector"),
     );
   });
 

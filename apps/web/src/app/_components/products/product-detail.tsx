@@ -517,17 +517,19 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       heroStamp={presence.stamp}
       heroStats={heroStats}
     >
-      <div className="border-border border-b bg-card px-2 py-2 md:px-4">
-        <ProductRelationshipRouteContent
-          product={product}
-          query={relationshipRouteQuery}
-          variant="strip"
-        />
-      </div>
       <DetailSections
         sections={sections}
         rawData={product}
         heroImages={images}
+        relationshipPreview={
+          <div className="border-border border-b bg-card px-2 py-2 md:px-4">
+            <ProductRelationshipRouteContent
+              product={product}
+              query={relationshipRouteQuery}
+              variant="strip"
+            />
+          </div>
+        }
       />
       <ProductAddToInventoryDialog
         open={addToInventoryOpen}

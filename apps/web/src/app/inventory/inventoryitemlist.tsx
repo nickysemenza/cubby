@@ -80,6 +80,7 @@ export function InventoryItemList() {
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview("inventory", { responsiveInspector: true });
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
   // Discard is single-row only: it writes one ledger line against one product.
@@ -388,6 +389,7 @@ export function InventoryItemList() {
           onRowHoverEnd={onRowHoverEnd}
           currentRowId={preview?.id}
           desktopInspector={dockedInspector}
+          inspectorToggle={inspectorToggle}
         />
       )}
       <PreviewSheet />

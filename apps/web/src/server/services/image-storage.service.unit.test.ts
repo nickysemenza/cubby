@@ -61,11 +61,15 @@ vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
 }));
 
 import { imageShortcode } from "@cubby/schemas/identifiers";
-import type { McpAttachFileInput } from "@cubby/schemas/image";
-import { testEntityId } from "@cubby/schemas/testing";
+import {
+  createFileUploadResponse,
+  type McpAttachFileInput,
+} from "@cubby/schemas/image";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { ExternalFetchError } from "@cubby/shared/external-fetch";
 import {
   attachFileToEntity,
+  createFileUpload,
   importImageFromUrl,
   initiateDocumentUpload,
 } from "./image-storage.service";
@@ -75,8 +79,19 @@ const PNG_BASE64 =
 
 const STAGED_UPLOAD_ID = testEntityId("image", "staged-upload");
 const EXISTING_IMAGE_ID = testEntityId("image", "existing-image");
-const MISSING_UPLOAD_ID = testEntityId("image", "missing-upload");
 const STANDALONE_IMAGE_ID = testEntityId("image", "standalone-image");
+
+// `uploadId` crosses the API as the staged row's public `IMG-` code; the uuids
+// above are what it resolves to, and what the uuid-keyed repo calls must see.
+const STAGED_UPLOAD_CODE = testShortcode("image", "IMG-2222");
+const EXISTING_IMAGE_CODE = testShortcode("image", "IMG-3333");
+const MISSING_UPLOAD_CODE = testShortcode("image", "IMG-4444");
+const STANDALONE_IMAGE_CODE = testShortcode("image", "IMG-5555");
+const IMAGE_ID_BY_CODE = new Map<string, string>([
+  [STAGED_UPLOAD_CODE, STAGED_UPLOAD_ID],
+  [EXISTING_IMAGE_CODE, EXISTING_IMAGE_ID],
+  [STANDALONE_IMAGE_CODE, STANDALONE_IMAGE_ID],
+]);
 
 describe("importImageFromUrl", () => {
   beforeEach(() => {
@@ -188,6 +203,52 @@ describe("initiateDocumentUpload", () => {
   });
 });
 
+describe("createFileUpload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createPendingImageRecord.mockResolvedValue({
+      id: STAGED_UPLOAD_ID,
+      shortcode: "IMG-2AAA",
+    });
+    mocks.generatePresignedUploadUrl.mockResolvedValue(
+      "https://r2.example/put",
+    );
+    mocks.getImageByKey.mockResolvedValue(null);
+  });
+
+  // The regression guard for the class of bug that broke this tool outright:
+  // the handler's return value must satisfy the schema `registerMcpTool`
+  // declares as its `outputSchema`, because `structuredSuccess` PARSES against
+  // it — a mismatch fails every single call with a bare Zod issue array, and no
+  // schema-walk test can see it. `uploadId` was `z.uuid()` while the service
+  // returned an `IMG-` shortcode, so `create_file_upload` was unusable.
+  it("returns a response that satisfies its declared MCP output schema", async () => {
+    const result = await createFileUpload({} as never, {
+      entityId: "PRD-TEST",
+      filename: "receipt.jpeg",
+      contentType: "image/jpeg",
+      size: 2_432_267,
+    });
+
+    expect(createFileUploadResponse.safeParse(result)).toMatchObject({
+      success: true,
+    });
+    expect(result.uploadId).toBe("IMG-2AAA");
+  });
+
+  it("refuses a content type outside the allowlist before staging a row", async () => {
+    await expect(
+      createFileUpload({} as never, {
+        entityId: "PRD-TEST",
+        filename: "notes.txt",
+        contentType: "text/plain",
+        size: 12,
+      }),
+    ).rejects.toThrow(/Unsupported content type/);
+    expect(mocks.createPendingImageRecord).not.toHaveBeenCalled();
+  });
+});
+
 describe("attachFileToEntity", () => {
   const resolvedProductId = testEntityId("product", "attach-target");
 
@@ -218,7 +279,14 @@ describe("attachFileToEntity", () => {
       }),
     );
     mocks.findAttachmentByIdempotencyKey.mockResolvedValue(null);
-    mocks.resolveLiveShortcode.mockResolvedValue(resolvedProductId);
+    // Two boundary crossings per call — the target entity and the `IMG-`
+    // uploadId — so the resolver has to answer per entity, not blanket.
+    mocks.resolveLiveShortcode.mockImplementation(
+      async (_db: unknown, code: string, entity: string) =>
+        entity === "image"
+          ? (IMAGE_ID_BY_CODE.get(code) ?? null)
+          : resolvedProductId,
+    );
   });
 
   const base = {
@@ -462,7 +530,7 @@ describe("attachFileToEntity", () => {
   // with it. So an `uploadId` naming an already-attached image would duplicate
   // the attachment and then destroy the original — and that mixup is easy to
   // make, since `attach_file` returns an `imageId` and `create_file_upload`
-  // returns an `uploadId`, both bare uuids over the same table.
+  // returns an `uploadId`, both `IMG-` codes over the same table.
   describe("uploadId mode", () => {
     const stagedRow = {
       id: STAGED_UPLOAD_ID,
@@ -486,10 +554,13 @@ describe("attachFileToEntity", () => {
 
       const result = await attachFileToEntity({} as never, {
         ...base,
-        uploadId: STAGED_UPLOAD_ID,
+        uploadId: STAGED_UPLOAD_CODE,
       });
 
       expect(result.kind).toBe("image");
+      // Both repo calls are uuid-keyed: handing either the `IMG-` code would
+      // read nothing and, for the delete, silently strand the staged object.
+      expect(mocks.getImageById).toHaveBeenCalledWith({}, STAGED_UPLOAD_ID);
       expect(mocks.deleteImages).toHaveBeenCalledWith({}, [STAGED_UPLOAD_ID]);
     });
 
@@ -503,7 +574,7 @@ describe("attachFileToEntity", () => {
       await expect(
         attachFileToEntity({} as never, {
           ...base,
-          uploadId: EXISTING_IMAGE_ID,
+          uploadId: EXISTING_IMAGE_CODE,
         }),
       ).rejects.toThrow(/not a staged upload/);
 
@@ -514,7 +585,21 @@ describe("attachFileToEntity", () => {
       expect(mocks.deleteImages).not.toHaveBeenCalled();
     });
 
-    it("names create_file_upload when the uploadId does not exist", async () => {
+    it("names create_file_upload when the uploadId resolves to nothing", async () => {
+      // MISSING_UPLOAD_CODE is absent from IMAGE_ID_BY_CODE, so the shortcode
+      // resolver returns null and the row lookup never runs.
+      await expect(
+        attachFileToEntity({} as never, {
+          ...base,
+          uploadId: MISSING_UPLOAD_CODE,
+        }),
+      ).rejects.toThrow(/Call create_file_upload first/);
+      expect(mocks.getImageById).not.toHaveBeenCalled();
+    });
+
+    it("names create_file_upload when the resolved row is gone", async () => {
+      // The narrow race the resolver cannot cover: the code resolved, then the
+      // row disappeared before the read.
       mocks.getImageById.mockRejectedValue(
         Object.assign(new Error("Image not found"), {
           cause: { reason: "IMAGE_NOT_FOUND" },
@@ -524,7 +609,7 @@ describe("attachFileToEntity", () => {
       await expect(
         attachFileToEntity({} as never, {
           ...base,
-          uploadId: MISSING_UPLOAD_ID,
+          uploadId: STAGED_UPLOAD_CODE,
         }),
       ).rejects.toThrow(/Call create_file_upload first/);
     });
@@ -535,7 +620,7 @@ describe("attachFileToEntity", () => {
       await expect(
         attachFileToEntity({} as never, {
           ...base,
-          uploadId: STAGED_UPLOAD_ID,
+          uploadId: STAGED_UPLOAD_CODE,
         }),
       ).rejects.toThrow("database unavailable");
     });
@@ -551,7 +636,7 @@ describe("attachFileToEntity", () => {
       await expect(
         attachFileToEntity({} as never, {
           ...base,
-          uploadId: STANDALONE_IMAGE_ID,
+          uploadId: STANDALONE_IMAGE_CODE,
         }),
       ).rejects.toThrow(/not a staged upload/);
       expect(mocks.deleteImages).not.toHaveBeenCalled();

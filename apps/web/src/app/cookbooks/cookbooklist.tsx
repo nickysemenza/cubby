@@ -42,6 +42,7 @@ export function CookbookList() {
     PreviewSheet,
     preview,
     dockedInspector,
+    inspectorToggle,
   } = useEntityPreview("cookbook", { responsiveInspector: true });
 
   const columns = useMemo(
@@ -129,6 +130,7 @@ export function CookbookList() {
         currentRowId={preview?.id}
         defaultDensity="dense"
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
       />
       <PreviewSheet />
       {dialog}

@@ -1,22 +1,33 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
+import { PanelRight } from "lucide-react";
+import type { ReactNode } from "react";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import { entityLabel, isBrowserRoutedEntity } from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
-interface PreviewState {
+export interface PreviewState {
   entityType: Entity;
   id: string;
   rowKey: string;
 }
+
+export interface EntityPreviewRendererProps {
+  preview: PreviewState;
+  onClose: () => void;
+}
+
+type EntityPreviewRenderer = (props: EntityPreviewRendererProps) => ReactNode;
 
 interface PreviewIntent {
   preview: PreviewState;
@@ -63,6 +74,12 @@ interface UseEntityPreviewOptions {
    * viewport so selecting a row never becomes invisible.
    */
   responsiveInspector?: boolean;
+  /**
+   * Product owns a denser, relationship-aware inspector. The responsive
+   * presentation still belongs here so it follows the same selection and
+   * close/reopen behavior as every other top-level list.
+   */
+  renderInspector?: EntityPreviewRenderer;
 }
 
 // Module-level so its identity never changes across renders — a component
@@ -71,9 +88,11 @@ interface UseEntityPreviewOptions {
 // open/close animation and resetting scroll) even when preview hasn't changed.
 function PreviewSheetView({
   preview,
+  inspector,
   onClose,
 }: {
   preview: PreviewState | null;
+  inspector: ReactNode;
   onClose: () => void;
 }) {
   return (
@@ -88,15 +107,24 @@ function PreviewSheetView({
             <SheetTitle className="sr-only">
               {entityLabel(preview.entityType)} {preview.id} preview
             </SheetTitle>
-            <EntityWorkbenchInspector
-              entity={preview.entityType}
-              id={preview.id}
-              onClose={onClose}
-            />
+            {inspector}
           </>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function renderDefaultInspector({
+  preview,
+  onClose,
+}: EntityPreviewRendererProps) {
+  return (
+    <EntityWorkbenchInspector
+      entity={preview.entityType}
+      id={preview.id}
+      onClose={onClose}
+    />
   );
 }
 
@@ -105,6 +133,7 @@ export function useEntityPreview(
   options?: UseEntityPreviewOptions,
 ) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [isInspectorOpen, setInspectorOpen] = useState(false);
   const presentation = useSyncExternalStore(
     subscribePreviewPresentation,
     previewPresentation,
@@ -112,6 +141,7 @@ export function useEntityPreview(
   );
   const idField = options?.idField ?? "id";
   const responsiveInspector = options?.responsiveInspector ?? false;
+  const renderInspector = options?.renderInspector ?? renderDefaultInspector;
   const queryClient = useQueryClient();
   const intentRef = useRef<PreviewIntent | null>(null);
 
@@ -180,6 +210,7 @@ export function useEntityPreview(
         stopIntent(intent, false);
       }
       setPreview(resolved);
+      setInspectorOpen(true);
     },
     [resolveRow, stopIntent],
   );
@@ -245,7 +276,19 @@ export function useEntityPreview(
     [resolveRow, stopIntent],
   );
 
-  const closePreview = useCallback(() => setPreview(null), []);
+  // Closing the presentation must not discard the selected record: the row
+  // remains current and the table toolbar can reopen it without another click.
+  const closePreview = useCallback(() => setInspectorOpen(false), []);
+  const toggleInspector = useCallback(
+    () => setInspectorOpen((open) => !open),
+    [],
+  );
+
+  const inspector = useMemo(
+    () =>
+      preview ? renderInspector({ preview, onClose: closePreview }) : null,
+    [preview, renderInspector, closePreview],
+  );
 
   // Stable identity as long as preview/closePreview haven't changed, so a
   // host re-render for unrelated reasons (e.g. list background refetch)
@@ -254,22 +297,46 @@ export function useEntityPreview(
     () => (
       <PreviewSheetView
         preview={
-          !responsiveInspector || presentation === "sheet" ? preview : null
+          (!responsiveInspector || presentation === "sheet") && isInspectorOpen
+            ? preview
+            : null
         }
+        inspector={inspector}
         onClose={closePreview}
       />
     ),
-    [responsiveInspector, presentation, preview, closePreview],
+    [
+      responsiveInspector,
+      presentation,
+      isInspectorOpen,
+      preview,
+      inspector,
+      closePreview,
+    ],
   );
 
   const dockedInspector =
-    responsiveInspector && presentation === "dock" && preview ? (
-      <EntityWorkbenchInspector
-        entity={preview.entityType}
-        id={preview.id}
-        onClose={closePreview}
-      />
-    ) : null;
+    responsiveInspector && presentation === "dock" && isInspectorOpen
+      ? inspector
+      : null;
+
+  const inspectorToggle = useMemo(
+    () =>
+      responsiveInspector ? (
+        <Button
+          variant="ghost"
+          size="icon-lg"
+          className="shrink-0"
+          disabled={!preview}
+          onClick={toggleInspector}
+          aria-label={isInspectorOpen ? "Close inspector" : "Open inspector"}
+          aria-pressed={isInspectorOpen}
+        >
+          <PanelRight className="size-4" />
+        </Button>
+      ) : null,
+    [responsiveInspector, preview, isInspectorOpen, toggleInspector],
+  );
 
   return {
     onRowClick,
@@ -277,8 +344,10 @@ export function useEntityPreview(
     onRowHoverEnd,
     PreviewSheet,
     dockedInspector,
+    inspectorToggle,
     preview,
     setPreview,
     closePreview,
+    isInspectorOpen,
   };
 }

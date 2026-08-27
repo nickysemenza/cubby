@@ -49,6 +49,7 @@ export function MealTable() {
     PreviewSheet,
     dockedInspector,
     preview,
+    inspectorToggle,
   } = useEntityPreview("meal", { responsiveInspector: true });
   const columnHelper = useMemo(() => createCubbyColumnHelper<MealOut>(), []);
 
@@ -215,6 +216,7 @@ export function MealTable() {
         onRowHoverEnd={onRowHoverEnd}
         currentRowId={preview?.rowKey ?? preview?.id}
         desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
       />
       <PreviewSheet />
     </>

@@ -2740,9 +2740,16 @@ export const backgroundBatch = pgTable(
     lastEnqueuedAt: timestamp("lastEnqueuedAt", { mode: "date" }),
     firstJobStartedAt: timestamp("firstJobStartedAt", { mode: "date" }),
     lastJobFinishedAt: timestamp("lastJobFinishedAt", { mode: "date" }),
-    processingDurationMs: integer("processingDurationMs"),
-    wallDurationMs: integer("wallDurationMs"),
-    activeDurationMs: integer("activeDurationMs").notNull().default(0),
+    // bigint, not integer: int32 tops out at 2_147_483_647 ms = 24.86 days, and
+    // these are wall-clock spans over a batch's whole life. A batch left open
+    // longer than that (a lost queue wakeup strands one indefinitely) overflowed
+    // the moment anything stamped finishedAt on its jobs, so the summary UPDATE
+    // threw 22003 and rolled back the work that triggered it.
+    processingDurationMs: bigint("processingDurationMs", { mode: "number" }),
+    wallDurationMs: bigint("wallDurationMs", { mode: "number" }),
+    activeDurationMs: bigint("activeDurationMs", { mode: "number" })
+      .notNull()
+      .default(0),
     metadata: jsonb("metadata").$type<unknown>(),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -2778,7 +2785,10 @@ export const backgroundJob = pgTable(
     queuedAt: timestamp("queuedAt", { mode: "date" }),
     startedAt: timestamp("startedAt", { mode: "date" }),
     finishedAt: timestamp("finishedAt", { mode: "date" }),
-    durationMs: integer("durationMs"),
+    // bigint for the same reason as the batch spans above: a job whose worker
+    // died holds `running` until the lease reclaims it, so now-startedAt can
+    // exceed 24.86 days.
+    durationMs: bigint("durationMs", { mode: "number" }),
     lastError: text("lastError"),
     ...baseTimestamps(),
     ...softDeletedAt(),
