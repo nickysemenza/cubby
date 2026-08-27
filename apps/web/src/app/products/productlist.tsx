@@ -140,6 +140,15 @@ const STOCK_TRACKED_BULK_OPTIONS: FilterableComboboxItem[] = [
 const parseStockTracked = (value: string): boolean | null =>
   value === UNDECIDED_STOCK_TRACKING ? null : value === "true";
 
+/**
+ * Hoisted: `useActionMutation` infers its result type from this reference, and
+ * an inline factory call inside the options literal defeats that inference.
+ */
+const productBulkUpdateOptions = entityMutationOptionsFactory(
+  "product",
+  "bulkUpdate",
+);
+
 const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
 const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
 const NOTES_PRESENCE_OPTIONS = presenceCellOptions("notes");
@@ -325,9 +334,9 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [],
   );
   const stockTrackingMutation = useActionMutation({
-    mutationFn: productOperations.bulkSetStockTracked.mutationOptions,
-    success: (data: { items: unknown[] }) =>
-      `Updated ${data.items.length} product${data.items.length !== 1 ? "s" : ""}`,
+    mutationFn: productBulkUpdateOptions,
+    success: (data) =>
+      `Updated ${data.updated} product${data.updated !== 1 ? "s" : ""}`,
     onSuccess: () => setStockTrackingRows([]),
   });
   const updateProductMutation = useUpdateMutation({
@@ -1140,13 +1149,18 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           }}
           items={stockTrackingRows}
           isPending={stockTrackingMutation.isPending}
+          currentValue={(product) =>
+            product.stockTracked === null
+              ? UNDECIDED_STOCK_TRACKING
+              : String(product.stockTracked)
+          }
           options={STOCK_TRACKED_BULK_OPTIONS}
           fieldLabel="Stock tracking"
           itemNoun="Product"
           onConfirm={async (value) => {
             await stockTrackingMutation.mutateAsync({
               ids: stockTrackingRows.map((product) => product.id),
-              stockTracked: parseStockTracked(value),
+              data: { stockTracked: parseStockTracked(value) },
             });
           }}
         />

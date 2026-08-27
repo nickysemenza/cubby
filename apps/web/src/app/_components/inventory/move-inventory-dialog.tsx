@@ -48,6 +48,7 @@ export function MoveInventoryDialog({
 }: MoveInventoryDialogProps) {
   const invalidateInventory = useInventoryInvalidation();
   const { form, error, setError, reset } = useDestinationLocationForm();
+  const targetLocation = form.watch("targetLocation");
   const sourceLocationIds = uniq(
     items.map((item) => sourceLocationIdProp ?? item.location.id),
   ).filter((id): id is LocationShortcode => Boolean(id));
@@ -133,6 +134,17 @@ export function MoveInventoryDialog({
         description={`Select a destination location for the selected inventory item${items.length !== 1 ? "s" : ""}.`}
         renderItem={(item) =>
           `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
+        }
+        // No blocked/unchanged arm: `DestinationLocationField` disables every
+        // source location in the picker, so a row cannot be asked to move
+        // where it already is.
+        effect={
+          targetLocation
+            ? (item) => ({
+                from: item.location.name,
+                to: targetLocation.name,
+              })
+            : undefined
         }
         onSubmit={handleSubmit}
         isPending={moveMutation.isPending}

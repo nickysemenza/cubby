@@ -996,11 +996,6 @@ export const expenseChargeContextOut = z
   })
   .nullable();
 
-export const expenseBulkMutationOut = z.object({
-  items: z.array(expenseOut),
-  sideEffects: mutationSideEffectsSchema,
-});
-
 export const deleteExpensesWithPurchaseEffectsOut = z.object({
   deleted: z.number().int().nonnegative(),
   deletedIds: z.array(expenseShortcode),

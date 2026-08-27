@@ -2,7 +2,7 @@ import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { useMemo } from "react";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { task } from "~/app/tasks/task.functions";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type {
@@ -17,6 +17,15 @@ import { SetTaskStatusDialog } from "./set-task-status-dialog";
 
 const NO_EXTRA_ACTIONS: BulkAction<TaskOut>[] = [];
 
+/**
+ * Every task bulk verb here is one kernel `bulkUpdate` over a declared field
+ * mask — the id set differs, the patch differs, the command does not.
+ */
+const taskBulkUpdateOptions = entityMutationOptionsFactory(
+  "task",
+  "bulkUpdate",
+);
+
 export function useTaskBulkActions({
   includeDueDate = false,
   onCreateProject,
@@ -26,46 +35,34 @@ export function useTaskBulkActions({
   onCreateProject?: (ids: TaskShortcode[]) => void;
   extraActions?: BulkAction<TaskOut>[];
 } = {}) {
-  const taskCount = (data: { items: unknown[] }) =>
-    `${data.items.length} task${data.items.length !== 1 ? "s" : ""}`;
+  const taskCount = (data: { updated: number }) =>
+    `${data.updated} task${data.updated !== 1 ? "s" : ""}`;
   const updated = (data: {
-    items: unknown[];
+    updated: number;
     sideEffects: Parameters<typeof savedWithBackgroundWork>[0];
   }) => savedWithBackgroundWork(data.sideEffects, `Updated ${taskCount(data)}`);
 
-  const move = useStagedBulkAction<
-    TaskOut,
-    typeof task.bulkMove.mutationOptions
-  >({
+  const move = useStagedBulkAction<TaskOut, typeof taskBulkUpdateOptions>({
     verb: "moveToProject",
     // The existing id is load-bearing: layouts persist per action id.
     id: "move",
-    mutationFn: task.bulkMove.mutationOptions,
+    mutationFn: taskBulkUpdateOptions,
     success: (data) =>
       savedWithBackgroundWork(data.sideEffects, `Moved ${taskCount(data)}`),
   });
-  const status = useStagedBulkAction<
-    TaskOut,
-    typeof task.bulkSetStatus.mutationOptions
-  >({
+  const status = useStagedBulkAction<TaskOut, typeof taskBulkUpdateOptions>({
     verb: "setStatus",
-    mutationFn: task.bulkSetStatus.mutationOptions,
+    mutationFn: taskBulkUpdateOptions,
     success: updated,
   });
-  const trade = useStagedBulkAction<
-    TaskOut,
-    typeof task.bulkSetTrade.mutationOptions
-  >({
+  const trade = useStagedBulkAction<TaskOut, typeof taskBulkUpdateOptions>({
     verb: "setTrade",
-    mutationFn: task.bulkSetTrade.mutationOptions,
+    mutationFn: taskBulkUpdateOptions,
     success: updated,
   });
-  const dueDate = useStagedBulkAction<
-    TaskOut,
-    typeof task.bulkSetDueDate.mutationOptions
-  >({
+  const dueDate = useStagedBulkAction<TaskOut, typeof taskBulkUpdateOptions>({
     verb: "setDueDate",
-    mutationFn: task.bulkSetDueDate.mutationOptions,
+    mutationFn: taskBulkUpdateOptions,
     success: updated,
   });
 
@@ -130,9 +127,14 @@ export function TaskBulkActionDialogs({
           onOpenChange={closed(move)}
           items={move.items}
           entityLabel="Task"
+          currentProject={(item) =>
+            item.projectId
+              ? { id: item.projectId, name: item.projectName ?? item.projectId }
+              : null
+          }
           isPending={move.isPending}
           onConfirm={async (projectId) => {
-            await move.submit({ projectId });
+            await move.submit({ data: { projectId } });
             onComplete();
           }}
         />
@@ -142,9 +144,10 @@ export function TaskBulkActionDialogs({
           open
           onOpenChange={closed(status)}
           items={status.items}
+          currentStatus={(item) => item.status}
           isPending={status.isPending}
           onConfirm={async (nextStatus) => {
-            await status.submit({ status: nextStatus });
+            await status.submit({ data: { status: nextStatus } });
             onComplete();
           }}
         />
@@ -155,11 +158,12 @@ export function TaskBulkActionDialogs({
           onOpenChange={closed(trade)}
           items={trade.items}
           isPending={trade.isPending}
+          currentValue={(item) => item.trade}
           options={tradeOptions}
           fieldLabel="Trade"
           itemNoun="Task"
           onConfirm={async (nextTrade) => {
-            await trade.submit({ trade: nextTrade as Trade });
+            await trade.submit({ data: { trade: nextTrade as Trade } });
             onComplete();
           }}
         />
@@ -169,9 +173,15 @@ export function TaskBulkActionDialogs({
           open
           onOpenChange={closed(dueDate)}
           items={dueDate.items}
+          currentWindow={(item) => ({
+            dueDate: item.dueDate,
+            dueEndDate: item.dueEndDate,
+          })}
           isPending={dueDate.isPending}
           onConfirm={async (nextDueDate, dueEndDate) => {
-            await dueDate.submit({ dueDate: nextDueDate, dueEndDate });
+            await dueDate.submit({
+              data: { dueDate: nextDueDate, dueEndDate },
+            });
             onComplete();
           }}
         />

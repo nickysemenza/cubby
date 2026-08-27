@@ -44,6 +44,7 @@ export function BulkReparentLocationsDialog({
     resolver: zodResolver(formSchema),
     defaultValues: { targetParent: null },
   });
+  const targetParent = form.watch("targetParent");
 
   const bulkUpdateParent = useMutation({
     ...location.bulkUpdateParent.mutationOptions(),
@@ -95,6 +96,23 @@ export function BulkReparentLocationsDialog({
         itemNoun="Location"
         description="Select the new parent location for the selected locations."
         renderItem={(location) => location.name}
+        // Nothing to project until a parent is chosen. A selected location
+        // named as its own new parent is a real blocker, not a no-op: the
+        // submit guard below refuses the whole write, so say so up front.
+        effect={
+          targetParent
+            ? (location) => ({
+                from: location.parent?.name ?? "Home",
+                to: targetParent.name,
+                unchanged: location.parent?.id === targetParent.id,
+                blocked:
+                  location.id === targetParent.id
+                    ? "a location cannot be its own parent"
+                    : undefined,
+              })
+            : undefined
+        }
+        unchangedLabel="already under this parent"
         onSubmit={handleSubmit}
         isPending={bulkUpdateParent.isPending}
       >

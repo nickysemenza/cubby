@@ -7,7 +7,6 @@ import {
 import {
   mergeProductsInput,
   productApplyUpcInput,
-  productBulkStockTrackedInput,
   productCategoryDistributionOut,
   productDiscardInput,
   productDiscardOut,
@@ -68,10 +67,6 @@ const productSearchOut = createPaginatedResponseSchemaWithContext(
   productPickerItemOut,
   "product",
 );
-const productBulkStockTrackedOut = z.object({
-  items: z.array(productTopLevelOut),
-  sideEffects: mutationSideEffectsSchema,
-});
 const productMergeOut = z.object({
   product: productTopLevelOut,
   mergeSummary: productMergeSummaryOut,
@@ -193,8 +188,4 @@ export const productWorkflowSchemas = {
     output: productProjectUsesSetOut,
   },
   discard: { input: productDiscardInput, output: productDiscardOut },
-  bulkSetStockTracked: {
-    input: productBulkStockTrackedInput,
-    output: productBulkStockTrackedOut,
-  },
 } as const;

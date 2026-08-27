@@ -12,10 +12,10 @@ interface MoveToProjectItem {
   name: string;
 }
 
-interface MoveToProjectDialogProps {
+interface MoveToProjectDialogProps<T extends MoveToProjectItem> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  items: MoveToProjectItem[];
+  items: T[];
   /** Noun for the dialog title/count line, e.g. "Task" / "Expense". */
   entityLabel: string;
   /** Include an explicit "No project" option. Defaults to true — both
@@ -25,6 +25,13 @@ interface MoveToProjectDialogProps {
    * shape coupling and works for both `task.bulkMove` and `expense.bulkMove`. */
   onConfirm: (projectId: ProjectShortcode | null) => Promise<void>;
   isPending: boolean;
+  /**
+   * The project the row belongs to today, `null` for none. Supplying it
+   * previews `current project → chosen project` and dims the rows already
+   * there — the reason this dialog is generic over its row type rather than
+   * narrowing to `{ id, name }`.
+   */
+  currentProject?: (item: T) => { id: ProjectShortcode; name: string } | null;
 }
 
 /**
@@ -34,7 +41,7 @@ interface MoveToProjectDialogProps {
  * merging — a task/expense move is a plain `projectId` column write, so
  * there's no partial-quantity/source-location bookkeeping to do here.
  */
-export function MoveToProjectDialog({
+export function MoveToProjectDialog<T extends MoveToProjectItem>({
   open,
   onOpenChange,
   items,
@@ -42,7 +49,8 @@ export function MoveToProjectDialog({
   allowNoProject = true,
   onConfirm,
   isPending,
-}: MoveToProjectDialogProps) {
+  currentProject,
+}: MoveToProjectDialogProps<T>) {
   const [selected, setSelected] =
     useState<ComboboxItem<ProjectShortcode> | null>(null);
   const [clearRequested, setClearRequested] = useState(false);
@@ -63,6 +71,7 @@ export function MoveToProjectDialog({
   };
 
   const count = items.length;
+  const destination = selected ?? (clearRequested ? null : undefined);
   const noun = `${entityLabel.toLowerCase()}${count !== 1 ? "s" : ""}`;
 
   return (
@@ -75,6 +84,21 @@ export function MoveToProjectDialog({
       itemNoun={entityLabel}
       description={`Move ${count} ${noun} to a different project${allowNoProject ? ", or clear the project entirely" : ""}.`}
       renderItem={(item) => item.name}
+      // Nothing to project until a destination is chosen — "Clear project"
+      // counts, because moving to no project is itself a destination.
+      effect={
+        currentProject && destination !== undefined
+          ? (item) => {
+              const current = currentProject(item);
+              return {
+                from: current?.name ?? "No project",
+                to: destination?.name ?? "No project",
+                unchanged: (current?.id ?? null) === (destination?.id ?? null),
+              };
+            }
+          : undefined
+      }
+      unchangedLabel="already there"
       onSubmit={handleSubmit}
       isPending={isPending}
     >
