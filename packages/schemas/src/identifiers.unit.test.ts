@@ -1,6 +1,7 @@
 import { AppErrors } from "@cubby/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { type ShortcodeEntity, shortcodeEntities } from "./entity-manifest";
+import { entityNames } from "./generated/entity-names.gen";
 import {
   ENTITY_ID_SCHEMA,
   ENTITY_LABEL,
@@ -66,6 +67,12 @@ describe("entity id lookups", () => {
       // Account" — the label is only ever used sentence-initially.
       expect(label).toBe(
         label.charAt(0) + label.slice(1).toLowerCase().replace(/_/g, " "),
+      );
+      // ...and it is that one canonical name, not a second copy of it: the
+      // value is the entity literal's `names.singular` with everything after
+      // the first word lowered, so a manifest rename reaches server prose.
+      expect(label.toLowerCase()).toBe(
+        entityNames[entity].singular.toLowerCase(),
       );
     }
   });

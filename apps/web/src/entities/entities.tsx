@@ -121,9 +121,11 @@ const titleCaseEntityLabel = (entity: ShortcodeEntity): string =>
  * exactly the trap. Same shape as `DISPLAY_NAME_COLUMN` being a third question
  * rather than a third copy (see `shortcode-resolver.ts`).
  *
- * The return type is the manifest's own string literal, so a browser-routed
- * entity that declared no plural (`null`, as the route-less `ledgerParty` and
- * `ledgerTransfer` do) fails to compile here rather than reaching the nav.
+ * The return type is the manifest's own string literal rather than `string`,
+ * so a routed entity that declared no plural would hand back `null` and fail
+ * to compile against `EntityDefinition` instead of reaching the nav. (The
+ * route-less `ledgerParty`/`ledgerTransfer` are already excluded a step
+ * earlier, by the parameter constraint.)
  */
 const manifestPluralLabel = <E extends BrowserRoutedEntity>(
   entity: E,
