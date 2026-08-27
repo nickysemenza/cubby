@@ -694,7 +694,7 @@ export async function finishBackgroundJob(
       .set({
         status,
         finishedAt: now,
-        durationMs: sql`GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${now}::timestamp - ${backgroundJob.startedAt})) * 1000))::int`,
+        durationMs: sql`GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${now}::timestamp - ${backgroundJob.startedAt})) * 1000))::bigint`,
       })
       .where(eq(backgroundJob.id, jobId))
       .returning({ batchId: backgroundJob.batchId });
@@ -728,7 +728,7 @@ export async function failOrRetryBackgroundJob(
         finishedAt: nextStatus === "failed" ? now : null,
         durationMs:
           nextStatus === "failed"
-            ? sql`GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${now}::timestamp - ${backgroundJob.startedAt})) * 1000))::int`
+            ? sql`GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${now}::timestamp - ${backgroundJob.startedAt})) * 1000))::bigint`
             : null,
         lastError: getErrorMessage(error),
       })
@@ -957,7 +957,7 @@ async function recalculateBackgroundBatchSummaryTx(
       MAX("queuedAt") AS "lastEnqueuedAt",
       MIN("startedAt") AS "firstJobStartedAt",
       MAX("finishedAt") AS "lastJobFinishedAt",
-      COALESCE(SUM("durationMs"), 0)::int AS "activeDurationMs"
+      COALESCE(SUM("durationMs"), 0)::bigint AS "activeDurationMs"
     FROM "BackgroundJob"
     WHERE "batchId" = ${batchId}
       AND "deletedAt" IS NULL
