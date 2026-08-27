@@ -5,7 +5,6 @@ import type {
 } from "@cubby/schemas/entity-manifest";
 import { entityNames } from "@cubby/schemas/entity-names";
 import { displayGtin } from "@cubby/schemas/external-id";
-import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import type { VendorOut } from "@cubby/schemas/vendor";
 import {
@@ -85,56 +84,49 @@ const newRouteExtensions = {
 } as const;
 
 /**
- * Derives a Title Case UI label ("Financial Account") from the canonical
- * sentence-case label a not-found/prose message calls the entity
- * ("Financial account", `ENTITY_LABEL` in `@cubby/schemas/identifiers`).
+ * Stamps every definition with the display names its own key already implies.
  *
- * One canonical string, two castings for two audiences: server error prose
- * reads sentence-initial ("Financial account not found"), while UI chrome
- * here (nav, page headings, dialog titles, column headers) reads as a
- * heading. Every `ShortcodeEntity` that also has a browser route goes
- * through this rather than a hand-typed literal, so a new entity or a
- * renamed `ENTITY_LABEL` can't reintroduce the "Inventory entry" vs.
- * "Inventory Item" drift this replaced — `entities.unit.test.ts` pins the
- * two sources to agree entity-by-entity as a belt-and-braces guard.
+ * Both come straight from the entity's manifest literal (`names` in
+ * `scripts/entity-literals/entities/*.entity.ts`, surfaced as `entityNames`),
+ * so neither is spelled here and neither can disagree with the key it sits
+ * under — `wish: { label: ... }` naming a vendor is no longer expressible.
+ *
+ * `singular` is the UI label for one record; `plural` is the NAV/SECTION name,
+ * read where context is already established, so it drops the qualifier the
+ * singular needs. It is declared, NOT pluralized: `inventory` → "Inventory"
+ * (not "Inventory Items"), `financialAccount` → "Accounts",
+ * `financialTransaction` → "Transactions", `wish` → "Wishlist" (not "Wishes").
+ * The other twelve coincide with a naive plural, which is exactly the trap —
+ * `pluralize` is already a dependency and gets all four of those wrong.
+ *
+ * Names are stamped BEFORE the definition spreads in, so an entity that has a
+ * genuine reason to depart can still say so and win.
  */
-const titleCaseEntityLabel = (entity: ShortcodeEntity): string =>
-  ENTITY_LABEL[entity]
-    .split(" ")
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-    .join(" ");
+const withEntityNames = <
+  const Definitions extends Record<BrowserRoutedEntity, object>,
+>(
+  definitions: Definitions,
+): {
+  [Entity in keyof Definitions & BrowserRoutedEntity]: {
+    label: (typeof entityNames)[Entity]["singular"];
+    pluralLabel: (typeof entityNames)[Entity]["plural"];
+  } & Definitions[Entity];
+} =>
+  Object.fromEntries(
+    Object.entries(definitions).map(([entity, definition]) => [
+      entity,
+      {
+        label: entityNames[entity as BrowserRoutedEntity].singular,
+        pluralLabel: entityNames[entity as BrowserRoutedEntity].plural,
+        ...definition,
+      },
+    ]),
+    // `Object.entries` widens the key to `string` and loses the pairing the
+    // signature above states; the mapped type is the real contract.
+  ) as never;
 
-/**
- * Reads the nav/section name an entity's manifest literal declares
- * (`names.plural` in `scripts/entity-literals/entities/*.entity.ts`, surfaced
- * as `entityNames`). It is declared per entity rather than derived, and is NOT
- * a pluralization of `label` — `pluralize` is already a dependency and gets
- * all four exceptions below wrong.
- *
- * It answers a different question: `label` names one record, while
- * `pluralLabel` is the NAV/SECTION name, read in a place — the sidebar, a page
- * heading — where the context is already established, so it drops the
- * qualifier the singular needs. Four differ from the naive plural on purpose:
- * `inventory` → "Inventory" (not "Inventory Items"), `financialAccount` →
- * "Accounts", `financialTransaction` → "Transactions", `wish` → "Wishlist"
- * (not "Wishes"). The other twelve coincide with a naive plural, which is
- * exactly the trap. Same shape as `DISPLAY_NAME_COLUMN` being a third question
- * rather than a third copy (see `shortcode-resolver.ts`).
- *
- * The return type is the manifest's own string literal rather than `string`,
- * so a routed entity that declared no plural would hand back `null` and fail
- * to compile against `EntityDefinition` instead of reaching the nav. (The
- * route-less `ledgerParty`/`ledgerTransfer` are already excluded a step
- * earlier, by the parameter constraint.)
- */
-const manifestPluralLabel = <E extends BrowserRoutedEntity>(
-  entity: E,
-): (typeof entityNames)[E]["plural"] => entityNames[entity].plural;
-
-const entityDefinitions = {
+const entityDefinitions = withEntityNames({
   ingredient: {
-    label: titleCaseEntityLabel("ingredient"),
-    pluralLabel: manifestPluralLabel("ingredient"),
     ...generatedBrowserRoutes.ingredient,
     lucideIcon: Carrot,
     color: {
@@ -179,8 +171,6 @@ const entityDefinitions = {
     },
   },
   product: {
-    label: titleCaseEntityLabel("product"),
-    pluralLabel: manifestPluralLabel("product"),
     ...generatedBrowserRoutes.product,
     lucideIcon: Barcode,
     color: INK.primary,
@@ -248,8 +238,6 @@ const entityDefinitions = {
     },
   },
   recipe: {
-    label: titleCaseEntityLabel("recipe"),
-    pluralLabel: manifestPluralLabel("recipe"),
     ...generatedBrowserRoutes.recipe,
     lucideIcon: ChefHat,
     color: INK.primary,
@@ -279,8 +267,6 @@ const entityDefinitions = {
     },
   },
   cookbook: {
-    label: titleCaseEntityLabel("cookbook"),
-    pluralLabel: manifestPluralLabel("cookbook"),
     ...generatedBrowserRoutes.cookbook,
     lucideIcon: BookOpen,
     color: INK.primary,
@@ -289,8 +275,6 @@ const entityDefinitions = {
     sortableFields: [],
   },
   location: {
-    label: titleCaseEntityLabel("location"),
-    pluralLabel: manifestPluralLabel("location"),
     ...generatedBrowserRoutes.location,
     lucideIcon: MapPin,
     color: INK.slate,
@@ -318,8 +302,6 @@ const entityDefinitions = {
     },
   },
   inventory: {
-    label: titleCaseEntityLabel("inventory"),
-    pluralLabel: manifestPluralLabel("inventory"),
     ...generatedBrowserRoutes.inventory,
     lucideIcon: Package,
     color: INK.primary,
@@ -346,8 +328,6 @@ const entityDefinitions = {
     },
   },
   meal: {
-    label: titleCaseEntityLabel("meal"),
-    pluralLabel: manifestPluralLabel("meal"),
     ...generatedBrowserRoutes.meal,
     lucideIcon: CalendarDays,
     // Neutral, not amber: the status ramp is reserved for entities whose accent
@@ -366,8 +346,6 @@ const entityDefinitions = {
     },
   },
   project: {
-    label: titleCaseEntityLabel("project"),
-    pluralLabel: manifestPluralLabel("project"),
     ...generatedBrowserRoutes.project,
     lucideIcon: Hammer,
     color: INK.plum,
@@ -389,8 +367,6 @@ const entityDefinitions = {
     },
   },
   task: {
-    label: titleCaseEntityLabel("task"),
-    pluralLabel: manifestPluralLabel("task"),
     ...generatedBrowserRoutes.task,
     lucideIcon: ListChecks,
     color: INK.slate,
@@ -411,8 +387,6 @@ const entityDefinitions = {
     },
   },
   vendor: {
-    label: titleCaseEntityLabel("vendor"),
-    pluralLabel: manifestPluralLabel("vendor"),
     ...generatedBrowserRoutes.vendor,
     lucideIcon: Store,
     // A quiet roster, not a live money surface — same neutral as location/task.
@@ -460,8 +434,6 @@ const entityDefinitions = {
     },
   },
   purchase: {
-    label: titleCaseEntityLabel("purchase"),
-    pluralLabel: manifestPluralLabel("purchase"),
     ...generatedBrowserRoutes.purchase,
     lucideIcon: Receipt,
     color: INK.primary,
@@ -514,8 +486,6 @@ const entityDefinitions = {
     },
   },
   expense: {
-    label: titleCaseEntityLabel("expense"),
-    pluralLabel: manifestPluralLabel("expense"),
     ...generatedBrowserRoutes.expense,
     lucideIcon: ReceiptText,
     color: INK.primary,
@@ -541,9 +511,7 @@ const entityDefinitions = {
     },
   },
   financialAccount: {
-    label: titleCaseEntityLabel("financialAccount"),
     dialogLabel: "Account",
-    pluralLabel: manifestPluralLabel("financialAccount"),
     ...generatedBrowserRoutes.financialAccount,
     lucideIcon: CreditCard,
     color: INK.slate,
@@ -564,9 +532,7 @@ const entityDefinitions = {
     },
   },
   financialTransaction: {
-    label: titleCaseEntityLabel("financialTransaction"),
     dialogLabel: "Transaction",
-    pluralLabel: manifestPluralLabel("financialTransaction"),
     ...generatedBrowserRoutes.financialTransaction,
     lucideIcon: CreditCard,
     color: INK.primary,
@@ -588,8 +554,6 @@ const entityDefinitions = {
     },
   },
   wish: {
-    label: titleCaseEntityLabel("wish"),
-    pluralLabel: manifestPluralLabel("wish"),
     ...generatedBrowserRoutes.wish,
     lucideIcon: Heart,
     color: INK.plum,
@@ -607,8 +571,6 @@ const entityDefinitions = {
     },
   },
   "usda-food": {
-    label: "USDA Food",
-    pluralLabel: manifestPluralLabel("usda-food"),
     ...generatedBrowserRoutes["usda-food"],
     lucideIcon: Apple,
     color: INK.positive,
@@ -626,8 +588,6 @@ const entityDefinitions = {
     },
   },
   image: {
-    label: titleCaseEntityLabel("image"),
-    pluralLabel: manifestPluralLabel("image"),
     ...generatedBrowserRoutes.image,
     lucideIcon: Image,
     color: {
@@ -644,7 +604,7 @@ const entityDefinitions = {
       standardColumns: [],
     },
   },
-} as const satisfies Record<BrowserRoutedEntity, EntityDefinition>;
+} as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;
 
 /** Route unions are derived from the definitions so links cannot drift. */
 export type EntityDetailRoute =
@@ -668,15 +628,12 @@ export const getSortableFields = (entity: Entity): readonly string[] =>
 
 /**
  * Human-readable labels for generic surfaces that include route-less entities.
- * Routed entities' `.label` is `titleCaseEntityLabel` of the canonical
- * `ENTITY_LABEL` (or, for the handful of browser-routed entities with no
- * shortcode, e.g. `usda-food`, a hand-typed literal) — not independently
- * curated, so it can't drift from the server's error-prose wording the way
- * "Inventory Item" vs. "Inventory entry" once did. Route-less records
+ * Routed entities' `.label` is the manifest's own `names.singular`, stamped
+ * from the key by `withEntityNames`, so it cannot drift from the server's
+ * error prose — that derives from the same declaration. Route-less records
  * deliberately avoid growing a parallel browser registry just to appear in
- * audit tooling, so `ledgerParty`/`ledgerTransfer` fall back to their
- * `ENTITY_LABEL` string verbatim (sentence case fits the audit-log prose
- * they actually appear in).
+ * audit tooling, so `ledgerParty`/`ledgerTransfer` fall back to a sentence-case
+ * literal, which is what the audit-log prose they appear in wants.
  */
 export const entityLabel = (entity: Entity): string => {
   if (isBrowserRoutedEntity(entity)) return entities[entity].label;

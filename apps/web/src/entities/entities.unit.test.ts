@@ -22,9 +22,10 @@ import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { wishSortableFields } from "@cubby/schemas/wish";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   browserEntityDefinition,
+  type EntityDetailRoute,
   entities,
   entityLabel,
   isBrowserRoutedEntity,
@@ -99,12 +100,10 @@ describe("entity label parity", () => {
     // prose, sentence case) and this registry's `.label` (UI chrome — nav,
     // headers, dialog titles — Title Case) used to be two hand-maintained
     // maps that could silently disagree, as "Inventory entry" vs. "Inventory
-    // Item" once did. `.label` now derives from `ENTITY_LABEL` via
-    // `titleCaseEntityLabel`, so a mismatch here means either that
-    // derivation broke or a `label` field went back to being hand-typed —
-    // this re-implements the same word-by-word title-case independently of
-    // `entities.tsx` so the assertion isn't a tautology against its own
-    // helper.
+    // Item" once did. Both now come from the same manifest declaration, so a
+    // mismatch here means one of the two derivations broke or a `label` went
+    // back to being hand-typed. Re-implements the casing independently of
+    // `entities.tsx` so the assertion isn't a tautology against its helper.
     const titleCase = (label: string): string =>
       label
         .split(" ")
@@ -154,5 +153,31 @@ describe("entity label parity", () => {
       financialTransaction: "Transactions",
       wish: "Wishlist",
     });
+  });
+});
+
+describe("entity names come from the key", () => {
+  it("stamps every routed entity from its own manifest declaration", () => {
+    // `withEntityNames` reads both names off the key, so a definition can no
+    // longer name a different entity than the one it sits under. This walks
+    // the registry against the manifest to prove the stamping is real rather
+    // than 17 lucky coincidences.
+    const wrong = browserRoutedEntities.filter(
+      (entity) =>
+        entities[entity].label !== entityNames[entity].singular ||
+        entities[entity].pluralLabel !== entityNames[entity].plural,
+    );
+    expect(wrong).toEqual([]);
+    expect(browserRoutedEntities.length).toBeGreaterThan(10);
+  });
+
+  it("keeps the definitions' literal types through the wrapper", () => {
+    // The silent failure mode: a wrapper that widens these to `string` still
+    // typechecks, and `EntityDetailRoute` quietly stops protecting links from
+    // drifting. Nothing at runtime would notice, so pin it at the type level.
+    expectTypeOf<EntityDetailRoute>().not.toEqualTypeOf<string>();
+    expectTypeOf<"/wishes/$shortcode">().toMatchTypeOf<EntityDetailRoute>();
+    expectTypeOf(entities.wish.pluralLabel).toEqualTypeOf<"Wishlist">();
+    expectTypeOf(entities.inventory.label).toEqualTypeOf<"Inventory Item">();
   });
 });
