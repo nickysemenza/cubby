@@ -469,13 +469,13 @@ export const getProductsByShortcodes = async (
   return ledgered.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
 };
 
-export const productList = async (
+/**
+ * The complete WHERE for a product list. `getEntityCounts` calls it with `{}`
+ * — see repo/dashboard.ts.
+ */
+export const buildProductWhere = async (
   db: Database,
   filters: ProductFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  groupBy?: string,
-  readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
 
@@ -912,6 +912,18 @@ export const productList = async (
       ),
     ],
   );
+  return whereClause;
+};
+
+export const productList = async (
+  db: Database,
+  filters: ProductFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  groupBy?: string,
+  readIntent: ListReadIntent = "page",
+) => {
+  const whereClause = await buildProductWhere(db, filters);
 
   if (readIntent === "count") {
     return {

@@ -1,5 +1,5 @@
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
-import { eq, type SQL } from "drizzle-orm";
+import { and, eq, type SQL, sql } from "drizzle-orm";
 import { inventoryEntry } from "~/server/db/schema";
 
 /**
@@ -55,3 +55,38 @@ export const placementCondition = (
   if (filter === undefined || filter === "all") return undefined;
   return eq(inventoryEntry.placement, filter);
 };
+
+/**
+ * The JOIN-implied half of `inventoryentryList`'s population, as a
+ * self-contained predicate: an entry is browsable only when BOTH its Product
+ * and its Location are live.
+ *
+ * The list says this with `INNER JOIN`s because it needs those tables' columns
+ * for search, category, and sorting. A caller with no joins to hang it on — the
+ * dashboard's scalar `count(*)` subquery — cannot express it that way, and the
+ * count's hand-mirrored predicate used to simply omit it. That was latent
+ * rather than live (production: 863 either way, and zero live entries point at
+ * a soft-deleted product or location), but it was correct only by luck of the
+ * data.
+ *
+ * Provably equivalent to the joins: `InventoryEntry.productId` and
+ * `.locationId` are both `notNull` FKs to a primary key, so the join matches
+ * exactly one row — never zero, never many. The only rows it removes are those
+ * failing `notDeleted`, which is what these EXISTS remove.
+ *
+ * Correlated `EXISTS` is a trap elsewhere in this repo (see recipe/crud.ts on
+ * the relational query builder aliasing the root table). Inventory is exempt:
+ * every read path is a plain `select().from(inventoryEntry)`, never
+ * `query.inventoryEntry.findMany` carrying this clause, so
+ * `${inventoryEntry.productId}` renders `"InventoryEntry"."productId"` at all
+ * of them — including `FROM "InventoryEntry"` in `getEntityCounts`.
+ */
+export const liveProductAndLocation = (): SQL =>
+  and(
+    sql`EXISTS (SELECT 1 FROM "Product" lpl_p
+                 WHERE lpl_p."id" = ${inventoryEntry.productId}
+                   AND lpl_p."deletedAt" IS NULL)`,
+    sql`EXISTS (SELECT 1 FROM "Location" lpl_l
+                 WHERE lpl_l."id" = ${inventoryEntry.locationId}
+                   AND lpl_l."deletedAt" IS NULL)`,
+  )!;

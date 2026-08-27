@@ -131,13 +131,11 @@ export const getUpcomingMealSummary = async (
   });
 };
 
-export const mealList = async (
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildMealWhere = (
   db: Database,
   filters: MealFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-): Promise<{ data: MealOut[]; count: number }> => {
+): SQL | undefined => {
   const dbClient = getDb(db);
   const mealsWithUnderstatedRecipeCost = dbClient
     .select({ mealId: mealRecipe.mealId })
@@ -152,6 +150,38 @@ export const mealList = async (
         sql`(${recipe.totals} ->> 'costCovered')::int < (${recipe.totals} ->> 'ingredientCount')::int`,
       ),
     );
+
+  return and(
+    notDeleted(meal),
+    ...auditDateWhereConditions(meal, filters),
+    // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
+    // the manifest renders its control — omitting this is the #588 drift, where
+    // the UI sends a filter the server silently ignores.
+    ...relatedWhereConditions("meal", filters, meal.id),
+    // OR-ed, not narrowed: "unslotted" is a value of the same picker, so
+    // selecting it alongside `dinner` means "dinner or unslotted".
+    eqAnyOrPresence(
+      meal.mealType,
+      filters.mealType,
+      filters.mealTypePresenceFilter,
+    ),
+    eqAny(meal.mealKind, filters.mealKind),
+    filters.from ? gte(meal.date, filters.from) : undefined,
+    filters.to ? lte(meal.date, filters.to) : undefined,
+    filters.recipeCostCoverage === "understated"
+      ? inArray(meal.id, mealsWithUnderstatedRecipeCost)
+      : undefined,
+  );
+};
+
+export const mealList = async (
+  db: Database,
+  filters: MealFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+): Promise<{ data: MealOut[]; count: number }> => {
+  const dbClient = getDb(db);
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
   // declaration order IS clock order (the calendar sorts a day by it), so
@@ -177,27 +207,7 @@ export const mealList = async (
   });
   const { take, skip } = buildTakeSkip(pagination);
 
-  const whereCondition = and(
-    notDeleted(meal),
-    ...auditDateWhereConditions(meal, filters),
-    // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
-    // the manifest renders its control — omitting this is the #588 drift, where
-    // the UI sends a filter the server silently ignores.
-    ...relatedWhereConditions("meal", filters, meal.id),
-    // OR-ed, not narrowed: "unslotted" is a value of the same picker, so
-    // selecting it alongside `dinner` means "dinner or unslotted".
-    eqAnyOrPresence(
-      meal.mealType,
-      filters.mealType,
-      filters.mealTypePresenceFilter,
-    ),
-    eqAny(meal.mealKind, filters.mealKind),
-    filters.from ? gte(meal.date, filters.from) : undefined,
-    filters.to ? lte(meal.date, filters.to) : undefined,
-    filters.recipeCostCoverage === "understated"
-      ? inArray(meal.id, mealsWithUnderstatedRecipeCost)
-      : undefined,
-  );
+  const whereCondition = buildMealWhere(db, filters);
 
   const { data: rows, count } = await executeListQueryWithCount({
     kind: readIntent,

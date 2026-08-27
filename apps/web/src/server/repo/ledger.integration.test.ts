@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   auditLog,
   expenseAttribution,
+  financialAccount,
   financialTransaction,
   financialTransactionAllocation,
   ledgerParty,
@@ -331,6 +332,20 @@ describe("consolidated household ledger", () => {
         ),
       );
     expect(cleared?.id).toBe(outflow.id);
+
+    // The transfer's OTHER declared disposition: `LedgerSourceClaim` rows are
+    // soft-deleted, not detached. Unlike almost every other edge in the
+    // lifecycle registry this one runs through a bespoke single-call-site
+    // helper (`softDeleteLedgerSourceClaims` in ledger-source-claim.ts, a file
+    // with no test of its own) rather than `removeEntity`'s shared children
+    // mechanism — so nothing else in the suite covers it.
+    const [claim] = await unwrapDb(ctx.db)
+      .select({ deletedAt: ledgerSourceClaim.deletedAt })
+      .from(ledgerSourceClaim)
+      .where(eq(ledgerSourceClaim.ledgerTransferId, transfer.entityId));
+    expect(claim).toBeDefined();
+    expect(claim?.deletedAt).not.toBeNull();
+
     await expect(
       deleteLedgerParties(
         ctx.db,
@@ -403,6 +418,28 @@ describe("consolidated household ledger", () => {
       },
       ctx.actor,
     );
+    // The merge policy declares FOUR repoints; only `LedgerTransfer.fromPartyId`
+    // (the transfer above) was exercised. These two cover the rest:
+    // `FinancialAccount.ledgerPartyId` and the transfer's `toPartyId`.
+    const loserAccount = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Lose-owned placeholder",
+      identity: { kind: "cash" },
+      ledgerPartyId: lose.entityId,
+    });
+    const inboundTransfer = await createLedgerTransfer(
+      ctx.db,
+      {
+        fromPartyId: other.output.id,
+        toPartyId: lose.output.id,
+        amount: 1,
+        date: "2026-08-21",
+        notes: null,
+        sourceClaims: [],
+        evidenceTransactionIds: [],
+      },
+      ctx.actor,
+    );
+
     const preview = await previewMergeLedgerParties(ctx.db, {
       keepId: keep.entityId,
       mergeIds: [lose.entityId],
@@ -458,11 +495,26 @@ describe("consolidated household ledger", () => {
         ),
       );
     expect(largeShare?.weight).toBe(7_000_000_000);
+    // `toBeDefined()` would pass even if the repoint named the WRONG party — it
+    // only proves the column is non-null. All three repoints assert the
+    // survivor by id.
     const [repointed] = await unwrapDb(ctx.db)
       .select({ fromPartyId: ledgerTransfer.fromPartyId })
       .from(ledgerTransfer)
       .where(eq(ledgerTransfer.shortcode, transfer.output!.id));
-    expect(repointed?.fromPartyId).toBeDefined();
+    expect(repointed?.fromPartyId).toBe(keep.entityId);
+
+    const [inbound] = await unwrapDb(ctx.db)
+      .select({ toPartyId: ledgerTransfer.toPartyId })
+      .from(ledgerTransfer)
+      .where(eq(ledgerTransfer.shortcode, inboundTransfer.output!.id));
+    expect(inbound?.toPartyId).toBe(keep.entityId);
+
+    const [account] = await unwrapDb(ctx.db)
+      .select({ ledgerPartyId: financialAccount.ledgerPartyId })
+      .from(financialAccount)
+      .where(eq(financialAccount.id, loserAccount.id));
+    expect(account?.ledgerPartyId).toBe(keep.entityId);
   });
 
   it("owns nested Expense sets with omit, replace, and clear semantics", async () => {

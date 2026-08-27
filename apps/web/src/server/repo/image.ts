@@ -66,10 +66,10 @@ import {
   associatePendingImages,
   auditDateWhereConditions,
   buildOrderBy,
+  buildSearchConditions,
   countWhere,
   eqAny,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   isNotDeleted,
   type ListReadIntent,
@@ -467,6 +467,50 @@ const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
     not(anyForeignKeyImageReferenceCondition(db, image)),
   );
 
+/**
+ * The `imageList` predicate. Takes `outerImage` as a parameter — not just
+ * `image` — because `imageList` below calls this twice: once against the
+ * aliased table the relational `findMany` selects through, once against the
+ * root table for the plain-count query. Exported so `getEntityCounts` can call
+ * `buildImageWhere(db, {})` and get the list's REAL population rather than a
+ * hand-restated copy that can drift from it.
+ *
+ * Routed through `buildSearchConditions` (like every other list) rather than a
+ * hand-built `and(...)`, which is a deliberate behavior change: the old
+ * `buildWhere` here started from an EMPTY conditions array with NO soft-delete
+ * predicate at all, so `imageList({})` would have returned soft-deleted images
+ * too. `buildSearchConditions` supplies `notDeleted` for free, closing that gap.
+ * Verified impact is ZERO rows today (0 of 5738 images have `deletedAt` set,
+ * since `deleteImages` hard-deletes rather than soft-deletes) — `Image` is
+ * still declared `softDeletedAt()`, so this closes a latent gap rather than
+ * changing any observable result.
+ */
+export const buildImageWhere = (
+  db: Database,
+  filters: ImageListFilters,
+  outerImage: typeof image = image,
+): SQL | undefined => {
+  let referencePresence: SQL | undefined;
+  if (filters.referencePresenceFilter) {
+    const referenced = activeImageReferenceCondition(db, outerImage);
+    referencePresence =
+      filters.referencePresenceFilter === "has" ? referenced : not(referenced);
+  }
+
+  return buildSearchConditions(
+    outerImage,
+    [{ column: outerImage.filename, term: filters.nameFilter }],
+    [
+      eqAny(outerImage.status, filters.status),
+      ...auditDateWhereConditions(outerImage, filters),
+      referencePresence,
+      filters.uploadedAgeHoursMin !== undefined
+        ? sql`${outerImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`
+        : undefined,
+    ],
+  );
+};
+
 export const imageList = async (
   db: Database,
   filters: ImageListFilters,
@@ -475,39 +519,12 @@ export const imageList = async (
   readIntent: ListReadIntent = "page",
 ) => {
   const dbClient = getDb(db);
-  const buildWhere = (outerImage: typeof image) => {
-    const whereConditions: SQL[] = [];
-    const filenameCondition = formatSearchTerm(
-      outerImage.filename,
-      filters.nameFilter,
-    );
-    if (filenameCondition) whereConditions.push(filenameCondition);
-    const statusCondition = eqAny(outerImage.status, filters.status);
-    if (statusCondition) whereConditions.push(statusCondition);
-    whereConditions.push(
-      ...auditDateWhereConditions(outerImage, filters).filter(
-        (condition): condition is NonNullable<typeof condition> =>
-          Boolean(condition),
-      ),
-    );
-    if (filters.referencePresenceFilter) {
-      const referenced = activeImageReferenceCondition(db, outerImage);
-      whereConditions.push(
-        filters.referencePresenceFilter === "has"
-          ? referenced
-          : not(referenced),
-      );
-    }
-    if (filters.uploadedAgeHoursMin !== undefined) {
-      whereConditions.push(
-        sql`${outerImage.createdAt} < now() - (${filters.uploadedAgeHoursMin} * interval '1 hour')`,
-      );
-    }
-    return whereConditions.length > 0 ? and(...whereConditions) : undefined;
-  };
-
-  const whereClause = buildWhere(aliasedTable(image, "image"));
-  const countWhereClause = buildWhere(image);
+  const whereClause = buildImageWhere(
+    db,
+    filters,
+    aliasedTable(image, "image"),
+  );
+  const countWhereClause = buildImageWhere(db, filters, image);
 
   const orderByClause = buildOrderBy(image, sorts, [...imageSortableFields]);
 

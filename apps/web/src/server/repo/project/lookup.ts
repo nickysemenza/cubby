@@ -54,6 +54,7 @@ import {
   loadProjectDateWindows,
   loadProjectSubtreeRollups,
   loadProjectTree,
+  type ProjectTree,
   projectCompletionYear,
 } from "./subtree";
 
@@ -120,12 +121,25 @@ export const buildProjectListQuery = async (
   sorts: SortParams[],
 ) => {
   // Whole-tree parent/child map — cheap single query — see subtree.ts's doc
-  // comment. Fetched up front (rather than inside `loadProjectSubtreeRollups`
-  // below) because it also resolves `includeSubProjects` into the WHERE
-  // clause, which has to be built before this page's ids exist; it is then
-  // handed back in so the tree is never queried twice.
-  const tree = await loadProjectTree(db);
-  const { childrenByParent } = tree;
+  // comment. Loaded LAZILY and memoized: only two filters need it for the WHERE
+  // clause (`includeSubProjects` below, and `completionYear`'s date windows),
+  // and `getEntityCounts` calls this with `{}` inside a function whose entire
+  // design is one round trip. Eagerly loading here made that a second query
+  // before a single filter had been inspected.
+  //
+  // Whoever forces it keeps the result, and it is handed back so the tree is
+  // never queried twice. `loadProjectSubtreeRollups` already declares its
+  // `tree` argument optional and re-fetches when absent (subtree.ts:385), so
+  // the `undefined` this can now return needs no call-site change — and a
+  // `readIntent: "count"` list, which returns before rollups, stops loading the
+  // tree at all.
+  let loadedTree: ProjectTree | undefined;
+  let treePromise: Promise<ProjectTree> | undefined;
+  const getTree = async () => {
+    treePromise ??= loadProjectTree(db);
+    loadedTree = await treePromise;
+    return loadedTree;
+  };
 
   // Delegate exact tracker membership to the same deep module used by the
   // dashboard and Problems. This avoids a second copy of the stalled, budget,
@@ -166,6 +180,7 @@ export const buildProjectListQuery = async (
         ? sql`false`
         : inArray(project.parentProjectId, parentProjectUuids);
   if (parentProjectUuids.length > 0 && filters.includeSubProjects) {
+    const { childrenByParent } = await getTree();
     parentValues = inArray(
       project.id,
       parentProjectUuids.flatMap((id) =>
@@ -181,9 +196,10 @@ export const buildProjectListQuery = async (
     ),
   );
 
-  const completionIds = filters.completionYear
-    ? await loadProjectDateWindows(db, tree).then(({ dateWindows }) =>
-        tree.allRows
+  const completionTree = filters.completionYear ? await getTree() : undefined;
+  const completionIds = completionTree
+    ? await loadProjectDateWindows(db, completionTree).then(({ dateWindows }) =>
+        completionTree.allRows
           .filter((row) => {
             const window = dateWindows.get(row.id);
             return (
@@ -297,8 +313,19 @@ export const buildProjectListQuery = async (
     },
   );
 
-  return { tree, whereClause, orderByArray };
+  return { tree: loadedTree, whereClause, orderByArray };
 };
+
+/**
+ * The complete WHERE for a project list. `getEntityCounts` calls it with `{}` —
+ * see repo/dashboard.ts. Thin wrapper so the registry's entries all look alike
+ * and the dashboard never has to discard an `orderByArray` it did not ask for;
+ * with no filters set, the lazy tree above means this issues no query.
+ */
+export const buildProjectWhere = async (
+  db: Database,
+  filters: ProjectFilters,
+) => (await buildProjectListQuery(db, filters, [])).whereClause;
 
 /**
  * Footer total for the `costEstimate` column: `SUM` over the FULL filtered

@@ -240,7 +240,8 @@ async function toIds(
   return resolveAllPresent(db, entity, codes);
 }
 
-async function whereFor(
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export async function buildFinancialTransactionWhere(
   db: Database,
   filters: FinancialTransactionFilters,
 ): Promise<SQL | undefined> {
@@ -326,7 +327,7 @@ export async function listFinancialTransactions(
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ) {
-  const where = await whereFor(db, filters);
+  const where = await buildFinancialTransactionWhere(db, filters);
   const { take, skip } = buildTakeSkip(pagination);
   const { data: rows, count } = await executeListQueryWithCount({
     kind: readIntent,

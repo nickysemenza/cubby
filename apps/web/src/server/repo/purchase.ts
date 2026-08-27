@@ -503,11 +503,37 @@ const documentPresenceCondition = (
       ? sql`${purchaseDocumentCount} = 0`
       : undefined;
 
-const buildPurchaseWhereClause = (
+/**
+ * The complete WHERE for a purchase list, filters and all.
+ *
+ * The vendor resolve lives INSIDE rather than being handed in: a caller that
+ * passed `undefined` would be restating "with no vendor filter there is no
+ * vendor predicate", which is a fact this function derives from
+ * `filters.vendorId`. `getEntityCounts` calls it with `{}` for exactly that
+ * reason — see the registry in repo/dashboard.ts.
+ */
+export const buildPurchaseWhereClause = async (
+  db: Database | DrizzleTransaction,
   filters: PurchaseFilters,
-  vendorCondition: SQL | undefined,
-) =>
-  buildSearchConditions(
+) => {
+  // An unknown code resolves to nothing and so matches nothing, which is what a
+  // filter naming a missing vendor should do — not throw. `vendorUuids` alone
+  // can't express that: `eqAny([])` is "no constraint" by design (see its doc
+  // in database-helpers/query.ts), so a requested-but-unresolved vendor has to
+  // become an explicit `sql`false`` here rather than being handed to `eqAny`
+  // and silently dropping the filter (which would return every purchase).
+  const vendorCodes = filters.vendorId ? [filters.vendorId].flat() : undefined;
+  const vendorUuids = vendorCodes
+    ? [...(await resolveShortcodes(db, vendorCodes)).values()]
+        .filter((ref) => ref.entity === "vendor")
+        .map((ref) => ref.id)
+    : undefined;
+  const vendorCondition = vendorCodes
+    ? vendorUuids && vendorUuids.length > 0
+      ? eqAny(purchase.vendorId, vendorUuids)
+      : sql`false`
+    : undefined;
+  return buildSearchConditions(
     purchase,
     [{ column: purchase.displayLabel, term: filters.displayLabelSearch }],
     [
@@ -554,6 +580,7 @@ const buildPurchaseWhereClause = (
       filters.dateTo ? sql`${purchase.date} <= ${filters.dateTo}` : undefined,
     ],
   );
+};
 
 const resolvePurchaseSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
@@ -574,24 +601,7 @@ export const purchaseList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
-  // An unknown code resolves to nothing and so matches nothing, which is what a
-  // filter naming a missing vendor should do — not throw. `vendorUuids` alone
-  // can't express that: `eqAny([])` is "no constraint" by design (see its doc
-  // in database-helpers/query.ts), so a requested-but-unresolved vendor has to
-  // become an explicit `sql\`false\`` here rather than being handed to `eqAny`
-  // and silently dropping the filter (which would return every purchase).
-  const vendorCodes = filters.vendorId ? [filters.vendorId].flat() : undefined;
-  const vendorUuids = vendorCodes
-    ? [...(await resolveShortcodes(db, vendorCodes)).values()]
-        .filter((ref) => ref.entity === "vendor")
-        .map((ref) => ref.id)
-    : undefined;
-  const vendorCondition = vendorCodes
-    ? vendorUuids && vendorUuids.length > 0
-      ? eqAny(purchase.vendorId, vendorUuids)
-      : sql`false`
-    : undefined;
-  const whereClause = buildPurchaseWhereClause(filters, vendorCondition);
+  const whereClause = await buildPurchaseWhereClause(db, filters);
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({

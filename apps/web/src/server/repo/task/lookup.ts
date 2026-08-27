@@ -143,13 +143,8 @@ const resolveTaskSort = (sort: SortParams) => {
   return null;
 };
 
-export const taskList = async (
-  db: Database,
-  filters: TaskFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-): Promise<{ data: TaskOut[]; count: number }> => {
+/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
   const dbClient = getDb(db);
   const projectCondition = await buildTaskProjectCondition(
     db,
@@ -210,7 +205,7 @@ export const taskList = async (
       )
     : undefined;
 
-  const whereClause = buildSearchConditions(
+  return buildSearchConditions(
     task,
     [],
     [
@@ -264,6 +259,17 @@ export const taskList = async (
           : undefined,
     ],
   );
+};
+
+export const taskList = async (
+  db: Database,
+  filters: TaskFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+): Promise<{ data: TaskOut[]; count: number }> => {
+  const dbClient = getDb(db);
+  const whereClause = await buildTaskWhere(db, filters);
 
   const orderByArray = buildOrderBy(task, sorts, [...taskSortableFields], {
     resolve: resolveTaskSort,

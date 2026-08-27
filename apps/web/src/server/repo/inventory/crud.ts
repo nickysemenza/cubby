@@ -79,7 +79,11 @@ import {
   dbInventoryEntryToListAPI,
   requireLoadedProductPricing,
 } from "./mappers";
-import { placementCondition, stockOnly } from "./placement";
+import {
+  liveProductAndLocation,
+  placementCondition,
+  stockOnly,
+} from "./placement";
 import type {
   CreateInventoryEntryData,
   InventoryEntryDeepDB,
@@ -276,20 +280,25 @@ const inventoryListOrderBy = (sorts: SortParams[]) =>
     tieBreaker: desc(inventoryEntry.createdAt),
   });
 
-export const inventoryentryList = async (
+/**
+ * The complete WHERE for an inventory list. `getEntityCounts` calls it with
+ * `{}` — see repo/dashboard.ts.
+ *
+ * Includes {@link liveProductAndLocation}, the predicate form of the two
+ * `INNER JOIN`s below. Folding it in HERE rather than only into the count path
+ * is what makes this honest: rows, count, and the valuation aggregate all
+ * narrow the same way, and a caller with no joins gets the same population.
+ */
+export const buildInventoryWhere = async (
   db: Database,
   filters: InventoryFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
 ) => {
-  const { take, skip } = buildTakeSkip(pagination);
   const [locationIds, productIds] = await Promise.all([
     resolveFilterIds(db, "location", filters.locationIdFilter),
     resolveFilterIds(db, "product", filters.productIdFilter),
   ]);
 
-  const whereCondition = buildSearchConditions(
+  return buildSearchConditions(
     inventoryEntry,
     [
       { column: product.name, term: filters.productNameFilter },
@@ -335,8 +344,20 @@ export const inventoryentryList = async (
       // `list_inventory`, and any direct workflow caller cannot disagree about what
       // an empty filter means — pass "all" to opt back in.
       placementCondition(filters.placementFilter ?? "stock"),
+      liveProductAndLocation(),
     ],
   );
+};
+
+export const inventoryentryList = async (
+  db: Database,
+  filters: InventoryFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const { take, skip } = buildTakeSkip(pagination);
+  const whereCondition = await buildInventoryWhere(db, filters);
 
   if (readIntent === "count") {
     const [result] = await getDb(db)
