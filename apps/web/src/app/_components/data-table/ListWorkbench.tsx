@@ -21,6 +21,11 @@ export interface ListWorkbenchModel<TItem extends RowData> {
   error?: unknown;
   timing?: QueryTiming;
   bulkActionBar?: ReactNode;
+  /**
+   * The entity each row is *about*, when different from `entity`. Publishing
+   * it is what makes that entity's actions reachable from these rows.
+   */
+  subjectEntity?: Entity;
   deleteDialog?: ReactNode;
   infiniteScroll?: InfiniteScrollControls;
   refreshControls?: {
@@ -95,6 +100,7 @@ export function ListWorkbench<TItem extends RowData>({
       <RTable
         table={model.table}
         entity={model.entity}
+        subjectEntity={model.subjectEntity}
         isLoading={model.isLoading}
         error={model.error}
         timing={model.timing}

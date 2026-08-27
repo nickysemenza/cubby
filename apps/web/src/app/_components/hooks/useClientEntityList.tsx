@@ -55,6 +55,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "legacyLayoutSizingKey"
   | "deleteEmptyLabel"
   | "hiddenFilterColumns"
+  | "subject"
 >;
 
 interface UseClientEntityListOptions<TData extends BaseListRow>
@@ -125,6 +126,7 @@ export function useClientEntityList<TData extends BaseListRow>({
   rowIsEntity,
   bulkActions,
   deleteEmptyLabel,
+  subject,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
   const clientTableStateOptions = useMemo(
     () => ({
@@ -220,6 +222,7 @@ export function useClientEntityList<TData extends BaseListRow>({
       isLoading,
       error,
       bulkActionBar,
+      subjectEntity: subject?.entity,
       deleteDialog: presentationState.deleteDialog,
     },
     requestDelete: presentationState.requestDelete,

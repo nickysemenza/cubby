@@ -6,7 +6,7 @@ import type {
   BulkActionResult,
 } from "../data-table/bulk-actions.types";
 import type { ActionSurface } from "./action-items";
-import { verbBulkAction } from "./action-verb-ui";
+import { VerbButton, verbBulkAction } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
 import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 
@@ -45,6 +45,18 @@ export interface EntityActionRow {
   id: string;
   /** Used for display only; absent where a surface knows only the code. */
   name?: string | null;
+}
+
+/**
+ * The record a row is *about*, when that differs from the row itself.
+ *
+ * An inventory entry is about its product; an expense line is about the
+ * product it names. Declaring that is what lets an action registered for one
+ * entity be reached from a table of another, without every such table
+ * re-declaring the action.
+ */
+export interface EntityActionSubject extends EntityActionRow {
+  entity: Entity;
 }
 
 /** Where a registered action is allowed to appear. */
@@ -160,6 +172,11 @@ export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
     verb: ActionVerbId;
     run: (row: EntityActionRow) => void;
   }[];
+  /** Actions a detail page renders as buttons against the record it shows. */
+  detailActions: {
+    verb: ActionVerbId;
+    run: (row: EntityActionRow) => void;
+  }[];
 }
 
 /**
@@ -260,28 +277,51 @@ export function useEntityActions<TRow extends EntityActionRow>(
     ];
   });
 
-  return { bulkActions, rowMenuItems, dialogs, singleRecordActions };
+  // Same shape as `singleRecordActions`, different surface: a detail page acts
+  // on the one record it is showing, and renders a button rather than a
+  // command item.
+  const detailActions = resolved.flatMap(({ definition, handles }) => {
+    if (definition.arity === "multi") return [];
+    if (!appliesTo(definition, entity, "detail")) return [];
+    const { run } = handles;
+    if (!run) return [];
+    return [
+      { verb: definition.verb, run: (row: EntityActionRow) => void run([row]) },
+    ];
+  });
+
+  return {
+    bulkActions,
+    rowMenuItems,
+    dialogs,
+    singleRecordActions,
+    detailActions,
+  };
 }
 
 /**
  * What a surface publishes so the actions column's cells can reach the row
  * items it resolved.
  *
- * `entity` travels with the items because a sub-table of a DIFFERENT entity
- * may render inside the provider (an expense table on a project page). Items
- * resolved for the outer entity must not leak into it.
+ * A **list**, because one table can offer two entities' actions: its own rows'
+ * and those of the record each row is *about*. An inventory entry names a
+ * product, so the inventory table publishes both, and each entry carries its
+ * `entity` so a sub-table of a different entity rendered inside the provider
+ * cannot pick up the outer one's items.
  */
-export interface EntityActionsContextValue {
+export interface EntityActionsEntry {
   entity: Entity;
   rowMenuItems: (row: EntityActionRow) => ReactNode;
 }
+
+export type EntityActionsContextValue = readonly EntityActionsEntry[];
 
 const EntityActionsContext = createContext<EntityActionsContextValue | null>(
   null,
 );
 
 /**
- * Bridges one `useEntityActions` call to every actions column beneath it.
+ * Bridges `useEntityActions` calls to every actions column beneath.
  *
  * `createActionsColumn` builds a column def, and its callers build columns
  * inside a `useMemo` — neither is a legal place to call a hook, and mounting
@@ -289,33 +329,110 @@ const EntityActionsContext = createContext<EntityActionsContextValue | null>(
  * cell *can* read a context, which is how `createExpenseProductImageColumn`
  * already reaches shared per-table data. So the surface resolves the actions
  * once (the same call that renders `dialogs`) and publishes them here.
+ *
+ * Nested providers **merge**: a table publishes its own entity, then nests a
+ * second provider for the subject entity. The nearest entry for a given entity
+ * wins, so an inner table still shadows an outer one of the same entity.
  */
 export function EntityActionsProvider({
   value,
   children,
 }: {
-  value: EntityActionsContextValue | null;
+  value: EntityActionsContextValue | EntityActionsEntry | null;
   children: ReactNode;
 }) {
+  const parent = useContext(EntityActionsContext);
+  const merged = useMemo<EntityActionsContextValue | null>(() => {
+    const added = value === null ? [] : Array.isArray(value) ? value : [value];
+    if (added.length === 0) return parent;
+    const inherited = (parent ?? []).filter(
+      (entry) => !added.some((next) => next.entity === entry.entity),
+    );
+    return [...added, ...inherited];
+  }, [value, parent]);
   return (
-    <EntityActionsContext.Provider value={value}>
+    <EntityActionsContext.Provider value={merged}>
       {children}
     </EntityActionsContext.Provider>
   );
 }
 
-/** The registered row-menu entries for one row, or nothing outside a provider. */
+/**
+ * The registered row-menu entries for one row, or nothing outside a provider.
+ *
+ * Renders the table entity's actions for the row itself, then the actions of
+ * whatever the row is *about* — so "Add to inventory" is reachable from an
+ * inventory entry or an expense line, not only from the product list.
+ */
 export function EntityActionRowMenuItems({
   entity,
   row,
+  subject,
 }: {
   entity: Entity;
   row: { id: string | number };
+  /** What this row is about, when that is a different record. */
+  subject?: EntityActionSubject | null;
 }) {
   const context = useContext(EntityActionsContext);
-  if (!context || context.entity !== entity) return null;
+  if (!context) return null;
+
+  const itemsFor = (target: Entity, record: EntityActionRow) =>
+    context.find((entry) => entry.entity === target)?.rowMenuItems(record) ??
+    null;
+
   // Registered actions address rows by public shortcode; the only rows keyed
   // by anything else are non-entity rows no definition can target.
-  if (typeof row.id !== "string") return null;
-  return <>{context.rowMenuItems(row as EntityActionRow)}</>;
+  const own =
+    typeof row.id === "string"
+      ? itemsFor(entity, row as EntityActionRow)
+      : null;
+  // A row whose subject IS itself would otherwise list every action twice.
+  const subjectItems =
+    subject && !(subject.entity === entity && subject.id === row.id)
+      ? itemsFor(subject.entity, { id: subject.id, name: subject.name })
+      : null;
+
+  if (!own && !subjectItems) return null;
+  return (
+    <>
+      {own}
+      {subjectItems}
+    </>
+  );
+}
+
+/**
+ * A record's declared actions as buttons — the detail-page counterpart to
+ * `EntityActionRowMenuItems`.
+ *
+ * Deliberately not a retrofit of every detail page onto `heroActions`: the
+ * twelve detail pages each hand-assemble their own actions today, and rewriting
+ * that is a separate job. This slots wherever a page already renders an action
+ * — a section `headerAction`, a hero slot — so a verb declared once stops
+ * being unreachable from the record's own page.
+ *
+ * Mounts its own dialogs, so the caller renders nothing else.
+ */
+export function EntityActionButtons({
+  entity,
+  record,
+}: {
+  entity: Entity;
+  record: EntityActionRow;
+}) {
+  const { detailActions, dialogs } = useEntityActions(entity);
+  if (detailActions.length === 0) return null;
+  return (
+    <>
+      {detailActions.map((action) => (
+        <VerbButton
+          key={action.verb}
+          verb={action.verb}
+          onClick={() => action.run(record)}
+        />
+      ))}
+      {dialogs}
+    </>
+  );
 }

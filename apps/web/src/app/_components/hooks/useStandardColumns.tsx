@@ -2,6 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import type { EntityActionSubject } from "~/app/_components/actions/entity-actions";
 import {
   browserEntityDefinition,
   getSortableFields,
@@ -107,6 +108,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * `entity`'s detail route keyed by `row.id`.
    */
   rowLink?: RowLinkResolver<TData>;
+  subject?: (row: TData) => EntityActionSubject | null;
   /**
    * Column ids to render with NO filter control, even though the manifest (or
    * a column factory's own fallback) declares one. For a page that pins that
@@ -140,6 +142,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   enableRowSelection,
   combinedExtraActions,
   rowLink,
+  subject,
   mappingsMap,
   hasUnitMappings,
   nameClassName,
@@ -341,6 +344,7 @@ export function useStandardColumns<TData extends BaseListRow>({
       createActionsColumn(columnHelper, entity, {
         extraActions: combinedExtraActions,
         rowLink,
+        subject,
       }),
     );
 
@@ -357,6 +361,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     enableRowSelection,
     combinedExtraActions,
     rowLink,
+    subject,
     nameClassName,
     nameEditable,
     nameSuffix,

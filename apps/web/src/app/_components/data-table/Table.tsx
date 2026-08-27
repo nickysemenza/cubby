@@ -3,7 +3,7 @@ import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -24,7 +24,7 @@ import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import {
-  type EntityActionsContextValue,
+  type EntityActionsEntry,
   EntityActionsProvider,
   useEntityActions,
 } from "../actions/entity-actions";
@@ -75,6 +75,13 @@ export interface RTableProps<TItem extends RowData> {
   timing?: QueryTiming;
   /** Entity type for mobile card navigation - when provided, cards become clickable */
   entity?: Entity;
+  /**
+   * The entity each row is *about*, when that differs from `entity` — an
+   * inventory entry is about its product. Constant per table: only which
+   * record varies per row, and the column's `subject` resolver says which.
+   * Declaring it here is what publishes that entity's actions to the rows.
+   */
+  subjectEntity?: Entity;
   /** Canonical mobile destination for rows whose entity type varies by row. */
   getMobileDetailsHref?: (item: TItem) => string | undefined;
   /** Callback when a row is clicked */
@@ -182,20 +189,26 @@ function TableWithEntityActions({
   children,
 }: {
   entity: Entity;
-  children: (rowActions: EntityActionsContextValue) => ReactNode;
+  children: () => ReactNode;
 }) {
   const { rowMenuItems, dialogs } = useEntityActions(entity);
-  const rowActions = useMemo<EntityActionsContextValue>(
-    () => ({ entity, rowMenuItems }),
-    // `rowMenuItems` is a fresh closure each render by design (it reads the
-    // current handles); the context value must not churn with it or every
-    // actions cell re-renders on every parent render.
-    // biome-ignore lint/correctness/useExhaustiveDependencies: see above
+  // Read through a ref, the same way `useListBulkActions` publishes its own:
+  // `rowMenuItems` is a fresh closure every render (it reads the current
+  // handles), so memoizing the value on it would churn the context and
+  // re-render every actions cell, while memoizing without it would capture a
+  // stale closure and freeze the dialogs a menu item opens.
+  const latestRowMenuItems = useRef(rowMenuItems);
+  latestRowMenuItems.current = rowMenuItems;
+  const rowActions = useMemo<EntityActionsEntry>(
+    () => ({
+      entity,
+      rowMenuItems: (row) => latestRowMenuItems.current(row),
+    }),
     [entity],
   );
   return (
     <EntityActionsProvider value={rowActions}>
-      {children(rowActions)}
+      {children()}
       {dialogs}
     </EntityActionsProvider>
   );
@@ -204,15 +217,27 @@ function TableWithEntityActions({
 export default function RTable<TItem extends RowData>(
   props: RTableProps<TItem>,
 ) {
-  const { entity } = props;
-  if (entity) {
-    return (
-      <TableWithEntityActions key={entity} entity={entity}>
-        {() => <RTableInner {...props} />}
+  const { entity, subjectEntity } = props;
+  let content = <RTableInner {...props} />;
+  // Nested, not merged in one call: each entity needs its own hook instance,
+  // and the provider merges what it finds above it.
+  if (subjectEntity && subjectEntity !== entity) {
+    const inner = content;
+    content = (
+      <TableWithEntityActions key={subjectEntity} entity={subjectEntity}>
+        {() => inner}
       </TableWithEntityActions>
     );
   }
-  return <RTableInner {...props} />;
+  if (entity) {
+    const inner = content;
+    content = (
+      <TableWithEntityActions key={entity} entity={entity}>
+        {() => inner}
+      </TableWithEntityActions>
+    );
+  }
+  return content;
 }
 
 function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {

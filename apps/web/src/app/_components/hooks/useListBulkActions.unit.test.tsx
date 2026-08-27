@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 import type { CubbyRow as Row } from "../data-table/table-features";
@@ -24,13 +26,23 @@ const noop: BulkAction<TestRow> = {
   onExecute: async () => ({ success: true }),
 };
 
+// The product entry's action resolves product detail to derive its kit
+// warning, so resolving the registry needs a client. The app always has one.
+const client = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={client}>{children}</QueryClientProvider>
+);
+
 describe("useListBulkActions", () => {
   it("offers Copy codes on a shortcode entity with no other actions", () => {
     // `ledgerParty` has a shortcode but declares no entity actions, so it
     // isolates the generic half. Product is covered below, where the registry
     // contributes.
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({ entity: "ledgerParty" }),
+    const { result } = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "ledgerParty" }),
+      { wrapper },
     );
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
@@ -44,8 +56,9 @@ describe("useListBulkActions", () => {
   // The payoff of the registry: no product list asks for this action, and
   // every one of them offers it.
   it("adds the entity's declared actions without the list declaring them", () => {
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({ entity: "product" }),
+    const { result } = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "product" }),
+      { wrapper },
     );
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
@@ -55,11 +68,13 @@ describe("useListBulkActions", () => {
   });
 
   it("offers Copy codes for image now that it has a shortcode", () => {
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({
-        entity: "image",
-        deleteBulkAction: noop,
-      }),
+    const { result } = renderHook(
+      () =>
+        useListBulkActions<TestRow>({
+          entity: "image",
+          deleteBulkAction: noop,
+        }),
+      { wrapper },
     );
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
@@ -69,8 +84,9 @@ describe("useListBulkActions", () => {
   });
 
   it("earns the checkbox column for image on Copy codes alone", () => {
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({ entity: "image" }),
+    const { result } = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "image" }),
+      { wrapper },
     );
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
@@ -80,20 +96,22 @@ describe("useListBulkActions", () => {
   });
 
   it("leads with Copy and trails with Delete", () => {
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({
-        entity: "task",
-        bulkActions: {
-          actions: [
-            {
-              id: "move",
-              label: "Move",
-              onExecute: async () => ({ success: true }),
-            },
-          ],
-        },
-        deleteBulkAction: noop,
-      }),
+    const { result } = renderHook(
+      () =>
+        useListBulkActions<TestRow>({
+          entity: "task",
+          bulkActions: {
+            actions: [
+              {
+                id: "move",
+                label: "Move",
+                onExecute: async () => ({ success: true }),
+              },
+            ],
+          },
+          deleteBulkAction: noop,
+        }),
+      { wrapper },
     );
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
@@ -104,8 +122,9 @@ describe("useListBulkActions", () => {
   });
 
   it("copies the selected rows' ids and keeps the selection", async () => {
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({ entity: "product" }),
+    const { result } = renderHook(
+      () => useListBulkActions<TestRow>({ entity: "product" }),
+      { wrapper },
     );
 
     const selected = rows("PRD-4K7M", "PRD-9X2A");
@@ -131,11 +150,13 @@ describe("useListBulkActions", () => {
   // EVERY action sticky — including Delete, which would leave rows ticked that
   // no longer exist.
   it("still clears the selection for an action that does not preserve it", async () => {
-    const { result } = renderHook(() =>
-      useListBulkActions<TestRow>({
-        entity: "product",
-        deleteBulkAction: noop,
-      }),
+    const { result } = renderHook(
+      () =>
+        useListBulkActions<TestRow>({
+          entity: "product",
+          deleteBulkAction: noop,
+        }),
+      { wrapper },
     );
 
     act(() => {

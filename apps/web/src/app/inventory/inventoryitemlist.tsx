@@ -310,6 +310,17 @@ export function InventoryItemList() {
   // loading state, and delete dialog directly.
   const { workbench, data, totalCount } = useEntityList({
     entity: "inventory",
+    // An inventory entry is about its product, so product verbs — "add another
+    // of these here" — reach this row without the inventory table declaring a
+    // single one of them.
+    subject: {
+      entity: "product" as const,
+      resolve: (row: { product: { id: string; name: string } }) => ({
+        entity: "product" as const,
+        id: row.product.id,
+        name: row.product.name,
+      }),
+    },
     // Inventory has custom columns (product image, amount instead of name)
     columns,
     deletable: deletableConfig,

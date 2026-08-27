@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { browserEntityDefinition } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
+import type { EntityActionSubject } from "../actions/entity-actions";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import {
@@ -149,6 +150,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   expandable,
   rowLink,
   rowActionGuard,
+  subject,
 }: {
   entity: BrowserRoutedEntity;
   data: readonly { id: string }[];
@@ -173,6 +175,8 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   expandable?: boolean;
   rowLink?: RowLinkResolver<TData>;
   rowActionGuard?: (row: TData) => boolean;
+  /** What each row is about, when that is a different record. */
+  subject?: (row: TData) => EntityActionSubject | null;
 }) {
   const columnHelper = useMemo(() => createCubbyColumnHelper<TData>(), []);
   const relatedViews = useMemo(() => relatedViewsFor(entity), [entity]);
@@ -251,6 +255,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
     hiddenFilterColumns,
     expandable,
     rowLink,
+    subject,
   });
   const persistedLayoutKey = layoutKey ?? entity;
   const layout = useCubbyTableLayout({

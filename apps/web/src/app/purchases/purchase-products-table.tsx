@@ -211,27 +211,25 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   });
 
   return (
-    <>
-      <RTable
-        table={table}
-        entity="product"
-        bulkActionBar={selection.renderBulkActionBar(table)}
-        ariaLabel="Products linked to this purchase"
-        embedded
-        isLoading={query.isPending}
-        emptyState={
-          <Empty variant="minimal" className="py-6">
-            <EmptyHeader>
-              <EmptyTitle>No products recorded</EmptyTitle>
-              <EmptyDescription>
-                No expense on this order names a product, and none has been
-                attached directly. Attaching is most useful for lump-sum or
-                installment orders whose expenses can&apos;t carry a product.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        }
-      />
-    </>
+    <RTable
+      table={table}
+      entity="product"
+      bulkActionBar={selection.renderBulkActionBar(table)}
+      ariaLabel="Products linked to this purchase"
+      embedded
+      isLoading={query.isPending}
+      emptyState={
+        <Empty variant="minimal" className="py-6">
+          <EmptyHeader>
+            <EmptyTitle>No products recorded</EmptyTitle>
+            <EmptyDescription>
+              No expense on this order names a product, and none has been
+              attached directly. Attaching is most useful for lump-sum or
+              installment orders whose expenses can&apos;t carry a product.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      }
+    />
   );
 }

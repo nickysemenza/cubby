@@ -1,5 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { ProductAddToInventoryDialog } from "../products/product-add-to-inventory-dialog";
 import type { BulkAddProduct } from "../products/product-bulk-add-to-inventory-dialog";
 import { ProductBulkAddToInventoryDialog } from "../products/product-bulk-add-to-inventory-dialog";
@@ -40,6 +42,39 @@ export function useAddToInventoryAction(): EntityActionHandles {
     setStaged(rows.map(asBulkAddProduct));
   }, []);
 
+  // One staged product is the only case that can carry the kit warning, and
+  // it is the case every surface but the selection bar produces. Fetching the
+  // detail here rather than taking it as a prop is what moved the warning off
+  // the product page: invoked from a row menu or the palette, stocking a kit
+  // whose parts are already on shelves used to over-account in silence.
+  //
+  // It also supplies the name and manufacturer for rows that carry only an id
+  // — an expense line names a `productId` and nothing else.
+  const soleProduct = staged.length === 1 ? staged[0] : undefined;
+  const { data: detail } = useQuery({
+    ...entityDetailFor("product").queryOptions(soleProduct?.id ?? ""),
+    enabled: soleProduct !== undefined,
+  });
+
+  const soleWithDetail = useMemo(() => {
+    if (!soleProduct) return undefined;
+    if (!detail || detail.id !== soleProduct.id) return soleProduct;
+    return {
+      id: soleProduct.id,
+      name: detail.name,
+      manufacturer: detail.manufacturer,
+    };
+  }, [soleProduct, detail]);
+
+  const accounting = useMemo(() => {
+    if (!detail || detail.id !== soleProduct?.id) return undefined;
+    return {
+      expectedQuantity: detail.quantityLedger.expectedQuantity,
+      ownOnHandUnits: detail.onHandUnits,
+      componentCount: detail.componentCount,
+    };
+  }, [detail, soleProduct]);
+
   const run = useCallback(
     async (rows: readonly EntityActionRow[]) => {
       stage(rows);
@@ -67,27 +102,27 @@ export function useAddToInventoryAction(): EntityActionHandles {
     // location suggester — it reads one product's history for a basis, so a
     // mixed selection has nothing to suggest from. Anything more gets the
     // grid, where the shared location is the whole point.
-    dialog:
-      staged.length === 1 && staged[0] ? (
-        <ProductAddToInventoryDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setStaged([]);
-          }}
-          product={{
-            id: staged[0].id,
-            name: staged[0].name,
-            manufacturer: staged[0].manufacturer ?? "",
-          }}
-        />
-      ) : (
-        <ProductBulkAddToInventoryDialog
-          open={staged.length > 1}
-          onOpenChange={(open) => {
-            if (!open) setStaged([]);
-          }}
-          products={staged}
-        />
-      ),
+    dialog: soleWithDetail ? (
+      <ProductAddToInventoryDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setStaged([]);
+        }}
+        product={{
+          id: soleWithDetail.id,
+          name: soleWithDetail.name,
+          manufacturer: soleWithDetail.manufacturer ?? "",
+        }}
+        {...(accounting ? { accounting } : {})}
+      />
+    ) : (
+      <ProductBulkAddToInventoryDialog
+        open={staged.length > 1}
+        onOpenChange={(open) => {
+          if (!open) setStaged([]);
+        }}
+        products={staged}
+      />
+    ),
   };
 }

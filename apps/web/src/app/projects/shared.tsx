@@ -1135,20 +1135,18 @@ export function ExpenseList({
 
   return (
     <ExpenseProductImages rows={expenses}>
-      <>
-        <RTable
-          table={table}
-          embedded
-          showColumnMenu
-          bulkActionBar={selection.renderBulkActionBar(table)}
-        />
-        {deleteDialog}
-        {rowActions.dialogs}
-        <ExpenseBulkActionDialogs
-          controller={expenseBulkActions}
-          onComplete={() => table.resetRowSelection()}
-        />
-      </>
+      <RTable
+        table={table}
+        embedded
+        showColumnMenu
+        bulkActionBar={selection.renderBulkActionBar(table)}
+      />
+      {deleteDialog}
+      {rowActions.dialogs}
+      <ExpenseBulkActionDialogs
+        controller={expenseBulkActions}
+        onComplete={() => table.resetRowSelection()}
+      />
     </ExpenseProductImages>
   );
 }
