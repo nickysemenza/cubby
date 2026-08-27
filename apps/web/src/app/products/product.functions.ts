@@ -1,4 +1,4 @@
-import type {
+import {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
 } from "@cubby/schemas/product";
@@ -8,14 +8,14 @@ import {
   productMarkUsdaUnavailableEvent,
   productWorkflowSchemas,
 } from "@cubby/schemas/product-workflow";
-import type { z } from "zod";
+import { z } from "zod";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
   query,
+  subscription,
 } from "~/integrations/tanstack-query/operation-catalog";
-import { openWorkflowStream } from "~/lib/workflow-stream";
 
 export const product = defineOperationDomain("product", {
   search: query({
@@ -145,36 +145,28 @@ export const product = defineOperationDomain("product", {
   }),
 });
 
+export const productStreams = defineOperationDomain("product", {
+  createMany: subscription({
+    input: productCreateManyInput,
+    event: productCreateManyEvent,
+  }),
+  markUsdaUnavailableMany: subscription({
+    input: productMarkUsdaUnavailableManyInput,
+    event: productMarkUsdaUnavailableEvent,
+  }),
+  backfillUPCImages: subscription({
+    input: z.undefined(),
+    event: productBackfillUpcImagesEvent,
+  }),
+});
+
 export const createManyProductsStream = (
   input: z.input<typeof productCreateManyInput>,
   signal?: AbortSignal,
-) =>
-  openWorkflowStream({
-    operation: "product.createMany",
-    kind: "mutation",
-    url: "/api/product-stream/create-many",
-    input,
-    eventSchema: productCreateManyEvent,
-    signal,
-  });
+) => productStreams.createMany.open(input, { signal });
 export const markProductsUsdaUnavailableStream = (
   input: z.input<typeof productMarkUsdaUnavailableManyInput>,
   signal?: AbortSignal,
-) =>
-  openWorkflowStream({
-    operation: "product.markUsdaUnavailableMany",
-    kind: "mutation",
-    url: "/api/product-stream/mark-usda-unavailable",
-    input,
-    eventSchema: productMarkUsdaUnavailableEvent,
-    signal,
-  });
+) => productStreams.markUsdaUnavailableMany.open(input, { signal });
 export const backfillProductUpcImagesStream = (signal?: AbortSignal) =>
-  openWorkflowStream({
-    operation: "product.backfillUPCImages",
-    kind: "mutation",
-    url: "/api/product-stream/backfill-upc-images",
-    input: undefined,
-    eventSchema: productBackfillUpcImagesEvent,
-    signal,
-  });
+  productStreams.backfillUPCImages.open(undefined, { signal });

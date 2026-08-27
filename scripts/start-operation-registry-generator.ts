@@ -21,13 +21,13 @@ const HANDLER_OUTPUT = join(
 );
 
 type Kind = "query" | "mutation" | "subscription";
-type Definition = { kind: Kind; entities: Set<string> };
 type HandlerDefinition = {
   module: string;
   exportName: string;
   /**
-   * The handler is `<exportName>.operations[<member>]`, already
-   * `StartOperationHandler`-shaped, so the emitted loader needs no cast.
+   * The handler is `<exportName>.<table>[<member>]`, already
+   * `StartOperationHandler` / `WorkflowStreamHandler`-shaped, so the emitted
+   * loader needs no cast.
    */
   member: string;
 };
@@ -42,24 +42,6 @@ const sourceFiles = (directory: string): string[] =>
       : [];
   });
 
-const propertyString = (
-  object: AstNode,
-  name: string,
-): string | undefined => {
-  const properties = Array.isArray(object.properties)
-    ? (object.properties as AstNode[])
-    : [];
-  const property = properties.find((candidate) => {
-    if (candidate.type !== "Property") return false;
-    const key = candidate.key as AstNode | undefined;
-    return key?.name === name || key?.value === name;
-  });
-  const value = property?.value as AstNode | undefined;
-  return value?.type === "Literal" && typeof value.value === "string"
-    ? value.value
-    : undefined;
-};
-
 const calledName = (expression: AstNode): string | undefined =>
   expression.type === "Identifier"
     ? (expression.name as string | undefined)
@@ -68,31 +50,6 @@ const calledName = (expression: AstNode): string | undefined =>
           | string
           | undefined)
       : undefined;
-
-/**
- * Subscriptions have no domain tables: the 13 workflow streams still declare
- * their operation id at the response call site, so these two calls remain the
- * only harvested call-expression pattern.
- */
-const SUBSCRIPTION_CALLS = new Set([
-  "workflowStreamResponse",
-  "openWorkflowStream",
-]);
-
-const walk = (node: AstNode, visit: (node: AstNode) => void): void => {
-  visit(node);
-  for (const value of Object.values(node)) {
-    if (Array.isArray(value)) {
-      for (const child of value) {
-        if (child && typeof child === "object" && "type" in child) {
-          walk(child as AstNode, visit);
-        }
-      }
-    } else if (value && typeof value === "object" && "type" in value) {
-      walk(value as AstNode, visit);
-    }
-  }
-};
 
 const moduleSpecifier = (path: string): string =>
   `~/${relative(SOURCE_ROOT, path)
@@ -137,17 +94,14 @@ const topLevelVariableDeclarators = (
   return declarators;
 };
 
-type DomainMember = { operation: string; kind: Exclude<Kind, "subscription"> };
+type DomainMember = { operation: string; kind: Kind };
 type DomainDeclaration = {
   path: string;
   domain: string;
   members: Map<string, DomainMember>;
 };
 type DomainDeclarations = {
-  byOperation: Map<
-    string,
-    { kind: Exclude<Kind, "subscription">; path: string; exportName: string }
-  >;
+  byOperation: Map<string, { kind: Kind; path: string; exportName: string }>;
   byBinding: Map<string, DomainDeclaration>;
 };
 
@@ -227,7 +181,8 @@ export const collectDomainDeclarations = (): DomainDeclarations => {
         if (typeof memberName !== "string" || value?.type !== "CallExpression")
           continue;
         const kind = calledName(value.callee as AstNode);
-        if (kind !== "query" && kind !== "mutation") continue;
+        if (kind !== "query" && kind !== "mutation" && kind !== "subscription")
+          continue;
         const operation = `${domainArg.value}.${memberName}`;
         const existing = byOperation.get(operation);
         if (existing) {
@@ -276,16 +231,17 @@ const importBindings = (
   return bindings;
 };
 
-/** Resolve an `implementOperationDomain` argument to its client declaration. */
+/** Resolve an `implement*Domain` argument to its client declaration. */
 const resolveDomainBinding = (
   path: string,
+  implementer: string,
   bindings: Map<string, { source: string; imported: string }>,
   identifier: string,
 ): DomainDeclaration => {
   const binding = bindings.get(identifier);
   if (!binding || !binding.source.startsWith("~/")) {
     throw new Error(
-      `${relative(ROOT, path)} passes ${identifier} to implementOperationDomain, but it is not a named import from a "~/" module.`,
+      `${relative(ROOT, path)} passes ${identifier} to ${implementer}, but it is not a named import from a "~/" module.`,
     );
   }
   const base = join(SOURCE_ROOT, binding.source.slice(2));
@@ -304,19 +260,55 @@ const resolveDomainBinding = (
 };
 
 /**
- * Handlers are exported `implementOperationDomain` tables under
- * `apps/web/src/server` — a typed bijection with the client declarations, so
- * discovery needs no filename convention and no string heuristics: compile the
- * tables into lazy adapters rather than maintaining a second handwritten
- * dispatcher registry.
+ * The two implementer tables, and the descriptor table each one reads from.
+ * A member's declared kind decides which implementer owns it, so implementing
+ * a subscription with `implementOperationDomain` (or the reverse) fails here
+ * rather than at whichever runtime first notices the shape mismatch.
  */
-export const collectStartOperationHandlers = (): Map<
+const IMPLEMENTERS = {
+  implementOperationDomain: { table: "operations", kinds: ["query", "mutation"] },
+  implementSubscriptionDomain: { table: "streams", kinds: ["subscription"] },
+} as const satisfies Record<
   string,
-  HandlerDefinition
-> => {
-  const handlers = new Map<string, HandlerDefinition>();
-  const register = (operation: string, definition: HandlerDefinition) => {
-    const existing = handlers.get(operation);
+  { table: string; kinds: readonly Kind[] }
+>;
+type ImplementerName = keyof typeof IMPLEMENTERS;
+
+const isImplementer = (name: string | undefined): name is ImplementerName =>
+  name !== undefined && Object.hasOwn(IMPLEMENTERS, name);
+
+export type CollectedHandlers = {
+  /** `query` | `mutation` members, dispatched by `dispatchStartOperation`. */
+  operations: Map<string, HandlerDefinition>;
+  /** `subscription` members, dispatched by `dispatchWorkflowStream`. */
+  subscriptions: Map<string, HandlerDefinition>;
+};
+
+let cachedHandlers: CollectedHandlers | undefined;
+
+/**
+ * Handlers are exported `implementOperationDomain` / `implementSubscriptionDomain`
+ * tables under `apps/web/src/server` — a typed bijection with the client
+ * declarations, so discovery needs no filename convention and no string
+ * heuristics: compile the tables into lazy adapters rather than maintaining a
+ * second handwritten dispatcher registry.
+ */
+export const collectStartOperationHandlers = (): CollectedHandlers => {
+  if (cachedHandlers) return cachedHandlers;
+  const collected: CollectedHandlers = {
+    operations: new Map(),
+    subscriptions: new Map(),
+  };
+  const register = (
+    kind: Kind,
+    operation: string,
+    definition: HandlerDefinition,
+  ) => {
+    const handlers =
+      kind === "subscription" ? collected.subscriptions : collected.operations;
+    const existing =
+      collected.operations.get(operation) ??
+      collected.subscriptions.get(operation);
     if (existing) {
       throw new Error(
         `Duplicate browser operation ${operation}: ${existing.module}.${existing.exportName} and ${definition.module}.${definition.exportName}`,
@@ -340,15 +332,13 @@ export const collectStartOperationHandlers = (): Map<
       for (const variable of variables) {
         const id = variable.id as AstNode | undefined;
         const implementation = variable.init as AstNode | undefined;
-        if (
-          typeof id?.name !== "string" ||
-          implementation?.type !== "CallExpression" ||
-          calledName(implementation.callee as AstNode) !==
-            "implementOperationDomain"
-        ) {
-          continue;
-        }
-        const args = Array.isArray(implementation.arguments)
+        if (typeof id?.name !== "string") continue;
+        const implementer =
+          implementation?.type === "CallExpression"
+            ? calledName(implementation.callee as AstNode)
+            : undefined;
+        if (!isImplementer(implementer)) continue;
+        const args = Array.isArray(implementation?.arguments)
           ? (implementation.arguments as AstNode[])
           : [];
         const [domainArg, tableArg] = args;
@@ -358,10 +348,16 @@ export const collectStartOperationHandlers = (): Map<
           tableArg?.type !== "ObjectExpression"
         ) {
           throw new Error(
-            `Unable to compile ${relative(ROOT, path)}:${id.name} — implementOperationDomain takes an imported domain identifier and an inline handler table.`,
+            `Unable to compile ${relative(ROOT, path)}:${id.name} — ${implementer} takes an imported domain identifier and an inline handler table.`,
           );
         }
-        const domain = resolveDomainBinding(path, bindings, domainArg.name);
+        const domain = resolveDomainBinding(
+          path,
+          implementer,
+          bindings,
+          domainArg.name,
+        );
+        const allowed: readonly Kind[] = IMPLEMENTERS[implementer].kinds;
         const properties = Array.isArray(tableArg.properties)
           ? (tableArg.properties as AstNode[])
           : [];
@@ -376,7 +372,12 @@ export const collectStartOperationHandlers = (): Map<
               `${relative(ROOT, path)}:${id.name} implements ${domain.domain}.${memberName}, which is not declared in ${relative(ROOT, domain.path)}.`,
             );
           }
-          register(member.operation, {
+          if (!allowed.includes(member.kind)) {
+            throw new Error(
+              `${relative(ROOT, path)}:${id.name} implements ${member.operation} with ${implementer}, but ${relative(ROOT, domain.path)} declares it as a ${member.kind}.`,
+            );
+          }
+          register(member.kind, member.operation, {
             module: moduleSpecifier(path),
             exportName: id.name,
             member: memberName,
@@ -385,61 +386,45 @@ export const collectStartOperationHandlers = (): Map<
       }
     }
   }
-  return handlers;
+  cachedHandlers = collected;
+  return collected;
 };
 
-export const collectStartOperations = (): Map<string, Definition> => {
+/**
+ * The registry: every client-declared operation, with the kind its declaration
+ * gave it. `defineOperationDomain` is now the ONLY source — the heuristic
+ * call-site harvest that used to mint the subscription rows is gone, along with
+ * the class of bug where a hand-written stream wrapper's operation string was
+ * the registry entry.
+ */
+export const collectStartOperations = (): Map<string, Kind> => {
   const declarations = collectDomainDeclarations();
-  const operations = new Map<string, Definition>();
-  const add = (
-    operation: string,
-    kind: Kind,
-    path: string,
-    entity?: string,
-  ) => {
-    const definition = operations.get(operation) ?? {
-      kind,
-      entities: new Set<string>(),
-    };
-    if (definition.kind !== kind) {
-      throw new Error(
-        `${operation} has conflicting Start kinds (${definition.kind} and ${kind}) in ${relative(ROOT, path)}`,
-      );
-    }
-    if (entity) definition.entities.add(entity);
-    operations.set(operation, definition);
-  };
-
-  for (const [operation, declared] of declarations.byOperation) {
-    add(operation, declared.kind, declared.path);
-  }
-
-  for (const path of sourceFiles(SOURCE_ROOT)) {
-    walk(parseFile(path), (node) => {
-      if (node.type !== "CallExpression") return;
-      const name = calledName(node.callee as AstNode);
-      if (!name || !SUBSCRIPTION_CALLS.has(name)) return;
-      const first = (node.arguments as AstNode[])[0];
-      if (first?.type !== "ObjectExpression") return;
-      const operation = propertyString(first, "operation");
-      if (operation) {
-        add(operation, "subscription", path, propertyString(first, "entity"));
-      }
-    });
-  }
 
   // Fires earlier and more clearly than the generated loader's `satisfies`
   // exhaustiveness failure (which stays as belt-and-braces): a declared
   // operation nobody implements is a broken client call, not a type puzzle.
   const handlers = collectStartOperationHandlers();
   for (const [operation, declared] of declarations.byOperation) {
-    if (!handlers.has(operation)) {
+    const implementer =
+      declared.kind === "subscription"
+        ? "implementSubscriptionDomain"
+        : "implementOperationDomain";
+    const table =
+      declared.kind === "subscription"
+        ? handlers.subscriptions
+        : handlers.operations;
+    if (!table.has(operation)) {
       throw new Error(
-        `${operation} is declared by ${declared.exportName} in ${relative(ROOT, declared.path)} but has no implementOperationDomain handler under apps/web/src/server. Implement the member there, or delete the declaration.`,
+        `${operation} is declared by ${declared.exportName} in ${relative(ROOT, declared.path)} but has no ${implementer} handler under apps/web/src/server. Implement the member there, or delete the declaration.`,
       );
     }
   }
-  return operations;
+  return new Map(
+    [...declarations.byOperation].map(([operation, declared]) => [
+      operation,
+      declared.kind,
+    ]),
+  );
 };
 
 export const renderStartOperationRegistry = (): string => {
@@ -449,7 +434,7 @@ export const renderStartOperationRegistry = (): string => {
   return `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
     `export const START_OPERATIONS = {\n${operations
       .map(
-        ([operation, definition]) => {
+        ([operation, kind]) => {
           const entities = operation.startsWith("entity.")
             ? [
                 "ingredient",
@@ -472,7 +457,7 @@ export const renderStartOperationRegistry = (): string => {
                 "usda-food",
                 "image",
               ]
-            : [...definition.entities].sort();
+            : [];
           const phases = operation === "entity.detail"
             ? [
                 "resolve",
@@ -485,7 +470,7 @@ export const renderStartOperationRegistry = (): string => {
                 "food",
               ]
             : [];
-          return `  ${JSON.stringify(operation)}: { kind: ${JSON.stringify(definition.kind)}, entities: ${JSON.stringify(entities)}, productPhases: ${JSON.stringify(phases)} },`;
+          return `  ${JSON.stringify(operation)}: { kind: ${JSON.stringify(kind)}, entities: ${JSON.stringify(entities)}, productPhases: ${JSON.stringify(phases)} },`;
         },
       )
       .join("\n")}\n} as const;\n\n` +
@@ -498,26 +483,35 @@ export const renderStartOperationRegistry = (): string => {
 };
 
 export const renderStartOperationHandlers = (): string => {
-  const handlers = [...collectStartOperationHandlers()].sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
-  return (
-    `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
-    `import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";\n` +
-    `import type { StartOperationResult } from "~/server/start-operation.contract";\n` +
-    `import type { StartOperationRequest } from "~/server/start-operation.server";\n` +
-    `\nexport type StartOperationHandler = (options: { data: unknown; request: StartOperationRequest }) => Promise<StartOperationResult<unknown>>;\n` +
-    `export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;\n` +
-    `\nexport const START_OPERATION_HANDLER_LOADERS = {\n${handlers
+  const { operations, subscriptions } = collectStartOperationHandlers();
+  const sorted = (handlers: Map<string, HandlerDefinition>) =>
+    [...handlers].sort(([a], [b]) => a.localeCompare(b));
+  const loaders = (
+    handlers: Map<string, HandlerDefinition>,
+    table: string,
+  ): string =>
+    sorted(handlers)
       .map(
         ([operation, handler]) =>
-          `  ${JSON.stringify(operation)}: async () => (await import(${JSON.stringify(handler.module)})).${handler.exportName}.operations${
+          `  ${JSON.stringify(operation)}: async () => (await import(${JSON.stringify(handler.module)})).${handler.exportName}.${table}${
             /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(handler.member)
               ? `.${handler.member}`
               : `[${JSON.stringify(handler.member)}]`
           },`,
       )
-      .join("\n")}\n} as const satisfies Record<StartOperationIdOfKind<"query" | "mutation">, StartOperationHandlerLoader>;\n`
+      .join("\n");
+  return (
+    `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
+    `import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";\n` +
+    `import type { StartOperationResult } from "~/server/start-operation.contract";\n` +
+    `import type { StartOperationRequest } from "~/server/start-operation.server";\n` +
+    `import type { WorkflowStreamHandler } from "~/server/subscription-domain.server";\n` +
+    `\nexport type StartOperationHandler = (options: { data: unknown; request: StartOperationRequest }) => Promise<StartOperationResult<unknown>>;\n` +
+    `export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;\n` +
+    `export type WorkflowStreamHandlerLoader = () => Promise<WorkflowStreamHandler>;\n` +
+    `\nexport const START_OPERATION_HANDLER_LOADERS = {\n${loaders(operations, "operations")}\n} as const satisfies Record<StartOperationIdOfKind<"query" | "mutation">, StartOperationHandlerLoader>;\n` +
+    `\n/**\n * Partial, unlike its sibling: coverage of the subscription ids is enforced\n * by the generator's declared-but-unimplemented check, which names the missing\n * member and its module. What this annotation still buys is key validity — a\n * loader keyed to an id the registry does not carry as a subscription.\n */\n` +
+    `export const WORKFLOW_STREAM_HANDLER_LOADERS = {\n${loaders(subscriptions, "streams")}\n} as const satisfies Partial<Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>>;\n`
   );
 };
 

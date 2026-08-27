@@ -14,7 +14,7 @@ import type {
   PublicStartOperationError,
   StartOperationResult,
 } from "~/server/start-operation.contract";
-import { getRequestId } from "~/server/tracing";
+import { type AppSpan, getRequestId } from "~/server/tracing";
 import type { Workload } from "~/server/workload";
 
 export type StartOperationRequest = {
@@ -106,6 +106,25 @@ export function normalizeStartOperationError(
   };
 }
 
+/**
+ * Resolve the actor for a Start request and record the one span fact both
+ * transports report identically.
+ *
+ * This is the whole of what `runStartOperation` and `workflowStreamResponse`
+ * share. Everything downstream differs BECAUSE one transport returns a value
+ * and the other a stream: read-policy selection, output parsing, and the
+ * result envelope have no counterpart on the stream side, and the same-origin
+ * check, per-event `eventSchema.parse`, and NDJSON framing have none here.
+ */
+export async function authenticateStartOperation(
+  headers: Headers,
+  span: AppSpan,
+): Promise<AuthenticatedStartOperationContext> {
+  const authenticated = requireActor(await createRequestContext({ headers }));
+  span.setAttribute("cubby.authenticated", true);
+  return authenticated;
+}
+
 export async function runStartOperation<
   InputSchema extends z.ZodType,
   Output,
@@ -147,8 +166,9 @@ export async function runStartOperation<
       let stage: OperationStage = "context";
       try {
         throwIfStartOperationAborted(options.request.signal);
-        const authenticated = requireActor(
-          await createRequestContext({ headers: options.request.headers }),
+        const authenticated = await authenticateStartOperation(
+          options.request.headers,
+          span,
         );
         const readPolicy =
           options.readPolicy ??
@@ -158,7 +178,6 @@ export async function runStartOperation<
             ? { ...authenticated, readDb: authenticated.db }
             : authenticated;
         span.setAttributes({
-          "cubby.authenticated": true,
           "cubby.request_origin": context.requestOrigin,
           "cubby.read.consistency":
             readPolicy === "strong"

@@ -1,13 +1,16 @@
-import { ai } from "~/lib/ai.functions";
+import { ai, aiStreams } from "~/lib/ai.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   approveDetectedInventoryItemWorkflow,
   auditCategoriesWorkflow,
+  backfillLocationDescriptionsWorkflow,
   describeLocationWorkflow,
   detectInventoryItemsWorkflow,
   identifyProductWorkflow,
   listAiUsageRecentWorkflow,
   parseSearchWorkflow,
+  precomputeEnrichmentProposalsWorkflow,
   suggestCategoryWorkflow,
   suggestIngredientMergeBatchWorkflow,
   suggestLocationTypeWorkflow,
@@ -53,4 +56,11 @@ export const aiHandlers = implementOperationDomain(ai, {
     readPolicy: "strong",
     run: (context, input) => summarizeAiUsageWorkflow(context.db, input),
   },
+});
+
+export const aiStreamHandlers = implementSubscriptionDomain(aiStreams, {
+  backfillLocationDescriptions: (context) =>
+    backfillLocationDescriptionsWorkflow(context.db),
+  precomputeEnrichmentProposals: (context, input) =>
+    precomputeEnrichmentProposalsWorkflow(context, input),
 });
