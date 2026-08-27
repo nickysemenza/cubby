@@ -1,17 +1,8 @@
-import {
-  agentAskInputSchema,
-  agentResultSchema,
-  agentStreamEventSchema,
-} from "@cubby/schemas/agent";
+import type { agentAskInputSchema } from "@cubby/schemas/agent";
 import type { z } from "zod";
 import { runAgent, runAgentStream } from "~/server/agent/runtime";
 import { createMcpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-
-export const agentWorkflowSchemas = {
-  ask: { input: agentAskInputSchema, output: agentResultSchema },
-  askStream: { input: agentAskInputSchema, output: agentStreamEventSchema },
-} as const;
 
 const createAgentCaller = (context: AuthenticatedStartOperationContext) =>
   createMcpWorkflowCaller({

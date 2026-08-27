@@ -35,9 +35,6 @@ import type {
 } from "@cubby/schemas/product-components";
 import {
   type CreateManyProductResult,
-  productBackfillUpcImagesEvent,
-  productCreateManyEvent,
-  productMarkUsdaUnavailableEvent,
   productSearchInput,
 } from "@cubby/schemas/product-workflow";
 import type {
@@ -111,12 +108,7 @@ const productShortcodes = bindShortcodeResolver("product");
 const projectShortcodes = bindShortcodeResolver("project");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 
-export {
-  productBackfillUpcImagesEvent,
-  productCreateManyEvent,
-  productMarkUsdaUnavailableEvent,
-  productSearchInput,
-};
+export { productSearchInput };
 
 export async function searchProductsWorkflow(
   context: ProductWorkflowContext,
