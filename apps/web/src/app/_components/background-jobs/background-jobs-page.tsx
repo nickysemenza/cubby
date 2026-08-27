@@ -1,6 +1,6 @@
 import type { BackgroundBatchStatus } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Eraser, StepForward } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -46,7 +46,6 @@ export function BackgroundJobsPage({
   scopedBatchIds?: string[];
 }) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [pageIndex, setPageIndex] = useState(0);
   const [showFailedOnly, setShowFailedOnly] = useState(false);
 
@@ -105,47 +104,28 @@ export function BackgroundJobsPage({
     previousStatusRef.current = undefined;
   }, [selectedBatchId]);
 
-  const invalidateOperations = (...operations: readonly { id: string }[]) => {
-    for (const operation of operations) {
-      void queryClient.invalidateQueries({
-        queryKey: ["operation", operation.id],
-      });
-    }
-  };
-  const invalidateAfterMutation = () => {
-    setPageIndex(0);
-    invalidateOperations(
-      backgroundBatch.list,
-      backgroundBatch.summary,
-      backgroundBatch.jobs,
-    );
-  };
-  const invalidateList = () => invalidateOperations(backgroundBatch.list);
-  const drain = useMutation({
-    ...backgroundJob.drain.mutationOptions(),
-    onSuccess: invalidateList,
-  });
+  // Every mutation on this page invalidates the `["background-batch"]` root,
+  // which prefix-matches the list, summary, jobs and stranded-count tags — so
+  // the only thing left to do on success is put the job pager back on page one.
+  const resetPager = () => setPageIndex(0);
+  const drain = useMutation(backgroundJob.drain.mutationOptions());
   const strandedQuery = useQuery(backgroundJob.strandedCount.queryOptions({}));
-  const clearStranded = useMutation({
-    ...backgroundJob.clearStranded.mutationOptions(),
-    onSuccess: () => {
-      invalidateList();
-      invalidateOperations(backgroundJob.strandedCount);
-    },
-  });
+  const clearStranded = useMutation(
+    backgroundJob.clearStranded.mutationOptions(),
+  );
   const retry = useMutation({
     ...backgroundBatch.retry.mutationOptions(),
-    onSuccess: () => invalidateAfterMutation(),
+    onSuccess: resetPager,
   });
   const retryJob = useMutation({
     ...backgroundJob.retry.mutationOptions(),
     onSuccess: () => {
-      if (selectedBatchId) invalidateAfterMutation();
+      if (selectedBatchId) resetPager();
     },
   });
   const cancel = useMutation({
     ...backgroundBatch.cancel.mutationOptions(),
-    onSuccess: () => invalidateAfterMutation(),
+    onSuccess: resetPager,
   });
 
   const visibleBatches = scopedSet
