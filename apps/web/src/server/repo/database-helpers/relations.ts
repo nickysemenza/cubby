@@ -154,6 +154,16 @@ const sectionOrder = (t: {
 export const imageOrder = sectionOrder;
 
 /**
+ * Insertion order for relations hanging off a plain FK, which have no
+ * `sortOrder` column to sort by: oldest link first, id breaking the ties
+ * createdAt can't (it's the transaction timestamp, identical across one save).
+ */
+const linkOrder = (t: { createdAt: AnyColumn; id: AnyColumn }) => [
+  asc(t.createdAt),
+  asc(t.id),
+];
+
+/**
  * The identity product a Location IS — the bin, tote or rack itself, as
  * opposed to `inventoryEntries.product`, which is stock held at it. Carries
  * the cover image because a linked location renders from its SKU's photo.
@@ -202,6 +212,11 @@ export const relations = {
       with: {
         product: {
           where: notDeleted(product),
+          // Load-bearing for BOTH the Product column's pill (which shows
+          // `product[0]` of a possible +9) and the leading thumbnail (which
+          // falls back to these images). Unordered, Postgres was free to
+          // return a different brand per request.
+          orderBy: linkOrder,
           with: {
             unitMappings: {
               where: notDeleted(productUnitMappings),

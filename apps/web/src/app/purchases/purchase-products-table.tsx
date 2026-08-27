@@ -9,6 +9,7 @@ import {
   createCurrencyColumn,
   createImageColumn,
   createNameColumn,
+  rowImages,
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import {
@@ -134,7 +135,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
   );
   const columns = useMemo<CubbyColumnDef<PurchaseProductRow>[]>(
     () => [
-      createImageColumn(helper, { entity: "product" }),
+      createImageColumn(helper, { entity: "product", getImages: rowImages }),
       createNameColumn(helper, "product", "name", {
         header: "Product",
         expandable: true,

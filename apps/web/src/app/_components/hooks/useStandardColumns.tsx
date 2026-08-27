@@ -18,6 +18,7 @@ import {
   type FilterConfig,
   multiSelectFilterFn,
   type RowLinkResolver,
+  rowImages,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 import type {
@@ -241,7 +242,18 @@ export function useStandardColumns<TData extends BaseListRow>({
     if (standardColumns.includes("image")) {
       cols.push(
         withManifestFilter(
-          createImageColumn(columnHelper, { entity }),
+          createImageColumn(columnHelper, {
+            entity,
+            // The one asserted `rowImages`. `TData` is unbound here, so a
+            // conditional "optional only when the row has images" would defer
+            // and fail to resolve; the assertion holds because only `product`
+            // and `recipe` declare `standardColumns: ["image"]`, and both carry
+            // a required `images` on their list row. Any new entity opting in
+            // must add one too — or pass its own cascade resolver.
+            getImages: rowImages as (
+              row: TData,
+            ) => ReturnType<typeof rowImages>,
+          }),
           "image",
         ),
       );

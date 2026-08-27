@@ -19,7 +19,7 @@ import {
   locationShortcode,
   productShortcode,
 } from "./identifiers";
-import { type ImageOut, imageOut, isDisplayableImageFile } from "./image";
+import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
 import {
   createPaginatedResponseSchema,
   entityFilterList,
@@ -230,14 +230,10 @@ export type LocationIdentityProductOut = z.infer<
 export const locationCoverImage = (loc: {
   images: ImageOut[];
   product: { coverImage: ImageOut | null } | null;
-}): ImageOut | null => {
-  const own = loc.images.find(isDisplayableImageFile);
-  if (own) return own;
-  // `mapLocationIdentityProduct` filters this too, but a caller may hand us a
-  // cover from somewhere else; the predicate is the contract, not the mapper.
-  const cover = loc.product?.coverImage;
-  return cover && isDisplayableImageFile(cover) ? cover : null;
-};
+}): ImageOut | null =>
+  // `mapLocationIdentityProduct` filters the cover too, but a caller may hand
+  // us one from somewhere else; the predicate is the contract, not the mapper.
+  firstDisplayableImage<ImageOut>(loc.images, loc.product?.coverImage);
 
 export const locationOutFields = {
   id: locationShortcode,

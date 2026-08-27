@@ -1,4 +1,7 @@
-import type { IngredientListItem } from "@cubby/schemas/ingredient";
+import {
+  type IngredientListItem,
+  ingredientCoverImage,
+} from "@cubby/schemas/ingredient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
@@ -193,7 +196,16 @@ export function IngredientList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateIngredientMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createImageColumn(columnHelper, { entity: "ingredient" }),
+      createImageColumn(columnHelper, {
+        entity: "ingredient",
+        // An ingredient has no images of its own, so this borrows the photo of
+        // a product it maps to — the images are already joined for the Product
+        // column's pill. Without it every row rendered the carrot placeholder.
+        getImages: (ingredient) => {
+          const cover = ingredientCoverImage(ingredient);
+          return cover ? [cover] : [];
+        },
+      }),
       createNameColumn(columnHelper, "ingredient", "name", {
         // Cap the name (it would otherwise absorb all leftover width under the
         // fixed layout and leave a big gap); the flex space goes to Recipes +

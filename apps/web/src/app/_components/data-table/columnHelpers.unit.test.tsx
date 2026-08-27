@@ -17,6 +17,7 @@ import {
   describeProductPricingSource,
   productPriceClearLabel,
   renderProductPriceValue,
+  rowImages,
 } from "./columnHelpers";
 import { EditableCell } from "./editable-cell";
 import {
@@ -379,11 +380,23 @@ describe("createImageColumn", () => {
     expect(screen.getByTestId("thumb")).toHaveTextContent("1");
   });
 
-  it("keeps PDFs out of the default row-embedded thumbnails", () => {
-    const column = createImageColumn(
-      createCubbyColumnHelper<{ id: string; images: unknown[] }>(),
-      { entity: "product" },
-    ) as ColumnDef<{ id: string; images: unknown[] }, unknown>;
+  it("keeps PDFs out of `rowImages` thumbnails", () => {
+    // `images` is typed, not `unknown[]`: `rowImages` requires a row that
+    // really carries images, which is the whole point of it being named at the
+    // call site rather than reached through a cast.
+    type PdfRow = {
+      id: string;
+      images: Array<{
+        id: string;
+        url: string;
+        filename: string;
+        contentType?: string;
+      }>;
+    };
+    const column = createImageColumn(createCubbyColumnHelper<PdfRow>(), {
+      entity: "product",
+      getImages: rowImages,
+    }) as ColumnDef<PdfRow, unknown>;
 
     function PdfHarness() {
       const table = useTable({
