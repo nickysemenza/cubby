@@ -193,17 +193,3 @@ export function entityListFor<E extends ListEntity>(entity: E) {
 export type EntityListScoped<E extends ListEntity> = ReturnType<
   typeof entityListFor<E>
 >;
-
-export function entityListQueryOptions<E extends ListEntity>(
-  entity: E,
-  input: EntityListParams<E>,
-) {
-  return entityListFor(entity).queryOptions(input);
-}
-
-export function entityInfiniteListQueryOptions<E extends ListEntity>(
-  entity: E,
-  input: EntityListParams<E>,
-) {
-  return entityListFor(entity).infiniteQueryOptions(input);
-}

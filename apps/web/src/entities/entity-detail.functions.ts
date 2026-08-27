@@ -126,18 +126,5 @@ export type EntityDetailScoped<E extends DetailEntity> = ReturnType<
   typeof entityDetailFor<E>
 >;
 
-export const entityDetailQueryKey = <E extends DetailEntity>(
-  entity: E,
-  shortcode: string,
-) => entityDetailFor(entity).queryKey(shortcode);
-
 export const entityDetailRootKey = <E extends DetailEntity>(entity: E) =>
   entityDetailFor(entity).queryKey("").slice(0, 2);
-
-export function entityDetailQueryOptions<E extends DetailEntity>(
-  entity: E,
-  shortcode: EntityDetailInputByEntity[E]["shortcode"],
-  options?: { enabled?: boolean; staleTime?: number },
-) {
-  return entityDetailFor(entity).queryOptions(shortcode, options);
-}
