@@ -2,7 +2,7 @@ import type { BackgroundBatchStatus } from "@cubby/schemas/background-jobs";
 import { getErrorMessage } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { StepForward } from "lucide-react";
+import { Eraser, StepForward } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -125,6 +125,14 @@ export function BackgroundJobsPage({
     ...backgroundJob.drain.mutationOptions(),
     onSuccess: invalidateList,
   });
+  const strandedQuery = useQuery(backgroundJob.strandedCount.queryOptions({}));
+  const clearStranded = useMutation({
+    ...backgroundJob.clearStranded.mutationOptions(),
+    onSuccess: () => {
+      invalidateList();
+      invalidateOperations(backgroundJob.strandedCount);
+    },
+  });
   const retry = useMutation({
     ...backgroundBatch.retry.mutationOptions(),
     onSuccess: () => invalidateAfterMutation(),
@@ -186,16 +194,37 @@ export function BackgroundJobsPage({
     });
   };
 
+  // Only rendered when there is something to clear: an always-visible button
+  // for a table that is normally empty reads as a routine step rather than the
+  // exception it is.
+  const abandonedCount = strandedQuery.data?.abandoned ?? 0;
   const drainAction = (
-    <Button
-      type="button"
-      variant="outline"
-      disabled={drain.isPending}
-      onClick={() => drain.mutate({ limit: 25 })}
-    >
-      {drain.isPending ? <Spinner className="size-3" /> : <StepForward />}
-      Drain pending
-    </Button>
+    <>
+      {abandonedCount > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          disabled={clearStranded.isPending}
+          onClick={() => clearStranded.mutate({})}
+        >
+          {clearStranded.isPending ? (
+            <Spinner className="size-3" />
+          ) : (
+            <Eraser />
+          )}
+          Clear {abandonedCount.toLocaleString()} stranded
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        variant="outline"
+        disabled={drain.isPending}
+        onClick={() => drain.mutate({ limit: 25 })}
+      >
+        {drain.isPending ? <Spinner className="size-3" /> : <StepForward />}
+        Drain pending
+      </Button>
+    </>
   );
 
   return (

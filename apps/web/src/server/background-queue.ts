@@ -20,7 +20,10 @@ import {
   getBackgroundJob,
   markBackgroundJobRunning,
 } from "~/server/repo/background-jobs";
-import { upsertEntityEmbedding } from "~/server/repo/entity-embedding";
+import {
+  getStoredEmbeddingHash,
+  upsertEntityEmbedding,
+} from "~/server/repo/entity-embedding";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
@@ -191,14 +194,16 @@ async function runBackgroundJobPayload(
       if (refreshed.status !== "upserted") return "skipped" as const;
       const text = await getSearchDocumentEmbeddingText(db, ref.entity, ref.id);
       if (!text) return "skipped" as const;
+      // Computed unconditionally now: a sha256 over already-loaded text is
+      // nothing next to the HTTP embedding call it can avoid below.
+      const currentHash = await embeddingTextHash({
+        entityType: text.entityType,
+        provider: getSemanticEmbeddingConfig().provider,
+        model: getSemanticEmbeddingConfig().model,
+        dimensions: getSemanticEmbeddingConfig().dimensions,
+        text: normalizeSearchText(text.embeddingText),
+      });
       if (p.payload.expectedEmbeddingHash) {
-        const currentHash = await embeddingTextHash({
-          entityType: text.entityType,
-          provider: getSemanticEmbeddingConfig().provider,
-          model: getSemanticEmbeddingConfig().model,
-          dimensions: getSemanticEmbeddingConfig().dimensions,
-          text: normalizeSearchText(text.embeddingText),
-        });
         // The workflow inspected a different document revision. Refresh is
         // already complete above; persist a replacement child keyed by the
         // current hash so this same workflow still converges without paying a
@@ -228,6 +233,17 @@ async function runBackgroundJobPayload(
           return "skipped" as const;
         }
       }
+      // Nothing about the embedded text changed, so the vector we would get
+      // back is the one already stored. Mutation-sourced refreshes fan out on
+      // every edit and carry no expected hash, so this is the common case, not
+      // the exception — skipping here is what keeps a re-projection free.
+      const storedHash = await getStoredEmbeddingHash(db, {
+        entityType: text.entityType,
+        entityId: text.entityId,
+        config: getSemanticEmbeddingConfig(),
+      });
+      if (storedHash === currentHash) return "skipped" as const;
+
       if (!semanticEmbeddingsConfigured()) return "skipped" as const;
       const [embedding] = await embedTexts([text.embeddingText], {
         operation: "entityEmbeddingRefresh",

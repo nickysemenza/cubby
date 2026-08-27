@@ -9,6 +9,7 @@ import {
   addBackgroundJobsToBatch,
   type CreateBackgroundJobInput,
   createBackgroundBatchWithJobs,
+  findRecoverableStrandedJobs,
   getBackgroundBatchSummary,
   getQueuedBackgroundBatchDispatch,
   setBackgroundBatchProcessor,
@@ -44,6 +45,9 @@ async function getDispatchedBatchRef(
   return toBackgroundBatchRef(summary);
 }
 
+/** Matches the default BackgroundJob.maxAttempts; the dev path should not exceed it. */
+const INLINE_RETRY_LIMIT = 3;
+
 async function processInlineJobs(
   db: Database,
   jobIds: string[],
@@ -54,7 +58,15 @@ async function processInlineJobs(
   const { processBackgroundJob } = await import("./background-queue");
   for (const jobId of jobIds) {
     let outcome = await processBackgroundJob(db, jobId, batchKind);
-    while (outcome === "retry") {
+    // Bounded because this runs inline on the dev request path: an uncapped
+    // loop turns a job that always returns "retry" into a hung request with no
+    // queue to back off against. The job's own maxAttempts still governs the
+    // durable outcome; this only stops the in-process spin.
+    for (
+      let attempt = 1;
+      outcome === "retry" && attempt < INLINE_RETRY_LIMIT;
+      attempt++
+    ) {
       outcome = await processBackgroundJob(db, jobId, batchKind);
     }
   }
@@ -149,6 +161,51 @@ export async function dispatchQueuedBackgroundJob(
     jobIds: [input.jobId],
     batchKind: input.batchKind,
   });
+}
+
+/** One sweep stays well inside a scheduled invocation's budget. */
+const STRANDED_SWEEP_LIMIT = 500;
+
+/**
+ * Replace queue wakeups that were lost, so a dispatch whose invocation died
+ * mid-sendBatch heals on its own. This reconciles rather than retries: an
+ * invocation killed by the CPU limit throws nothing for a catch block to see,
+ * so the durable Postgres row is the only evidence the work exists.
+ *
+ * Redispatches a message instead of running the job inline (as
+ * drainQueuedBackgroundJobs does) so each job gets its own fresh CPU budget —
+ * running them here would reproduce the very failure being repaired.
+ */
+export async function sweepStrandedBackgroundJobs(
+  db: Database,
+  limit: number = STRANDED_SWEEP_LIMIT,
+): Promise<{ redispatched: number; batches: number }> {
+  const stranded = await findRecoverableStrandedJobs(db, limit);
+  if (stranded.length === 0) return { redispatched: 0, batches: 0 };
+
+  // No binding (Node dev) means dispatch ran these inline in-process; there is
+  // no lost wakeup to replace, and enqueueing one would have nothing to drain it.
+  const queue = getBackgroundQueue();
+  if (!queue) return { redispatched: 0, batches: 0 };
+
+  const jobIdsByBatch = new Map<string, string[]>();
+  for (const job of stranded) {
+    const existing = jobIdsByBatch.get(job.batchId);
+    if (existing) existing.push(job.id);
+    else jobIdsByBatch.set(job.batchId, [job.id]);
+  }
+
+  let redispatched = 0;
+  for (const [batchId, jobIds] of jobIdsByBatch) {
+    // The message carries the BATCH kind, not the job kind: a workflow's
+    // coordinator and its children differ, and the consumer uses this to gate
+    // continuation checks without a second read.
+    const summary = await getBackgroundBatchSummary(db, batchId);
+    if (!summary) continue;
+    await sendBackgroundMessages(queue, batchId, summary.kind, jobIds);
+    redispatched += jobIds.length;
+  }
+  return { redispatched, batches: jobIdsByBatch.size };
 }
 
 export async function redispatchQueuedBatchJobs(

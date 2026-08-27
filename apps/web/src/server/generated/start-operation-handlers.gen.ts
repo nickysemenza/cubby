@@ -94,6 +94,10 @@ export const START_OPERATION_HANDLER_LOADERS = {
     const module = await import("~/server/background-batch-browser.server");
     return module.getBackgroundBatchSummaryForBrowser as unknown as StartOperationHandler;
   },
+  "background-job.clearStranded": async () => {
+    const module = await import("~/server/background-batch-browser.server");
+    return module.clearStrandedBackgroundJobsForBrowser as unknown as StartOperationHandler;
+  },
   "background-job.drain": async () => {
     const module = await import("~/server/background-batch-browser.server");
     return module.drainBackgroundJobsForBrowser as unknown as StartOperationHandler;
@@ -101,6 +105,10 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "background-job.retry": async () => {
     const module = await import("~/server/background-batch-browser.server");
     return module.retryBackgroundJobForBrowser as unknown as StartOperationHandler;
+  },
+  "background-job.strandedCount": async () => {
+    const module = await import("~/server/background-batch-browser.server");
+    return module.countStrandedBackgroundJobsForBrowser as unknown as StartOperationHandler;
   },
   "calendar.getFeed": async () => {
     const module = await import("~/server/calendar-browser.server");

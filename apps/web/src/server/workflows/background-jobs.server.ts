@@ -3,7 +3,9 @@ import { drainQueuedBackgroundJobs } from "~/server/background-queue";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  cancelAbandonedStrandedJobs,
   cancelQueuedJobsForBatch,
+  countAbandonedStrandedJobs,
   getBackgroundBatchSummary,
   listBackgroundBatches,
   listBackgroundBatchJobs,
@@ -70,3 +72,12 @@ export const drainBackgroundJobsWorkflow = async (
   db: Database,
   input: { limit: number },
 ) => await drainQueuedBackgroundJobs(db, input.limit);
+
+export const countStrandedBackgroundJobsWorkflow = async (db: Database) => ({
+  abandoned: await countAbandonedStrandedJobs(db),
+});
+
+export const clearStrandedBackgroundJobsWorkflow = async (
+  db: Database,
+  input: { limit: number },
+) => await cancelAbandonedStrandedJobs(db, input.limit);

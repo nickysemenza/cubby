@@ -5,10 +5,14 @@ import {
   backgroundBatchIdInputSchema,
   backgroundBatchJobsInputSchema,
   backgroundBatchListInputSchema,
+  backgroundClearStrandedInputSchema,
+  backgroundClearStrandedOutSchema,
   backgroundDrainInputSchema,
   backgroundDrainOutSchema,
   backgroundJobActionOutSchema,
   backgroundJobIdInputSchema,
+  backgroundStrandedCountInputSchema,
+  backgroundStrandedCountOutSchema,
 } from "@cubby/schemas/background-jobs";
 import {
   defineOperationDomain,
@@ -54,6 +58,16 @@ export const backgroundJob = defineOperationDomain("background-job", {
   drain: mutation({
     input: backgroundDrainInputSchema,
     output: backgroundDrainOutSchema,
+    invalidates: [["background-batch"]],
+  }),
+  strandedCount: query({
+    input: backgroundStrandedCountInputSchema,
+    output: backgroundStrandedCountOutSchema,
+    tags: [["background-batch"], ["background-batch", "stranded"]],
+  }),
+  clearStranded: mutation({
+    input: backgroundClearStrandedInputSchema,
+    output: backgroundClearStrandedOutSchema,
     invalidates: [["background-batch"]],
   }),
 });
