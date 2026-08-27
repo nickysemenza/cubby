@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { CommandGroup, CommandItem } from "~/components/ui/command";
 import { verbDef } from "../actions/action-verbs";
 import {
@@ -23,15 +23,18 @@ export interface PaletteAction {
  */
 function ResolvedHost({
   entity,
+  active,
   children,
 }: {
   entity: Entity;
+  /** False once the palette has moved on — dialogs stay, the group does not. */
+  active: boolean;
   children: (actions: PaletteAction[]) => ReactNode;
 }) {
   const { singleRecordActions, dialogs } = useEntityActions(entity);
   return (
     <>
-      {children(singleRecordActions)}
+      {children(active ? singleRecordActions : NO_ACTIONS)}
       {dialogs}
     </>
   );
@@ -43,6 +46,12 @@ const NO_ACTIONS: PaletteAction[] = [];
  * `key={entity}` is load-bearing: `useEntityActions` invokes one hook per
  * matching definition, so the entity has to be constant for an instance.
  * Remounting as the typed shortcode changes is what keeps that true.
+ *
+ * The resolved entity is *sticky*. Selecting an action closes the palette,
+ * which clears its search, which un-resolves the shortcode — so a host that
+ * tracked the live value would unmount the dialog in the same commit that
+ * opened it. Holding the last entity keeps the dialog alive; `active` is what
+ * stops the group itself from lingering in a palette that has moved on.
  */
 export function EntityPaletteActionsHost({
   entity,
@@ -51,9 +60,12 @@ export function EntityPaletteActionsHost({
   entity: Entity | null;
   children: (actions: PaletteAction[]) => ReactNode;
 }) {
-  if (!entity) return <>{children(NO_ACTIONS)}</>;
+  const [resolved, setResolved] = useState<Entity | null>(entity);
+  if (entity !== null && entity !== resolved) setResolved(entity);
+
+  if (!resolved) return <>{children(NO_ACTIONS)}</>;
   return (
-    <ResolvedHost key={entity} entity={entity}>
+    <ResolvedHost key={resolved} entity={resolved} active={entity === resolved}>
       {children}
     </ResolvedHost>
   );
