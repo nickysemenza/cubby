@@ -59,7 +59,9 @@ type CalendarEditDescriptor =
 // presentation concerns. `satisfies` makes a newly-added CalendarItem arm a
 // compile-time registry decision rather than an accidental generic card.
 type CalendarKindSpec<K extends CalendarItemKind> = {
-  entity: Entity;
+  // No `entity` field: every calendar kind IS the entity it shows, and
+  // `item.kind` already carries it to the one place that asked. Restating it
+  // per entry only created a way for `meal` to claim it was a task.
   create: (date?: string) => EntityEditDialogRequest;
   icon: (item: ItemOf<K>) => LucideIcon;
   cover: (
@@ -83,7 +85,6 @@ const calendarKindRegistry: {
   [K in CalendarItemKind]: CalendarKindSpec<K>;
 } = {
   meal: {
-    entity: "meal",
     create: (date) => mealCaptureRequest({ date }),
     icon: (item) => mealTypeIcon(item.mealType),
     cover: (item) =>
@@ -138,7 +139,6 @@ const calendarKindRegistry: {
     }),
   },
   task: {
-    entity: "task",
     create: (date) => taskCaptureRequest({ date }),
     icon: () => KIND_ICONS.task,
     cover: (item) =>
@@ -171,7 +171,6 @@ const calendarKindRegistry: {
     }),
   },
   expense: {
-    entity: "expense",
     create: (date) => expenseCaptureRequest({ date, future: true }),
     icon: () => KIND_ICONS.expense,
     cover: (item) =>
@@ -231,7 +230,6 @@ const calendarKindRegistry: {
     }),
   },
   project: {
-    entity: "project",
     create: (date) => projectCaptureRequest({ date }),
     icon: () => KIND_ICONS.project,
     cover: () => undefined,
@@ -280,7 +278,8 @@ function calendarItemPresentation(item: CalendarItem, today = "") {
   // The switch above keeps the registry exhaustively typed; callers see one
   // simple presentation value and never need to discriminate CalendarItem.
   return {
-    entity: spec.entity,
+    // The kind and the entity are the same thing here — see CalendarKindSpec.
+    entity: item.kind,
     icon: spec.icon(item as never),
     cover: spec.cover(item as never),
     metadata: spec.metadata(item as never),
