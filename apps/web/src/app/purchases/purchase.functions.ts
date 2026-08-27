@@ -21,7 +21,7 @@ export const purchase = defineOperationDomain("purchase", {
   products: query({
     input: purchaseProductsInput,
     output: purchaseProductsOut,
-    tags: [["purchase"], ["purchase", "products"]],
+    tags: [["purchase", "products"]],
   }),
   link: mutation({
     input: linkExpensesToPurchaseInput,

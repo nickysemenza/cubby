@@ -23,12 +23,12 @@ export const search = defineOperationDomain("search", {
   find: query({
     input: searchQueryInputSchema,
     output: searchHitsOut,
-    tags: [["search"], ["search", "find"]],
+    tags: [["search", "find"]],
   }),
   documentHealth: query({
     input: z.undefined(),
     output: searchDocumentMaintenanceSchema,
-    tags: [["search"], ["search", "documentHealth"]],
+    tags: [["search", "documentHealth"]],
   }),
   repairDocuments: mutation({
     input: z.undefined(),
@@ -38,12 +38,12 @@ export const search = defineOperationDomain("search", {
   related: query({
     input: searchQueryInputSchema,
     output: relatedSearchOutSchema,
-    tags: [["search"], ["search", "related"]],
+    tags: [["search", "related"]],
   }),
   debug: query({
     input: searchQueryInputSchema,
     output: searchDebugOutSchema,
-    tags: [["search"], ["search", "debug"]],
+    tags: [["search", "debug"]],
   }),
   enqueueEmbeddingBackfill: mutation({
     input: enqueueEmbeddingBackfillInputSchema,

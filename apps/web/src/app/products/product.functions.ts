@@ -20,19 +20,19 @@ import { openWorkflowStream } from "~/lib/workflow-stream";
 export const product = defineOperationDomain("product", {
   search: query({
     ...productWorkflowSchemas.search,
-    tags: [["product"], ["product", "search"]],
+    tags: [["product", "search"]],
   }),
   summaries: query({
     ...productWorkflowSchemas.summaries,
-    tags: [["product"], ["product", "summaries"]],
+    tags: [["product", "summaries"]],
   }),
   quantitySummaries: query({
     ...productWorkflowSchemas.quantitySummaries,
-    tags: [["product"], ["product", "quantitySummaries"]],
+    tags: [["product", "quantitySummaries"]],
   }),
   inventoryEntriesByIds: query({
     ...productWorkflowSchemas.inventoryEntriesByIds,
-    tags: [["product"], ["product", "inventoryEntriesByIds"]],
+    tags: [["product", "inventoryEntriesByIds"]],
   }),
   quickCreate: mutation({
     ...productWorkflowSchemas.quickCreate,
@@ -52,27 +52,27 @@ export const product = defineOperationDomain("product", {
   }),
   tagOptions: query({
     ...productWorkflowSchemas.tagOptions,
-    tags: [["product"], ["product", "tagOptions"]],
+    tags: [["product", "tagOptions"]],
   }),
   categoryDistribution: query({
     ...productWorkflowSchemas.categoryDistribution,
-    tags: [["product"], ["product", "categoryDistribution"]],
+    tags: [["product", "categoryDistribution"]],
   }),
   manufacturerOptions: query({
     ...productWorkflowSchemas.manufacturerOptions,
-    tags: [["product"], ["product", "manufacturerOptions"]],
+    tags: [["product", "manufacturerOptions"]],
   }),
   externalIdSourceOptions: query({
     ...productWorkflowSchemas.externalIdSourceOptions,
-    tags: [["product"], ["product", "externalIdSourceOptions"]],
+    tags: [["product", "externalIdSourceOptions"]],
   }),
   movementTimeline: query({
     ...productWorkflowSchemas.movementTimeline,
-    tags: [["product"], ["product", "movementTimeline"]],
+    tags: [["product", "movementTimeline"]],
   }),
   getByShortcodes: query({
     ...productWorkflowSchemas.getByShortcodes,
-    tags: [["product"], ["product", "getByShortcodes"]],
+    tags: [["product", "getByShortcodes"]],
   }),
   merge: mutation({
     ...productWorkflowSchemas.merge,
@@ -80,22 +80,23 @@ export const product = defineOperationDomain("product", {
   }),
   projectUses: query({
     ...productWorkflowSchemas.projectUses,
-    tags: [["product"], ["product", "projectUses"], ["project", "resource"]],
+    tags: [
+      ["product", "projectUses"],
+      ["project", "resource"],
+    ],
   }),
   purchases: query({
     ...productWorkflowSchemas.purchases,
-    tags: [["product"], ["product", "purchases"]],
+    tags: [["product", "purchases"]],
   }),
   relationshipRoute: query({
     ...productWorkflowSchemas.relationshipRoute,
     tags: [
-      ["product"],
       ["product", "relationshipRoute"],
       ["inventory"],
       ["location"],
       ["expense"],
       ["purchase"],
-      ["project"],
       ["project", "resource"],
       ["task"],
       ["vendor"],
@@ -103,19 +104,24 @@ export const product = defineOperationDomain("product", {
   }),
   components: query({
     ...productWorkflowSchemas.components,
-    tags: [["product"], ["product", "components"], ["product", "component"]],
+    tags: [
+      ["product", "components"],
+      ["product", "component"],
+    ],
   }),
   kitComponentRows: query({
     ...productWorkflowSchemas.kitComponentRows,
     tags: [
-      ["product"],
       ["product", "kitComponentRows"],
       ["product", "component"],
     ],
   }),
   kitMembership: query({
     ...productWorkflowSchemas.kitMembership,
-    tags: [["product"], ["product", "kitMembership"], ["product", "component"]],
+    tags: [
+      ["product", "kitMembership"],
+      ["product", "component"],
+    ],
   }),
   attachComponents: mutation({
     ...productWorkflowSchemas.attachComponents,

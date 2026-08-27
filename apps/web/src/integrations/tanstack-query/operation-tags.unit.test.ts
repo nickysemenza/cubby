@@ -85,35 +85,31 @@ describe("operation cache tags", () => {
   });
 
   /**
-   * Invariant 1, scoped. The full rule — no tag on a query is a proper prefix of
-   * a sibling tag on the same query — does not hold yet: ~95 query descriptors
-   * declare both a bare entity root and a narrower op tag (`product.search` has
-   * `["product"]` and `["product","search"]`), and the bare root is redundant
-   * because invalidating it already prefix-matches the narrower sibling.
-   * Cleaning those up means editing `*.functions.ts`, which is Wave 2's step A2.
+   * Invariant 1. No tag on a query is a proper prefix of a sibling tag on the
+   * SAME query: invalidating the prefix already prefix-matches the longer
+   * sibling, so the shorter one adds nothing and only makes the declaration read
+   * as if it did. `product.search` used to declare `["product"]` alongside
+   * `["product","search"]`; the only invalidation that reached the first also
+   * reached the second.
    *
-   * What IS asserted here is that the redundancy never runs deeper than that one
-   * idiom: no two-or-more-segment tag subsumes a sibling. A violation of THAT
-   * would be a genuine modelling mistake rather than the accepted broad-root
-   * convention.
+   * Cross-entity opt-in tags are NOT redundant and must survive:
+   * `product.relationshipRoute` names `["inventory"]`, `["location"]`,
+   * `["expense"]`, … precisely because a product query wants to re-read when
+   * OTHER entities move. None of those is a prefix of a sibling.
    */
-  it("has no redundancy deeper than the bare-entity-root idiom", () => {
-    const deep: string[] = [];
+  it("has no tag that is a proper prefix of a sibling", () => {
+    const redundant: string[] = [];
     for (const { path, descriptor } of descriptors) {
       const tags = descriptor.definition.tags ?? [];
       for (const tag of tags)
         for (const sibling of tags)
-          if (tag !== sibling && tag.length > 1 && isPrefixOf(tag, sibling))
-            deep.push(
+          if (tag !== sibling && isPrefixOf(tag, sibling))
+            redundant.push(
               `${descriptor.id} (${path}): ${show(tag)} subsumes ${show(sibling)}`,
             );
     }
-    expect(deep).toEqual([]);
+    expect(redundant).toEqual([]);
   });
-
-  it.todo(
-    "no tag on a query is a proper prefix of a sibling tag (Wave 2 / step A2 drops the ~95 redundant bare roots)",
-  );
 
   /**
    * Invariant 2. `entity.list` is tagged `[["entity","list"]]` and `entity.detail`

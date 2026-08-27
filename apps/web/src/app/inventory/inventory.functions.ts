@@ -56,11 +56,11 @@ export const inventory = defineOperationDomain("inventory", {
   findDuplicates: query({
     input: inventoryFindDuplicatesInput,
     output: inventoryDuplicateUniqueProductsOut,
-    tags: [["inventory"], ["inventory", "findDuplicates"]],
+    tags: [["inventory", "findDuplicates"]],
   }),
   getByLocationIds: query({
     input: inventoryLocationIdsInput,
     output: inventoryWithLocationAndProductListOut,
-    tags: [["inventory"], ["inventory", "getByLocationIds"]],
+    tags: [["inventory", "getByLocationIds"]],
   }),
 });

@@ -24,18 +24,18 @@ export const backgroundBatch = defineOperationDomain("background-batch", {
   list: query({
     input: backgroundBatchListInputSchema,
     output: backgroundBatchBrowserListOutSchema,
-    tags: [["background-batch"], ["background-batch", "list"]],
+    tags: [["background-batch", "list"]],
   }),
   summary: query({
     input: backgroundBatchIdInputSchema,
     output: backgroundBatchBrowserSummarySchema,
-    tags: [["background-batch"], ["background-batch", "summary"]],
+    tags: [["background-batch", "summary"]],
     freshness: { staleTime: 0 },
   }),
   jobs: query({
     input: backgroundBatchJobsInputSchema,
     output: backgroundBatchBrowserJobsOutSchema,
-    tags: [["background-batch"], ["background-batch", "jobs"]],
+    tags: [["background-batch", "jobs"]],
   }),
   retry: mutation({
     input: backgroundBatchIdInputSchema,
@@ -63,7 +63,7 @@ export const backgroundJob = defineOperationDomain("background-job", {
   strandedCount: query({
     input: backgroundStrandedCountInputSchema,
     output: backgroundStrandedCountOutSchema,
-    tags: [["background-batch"], ["background-batch", "stranded"]],
+    tags: [["background-batch", "stranded"]],
   }),
   clearStranded: mutation({
     input: backgroundClearStrandedInputSchema,

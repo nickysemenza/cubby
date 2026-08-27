@@ -11,22 +11,22 @@ export const project = defineOperationDomain("project", {
   dashboardSummary: query({
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectDashboardSummaryOut,
-    tags: [["project"], ["project", "dashboardSummary"]],
+    tags: [["project", "dashboardSummary"]],
   }),
   tree: query({
     input: schemas.projectTreeInput,
     output: schemas.projectTreeOut,
-    tags: [["project"], ["project", "tree"]],
+    tags: [["project", "tree"]],
   }),
   portfolioAnalytics: query({
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,
-    tags: [["project"], ["project", "portfolioAnalytics"]],
+    tags: [["project", "portfolioAnalytics"]],
   }),
   options: query({
     input: z.undefined(),
     output: z.array(schemas.projectOptionsOut),
-    tags: [["project"], ["project", "options"]],
+    tags: [["project", "options"]],
   }),
   createFromTasks: mutation({
     input: schemas.createProjectFromTasksInput,
@@ -36,13 +36,15 @@ export const project = defineOperationDomain("project", {
   resources: query({
     input: schemas.projectResourceProjectInput,
     output: schemas.projectResourcesOut,
-    tags: [["project"], ["project", "resources"], ["project", "resource"]],
+    tags: [
+      ["project", "resources"],
+      ["project", "resource"],
+    ],
   }),
   toolSuggestions: query({
     input: schemas.projectResourceProjectInput,
     output: schemas.projectToolSuggestionsOut,
     tags: [
-      ["project"],
       ["project", "toolSuggestions"],
       ["project", "resource"],
     ],
@@ -60,7 +62,10 @@ export const project = defineOperationDomain("project", {
   toolMatrix: query({
     input: schemas.projectToolMatrixInput,
     output: schemas.projectToolMatrixOut,
-    tags: [["project"], ["project", "toolMatrix"], ["project", "resource"]],
+    tags: [
+      ["project", "toolMatrix"],
+      ["project", "resource"],
+    ],
   }),
   setToolUsage: mutation({
     input: schemas.projectToolUsageSetInput,

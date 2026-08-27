@@ -19,17 +19,17 @@ export const collection = defineOperationDomain("collection", {
   list: query({
     input: z.null(),
     output: z.array(collectionSummaryOut),
-    tags: [["collection"], ["collection", "list"]],
+    tags: [["collection", "list"]],
   }),
   detail: query({
     input: collectionDetailInput,
     output: collectionDetailOut,
-    tags: [["collection"], ["collection", "detail"]],
+    tags: [["collection", "detail"]],
   }),
   matrix: query({
     input: collectionMatrixInput,
     output: collectionMatrixOut,
-    tags: [["collection"], ["collection", "matrix"]],
+    tags: [["collection", "matrix"]],
   }),
   set: mutation({
     input: collectionTagSetInput,
