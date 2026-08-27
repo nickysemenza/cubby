@@ -1107,7 +1107,15 @@ function ProjectPreviewContent({
     : undefined;
 
   return (
-    <PreviewQuery query={{ data, isLoading: query.isLoading }} label="Project">
+    <PreviewQuery
+      query={{
+        data,
+        isLoading: query.isLoading,
+        isError: query.isError,
+        refetch: query.refetch,
+      }}
+      label="Project"
+    >
       {(project) => (
         <ManifestCard
           {...toProjectCard(project)}

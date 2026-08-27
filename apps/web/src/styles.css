@@ -350,6 +350,8 @@
   --sidebar-accent-foreground: var(--brand-foreground);
   --sidebar-border: var(--brand-hairline);
   --sidebar-ring: var(--brand-ultramarine);
+  --app-sidebar-expanded-width: 13rem;
+  --app-sidebar-collapsed-width: 3.5rem;
 }
 /*
   ---break---

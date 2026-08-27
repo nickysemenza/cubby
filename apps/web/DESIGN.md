@@ -229,7 +229,7 @@ from role and weight, not swapping typefaces.
 
 ## Layout
 
-Wide desktop uses a 224px expanded domain rail or 56px collapsed rail, a 48px
+Wide desktop uses a 208px expanded domain rail or 56px collapsed rail, a 48px
 command band, a central work surface, and an optional 400px modeless inspector
 at 1280px and wider. From 768–1279px, the same inspector content moves into an
 explicit right sheet. Below 768px, rows use semantic cards or purpose-built
@@ -300,7 +300,8 @@ than route-local visual systems.
 - **Hover / Focus:** filled cobalt deepens; focus uses a crisp cobalt 2px ring
   and real boundary, never glow.
 - **Outline / Secondary / Ghost:** white, inset, or transparent at rest with a
-  neutral hover tone. Destructive actions use restrained red tint and text.
+  neutral hover tone. Destructive actions use a restrained red tint and border
+  with neutral foreground text so the warning remains legible on paper.
 
 ### Chips
 

@@ -42,7 +42,7 @@ export function ProblemsBanner() {
       className={cn(
         "flex min-h-11 items-center gap-2 border px-2 py-1 transition-colors sm:min-h-0",
         defects > 0
-          ? "border-destructive/60 bg-destructive/10 text-destructive hover:bg-destructive/20"
+          ? "border-destructive/60 bg-destructive/10 text-foreground hover:bg-destructive/20"
           : "border-border bg-muted/40 text-muted-foreground hover:bg-muted",
       )}
     >

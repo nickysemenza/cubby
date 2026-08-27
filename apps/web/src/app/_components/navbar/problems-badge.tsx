@@ -102,7 +102,13 @@ export const ProblemsBadge = () => {
   // arrives.
   if (!isAuthed || isLoading || !count) {
     return (
-      <Button variant="ghost" size="sm" disabled className="h-8 px-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled
+        className="h-8 px-2"
+        data-testid="problems-badge"
+      >
         <Spinner />
       </Button>
     );
@@ -151,6 +157,7 @@ export const ProblemsBadge = () => {
             render={<Link to="/problems" />}
             nativeButton={false}
             aria-label={accessibleName}
+            data-testid="problems-badge"
           />
         }
       >

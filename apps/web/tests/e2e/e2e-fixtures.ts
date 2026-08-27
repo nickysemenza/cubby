@@ -1,3 +1,4 @@
+import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { productCreateInput } from "@cubby/schemas/product";
@@ -13,6 +14,7 @@ import {
   type EntityBrowserMutationCommand,
   entityBrowserMutationCommandSchema,
 } from "~/server/entity-kernel/contracts";
+import { createUploadedImageRecord } from "~/server/repo/image";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -128,6 +130,30 @@ export const seedProductPrerequisite = (
     "product",
     productFixtureInput(opts.name, opts.manufacturer ?? "E2E fixture"),
   );
+
+export const seedFinancialAccountPrerequisite = (page: Page, name: string) =>
+  createFixture(
+    page,
+    "financialAccount",
+    financialAccountCreateInput.parse({
+      name,
+      identity: { kind: "cash" },
+      provisional: false,
+      sourceAliases: [],
+      ledgerPartyId: null,
+      notes: null,
+    }),
+  );
+
+export const seedImagePrerequisite = async (name: string) => {
+  const created = await createUploadedImageRecord(getFixtureDb(), {
+    key: `e2e-${name}`,
+    filename: `${name}.png`,
+    contentType: "image/png",
+    size: 100,
+  });
+  return { id: created.shortcode };
+};
 
 export const seedInventoryPrerequisites = (
   page: Page,

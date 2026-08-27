@@ -1,5 +1,4 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   notFound,
@@ -20,16 +19,18 @@ import RecipeDetail, {
 } from "~/app/_components/recipe/RecipeDetail";
 import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
 import { useDuplicateRecipe } from "~/app/_components/recipe/use-duplicate-recipe";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { shortcodeHead } from "~/lib/page-title";
 import { invalidatesFor } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
@@ -67,6 +68,18 @@ const searchDefaults = {
   scale: undefined,
 } as const;
 
+const RecipeNotFound = notFoundPage(
+  "recipe",
+  "Recipe not found",
+  "This recipe is no longer available.",
+);
+
+const RecipeDetailPage = detailPage({
+  query: (shortcode) => entityDetailQueryOptions("recipe", shortcode),
+  render: (recipe) => <RecipeDetailBody recipe={recipe} />,
+  title: (recipe) => recipe.name,
+});
+
 export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   validateSearch: searchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
@@ -78,35 +91,12 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page variant="list" title="Recipe not found" entity="recipe" compact>
-      <Empty>
-        <EmptyTitle>Recipe not found</EmptyTitle>
-        <EmptyDescription>This recipe is no longer available.</EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: RecipeNotFound,
   head: shortcodeHead,
   component: RecipeDetailPage,
 });
 
-/**
- * Splits the guard from the body so every hook below can treat the recipe as
- * loaded. The loader already threw notFound for an unknown code; this only
- * satisfies the generic detail read's nullable output, and inlining the guard would
- * mean either a conditional hook or `?.` on a dozen call sites.
- */
-function RecipeDetailPage() {
-  const { shortcode } = Route.useParams();
-  const { data: recipe } = useSuspenseQuery(
-    entityDetailQueryOptions("recipe", shortcode),
-  );
-  if (!recipe) return null;
-  return <RecipeDetailBody recipe={recipe} />;
-}
-
 function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
-  const { shortcode } = Route.useParams();
   const { edit: isEditing, view, flowLayout, scale } = Route.useSearch();
   const navigate = useNavigate();
 
@@ -150,8 +140,6 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
   });
 
   const { duplicateRecipe, isPending: isDuplicating } = useDuplicateRecipe();
-
-  useDetailTitle(shortcode, recipe.name);
 
   // Placard stats from the persisted totals — zero engine calls. The Data
   // view's summary card shows live SCALED totals; these are the 1× ledger

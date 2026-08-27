@@ -204,6 +204,16 @@ describe("DetailSections ledger", () => {
       entity: "vendor",
       sourceId: "VEN-EXAMPLE",
     });
+    const sectionIds = Array.from(
+      document.querySelectorAll("section"),
+      (section) => section.id,
+    );
+    expect(sectionIds[0]).toBe("relationships");
+    expect(
+      screen
+        .getByTestId("relationship-route-preview")
+        .compareDocumentPosition(document.getElementById("relationships")!),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("omits empty sections without leaving an index target", () => {

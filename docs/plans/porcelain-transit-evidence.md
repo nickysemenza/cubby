@@ -29,7 +29,7 @@ fix only redesign-caused failures.
 | --- | --- | --- |
 | T0 Governance and baselines | Complete | Branch/base above; approved mocks, calibration, truth matrix, and 18 source-state screenshots are committed together |
 | T1 Tokens, fonts, and primitives | Complete | Shared raw tokens, Inter-led typography, domain palette, modest geometry, restrained overlays, rebuilt core primitives, and desktop/mobile state gallery |
-| T2 Desktop/mobile shell | Complete | 224px expanded and 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint |
+| T2 Desktop/mobile shell | Complete | The original 224px expanded rail is narrowed to 208px by this post-merge follow-up; the 56px collapsed rail, 48px command band, five domain groups, preserved contextual mobile chrome, focused tests/typecheck, independent review, and desktop/mobile visual checkpoint remain |
 | T3 Products reference workbench | Complete | Approved 28px Product density, docked inspector, Sheet, phone projection, one Product-owned relationship query, fixed direct/derived semantics, bounded previews, explicit provenance, and synthetic desktop/phone examples |
 | T4 Canonical detail system | Complete | Product detail reuses the same relationship query near the hero and in its full route ledger, suppresses the generic duplicate explorer, and preserves recategorized project-use history as read-only evidence |
 | T5 Canonical lists/details | Complete | Standard, direct-workbench, Project, Wishlist, Meal, and USDA rosters share the responsive inspector/mobile-detail contract; canonical details use one section ledger for Activity and truthful relationships, first-wave fallback previews are explicit, and read-heavy density is scoped rather than global |
@@ -192,9 +192,10 @@ returns exact branch counts, at most three previews, canonical shortcodes, and
 explicit provenance. Stock and identity Locations, Expenses and Purchases, used
 on and purchased-for Projects, Tasks, and derived Vendors remain distinctly
 named rather than flattened into a decorative graph or inferred in the client.
-The operation currently executes fifteen bounded repository statements in
-parallel. That is acknowledged performance debt for later query consolidation,
-not permission to reintroduce client fan-out or weaken the fixed contract.
+The separate query-consolidation follow-up owns a deterministic test-enforced
+budget. This historical design ledger does not duplicate that mutable count;
+later consolidation must not reintroduce client fan-out or dilute the fixed
+contract.
 
 ### Checkpoint decision
 

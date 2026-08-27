@@ -1,6 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
-import { createProduct } from "./e2e-helpers";
+import {
+  seedFinancialAccountPrerequisite,
+  seedImagePrerequisite,
+  seedLocationPrerequisite,
+  seedProductPrerequisite,
+} from "./e2e-fixtures";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+// This single test intentionally mutates a shared database across its route
+// matrix. Retrying it would collide with its own fixed, human-readable fixtures
+// and obscure the original accessibility failure.
+test.describe.configure({ retries: 0 });
 
 test("representative authenticated pages have no serious Axe violations", async ({
   page,
@@ -22,13 +33,48 @@ test("representative authenticated pages have no serious Axe violations", async 
     expect(serious).toEqual([]);
   };
 
-  await page.goto("/products");
+  await gotoAuthenticatedPage(page, "/products");
+  await assertAccessible();
+  const product = await seedProductPrerequisite(page, {
+    name: "Axe accessibility product",
+  });
+  const location = await seedLocationPrerequisite(
+    page,
+    "Axe accessibility location",
+  );
+  const account = await seedFinancialAccountPrerequisite(
+    page,
+    "Axe accessibility cash account",
+  );
+  const image = await seedImagePrerequisite("axe-accessibility-image");
+  await gotoAuthenticatedPage(page, "/");
+  await assertAccessible();
+
+  await page.goto("/recipes");
+  await assertAccessible();
+
+  await page.goto("/financial-transactions");
   await assertAccessible();
 
   await page.goto("/products/new");
   await assertAccessible();
 
-  await createProduct(page, `Axe Product ${Date.now()}`);
+  await page.goto(`/products/${product.id}`);
+  await assertAccessible();
+
+  await page.goto("/locations");
+  await assertAccessible();
+  await page.goto(`/locations/${location.id}`);
+  await assertAccessible();
+
+  await page.goto("/financial-accounts");
+  await assertAccessible();
+  await page.goto(`/financial-accounts/${account.id}`);
+  await assertAccessible();
+
+  await page.goto("/images");
+  await assertAccessible();
+  await page.goto(`/images/${image.id}`);
   await assertAccessible();
 
   await page.goto("/labels");

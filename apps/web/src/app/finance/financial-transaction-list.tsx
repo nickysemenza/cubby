@@ -188,7 +188,6 @@ export function FinancialTransactionList() {
       filterOptions={filterOptions}
       initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
       ariaLabel="Financial transactions"
-      preview={false}
     />
   );
 }

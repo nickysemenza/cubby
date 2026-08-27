@@ -1,5 +1,8 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import {
+  detailPage,
+  notFoundPage,
+} from "~/app/_components/routing/entity-routes";
 import { expense } from "~/app/expenses/expense.functions";
 import { project } from "~/app/projects/project.functions";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
@@ -14,13 +17,22 @@ import {
 } from "~/app/projects/project-query-params";
 import { task } from "~/app/tasks/task.functions";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entityDetailQueryOptions } from "~/entities/entity-detail.functions";
 import { entityListQueryOptions } from "~/entities/entity-list.functions";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { shortcodeHead } from "~/lib/page-title";
+
+const ProjectNotFound = notFoundPage(
+  "project",
+  "Project not found",
+  "This project is no longer available.",
+);
+
+const ProjectDetailRoute = detailPage({
+  query: (shortcode) => entityDetailQueryOptions("project", shortcode),
+  render: (project) => <ProjectDetailPage project={project} />,
+  title: (project) => project.name,
+});
 
 export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   loader: async ({ params, context }) => {
@@ -54,31 +66,7 @@ export const Route = createFileRoute("/_authenticated/projects/$shortcode")({
   },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
-  notFoundComponent: () => (
-    <Page variant="list" title="Project not found" entity="project" compact>
-      <Empty>
-        <EmptyTitle>Project not found</EmptyTitle>
-        <EmptyDescription>
-          This project is no longer available.
-        </EmptyDescription>
-      </Empty>
-    </Page>
-  ),
+  notFoundComponent: ProjectNotFound,
   head: shortcodeHead,
   component: ProjectDetailRoute,
 });
-
-function ProjectDetailRoute() {
-  const { shortcode } = Route.useParams();
-  const { data: project } = useSuspenseQuery(
-    entityDetailQueryOptions("project", shortcode),
-  );
-
-  useDetailTitle(shortcode, project?.name);
-
-  // The loader already threw notFound for an unknown code; this guard only
-  // satisfies the nullable output type.
-  if (!project) return null;
-
-  return <ProjectDetailPage project={project} />;
-}

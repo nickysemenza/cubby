@@ -6,8 +6,8 @@ import { infLocation } from "@cubby/schemas/location";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { wishOut } from "@cubby/schemas/wish";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import {
   toFinancialAccountCard,
@@ -20,10 +20,11 @@ import {
 import { PreviewQuery } from "./preview/preview-query";
 
 describe("PreviewQuery", () => {
-  it("renders loading, deleted, and success states", () => {
+  it("distinguishes loading, failure, deletion, and success states", () => {
+    const refetch = vi.fn();
     const { rerender } = render(
       <PreviewQuery
-        query={{ data: undefined, isLoading: true }}
+        query={{ data: undefined, isLoading: true, isError: false, refetch }}
         label="Product"
       >
         {(data: { name: string }) => <span>{data.name}</span>}
@@ -33,7 +34,21 @@ describe("PreviewQuery", () => {
 
     rerender(
       <PreviewQuery
-        query={{ data: undefined, isLoading: false }}
+        query={{ data: undefined, isLoading: false, isError: true, refetch }}
+        label="Product"
+      >
+        {(data: { name: string }) => <span>{data.name}</span>}
+      </PreviewQuery>,
+    );
+    expect(
+      screen.getByText("Product could not be loaded."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledOnce();
+
+    rerender(
+      <PreviewQuery
+        query={{ data: undefined, isLoading: false, isError: false, refetch }}
         label="Product"
       >
         {(data: { name: string }) => <span>{data.name}</span>}
@@ -43,7 +58,12 @@ describe("PreviewQuery", () => {
 
     rerender(
       <PreviewQuery
-        query={{ data: { name: "Olive oil" }, isLoading: false }}
+        query={{
+          data: { name: "Olive oil" },
+          isLoading: false,
+          isError: false,
+          refetch,
+        }}
         label="Product"
       >
         {(data) => <span>{data.name}</span>}
