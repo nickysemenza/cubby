@@ -213,7 +213,7 @@ export function WithLocationSearch({
             ? (searchHits?.map((hit) =>
                 buildSearchHitComboboxItem(hit, "location"),
               ) ?? [])
-            : (data?.items.map(buildLocationComboboxItem) ?? []),
+            : (data?.data.map(buildLocationComboboxItem) ?? []),
         onSearchChange,
         isLoading: exactCode
           ? isExactLoading
