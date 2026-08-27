@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ReactNode } from "react";
-import { useMemo, useRef } from "react";
+import { Fragment, createContext, useContext, useMemo, useRef } from "react";
 import type {
   BulkAction,
   BulkActionResult,
@@ -8,6 +8,7 @@ import type {
 import type { ActionSurface } from "./action-items";
 import { verbBulkAction } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
+import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 
 /**
  * The entity action registry: which verbs an entity offers, and what running
@@ -105,7 +106,22 @@ export interface EntityActionDefinition {
  * the generic "Copy codes" and before the contract's "Delete" (see
  * `useListBulkActions`).
  */
-export const entityActions: readonly EntityActionDefinition[] = [];
+export const entityActions: readonly EntityActionDefinition[] = [
+  {
+    verb: "addToInventory",
+    entities: ["product"],
+    // `both`, and that is the whole point: it was a row-only affordance
+    // repeated on three tables, so stocking an order meant opening the same
+    // dialog once per line and re-picking the same shelf every time.
+    arity: "both",
+    surfaces: ["row", "bar", "detail", "palette-quick"],
+    // The dialog collects a location and per-row quantities, so the bar's job
+    // ends once the rows are staged — and a cancelled dialog should leave the
+    // operator's selection where they left it.
+    preserveSelection: true,
+    use: useAddToInventoryAction,
+  },
+];
 
 const appliesTo = (
   definition: EntityActionDefinition,
@@ -138,6 +154,13 @@ export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
  */
 export function useEntityActions<TRow extends EntityActionRow>(
   entity: Entity,
+  /**
+   * Test seam. Production callers pass nothing and get the module registry;
+   * a test supplies its own so it can assert the resolution rules without
+   * depending on which verbs happen to be declared. Like `entity`, it fixes
+   * which hooks run, so it must be constant for a component instance.
+   */
+  registry: readonly EntityActionDefinition[] = entityActions,
 ): UseEntityActionsReturn<TRow> {
   const firstEntityRef = useRef(entity);
   if (firstEntityRef.current !== entity) {
@@ -149,13 +172,13 @@ export function useEntityActions<TRow extends EntityActionRow>(
 
   const matching = useMemo(
     () =>
-      entityActions.filter(
+      registry.filter(
         (definition) =>
           appliesTo(definition, entity, "row") ||
           appliesTo(definition, entity, "bar") ||
           appliesTo(definition, entity, "detail"),
       ),
-    [entity],
+    [entity, registry],
   );
 
   // Stable across renders because `matching` is derived from a constant
@@ -192,10 +215,74 @@ export function useEntityActions<TRow extends EntityActionRow>(
     ({ definition }) =>
       definition.arity !== "multi" && appliesTo(definition, entity, "row"),
   );
+  // Keyed by verb, not by array position: a definition's handles are rendered
+  // as siblings, and a registry entry that appears conditionally (an action
+  // with no `run` this render) would otherwise shift every later key.
   const rowMenuItems = (row: TRow) =>
-    rowCapable.map(({ handles }) => handles.rowMenuItem(row));
+    rowCapable.map(({ definition, handles }) => (
+      <Fragment key={definition.verb}>{handles.rowMenuItem(row)}</Fragment>
+    ));
 
-  const dialogs = resolved.map(({ handles }) => handles.dialog);
+  const dialogs = resolved.map(({ definition, handles }) => (
+    <Fragment key={definition.verb}>{handles.dialog}</Fragment>
+  ));
 
   return { bulkActions, rowMenuItems, dialogs };
+}
+
+/**
+ * What a surface publishes so the actions column's cells can reach the row
+ * items it resolved.
+ *
+ * `entity` travels with the items because a sub-table of a DIFFERENT entity
+ * may render inside the provider (an expense table on a project page). Items
+ * resolved for the outer entity must not leak into it.
+ */
+export interface EntityActionsContextValue {
+  entity: Entity;
+  rowMenuItems: (row: EntityActionRow) => ReactNode;
+}
+
+const EntityActionsContext = createContext<EntityActionsContextValue | null>(
+  null,
+);
+
+/**
+ * Bridges one `useEntityActions` call to every actions column beneath it.
+ *
+ * `createActionsColumn` builds a column def, and its callers build columns
+ * inside a `useMemo` — neither is a legal place to call a hook, and mounting
+ * the definitions per row would give each row its own copy of every dialog. A
+ * cell *can* read a context, which is how `createExpenseProductImageColumn`
+ * already reaches shared per-table data. So the surface resolves the actions
+ * once (the same call that renders `dialogs`) and publishes them here.
+ */
+export function EntityActionsProvider({
+  value,
+  children,
+}: {
+  value: EntityActionsContextValue | null;
+  children: ReactNode;
+}) {
+  return (
+    <EntityActionsContext.Provider value={value}>
+      {children}
+    </EntityActionsContext.Provider>
+  );
+}
+
+/** The registered row-menu entries for one row, or nothing outside a provider. */
+export function EntityActionRowMenuItems({
+  entity,
+  row,
+}: {
+  entity: Entity;
+  row: { id: string | number };
+}) {
+  const context = useContext(EntityActionsContext);
+  if (!context || context.entity !== entity) return null;
+  // Registered actions address rows by public shortcode; the only rows keyed
+  // by anything else are non-entity rows no definition can target.
+  if (typeof row.id !== "string") return null;
+  return <>{context.rowMenuItems(row as EntityActionRow)}</>;
 }
