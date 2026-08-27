@@ -245,3 +245,40 @@ Financial Account, Financial Transaction, Wish, and Image compact summaries are
 explicit rather than fabricated. Read-heavy first-visit density is opt-in and
 stored preference still wins. Specialist workbenches and ordinary dashboard
 surfaces remain intentionally bounded to T6–T8.
+
+## 2026-08-27 all-entity refinement
+
+This refinement closes the shared interaction contract rather than starting a
+new visual phase. All 17 browser-routed rosters expose selection independently
+from the current inspected row. Exactly one checked canonical row gains a
+presentation-only Inspect action; desktop and intermediate viewports reuse the
+existing dock/Sheet while phone continues to canonical detail. Projected,
+foreign tree-child, route-less, and embedded rows remain explicit exclusions.
+
+Generic and Product inspectors now lead with a human title and existing-payload
+truth before a bounded direct-relationship strip. Loading, retryable failure,
+deleted/unavailable, relation-empty, and relation-error states stay distinct.
+The action catalog records surface, arity, availability, grouping, priority,
+placement, and selection-preservation once while existing domain operations and
+specialist workflows retain their established mutation boundaries.
+
+Final command, browser, accessibility, detector, and exact-head CI evidence is
+appended here only after those gates run; the historical T1–T9 entries above are
+not rewritten to imply they covered this later closure.
+
+### Refinement evidence
+
+| Gate | Evidence |
+| --- | --- |
+| Focused component and catalog coverage | 14 files and 117 tests passed, including the real 17-entity registry matrix, action availability and ordering, responsive Inspect, shared inspector/detail composition, Product relationship deduplication, and lazy detail modes. |
+| Specialist boundaries | 3 focused files and 26 tests passed after embedded inventory tables explicitly opted out of canonical catalog actions; focused Purchase/Vendor merge staging passed 2 tests. |
+| Repository gate | `pnpm check` passed after the catalog migration exposed and removed the obsolete local print-label adapter and its stale test mock. |
+| Production build | `pnpm --dir apps/web build` passed; the generated service worker was 1,231,750 gzip bytes and remained within its budget. |
+| Representative browser behavior | The Product desktop dock, multi-select suppression, Product phone navigation, generic entity inspector, and representative authenticated Axe case passed locally. The three visual cases reached stable capture state, but this Darwin checkout has only canonical Linux baselines, so no duplicate platform snapshots were committed. |
+| Specialist browser boundary | The bounded Project Gallery route check was attempted twice; both runs stopped in global setup on the known Better Auth/PGlite `401 INVALID_EMAIL_OR_PASSWORD` race before product code mounted. Exact-head CI remains authoritative for this case. |
+| Impeccable | The detector ran exactly once on the final UI source. Its only matches were an existing color test fixture and the intentional specialist Gantt boundary; neither was a material Porcelain inconsistency. |
+| Independent architecture review | The Sol review found selection-availability loss, stale cardinality execution, duplicate action hosts, incomplete merge staging, and embedded Inventory action duplication during development. Each was corrected; the final read-only review reported no unresolved P0/P1 or material entity-parity mismatch. |
+
+Exact-head CI is recorded on the pull request rather than backfilled into this
+repository document. The CI runner owns the canonical Linux visual comparison
+and the full generated route sweep.

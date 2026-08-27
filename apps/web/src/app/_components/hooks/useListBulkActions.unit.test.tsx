@@ -143,6 +143,8 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
+      "print-location-labels",
+      "move-location-under",
       "move",
       "delete",
     ]);
@@ -182,6 +184,30 @@ describe("useListBulkActions", () => {
 
     expect(inspect).toHaveBeenCalledWith(selected[0]);
     expect(result.current.state.selectedCount).toBe(1);
+  });
+
+  it("lets an embedded specialist table opt out of canonical catalog actions", () => {
+    const { result } = renderHook(
+      () =>
+        useListBulkActions<TestRow>({
+          entity: "inventory",
+          includeCatalogActions: false,
+          bulkActions: {
+            actions: [
+              {
+                id: "embedded-move",
+                label: "Move",
+                onExecute: async () => ({ success: true }),
+              },
+            ],
+          },
+        }),
+      { wrapper },
+    );
+
+    expect(result.current.config?.actions.map((action) => action.id)).toEqual([
+      "embedded-move",
+    ]);
   });
 
   it("copies the selected rows' ids and keeps the selection", async () => {

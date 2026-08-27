@@ -9,11 +9,13 @@ const mocks = vi.hoisted(
     relationships: Mock<(props: unknown) => void>;
     relationshipRoute: Mock<(props: unknown) => void>;
     activity: Mock<(props: unknown) => void>;
+    actions: Mock<(props: unknown) => void>;
   } => ({
     preview: vi.fn(),
     relationships: vi.fn(),
     relationshipRoute: vi.fn(),
     activity: vi.fn(),
+    actions: vi.fn(),
   }),
 );
 
@@ -70,7 +72,10 @@ vi.mock("./audit-log/audit-log-list", () => ({
 }));
 
 vi.mock("./actions/entity-actions", () => ({
-  EntityActionButtons: () => <div data-testid="inspector-actions" />,
+  EntityActionButtons: (props: unknown) => {
+    mocks.actions(props);
+    return <div data-testid="inspector-actions" />;
+  },
 }));
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
@@ -79,6 +84,7 @@ const VENDOR_ID = "VEN-WORKBENCH";
 const IMAGE_ID = "IMG-WORKBENCH";
 const LEDGER_PARTY_ID = "LPY-WORKBENCH";
 const PRODUCT_ID = "PRD-WORKBENCH";
+const INVENTORY_ID = "INV-WORKBENCH";
 
 describe("EntityWorkbenchInspector", () => {
   beforeEach(() => {
@@ -86,6 +92,7 @@ describe("EntityWorkbenchInspector", () => {
     mocks.relationships.mockClear();
     mocks.relationshipRoute.mockClear();
     mocks.activity.mockClear();
+    mocks.actions.mockClear();
   });
 
   it("keeps the compact overview mounted alone until its tab is selected", () => {
@@ -106,15 +113,28 @@ describe("EntityWorkbenchInspector", () => {
         showOpenAction: false,
         showIdentityHeader: false,
         onNameResolved: expect.any(Function),
+        onRecordResolved: expect.any(Function),
       }),
     );
     const previewProps = mocks.preview.mock.calls[0]?.[0] as {
       onNameResolved: (name: string) => void;
+      onRecordResolved: (record: object | undefined) => void;
     };
     act(() => previewProps.onNameResolved("Fixture vendor"));
     expect(
       screen.getByRole("heading", { name: "Fixture vendor" }),
     ).toBeVisible();
+    const fullRecord = {
+      id: VENDOR_ID,
+      name: "Fixture vendor",
+      locationCount: 2,
+    };
+    act(() => previewProps.onRecordResolved(fullRecord));
+    expect(mocks.actions).toHaveBeenCalledWith({
+      entity: "vendor",
+      record: fullRecord,
+      surface: "inspector",
+    });
     expect(mocks.relationships).not.toHaveBeenCalled();
     expect(mocks.relationshipRoute).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -166,6 +186,27 @@ describe("EntityWorkbenchInspector", () => {
     expect(openLink.tagName).toBe("A");
     expect(openLink).toHaveAttribute("data-router-link", "true");
     expect(mocks.relationshipRoute).not.toHaveBeenCalled();
+  });
+
+  it("clears actions when a compact preview becomes unavailable or deleted", () => {
+    render(<EntityWorkbenchInspector entity="inventory" id={INVENTORY_ID} />);
+
+    const previewProps = mocks.preview.mock.calls[0]?.[0] as {
+      onRecordResolved: (record: object | undefined) => void;
+    };
+    act(() =>
+      previewProps.onRecordResolved({
+        id: INVENTORY_ID,
+        name: "Fixture inventory",
+        availableQuantity: 4,
+      }),
+    );
+    expect(screen.getByTestId("inspector-actions")).toBeVisible();
+
+    act(() => previewProps.onRecordResolved(undefined));
+
+    expect(screen.queryByTestId("inspector-actions")).toBeNull();
+    expect(mocks.actions).toHaveBeenCalledTimes(1);
   });
 
   it("does not mount the generic relationship path for Product", () => {

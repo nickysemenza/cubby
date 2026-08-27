@@ -70,7 +70,6 @@ vi.mock("../EntityInlineLink", () => ({
   ),
 }));
 
-vi.mock("../print-label-button", () => ({ PrintLabelButton: () => null }));
 vi.mock("./product-notes-markdown", () => ({
   ProductNotesMarkdown: () => null,
 }));

@@ -98,7 +98,10 @@ vi.mock("~/components/page/Page", () => ({
   },
 }));
 
-import { ProductRelationshipRoute } from "./product-relationship-route";
+import {
+  ProductRelationshipRoute,
+  ProductRelationshipRouteFrame,
+} from "./product-relationship-route";
 import { ProductWorkbenchInspector } from "./product-workbench-inspector";
 
 const product: ProductWithFoodOut = productWithFoodOut.parse({
@@ -317,6 +320,77 @@ describe("ProductWorkbenchInspector", () => {
     ).toBeTruthy();
     expect(mocks.nestedPage).not.toHaveBeenCalled();
     expect(screen.queryByTestId("nested-page")).not.toBeInTheDocument();
+  });
+
+  it("caps the inspector strip at three direct destinations and reveals Relations locally", () => {
+    render(<ProductWorkbenchInspector productId={product.id} />);
+
+    const strip = screen.getByRole("navigation", {
+      name: `${product.name} direct relationships`,
+    });
+    expect(
+      within(strip).getByRole("link", { name: "Direct Stock: 1 records" }),
+    ).toBeInTheDocument();
+    expect(
+      within(strip).getByRole("link", {
+        name: "Direct Also a location: 1 records",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(strip).getByRole("link", { name: "Direct Expenses: 1 records" }),
+    ).toBeInTheDocument();
+    expect(within(strip).queryByText("Purchases")).not.toBeInTheDocument();
+    expect(within(strip).getByText("+2 more")).toBeInTheDocument();
+
+    fireEvent.click(within(strip).getByRole("button", { name: "View all" }));
+
+    expect(screen.getByRole("tab", { name: "Relations" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /^Purchases/ })).toBeVisible();
+  });
+
+  it("links compact-strip overflow to the canonical Relationships section without a local tab", () => {
+    const direct = [
+      { id: "stock", label: "Stock", kind: "direct" as const, count: 1 },
+      {
+        id: "identity-locations",
+        label: "Also a location",
+        kind: "direct" as const,
+        count: 1,
+      },
+      {
+        id: "expenses",
+        label: "Expenses",
+        kind: "direct" as const,
+        count: 1,
+      },
+      {
+        id: "purchases",
+        label: "Purchases",
+        kind: "direct" as const,
+        count: 1,
+      },
+    ].map((branch) => ({
+      ...branch,
+      samples: [],
+      detailHash: "relationships",
+      emptyCopy: "None.",
+    }));
+
+    render(
+      <ProductRelationshipRouteFrame
+        product={product}
+        direct={direct}
+        derived={[]}
+        variant="strip"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "View all direct relationships" }),
+    ).toHaveAttribute("href", `/products/${product.id}#relationships`);
   });
 
   it("renders direct relationship branches with provenance and derived branches separately", () => {

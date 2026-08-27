@@ -1,9 +1,11 @@
+import type { Entity } from "@cubby/schemas/entity";
 import {
   browserRoutedEntities,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { render, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { CubbyRow as Row } from "../data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
 import type {
   EntityActionDefinition,
@@ -30,7 +32,7 @@ const stubHandles = (
 });
 
 describe("production entity action catalog", () => {
-  const roster = (entity: "product" | "inventory" | "expense" | "task") =>
+  const roster = (entity: Entity) =>
     entityActionCatalogDescriptors
       .filter(
         (action) =>
@@ -140,6 +142,23 @@ describe("production entity action catalog", () => {
         verb: "discard",
         arity: "both",
         surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "moveTo",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+    ]);
+    expect(roster("location")).toEqual([
+      {
+        verb: "printLabel",
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      },
+      {
+        verb: "moveUnder",
+        arity: "both",
+        surfaces: ["row", "selection"],
       },
     ]);
   });
@@ -349,6 +368,14 @@ describe("useEntityActions", () => {
       preserveSelection: true,
     });
     expect(duplicate?.availability([{ id: "PRD-LOCKED" }])).toEqual({
+      status: "disabled",
+      reason: "Already duplicated",
+    });
+    expect(
+      result.current.bulkActions[1]?.availability?.([
+        { original: { id: "PRD-LOCKED" } } as Row<TestRow>,
+      ]),
+    ).toEqual({
       status: "disabled",
       reason: "Already duplicated",
     });

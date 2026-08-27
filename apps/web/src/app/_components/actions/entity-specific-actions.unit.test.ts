@@ -4,6 +4,7 @@ import {
   deleteEntityActionDefinition,
 } from "./delete-entity-action";
 import { ingredientEntityActionDefinitions } from "./ingredient-entity-actions";
+import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 import { mergeEntityActionDefinitions } from "./merge-entity-actions";
 import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
 import { recipeEntityActionDefinitions } from "./recipe-entity-actions";
@@ -89,6 +90,29 @@ describe("entity-specific action definitions", () => {
       expect.objectContaining({
         verb: "setStockTracking",
         surfaces: ["selection"],
+      }),
+    ]);
+  });
+
+  it("centralizes reusable Inventory and Location actions", () => {
+    expect(inventoryLocationEntityActionDefinitions).toEqual([
+      expect.objectContaining({
+        verb: "moveTo",
+        entities: ["inventory"],
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      }),
+      expect.objectContaining({
+        verb: "printLabel",
+        entities: ["location"],
+        arity: "both",
+        surfaces: ["row", "selection", "inspector", "detail"],
+      }),
+      expect.objectContaining({
+        verb: "moveUnder",
+        entities: ["location"],
+        arity: "both",
+        surfaces: ["row", "selection"],
       }),
     ]);
   });
