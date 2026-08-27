@@ -77,11 +77,7 @@ describe("cached-read policy", () => {
     expect(runtime).toContain('action: "list"');
     expect(runtime).toContain('action: "get"');
     expect(
-      between(
-        runtime,
-        'operation: "entity.detail"',
-        "export async function getEntityFilterOptions",
-      ),
+      between(runtime, "entityDetailHandlers", "entityFilterOptionsHandlers"),
     ).toContain('readPolicy: "context"');
   });
 
