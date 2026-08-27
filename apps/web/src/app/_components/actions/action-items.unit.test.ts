@@ -7,6 +7,7 @@ import {
   actionsForSurface,
   createActionFor,
 } from "./action-items";
+import { verbDef } from "./action-verbs";
 
 describe("createActionFor", () => {
   it("uses the /new route when the entity has one", () => {
@@ -102,5 +103,28 @@ describe("action registry", () => {
       "what-can-i-make",
       "shopping-list",
     ]);
+  });
+});
+
+describe("verb-backed actions single-source their presentation", () => {
+  // The drift this closes: "Bulk Edit" and "Print Labels" shipped here in
+  // Title Case against action-verbs.ts's documented sentence case, and Bulk
+  // edit carried a different icon than the verb registry declares. Both
+  // registries existed; they were simply never connected.
+  const verbBacked = actionItems.filter((item) => item.verb !== undefined);
+
+  it("covers the actions that are also verbs", () => {
+    expect(verbBacked.map((item) => item.id).sort()).toEqual([
+      "bulk-edit",
+      "photo-pass",
+      "print-labels",
+      "recount",
+    ]);
+  });
+
+  it.each(verbBacked)("$id reads label and icon from the verb", (item) => {
+    const verb = verbDef(item.verb!);
+    expect(item.name).toBe(verb.label);
+    expect(item.icon).toBe(verb.icon);
   });
 });
