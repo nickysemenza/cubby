@@ -6,7 +6,6 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
-  inventoryBulkAddOut,
   inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryFindDuplicatesInput,
@@ -44,7 +43,6 @@ import {
 
 export {
   bulkMovePayload,
-  inventoryBulkAddOut,
   inventoryBulkAddPayload,
   inventoryBulkOperationPayload,
   inventoryFindDuplicatesInput,
