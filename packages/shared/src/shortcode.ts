@@ -241,41 +241,15 @@ const shortcodeGenerator =
   () =>
     schema.parse(`${prefix}${shortcodeBody()}`);
 
-const GENERATE_SHORTCODE = {
-  cookbook: shortcodeGenerator(cookbookShortcode, SHORTCODE_PREFIX.cookbook),
-  expense: shortcodeGenerator(expenseShortcode, SHORTCODE_PREFIX.expense),
-  financialAccount: shortcodeGenerator(
-    financialAccountShortcode,
-    SHORTCODE_PREFIX.financialAccount,
-  ),
-  financialTransaction: shortcodeGenerator(
-    financialTransactionShortcode,
-    SHORTCODE_PREFIX.financialTransaction,
-  ),
-  image: shortcodeGenerator(imageShortcode, SHORTCODE_PREFIX.image),
-  ingredient: shortcodeGenerator(
-    ingredientShortcode,
-    SHORTCODE_PREFIX.ingredient,
-  ),
-  inventory: shortcodeGenerator(inventoryShortcode, SHORTCODE_PREFIX.inventory),
-  ledgerParty: shortcodeGenerator(
-    ledgerPartyShortcode,
-    SHORTCODE_PREFIX.ledgerParty,
-  ),
-  ledgerTransfer: shortcodeGenerator(
-    ledgerTransferShortcode,
-    SHORTCODE_PREFIX.ledgerTransfer,
-  ),
-  location: shortcodeGenerator(locationShortcode, SHORTCODE_PREFIX.location),
-  meal: shortcodeGenerator(mealShortcode, SHORTCODE_PREFIX.meal),
-  product: shortcodeGenerator(productShortcode, SHORTCODE_PREFIX.product),
-  project: shortcodeGenerator(projectShortcode, SHORTCODE_PREFIX.project),
-  purchase: shortcodeGenerator(purchaseShortcode, SHORTCODE_PREFIX.purchase),
-  recipe: shortcodeGenerator(recipeShortcode, SHORTCODE_PREFIX.recipe),
-  task: shortcodeGenerator(taskShortcode, SHORTCODE_PREFIX.task),
-  vendor: shortcodeGenerator(vendorShortcode, SHORTCODE_PREFIX.vendor),
-  wish: shortcodeGenerator(wishShortcode, SHORTCODE_PREFIX.wish),
-} as const satisfies Record<ShortcodeType, () => AnyShortcode>;
+// Every entity's generator is definitionally shortcodeGenerator(
+// SHORTCODE_SCHEMA[type], SHORTCODE_PREFIX[type]) — looping over the
+// already-complete schema registry keeps this in lockstep by construction.
+const GENERATE_SHORTCODE = Object.fromEntries(
+  (Object.keys(SHORTCODE_SCHEMA) as ShortcodeType[]).map((type) => [
+    type,
+    shortcodeGenerator(SHORTCODE_SCHEMA[type], SHORTCODE_PREFIX[type]),
+  ]),
+) as Record<ShortcodeType, () => AnyShortcode>;
 
 /**
  * Generate a shortcode for `type`. Uniqueness is NOT checked here — the DB
@@ -315,59 +289,16 @@ const parsedShortcodeFor = <T extends ShortcodeType>(
  * with the exact schema. A generic lookup would widen `{ type, shortcode }` to
  * two independent unions and lose the discriminated-union guarantee.
  */
-const PARSE_CANONICAL_SHORTCODE = {
-  cookbook: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("cookbook", cookbookShortcode.parse(code), legacy),
-  expense: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("expense", expenseShortcode.parse(code), legacy),
-  financialAccount: (code: string, legacy: boolean) =>
-    parsedShortcodeFor(
-      "financialAccount",
-      financialAccountShortcode.parse(code),
-      legacy,
-    ),
-  financialTransaction: (code: string, legacy: boolean) =>
-    parsedShortcodeFor(
-      "financialTransaction",
-      financialTransactionShortcode.parse(code),
-      legacy,
-    ),
-  image: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("image", imageShortcode.parse(code), legacy),
-  ingredient: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("ingredient", ingredientShortcode.parse(code), legacy),
-  inventory: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("inventory", inventoryShortcode.parse(code), legacy),
-  ledgerParty: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("ledgerParty", ledgerPartyShortcode.parse(code), legacy),
-  ledgerTransfer: (code: string, legacy: boolean) =>
-    parsedShortcodeFor(
-      "ledgerTransfer",
-      ledgerTransferShortcode.parse(code),
-      legacy,
-    ),
-  location: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("location", locationShortcode.parse(code), legacy),
-  meal: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("meal", mealShortcode.parse(code), legacy),
-  product: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("product", productShortcode.parse(code), legacy),
-  project: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("project", projectShortcode.parse(code), legacy),
-  purchase: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("purchase", purchaseShortcode.parse(code), legacy),
-  recipe: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("recipe", recipeShortcode.parse(code), legacy),
-  task: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("task", taskShortcode.parse(code), legacy),
-  vendor: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("vendor", vendorShortcode.parse(code), legacy),
-  wish: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("wish", wishShortcode.parse(code), legacy),
-} as const satisfies Record<
-  ShortcodeType,
-  (code: string, legacy: boolean) => ParsedShortcode
->;
+// Every entity's canonical parser is definitionally parsedShortcodeFor(type,
+// SHORTCODE_SCHEMA[type].parse(code), legacy) — looping over the
+// already-complete schema registry keeps this in lockstep by construction.
+const PARSE_CANONICAL_SHORTCODE = Object.fromEntries(
+  (Object.keys(SHORTCODE_SCHEMA) as ShortcodeType[]).map((type) => [
+    type,
+    (code: string, legacy: boolean) =>
+      parsedShortcodeFor(type, SHORTCODE_SCHEMA[type].parse(code), legacy),
+  ]),
+) as Record<ShortcodeType, (code: string, legacy: boolean) => ParsedShortcode>;
 
 /**
  * Parse a shortcode into its entity type and canonical form, accepting both
