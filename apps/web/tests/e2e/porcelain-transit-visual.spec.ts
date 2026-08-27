@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { seedInventoryPrerequisites } from "./e2e-fixtures";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -9,17 +10,20 @@ async function seedProductWithRelationship(
 ) {
   const { products } = await seedInventoryPrerequisites(page, {
     locationName,
-    products: [
-      {
-        name: productName,
-        quantity: 2,
-        unit: "each",
-      },
-    ],
+    products: [{ name: productName, quantity: 2, unit: "each" }],
   });
   const product = products[0];
   if (!product) throw new Error("Visual fixture did not create a product");
   return product;
+}
+
+async function expectCleanVisualState(page: Page) {
+  await expect(
+    page.getByText("The operation could not be completed", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Other relationships could not be loaded.", { exact: true }),
+  ).toHaveCount(0);
 }
 
 test("Porcelain desktop Products workbench remains visually stable", async ({
@@ -38,6 +42,8 @@ test("Porcelain desktop Products workbench remains visually stable", async ({
   const table = page.getByRole("table", { name: "Products table" });
   await expect(table).toBeVisible({ timeout: 15000 });
   await expectViewportBounded(page);
+  await page.waitForLoadState("networkidle");
+  await expectCleanVisualState(page);
 
   await expect(page).toHaveScreenshot(
     "porcelain-products-workbench-desktop.png",
@@ -64,6 +70,8 @@ test("Porcelain phone Products roster remains visually stable", async ({
   const roster = page.getByRole("list", { name: "Products list" });
   await expect(roster).toBeVisible({ timeout: 15000 });
   await expectViewportBounded(page);
+  await page.waitForLoadState("networkidle");
+  await expectCleanVisualState(page);
 
   await expect(page).toHaveScreenshot("porcelain-products-roster-phone.png", {
     animations: "disabled",
@@ -85,14 +93,18 @@ test("Porcelain phone Product detail keeps its relationship journey visible", as
     page.getByRole("heading", { level: 2, name: "Relationships" }),
   ).toBeVisible({ timeout: 15000 });
   await expectViewportBounded(page);
+  const stockHeading = page.getByRole("heading", { level: 4, name: "Stock" });
+  await expect(stockHeading).toBeVisible({ timeout: 15000 });
+  await page.waitForLoadState("networkidle");
+  await expectCleanVisualState(page);
 
   await expect(page).toHaveScreenshot(
     "porcelain-product-detail-relationships-phone.png",
     {
       animations: "disabled",
       caret: "hide",
-      // Shortcodes vary between isolated databases; keep record identifiers
-      // out of the committed image while asserting the visible relationship UI.
+      // Shortcodes vary between isolated databases; keep the generated record
+      // identifier out of the committed image while preserving relationship UI.
       mask: [page.getByText(product.id, { exact: true })],
     },
   );
