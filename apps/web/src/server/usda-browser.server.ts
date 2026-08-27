@@ -2,31 +2,12 @@ import {
   buildPaginatedResponse,
   normalizeSorts,
 } from "@cubby/schemas/pagination";
-import {
-  foodSummaryWithLinkedProducts,
-  usdaFoodIdInput,
-  usdaFoodListOut,
-  usdaFoodLookupInput,
-  usdaListInput,
-} from "@cubby/schemas/usda";
-import type { z } from "zod";
-import {
-  runStartOperation,
-  type StartOperationRequest,
-} from "~/server/start-operation.server";
+import { usdaFood } from "~/entities/usda.functions";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import { findUsdaFoodWorkflow } from "~/server/workflows/usda.server";
 
-export const listUsdaFoods = async (options: {
-  data: z.input<typeof usdaListInput>;
-  request: StartOperationRequest;
-}) =>
-  await runStartOperation({
-    operation: "usda-food.list",
-    type: "query",
-    input: options.data,
-    inputSchema: usdaListInput,
-    outputSchema: usdaFoodListOut,
-    request: options.request,
+export const usdaFoodHandlers = implementOperationDomain(usdaFood, {
+  list: {
     readPolicy: "strong",
     run: async (context, input) => {
       try {
@@ -49,35 +30,13 @@ export const listUsdaFoods = async (options: {
         return buildPaginatedResponse(input.pagination, [], 0);
       }
     },
-  });
-
-export const getUsdaFoodDetail = async (options: {
-  data: z.input<typeof usdaFoodIdInput>;
-  request: StartOperationRequest;
-}) =>
-  await runStartOperation({
-    operation: "usda-food.detail",
-    type: "query",
-    input: options.data,
-    inputSchema: usdaFoodIdInput,
-    outputSchema: foodSummaryWithLinkedProducts.nullable(),
-    request: options.request,
+  },
+  detail: {
     readPolicy: "strong",
-    run: async (context, input) =>
-      await context.usdaService.getFoodSummaryByID(input.id),
-  });
-
-export const getUsdaFoodByAlternateId = async (options: {
-  data: z.input<typeof usdaFoodLookupInput>;
-  request: StartOperationRequest;
-}) =>
-  await runStartOperation({
-    operation: "usda-food.alternateId",
-    type: "query",
-    input: options.data,
-    inputSchema: usdaFoodLookupInput,
-    outputSchema: foodSummaryWithLinkedProducts.nullable(),
-    request: options.request,
+    run: (context, input) => context.usdaService.getFoodSummaryByID(input.id),
+  },
+  alternateId: {
     readPolicy: "strong",
     run: (context, input) => findUsdaFoodWorkflow(context.usdaService, input),
-  });
+  },
+});
