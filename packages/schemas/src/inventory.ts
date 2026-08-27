@@ -5,6 +5,7 @@ import { inventoryRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
   dateRangeFields,
+  plainDate,
   timestampedFields,
 } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -13,6 +14,7 @@ import { externalIdOut, gtin } from "./external-id";
 import { moneyNullable } from "./money";
 import { imageOut } from "./image";
 import {
+  expenseShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
@@ -333,6 +335,74 @@ export const inventoryBulkAddOut = z.object({
   items: inventoryWithLocationAndProductListOut,
   createdCount: z.number().int().nonnegative(),
   mergedCount: z.number().int().nonnegative(),
+  sideEffects: mutationSideEffectsSchema,
+});
+
+/**
+ * One shelf row to write off, and how much of it.
+ *
+ * No `productId`: an entry already names its product, which is the whole
+ * reason discarding from an inventory surface is simpler than discarding from
+ * a product one. `productDiscardInput` has to ask which shelf because a
+ * product may sit on several; a selection of entries has already answered
+ * that per row.
+ */
+const inventoryBulkDiscardItem = z.object({
+  inventoryEntryId: inventoryShortcode,
+  quantity: z
+    .number()
+    .positive()
+    .describe(
+      "Units leaving the household from this entry, as a positive count. May be fractional. Stored on the Expense as a NEGATIVE productQuantity.",
+    ),
+});
+
+/**
+ * Write off units from many shelf rows in one transaction.
+ *
+ * N items mint N zero-cost Expenses carrying negative `productQuantity` — one
+ * ledger line per row, which is what a discard IS; there is no combined line
+ * to write. Date and reason are shared because they describe the event, not
+ * the row.
+ *
+ * Unlike `productDiscardInput` there is no `adjustInventory` opt-out: the
+ * caller selected shelf rows, so "take it off that shelf" is the request. A
+ * ledger-only write-off is still available from the product surfaces.
+ */
+export const inventoryBulkDiscardPayload = z.object({
+  items: z.array(inventoryBulkDiscardItem).min(1),
+  date: plainDate,
+  reason: z
+    .string()
+    .max(500)
+    .nullable()
+    .default(null)
+    .describe(
+      "Free text stored as each Expense's notes — broken, thrown away, given away.",
+    ),
+});
+export type InventoryBulkDiscardPayload = z.infer<
+  typeof inventoryBulkDiscardPayload
+>;
+
+/**
+ * One result row per submitted item, in submission order.
+ *
+ * `removed` distinguishes "the entry emptied and was soft-deleted" from "the
+ * entry was drawn down" — the caller cannot derive it, because the amount it
+ * held was read inside the transaction.
+ */
+export const inventoryBulkDiscardOut = z.object({
+  items: z.array(
+    z.object({
+      inventoryEntryId: inventoryShortcode,
+      productId: productShortcode,
+      expenseId: expenseShortcode,
+      storedQuantity: z.number().negative(),
+      removed: z.boolean(),
+      remainingValue: z.number().nullable(),
+    }),
+  ),
   sideEffects: mutationSideEffectsSchema,
 });
 

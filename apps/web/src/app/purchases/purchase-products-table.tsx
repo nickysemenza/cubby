@@ -247,7 +247,7 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
       table={table}
       entity="product"
       bulkActionBar={selection.renderBulkActionBar(table)}
-        {...selection.tableProps}
+      {...selection.tableProps}
       ariaLabel="Products linked to this purchase"
       embedded
       isLoading={query.isPending}

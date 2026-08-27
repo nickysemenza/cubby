@@ -226,6 +226,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "inventory.bulkAdd": async () =>
     (await import("~/server/inventory-browser.server")).inventoryHandlers
       .operations.bulkAdd,
+  "inventory.bulkDiscard": async () =>
+    (await import("~/server/inventory-browser.server")).inventoryHandlers
+      .operations.bulkDiscard,
   "inventory.bulkMove": async () =>
     (await import("~/server/inventory-browser.server")).inventoryHandlers
       .operations.bulkMove,

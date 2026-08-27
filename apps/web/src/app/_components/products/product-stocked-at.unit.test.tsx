@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   rowIsEntity: { current: null as ((row: never) => boolean) | null },
   moveDialog: vi.fn(),
   deleteDialog: vi.fn(),
-  discardDialog: vi.fn(),
   hierarchyDrilldown: vi.fn(),
 }));
 
@@ -81,12 +80,6 @@ vi.mock("~/app/_components/inventory/move-inventory-dialog", () => ({
 vi.mock("~/app/_components/inventory/delete-inventory-dialog", () => ({
   DeleteInventoryDialog: (props: unknown) => {
     mocks.deleteDialog(props);
-    return null;
-  },
-}));
-vi.mock("./product-discard-dialog", () => ({
-  ProductDiscardDialog: (props: unknown) => {
-    mocks.discardDialog(props);
     return null;
   },
 }));
@@ -211,7 +204,6 @@ beforeEach(() => {
     mocks.rTable,
     mocks.moveDialog,
     mocks.deleteDialog,
-    mocks.discardDialog,
     mocks.hierarchyDrilldown,
   ])
     m.mockClear();
@@ -287,8 +279,10 @@ describe("ProductStockedAt", () => {
     render(<ProductStockedAt product={locationsOnlyProduct} />);
     const row = mocks.rows.current[0];
     expect(row).toBeDefined();
-    // No InventoryEntry behind it, so Move / Discard / Delete have nothing to
-    // act on — the menu is absent rather than present and failing.
+    // No InventoryEntry behind it, so Move and Delete have nothing to act on —
+    // the menu is absent rather than present and failing. The registry's
+    // Discard filters the same row out on its own (see
+    // `use-discard-inventory-action`), so neither half offers it.
     expect(mocks.extraActions.current!(row as never)).toBeNull();
     expect(mocks.rowIsEntity.current!(row as never)).toBe(false);
   });
@@ -300,13 +294,16 @@ describe("ProductStockedAt", () => {
     expect(mocks.extraActions.current!(row as never)).not.toBeNull();
   });
 
-  it("offers Move, Discard, and Delete on every row", () => {
+  // Discard is deliberately absent: it is a registered `inventory` action now,
+  // so it arrives through `EntityActionRowMenuItems` rather than this table's
+  // own `extraActions`.
+  it("offers Move and Delete on every row", () => {
     render(<ProductStockedAt product={product} />);
     const menu = render(
       mocks.extraActions.current!(mocks.rows.current[0] as never),
     );
     expect(menu.getByText("Move to...")).toBeInTheDocument();
-    expect(menu.getByText("Discard...")).toBeInTheDocument();
+    expect(menu.queryByText("Discard...")).not.toBeInTheDocument();
     expect(menu.getByText("Delete")).toBeInTheDocument();
   });
 
@@ -328,14 +325,6 @@ describe("ProductStockedAt", () => {
     expect(props.items[0].location.id).toBe("LOC-BBBB");
   });
 
-  it("seeds Discard with the shelf whose row was clicked", () => {
-    fireRowAction("Discard...", 1);
-
-    const props = mocks.discardDialog.mock.calls.at(-1)?.[0];
-    expect(props.open).toBe(true);
-    expect(props.defaultInventoryEntryId).toBe("INV-BBBB");
-  });
-
   it("leaves every dialog closed and unseeded at rest", () => {
     render(<ProductStockedAt product={product} />);
 
@@ -344,12 +333,6 @@ describe("ProductStockedAt", () => {
     );
     expect(mocks.deleteDialog).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: false, items: [] }),
-    );
-    expect(mocks.discardDialog).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        open: false,
-        defaultInventoryEntryId: undefined,
-      }),
     );
   });
 });

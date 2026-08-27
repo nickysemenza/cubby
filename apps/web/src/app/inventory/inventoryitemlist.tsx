@@ -1,8 +1,4 @@
 import { displayGtin } from "@cubby/schemas/external-id";
-import type {
-  InventoryShortcode,
-  ProductShortcode,
-} from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
@@ -37,7 +33,6 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { InventoryDiscardDialog } from "../_components/inventory/inventory-discard-dialog";
 import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
@@ -83,14 +78,6 @@ export function InventoryItemList() {
     inspectorToggle,
   } = useEntityPreview("inventory", { responsiveInspector: true });
   const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
-  // Discard is single-row only: it writes one ledger line against one product.
-  // Held as {productId, entryId} rather than the row, because the dialog
-  // deliberately re-fetches the product — a row here knows only its own shelf,
-  // and passing that in would read as "this is the whole stock".
-  const [discardTarget, setDiscardTarget] = useState<{
-    productId: ProductShortcode;
-    entryId: InventoryShortcode;
-  } | null>(null);
   const [bulkMoveItems, setBulkMoveItems] = useState<InventoryListItem[]>([]);
 
   const clearProductScope = useCallback(() => {
@@ -119,13 +106,6 @@ export function InventoryItemList() {
           onSelect={(e) => {
             e.stopPropagation();
             setMoveTarget(row);
-          }}
-        />
-        <VerbMenuItem
-          verb="discard"
-          onSelect={(e) => {
-            e.stopPropagation();
-            setDiscardTarget({ productId: row.product.id, entryId: row.id });
           }}
         />
       </>
@@ -413,14 +393,6 @@ export function InventoryItemList() {
           }}
           items={[moveTarget]}
           onSuccess={() => setMoveTarget(null)}
-        />
-      )}
-      {discardTarget && (
-        <InventoryDiscardDialog
-          onOpenChange={(open) => {
-            if (!open) setDiscardTarget(null);
-          }}
-          target={discardTarget}
         />
       )}
       {bulkMoveItems.length > 0 && (

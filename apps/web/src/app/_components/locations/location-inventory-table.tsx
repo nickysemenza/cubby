@@ -1,8 +1,4 @@
-import type {
-  InventoryShortcode,
-  LocationShortcode,
-  ProductShortcode,
-} from "@cubby/schemas/identifiers";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
@@ -25,7 +21,6 @@ import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
-import { InventoryDiscardDialog } from "../inventory/inventory-discard-dialog";
 import { InventoryShelf } from "../inventory/inventory-shelf";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import {
@@ -103,12 +98,6 @@ export function LocationInventoryTable({
     type: "move" | "delete" | null;
     items: InventoryItem[];
   }>({ type: null, items: [] });
-  // Discard is single-row only: it writes one ledger line against one product.
-  const [discardTarget, setDiscardTarget] = useState<{
-    productId: ProductShortcode;
-    entryId: InventoryShortcode;
-  } | null>(null);
-
   // `updateMutation` is intentionally absent from the dep array: useMutation
   // returns a new object every render, but the closure captures mutateAsync
   // correctly and it is functionally stable — same reasoning as the columns
@@ -266,18 +255,6 @@ export function LocationInventoryTable({
           verb="moveTo"
           onSelect={() => setDialogState({ type: "move", items: [item] })}
         />
-        {/* Discard writes a ledger row and can clear the shelf in the same
-            transaction — the honest verb for "used it up", where Delete just
-            says the entry should never have existed. */}
-        <VerbMenuItem
-          verb="discard"
-          onSelect={() =>
-            setDiscardTarget({
-              productId: item.product.id,
-              entryId: item.id,
-            })
-          }
-        />
         <VerbMenuItem
           verb="delete"
           onSelect={() => setDialogState({ type: "delete", items: [item] })}
@@ -321,17 +298,6 @@ export function LocationInventoryTable({
           workbench.table.resetRowSelection();
         }}
       />
-
-      {/* Discard dialog — fetches the product so the operator sees every shelf.
-          Mounted only while targeted, so the fetch never runs at rest. */}
-      {discardTarget && (
-        <InventoryDiscardDialog
-          onOpenChange={(open) => {
-            if (!open) setDiscardTarget(null);
-          }}
-          target={discardTarget}
-        />
-      )}
 
       {/* Delete dialog */}
       <DeleteInventoryDialog

@@ -219,7 +219,7 @@ function ResourcesTable({
       table={table}
       entity="product"
       bulkActionBar={selection.renderBulkActionBar(table)}
-        {...selection.tableProps}
+      {...selection.tableProps}
       ariaLabel="Reusable project resources"
       embedded
       isLoading={isLoading}

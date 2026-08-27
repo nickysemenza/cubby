@@ -1,8 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
+import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import RTable, { type RTableProps } from "./Table";
 import type { CubbyTable } from "./table-features";

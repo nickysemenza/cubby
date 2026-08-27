@@ -7,6 +7,7 @@ import {
 import {
   bulkMovePayload,
   inventoryBulkAddPayload,
+  inventoryBulkDiscardPayload,
   inventoryBulkOperationPayload,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
@@ -30,12 +31,17 @@ import {
   moveInventoryEntries,
   reconcileLocationSession,
 } from "~/server/repo/inventory";
-import { findDuplicateUniqueProducts } from "~/server/repo/product";
+import {
+  discardFromInventoryEntries,
+  findDuplicateUniqueProducts,
+} from "~/server/repo/product";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import {
   resolveScanStrays as resolveScanStraysService,
   scanAtLocation as scanAtLocationService,
@@ -44,6 +50,7 @@ import {
 export {
   bulkMovePayload,
   inventoryBulkAddPayload,
+  inventoryBulkDiscardPayload,
   inventoryBulkOperationPayload,
   inventoryFindDuplicatesInput,
   inventoryLocationIdsInput,
@@ -212,6 +219,98 @@ export const bulkAddInventoryWorkflow = async (
     createdCount,
     mergedCount,
     sideEffects: { backgroundBatches },
+  };
+};
+
+/**
+ * Write off units from a selection of shelf rows.
+ *
+ * The inventory-side counterpart to `discardProductWorkflow`: that one starts
+ * from a product and has to ask which shelf, this one starts from the shelf
+ * rows themselves. One transaction, N ledger lines — the same shape as
+ * {@link bulkAddInventoryWorkflow}, and for the same reason: a loop of
+ * per-row requests gives no cross-row atomicity, which is acceptable for a
+ * reversible flag and not for ledger rows.
+ */
+export const bulkDiscardInventoryWorkflow = async (
+  context: {
+    db: Database;
+    actorContext: ActorContext;
+    services: { recipeCosting: RecipeCostingService };
+  },
+  input: z.output<typeof inventoryBulkDiscardPayload>,
+) => {
+  const resolvedEntries = await resolveEntityIds(
+    context.db,
+    input.items.map((item) => item.inventoryEntryId),
+    "inventory",
+  );
+
+  const result = await discardFromInventoryEntries(
+    context.db,
+    {
+      items: input.items.map((item) => ({
+        inventoryEntryId: parseEntityId(
+          "inventory",
+          resolvedEntries.get(item.inventoryEntryId)!,
+        ),
+        quantity: item.quantity,
+      })),
+      date: input.date,
+      reason: input.reason,
+    },
+    context.actorContext,
+  );
+
+  const backgroundBatches = await runMutationSideEffectsForEntities(
+    context.db,
+    result.items.flatMap((line) => [
+      {
+        action: "created" as const,
+        entity: { entityType: "expense" as const, entityId: line.expenseId },
+        source: "inventory.bulkDiscard",
+      },
+      // An entry that emptied was soft-deleted; one that was drawn down was
+      // updated. Reporting the wrong one leaves a removed row in the search
+      // index.
+      ...(line.inventory
+        ? [
+            {
+              action: line.inventory.removed
+                ? ("deleted" as const)
+                : ("updated" as const),
+              entity: {
+                entityType: "inventory" as const,
+                entityId: line.inventory.entryId,
+              },
+              source: "inventory.bulkDiscard",
+            },
+          ]
+        : []),
+    ]),
+  );
+  const recipeBatches = await recomputeRecipesForPriceAffectedProducts(
+    context.db,
+    context.services.recipeCosting,
+    result.priceAffectedProductIds,
+    "inventory.bulkDiscard",
+  );
+
+  return {
+    items: result.items.map((line) => ({
+      inventoryEntryId: parseShortcodeFor(
+        "inventory",
+        line.inventory?.entryShortcode ?? "",
+      ),
+      productId: line.productShortcode,
+      expenseId: parseShortcodeFor("expense", line.expenseShortcode),
+      storedQuantity: line.storedQuantity,
+      removed: line.inventory?.removed ?? false,
+      remainingValue: line.inventory?.remainingValue ?? null,
+    })),
+    sideEffects: {
+      backgroundBatches: [...backgroundBatches, ...recipeBatches],
+    },
   };
 };
 

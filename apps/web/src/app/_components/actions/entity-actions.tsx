@@ -9,6 +9,7 @@ import type { ActionSurface } from "./action-items";
 import { VerbButton, verbBulkAction } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
 import { useAddToInventoryAction } from "./use-add-to-inventory-action";
+import { useDiscardInventoryAction } from "./use-discard-inventory-action";
 
 /**
  * The entity action registry: which verbs an entity offers, and what running
@@ -72,10 +73,10 @@ const DEFAULT_SURFACES: readonly EntityActionSurface[] = [
  * How many rows an action means anything on.
  *
  * Declared rather than inferred, because the two failure modes look identical
- * from the outside: `merge` is `multi` (merging one record is a no-op) and
- * `discard` is `single` on purpose (it writes one ledger line against one
- * product). Recording that keeps a row-only verb an intentional decision
- * instead of an omission nobody got round to.
+ * from the outside: `merge` is `multi` (merging one record is a no-op), while
+ * `discard` is `both` even though it writes ONE ledger line per row — N lines
+ * is what N discards ARE, not a compromise. Recording that keeps a row-only
+ * verb an intentional decision instead of an omission nobody got round to.
  */
 type EntityActionArity = "single" | "multi" | "both";
 
@@ -137,6 +138,20 @@ const entityActions: readonly EntityActionDefinition[] = [
     // operator's selection where they left it.
     preserveSelection: true,
     use: useAddToInventoryAction,
+  },
+  {
+    verb: "discard",
+    // `inventory`, not `product`: an entry names its amount and its shelf, so a
+    // selection of entries is already a complete instruction. A product row is
+    // not — a product on two shelves still owes a per-row choice — which is why
+    // `productlist` keeps its own single-row discard and this never reaches it.
+    entities: ["inventory"],
+    arity: "both",
+    // The dialog collects a date, a reason and per-row quantities, so the bar's
+    // job ends once the rows are staged — and a cancelled dialog should leave
+    // the operator's selection where they left it.
+    preserveSelection: true,
+    use: useDiscardInventoryAction,
   },
 ];
 
