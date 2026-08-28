@@ -150,9 +150,9 @@ Look for: N+1 query patterns in repos (loop of awaited queries where one IN quer
     model: "sonnet",
     prompt: `${COMMON}
 LANE: Convention drift.
-Read CLAUDE.md "Required Helpers" table and its caveats/carve-outs FIRST — the carve-outs are extensive and re-flagging them is the #1 failure mode of this lane.
+Read the current CLAUDE.md and the helper catalogue in docs/agents/root-rules-reference.md before auditing. Respect its caveats and carve-outs; re-flagging an explicit carve-out is the #1 failure mode of this lane.
 Scope: apps/web/src.
-Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Also run: node scripts/check-conventions.ts from repo root if it exists and report its output; run pnpm lint and pnpm format:check if quick. Cross-check every candidate against the carve-out list before reporting.`,
+Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Run pnpm lint and pnpm format:check if quick. Cross-check every candidate against the carve-out list before reporting.`,
   },
   {
     key: "gates",
@@ -161,9 +161,8 @@ Look for genuinely NEW drift: inline patterns from the "avoid" column (manual in
 LANE: Mechanical gates — run the repo's own quality commands and report ground truth. From ${ROOT}:
 1. pnpm run typecheck (or the workspace equivalent — check package.json scripts first)
 2. pnpm run lint && pnpm run format:check
-3. node scripts/check-conventions.ts
-4. cd apps/web && npx knip 2>&1 | tail -40
-5. In recipebridge/: cargo fmt --check
+3. pnpm run knip 2>&1 | tail -40
+4. cargo fmt --manifest-path recipebridge/Cargo.toml -- --check
 Each command may take a few minutes — that is fine. Report each command's pass/fail and the exact failing output as findings (category 'gate'). If everything passes, return findings: [] and say so in laneSummary. Do NOT editorialize or invent findings beyond command output.`,
   },
   {

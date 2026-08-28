@@ -186,6 +186,30 @@ describe("implementSubscriptionDomain", () => {
     expect(seen.context?.db).toBe(baseContext.db);
   });
 
+  it("parses every yielded event against the declared event schema", async () => {
+    const handlers = implementSubscriptionDomain(
+      domain,
+      {
+        sweep: noEvents,
+        tick: async function* () {
+          yield { n: 1 };
+          // SAFETY: deliberately malformed runtime data exercises the adapter's
+          // event-schema guard; the declared member type is not being widened.
+          yield { n: "not-a-number" } as never;
+          yield { n: 3 };
+        },
+      },
+      adapter,
+    );
+
+    // The valid event is delivered; the invalid event terminates the stream
+    // with a protocol error instead of leaking unvalidated payloads.
+    const frames = await framesOf(
+      await handlers.streams.tick({ request: streamRequest({ count: 3 }) }),
+    );
+    expect(frames.map((frame) => frame.kind)).toEqual(["event", "error"]);
+  });
+
   it("rejects input before invoking its member", async () => {
     let invoked = false;
     const handlers = implementSubscriptionDomain(

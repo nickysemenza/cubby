@@ -10,7 +10,7 @@ import {
   pingDb,
 } from "~/server/repo/debug";
 
-export const timingResultSchema = z.object({
+const timingResultSchema = z.object({
   label: z.string(),
   durationMs: z.number(),
   error: z.string().optional(),

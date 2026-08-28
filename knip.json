@@ -53,17 +53,12 @@
       "ignoreDependencies": [
         "@fontsource-variable/inter",
         "@fontsource-variable/jetbrains-mono",
-        "@fontsource-variable/space-grotesk",
         "@testing-library/.+",
         "@vitest/.+",
-        "@tailwindcss/postcss",
         "@tailwindcss/vite",
-        "postcss",
         "@opentelemetry/.+",
-        "@tanstack/router-plugin",
         "vite-plugin-wasm",
-        "vite-plugin-top-level-await",
-        "rollup"
+        "vite-plugin-top-level-await"
       ],
       "vitest": { "config": "vitest.config.ts" },
       "playwright": { "config": "playwright.config.ts" }

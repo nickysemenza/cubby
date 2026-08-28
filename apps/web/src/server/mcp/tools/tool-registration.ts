@@ -81,6 +81,8 @@ export function getToolEntityExtractor(
 function uiToolMeta(toolName: string) {
   const resourceUri = mcpAppResourceUriForTool(toolName);
   if (!resourceUri) return undefined;
+  // MCP Apps clients read the nested pointer; keep the legacy alias for older
+  // hosts while both forms are emitted from this one registration seam.
   return { ui: { resourceUri }, "ui/resourceUri": resourceUri };
 }
 
@@ -123,6 +125,11 @@ function structuredSuccess<TOutput extends StructuredOutputSchema>(
   };
 }
 
+/**
+ * Refusal details stay in `_meta`, not `structuredContent`. The reference SDK
+ * validates structured content against the success schema even for `isError`,
+ * so putting `{code, reason}` there makes an ordinary refusal throw McpError.
+ */
 function structuredError<T>(error: T): CallToolResult {
   const result: CallToolResult = {
     content: [{ type: "text", text: formatToolError(error) }],

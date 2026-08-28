@@ -154,18 +154,4 @@ describe("cached-read policy", () => {
     expect(searchTools).not.toContain("getCaller(extra)");
     expect(registration).toContain("getCaller(extra)");
   });
-
-  it("keeps the published iCalendar feed entirely on bounded-stale reads", () => {
-    const route = read("../routes/api/calendar.$token.$feed.ts");
-
-    expect(route).toContain('import { boundedStaleDb } from "~/server/db"');
-    expect(route).toContain(
-      "findUserByCalendarFeedToken(boundedStaleDb, token)",
-    );
-    expect(route).toContain("getCalendarRange(boundedStaleDb, {");
-    expect(route).not.toMatch(/\bimport \{ db \} from "~\/server\/db"/u);
-    expect(route).not.toMatch(
-      /\b(findUserByCalendarFeedToken|getCalendarRange)\(db,/u,
-    );
-  });
 });

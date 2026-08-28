@@ -164,3 +164,6 @@ export type BrowserRoutedEntity = EntityWithBrowserRoute;
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];
 export type SearchableEntity = (typeof searchableEntities)[number];
+
+export const isAuditableEntity = (entity: Entity): entity is AuditableEntity =>
+  entityManifest[entity].auditable;
