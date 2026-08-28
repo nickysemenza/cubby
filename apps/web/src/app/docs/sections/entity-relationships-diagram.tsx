@@ -1,8 +1,8 @@
 /**
  * Hand-authored static SVG of cubby's core entity relationships. Replaces the
  * old graphviz-react render (a lazy-loaded WASM layout engine) with a small,
- * dependency-free diagram whose colors are design tokens so it tracks the
- * light/dark theme. Layout mirrors graphviz's top-to-bottom rank order:
+ * dependency-free diagram whose colors are design tokens. Layout mirrors
+ * graphviz's top-to-bottom rank order:
  *   rank 0: Recipe, Inventory   (sources — nothing points at them)
  *   rank 1: Product, Location   (Inventory feeds both)
  *   rank 2: Ingredient, USDA    (fulfilled / enriched leaves)

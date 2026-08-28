@@ -217,8 +217,8 @@ const calendarKindRegistry: {
     event: (item, today) => ({
       className: item.future
         ? item.startDate < today
-          ? "border border-dashed border-destructive bg-destructive/10 hover:bg-destructive/15 dark:bg-destructive/10 dark:hover:bg-destructive/15"
-          : "border border-dashed border-warning bg-warning/10 hover:bg-warning/15 dark:bg-warning/10 dark:hover:bg-warning/15"
+          ? "border border-dashed border-destructive bg-destructive/10 hover:bg-destructive/15"
+          : "border border-dashed border-warning bg-warning/10 hover:bg-warning/15"
         : undefined,
       color:
         item.future && item.startDate < today
@@ -252,8 +252,7 @@ const calendarKindRegistry: {
         "Project dates are derived from its work and spending. Edit the full project to change its record.",
     }),
     event: () => ({
-      className:
-        "bg-muted py-1 hover:bg-muted dark:bg-muted dark:hover:bg-muted",
+      className: "bg-muted py-1 hover:bg-muted",
       color: entities.project.color.accent,
       priority: 100,
     }),

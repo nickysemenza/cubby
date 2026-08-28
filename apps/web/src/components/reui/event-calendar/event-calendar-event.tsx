@@ -202,7 +202,6 @@ function EventCalendarEvent<TData = unknown>({
       preview && "pointer-events-none",
       "@container gap-1.5 rounded-sm px-1.5 py-1 leading-normal",
       "bg-(--ec-event-color)/15 hover:bg-(--ec-event-color)/25",
-      "dark:bg-(--ec-event-color)/20 dark:hover:bg-(--ec-event-color)/30",
       "inset-ring inset-ring-(--ec-event-color)/15",
       "transition-[background-color,box-shadow] duration-150",
       "data-dragging:opacity-40",

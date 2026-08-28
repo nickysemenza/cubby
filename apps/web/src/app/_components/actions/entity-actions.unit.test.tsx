@@ -163,7 +163,7 @@ describe("production entity action catalog", () => {
     ]);
   });
 
-  it("guards migrated Expense and Task memberships and order", () => {
+  it("guards Expense and Task memberships and order", () => {
     expect(roster("expense")).toEqual([
       {
         verb: "markPurchased",
@@ -244,7 +244,7 @@ const REGISTRY: readonly EntityActionDefinition[] = [
     verb: "setStatus",
     entities: ["task"],
     arity: "both",
-    surfaces: ["bar"],
+    surfaces: ["selection"],
     use: () => stubHandles("setStatus", succeeds),
   },
   {
@@ -270,11 +270,11 @@ describe("useEntityActions", () => {
     const product = resolve("product");
     const vendor = resolve("vendor");
 
-    expect(product.current.bulkActions.map((a) => a.id)).toEqual([
+    expect(product.current.selectionActions.map((a) => a.id)).toEqual([
       "add-to-inventory",
       "merge",
     ]);
-    expect(vendor.current.bulkActions.map((a) => a.id)).toEqual(["merge"]);
+    expect(vendor.current.selectionActions.map((a) => a.id)).toEqual(["merge"]);
     expect(rowMenuText(vendor.current.rowMenuItems, "VEN-1")).toBe("");
   });
 
@@ -283,7 +283,7 @@ describe("useEntityActions", () => {
   it("keeps a single verb out of the selection bar", () => {
     const { current } = resolve("product");
 
-    expect(current.bulkActions.map((a) => a.id)).not.toContain("discard");
+    expect(current.selectionActions.map((a) => a.id)).not.toContain("discard");
     expect(rowMenuText(current.rowMenuItems, "PRD-1")).toContain(
       "discard:PRD-1",
     );
@@ -293,25 +293,25 @@ describe("useEntityActions", () => {
     const { current } = resolve("product");
 
     expect(rowMenuText(current.rowMenuItems, "PRD-1")).not.toContain("merge:");
-    expect(current.bulkActions.map((a) => a.id)).toContain("merge");
+    expect(current.selectionActions.map((a) => a.id)).toContain("merge");
   });
 
   it("floors a multi verb at two rows, whatever it asked for", () => {
     const { current } = resolve("product");
-    const byId = new Map(current.bulkActions.map((a) => [a.id, a]));
+    const byId = new Map(current.selectionActions.map((a) => [a.id, a]));
 
     expect(byId.get("merge")?.minSelection).toBe(2);
     expect(byId.get("add-to-inventory")?.minSelection).toBe(1);
   });
 
-  it("honors surfaces: a bar-only verb never reaches the row menu", () => {
+  it("honors surfaces: a selection-only verb never reaches the row menu", () => {
     const { current } = resolve("task");
 
-    expect(current.bulkActions.map((a) => a.id)).toEqual(["set-status"]);
+    expect(current.selectionActions.map((a) => a.id)).toEqual(["set-status"]);
     expect(rowMenuText(current.rowMenuItems, "TSK-1")).toBe("");
   });
 
-  it("normalizes selection metadata and preserves the legacy bulk presenter", () => {
+  it("normalizes selection metadata", () => {
     const run = vi.fn(succeeds);
     const registry: readonly EntityActionDefinition[] = [
       {
@@ -345,8 +345,7 @@ describe("useEntityActions", () => {
     );
     const [stock, duplicate] = result.current.selectionActionItems;
 
-    expect(result.current.selectionActions).toBe(result.current.bulkActions);
-    expect(result.current.bulkActions.map((action) => action.id)).toEqual([
+    expect(result.current.selectionActions.map((action) => action.id)).toEqual([
       "mark-as-stock",
       "duplicate",
     ]);
@@ -372,15 +371,15 @@ describe("useEntityActions", () => {
       reason: "Already duplicated",
     });
     expect(
-      result.current.bulkActions[1]?.availability?.([
+      result.current.selectionActions[1]?.availability?.([
         { original: { id: "PRD-LOCKED" } } as Row<TestRow>,
       ]),
     ).toEqual({
       status: "disabled",
       reason: "Already duplicated",
     });
-    expect(result.current.bulkActions[1]?.maxSelection).toBe(1);
-    expect(result.current.bulkActions[1]?.preserveSelection).toBe(true);
+    expect(result.current.selectionActions[1]?.maxSelection).toBe(1);
+    expect(result.current.selectionActions[1]?.preserveSelection).toBe(true);
   });
 
   it("resolves inspector actions independently from detail actions", () => {
@@ -414,10 +413,12 @@ describe("useEntityActions", () => {
     });
   });
 
-  it("drops a bulk action with nothing to run, keeping its row entry", () => {
+  it("drops a selection action with nothing to run, keeping its row entry", () => {
     const { current } = resolve("product");
 
-    expect(current.bulkActions.map((a) => a.id)).not.toContain("print-labels");
+    expect(current.selectionActions.map((a) => a.id)).not.toContain(
+      "print-labels",
+    );
     expect(rowMenuText(current.rowMenuItems, "PRD-1")).toContain(
       "printLabels:PRD-1",
     );
