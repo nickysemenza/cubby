@@ -1,6 +1,7 @@
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { Info } from "lucide-react";
 import { useState } from "react";
+
 import { BasicInfo } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -10,6 +11,7 @@ import { financialTransactionEditRequest } from "~/entities/editing/editor-reque
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
+
 import { DetailSections } from "../_components/data-table/detail-page";
 import { TableLink } from "../_components/table/TableLink";
 export function FinancialTransactionDetail({

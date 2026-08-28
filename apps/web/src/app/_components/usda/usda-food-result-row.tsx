@@ -1,10 +1,12 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda-schemas";
 import { Copy, Link2 } from "lucide-react";
+
 import { Row } from "~/components/layout";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
+
 import { KEY_NUTRIENTS, NutrientsSummary } from "../units/NutrientsSummary";
 import { CoreNutrientCoverage } from "./core-nutrient-coverage";
 
@@ -12,7 +14,7 @@ function MetaChip({ children }: { children: React.ReactNode }) {
   return (
     <span
       className={
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-sm bg-muted px-1.5 py-0.5" /* tight: meta chip */
+        "inline-flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 whitespace-nowrap" /* tight: meta chip */
       }
     >
       {children}
@@ -65,11 +67,11 @@ export function UsdaFoodResultRow({
 
   return (
     <div className="flex w-full flex-col gap-1">
-      <span className="line-clamp-2 font-medium text-sm leading-snug">
+      <span className="line-clamp-2 text-sm leading-snug font-medium">
         {foodInfo.description}
       </span>
 
-      <Row wrap gap="sm" className="text-muted-foreground text-xs">
+      <Row wrap gap="sm" className="text-xs text-muted-foreground">
         <MetaChip>
           <UsdaDataTypeDot dataType={foodInfo.data_type} />
           {dataTypeLabel(foodInfo.data_type)}
@@ -102,7 +104,7 @@ export function UsdaFoodResultRow({
           align="center"
           wrap
           gap="sm"
-          className="text-muted-foreground text-xs"
+          className="text-xs text-muted-foreground"
         >
           <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
           <span>{totalNutrients} nutrients</span>

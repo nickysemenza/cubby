@@ -1,6 +1,7 @@
 import type { ProjectOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { buildProjectTree } from "./project-tree";
 
 /** Minimal `ProjectOut`-shaped fixture — only `id`/`parentProjectId` vary;

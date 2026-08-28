@@ -1,6 +1,7 @@
 import { Check, ClipboardCopy } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import { copyText } from "~/lib/clipboard";
 
@@ -30,7 +31,7 @@ export function CopyDebugButton({
       type="button"
       variant="ghost"
       size="xs"
-      className="px-1 text-muted-foreground text-xs hover:text-foreground"
+      className="px-1 text-xs text-muted-foreground hover:text-foreground"
       title={title}
       onClick={async (e) => {
         e.stopPropagation();

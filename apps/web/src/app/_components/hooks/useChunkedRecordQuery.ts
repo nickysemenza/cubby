@@ -1,6 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
 import { chunk, uniq } from "es-toolkit";
 import { useMemo } from "react";
+
 import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 
 const uniqueSortedIds = (ids: readonly string[]) =>
@@ -15,7 +16,7 @@ export function useChunkedRecordQuery<TRecord extends Record<string, unknown>>({
   empty: TRecord;
   // Transport queryOptions carry specialized error/query-key generics that don't
   // reduce cleanly to React Query's public UseQueryOptions type.
-  // biome-ignore lint/suspicious/noExplicitAny: intentional queryOptions boundary
+  // oxlint-disable-next-line typescript/no-explicit-any -- intentional queryOptions boundary
   queryOptions: (ids: string[]) => any;
 }): TRecord {
   const idsKey = useMemo(() => uniqueSortedIds(ids).join(","), [ids]);

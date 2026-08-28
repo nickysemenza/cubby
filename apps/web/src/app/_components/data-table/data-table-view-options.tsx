@@ -17,12 +17,13 @@ import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { humanize } from "~/entities/filters";
 import { useIsMobile } from "~/hooks/useMobile";
-import TableLayoutCustomizer from "./TableLayoutCustomizer";
+
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
 import { isTableLayoutCustomized } from "./table-layout";
+import TableLayoutCustomizer from "./TableLayoutCustomizer";
 import { type TableDensity, useTableDensity } from "./useTableDensity";
 
 const densityOptions: {
@@ -80,7 +81,7 @@ export function DataTableViewOptions<TData extends RowData>({
       <Settings2 className="size-3.5" />
       Display
       {isCustomized && (
-        <span className="font-mono text-2xs text-muted-foreground normal-case tracking-normal">
+        <span className="font-mono text-2xs tracking-normal text-muted-foreground normal-case">
           Custom
         </span>
       )}
@@ -108,7 +109,7 @@ export function DataTableViewOptions<TData extends RowData>({
         >
           <div className="space-y-4">
             <section className="space-y-2">
-              <h3 className="font-medium text-2xs text-muted-foreground uppercase tracking-wider">
+              <h3 className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
                 Density
               </h3>
               <ChoiceSwitcher
@@ -120,7 +121,7 @@ export function DataTableViewOptions<TData extends RowData>({
               />
             </section>
             {isCustomized && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-xs text-muted-foreground">
                 Customized layout — restore defaults below
               </p>
             )}

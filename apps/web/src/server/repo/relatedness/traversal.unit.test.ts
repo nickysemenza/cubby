@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { compileTraversal, invertPath } from "./traversal";
 
 describe("relatedness traversal", () => {

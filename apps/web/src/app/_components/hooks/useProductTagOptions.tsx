@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+
 import { product } from "~/app/products/product.functions";
 
 const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];

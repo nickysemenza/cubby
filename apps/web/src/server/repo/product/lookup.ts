@@ -7,11 +7,13 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 import { and, eq, ilike, inArray, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
+
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
+
 import { loadPrimaryGtins, productHasGtin } from "./gtin";
 import { foodLookupParamFromProduct } from "./helpers";
 import {

@@ -1,7 +1,9 @@
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { problemQueryDeclarations } from "~/entities/problem-registry";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
+
 import {
   countEntitiesMissingEmbeddings,
   findEntitiesMissingEmbeddings,
@@ -29,9 +31,11 @@ describe("findViewProblems", () => {
       ).toBe(true);
       expect(result.sectionTotals[problem.key]).toBeTypeOf("number");
       const focused = await executeProblem(ctx.db, problem.key);
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(focused.items, problem.key).toEqual(
         (result as unknown as Record<string, unknown>)[problem.key],
       );
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(focused.count, problem.key).toBe(
         result.sectionTotals[problem.key],
       );
@@ -48,7 +52,9 @@ describe("findViewProblems", () => {
       const result = await executeProblem(ctx.db, problem.key, {
         sampleSize: 1,
       });
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.count, problem.key).toBeGreaterThanOrEqual(0);
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.data.length, problem.key).toBeLessThanOrEqual(1);
     }
   });
@@ -201,10 +207,15 @@ describe("findViewProblems", () => {
       const counted = await executeProblem(ctx.db, problem.key, {
         mode: "count",
       });
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.source.kind, problem.key).toBe("derived");
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.count, problem.key).toBeGreaterThanOrEqual(0);
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.items.length, problem.key).toBeLessThanOrEqual(1);
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(counted.count, problem.key).toBe(result.count);
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(counted.items, problem.key).toEqual([]);
       // A provider failure is explicit state, never an empty healthy result.
       expect(["healthy", "stale", "unavailable"]).toContain(

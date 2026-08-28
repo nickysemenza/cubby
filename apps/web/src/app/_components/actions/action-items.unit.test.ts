@@ -1,6 +1,8 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
+
 import { entities } from "~/entities/entities";
+
 import { entityEmptyConfigForTest } from "../data-table/entity-empty-states";
 import {
   actionItems,

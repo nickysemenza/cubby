@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ImageOff } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { Image } from "~/components/ui/image";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";

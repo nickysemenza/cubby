@@ -1,11 +1,15 @@
 import type * as React from "react";
 import type { ReactNode } from "react";
+
 import { cn } from "~/lib/utils";
 import { stackVariants } from "~/styles/layouts";
+
 import { Stack } from "./stack";
 
-interface SectionProps
-  extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
+interface SectionProps extends Omit<
+  React.HTMLAttributes<HTMLElement>,
+  "title"
+> {
   /** Section heading (rendered as an `h2`). */
   title?: ReactNode;
   /** Muted sub-line under the title. */
@@ -34,12 +38,12 @@ export function Section({
       {...props}
     >
       {hasHeader && (
-        <Stack gap="tight" className="border-border border-b pb-1">
+        <Stack gap="tight" className="border-b border-border pb-1">
           {title && (
-            <h2 className="font-heading font-semibold text-sm">{title}</h2>
+            <h2 className="font-heading text-sm font-semibold">{title}</h2>
           )}
           {description && (
-            <p className="text-muted-foreground text-xs">{description}</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
           )}
         </Stack>
       )}

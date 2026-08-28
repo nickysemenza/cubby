@@ -15,6 +15,7 @@ import {
   Suspense,
   useMemo,
 } from "react";
+
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
 import {
   type CubbyRow,
@@ -60,6 +61,7 @@ import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import {
   defaultFilters,
   type Filters,
@@ -70,11 +72,11 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import { project } from "./project.functions";
 import {
   ProjectDataExpenseList,
   ProjectDataTaskList,
 } from "./project-data-lists";
+import { project } from "./project.functions";
 import {
   capitalize,
   formatDate,
@@ -175,9 +177,9 @@ function MainDashboard({ view }: { view: DashboardView }) {
   const statusesKey = search.statuses?.join(",");
   const kindsKey = search.kinds?.join(",");
   const locationsKey = search.locations?.join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives above, not the array references, on purpose
   const filters = useMemo<Filters>(
     () => filtersFromSearch(search),
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the joined-string primitives above, not the array references, on purpose
     [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
 
@@ -224,11 +226,12 @@ function MainDashboard({ view }: { view: DashboardView }) {
     />
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives, not the Set references
   const scopeInput = useMemo(
     () => filtersToScopeInput(filters),
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the joined-string primitives, not the Set references
     [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
+
   const projectScope = useMemo<EmbeddedProjectScope>(
     () => ({
       statuses: scopeInput.statusScope,
@@ -433,7 +436,7 @@ function OverviewView({
           <Link
             to="/projects"
             search={{ view: "data", statuses: ["done"] }}
-            className="text-muted-foreground text-xs hover:text-foreground hover:underline"
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
           >
             {data.completedCount} completed project
             {data.completedCount !== 1 ? "s" : ""} — view completed →
@@ -476,7 +479,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
               {task.name}
             </Link>
             {task.projectName && task.projectId && (
-              <span className="min-w-0 max-w-40 text-muted-foreground text-xs">
+              <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
                 <EntityInlineLink
                   displayImage={undefined}
                   entity="project"
@@ -486,7 +489,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
               </span>
             )}
             {task.dueDate && (
-              <span className="ml-auto shrink-0 text-muted-foreground text-xs">
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                 {formatDate(task.dueDate)}
               </span>
             )}
@@ -531,7 +534,7 @@ function DataViewContent({
   return (
     <Stack className="pt-4">
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Projects</h2>
+        <h2 className="font-heading text-xl font-semibold">Projects</h2>
         <ProjectTable
           locations={locations}
           completionYears={completionYears}
@@ -546,7 +549,7 @@ function DataViewContent({
       </Stack>
 
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Tasks</h2>
+        <h2 className="font-heading text-xl font-semibold">Tasks</h2>
         <ProjectDataTaskList projectScope={projectScope} />
         <HiddenByDateNote
           count={hiddenByDate.tasks}
@@ -556,7 +559,7 @@ function DataViewContent({
       </Stack>
 
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Expenses</h2>
+        <h2 className="font-heading text-xl font-semibold">Expenses</h2>
         <ProjectDataExpenseList projectScope={projectScope} />
         <HiddenByDateNote
           count={hiddenByDate.expenses}
@@ -751,7 +754,7 @@ function ServerProjectGallery({
         </Stack>
         {dockedInspector ? (
           <div
-            className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-border border-l bg-card xl:block"
+            className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
             data-desktop-inspector
           >
             {dockedInspector}
@@ -838,7 +841,6 @@ export function ProjectCard({
       onBlur={() => inspection?.onRowHoverEnd()}
     >
       {inspection ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: wrapper only prevents the card link from handling checkbox clicks
         <div
           role="presentation"
           className="absolute top-0 right-0 z-10 flex min-h-11 min-w-11 items-center justify-center"
@@ -897,7 +899,7 @@ export function ProjectCard({
                 key={loc}
                 variant="outline"
                 // Free-form location names — opt out of the mono-uppercase stamp.
-                className="font-sans normal-case tracking-normal"
+                className="font-sans tracking-normal normal-case"
               >
                 {loc}
               </Badge>

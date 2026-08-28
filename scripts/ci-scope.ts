@@ -1,7 +1,4 @@
-const inertExact = new Set([
-  "LICENSE",
-  "cubby.code-workspace",
-]);
+const inertExact = new Set(["LICENSE", "cubby.code-workspace"]);
 
 const inertPrefixes = [".agents/", ".claude/", ".codex/", ".vscode/", "docs/"];
 
@@ -86,7 +83,9 @@ const isKnownCodePath = (path: string) =>
   startsWithAny(path, sharedRootPrefixes);
 
 export function classifyPaths(paths: readonly (string | null | undefined)[]) {
-  const changed = [...new Set(paths.filter((path) => Boolean(path)))] as string[];
+  const changed = [
+    ...new Set(paths.filter((path) => Boolean(path))),
+  ] as string[];
   const active = changed.filter((path) => !isInert(path));
   const unknown = active.some((path) => !isKnownCodePath(path));
   const dependencies =
@@ -107,19 +106,26 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
   );
 
   const web =
-    unknown || sharedRoot || active.some((path) => startsWithAny(path, webPrefixes));
+    unknown ||
+    sharedRoot ||
+    active.some((path) => startsWithAny(path, webPrefixes));
   const aux =
     unknown ||
     sharedRoot ||
     active.some((path) => startsWithAny(path, auxTestPrefixes));
   const usda =
-    unknown || sharedRoot || active.some((path) => startsWithAny(path, usdaPrefixes));
+    unknown ||
+    sharedRoot ||
+    active.some((path) => startsWithAny(path, usdaPrefixes));
   const upc =
-    unknown || sharedRoot || active.some((path) => startsWithAny(path, upcPrefixes));
+    unknown ||
+    sharedRoot ||
+    active.some((path) => startsWithAny(path, upcPrefixes));
   const rust =
     unknown ||
     active.some(
-      (path) => path === "rust-toolchain.toml" || startsWithAny(path, rustPrefixes),
+      (path) =>
+        path === "rust-toolchain.toml" || startsWithAny(path, rustPrefixes),
     );
 
   return {
@@ -129,10 +135,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
     aux,
     usda,
     upc,
-    workers: [
-      ...(usda ? ["usda-api"] : []),
-      ...(upc ? ["upc-lookup"] : []),
-    ],
+    workers: [...(usda ? ["usda-api"] : []), ...(upc ? ["upc-lookup"] : [])],
     dependencies,
     unknown,
   };

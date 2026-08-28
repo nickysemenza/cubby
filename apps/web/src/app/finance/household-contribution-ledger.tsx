@@ -7,6 +7,7 @@ import {
   CircleX,
 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
+
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import {
   ContributionGapTargets,
@@ -28,6 +29,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { formatCurrency } from "~/lib/utils";
+
 import { householdContribution } from "./household-contribution.functions";
 
 function CheckMark({ ok }: { ok: boolean }) {
@@ -127,8 +129,8 @@ export function HouseholdContributionLedgerReport({
       </StatGrid>
 
       <section aria-labelledby={partyHeadingId}>
-        <div className="mb-2 flex items-baseline justify-between gap-2 border-foreground border-b pb-1">
-          <h2 id={partyHeadingId} className="eyebrow my-0">
+        <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-foreground pb-1">
+          <h2 id={partyHeadingId} className="my-0 eyebrow">
             Household contribution by party
           </h2>
           <span className="font-mono text-2xs text-muted-foreground">
@@ -180,8 +182,8 @@ export function HouseholdContributionLedgerReport({
       </section>
 
       <section aria-labelledby={checksHeadingId}>
-        <div className="mb-2 border-foreground border-b pb-1">
-          <h2 id={checksHeadingId} className="eyebrow my-0">
+        <div className="mb-2 border-b border-foreground pb-1">
+          <h2 id={checksHeadingId} className="my-0 eyebrow">
             Accounting checks
           </h2>
         </div>
@@ -189,8 +191,8 @@ export function HouseholdContributionLedgerReport({
       </section>
 
       <section aria-labelledby={gapsHeadingId}>
-        <div className="mb-2 flex items-baseline justify-between gap-2 border-foreground border-b pb-1">
-          <h2 id={gapsHeadingId} className="eyebrow my-0">
+        <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-foreground pb-1">
+          <h2 id={gapsHeadingId} className="my-0 eyebrow">
             Reconciliation gaps
           </h2>
           {data.gapsTruncated && (
@@ -267,7 +269,7 @@ export function HouseholdContributionLedger() {
 
   return (
     <Stack gap="lg">
-      <Row align="end" wrap gap="sm" className="border-border border-b pb-2">
+      <Row align="end" wrap gap="sm" className="border-b border-border pb-2">
         <label className="grid gap-1 text-xs" htmlFor={asOfId}>
           <span className="eyebrow">As of</span>
           <DatePickerInput

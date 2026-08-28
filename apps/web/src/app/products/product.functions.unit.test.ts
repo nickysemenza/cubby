@@ -1,7 +1,9 @@
 import type { Query } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+
 import { matchesTags } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
+
 import { product } from "./product.functions";
 
 /**

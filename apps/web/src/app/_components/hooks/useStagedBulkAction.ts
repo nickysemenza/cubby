@@ -1,6 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type { ActionVerbId } from "../actions/action-verbs";
 import type { BulkAction } from "../data-table/bulk-actions.types";
@@ -93,6 +94,7 @@ export function useStagedBulkAction<
         ...values,
         ids: items.map((item) => item.id),
       } as VariablesOf<TFn>)) as DataOf<TFn>,
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, items],
   );
 

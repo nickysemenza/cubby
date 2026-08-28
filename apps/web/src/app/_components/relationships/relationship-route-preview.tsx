@@ -9,6 +9,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+
 import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Button } from "~/components/ui/button";
@@ -21,6 +22,7 @@ import {
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { relatedData } from "~/lib/related-data.functions";
 import { cn } from "~/lib/utils";
+
 import { TableLink } from "../table/TableLink";
 
 const ROUTE_PREVIEW_LIMIT = 3;
@@ -304,14 +306,14 @@ export function RelationshipRoutePreview({
   return (
     <section
       aria-label={`${model.source.label} relationship preview`}
-      className={cn("border-border border-y py-2", className)}
+      className={cn("border-y border-border py-2", className)}
       data-testid="relationship-route-preview"
     >
-      <div className="overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
+      <div className="[scrollbar-width:thin] overflow-x-auto overscroll-x-contain">
         <div className="flex min-w-max items-center gap-2 px-1 md:min-w-0 md:flex-wrap">
           <SourcePreview source={model.source} />
           <ArrowRight aria-hidden className="size-3 shrink-0 text-slate" />
-          <div className="flex items-center gap-1 whitespace-nowrap font-medium text-xs">
+          <div className="flex items-center gap-1 text-xs font-medium whitespace-nowrap">
             <span>{model.relation.label}</span>
             <span className="font-mono text-2xs text-slate">
               ({model.relation.totalCount})
@@ -327,7 +329,7 @@ export function RelationshipRoutePreview({
               </li>
             ))}
             {model.relation.totalCount > model.relation.endpoints.length ? (
-              <li className="flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-2xs text-slate">
+              <li className="flex shrink-0 items-center gap-1 font-mono text-2xs whitespace-nowrap text-slate">
                 <span>
                   +{model.relation.totalCount - model.relation.endpoints.length}
                 </span>
@@ -360,7 +362,7 @@ function RelationshipRoutePreviewState({
   return (
     <section
       aria-label={`${source.label} relationship preview`}
-      className="border-border border-y px-3 py-2 text-muted-foreground text-xs"
+      className="border-y border-border px-3 py-2 text-xs text-muted-foreground"
       data-testid="relationship-route-preview-state"
     >
       {children}

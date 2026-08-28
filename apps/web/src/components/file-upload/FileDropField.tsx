@@ -1,6 +1,7 @@
 import { FileUp, Upload } from "lucide-react";
 import { useCallback, useState } from "react";
 import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -118,11 +119,11 @@ export function FileDropField({
             {label}
           </Button>
           {description && (
-            <span className="text-muted-foreground text-xs">{description}</span>
+            <span className="text-xs text-muted-foreground">{description}</span>
           )}
         </Row>
         {errors.map((error) => (
-          <p key={error} className="text-destructive text-xs">
+          <p key={error} className="text-xs text-destructive">
             {error}
           </p>
         ))}
@@ -141,17 +142,17 @@ export function FileDropField({
         })}
         disabled={disabled}
         className={cn(
-          "flex w-full flex-col items-center gap-2 border border-[var(--border)] border-dashed bg-muted/20 p-6 text-center text-muted-foreground transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50",
+          "flex w-full flex-col items-center gap-2 border border-dashed border-[var(--border)] bg-muted/20 p-6 text-center text-muted-foreground transition-colors hover:bg-muted/40 disabled:pointer-events-none disabled:opacity-50",
           isDragActive &&
             "border-primary bg-primary/10 text-foreground ring-2 ring-primary/20",
         )}
       >
         <Upload className="size-5" />
-        <span className="font-medium text-foreground text-sm">{label}</span>
+        <span className="text-sm font-medium text-foreground">{label}</span>
         {description && <span className="text-xs">{description}</span>}
       </button>
       {errors.map((error) => (
-        <p key={error} className="text-destructive text-xs">
+        <p key={error} className="text-xs text-destructive">
           {error}
         </p>
       ))}

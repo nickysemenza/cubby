@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 const source = (name: string) =>
@@ -42,6 +43,7 @@ describe("entity editing architecture", () => {
       "../../app/_components/forms/quick-add-dialog.tsx",
     ];
     for (const path of removedShells) {
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(existsSync(new URL(path, import.meta.url)), path).toBe(false);
     }
   });

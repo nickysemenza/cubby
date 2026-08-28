@@ -1,15 +1,17 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { Hammer } from "lucide-react";
 import { useMemo } from "react";
+
 import { formatCurrency } from "~/lib/utils";
+
 import {
   nivoBarChrome,
   nivoChartTheme,
   nivoCurrencyAxis,
   TRADE_LABELS,
 } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { ChartTooltip } from "./ChartTooltip";
 import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 type Datum = {
@@ -37,13 +39,11 @@ export function TradeActivity({
   const data = useMemo(
     () =>
       rows
-        .map(
-          (r): Datum => ({
-            trade: TRADE_LABELS[r.trade],
-            actual: r.actual,
-            committed: r.committed,
-          }),
-        )
+        .map((r): Datum => ({
+          trade: TRADE_LABELS[r.trade],
+          actual: r.actual,
+          committed: r.committed,
+        }))
         .filter((d) => d.actual > 0 || d.committed > 0)
         .sort((a, b) => a.actual + a.committed - (b.actual + b.committed)),
     [rows],
@@ -54,7 +54,7 @@ export function TradeActivity({
       <div>
         <ChartEmpty icon={Hammer} title="No principal trade spend yet." />
         {adjustments !== 0 ? (
-          <p className="mt-2 text-center text-muted-foreground text-xs">
+          <p className="mt-2 text-center text-xs text-muted-foreground">
             Total spend is {formatCurrency(adjustments, 0)} in purchase
             adjustments, with no principal trade bars.
           </p>
@@ -114,7 +114,7 @@ export function TradeActivity({
         theme={nivoChartTheme}
       />
       {adjustments !== 0 ? (
-        <p className="mt-2 text-center text-muted-foreground text-xs">
+        <p className="mt-2 text-center text-xs text-muted-foreground">
           Total spend also includes {formatCurrency(adjustments, 0)} in purchase
           adjustments not assigned to a trade.
         </p>

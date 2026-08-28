@@ -101,7 +101,7 @@ describe("EditableEntityCell", () => {
   it("renders display mode by default and enters edit mode on click without propagating", () => {
     const parentClick = vi.fn();
     render(
-      // biome-ignore lint/a11y/noStaticElementInteractions: test only
+      // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- This fixture deliberately mirrors the interaction target for event propagation coverage.
       <div onClick={parentClick}>
         <EditableEntityCell
           value={PANTRY}

@@ -3,7 +3,9 @@ import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import type { z } from "zod";
+
 import { entityListFor } from "~/entities/entity-list.functions";
+
 import { flattenUniquePageItems } from "../hooks/infinite-page-utils";
 
 type InventoryItem = z.infer<typeof inventoryListItemOut>;
@@ -45,6 +47,7 @@ export function useAllInventoryItems() {
     if (query.hasNextPage && !query.isFetchingNextPage) {
       void query.fetchNextPage({ cancelRefetch: false });
     }
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage]);
 
   const items = useMemo(

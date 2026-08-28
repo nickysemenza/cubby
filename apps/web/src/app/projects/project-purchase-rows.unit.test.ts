@@ -2,7 +2,9 @@ import { expenseOut } from "@cubby/schemas/project";
 import { purchaseOut } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import {
   buildProjectPurchaseRows,
   projectPurchaseSubRows,

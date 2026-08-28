@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
+
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 
 /**

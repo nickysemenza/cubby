@@ -2,6 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ReactNode } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
@@ -9,6 +10,7 @@ import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
+
 import { AuditedHint } from "./AuditedHint";
 import { LocationContentsPreview } from "./LocationContentsPreview";
 import type { InventoryItem } from "./types";

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 import { lazy, type ReactNode, Suspense, useCallback, useMemo } from "react";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { toDayIndex, todayPlain } from "~/app/projects/charts/gantt/gantt-date";
 import type {
@@ -13,8 +14,9 @@ import { TaskHeatmap } from "~/app/projects/charts/task-heatmap";
 import { Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { TasksAgenda } from "./TasksAgenda";
+
 import { task } from "./task.functions";
+import { TasksAgenda } from "./TasksAgenda";
 
 /** Stable empty default — never a fresh `[]` per render (would churn memos). */
 const NO_TASKS: TaskOut[] = [];
@@ -152,7 +154,7 @@ export function TasksTimelineView({ filters }: { filters: TaskFilters }) {
 
   return (
     <Stack gap="lg">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Timeline intrinsically shows dated tasks only.{" "}
         {data && data.undatedCount > 0 && (
           <>

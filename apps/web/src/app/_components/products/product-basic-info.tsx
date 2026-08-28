@@ -8,6 +8,7 @@ import {
 } from "@cubby/shared/collection-tag";
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
@@ -17,6 +18,7 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import {
   describeProductPricingSource,
   productPriceClearLabel,
@@ -119,7 +121,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             }}
             renderValue={() => renderProductPriceValue(product.pricing)}
           />
-          <span className="text-muted-foreground text-xs">
+          <span className="text-xs text-muted-foreground">
             {describeProductPricingSource(product.pricing)}
           </span>
         </Stack>
@@ -289,7 +291,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         <Stack gap="sm">
           {product.notes ? (
             <Stack gap="xs">
-              <p className="eyebrow my-0">Notes</p>
+              <p className="my-0 eyebrow">Notes</p>
               <ProductNotesMarkdown
                 notes={product.notes}
                 documents={documents}

@@ -1,5 +1,6 @@
 import type { McpUsageDashboardOut } from "@cubby/schemas/telemetry";
 import { describe, expect, it } from "vitest";
+
 import { filterAndSortMcpTools } from "./mcp-usage-dashboard";
 
 type ToolRow = McpUsageDashboardOut["tools"][number];

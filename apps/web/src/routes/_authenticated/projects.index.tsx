@@ -1,4 +1,5 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import {
   DASHBOARD_VIEW_OPTIONS,

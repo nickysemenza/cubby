@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { filterNotionPreview, updateVisibleSelection } from "./preview-filters";
 
 const preview = [

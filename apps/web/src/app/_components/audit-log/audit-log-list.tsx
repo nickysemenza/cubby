@@ -4,6 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 import { Activity, CircleAlert } from "lucide-react";
 import { useMemo } from "react";
+
 import { Row } from "~/components/layout";
 import { AuditTimeline } from "~/components/reui/timeline";
 import { Button } from "~/components/ui/button";
@@ -19,6 +20,7 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { auditLogListOptions } from "~/lib/audit-log.functions";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
 interface AuditLogListProps {

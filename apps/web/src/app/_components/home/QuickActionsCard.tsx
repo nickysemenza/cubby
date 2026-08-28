@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
 import { useId } from "react";
+
 import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { EntityIcon, entities } from "~/entities/entities";
+
 import { actionsForSurface } from "../actions/action-items";
 
 const homeActions = actionsForSurface("home-quick");
@@ -16,13 +18,13 @@ export function DailyPasses() {
   const titleId = useId();
   return (
     <section aria-labelledby={titleId}>
-      <div className="flex items-start gap-2 border-border border-b pb-2">
+      <div className="flex items-start gap-2 border-b border-border pb-2">
         <Zap className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden />
         <div>
-          <h2 id={titleId} className="font-heading font-semibold text-sm">
+          <h2 id={titleId} className="font-heading text-sm font-semibold">
             Daily passes
           </h2>
-          <p className="text-muted-foreground text-xs">
+          <p className="text-xs text-muted-foreground">
             Useful household runs.
           </p>
         </div>

@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, ExternalLink, Package } from "lucide-react";
 import { type FC, type ReactNode, useId, useMemo, useState } from "react";
+
 import { product as productOperations } from "~/app/products/product.functions";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -307,14 +308,14 @@ function RouteBranchRows({
   const showDetailLink = branch.count > 0 || Boolean(branch.evidence);
 
   return (
-    <li className="border-border border-b last:border-b-0">
+    <li className="border-b border-border last:border-b-0">
       <div className="flex min-h-11 items-center gap-2 py-1.5 md:min-h-8">
         <button
           type="button"
           aria-expanded={expanded}
           aria-controls={panelId}
           onClick={() => setExpanded((value) => !value)}
-          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left text-xs focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none md:min-h-8"
         >
           <ChevronDown
             aria-hidden
@@ -334,7 +335,7 @@ function RouteBranchRows({
           <ProductSectionLink
             productId={productId}
             hash={branch.detailHash}
-            className="inline-flex min-h-11 shrink-0 items-center text-primary text-xs underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+            className="inline-flex min-h-11 shrink-0 items-center text-xs text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none md:min-h-8"
           >
             View all
             <ExternalLink aria-hidden className="ml-1 size-3" />
@@ -344,7 +345,7 @@ function RouteBranchRows({
       {expanded ? (
         <ul
           id={panelId}
-          className="border-border border-l pb-2 pl-3"
+          className="border-l border-border pb-2 pl-3"
           aria-label={`${branch.label} records`}
         >
           {samples.length > 0 ? (
@@ -355,7 +356,7 @@ function RouteBranchRows({
               >
                 <InternalRouteLink
                   to={sample.to}
-                  className="min-w-0 flex-1 truncate text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="min-w-0 flex-1 truncate text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
                   title={sample.label}
                   ariaLabel={`${branch.kind === "direct" ? "Direct" : "Derived"} ${branch.label}: ${sample.label}`}
                 >
@@ -384,7 +385,7 @@ function RouteBranchRows({
               <ProductSectionLink
                 productId={productId}
                 hash={branch.detailHash}
-                className="inline-flex min-h-11 items-center text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+                className="inline-flex min-h-11 items-center text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none md:min-h-8"
               >
                 View all {branch.count} {branch.label.toLowerCase()}
               </ProductSectionLink>
@@ -446,7 +447,7 @@ export function ProductRelationshipRouteFrame({
               <ProductSectionLink
                 productId={product.id}
                 hash={branch.detailHash}
-                className="inline-flex min-h-11 items-center gap-1.5 border border-border bg-card px-2 text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+                className="inline-flex min-h-11 items-center gap-1.5 border border-border bg-card px-2 text-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none md:min-h-8"
                 ariaLabel={`Direct ${branch.label}: ${branch.count} records`}
               >
                 <span>{branch.label}</span>
@@ -476,7 +477,7 @@ export function ProductRelationshipRouteFrame({
                 <ProductSectionLink
                   productId={product.id}
                   hash="relationships"
-                  className="inline-flex min-h-11 items-center text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:min-h-8"
+                  className="inline-flex min-h-11 items-center text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none md:min-h-8"
                   ariaLabel="View all direct relationships"
                 >
                   View all
@@ -495,10 +496,10 @@ export function ProductRelationshipRouteFrame({
   return (
     <section
       aria-label="Product relationship route"
-      className="border-border border-y"
+      className="border-y border-border"
     >
-      <header className="border-border border-b px-3 py-2">
-        <h3 className="font-semibold text-foreground text-xs">
+      <header className="border-b border-border px-3 py-2">
+        <h3 className="text-xs font-semibold text-foreground">
           Relationship route
         </h3>
         <p className="mt-0.5 text-muted-foreground">
@@ -508,7 +509,7 @@ export function ProductRelationshipRouteFrame({
       <div className="px-3 py-1">
         <div
           aria-current="page"
-          className="flex min-h-11 items-center gap-2 border-border border-b py-1.5 font-medium text-foreground md:min-h-8"
+          className="flex min-h-11 items-center gap-2 border-b border-border py-1.5 font-medium text-foreground md:min-h-8"
         >
           <Package
             aria-hidden
@@ -526,7 +527,7 @@ export function ProductRelationshipRouteFrame({
             Direct relationships
           </h4>
           {direct.length > 0 ? (
-            <ol className="border-border border-l pl-3">
+            <ol className="border-l border-border pl-3">
               {direct.map((branch) => (
                 <RouteBranchRows
                   key={branch.id}
@@ -541,11 +542,11 @@ export function ProductRelationshipRouteFrame({
         </section>
         <section
           aria-labelledby={derivedHeadingId}
-          className="border-border border-t py-1.5"
+          className="border-t border-border py-1.5"
         >
           <h4
             id={derivedHeadingId}
-            className="font-medium text-foreground text-xs"
+            className="text-xs font-medium text-foreground"
           >
             Derived from those records
           </h4>
@@ -595,7 +596,7 @@ export const ProductRelationshipRouteContent: FC<{
     return (
       <section
         aria-label="Product relationship route"
-        className="border-border border-y px-3 py-2"
+        className="border-y border-border px-3 py-2"
       >
         <div className="h-3 w-28 animate-pulse bg-muted motion-reduce:animate-none" />
         <div className="mt-2 h-8 w-full animate-pulse bg-muted motion-reduce:animate-none" />
@@ -610,7 +611,7 @@ export const ProductRelationshipRouteContent: FC<{
       <div className="space-y-2">
         <section
           aria-label="Relationship route error"
-          className="border-border border-y px-3 py-2 text-xs"
+          className="border-y border-border px-3 py-2 text-xs"
         >
           <p className="text-muted-foreground">
             Other relationships could not be loaded.

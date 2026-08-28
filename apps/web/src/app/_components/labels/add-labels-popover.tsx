@@ -6,6 +6,7 @@ import { uniq } from "es-toolkit";
 import { Plus, Search, Users } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
 import { location } from "~/app/locations/location.functions";
@@ -167,7 +168,7 @@ export function AddLabelsPopover({
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate">{loc.name}</span>
                   {loc.ancestors.length > 0 && (
-                    <span className="break-words text-muted-foreground text-xs sm:truncate">
+                    <span className="text-xs break-words text-muted-foreground sm:truncate">
                       {loc.ancestors.map((a) => a.name).join(" › ")}
                     </span>
                   )}
@@ -177,7 +178,7 @@ export function AddLabelsPopover({
                     <button
                       type="button"
                       aria-label={`Add ${loc.name}`}
-                      className="min-h-11 min-w-11 px-2 text-primary text-xs hover:bg-muted sm:min-h-0 sm:min-w-0 sm:px-1.5 sm:py-0.5" /* tight */
+                      className="min-h-11 min-w-11 px-2 text-xs text-primary hover:bg-muted sm:min-h-0 sm:min-w-0 sm:px-1.5 sm:py-0.5" /* tight */
                       onClick={() => handleAddSingle(loc)}
                     >
                       Add
@@ -186,7 +187,7 @@ export function AddLabelsPopover({
                   <button
                     type="button"
                     aria-label={`Add children of ${loc.name}`}
-                    className="flex min-h-11 items-center gap-1 px-2 text-primary text-xs hover:bg-muted sm:min-h-0 sm:px-1.5 sm:py-0.5" /* tight */
+                    className="flex min-h-11 items-center gap-1 px-2 text-xs text-primary hover:bg-muted sm:min-h-0 sm:px-1.5 sm:py-0.5" /* tight */
                     onClick={() => void handleAddChildren(loc)}
                   >
                     <Users className="size-3" />

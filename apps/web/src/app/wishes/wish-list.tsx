@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { ImageIcon } from "lucide-react";
 import { useMemo } from "react";
+
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
@@ -24,6 +25,7 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCurrencyRange, rangeMidpoint } from "~/lib/format-range";
 import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
+
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, type WishRow, wishSubRows } from "./wish-rows";
 

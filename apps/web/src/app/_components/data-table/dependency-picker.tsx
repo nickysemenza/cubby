@@ -4,10 +4,12 @@ import { Check, Pencil, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import type { PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
@@ -76,7 +78,7 @@ export function DependencyPicker<TId extends string>({
     return (
       <Row wrap gap="sm" align="center">
         {value.length === 0 && (
-          <span className="text-muted-foreground text-sm">None</span>
+          <span className="text-sm text-muted-foreground">None</span>
         )}
         {value.map((item) => (
           <span key={item.id}>{renderReadChip(item)}</span>
@@ -98,14 +100,14 @@ export function DependencyPicker<TId extends string>({
     <Stack gap="xs">
       <Row wrap gap="xs" align="center">
         {pending.length === 0 && (
-          <span className="text-muted-foreground text-sm">None</span>
+          <span className="text-sm text-muted-foreground">None</span>
         )}
         {pending.map((item) => (
           <Badge
             key={item.id}
             variant="outline"
             // Entity names — opt out of the mono-uppercase stamp.
-            className="gap-1 pr-1 font-normal font-sans normal-case tracking-normal"
+            className="gap-1 pr-1 font-sans font-normal tracking-normal normal-case"
           >
             {item.icon}
             <span className="truncate">{item.name}</span>

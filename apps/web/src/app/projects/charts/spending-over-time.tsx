@@ -3,6 +3,7 @@ import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ResponsiveLine } from "@nivo/line";
 import { TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import {
   ViewSwitcher,
@@ -10,14 +11,15 @@ import {
 } from "~/components/ui/view-switcher";
 import { nivoMotion } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   getCostTypeColor,
   nivoChartTheme,
   normalizeCostTypeKey,
   TRADE_LABELS,
 } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { ChartTooltip } from "./ChartTooltip";
 import {
   buildCumulativeSpendPoints,
   buildStackedCumulativeSpend,
@@ -144,7 +146,7 @@ export function SpendingOverTime({
         />
       )}
       {mode !== "total" && adjustmentTotal !== 0 ? (
-        <p className="text-center text-muted-foreground text-xs">
+        <p className="text-center text-xs text-muted-foreground">
           Total spend also includes {formatCurrency(adjustmentTotal, 0)} in
           purchase adjustments not assigned to this breakdown.
         </p>
@@ -315,7 +317,7 @@ function StackedSpend({
   const monthCount = series[0]?.data.length ?? 0;
   if (series.length === 0 || monthCount < 2) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Not enough data for a trend (need 2+ months).
       </p>
     );

@@ -5,6 +5,7 @@ import type {
 import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { taskStatusValues, tradeValues } from "@cubby/schemas/project";
 import { match } from "ts-pattern";
+
 import type {
   BoardColumnKey,
   BoardLaneKey,
@@ -184,14 +185,11 @@ function laneReassign(
   lane: BoardLaneKey,
 ): TaskBoardPatch {
   return match(lane)
-    .with(
-      { kind: "project" },
-      (l): TaskBoardPatch =>
-        l.projectId !== drag.projectId ? { projectId: l.projectId } : {},
+    .with({ kind: "project" }, (l): TaskBoardPatch =>
+      l.projectId !== drag.projectId ? { projectId: l.projectId } : {},
     )
-    .with(
-      { kind: "trade" },
-      (l): TaskBoardPatch => (l.trade !== drag.trade ? { trade: l.trade } : {}),
+    .with({ kind: "trade" }, (l): TaskBoardPatch =>
+      l.trade !== drag.trade ? { trade: l.trade } : {},
     )
     .exhaustive();
 }
@@ -218,15 +216,11 @@ export function computeMove(
         col.status !== drag.status ? { status: col.status } : {};
       return drop.lane ? { ...p, ...laneReassign(drag, drop.lane) } : p;
     })
-    .with(
-      { kind: "project" },
-      (col): TaskBoardPatch =>
-        col.projectId !== drag.projectId ? { projectId: col.projectId } : {},
+    .with({ kind: "project" }, (col): TaskBoardPatch =>
+      col.projectId !== drag.projectId ? { projectId: col.projectId } : {},
     )
-    .with(
-      { kind: "trade" },
-      (col): TaskBoardPatch =>
-        col.trade !== drag.trade ? { trade: col.trade } : {},
+    .with({ kind: "trade" }, (col): TaskBoardPatch =>
+      col.trade !== drag.trade ? { trade: col.trade } : {},
     )
     .exhaustive();
 

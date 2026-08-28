@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { didBatchSettle } from "./background-jobs-page";
 
 describe("background jobs detail refresh", () => {

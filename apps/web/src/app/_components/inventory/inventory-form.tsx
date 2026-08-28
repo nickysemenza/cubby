@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
+
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getLocationId,
@@ -21,6 +22,7 @@ import {
   inventoryItemWithLocationFields,
 } from "~/app/_components/form-fields";
 import { Card, CardContent } from "~/components/ui/card";
+
 import {
   type CreateModeProps,
   detectComboboxIdChange,
@@ -39,17 +41,17 @@ const formSchema = inventoryItemWithLocationFields;
 type InventoryFormValues = z.input<typeof formSchema>;
 
 // Props for create mode
-interface CreateInventoryFormProps
-  extends CreateModeProps<z.infer<typeof inventoryCreatePayloadData>> {
+interface CreateInventoryFormProps extends CreateModeProps<
+  z.infer<typeof inventoryCreatePayloadData>
+> {
   inventoryItem?: never;
 }
 
 // Props for edit mode
-interface EditInventoryFormProps
-  extends EditModeProps<
-    InventoryUpdateInput,
-    z.infer<typeof inventoryWithLocationAndProductOut>
-  > {
+interface EditInventoryFormProps extends EditModeProps<
+  InventoryUpdateInput,
+  z.infer<typeof inventoryWithLocationAndProductOut>
+> {
   entity: z.infer<typeof inventoryWithLocationAndProductOut>;
 }
 

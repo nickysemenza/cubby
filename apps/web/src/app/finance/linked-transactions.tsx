@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import {
   Table,
@@ -11,6 +12,7 @@ import {
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
+
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { TableLink } from "../_components/table/TableLink";
 import { financialTransactionStatusOptions } from "./financial-transaction-kind-options";

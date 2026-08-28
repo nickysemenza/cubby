@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+
 import type { Database } from "~/server/db/database";
+
 import { recomputeRecipesForPriceAffectedProducts } from "./expense-pricing.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
 

@@ -1,8 +1,10 @@
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { FC } from "react";
+
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { formatCurrency } from "~/lib/utils";
+
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";
 
 /**

@@ -11,6 +11,7 @@ import { isMiscProduct } from "@cubby/shared";
 import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+
 import { AliasesField } from "~/components/forms/aliases-field";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
@@ -23,6 +24,7 @@ import { Spinner } from "~/components/ui/spinner";
 import type { useImageState } from "~/hooks/useImageState";
 import { upc } from "~/lib/upc.functions";
 import { cn } from "~/lib/utils";
+
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   NullableNumericField,
@@ -71,7 +73,7 @@ function FormSection({
   }
   return (
     <Stack as="section" gap="sm">
-      <h4 className={cn(sectionRuleClass, "eyebrow my-0 font-medium")}>
+      <h4 className={cn(sectionRuleClass, "my-0 eyebrow font-medium")}>
         {title}
       </h4>
       {children}
@@ -245,7 +247,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         </Button>
       </Row>
       {lookupImageUrl && (
-        <Row align="center" gap="sm" className="text-muted-foreground text-sm">
+        <Row align="center" gap="sm" className="text-sm text-muted-foreground">
           <Image
             src={lookupImageUrl}
             alt="Product from UPC lookup"

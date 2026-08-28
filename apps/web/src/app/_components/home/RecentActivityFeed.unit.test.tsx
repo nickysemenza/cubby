@@ -1,6 +1,7 @@
 import type * as TanStackRouter from "@tanstack/react-router";
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { RecentActivityFeed } from "./RecentActivityFeed";
 
 const auditLogRender = vi.hoisted(() => vi.fn());

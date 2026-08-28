@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnDef,
@@ -30,7 +31,7 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCount, formatCurrency } from "~/lib/utils";
-import { expense } from "./expense.functions";
+
 import {
   canSwapExpenseAnalyzeAxes,
   DEFAULT_EXPENSE_ANALYZE_CONFIG,
@@ -44,6 +45,7 @@ import {
   expenseAnalyzeCsv,
   expenseAnalyzeCsvFilename,
 } from "./expense-analyze-csv";
+import { expense } from "./expense.functions";
 
 const METRICS: readonly { value: ExpenseAnalyzeMetric; label: string }[] = [
   { value: "net", label: "Net" },
@@ -160,9 +162,9 @@ export function canCompareExpenseAnalysis(
 ) {
   return Boolean(
     filters.dateFrom &&
-      filters.dateTo &&
-      rowDimension !== "month" &&
-      columnDimension !== "month",
+    filters.dateTo &&
+    rowDimension !== "month" &&
+    columnDimension !== "month",
   );
 }
 
@@ -260,7 +262,7 @@ function AnalyzeLedgerValue({
     <button
       type="button"
       className={cn(
-        "underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         className,
       )}
       aria-label={label}
@@ -336,7 +338,7 @@ function ReconciliationNote({
   const gridFilter = expenseAnalyzeGridTotalFilter(data, filters);
 
   return (
-    <Stack gap="xs" className="text-muted-foreground text-xs">
+    <Stack gap="xs" className="text-xs text-muted-foreground">
       <p>
         {renderPeriodTotals("Scope total", data.totals.scope, {})} ·{" "}
         {gridFilter
@@ -646,7 +648,7 @@ function ExpenseAnalyzeCrossTab({
               type="button"
               className={cn(
                 className,
-                "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               )}
               onClick={() => onOpenLedger(drilldown)}
             >
@@ -736,7 +738,7 @@ function ExpenseAnalyzeCrossTab({
         metric={metric}
         onOpenLedger={onOpenLedger}
       />
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         {projection === "delta" || projection === "percent"
           ? "Delta views combine two periods. Show Current or Previous to open exact Ledger rows."
           : `Click a populated cell to open its exact ${projection === "previous" ? "previous-period" : "current-period"} Ledger rows.`}
@@ -981,9 +983,8 @@ export function ExpenseAggregateExplorer({
       </Row>
 
       {query.isLoading ? (
-        <div
+        <output
           className="h-52 animate-pulse bg-muted"
-          role="status"
           aria-label="Loading analysis"
         />
       ) : query.isError ? (

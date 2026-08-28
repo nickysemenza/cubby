@@ -1,6 +1,7 @@
 import { locationId } from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
+
 import BulkMoveForm from "~/app/inventory/bulk-move/bulk-move-form";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

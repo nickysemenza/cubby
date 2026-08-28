@@ -11,12 +11,14 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   auditLog,
   expense as expenseTable,
   product,
   productComponent,
 } from "~/server/db/schema";
+
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts, updateProduct } from "./product";
 import {
@@ -595,6 +597,7 @@ describe("product ⟷ product component links (kit composition)", () => {
           componentProductId: part.entityId,
           quantity: 0,
         }),
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     });
 
@@ -622,6 +625,7 @@ describe("product ⟷ product component links (kit composition)", () => {
           componentProductId: part.entityId,
           quantity: 2,
         }),
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     });
   });

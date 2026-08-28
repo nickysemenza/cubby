@@ -1,5 +1,7 @@
 import type { TaskFilters, TaskTimelineOut } from "@cubby/schemas/project";
+
 import type { Database } from "~/server/db";
+
 import { taskList } from "./lookup";
 
 const ALL_ROWS = { pageIndex: 0, pageSize: 100_000 } as const;

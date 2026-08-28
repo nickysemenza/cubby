@@ -1,3 +1,4 @@
+// oxlint-disable-next-line typescript/triple-slash-reference -- Wrangler emits this ambient worker declaration without a module export.
 /// <reference path="./cloudflare-workers.d.ts" />
 /**
  * @cubby/worker-tracing

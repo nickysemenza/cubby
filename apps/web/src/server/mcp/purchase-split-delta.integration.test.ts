@@ -18,11 +18,13 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
 import { createMcpServer } from "./server";
 import {
   createMcpWorkflowCaller,
@@ -111,6 +113,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
+    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
     expect(result.isError, errorText(result)).not.toBe(true);
     const out = structured(result);
     expect(out.originalCost).toBe(100);
@@ -147,6 +150,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
+    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
     expect(result.isError, errorText(result)).not.toBe(true);
     const out = structured(result);
     expect(out.originalCost).toBe(100);
@@ -183,6 +187,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
+    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
     expect(result.isError, errorText(result)).not.toBe(true);
     const out = structured(result);
     expect(out.originalCost).toBeNull();

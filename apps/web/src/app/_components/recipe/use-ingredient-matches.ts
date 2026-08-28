@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
+
 import { ingredient } from "~/app/ingredients/ingredient.functions";
 
 /** A matched ingredient (DB row), or `null` when looked up but not found. */

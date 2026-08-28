@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Suspense, useId } from "react";
+
 import { DEFAULT_DOC_SLUG, getDocSection } from "~/app/docs/docs-registry";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Button } from "~/components/ui/button";
@@ -25,13 +26,13 @@ function DocsSectionNotFound() {
   return (
     <section
       aria-labelledby={headingId}
-      className="border-border border-y bg-card px-4 py-6 sm:px-6"
+      className="border-y border-border bg-card px-4 py-6 sm:px-6"
     >
       <div className="max-w-prose">
-        <h2 id={headingId} className="font-semibold text-lg">
+        <h2 id={headingId} className="text-lg font-semibold">
           Documentation section not found
         </h2>
-        <p className="mt-2 text-muted-foreground text-sm">
+        <p className="mt-2 text-sm text-muted-foreground">
           This link is no longer available. Browse the current documentation to
           continue.
         </p>

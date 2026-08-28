@@ -21,6 +21,7 @@ import {
   type Trade,
 } from "@cubby/schemas/project";
 import { groupBy, keyBy } from "es-toolkit";
+
 import { buildForest, type Forest, foldForest } from "../../project-forest";
 import { toDayIndex } from "./gantt-date";
 

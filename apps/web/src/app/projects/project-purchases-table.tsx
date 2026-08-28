@@ -2,6 +2,7 @@ import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import { useCallback, useMemo } from "react";
+
 import {
   createNameColumn,
   createPlainDateColumn,
@@ -17,6 +18,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   buildProjectPurchaseRows,
   type ProjectPurchaseRow,

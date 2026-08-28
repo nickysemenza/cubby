@@ -12,6 +12,7 @@ import type {
 } from "@cubby/schemas/search";
 import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
 import type { z } from "zod";
+
 import { getErrorMessage } from "~/lib/error-utils";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import {
@@ -33,6 +34,7 @@ import {
 } from "~/server/semantic/embeddings";
 import { hydrateSearchHitRefs } from "~/server/services/search.service";
 import { TraceNames, withTrace } from "~/server/tracing";
+
 import { getEmbeddingReadiness } from "./embedding-readiness.service";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];

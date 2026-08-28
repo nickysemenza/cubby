@@ -1,5 +1,7 @@
 import { useRouteContext } from "@tanstack/react-router";
+
 import { authClient } from "~/lib/auth-client";
+
 import { useHydrated } from "./useHydrated";
 
 /**

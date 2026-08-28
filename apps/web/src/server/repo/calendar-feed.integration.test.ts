@@ -1,7 +1,7 @@
 import { testUserId } from "@cubby/schemas/testing";
-
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   findUserByCalendarFeedToken,
   rotateCalendarFeedToken,

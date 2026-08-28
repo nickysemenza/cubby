@@ -1,6 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { type ReactNode, useState } from "react";
+
 import { CommandGroup, CommandItem } from "~/components/ui/command";
+
 import { verbDef } from "../actions/action-verbs";
 import {
   type EntityActionRow,
@@ -99,7 +101,7 @@ export function EntityPaletteActionGroup({
           >
             <Icon className="size-4" />
             <span>{label}</span>
-            <span className="ml-auto font-mono text-muted-foreground text-xs">
+            <span className="ml-auto font-mono text-xs text-muted-foreground">
               {shortcode}
             </span>
           </CommandItem>

@@ -5,11 +5,11 @@ import { testShortcode } from "@cubby/schemas/testing";
  * default means zodResolver blocks the first submit and nothing is called at
  * all. That failure is invisible to a test that only reads the field.
  */
-
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { QuickInventoryAdd } from "./quick-inventory-add";
 
 const mocks = vi.hoisted(() => ({

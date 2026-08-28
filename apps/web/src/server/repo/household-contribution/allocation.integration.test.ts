@@ -1,8 +1,10 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { expenseAttribution, ledgerParty } from "~/server/db/schema";
 import { insertAndReturn, unwrapDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
 import { loadExpenseAllocations } from "./allocation";
 
 describe("loadExpenseAllocations SQL arithmetic", () => {

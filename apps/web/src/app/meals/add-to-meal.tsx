@@ -11,6 +11,7 @@ import { format, parseISO } from "date-fns";
 import { CalendarPlus, TriangleAlert } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { Row, Stack } from "~/components/layout";
@@ -21,9 +22,10 @@ import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { meal } from "./meal.functions";
+
 import { mealListLabel } from "./meal-format";
 import { mealKindOptions, mealTypeOptions } from "./meal-options";
+import { meal } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 const NEW_MEAL = "new";
@@ -239,7 +241,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
                     setSwitchToCooked(checked === true)
                   }
                 />
-                <Label htmlFor={switchId} className="font-normal text-2xs">
+                <Label htmlFor={switchId} className="text-2xs font-normal">
                   Switch it to Cooked when adding
                 </Label>
               </Row>

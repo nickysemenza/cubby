@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -15,6 +16,7 @@ import {
 } from "~/components/ui/table";
 import { entityDetailLink } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import {
   formatAmount,
   haveText,
@@ -159,12 +161,12 @@ function RowGroup({
           <TableRow
             key={c.lineIndex}
             className={cn(
-              "bg-muted/20 text-muted-foreground text-xs",
+              "bg-muted/20 text-xs text-muted-foreground",
               i !== perMeal.length - 1 && "border-b-0",
             )}
           >
             <TableCell className="py-1" />
-            <TableCell className="whitespace-normal py-1 pl-6">
+            <TableCell className="py-1 pl-6 whitespace-normal">
               <Link
                 {...entityDetailLink("meal", c.mealId)}
                 className="hover:underline"

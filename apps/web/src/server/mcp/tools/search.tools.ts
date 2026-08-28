@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/mcp";
 import { similarEntitiesInputSchema } from "@cubby/schemas/search";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { getReadCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
 export function registerSearchTools(server: McpServer) {

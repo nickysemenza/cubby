@@ -1,5 +1,6 @@
 import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
 import { type ReactNode, useMemo } from "react";
+
 import {
   createCurrencyColumn,
   createPlainDateColumn,

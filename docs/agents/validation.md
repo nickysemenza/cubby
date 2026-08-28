@@ -67,6 +67,30 @@ One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,
 results, and limitations. CI remains authoritative and runs full coverage.
 
+## Quality policy
+
+Oxlint treats correctness and suspicious diagnostics as errors and rejects
+unused disable directives. The repository intentionally leaves type-aware
+linting and React Compiler rules disabled; compiler adoption needs its own
+compatibility review. `vitest/require-mock-type-parameters` is also excluded
+because the current Vitest mock surface cannot express that rule consistently.
+
+The few other global exclusions encode repository-wide incompatibilities, not
+finding baselines: React uses the automatic JSX runtime; table and chart render
+callbacks are intentionally passed as component-valued props; lexical shadowing
+and underscore-prefixed bindings are established schema and library interop
+patterns; and mutating `sort`/`reverse` calls cannot be mechanically replaced by
+copying variants without changing behavior. Intentional local exceptions to
+enabled rules use a one-line Oxlint directive with a constraint-focused reason.
+
+Oxfmt owns maintained JavaScript, TypeScript, JSX, TSX, JSON/JSONC, CSS, and HTML.
+It sorts imports only in maintained web source, excluding generated files; sorts
+Tailwind v4 classes in `cn`, `clsx`, and `cva`; and sorts package fields without
+reordering scripts. Markdown/MDX, YAML, TOML, generated output, vendored UI, and
+build artifacts remain outside the formatting domain. CSS is parsed and
+formatted, but this repository intentionally has no semantic CSS lint layer or
+JSON duplicate-key lint guarantee.
+
 ## PR and CI
 
 Inspect failing check logs and annotations before editing. Fix only failures

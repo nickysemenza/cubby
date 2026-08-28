@@ -1,6 +1,7 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   buildBulkMovePayloadItems,
   classifyScannedLocation,

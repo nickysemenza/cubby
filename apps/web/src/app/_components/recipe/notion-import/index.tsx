@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertCircle, Import, RotateCcw, Search } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { z } from "zod";
+
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
@@ -19,6 +20,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import type { ImportResult } from "../cookbook-import/types";
 import { RecipeImportCard } from "../recipe-import-card";
 import {
@@ -74,6 +76,7 @@ export function NotionImport() {
   const items: PreviewItem[] = preview.data ?? [];
   const filteredItems = useMemo(
     () => filterNotionPreview(items, search, filter),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [items, search, filter],
   );
   const visibleActionable = useMemo(
@@ -152,6 +155,7 @@ export function NotionImport() {
       else c.needs++;
     }
     return c;
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [items]);
 
   const summary = useMemo(() => {
@@ -204,7 +208,7 @@ export function NotionImport() {
           as="p"
           align="center"
           gap="xs"
-          className="text-destructive text-sm"
+          className="text-sm text-destructive"
         >
           <AlertCircle className="size-4" />
           {getErrorMessage(preview.error)}
@@ -216,7 +220,7 @@ export function NotionImport() {
           as="p"
           align="center"
           gap="sm"
-          className="text-muted-foreground text-sm"
+          className="text-sm text-muted-foreground"
         >
           <Spinner className="size-4" /> Reading the Notion Recipes database…
         </Row>

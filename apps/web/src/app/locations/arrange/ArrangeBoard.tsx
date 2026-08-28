@@ -2,9 +2,11 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, Home } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
+
 import { cn } from "~/lib/utils";
-import { ArrangeColumn } from "./ArrangeColumn";
+
 import { findNode, pathToNode } from "./arrange-tree-utils";
+import { ArrangeColumn } from "./ArrangeColumn";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeBoardProps {
@@ -84,7 +86,6 @@ export function ArrangeBoard({
 
   // Keep the newly active Miller column visible without making Unknown the
   // default mobile destination.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: length is the intended trigger, not a read
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {

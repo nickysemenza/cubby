@@ -7,6 +7,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
+
 import type { EditableEntity, EntityEditRequest } from "./types";
 
 type DialogRequest<E extends EditableEntity> = Omit<

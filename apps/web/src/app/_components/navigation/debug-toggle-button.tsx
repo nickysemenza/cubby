@@ -1,4 +1,5 @@
 import { Bug, BugOff } from "lucide-react";
+
 import { Button } from "~/components/ui/button";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";

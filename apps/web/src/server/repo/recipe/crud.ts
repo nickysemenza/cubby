@@ -38,6 +38,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { countBy } from "es-toolkit";
 import { match, P } from "ts-pattern";
+
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -717,22 +718,16 @@ const duplicateProvenance = async (
       : null;
 
   return match(src)
-    .with(
-      { type: "book" },
-      (book): RecipeProvenance => ({
-        sourceType: "Book",
-        sourceData: book.book,
-        cookbookId,
-        cookbookShortcode: book.cookbookId ?? null,
-      }),
-    )
-    .with(
-      { type: "website" },
-      (website): RecipeProvenance => ({
-        sourceType: "Website",
-        sourceData: website.url,
-      }),
-    )
+    .with({ type: "book" }, (book): RecipeProvenance => ({
+      sourceType: "Book",
+      sourceData: book.book,
+      cookbookId,
+      cookbookShortcode: book.cookbookId ?? null,
+    }))
+    .with({ type: "website" }, (website): RecipeProvenance => ({
+      sourceType: "Website",
+      sourceData: website.url,
+    }))
     .with({ type: "notion" }, () => otherProvenance)
     .with({ type: "other" }, () => otherProvenance)
     .with(P.nullish, () => otherProvenance)

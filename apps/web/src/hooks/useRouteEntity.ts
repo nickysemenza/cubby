@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useLocation } from "@tanstack/react-router";
 import { useMemo } from "react";
+
 import { entities } from "~/entities/entities";
 
 /** `/basePath` → entity, e.g. `/products` → "product". */

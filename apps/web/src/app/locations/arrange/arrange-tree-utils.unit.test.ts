@@ -5,6 +5,7 @@ import type {
 import { infLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import {
   applyItemMove,

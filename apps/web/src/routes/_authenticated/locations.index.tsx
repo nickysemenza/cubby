@@ -4,6 +4,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { Suspense } from "react";
+
 import LocationTreeGraph from "~/app/_components/inventory/location-tree-graph";
 import LocationTreeView from "~/app/_components/inventory/location-tree-view";
 import LocationTreemap from "~/app/_components/inventory/location-treemap";

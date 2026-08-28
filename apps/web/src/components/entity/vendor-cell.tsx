@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { Row } from "~/components/layout";
 import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
@@ -61,7 +62,7 @@ export function VendorMark({
         aria-hidden
         className={cn(
           shared,
-          "flex items-center justify-center border border-border bg-muted font-mono text-2xs text-slate leading-none",
+          "flex items-center justify-center border border-border bg-muted font-mono text-2xs leading-none text-slate",
         )}
       >
         {vendorMonogram(vendor)}
@@ -167,7 +168,7 @@ export function VendorCell({
       id={vendorId}
       displayImage={logo?.url ? { url: logo.url } : null}
       showIdentityMark={false}
-      className="group/vendor-link inline-flex min-w-0 max-w-full text-foreground transition-colors hover:text-primary"
+      className="group/vendor-link inline-flex max-w-full min-w-0 text-foreground transition-colors hover:text-primary"
     >
       {body}
     </EntityPreviewLink>

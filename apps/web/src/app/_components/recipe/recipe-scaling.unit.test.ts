@@ -2,6 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { scaleRecipe } from "./recipe-scaling";
 
 const row = (id: string, amounts: Amount[]) =>

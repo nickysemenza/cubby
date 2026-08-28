@@ -16,6 +16,7 @@ import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
@@ -34,6 +35,7 @@ import { Description } from "~/components/ui/description";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { wasm } from "~/lib/wasm";
+
 import { BookGroupCard } from "./book-group-card";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import { deriveBookName, withRetry } from "./import-helpers";
@@ -56,9 +58,10 @@ const failedChunksSchema = z.array(
       doc_path: z.string(),
       reason: z.string(),
     })
-    .transform(
-      ({ doc_path, ...rest }): FailedChunk => ({ ...rest, docPath: doc_path }),
-    ),
+    .transform(({ doc_path, ...rest }): FailedChunk => ({
+      ...rest,
+      docPath: doc_path,
+    })),
 );
 
 const CHUNK_CONCURRENCY = 8;
@@ -691,7 +694,7 @@ export function CookbookImport({
   return (
     <Stack>
       <div>
-        <h1 className="font-semibold text-xl">Import cookbook</h1>
+        <h1 className="text-xl font-semibold">Import cookbook</h1>
         <Description>
           Drag <code className="rounded bg-muted px-1 py-1 text-xs">.epub</code>{" "}
           cookbooks here — Cubby extracts the recipes with AI, then you review
@@ -703,7 +706,7 @@ export function CookbookImport({
         <Row
           align="center"
           gap="xs"
-          className="border border-warning/40 bg-warning/5 p-2 text-warning-ink text-xs"
+          className="border border-warning/40 bg-warning/5 p-2 text-xs text-warning-ink"
         >
           <AlertTriangle className="size-4 shrink-0" />
           Keep this page open — extraction and import run here, not in the

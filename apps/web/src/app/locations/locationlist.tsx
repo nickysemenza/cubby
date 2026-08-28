@@ -6,9 +6,11 @@ import {
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
+
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+
 import {
   createEntityInlineLinkColumn,
   createFilterableSelectColumn,
@@ -26,8 +28,8 @@ import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useLocationParentOptions } from "../_components/hooks/useLocationParentOptions";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
-import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
+import { LocationTypeLabel } from "../_components/locations/LocationTypeLabel";
 
 /**
  * Module-level: `initialColumnVisibility` sits in the merged-visibility
@@ -65,7 +67,6 @@ export function LocationList() {
     entity: "location",
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateLocationMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createImageColumn(columnHelper, {
@@ -178,6 +179,7 @@ export function LocationList() {
         },
       ),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateLocationMutation changes every render but is functionally stable
     [columnHelper],
   );
 

@@ -19,6 +19,7 @@ import {
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";

@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { Row } from "~/components/layout";
 
 /** `by {manufacturer}` — the standard product-card subtitle. */
@@ -15,7 +16,7 @@ export function createdAgoDetail(createdAt: Date | string | number): ReactNode {
       key="created"
       align="center"
       gap="xs"
-      className="text-muted-foreground text-sm"
+      className="text-sm text-muted-foreground"
     >
       <Calendar className="size-3" />
       Created {formatDistanceToNow(createdAt)} ago

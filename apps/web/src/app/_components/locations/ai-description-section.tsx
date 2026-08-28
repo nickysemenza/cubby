@@ -1,6 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { Eye, Sparkles } from "lucide-react";
 import type { FC } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";

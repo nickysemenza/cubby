@@ -12,6 +12,7 @@ import type {
 } from "@cubby/schemas/location";
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import {

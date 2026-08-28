@@ -6,6 +6,7 @@ import {
   type UPCLookupResponse,
 } from "@cubby/upc-contract";
 import { chunk } from "es-toolkit";
+
 import { env } from "~/env";
 import { getBindingFetcher } from "~/server/cf-env";
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";

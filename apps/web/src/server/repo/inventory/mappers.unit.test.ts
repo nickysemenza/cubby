@@ -1,6 +1,7 @@
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { resolveProductPricing } from "../product/pricing";
 import { dbInventoryEntryToAPI } from "./mappers";
 import type { InventoryEntryDeepDB } from "./types";

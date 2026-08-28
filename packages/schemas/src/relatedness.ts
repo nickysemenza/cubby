@@ -62,9 +62,9 @@ export const relatednessPairRegistry = {
 
 export type RelatednessPair = keyof typeof relatednessPairRegistry;
 export type ActiveRelatednessPair = {
-  [K in RelatednessPair]: (typeof relatednessPairRegistry)[K]["active"] extends true
-    ? K
-    : never;
+  [
+    K in RelatednessPair
+  ]: (typeof relatednessPairRegistry)[K]["active"] extends true ? K : never;
 }[RelatednessPair];
 
 export const activeRelatednessPairKeys = Object.entries(relatednessPairRegistry)

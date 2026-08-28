@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Fragment, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import type { GanttResource } from "~/components/reui/gantt/gantt-types";
+
 import { CubbyGantt } from "./CubbyGantt";
 import type { GanttRow } from "./gantt-model";
 

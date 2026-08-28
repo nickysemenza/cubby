@@ -1,5 +1,6 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { processBackgroundJob } from "~/server/background-queue";
 import {
   createBackgroundBatchWithJobs,
@@ -16,6 +17,7 @@ import {
   refreshSearchDocument,
 } from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
+
 import { enqueueEntityEmbeddingBackfill } from "./semantic-search.service";
 
 describe("semantic search background jobs", () => {

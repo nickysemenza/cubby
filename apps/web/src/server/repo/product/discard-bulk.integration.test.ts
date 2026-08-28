@@ -2,7 +2,9 @@ import type { InventoryId } from "@cubby/schemas/identifiers";
 import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { expense, inventoryEntry } from "~/server/db/schema";
+
 import { getDb } from "../database-helpers";
 import {
   createInventoryFixture as createInventoryEntry,

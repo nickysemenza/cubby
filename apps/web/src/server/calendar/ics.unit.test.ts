@@ -6,7 +6,9 @@ import {
 } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import { kindsForFeed, renderIcs } from "./ics";
 
 /** Mirrors mock-schema's own override type so a factory can take a subset. */

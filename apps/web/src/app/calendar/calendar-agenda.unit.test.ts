@@ -1,8 +1,8 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { addDays, format, parseISO } from "date-fns";
 import { describe, expect, it } from "vitest";
+
 import { groupItemsByDay } from "./calendar-agenda";
 
 /** All-day events are half-open: a single day ends on the NEXT day, the same

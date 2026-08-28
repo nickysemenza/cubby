@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+
 import { cn } from "~/lib/utils";
+
 import {
   NullableNumericField,
   SideBySideFields,
@@ -48,7 +50,7 @@ export function AmountFieldGroup<
       narrowFirst={compact}
       className={cn(
         compact
-          ? "w-full min-w-0 flex-row space-x-2 space-y-0"
+          ? "w-full min-w-0 flex-row space-y-0 space-x-2"
           : "min-w-[13rem] space-x-2",
       )}
     >

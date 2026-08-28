@@ -4,6 +4,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { BookOpen, Link2, Plus, RefreshCw } from "lucide-react";
 import { z } from "zod";
+
 import {
   type DetailSection,
   DetailSections,
@@ -201,7 +202,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
       layout="full"
       heroMedia={
         coverUrl ? (
-          <div className="flex justify-center border-border border-y bg-card p-3 md:rounded-md md:border">
+          <div className="flex justify-center border-y border-border bg-card p-3 md:rounded-md md:border">
             <Image
               src={coverUrl}
               alt={name}

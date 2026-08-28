@@ -1,6 +1,7 @@
 import type { ExpenseAnalyzeReadyOut } from "@cubby/schemas/project";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import type { ExpenseAnalyzeConfig } from "./expense-analyze-config";
 
 const mocks = vi.hoisted(() => ({

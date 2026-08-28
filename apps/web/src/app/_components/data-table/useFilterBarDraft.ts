@@ -1,6 +1,7 @@
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
+
 import {
   type Filter,
   type FilterBarField,

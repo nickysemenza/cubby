@@ -3,6 +3,7 @@ import type { TaskOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FC, useMemo } from "react";
+
 import {
   createNameColumn,
   createProjectLinkColumn,
@@ -15,6 +16,7 @@ import { task } from "~/app/tasks/task.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+
 import { ShelfEmpty } from "../data-table/shelf";
 import {
   createCubbyColumnHelper,
@@ -59,7 +61,6 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
     entity: "task",
   });
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () =>
       helper.columns([
@@ -88,6 +89,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
           },
         }),
       ]),
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, nameEditable],
   );
   const ordered = useMemo(() => orderProductTasks(tasks), [tasks]);
@@ -123,7 +125,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
       <Link
         to="/tasks"
         search={{ view: "list", productId: product.id }}
-        className="text-primary text-xs hover:underline"
+        className="text-xs text-primary hover:underline"
       >
         See all tasks →
       </Link>

@@ -2,6 +2,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { LayoutDashboard } from "lucide-react";
 import * as React from "react";
+
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -13,6 +14,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { getDefaultLocationType } from "~/lib/location-path";
 import { cn } from "~/lib/utils";
+
 import { LocationIcon } from "./location-icons";
 
 export interface LocationSegment {

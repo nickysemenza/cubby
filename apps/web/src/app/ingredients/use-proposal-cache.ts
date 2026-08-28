@@ -1,5 +1,6 @@
 import { entityIdSchema, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useRef, useState } from "react";
+
 import { precomputeEnrichmentProposalsStream } from "~/lib/ai.functions";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 

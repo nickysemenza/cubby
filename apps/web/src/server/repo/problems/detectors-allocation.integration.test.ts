@@ -6,11 +6,13 @@ import { sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import type { Database } from "~/server/db";
 import { financialTransactionAllocation } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
 import {
   findFinancialTransactionAllocationDefects,
   loadAllocationDefectPresenters,

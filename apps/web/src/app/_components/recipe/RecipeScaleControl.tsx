@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { Scaling, X } from "lucide-react";
 import { useMemo, useState } from "react";
+
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -15,6 +16,7 @@ import {
 } from "~/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
+
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";
 import { getIngredientName } from "./recipe-utils";
 

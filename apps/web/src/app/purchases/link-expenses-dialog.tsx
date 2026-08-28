@@ -7,6 +7,7 @@ import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { sumBy } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
+
 import {
   createCurrencyColumn,
   createNameColumn,
@@ -43,6 +44,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
+
 import { purchase as purchaseOperations } from "./purchase.functions";
 
 const NO_CANDIDATES: ExpenseOut[] = [];
@@ -191,7 +193,7 @@ export function LinkExpensesDialog({
               {info.row.original.vendor ?? "another purchase"}
             </span>
           ) : (
-            <span className="font-mono text-2xs text-slate uppercase tracking-wider">
+            <span className="font-mono text-2xs tracking-wider text-slate uppercase">
               unattached
             </span>
           ),

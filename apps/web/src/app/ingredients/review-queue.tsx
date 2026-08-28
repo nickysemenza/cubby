@@ -1,6 +1,7 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { useQueuePass } from "~/app/_components/queue-pass/useQueuePass";
@@ -10,6 +11,7 @@ import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { ingredient } from "./ingredient.functions";
 import { type MergeOption, ReviewCard } from "./review-card";
@@ -283,7 +285,7 @@ export function ReviewQueue({
         justify="between"
         wrap
         gap="sm"
-        className="text-muted-foreground text-xs"
+        className="text-xs text-muted-foreground"
       >
         <span>
           {counts.outstanding} left · {reviewedThisSession} reviewed

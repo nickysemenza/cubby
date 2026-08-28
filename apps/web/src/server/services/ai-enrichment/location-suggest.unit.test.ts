@@ -1,8 +1,9 @@
 import type { LocationSuggestionAiResult } from "@cubby/schemas/ai";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { describe, expect, it } from "vitest";
+
 import type { LocationPutAwayCandidate } from "~/server/repo/location";
+
 import {
   formatLocationCandidates,
   resolveSuggestedLocation,
@@ -138,8 +139,9 @@ describe("resolveSuggestedLocation", () => {
   // A near-miss must fail like any other miss: guessing which location was
   // meant is exactly what this function refuses to do.
   it("does not prefix-match a truncated code", () => {
-    expect(() =>
-      resolveSuggestedLocation(candidates, aiResult("LOC-222")),
+    expect(
+      () => resolveSuggestedLocation(candidates, aiResult("LOC-222")),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 });

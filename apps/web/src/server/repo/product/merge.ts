@@ -20,6 +20,7 @@ import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type { MergeProductsInput } from "@cubby/schemas/product";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
+
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -58,6 +59,7 @@ import {
   type SlotCollisionPlan,
 } from "~/server/repo/merge";
 import { cascadeRemoval } from "~/server/repo/removal";
+
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";
 import { ensureSlotPrimaries } from "./update-helpers";
 
@@ -695,13 +697,11 @@ async function buildProductMergePlan(
         stockTracked: true,
       },
     })
-  ).map(
-    (row): ProductMergeRow => ({
-      ...row,
-      id: parseEntityId("product", row.id),
-      shortcode: parseShortcodeFor("product", row.shortcode),
-    }),
-  );
+  ).map((row): ProductMergeRow => ({
+    ...row,
+    id: parseEntityId("product", row.id),
+    shortcode: parseShortcodeFor("product", row.shortcode),
+  }));
   const keeper = productRows.find((row) => row.id === input.keepId);
   if (!keeper) {
     if (options?.allowMissingKeeper) return null;
@@ -731,13 +731,11 @@ async function buildProductMergePlan(
         amount: true,
       },
     })
-  ).map(
-    (row): InventoryRow => ({
-      ...row,
-      id: parseEntityId("inventory", row.id),
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): InventoryRow => ({
+    ...row,
+    id: parseEntityId("inventory", row.id),
+    productId: parseEntityId("product", row.productId),
+  }));
   const componentRows = await loadComponentRows(db);
   const unitMappingRows = (
     await db.query.productUnitMappings.findMany({
@@ -751,12 +749,10 @@ async function buildProductMergePlan(
         asc(productUnitMappings.id),
       ],
     })
-  ).map(
-    (row): UnitMappingRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): UnitMappingRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const externalIdRows = (
     await db.query.productExternalId.findMany({
       where: and(
@@ -778,12 +774,10 @@ async function buildProductMergePlan(
         asc(productExternalId.id),
       ],
     })
-  ).map(
-    (row): ExternalIdRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ExternalIdRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const imageRows = (
     await db.query.productImage.findMany({
       where: and(
@@ -799,12 +793,10 @@ async function buildProductMergePlan(
       },
       orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
     })
-  ).map(
-    (row): ProductImageAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProductImageAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const projectUseRows = (
     await db.query.projectToolUsage.findMany({
       where: and(
@@ -813,12 +805,10 @@ async function buildProductMergePlan(
       ),
       columns: { id: true, productId: true, projectId: true },
     })
-  ).map(
-    (row): ProjectUseAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProjectUseAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const purchaseRows = (
     await db.query.purchaseProduct.findMany({
       where: and(
@@ -827,12 +817,10 @@ async function buildProductMergePlan(
       ),
       columns: { id: true, productId: true, purchaseId: true },
     })
-  ).map(
-    (row): PurchaseAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): PurchaseAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const wishRows = (
     await db.query.wishCandidate.findMany({
       where: and(
@@ -841,23 +829,19 @@ async function buildProductMergePlan(
       ),
       columns: { id: true, productId: true, wishId: true },
     })
-  ).map(
-    (row): WishAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): WishAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const expenses = (
     await db
       .select({ id: expense.id, productId: expense.productId })
       .from(expense)
       .where(and(inArray(expense.productId, liveLoserIds), notDeleted(expense)))
-  ).map(
-    (row): ProductAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const tasks = (
     await db
       .select({ id: task.id, productId: task.subjectProductId })
@@ -865,12 +849,10 @@ async function buildProductMergePlan(
       .where(
         and(inArray(task.subjectProductId, liveLoserIds), notDeleted(task)),
       )
-  ).map(
-    (row): ProductAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const locations = (
     await db
       .select({ id: location.id, productId: location.productId })
@@ -878,12 +860,10 @@ async function buildProductMergePlan(
       .where(
         and(inArray(location.productId, liveLoserIds), notDeleted(location)),
       )
-  ).map(
-    (row): ProductAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const cookbooks = (
     await db
       .select({ id: cookbook.id, productId: cookbook.productId })
@@ -891,12 +871,10 @@ async function buildProductMergePlan(
       .where(
         and(inArray(cookbook.productId, liveLoserIds), notDeleted(cookbook)),
       )
-  ).map(
-    (row): ProductAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const conversionCoverage = (
     await db
       .select({
@@ -905,12 +883,10 @@ async function buildProductMergePlan(
       })
       .from(productConversionCoverage)
       .where(inArray(productConversionCoverage.productId, liveLoserIds))
-  ).map(
-    (row): ProductAssociationRow => ({
-      ...row,
-      productId: parseEntityId("product", row.productId),
-    }),
-  );
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const aliases = uniq([
     ...keeper.aliases,
     ...losers.map((row) => row.name),

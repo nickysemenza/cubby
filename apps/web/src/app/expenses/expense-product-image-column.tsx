@@ -1,5 +1,6 @@
 import { ImageIcon } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+
 import type { CubbyColumnHelper as ColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   ProductImageSummariesProvider,

@@ -1,5 +1,6 @@
 import { parse_scraped_recipe } from "@cubby/recipebridge";
 import { describe, expect, it } from "vitest";
+
 import { scrapedToImportRecipe } from "./scraper";
 
 // Regression coverage for the section-aware scrape boundary. A live HTTP scrape

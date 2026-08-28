@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getLocationId,
@@ -298,7 +299,7 @@ export default function BulkMoveForm({
       </Row>
 
       {sourceLocation && isTruncated && (
-        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning-ink text-xs">
+        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink">
           Showing {loadedCount} of {totalCount} entries. The{" "}
           {totalCount - loadedCount} not listed can't be selected or moved. Move
           these first, then reload to see the rest.
@@ -308,7 +309,7 @@ export default function BulkMoveForm({
       {sourceLocation && (
         <div>
           <Row align="center" justify="between" className="mb-4">
-            <h3 className="font-medium text-lg">
+            <h3 className="text-lg font-medium">
               Items at {sourceLocation.name}
             </h3>
             {moveItems.length > 0 && (
@@ -330,7 +331,7 @@ export default function BulkMoveForm({
               <Row
                 align="center"
                 gap="md"
-                className="border-b pb-2 font-medium text-muted-foreground text-sm"
+                className="border-b pb-2 text-sm font-medium text-muted-foreground"
               >
                 <div className="w-8"></div>
                 <div className="flex-1">Product</div>

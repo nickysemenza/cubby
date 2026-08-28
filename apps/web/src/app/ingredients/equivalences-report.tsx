@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useMemo } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -23,6 +24,7 @@ import {
 } from "~/components/ui/tooltip";
 import { useHydrated } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
+
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
 
@@ -188,7 +190,7 @@ export function EquivalencesReport() {
                   <TableCell className="align-top text-muted-foreground">
                     {spreadLabel(c)}
                   </TableCell>
-                  <TableCell className="whitespace-normal align-top">
+                  <TableCell className="align-top whitespace-normal">
                     <Stack as="ul" gap="xs">
                       {c.examples.map((ex) => (
                         <li

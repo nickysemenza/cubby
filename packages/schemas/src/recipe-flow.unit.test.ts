@@ -33,23 +33,25 @@ describe("recipeFlowPlanSchema", () => {
   });
 
   it("rejects unsafe node ids and empty operation inputs", () => {
-    expect(() =>
-      recipeFlowPlanSchema.parse({
-        schemaVersion: 1,
-        setup: [],
-        sources: [],
-        operations: [
-          {
-            id: "Mix Batter",
-            label: "mix",
-            outputLabel: null,
-            inputs: [],
-            instructionRefs: [{ sectionId, instructionIndex: 0 }],
-            annotations: [],
-          },
-        ],
-        outputOperationIds: ["Mix Batter"],
-      }),
+    expect(
+      () =>
+        recipeFlowPlanSchema.parse({
+          schemaVersion: 1,
+          setup: [],
+          sources: [],
+          operations: [
+            {
+              id: "Mix Batter",
+              label: "mix",
+              outputLabel: null,
+              inputs: [],
+              instructionRefs: [{ sectionId, instructionIndex: 0 }],
+              annotations: [],
+            },
+          ],
+          outputOperationIds: ["Mix Batter"],
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 });

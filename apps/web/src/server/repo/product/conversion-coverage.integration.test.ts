@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import type { USDAClient } from "~/server/clients/usda";
 import { productConversionCoverage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -8,6 +9,7 @@ import {
   findCoverageProblems,
   rebuildProductConversionCoverageProjection,
 } from "~/server/services/problems.service";
+
 import { updateIngredient } from "../ingredient";
 import {
   attachProductComponents,
@@ -376,8 +378,9 @@ describe("ProductConversionCoverage projection", () => {
       [{ productId: middle.entityId, quantity: 1 }],
       ctx.actor,
     );
-    await writeProductConversionCoverageProjection(ctx.db, [
-      ...[top, middle, part].map((row) => ({
+    await writeProductConversionCoverageProjection(
+      ctx.db,
+      [top, middle, part].map((row) => ({
         productId: row.entityId,
         coverageTier: "complete",
         coveredKinds: [],
@@ -385,7 +388,7 @@ describe("ProductConversionCoverage projection", () => {
         islandCount: 1,
         status: "ready" as const,
       })),
-    ]);
+    );
 
     await updateProduct(ctx.db, part.entityId, { price: 7 }, ctx.actor);
     const statuses = await getDb(ctx.db)

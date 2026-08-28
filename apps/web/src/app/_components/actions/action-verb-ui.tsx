@@ -1,7 +1,9 @@
 import type { RowData } from "@tanstack/react-table";
 import type { ComponentProps, ReactElement } from "react";
+
 import { Button } from "~/components/ui/button";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+
 import type { BulkAction } from "../data-table/bulk-actions.types";
 import { type ActionVerbId, verbDef } from "./action-verbs";
 

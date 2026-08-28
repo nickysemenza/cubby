@@ -2,6 +2,7 @@ import type { AuditEntityType, AuditJsonValue } from "@cubby/schemas/audit";
 import { sortBy } from "es-toolkit";
 import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { MutedBox } from "~/components/layout/muted-box";
 import {
@@ -22,6 +23,7 @@ import { EntityIcon, entityLabel } from "~/entities/entities";
 import type { AuditLogEntry } from "~/lib/audit-log.functions";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
+
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { AuditEntityLink } from "./audit-entity-link";
 
@@ -274,7 +276,7 @@ export function AuditLogEntryComponent({
                     colored
                     className="size-4 flex-shrink-0"
                   />
-                  <span className="truncate font-medium text-sm">
+                  <span className="truncate text-sm font-medium">
                     {entry.entityName ?? fallbackEntityLabel}
                   </span>
                 </>
@@ -352,7 +354,7 @@ export function AuditLogEntryComponent({
                       colored
                       className="size-4 flex-shrink-0"
                     />
-                    <span className="font-medium text-sm">
+                    <span className="text-sm font-medium">
                       {entry.entityName ?? fallbackEntityLabel}
                     </span>
                   </>
@@ -373,13 +375,13 @@ export function AuditLogEntryComponent({
                   <Description as="span">by System</Description>
                 )}
 
-                <span className="text-muted-foreground text-xs">
+                <span className="text-xs text-muted-foreground">
                   <HoverableTimestamp timestamp={entry.createdAt} />
                 </span>
               </Row>
 
               {hasChanges && (
-                <CollapsibleTrigger className="mt-1 flex min-h-11 items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground md:mt-2 md:min-h-0">
+                <CollapsibleTrigger className="mt-1 flex min-h-11 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground md:mt-2 md:min-h-0">
                   {isOpen ? (
                     <ChevronDown className="size-3" />
                   ) : (

@@ -4,7 +4,7 @@ import type {
   RecipeDepNode,
 } from "@cubby/schemas/recipe-dependency-graph";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
 import {
   useCallback,
@@ -14,8 +14,10 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
@@ -96,7 +98,6 @@ function Graph({
   edges: RecipeDepEdge[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
   // useId may contain ":" which is invalid in an SVG/CSS url() selector.
   const arrowId = useId().replace(/:/g, "");
   const dimensions = useContainerDimensions(containerRef, {
@@ -215,10 +216,11 @@ function Graph({
       className="relative h-[540px] w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
-        aria-hidden="true"
+        aria-label="Recipe dependency graph"
         width={dimensions.width}
         height={dimensions.height}
       >
+        <title>Recipe dependency graph</title>
         <defs>
           <marker
             id={arrowId}
@@ -234,7 +236,7 @@ function Graph({
         </defs>
 
         <g>
-          {simLinks.map((link, i) => {
+          {simLinks.map((link) => {
             const source = resolvedGraphNode(link.source);
             const target = resolvedGraphNode(link.target);
             if (!source || !target || source.x == null || target.x == null)
@@ -250,8 +252,7 @@ function Graph({
               hovered && (source.id === hovered.id || target.id === hovered.id);
             return (
               <line
-                // biome-ignore lint/suspicious/noArrayIndexKey: d3 links lack stable ids
-                key={i}
+                key={`${source.id}-${target.id}`}
                 x1={source.x}
                 y1={source.y}
                 x2={tx}
@@ -271,32 +272,31 @@ function Graph({
             const adjacent = isAdjacent(node);
             const isHovered = hovered?.id === node.id;
             return (
-              // biome-ignore lint/a11y/noStaticElementInteractions: D3 graph node interaction
-              <g
+              <Link
                 key={node.id}
-                transform={`translate(${node.x ?? 0}, ${node.y ?? 0})`}
+                to="/recipes/$shortcode"
+                params={{ shortcode: node.id }}
                 className="cursor-pointer"
+                aria-label={`Open recipe ${node.name}`}
                 onMouseEnter={() => setHovered(node)}
                 onMouseLeave={() => setHovered(null)}
-                onClick={() =>
-                  navigate({
-                    to: "/recipes/$shortcode",
-                    params: { shortcode: node.id },
-                  })
-                }
+                onFocus={() => setHovered(node)}
+                onBlur={() => setHovered(null)}
               >
-                <circle
-                  r={r}
-                  fill={isHovered ? "var(--primary)" : colorFor(node)}
-                  stroke={
-                    node.external ? "var(--muted-foreground)" : "var(--card)"
-                  }
-                  strokeWidth={2}
-                  strokeDasharray={node.external ? "3 2" : undefined}
-                  opacity={adjacent ? 1 : 0.2}
-                  className="transition-opacity"
-                />
-              </g>
+                <g transform={`translate(${node.x ?? 0}, ${node.y ?? 0})`}>
+                  <circle
+                    r={r}
+                    fill={isHovered ? "var(--primary)" : colorFor(node)}
+                    stroke={
+                      node.external ? "var(--muted-foreground)" : "var(--card)"
+                    }
+                    strokeWidth={2}
+                    strokeDasharray={node.external ? "3 2" : undefined}
+                    opacity={adjacent ? 1 : 0.2}
+                    className="transition-opacity"
+                  />
+                </g>
+              </Link>
             );
           })}
         </g>
@@ -305,11 +305,11 @@ function Graph({
       {hovered && (
         <VizTooltip className="top-3 left-3 max-w-xs border">
           <div className="font-medium">{hovered.name}</div>
-          <div className="mt-1 text-muted-foreground text-xs">
+          <div className="mt-1 text-xs text-muted-foreground">
             {hovered.cookbookName ?? "No cookbook"}
             {hovered.external ? " · external" : ""}
           </div>
-          <div className="mt-1 text-muted-foreground text-xs">
+          <div className="mt-1 text-xs text-muted-foreground">
             Used by {inDegree.get(hovered.id) ?? 0} recipe
             {(inDegree.get(hovered.id) ?? 0) === 1 ? "" : "s"} · click to open
           </div>

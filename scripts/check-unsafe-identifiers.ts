@@ -48,11 +48,7 @@ const isNode = (value: unknown): value is AstNode =>
   typeof value === "object" && value !== null && "type" in value;
 const children = (node: AstNode): AstNode[] =>
   Object.values(node).flatMap((value) =>
-    Array.isArray(value)
-      ? value.filter(isNode)
-      : isNode(value)
-        ? [value]
-        : [],
+    Array.isArray(value) ? value.filter(isNode) : isNode(value) ? [value] : [],
   );
 const walk = (node: AstNode, visit: (node: AstNode) => void): void => {
   visit(node);
@@ -120,7 +116,10 @@ const workspaceExports = (): Map<string, string> => {
     };
     if (!manifest.name) continue;
     if (typeof manifest.exports === "string") {
-      result.set(manifest.name, resolve(dirname(packageFile), manifest.exports));
+      result.set(
+        manifest.name,
+        resolve(dirname(packageFile), manifest.exports),
+      );
     } else if (manifest.exports) {
       for (const [key, target] of Object.entries(manifest.exports)) {
         result.set(
@@ -159,7 +158,10 @@ class Provenance {
       constants: new Map(),
     };
     walk(unit.program, (node) => {
-      if (node.type === "TSTypeAliasDeclaration" || node.type === "TSInterfaceDeclaration") {
+      if (
+        node.type === "TSTypeAliasDeclaration" ||
+        node.type === "TSInterfaceDeclaration"
+      ) {
         const name = nameOf(isNode(node.id) ? node.id : undefined);
         if (name) info.types.set(name, node);
       }
@@ -174,7 +176,9 @@ class Provenance {
       if (node.type === "ImportDeclaration") {
         const source = literal(node.source);
         if (!source) return;
-        const specifiers = Array.isArray(node.specifiers) ? node.specifiers : [];
+        const specifiers = Array.isArray(node.specifiers)
+          ? node.specifiers
+          : [];
         for (const item of specifiers) {
           if (!isNode(item)) continue;
           const local = nameOf(isNode(item.local) ? item.local : undefined);
@@ -182,7 +186,9 @@ class Provenance {
           if (item.type === "ImportNamespaceSpecifier") {
             info.imports.set(local, { source, namespace: true });
           } else {
-            const imported = nameOf(isNode(item.imported) ? item.imported : undefined);
+            const imported = nameOf(
+              isNode(item.imported) ? item.imported : undefined,
+            );
             if (imported) info.imports.set(local, { source, name: imported });
           }
         }
@@ -193,12 +199,17 @@ class Provenance {
       }
       if (node.type === "ExportNamedDeclaration" && literal(node.source)) {
         const source = literal(node.source);
-        const specifiers = Array.isArray(node.specifiers) ? node.specifiers : [];
+        const specifiers = Array.isArray(node.specifiers)
+          ? node.specifiers
+          : [];
         for (const item of specifiers) {
           if (!isNode(item) || !source) continue;
           const local = nameOf(isNode(item.local) ? item.local : undefined);
-          const exported = nameOf(isNode(item.exported) ? item.exported : undefined);
-          if (local && exported) info.reexports.set(exported, { source, name: local });
+          const exported = nameOf(
+            isNode(item.exported) ? item.exported : undefined,
+          );
+          if (local && exported)
+            info.reexports.set(exported, { source, name: local });
         }
       }
     });
@@ -210,7 +221,8 @@ class Provenance {
         const name = nameOf(isNode(node.id) ? node.id : undefined);
         const init = isNode(node.init) ? node.init : undefined;
         if (!name || !init || info.constants.has(name)) return;
-        const value = literal(init) ??
+        const value =
+          literal(init) ??
           (nameOf(init) ? info.constants.get(nameOf(init) ?? "") : undefined);
         if (value !== undefined) {
           info.constants.set(name, value);
@@ -222,8 +234,12 @@ class Provenance {
   }
 
   constant(file: string, node: AstNode | undefined): string | undefined {
-    return literal(node) ??
-      (nameOf(node) ? this.modules.get(file)?.constants.get(nameOf(node) ?? "") : undefined);
+    return (
+      literal(node) ??
+      (nameOf(node)
+        ? this.modules.get(file)?.constants.get(nameOf(node) ?? "")
+        : undefined)
+    );
   }
 
   private candidate(path: string): string | undefined {
@@ -244,7 +260,8 @@ class Provenance {
     if (source.startsWith("~/")) {
       return this.candidate(resolve(root, "apps/web/src", source.slice(2)));
     }
-    if (source.startsWith(".")) return this.candidate(resolve(dirname(file), source));
+    if (source.startsWith("."))
+      return this.candidate(resolve(dirname(file), source));
     return undefined;
   }
 
@@ -299,17 +316,29 @@ class Provenance {
     return undefined;
   }
 
-  private schemaType(node: AstNode | undefined, file: string, schemaTypes: ReadonlySet<string>): boolean {
+  private schemaType(
+    node: AstNode | undefined,
+    file: string,
+    schemaTypes: ReadonlySet<string>,
+  ): boolean {
     if (!node) return false;
     if (node.type === "TSTypeQuery") {
-      const ref = this.symbol(file, qualified(isNode(node.exprName) ? node.exprName : undefined), "value");
+      const ref = this.symbol(
+        file,
+        qualified(isNode(node.exprName) ? node.exprName : undefined),
+        "value",
+      );
       return ref ? this.value(ref.file, ref.name) : false;
     }
     if (node.type === "TSTypeReference") {
-      const name = qualified(isNode(node.typeName) ? node.typeName : undefined).at(-1);
+      const name = qualified(
+        isNode(node.typeName) ? node.typeName : undefined,
+      ).at(-1);
       if (name && schemaTypes.has(name)) return true;
     }
-    return children(node).some((child) => this.schemaType(child, file, schemaTypes));
+    return children(node).some((child) =>
+      this.schemaType(child, file, schemaTypes),
+    );
   }
 
   brandedType(
@@ -319,21 +348,27 @@ class Provenance {
     schemaTypes: ReadonlySet<string> = new Set(),
   ): boolean {
     if (!node) return false;
-    if (node.type === "TSTypeOperator" && node.operator === "keyof") return false;
+    if (node.type === "TSTypeOperator" && node.operator === "keyof")
+      return false;
     if (node.type === "TSTypeReference") {
-      const parts = qualified(isNode(node.typeName) ? node.typeName : undefined);
+      const parts = qualified(
+        isNode(node.typeName) ? node.typeName : undefined,
+      );
       const tail = parts.at(-1);
       if (tail === "$brand") return true;
-      const args = isNode(node.typeArguments) && Array.isArray(node.typeArguments.params)
-        ? node.typeArguments.params.filter(isNode)
-        : [];
+      const args =
+        isNode(node.typeArguments) && Array.isArray(node.typeArguments.params)
+          ? node.typeArguments.params.filter(isNode)
+          : [];
       if ((tail === "infer" || tail === "output") && parts[0] === "z") {
         return args.some((arg) => this.schemaType(arg, file, schemaTypes));
       }
       if (tail && (generics.has(tail) || schemaTypes.has(tail))) return true;
       const ref = this.symbol(file, parts, "type");
       if (ref && this.type(ref.file, ref.name)) return true;
-      return args.some((arg) => this.brandedType(arg, file, generics, schemaTypes));
+      return args.some((arg) =>
+        this.brandedType(arg, file, generics, schemaTypes),
+      );
     }
     if (node.type === "TSInterfaceHeritage") {
       const ref = this.symbol(
@@ -364,7 +399,8 @@ class Provenance {
   private expression(node: AstNode | undefined, file: string): boolean {
     if (!node) return false;
     if (node.type === "MemberExpression") {
-      const property = nameOf(isNode(node.property) ? node.property : undefined) ??
+      const property =
+        nameOf(isNode(node.property) ? node.property : undefined) ??
         this.constant(file, isNode(node.property) ? node.property : undefined);
       if (property === "brand") return true;
     }
@@ -395,32 +431,48 @@ const expressionNames = (
 ): string[] => {
   if (!node) return [];
   if (node.type === "MemberExpression") {
-    const property = nameOf(isNode(node.property) ? node.property : undefined) ??
+    const property =
+      nameOf(isNode(node.property) ? node.property : undefined) ??
       constant(isNode(node.property) ? node.property : undefined);
     return [
       ...(property ? [property] : []),
-      ...expressionNames(isNode(node.object) ? node.object : undefined, constant),
+      ...expressionNames(
+        isNode(node.object) ? node.object : undefined,
+        constant,
+      ),
     ];
   }
   const name = nameOf(node);
   return name ? [name] : [];
 };
 
-const scanUnit = (unit: Unit, provenance: Provenance): IdentifierViolation[] => {
+const scanUnit = (
+  unit: Unit,
+  provenance: Provenance,
+): IdentifierViolation[] => {
   const { file, source, program } = unit;
   const violations: IdentifierViolation[] = [];
   const aliases = new Set<string>();
-  const constant = (node: AstNode | undefined) => provenance.constant(file, node);
+  const constant = (node: AstNode | undefined) =>
+    provenance.constant(file, node);
   let changed = true;
   while (changed) {
     changed = false;
     walk(program, (node) => {
       if (node.type === "ImportDeclaration") {
-        for (const item of Array.isArray(node.specifiers) ? node.specifiers : []) {
+        for (const item of Array.isArray(node.specifiers)
+          ? node.specifiers
+          : []) {
           if (!isNode(item)) continue;
-          const imported = nameOf(isNode(item.imported) ? item.imported : undefined);
+          const imported = nameOf(
+            isNode(item.imported) ? item.imported : undefined,
+          );
           const local = nameOf(isNode(item.local) ? item.local : undefined);
-          if (local && (unsafeName(imported) || unsafeName(local)) && !aliases.has(local)) {
+          if (
+            local &&
+            (unsafeName(imported) || unsafeName(local)) &&
+            !aliases.has(local)
+          ) {
             aliases.add(local);
             changed = true;
           }
@@ -431,16 +483,25 @@ const scanUnit = (unit: Unit, provenance: Provenance): IdentifierViolation[] => 
       const init = isNode(node.init) ? node.init : undefined;
       const names = expressionNames(init, constant);
       const local = nameOf(id);
-      if (local && names.some((name) => unsafeName(name) || aliases.has(name)) && !aliases.has(local)) {
+      if (
+        local &&
+        names.some((name) => unsafeName(name) || aliases.has(name)) &&
+        !aliases.has(local)
+      ) {
         aliases.add(local);
         changed = true;
       }
       if (id?.type !== "ObjectPattern") return;
-      for (const property of Array.isArray(id.properties) ? id.properties : []) {
+      for (const property of Array.isArray(id.properties)
+        ? id.properties
+        : []) {
         if (!isNode(property) || property.type !== "Property") continue;
-        const key = nameOf(isNode(property.key) ? property.key : undefined) ??
+        const key =
+          nameOf(isNode(property.key) ? property.key : undefined) ??
           constant(isNode(property.key) ? property.key : undefined);
-        const target = nameOf(isNode(property.value) ? property.value : undefined);
+        const target = nameOf(
+          isNode(property.value) ? property.value : undefined,
+        );
         if (target && unsafeName(key) && !aliases.has(target)) {
           aliases.add(target);
           changed = true;
@@ -449,93 +510,238 @@ const scanUnit = (unit: Unit, provenance: Provenance): IdentifierViolation[] => 
     });
   }
 
-  const scopes: Array<{ start: number; end: number; brands: Set<string>; schemas: Set<string> }> = [];
+  const scopes: Array<{
+    start: number;
+    end: number;
+    brands: Set<string>;
+    schemas: Set<string>;
+  }> = [];
   walk(program, (node) => {
-    if (!["FunctionDeclaration", "FunctionExpression", "ArrowFunctionExpression"].includes(node.type)) return;
+    if (
+      ![
+        "FunctionDeclaration",
+        "FunctionExpression",
+        "ArrowFunctionExpression",
+      ].includes(node.type)
+    )
+      return;
     const brands = new Set<string>();
     const schemas = new Set<string>();
-    const typeParameters = isNode(node.typeParameters) && Array.isArray(node.typeParameters.params)
-      ? node.typeParameters.params
-      : [];
+    const typeParameters =
+      isNode(node.typeParameters) && Array.isArray(node.typeParameters.params)
+        ? node.typeParameters.params
+        : [];
     for (const parameter of typeParameters) {
       if (!isNode(parameter)) continue;
       const name = nameOf(isNode(parameter.name) ? parameter.name : undefined);
-      if (name && provenance.brandedType(isNode(parameter.constraint) ? parameter.constraint : undefined, file)) brands.add(name);
+      if (
+        name &&
+        provenance.brandedType(
+          isNode(parameter.constraint) ? parameter.constraint : undefined,
+          file,
+        )
+      )
+        brands.add(name);
     }
     for (const parameter of Array.isArray(node.params) ? node.params : []) {
       if (!isNode(parameter)) continue;
       walk(parameter, (part) => {
         if (part.type !== "TSTypeReference") return;
-        const schema = qualified(isNode(part.typeName) ? part.typeName : undefined).at(-1);
+        const schema = qualified(
+          isNode(part.typeName) ? part.typeName : undefined,
+        ).at(-1);
         if (schema !== "ZodType" && schema !== "ZodSchema") return;
-        const args = isNode(part.typeArguments) && Array.isArray(part.typeArguments.params)
-          ? part.typeArguments.params
-          : [];
+        const args =
+          isNode(part.typeArguments) && Array.isArray(part.typeArguments.params)
+            ? part.typeArguments.params
+            : [];
         const output = isNode(args[0]) ? args[0] : undefined;
-        const outputName = qualified(isNode(output?.typeName) ? output.typeName : output).at(-1);
+        const outputName = qualified(
+          isNode(output?.typeName) ? output.typeName : output,
+        ).at(-1);
         if (outputName) schemas.add(outputName);
       });
     }
-    if (brands.size || schemas.size) scopes.push({ ...rangeOf(node), brands, schemas });
+    if (brands.size || schemas.size)
+      scopes.push({ ...rangeOf(node), brands, schemas });
   });
 
   const seen = new Set<string>();
-  const add = (kind: IdentifierViolationKind, node: AstNode, message: string) => {
+  const add = (
+    kind: IdentifierViolationKind,
+    node: AstNode,
+    message: string,
+  ) => {
     const { start, end } = rangeOf(node);
     const key = `${kind}:${start}:${end}`;
     if (seen.has(key)) return;
     seen.add(key);
-    violations.push({ file, kind, message, start, end, ...positionAt(source, start) });
+    violations.push({
+      file,
+      kind,
+      message,
+      start,
+      end,
+      ...positionAt(source, start),
+    });
   };
   walk(program, (node) => {
-    if (node.type === "ImportDeclaration" && literal(node.source) === TESTING_MODULE && !isTestPath(file)) {
-      add("unsafe-helper-import", node, `imports test-only identifier helpers from ${TESTING_MODULE}`);
+    if (
+      node.type === "ImportDeclaration" &&
+      literal(node.source) === TESTING_MODULE &&
+      !isTestPath(file)
+    ) {
+      add(
+        "unsafe-helper-import",
+        node,
+        `imports test-only identifier helpers from ${TESTING_MODULE}`,
+      );
     }
-    if ((node.type === "ExportNamedDeclaration" || node.type === "ExportAllDeclaration") && literal(node.source) === TESTING_MODULE && !isTestPath(file)) {
-      add("unsafe-helper-import", node, `re-exports test-only identifier helpers from ${TESTING_MODULE}`);
+    if (
+      (node.type === "ExportNamedDeclaration" ||
+        node.type === "ExportAllDeclaration") &&
+      literal(node.source) === TESTING_MODULE &&
+      !isTestPath(file)
+    ) {
+      add(
+        "unsafe-helper-import",
+        node,
+        `re-exports test-only identifier helpers from ${TESTING_MODULE}`,
+      );
     }
-    if (node.type === "ImportDeclaration" || node.type === "ExportNamedDeclaration") {
-      for (const item of Array.isArray(node.specifiers) ? node.specifiers : []) {
+    if (
+      node.type === "ImportDeclaration" ||
+      node.type === "ExportNamedDeclaration"
+    ) {
+      for (const item of Array.isArray(node.specifiers)
+        ? node.specifiers
+        : []) {
         if (!isNode(item)) continue;
-        const imported = nameOf(isNode(item.imported) ? item.imported : isNode(item.local) ? item.local : undefined);
-        const local = nameOf(isNode(item.local) ? item.local : isNode(item.exported) ? item.exported : undefined);
-        const forbidden = unsafeName(imported) ? imported : unsafeName(local) ? local : undefined;
-        if (forbidden) add("unsafe-helper-import", item, `imports or re-exports forbidden unsafe identifier helper ${forbidden}`);
+        const imported = nameOf(
+          isNode(item.imported)
+            ? item.imported
+            : isNode(item.local)
+              ? item.local
+              : undefined,
+        );
+        const local = nameOf(
+          isNode(item.local)
+            ? item.local
+            : isNode(item.exported)
+              ? item.exported
+              : undefined,
+        );
+        const forbidden = unsafeName(imported)
+          ? imported
+          : unsafeName(local)
+            ? local
+            : undefined;
+        if (forbidden)
+          add(
+            "unsafe-helper-import",
+            item,
+            `imports or re-exports forbidden unsafe identifier helper ${forbidden}`,
+          );
       }
     }
-    if (node.type === "ImportExpression" && constant(isNode(node.source) ? node.source : undefined) === TESTING_MODULE && !isTestPath(file)) {
-      add("unsafe-helper-import", node, `dynamically imports test-only identifier helpers from ${TESTING_MODULE}`);
+    if (
+      node.type === "ImportExpression" &&
+      constant(isNode(node.source) ? node.source : undefined) ===
+        TESTING_MODULE &&
+      !isTestPath(file)
+    ) {
+      add(
+        "unsafe-helper-import",
+        node,
+        `dynamically imports test-only identifier helpers from ${TESTING_MODULE}`,
+      );
     }
-    if (["FunctionDeclaration", "ClassDeclaration", "VariableDeclarator"].includes(node.type)) {
+    if (
+      [
+        "FunctionDeclaration",
+        "ClassDeclaration",
+        "VariableDeclarator",
+      ].includes(node.type)
+    ) {
       const declared = nameOf(isNode(node.id) ? node.id : undefined);
-      if (unsafeName(declared)) add("unsafe-helper-declaration", node, `declares forbidden unsafe identifier helper ${declared}`);
+      if (unsafeName(declared))
+        add(
+          "unsafe-helper-declaration",
+          node,
+          `declares forbidden unsafe identifier helper ${declared}`,
+        );
     }
-    if (["Property", "MethodDefinition", "PropertyDefinition"].includes(node.type)) {
-      const key = nameOf(isNode(node.key) ? node.key : undefined) ?? constant(isNode(node.key) ? node.key : undefined);
-      if (unsafeName(key)) add("unsafe-helper-declaration", node, `declares forbidden unsafe identifier helper ${key}`);
+    if (
+      ["Property", "MethodDefinition", "PropertyDefinition"].includes(node.type)
+    ) {
+      const key =
+        nameOf(isNode(node.key) ? node.key : undefined) ??
+        constant(isNode(node.key) ? node.key : undefined);
+      if (unsafeName(key))
+        add(
+          "unsafe-helper-declaration",
+          node,
+          `declares forbidden unsafe identifier helper ${key}`,
+        );
     }
     if (node.type === "CallExpression" || node.type === "NewExpression") {
-      const called = expressionNames(isNode(node.callee) ? node.callee : undefined, constant);
+      const called = expressionNames(
+        isNode(node.callee) ? node.callee : undefined,
+        constant,
+      );
       const args = Array.isArray(node.arguments) ? node.arguments : [];
-      if (called.length === 1 && called[0] === "require" && constant(isNode(args[0]) ? args[0] : undefined) === TESTING_MODULE && !isTestPath(file)) {
-        add("unsafe-helper-import", node, `requires test-only identifier helpers from ${TESTING_MODULE}`);
+      if (
+        called.length === 1 &&
+        called[0] === "require" &&
+        constant(isNode(args[0]) ? args[0] : undefined) === TESTING_MODULE &&
+        !isTestPath(file)
+      ) {
+        add(
+          "unsafe-helper-import",
+          node,
+          `requires test-only identifier helpers from ${TESTING_MODULE}`,
+        );
       }
-      const forbidden = called.find((name) => unsafeName(name) || aliases.has(name));
-      if (forbidden) add("unsafe-helper-call", node, `calls forbidden unsafe identifier helper ${forbidden}`);
+      const forbidden = called.find(
+        (name) => unsafeName(name) || aliases.has(name),
+      );
+      if (forbidden)
+        add(
+          "unsafe-helper-call",
+          node,
+          `calls forbidden unsafe identifier helper ${forbidden}`,
+        );
     }
     if (node.type === "TSAsExpression" || node.type === "TSTypeAssertion") {
       const { start, end } = rangeOf(node);
-      const scope = scopes.find((item) => start >= item.start && end <= item.end);
-      if (provenance.brandedType(isNode(node.typeAnnotation) ? node.typeAnnotation : undefined, file, scope?.brands, scope?.schemas)) {
-        add("branded-assertion", node, "asserts a value as a branded identifier type");
+      const scope = scopes.find(
+        (item) => start >= item.start && end <= item.end,
+      );
+      if (
+        provenance.brandedType(
+          isNode(node.typeAnnotation) ? node.typeAnnotation : undefined,
+          file,
+          scope?.brands,
+          scope?.schemas,
+        )
+      ) {
+        add(
+          "branded-assertion",
+          node,
+          "asserts a value as a branded identifier type",
+        );
       }
     }
   });
-  return violations.sort((a, b) => a.start - b.start || a.kind.localeCompare(b.kind));
+  return violations.sort(
+    (a, b) => a.start - b.start || a.kind.localeCompare(b.kind),
+  );
 };
 
 /** Scan in-memory TypeScript sources with cross-file symbol provenance. */
-export const scanSources = (sources: readonly Readonly<{ file: string; source: string }>[]) => {
+export const scanSources = (
+  sources: readonly Readonly<{ file: string; source: string }>[],
+) => {
   const units = sources.map(({ file, source }) => parseUnit(file, source));
   const provenance = new Provenance(units);
   return units.flatMap((unit) => scanUnit(unit, provenance));
@@ -545,12 +751,14 @@ export const scanSource = (file: string, source: string) =>
 
 export type ScanOptions = Readonly<{ includeTests?: boolean }>;
 const isTestPath = (path: string): boolean =>
-  /(?:^|[\\/])(?:tests?|__fixtures__|test-support|tooling)(?:[\\/]|$)/u.test(path) ||
-  /\.(?:test|spec|fixtures)\.[cm]?[jt]sx?$/u.test(path);
+  /(?:^|[\\/])(?:tests?|__fixtures__|test-support|tooling)(?:[\\/]|$)/u.test(
+    path,
+  ) || /\.(?:test|spec|fixtures)\.[cm]?[jt]sx?$/u.test(path);
 const sourceFilesUnder = (path: string, options: ScanOptions): string[] => {
   const stat = statSync(path);
   if (stat.isFile()) {
-    return SOURCE_EXTENSIONS.has(extname(path)) && !path.endsWith(".d.ts") &&
+    return SOURCE_EXTENSIONS.has(extname(path)) &&
+      !path.endsWith(".d.ts") &&
       (options.includeTests === true || !isTestPath(path))
       ? [path]
       : [];
@@ -563,15 +771,24 @@ const sourceFilesUnder = (path: string, options: ScanOptions): string[] => {
       : sourceFilesUnder(child, options);
   });
 };
-export const scanPaths = (paths: readonly string[], options: ScanOptions = {}) => {
-  const files = paths.flatMap((path) => sourceFilesUnder(resolve(path), options)).sort();
-  return scanSources(files.map((file) => ({ file, source: readFileSync(file, "utf8") })));
+export const scanPaths = (
+  paths: readonly string[],
+  options: ScanOptions = {},
+) => {
+  const files = paths
+    .flatMap((path) => sourceFilesUnder(resolve(path), options))
+    .sort();
+  return scanSources(
+    files.map((file) => ({ file, source: readFileSync(file, "utf8") })),
+  );
 };
 
 const main = (): void => {
   const args = process.argv.slice(2);
   if (args.includes("--help")) {
-    console.log("Usage: node scripts/check-unsafe-identifiers.ts [file-or-directory ...]");
+    console.log(
+      "Usage: node scripts/check-unsafe-identifiers.ts [file-or-directory ...]",
+    );
     return;
   }
   const paths = args.filter((arg) => !arg.startsWith("--"));
@@ -579,11 +796,17 @@ const main = (): void => {
     includeTests: args.includes("--include-tests"),
   });
   for (const violation of violations) {
-    console.error(`${relative(root, violation.file) || violation.file}:${violation.line}:${violation.column} ${violation.message}`);
+    console.error(
+      `${relative(root, violation.file) || violation.file}:${violation.line}:${violation.column} ${violation.message}`,
+    );
   }
   if (violations.length) {
     console.error(`Found ${violations.length} unsafe identifier violation(s).`);
     process.exitCode = 1;
   }
 };
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  main();

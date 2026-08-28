@@ -1,6 +1,8 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
+
 import { Stack } from "~/components/layout";
+
 import { docSections } from "./docs-registry";
 
 export const DOCS_NAV_LINK_CLASS =
@@ -20,7 +22,7 @@ export function DocsLayout() {
         <Stack gap="md">
           {Object.entries(groups).map(([group, sections]) => (
             <Stack key={group} gap="tight">
-              <div className="eyebrow px-2">{group}</div>
+              <div className="px-2 eyebrow">{group}</div>
               {sections.map((section) => (
                 <Link
                   key={section.slug}

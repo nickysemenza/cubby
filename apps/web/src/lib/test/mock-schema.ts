@@ -61,10 +61,10 @@ export function mock<T extends z.ZodType>(
   return schema.parse(merged);
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: walking Zod's internal def shape.
+// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
 type AnyDef = { type: string; [k: string]: any };
 const defOf = (s: z.ZodType): AnyDef =>
-  // biome-ignore lint/suspicious/noExplicitAny: internal access, see header.
+  // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
   (s as any)._zod.def;
 
 /** Read a `{ mock }` string hint off a schema's metadata, if present. */
@@ -92,9 +92,9 @@ const mockValueHint = (s: z.ZodType): unknown => s.meta?.()?.mockValue;
 /** Resolve a faker dot-path like "food.ingredient" and call it (preserving `this`). */
 function callFakerPath(path: string): unknown {
   const parts = path.split(".");
-  // biome-ignore lint/suspicious/noExplicitAny: faker is a deep dynamic namespace.
+  // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
   let ctx: any = faker;
-  // biome-ignore lint/suspicious/noExplicitAny: ditto.
+  // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
   let parent: any = faker;
   for (const p of parts) {
     parent = ctx;
@@ -104,7 +104,7 @@ function callFakerPath(path: string): unknown {
   return typeof ctx === "function" ? ctx.call(parent) : ctx;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: checks are Zod-internal.
+// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
 const readChecks = (checks: any[] | undefined) => {
   let intFmt = false;
   let minLen: number | undefined;
@@ -400,7 +400,7 @@ function gen(
       // schema to apply the transform. Fall back to the raw input on failure.
       const input = recurse(def.in);
       try {
-        // biome-ignore lint/suspicious/noExplicitAny: parse to apply transform.
+        // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
         return (schema as any).parse(input);
       } catch {
         return input;
@@ -413,7 +413,7 @@ function gen(
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: structural runtime check.
+// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
 const isPlain = (v: any): v is Record<string, unknown> =>
   typeof v === "object" &&
   v !== null &&
@@ -421,7 +421,7 @@ const isPlain = (v: any): v is Record<string, unknown> =>
 
 /** Deep-merge overrides onto a generated base. Plain objects recurse; arrays,
  * dates, class instances and primitives replace wholesale. */
-// biome-ignore lint/suspicious/noExplicitAny: merge is structural by nature.
+// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
 function deepMerge(base: any, over: any): any {
   if (over === undefined) return base;
   if (!isPlain(over) || !isPlain(base)) return over;

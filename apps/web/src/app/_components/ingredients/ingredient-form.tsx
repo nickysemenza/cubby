@@ -9,11 +9,13 @@ import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
 import { type Control, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { entityListFor } from "~/entities/entity-list.functions";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import {
   buildUpdateObject,
@@ -93,18 +95,18 @@ function DuplicateNameHint({
 }
 
 // Props for create mode
-interface CreateIngredientFormProps
-  extends CreateModeProps<z.infer<typeof ingredientBase>> {
+interface CreateIngredientFormProps extends CreateModeProps<
+  z.infer<typeof ingredientBase>
+> {
   ingredient?: never;
   initialName?: string;
 }
 
 // Props for edit mode
-interface EditIngredientFormProps
-  extends EditModeProps<
-    IngredientUpdateInput,
-    IngredientWithRecipesAndProductOut
-  > {
+interface EditIngredientFormProps extends EditModeProps<
+  IngredientUpdateInput,
+  IngredientWithRecipesAndProductOut
+> {
   entity: IngredientWithRecipesAndProductOut;
 }
 

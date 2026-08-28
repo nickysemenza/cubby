@@ -1,5 +1,6 @@
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
+
 import {
   type CrossTabFooterRow,
   CrossTabTable,
@@ -7,6 +8,7 @@ import {
 import type { CrossTabColumn } from "~/components/matrix/group-columns";
 import { EMPTY_MARK, totalCell } from "~/components/matrix/matrix-chrome";
 import { formatCurrencyRange } from "~/lib/format-range";
+
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildIngredientMatrix,
@@ -59,12 +61,10 @@ export function IngredientComponentGrid({
     return {
       // Column key is the component's recipe id — the same key `byComponent`
       // and `columnTotals` are keyed by, so cells look up without a mapping.
-      columns: cols.map(
-        (node): CrossTabColumn<RecipeTreeNode> => ({
-          key: node.recipe.id,
-          data: node,
-        }),
-      ),
+      columns: cols.map((node): CrossTabColumn<RecipeTreeNode> => ({
+        key: node.recipe.id,
+        data: node,
+      })),
       rows: matrix,
       columnTotals: colTotals,
       grandTotal: sumBy(matrix, (r) => r.total),
@@ -136,7 +136,7 @@ export function IngredientComponentGrid({
               </EntityPreviewLink>
             </div>
             {makes && (
-              <div className="font-normal text-2xs text-muted-foreground normal-case tracking-normal">
+              <div className="text-2xs font-normal tracking-normal text-muted-foreground normal-case">
                 makes {makes}
               </div>
             )}

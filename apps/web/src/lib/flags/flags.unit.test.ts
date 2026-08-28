@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { FLAGS, isDevBuildOnlyFlag } from "./flags";
 
 describe("developer flags", () => {

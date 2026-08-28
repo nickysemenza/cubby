@@ -7,11 +7,13 @@ import {
 import type { UserId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
+
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
+
 import { createAgentToolset, type ToolCallRecord } from "./mcp-bridge";
 
 const SYSTEM_PROMPT = `You are Cubby's inventory assistant. Cubby is a personal home-inventory app that tracks products, inventory items, locations, recipes, and ingredients.

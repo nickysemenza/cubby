@@ -1,4 +1,5 @@
 import { getShortcodeUrl } from "@cubby/shared";
+
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import {
@@ -9,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+
 import type { LabelItem } from "./sheet-layouts";
 
 export function PtouchPreview({ items }: { items: LabelItem[] }) {

@@ -1,5 +1,6 @@
 import { parse_ingredient } from "@cubby/recipebridge";
 import { describe, expect, it } from "vitest";
+
 import { wasm } from "~/lib/wasm";
 
 /**

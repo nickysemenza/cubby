@@ -1,11 +1,11 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { eq, inArray } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -13,6 +13,7 @@ import {
   productImage,
   purchaseImage,
 } from "~/server/db/schema";
+
 import {
   clearDataException,
   findProductExternalIdCollisions,
@@ -411,6 +412,7 @@ describe("computed purchase and product data quality", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     const quality = await setDataException(

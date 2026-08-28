@@ -41,6 +41,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
@@ -70,6 +71,7 @@ import { problems } from "~/lib/problems.functions";
 import { search } from "~/lib/search.functions";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
+
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";
 import {
@@ -399,7 +401,7 @@ function referentialLivenessGroup(v: ReferentialLivenessViolation): string {
 
 function edgeKeyDetail(edgeKey: string): ReactNode {
   return (
-    <div key="edge" className="font-mono text-muted-foreground text-xs">
+    <div key="edge" className="font-mono text-xs text-muted-foreground">
       {edgeKey}
     </div>
   );
@@ -411,7 +413,7 @@ function sourceDetail(sourceTable: string, sourceId: string): ReactNode {
       key="source"
       align="center"
       gap="xs"
-      className="text-muted-foreground text-sm"
+      className="text-sm text-muted-foreground"
     >
       Source{" "}
       <CodeChip>
@@ -437,7 +439,7 @@ function referentialTargetBadge(v: ReferentialLivenessViolation): ReactNode {
       title={v.targetId}
       // Free-form identifier, not a categorical tag — opt out of the
       // mono-uppercase stamp (matches the location/vendor badge idiom).
-      className="flex items-center gap-1 font-sans normal-case tracking-normal"
+      className="flex items-center gap-1 font-sans tracking-normal normal-case"
     >
       <EntityIcon entity={v.targetEntity} colored className="size-3" />
       {entityLabel(v.targetEntity)} {v.targetId.slice(0, 8)}
@@ -464,7 +466,7 @@ function missingBudgetDetail(item: ProjectAttentionItem): ReactNode[] {
   const { actualSpend, committedSpend } = item.facts;
   if (actualSpend <= 0 || committedSpend <= 0) return [];
   return [
-    <div key="split" className="text-muted-foreground text-sm">
+    <div key="split" className="text-sm text-muted-foreground">
       {formatCurrency(actualSpend, 0)} actual +{" "}
       {formatCurrency(committedSpend, 0)} committed
     </div>,
@@ -619,7 +621,7 @@ function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
         ...item.islands.map((island, i) => (
           <div
             key={island.exampleUnit}
-            className="text-muted-foreground text-sm"
+            className="text-sm text-muted-foreground"
           >
             Group {i + 1}: {island.units.join(", ")}
           </div>
@@ -651,7 +653,7 @@ function shortcodeChips(
         <Badge
           key={id}
           variant="outline"
-          className="font-sans normal-case tracking-normal"
+          className="font-sans tracking-normal normal-case"
           render={<Link {...entityDetailLink(entity, id)} />}
         >
           {id}
@@ -737,7 +739,7 @@ function entityBadge(
       key={ref.id}
       variant="outline"
       // Free-form entity names — opt out of the mono-uppercase stamp.
-      className="flex items-center gap-1 font-sans normal-case tracking-normal hover:bg-accent"
+      className="flex items-center gap-1 font-sans tracking-normal normal-case hover:bg-accent"
       render={
         routed ? <Link {...entityDetailLink(entity, ref.id)} /> : <span />
       }
@@ -841,7 +843,7 @@ const DECLARED_SECTIONS = [
       badges: dupe.products.map((p) => entityBadge("product", p)),
       details: [
         ...dupe.products.map((p) => (
-          <div key={p.id} className="text-muted-foreground text-sm">
+          <div key={p.id} className="text-sm text-muted-foreground">
             {[
               p.name,
               p.gtins.length
@@ -1200,7 +1202,7 @@ const DECLARED_SECTIONS = [
           key="recount"
           at={loc.lastBulkInventory}
           label="recounted"
-          className="text-foreground text-sm"
+          className="text-sm text-foreground"
         />,
       ],
       route: entityDetailLink("location", loc.id),
@@ -1670,7 +1672,7 @@ const DECLARED_SECTIONS = [
         subtitle: purchaseSubtitle(purchase),
         details: hint
           ? [
-              <div key="hint" className="text-muted-foreground text-sm">
+              <div key="hint" className="text-sm text-muted-foreground">
                 {hint}
               </div>,
             ]
@@ -1758,7 +1760,7 @@ const DECLARED_SECTIONS = [
         // Name both days. "3 days apart" alone is a claim the reader can't
         // check without opening both records — exactly the work the card is
         // meant to save.
-        <div key="dates" className="text-muted-foreground text-sm">
+        <div key="dates" className="text-sm text-muted-foreground">
           {[
             item.expenseDate
               ? `Expense ${formatDateWithYear(item.expenseDate)}`
@@ -1864,7 +1866,7 @@ const DECLARED_SECTIONS = [
       details: [
         // The reasons in words. The raw enum slugs (`sum-mismatch`,
         // `kind-sign-violation`) were reaching the page verbatim.
-        <div key="reasons" className="text-destructive text-sm">
+        <div key="reasons" className="text-sm text-destructive">
           {item.reasons
             .map((reason) => ALLOCATION_DEFECT_LABEL[reason] ?? reason)
             .join("; ")}
@@ -1897,7 +1899,7 @@ const DECLARED_SECTIONS = [
       title: item.id,
       subtitle: `Stored ${humanize(item.field).toLowerCase()} no longer parses`,
       details: [
-        <div key="message" className="text-muted-foreground text-sm">
+        <div key="message" className="text-sm text-muted-foreground">
           {item.message}
         </div>,
       ],

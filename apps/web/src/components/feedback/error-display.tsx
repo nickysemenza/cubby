@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+
 import { Button } from "~/components/ui/button";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { getAppErrorDetails } from "~/lib/error-utils";

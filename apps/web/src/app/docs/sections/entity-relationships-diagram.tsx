@@ -127,10 +127,10 @@ export function EntityRelationshipsDiagram() {
     <svg
       viewBox="0 0 700 300"
       width="100%"
-      role="img"
       aria-label="Diagram of cubby's core entity relationships: Recipe contains Ingredient; Product fulfills Ingredient and links to USDA Food for nutrition; Inventory is a quantity of a Product stored in a Location; Locations nest within Locations."
       style={{ maxWidth: "100%", height: "auto" }}
     >
+      <title>Core Cubby entity relationships</title>
       <defs>
         <marker
           id={arrowId}

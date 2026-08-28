@@ -6,6 +6,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
 import {
   AgentAnswer,
   AgentSourceContent,
@@ -20,6 +21,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { pageTitle } from "~/lib/page-title";
 
 export const Route = createFileRoute("/_authenticated/ask")({
@@ -82,7 +84,7 @@ function AskPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="where's the orange spool of cable?"
-            autoFocus
+            ref={focusOnMount}
           />
           <Button
             type="submit"
@@ -104,7 +106,7 @@ function AskPage() {
 
         {!hasRun && (
           <Stack gap="sm">
-            <Row align="center" gap="snug" className="eyebrow px-1">
+            <Row align="center" gap="snug" className="px-1 eyebrow">
               <Sparkles className="size-3.5" />
               Try asking
             </Row>
@@ -158,15 +160,15 @@ function AskPage() {
               toolCalls={
                 toolCalls.length > 0 ? (
                   <details className="border border-border/50 px-2 py-2">
-                    <summary className="eyebrow cursor-pointer">
+                    <summary className="cursor-pointer eyebrow">
                       {toolCalls.length} tool call
                       {toolCalls.length === 1 ? "" : "s"}
                     </summary>
                     <Stack gap="xs" className="mt-2">
-                      {toolCalls.map((call, i) => (
+                      {toolCalls.map((call, index) => (
                         <Row
-                          // biome-ignore lint/suspicious/noArrayIndexKey: tool calls are an ordered log with no stable id
-                          key={i}
+                          // oxlint-disable-next-line react/no-array-index-key -- Tool calls are an append-only ordered log with no stable id, and duplicate calls are valid.
+                          key={index}
                           align="center"
                           gap="sm"
                           className="font-mono text-xs"

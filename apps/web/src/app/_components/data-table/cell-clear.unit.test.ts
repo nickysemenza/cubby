@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+
 import { resolveCellClearTarget } from "./cell-clear";
 import type { CellSelection } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";

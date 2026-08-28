@@ -24,7 +24,7 @@ export function SectionHeading({
   const label = sectionName || `Part ${index + 1}`;
   if (variant === "title") {
     return (
-      <h3 className={cn("mb-4 font-semibold text-xl", className)}>{label}</h3>
+      <h3 className={cn("mb-4 text-xl font-semibold", className)}>{label}</h3>
     );
   }
   return <Eyebrow className={className}>{label}</Eyebrow>;

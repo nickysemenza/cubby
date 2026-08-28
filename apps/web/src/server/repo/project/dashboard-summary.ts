@@ -28,6 +28,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { sumBy, uniq } from "es-toolkit";
+
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
@@ -42,6 +43,7 @@ import {
   dbTaskToAPI,
   effectiveTaskDueDateSql,
 } from "~/server/repo/task/helpers";
+
 import { projectDependencyIds } from "./analytics";
 import { computeAttentionItems } from "./attention";
 import {

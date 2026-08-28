@@ -1,9 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { testEntityId, testUserId } from "@cubby/schemas/testing";
-
 import { getTableName, type SQL } from "drizzle-orm";
 import { PgDialect, type PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+
 import type { DrizzleTransaction } from "~/server/db";
 import {
   auditLog,
@@ -21,6 +21,7 @@ import {
 // they have to be written against the path callers actually use.
 import type { ChildCascade } from "~/server/repo/removal";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
+
 import type { RemovableEntity } from "./core";
 import { removeEntity } from "./entity";
 
@@ -400,6 +401,7 @@ describe("removeEntity — the parent table is derived, not passed", () => {
 });
 
 describe("removeEntity — the type-level lock", () => {
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses an auditKey on a hard-delete child", () => {
     // The directive sits on the declaration because a union mismatch is
     // reported against the whole literal, not the offending property.
@@ -413,6 +415,7 @@ describe("removeEntity — the type-level lock", () => {
     void child;
   });
 
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses a soft-delete child whose table has no deletedAt", () => {
     // @ts-expect-error TaskDependency has no deletedAt, so it cannot be soft-deleted
     const child: ChildCascade = {
@@ -422,6 +425,7 @@ describe("removeEntity — the type-level lock", () => {
     void child;
   });
 
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses ids branded for a different entity", () => {
     const { tx } = recordingTx();
     void removeEntity(tx, {

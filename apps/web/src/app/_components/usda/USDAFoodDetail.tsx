@@ -8,6 +8,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useMemo } from "react";
+
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import {
@@ -23,6 +24,7 @@ import {
   getAllUnitMappingsFromProduct,
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
+
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
 import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
@@ -106,7 +108,7 @@ export const USDAFoodDetail: React.FC<{
   );
 
   const ingredientsSection = brandedFoodInfo?.ingredients ? (
-    <div className="whitespace-pre-wrap text-sm">
+    <div className="text-sm whitespace-pre-wrap">
       {brandedFoodInfo.ingredients}
     </div>
   ) : (

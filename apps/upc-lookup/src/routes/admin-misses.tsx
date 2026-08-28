@@ -87,7 +87,7 @@ admin.get("/misses", async (c) => {
                   <td class="p-3 font-mono text-xs text-zinc-600">{m.upc}</td>
                   <td class="p-3 tabular-nums text-zinc-700">{m.attempts}</td>
                   <td class="p-3 text-zinc-500">{m.lastCheckedAt ?? "—"}</td>
-                  <td class="p-3">
+                  <td class="p-3" aria-label="Actions">
                     <div class="flex items-center justify-end gap-1">
                       <a
                         href={`/admin/misses/${m.upc}/create`}

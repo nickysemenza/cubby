@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { AuditLogList } from "./audit-log-list";
 
 type ActivityQueryData = { pages: Array<{ entries: never[] }> };

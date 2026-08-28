@@ -2,9 +2,11 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
+
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { extractEntityTitle } from "~/lib/entity-utils";
+
 import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
 import type {
   CubbyColumn as Column,

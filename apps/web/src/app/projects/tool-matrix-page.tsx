@@ -42,6 +42,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { ProjectMark } from "~/app/projects/project-mark";
@@ -65,8 +66,9 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
-import { project } from "./project.functions";
+
 import { PROJECT_STATUS_LABELS } from "./project-formatting";
+import { project } from "./project.functions";
 
 /**
  * How long a cell waits before it commits. A click-and-revert inside this
@@ -122,7 +124,7 @@ function SegmentedControl<T extends string | number>({
             aria-pressed={option.value === value}
             onClick={() => onChange(option.value)}
             className={cn(
-              "border-[var(--border)] border-l px-2 py-1 font-mono text-2xs first:border-l-0",
+              "border-l border-[var(--border)] px-2 py-1 font-mono text-2xs first:border-l-0",
               option.value === value
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted",
@@ -256,7 +258,7 @@ function MatrixCell({
   return (
     <td
       className={cn(
-        "border-[var(--border)] border-b border-l p-0 group-hover/row:bg-muted",
+        "border-b border-l border-[var(--border)] p-0 group-hover/row:bg-muted",
         striped && "bg-muted/20",
       )}
     >
@@ -269,7 +271,7 @@ function MatrixCell({
         disabled={locked}
         onClick={onToggle}
         className={cn(
-          "flex h-6 w-full items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+          "flex h-6 w-full items-center justify-center focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset",
           locked
             ? "cursor-not-allowed bg-muted/50"
             : "hover:ring-1 hover:ring-primary/40 hover:ring-inset",
@@ -288,8 +290,8 @@ function MatrixCell({
             // no check: visible when you scan a column, never mistaken for a
             // record. Keeps ultramarine meaning "this is real".
             state === "purchased" &&
-              "border border-primary border-dashed text-primary",
-            state === "trade" && "border border-muted-foreground border-dotted",
+              "border border-dashed border-primary text-primary",
+            state === "trade" && "border border-dotted border-muted-foreground",
             // A locked cell says "not possible", not "not yet" — so it reads as
             // struck-through rather than as one more empty box to fill in.
             locked && "text-muted-foreground/60",
@@ -440,7 +442,7 @@ export function ToolMatrixPage({
           align="center"
           gap="lg"
           wrap
-          className="border-[var(--border)] border-b px-2 py-2"
+          className="border-b border-[var(--border)] px-2 py-2"
         >
           <Row align="center" gap="sm">
             <span className="eyebrow">Projects</span>
@@ -518,7 +520,7 @@ export function ToolMatrixPage({
               <ChevronLeft className="size-3.5" aria-hidden />
             </button>
             <span
-              className="whitespace-nowrap font-mono text-2xs text-slate"
+              className="font-mono text-2xs whitespace-nowrap text-slate"
               title="Pages prioritize projects with tool activity, then recent projects; each page reads chronologically."
             >
               {firstProject}–{lastProject} of {data.totals.matchingProjects} ·
@@ -540,7 +542,7 @@ export function ToolMatrixPage({
           align="center"
           gap="lg"
           wrap
-          className="border-[var(--border)] border-b px-2 py-2"
+          className="border-b border-[var(--border)] px-2 py-2"
         >
           <SegmentedControl
             label="Group"
@@ -607,7 +609,7 @@ export function ToolMatrixPage({
           align="center"
           gap="lg"
           wrap
-          className="border-[var(--border)] border-t px-2 py-2 text-2xs text-muted-foreground"
+          className="border-t border-[var(--border)] px-2 py-2 text-2xs text-muted-foreground"
         >
           <Row align="center" gap="sm">
             <span className="size-3 rounded-[3px] bg-primary" aria-hidden />
@@ -615,14 +617,14 @@ export function ToolMatrixPage({
           </Row>
           <Row align="center" gap="sm">
             <span
-              className="size-3 rounded-[3px] border border-primary border-dashed"
+              className="size-3 rounded-[3px] border border-dashed border-primary"
               aria-hidden
             />
             Bought here
           </Row>
           <Row align="center" gap="sm">
             <span
-              className="size-3 rounded-[3px] border border-muted-foreground border-dotted"
+              className="size-3 rounded-[3px] border border-dotted border-muted-foreground"
               aria-hidden
             />
             Trade match
@@ -711,11 +713,12 @@ function MatrixTable({
       style={{ width: tableWidth }}
     >
       <thead className="sticky top-[51px] z-30 bg-card">
-        <tr className="border-[var(--foreground)] border-b">
+        <tr className="border-b border-[var(--foreground)]">
           <th
+            aria-label="Tool"
             className={cn(
               STICKY,
-              "z-40 w-64 min-w-64 max-w-64 bg-card px-2 pb-1 align-bottom",
+              "z-40 w-64 max-w-64 min-w-64 bg-card px-2 pb-1 align-bottom",
             )}
           >
             <div className="w-64">
@@ -725,9 +728,10 @@ function MatrixTable({
           {data.columns.map((column, columnIndex) => (
             <th
               key={column.projectId}
+              aria-label={column.projectName}
               title={`${column.projectName} · ${column.attachedCount} attached, ${column.suggestedCount} suggested`}
               className={cn(
-                "relative h-28 w-11 min-w-11 overflow-visible border-[var(--border)] border-l bg-card align-bottom",
+                "relative h-28 w-11 min-w-11 overflow-visible border-l border-[var(--border)] bg-card align-bottom",
                 columnIndex % 2 === 1 && "bg-muted/20",
               )}
             >
@@ -737,7 +741,7 @@ function MatrixTable({
                   entity="project"
                   id={column.projectId}
                   showIdentityMark={false}
-                  className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg] items-center gap-1 truncate text-2xs text-foreground leading-none underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
+                  className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg] items-center gap-1 truncate text-2xs leading-none text-foreground underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
                 >
                   <ProjectMark icon={column.icon} size={12} />
                   <span className="truncate">{column.projectName}</span>
@@ -752,7 +756,7 @@ function MatrixTable({
             className={cn(
               NUMERIC,
               STICKY_USES,
-              "w-14 border-[var(--border)] border-l bg-card align-bottom",
+              "w-14 border-l border-[var(--border)] bg-card align-bottom",
             )}
           >
             <span className="eyebrow">Uses</span>
@@ -775,10 +779,11 @@ function MatrixTable({
         {data.groups.flatMap((group) => [
           <tr key={`group-${group.key}`} className="bg-muted/40">
             <td
+              aria-label={group.label}
               colSpan={columnSpan}
               className={cn(
                 STICKY,
-                "border-[var(--border)] border-y bg-muted/40 px-2 py-1",
+                "border-y border-[var(--border)] bg-muted/40 px-2 py-1",
               )}
             >
               <Row align="center" gap="sm" className="w-64">
@@ -792,7 +797,7 @@ function MatrixTable({
               <td
                 className={cn(
                   STICKY,
-                  "w-64 min-w-64 max-w-64 border-[var(--border)] border-r border-b px-2 py-1 group-hover/row:bg-muted",
+                  "w-64 max-w-64 min-w-64 border-r border-b border-[var(--border)] px-2 py-1 group-hover/row:bg-muted",
                 )}
               >
                 <div className="w-64 min-w-0">
@@ -863,7 +868,7 @@ function MatrixTable({
                 className={cn(
                   NUMERIC,
                   STICKY_USES,
-                  "border-[var(--border)] border-b border-l group-hover/row:bg-muted",
+                  "border-b border-l border-[var(--border)] group-hover/row:bg-muted",
                 )}
               >
                 {row.visibleUseCount > 0 ? (
@@ -882,7 +887,7 @@ function MatrixTable({
                 className={cn(
                   NUMERIC,
                   STICKY_NET,
-                  "border-[var(--border)] border-b group-hover/row:bg-muted",
+                  "border-b border-[var(--border)] group-hover/row:bg-muted",
                 )}
               >
                 {formatCurrency(row.netLifetimeCost, 0)}
@@ -891,7 +896,7 @@ function MatrixTable({
                 className={cn(
                   NUMERIC,
                   STICKY_COST_PER_USE,
-                  "border-[var(--border)] border-b group-hover/row:bg-muted",
+                  "border-b border-[var(--border)] group-hover/row:bg-muted",
                 )}
               >
                 {row.costPerProjectUse === null ? (
@@ -905,8 +910,11 @@ function MatrixTable({
         ])}
       </tbody>
       <tfoot>
-        <tr className="border-[var(--foreground)] border-t">
-          <td className={cn(STICKY, "bg-card px-2 py-1")}>
+        <tr className="border-t border-[var(--foreground)]">
+          <td
+            aria-label="Tool totals"
+            className={cn(STICKY, "bg-card px-2 py-1")}
+          >
             <div className="w-64">
               <span className="eyebrow">{data.rows.length} tools</span>
             </div>
@@ -914,6 +922,7 @@ function MatrixTable({
           {data.columns.map((column, columnIndex) => (
             <td
               key={column.projectId}
+              aria-label={`${column.projectName} attached tools`}
               className={cn(
                 "bg-card text-center font-mono text-2xs tabular-nums",
                 columnIndex % 2 === 1 && "bg-muted/20",
@@ -924,10 +933,14 @@ function MatrixTable({
               )}
             </td>
           ))}
-          <td className={cn(NUMERIC, STICKY_USES, "border-l bg-card")}>
+          <td
+            aria-label="Attached uses total"
+            className={cn(NUMERIC, STICKY_USES, "border-l bg-card")}
+          >
             {data.totals.attachedCells}
           </td>
           <td
+            aria-label="Suggested tools total"
             className={cn(NUMERIC, STICKY_COST_PER_USE, "bg-card")}
             colSpan={2}
           >

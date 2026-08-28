@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { ChefHat, Equal, X } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+
 import { stickyRowHeaderCard } from "~/components/matrix/matrix-chrome";
 import { Image } from "~/components/ui/image";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
@@ -14,6 +15,7 @@ import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { formatCurrency } from "~/lib/utils";
+
 import { compactRound } from "../recipe-scaling-pct";
 import { RecipeSourceLink, sourceLabel } from "../recipe-source";
 import {
@@ -123,12 +125,12 @@ const AverageCell: React.FC<{
   const hasSpread = stats.count >= 2 && stats.max > stats.min;
   return (
     <div className="space-y-1">
-      <div className="font-medium font-mono tabular-nums">
+      <div className="font-mono font-medium tabular-nums">
         {format.mean(stats.mean)}
       </div>
       {hasSpread && (
         <>
-          <div className="font-mono text-2xs text-muted-foreground tabular-nums leading-tight">
+          <div className="font-mono text-2xs leading-tight text-muted-foreground tabular-nums">
             <div>
               {format.num(stats.min)}–{format.num(stats.max)}
             </div>
@@ -177,7 +179,7 @@ const GridRow: React.FC<{
         {renderCell(c, i)}
       </td>
     ))}
-    <td className="border-primary/40 border-l-2 px-2 py-2 align-top text-primary">
+    <td className="border-l-2 border-primary/40 px-2 py-2 align-top text-primary">
       {average}
     </td>
   </tr>
@@ -308,7 +310,7 @@ export const RecipeCompareGrid: React.FC<{
           value={basis}
           onValueChange={setBasisOverride}
         />
-        <span className="flex items-center gap-2 text-muted-foreground text-xs">
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
           <span
             className="inline-block size-2 rounded-full"
             style={{ backgroundColor: "var(--primary)" }}
@@ -320,7 +322,10 @@ export const RecipeCompareGrid: React.FC<{
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
-            <th className={`${STICKY} z-20 w-32 px-2 pt-2 pb-2`} />
+            <th
+              aria-label="Recipe"
+              className={`${STICKY} z-20 w-32 px-2 pt-2 pb-2`}
+            />
             {compared.map((c) => {
               const subtitle = sourceLabel(c.recipe.source);
               const hero = c.recipe.images[0]?.url;
@@ -355,7 +360,7 @@ export const RecipeCompareGrid: React.FC<{
                   <Link
                     to="/recipes/$shortcode"
                     params={{ shortcode: c.recipe.id }}
-                    className="line-clamp-2 min-h-[2.5em] font-medium leading-tight hover:underline"
+                    className="line-clamp-2 min-h-[2.5em] leading-tight font-medium hover:underline"
                   >
                     {c.recipe.name}
                   </Link>
@@ -367,11 +372,11 @@ export const RecipeCompareGrid: React.FC<{
                 </th>
               );
             })}
-            <th className="min-w-[110px] border-primary/40 border-l-2 px-2 pt-2 pb-2 text-left align-top font-normal">
+            <th className="min-w-[110px] border-l-2 border-primary/40 px-2 pt-2 pb-2 text-left align-top font-normal">
               <div className="mb-2 flex h-10 w-full items-center justify-center rounded-md bg-primary/10 text-primary">
                 <Equal className="size-4" />
               </div>
-              <div className="min-h-[2.5em] font-medium text-primary leading-tight">
+              <div className="min-h-[2.5em] leading-tight font-medium text-primary">
                 Average
               </div>
               <div className="text-2xs text-muted-foreground">
@@ -441,7 +446,7 @@ export const RecipeCompareGrid: React.FC<{
           <tr className="border-t bg-muted/30">
             <td
               colSpan={compared.length + 2}
-              className={`${STICKY} px-2 py-2 font-medium text-muted-foreground text-xs uppercase tracking-wide`}
+              className={`${STICKY} px-2 py-2 text-xs font-medium tracking-wide text-muted-foreground uppercase`}
             >
               Recipe details
             </td>
@@ -480,7 +485,7 @@ export const RecipeCompareGrid: React.FC<{
               return cps != null && sb ? (
                 <span>
                   {formatCurrencyRange(cps.lower, cps.upper)}{" "}
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-xs text-muted-foreground">
                     {perUnitSuffix(sb.noun)}
                   </span>
                 </span>
@@ -578,7 +583,7 @@ export const RecipeCompareGrid: React.FC<{
               const covered =
                 total - c.costing.totals.missingByType.price.length;
               return (
-                <span className="text-muted-foreground text-xs">
+                <span className="text-xs text-muted-foreground">
                   {coverageLabel(covered, total).fraction}
                 </span>
               );
@@ -601,7 +606,7 @@ export const RecipeCompareGrid: React.FC<{
                 notes.length > 90 ? `${notes.slice(0, 90).trimEnd()}…` : notes;
               return (
                 <span
-                  className="text-muted-foreground text-xs leading-snug"
+                  className="text-xs leading-snug text-muted-foreground"
                   title={notes}
                 >
                   {short}

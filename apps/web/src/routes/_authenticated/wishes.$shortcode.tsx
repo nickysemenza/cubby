@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
 import {
   detailPage,

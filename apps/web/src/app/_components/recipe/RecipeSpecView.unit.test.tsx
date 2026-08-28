@@ -9,9 +9,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { ok } from "neverthrow";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import type { RecipeCosting } from "~/lib/recipe-costing";
-import { RecipeSpecView } from "./RecipeSpecView";
+
 import type { RecipeTreeNode } from "./recipe-tree";
+import { RecipeSpecView } from "./RecipeSpecView";
 
 vi.mock("../EntityPreviewLink", () => ({
   dottedEntityLink: "",

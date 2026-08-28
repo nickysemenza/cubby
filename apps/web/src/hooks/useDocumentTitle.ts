@@ -1,5 +1,6 @@
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+
 import { DEFAULT_TITLE, pageTitle, TITLE_SEPARATOR } from "~/lib/page-title";
 
 /**

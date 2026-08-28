@@ -1,5 +1,6 @@
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
+
 import type { CubbyRow as Row } from "./table-features";
 
 /** Result of a bulk action execution */

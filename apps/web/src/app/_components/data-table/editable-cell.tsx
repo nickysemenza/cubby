@@ -6,6 +6,7 @@ import { Check, Pencil, RotateCcw, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
@@ -15,8 +16,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
+
 import { StaticPicker } from "../combobox/static-picker";
 import { DatePickerInput } from "../date-picker-input";
 import {
@@ -228,7 +231,7 @@ function EditableDisplay({
           clipboard={clipboard}
           hidePencilIcon
           aria-label="Edit value"
-          className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/editable:opacity-100"
+          className="shrink-0 p-1 opacity-40 transition-opacity group-hover/editable:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         >
           <Pencil className="size-3 text-muted-foreground" />
         </CellEditTrigger>
@@ -345,6 +348,7 @@ function EditableInputCellInternal<T>({
 
   useEffect(() => {
     if (autoOpen) edit.open();
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [autoOpen, edit.open]);
 
   // Money and numbers are measurements, same as dates: mono + tabular, which is
@@ -488,7 +492,7 @@ function EditableInputEditor<T>({
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Inline table-editor controls own keyboard behavior; this wrapper only blocks the row click.
     <div
       className={cn(
         "inline-flex gap-1",
@@ -497,7 +501,7 @@ function EditableInputEditor<T>({
       onClick={(e) => e.stopPropagation()}
     >
       {prefix && (
-        <span className="text-muted-foreground text-sm">{prefix}</span>
+        <span className="text-sm text-muted-foreground">{prefix}</span>
       )}
       {multiline ? (
         <Textarea
@@ -508,7 +512,7 @@ function EditableInputEditor<T>({
           className="w-64"
           rows={rows ?? 4}
           placeholder={placeholder}
-          autoFocus
+          ref={focusOnMount}
           disabled={isPending}
         />
       ) : (
@@ -520,7 +524,7 @@ function EditableInputEditor<T>({
           className="h-7 w-32"
           step={step}
           placeholder={placeholder}
-          autoFocus
+          ref={focusOnMount}
           disabled={isPending}
         />
       )}
@@ -590,6 +594,7 @@ function EditableSelectCellInternal({
 
   useEffect(() => {
     if (autoOpen) edit.open();
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [autoOpen, edit.open]);
 
   return (
@@ -654,7 +659,7 @@ function EditableSelectEditor({
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Inline table-editor controls own keyboard behavior; this wrapper only blocks the row click.
     <div
       className="inline-flex items-center gap-1"
       onClick={(e) => e.stopPropagation()}
@@ -667,7 +672,7 @@ function EditableSelectEditor({
         placeholder={placeholder}
         disabled={isPending}
         className="w-48"
-        autoFocus
+        openOnMount
         compact
         clearable={clearable}
       />
@@ -707,6 +712,7 @@ function EditableDateCellInternal({
 
   useEffect(() => {
     if (autoOpen) edit.open();
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [autoOpen, edit.open]);
 
   return (
@@ -773,7 +779,7 @@ function EditableDateEditor({
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Inline table-editor controls own keyboard behavior; this wrapper only blocks the row click.
     <div
       className="inline-flex items-center gap-1"
       onClick={(e) => e.stopPropagation()}
@@ -784,7 +790,7 @@ function EditableDateEditor({
         placeholder={placeholder}
         initialText={initialText}
         clearable
-        autoFocus
+        focusOnMount
         className={cn("w-40", isPending && "pointer-events-none opacity-50")}
       />
     </div>
@@ -834,6 +840,7 @@ export function EditableAmountCell({
       setOptimisticAmount(next);
       edit.cancel();
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [edit.cancel],
   );
   const { isPending, commit } = useEditorCommit<Amount>({
@@ -842,12 +849,12 @@ export function EditableAmountCell({
     onCancel: edit.cancel,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: edit.open is a stable callback
   const startEditing = useCallback(() => {
     const current = optimisticAmount ?? amount;
     setEditingValue(current.value);
     setEditingUnit(current.unit);
     edit.open();
+    // oxlint-disable-next-line react/exhaustive-deps -- edit.open is a stable callback
   }, [amount, optimisticAmount]);
 
   const save = useCallback(async () => {
@@ -877,6 +884,7 @@ export function EditableAmountCell({
         edit.cancel();
       }
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [save, edit.cancel],
   );
 
@@ -907,7 +915,7 @@ export function EditableAmountCell({
               onKeyDown={handleKeyDown}
               className="h-7 w-20"
               step="any"
-              autoFocus
+              ref={focusOnMount}
               disabled={isPending}
             />
             <Input

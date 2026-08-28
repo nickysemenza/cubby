@@ -84,6 +84,7 @@
 
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { AppErrorReason } from "@cubby/shared";
+
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 
@@ -105,9 +106,9 @@ type RetainingRole = (typeof RETAINING_ROLES)[number];
  * per-edge SQL map off this type.
  */
 export type ProductRetainingEdgeKey = {
-  [K in keyof typeof PRODUCT_EDGE_ROLES]: (typeof PRODUCT_EDGE_ROLES)[K]["role"] extends RetainingRole
-    ? K
-    : never;
+  [
+    K in keyof typeof PRODUCT_EDGE_ROLES
+  ]: (typeof PRODUCT_EDGE_ROLES)[K]["role"] extends RetainingRole ? K : never;
 }[keyof typeof PRODUCT_EDGE_ROLES];
 
 export const isRetainingEdgeKey = (

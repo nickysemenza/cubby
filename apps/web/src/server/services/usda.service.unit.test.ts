@@ -10,6 +10,7 @@ import type {
   FoodSummary,
 } from "@cubby/usda-schemas";
 import { describe, expect, it, vi } from "vitest";
+
 import type { USDAClient } from "../clients/usda";
 import { USDAService } from "./usda.service";
 

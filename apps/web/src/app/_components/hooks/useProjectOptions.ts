@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { createElement, useMemo } from "react";
-import { project } from "~/app/projects/project.functions";
+
 import { ProjectMark } from "~/app/projects/project-mark";
+import { project } from "~/app/projects/project.functions";
 
 const NO_PROJECT_OPTIONS: Array<{
   value: string;

@@ -1,9 +1,11 @@
 import { AlertCircle, Plus } from "lucide-react";
 import { Fragment, useMemo } from "react";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Table, TableBody, TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { CopyCorpusButton } from "./copy-corpus-button";
@@ -54,7 +56,7 @@ export function ParsedIngredientTable({
               {/* Name/amount/modifier row pairs with its raw-line row below; suppress
                   the border here so the divider only falls between items. */}
               <TableRow className={cn("border-b-0", tint)}>
-                <TableCell className="whitespace-normal align-top">
+                <TableCell className="align-top whitespace-normal">
                   {match ? (
                     <EntityInlineLink
                       displayImage={undefined}
@@ -98,14 +100,14 @@ export function ParsedIngredientTable({
                     ? formatAmounts(parsed.amounts)
                     : ""}
                 </TableCell>
-                <TableCell className="whitespace-normal align-top text-muted-foreground">
+                <TableCell className="align-top whitespace-normal text-muted-foreground">
                   {parsed.modifier ?? ""}
                 </TableCell>
               </TableRow>
               <TableRow className={tint}>
                 <TableCell
                   colSpan={2}
-                  className="whitespace-normal pt-0 pb-1 text-2xs text-muted-foreground leading-tight"
+                  className="pt-0 pb-1 text-2xs leading-tight whitespace-normal text-muted-foreground"
                 >
                   {raw}
                 </TableCell>

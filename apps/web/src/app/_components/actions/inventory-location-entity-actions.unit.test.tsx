@@ -1,6 +1,7 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 
 const mocks = vi.hoisted(() => ({ navigate: vi.fn() }));

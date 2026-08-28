@@ -3,11 +3,13 @@ import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entities, entityDialogLabel } from "~/entities/entities";
 import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };

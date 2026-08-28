@@ -1,6 +1,7 @@
 import type { ColumnFiltersState, OnChangeFn } from "@tanstack/react-table";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import type { Filter } from "./filter-bar-core";
 import { LedgerFilters } from "./LedgerFilters";
 import type { CubbyTable } from "./table-features";

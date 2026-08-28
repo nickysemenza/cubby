@@ -1,8 +1,10 @@
 import type { RowData } from "@tanstack/react-table";
 import { X } from "lucide-react";
+
 import { Row as LayoutRow } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
+
 import {
   type BulkAction,
   resolveBulkActionAvailability,
@@ -86,9 +88,9 @@ export function BulkActionBar<TData extends RowData>({
       align="center"
       gap="sm"
       wrap
-      className="bg-card max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--app-chrome-bottom)] max-md:z-40 max-md:min-h-12 max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-foreground max-md:border-t max-md:px-2 max-md:py-1 md:px-1 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+      className="bg-card max-md:fixed max-md:inset-x-0 max-md:bottom-[var(--app-chrome-bottom)] max-md:z-40 max-md:min-h-12 max-md:[scrollbar-width:none] max-md:flex-nowrap max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-t max-md:border-foreground max-md:px-2 max-md:py-1 md:px-1 max-md:[&::-webkit-scrollbar]:hidden"
     >
-      <span className="shrink-0 font-medium font-mono text-xs uppercase tabular-nums">
+      <span className="shrink-0 font-mono text-xs font-medium uppercase tabular-nums">
         {selectedCount} selected
       </span>
 

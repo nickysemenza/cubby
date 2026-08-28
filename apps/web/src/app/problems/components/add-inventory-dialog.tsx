@@ -1,4 +1,5 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
+
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 

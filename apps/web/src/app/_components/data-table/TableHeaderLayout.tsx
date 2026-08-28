@@ -10,6 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, GripVertical } from "lucide-react";
+
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
@@ -18,6 +19,7 @@ import { useCubbyDndSensors } from "~/components/dnd/sensors";
 import { Button } from "~/components/ui/button";
 import { TableHead, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+
 import { ColumnResizeHandle } from "./ColumnResizeHandle";
 import type { cubbyTableFeatures, CubbyTable as Table } from "./table-features";
 import { columnWidthValue, isLockedColumnId } from "./table-layout";
@@ -131,7 +133,7 @@ function SortableHeader<TData extends RowData>({
             variant="ghost"
             size="icon-sm"
             aria-label={`Reorder ${header.column.id} column`}
-            className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground opacity-0 pointer-coarse:opacity-100 transition-opacity active:cursor-grabbing group-focus-within/th:opacity-100 group-hover/th:opacity-100"
+            className="h-6 w-5 shrink-0 cursor-grab touch-none px-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/th:opacity-100 group-hover/th:opacity-100 active:cursor-grabbing pointer-coarse:opacity-100"
             {...attributes}
             {...listeners}
           >
@@ -143,7 +145,7 @@ function SortableHeader<TData extends RowData>({
             variant="ghost"
             size="sm"
             className={cn(
-              "group h-6 min-w-0 flex-1 select-none gap-1 px-1 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60",
+              "group h-6 min-w-0 flex-1 gap-1 px-1 text-2xs font-semibold tracking-wider uppercase select-none hover:bg-muted/60",
               numeric ? "justify-end" : "justify-start",
             )}
             onClick={header.column.getToggleSortingHandler()}
@@ -238,7 +240,7 @@ export default function TableHeaderLayout<TData extends RowData>({
           return (
             <TableRow
               key={headers.map((header) => header.id).join(":")}
-              className="border-border/50 border-b"
+              className="border-b border-border/50"
             >
               {headers.map((header) => (
                 <SortableHeader

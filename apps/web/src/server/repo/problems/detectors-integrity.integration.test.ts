@@ -2,10 +2,10 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { EdgeRole, EdgeSemantics } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
@@ -35,6 +35,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
 import { findReferentialLivenessViolations } from "./detectors-integrity";
 
 /**

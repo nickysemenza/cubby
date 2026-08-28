@@ -1,7 +1,9 @@
 import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
 import { Eye, Info, Package } from "lucide-react";
 import type { FC } from "react";
+
 import { Page } from "~/components/page/Page";
+
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
@@ -89,7 +91,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         location={location}
         linkable
         compact
-        className="min-h-11 border-border border-y px-2"
+        className="min-h-11 border-y border-border px-2"
       />
       <DetailSections
         sections={sections}

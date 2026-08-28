@@ -1,6 +1,7 @@
 import { type SearchType, searchTypeSchema } from "@cubby/schemas/search";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
+
 import { SearchPage } from "~/app/_components/search/search-page";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

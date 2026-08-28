@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { Bookmark, Check } from "lucide-react";
+
 import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -16,6 +17,7 @@ import {
   type ViewDefinition,
   viewsForEntity,
 } from "~/entities/view-manifest";
+
 import type { CubbyTable as Table } from "./table-features";
 import {
   type CubbySavedTableLayout,
@@ -139,7 +141,7 @@ export function SavedViewsMenu({
                 />
                 <Stack gap="tight">
                   <span>{view.label}</span>
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-xs text-muted-foreground">
                     {view.description}
                   </span>
                 </Stack>

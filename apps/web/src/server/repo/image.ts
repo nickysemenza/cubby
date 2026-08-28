@@ -39,6 +39,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
+
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type {
   IncomingEdgeKey,
@@ -864,7 +865,7 @@ const findReferencedImageIds = async (
           isNotNull(edgeColumn),
           imageIds ? inArray(edgeColumn, imageIds) : undefined,
           disposition.effect === "hard-delete"
-            ? // biome-ignore lint/suspicious/noExplicitAny: Drizzle's table type is too narrow for notDeleted()
+            ? // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic table type is too narrow for notDeleted().
               notDeleted(edgeTable as any)
             : undefined,
         ),

@@ -1,10 +1,12 @@
 import { useElementScrollRestoration } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
+
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
@@ -75,7 +77,6 @@ export function useDataTableController<TItem extends RowData>({
     [fetchNextPage, hasNextPage, isFetchingNextPage, isTransitioning],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tableContainerRef.current is read when the sentinel mounts; a ref mutation never re-renders, so listing it would be inert.
   const setDesktopInfiniteSentinel = useCallback(
     (sentinel: HTMLDivElement | null) => {
       desktopInfiniteObserverRef.current?.disconnect();
@@ -97,6 +98,7 @@ export function useDataTableController<TItem extends RowData>({
       observer.observe(sentinel);
       desktopInfiniteObserverRef.current = observer;
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- tableContainerRef.current is read when the sentinel mounts; a ref mutation never re-renders, so listing it would be inert.
     [
       isMobile,
       hasInfiniteScroll,
@@ -192,7 +194,7 @@ export function useDataTableController<TItem extends RowData>({
       "overflow-hidden",
       verticalAlign === "top" ? "align-top" : "align-middle",
     ),
-    row: cn(dConfig.rowClass, "table-row-hover border-border border-b"),
+    row: cn(dConfig.rowClass, "table-row-hover border-b border-border"),
     sortIcon: "h-3 w-3",
   };
 
@@ -206,10 +208,10 @@ export function useDataTableController<TItem extends RowData>({
     .getVisibleLeafColumns()
     .map((column) => `${column.id}:${column.getSize()}`)
     .join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scalar signature stands in for TanStack's fresh column array
   const columnSizeVars = useMemo(
     () =>
       columnWidthVariables(table.getVisibleLeafColumns(), tableContainerWidth),
+    // oxlint-disable-next-line react/exhaustive-deps -- scalar signature stands in for TanStack's fresh column array
     [columnSizesKey, tableContainerWidth],
   );
 

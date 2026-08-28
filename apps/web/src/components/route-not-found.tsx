@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 
@@ -16,10 +17,10 @@ export function RouteNotFound() {
         {/* Canonical logo asset — same source the nav uses, so the mark can't
             drift (the old inline copy had stale, hardcoded fill colors). */}
         <img src="/favicon.svg" alt="" className="size-12" />
-        <h1 className="font-bold text-4xl">404</h1>
+        <h1 className="text-4xl font-bold">404</h1>
       </Row>
       <Stack gap="sm" className="text-center">
-        <h2 className="font-semibold text-2xl">Page not found</h2>
+        <h2 className="text-2xl font-semibold">Page not found</h2>
         <p className="max-w-md text-muted-foreground">
           The page you're looking for doesn't exist or has been moved.
         </p>

@@ -1,8 +1,10 @@
 import type { LocationType } from "@cubby/schemas/location";
 import type React from "react";
+
 import { Stack } from "~/components/layout";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { NoneValue } from "~/components/ui/none-value";
+
 import { EntityInlineLink } from "./EntityInlineLink";
 import { TruncatedList } from "./TruncatedList";
 

@@ -27,6 +27,7 @@ import {
   type TableState,
   tableFeatures,
 } from "@tanstack/react-table";
+
 import type { CubbyColumnMeta, CubbyTableMeta } from "./table-meta";
 
 /**
@@ -100,12 +101,12 @@ export type CubbyTable<TData extends RowData> = ReactTable<
 export type CubbyRow<TData extends RowData> = Row<CubbyTableFeatures, TData>;
 export type CubbyColumn<
   TData extends RowData,
-  // biome-ignore lint/suspicious/noExplicitAny: shared table chrome accepts heterogeneous accessor values
+  // oxlint-disable-next-line typescript/no-explicit-any -- shared table chrome accepts heterogeneous accessor values
   TValue extends CellData = any,
 > = Column<CubbyTableFeatures, TData, TValue>;
 export type CubbyColumnDef<
   TData extends RowData,
-  // biome-ignore lint/suspicious/noExplicitAny: column arrays intentionally erase heterogeneous TValue
+  // oxlint-disable-next-line typescript/no-explicit-any -- column arrays intentionally erase heterogeneous TValue
   TValue extends CellData = any,
 > = ColumnDef<CubbyTableFeatures, TData, TValue>;
 export type CubbyColumnHelper<TData extends RowData> = ReturnType<
@@ -113,7 +114,7 @@ export type CubbyColumnHelper<TData extends RowData> = ReturnType<
 >;
 export type CubbyCellContext<
   TData extends RowData,
-  // biome-ignore lint/suspicious/noExplicitAny: reusable renderers accept heterogeneous cell values
+  // oxlint-disable-next-line typescript/no-explicit-any -- reusable renderers accept heterogeneous cell values
   TValue extends CellData = any,
 > = CellContext<CubbyTableFeatures, TData, TValue>;
 export type CubbyFilterFn<TData extends RowData> = FilterFn<

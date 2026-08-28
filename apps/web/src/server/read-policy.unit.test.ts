@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 const read = (path: string) =>
@@ -112,9 +113,11 @@ describe("cached-read policy", () => {
 
     for (const paths of authoritativeSurfaces) {
       const source = paths.map(read).join("\n");
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(source, paths.join(", ")).toMatch(
         /(?:context|ctx|c)\.db|readPolicy: "strong"/u,
       );
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(source, paths.join(", ")).not.toMatch(
         /(?:context|ctx|c)\.readDb/u,
       );

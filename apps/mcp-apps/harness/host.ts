@@ -59,6 +59,7 @@ async function load() {
     log("ui/open-link →", params);
     return {};
   };
+  // oxlint-disable-next-line unicorn/prefer-add-event-listener -- AppBridge exposes protocol callback slots rather than DOM events.
   bridge.onmessage = async (params) => {
     log("ui/message →", params);
     return {};

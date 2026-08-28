@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
+
 import { buildSelectColumn, reconcileRowSelection } from "./row-selection";
 import type {
   CubbyColumnDef as ColumnDef,

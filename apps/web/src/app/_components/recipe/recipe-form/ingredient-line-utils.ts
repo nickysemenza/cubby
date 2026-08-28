@@ -2,7 +2,9 @@ import type { WIngredient } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import { uniq } from "es-toolkit";
 import type { ReadonlyDeep } from "type-fest";
+
 import { wasm } from "~/lib/wasm";
+
 import type { IngredientMatch } from "../use-ingredient-matches";
 import type { IngItem } from "./types";
 

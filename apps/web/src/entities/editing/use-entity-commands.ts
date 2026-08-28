@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
+
 import {
   entityMutation,
   executeEntityMutation,
@@ -9,6 +10,7 @@ import {
 } from "~/entities/entity-mutation.functions";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
+
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {

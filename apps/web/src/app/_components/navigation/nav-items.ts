@@ -34,7 +34,9 @@ import {
   Wrench,
 } from "lucide-react";
 import { useMemo } from "react";
+
 import { entities } from "~/entities/entities";
+
 import type { WayfindingDomain } from "./domain-wayfinding";
 
 /** A navigable destination. `to` is typed against the generated route tree. */

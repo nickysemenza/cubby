@@ -2,6 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -155,7 +156,7 @@ function RankedMergeDialog<T extends MergeRow>({
         </DialogHeader>
         <Stack>
           <div>
-            <div className="mb-1 font-medium text-muted-foreground text-sm">
+            <div className="mb-1 text-sm font-medium text-muted-foreground">
               Keep (target):
             </div>
             <div className="flex flex-col gap-1">
@@ -295,7 +296,7 @@ function FixedMergeDialog<T extends MergeRow>({
                   {config.rowLabel(candidate)}
                 </span>
                 {config.rowStat && (
-                  <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                     {config.rowStat(candidate)}
                   </span>
                 )}

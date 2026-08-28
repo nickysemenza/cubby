@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { computeUnusedAliases } from "./unused-aliases";
 
 // Helper: a parse map where each name resolves to the given ingredient ids.

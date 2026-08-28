@@ -1,9 +1,11 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodPortion, NutrientsPer100 } from "@cubby/usda-schemas";
 import { useMemo, useState } from "react";
+
 import { Stack } from "~/components/layout";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { safeConvertAmount } from "~/lib/recipe-costing";
+
 import { NutritionLabel } from "./NutritionLabel";
 
 /**

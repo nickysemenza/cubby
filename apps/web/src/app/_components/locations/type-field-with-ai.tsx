@@ -1,6 +1,8 @@
 import type { LocationTypeSuggestion } from "@cubby/schemas/ai";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+
 import { ai } from "~/lib/ai.functions";
+
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { locationTypeOptionsWithTheme } from "./location-icons";

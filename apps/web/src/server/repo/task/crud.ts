@@ -30,6 +30,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, task, taskDependency } from "~/server/db/schema";
@@ -63,6 +64,7 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
 import { dbTaskToAPI } from "./helpers";
 
 export const TASK_DELETE_EDGE_POLICY = {
@@ -476,7 +478,7 @@ export const updateTask = async (
     }
 
     const changes: Record<string, { from: unknown; to: unknown }> = {
-      ...(computeChanges(before, updated, [...AUDIT_FIELDS]) ?? {}),
+      ...computeChanges(before, updated, [...AUDIT_FIELDS]),
     };
     if (data.blockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(

@@ -31,6 +31,7 @@ import { type FC, useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
@@ -38,6 +39,7 @@ import { Stack } from "~/components/layout";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
+
 import { PlainDateField, UnifiedTextField } from "../form-utils";
 
 const formSchema = z.object({
@@ -93,7 +95,6 @@ export const BulkDiscardInventoryDialog: FC<
   // so an unrelated invalidation hands back a new array for the same selection
   // and would otherwise wipe in-progress quantity edits.
   const selectionKey = items.map((item) => item.id).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on selectionKey, not the array identity
   useEffect(() => {
     if (!open) return;
     setError(null);
@@ -102,6 +103,7 @@ export const BulkDiscardInventoryDialog: FC<
       reason: form.getValues("reason"),
       quantities: defaultQuantities(items),
     });
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on selectionKey, not the array identity
   }, [selectionKey, open, form]);
 
   const quantities = form.watch("quantities");

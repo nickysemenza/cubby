@@ -5,6 +5,7 @@ import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   cookbook,
   image,
@@ -13,6 +14,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
 import {
@@ -73,6 +75,7 @@ describe("image repository", () => {
       updateImage(ctx.db, "00000000-0000-0000-0000-000000000000", {
         filename: "nope.jpg",
       }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -213,6 +216,7 @@ describe("image repository", () => {
       size: 512,
     });
 
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(markImageUploaded(ctx.db, uploaded.id)).rejects.toThrow();
   });
 

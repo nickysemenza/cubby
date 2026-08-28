@@ -1,6 +1,7 @@
 import type { TaskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { orderProductTasks } from "./product-task-history";
 
 // Shortcode body alphabet excludes 0, 1, I, O, L to avoid visual ambiguity.

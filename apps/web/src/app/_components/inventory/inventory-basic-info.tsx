@@ -1,10 +1,12 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import type { FC } from "react";
 import type { z } from "zod";
+
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import { UnitMappingGraph } from "../units/unit-mapping-graph";
 import { showAmountAndPrice } from "./format-amount";

@@ -35,8 +35,7 @@ interface RelatedViewPresentationDefinition {
 }
 
 /** Fully resolved runtime projection; presentation declarations never carry paths. */
-export interface RelatedViewDefinition
-  extends RelatedViewPresentationDefinition {
+export interface RelatedViewDefinition extends RelatedViewPresentationDefinition {
   target: Entity;
   label: string;
 }

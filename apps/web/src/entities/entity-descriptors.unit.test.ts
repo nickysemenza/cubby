@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
+
 import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
+
 import {
   type EntityDetailScoped,
   entityDetailFor,
@@ -226,6 +228,7 @@ describe("entity detail query keys", () => {
       runQueryFn(
         entityDetailFor("product").queryOptions("", { enabled: false }),
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -280,6 +283,7 @@ describe("entity list query keys", () => {
           sort: [],
         }),
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -361,11 +365,13 @@ describe("scoped entity descriptors", () => {
   });
 
   it("rejects an entity the operation is not registered for", () => {
-    expect(() =>
-      entityDetailFor("not-an-entity" as unknown as DetailEntity),
+    expect(
+      () => entityDetailFor("not-an-entity" as unknown as DetailEntity),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
-    expect(() =>
-      entityListFor("not-an-entity" as unknown as ListEntity),
+    expect(
+      () => entityListFor("not-an-entity" as unknown as ListEntity),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 

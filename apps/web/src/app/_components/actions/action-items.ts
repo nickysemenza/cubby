@@ -8,7 +8,9 @@ import {
   ShoppingCart,
   Sparkles,
 } from "lucide-react";
+
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
+
 import { type ActionVerbId, verbDef } from "./action-verbs";
 
 /**

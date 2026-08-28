@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Camera, ChevronLeft, ChevronRight, Link, Star, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -99,7 +100,8 @@ export function PendingImageUpload({
       if (!trimmed) return;
 
       try {
-        new URL(trimmed);
+        const parsedUrl = new URL(trimmed);
+        void parsedUrl;
       } catch {
         if (!silent) toast.error("Please enter a valid URL");
         return;
@@ -378,7 +380,7 @@ export function PendingImageUpload({
             Import
           </Button>
         </div>
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           You can also paste an image from your clipboard
         </p>
       </div>

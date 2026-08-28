@@ -3,6 +3,7 @@ import {
   foodSummaryWithLinkedProducts,
 } from "@cubby/schemas/usda";
 import { describe, expect, it } from "vitest";
+
 import { dedupeUsdaFoodsByUpc, nutrientCount } from "./usda-food-stats";
 
 // Minimal builder — these helpers only read a handful of fields, so we cast a

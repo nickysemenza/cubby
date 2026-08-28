@@ -1,5 +1,7 @@
 import type { LocationType } from "@cubby/schemas/location";
+
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
+
 import { LocationIcon } from "./location-icons";
 
 /**

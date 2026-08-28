@@ -16,8 +16,10 @@ import type { AnyColumn, InferInsertModel } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+
 import { getDb } from "./core";
 import { notDeleted } from "./query";
 
@@ -76,12 +78,12 @@ export async function replaceDependencyEdges<
 
   if (deduped.length > 0) {
     const live = await tx
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
       .select({ id: opts.entityTable.id as any })
       .from(opts.entityTable)
       .where(
         and(
-          // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+          // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
           inArray(opts.entityTable.id as any, deduped),
           notDeleted(opts.entityTable),
         ),
@@ -143,24 +145,24 @@ export async function dependencyIdsFor<
   if (ids.length === 0) return { blockedBy, blocking };
 
   const selectCols = {
-    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
     own: opts.ownColumn as any,
-    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
     blockedBy: opts.blockedByColumn as any,
   };
 
   const [blockedByRows, blockingRows] = await Promise.all([
     getDb(db)
       .select(selectCols)
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's generic TEdge is too narrow for from()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's generic edge table is too narrow for from().
       .from(edgeTable as any)
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
       .where(inArray(opts.ownColumn as any, ids)),
     getDb(db)
       .select(selectCols)
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's generic TEdge is too narrow for from()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's generic edge table is too narrow for from().
       .from(edgeTable as any)
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
       .where(inArray(opts.blockedByColumn as any, ids)),
   ]);
 

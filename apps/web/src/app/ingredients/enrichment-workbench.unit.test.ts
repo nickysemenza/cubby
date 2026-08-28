@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { shouldShowEnrichmentEmptyState } from "./enrichment-workbench";
 
 describe("shouldShowEnrichmentEmptyState", () => {

@@ -50,13 +50,13 @@ export interface EntityColor {
  */
 export interface MergeableConfig {
   keeperMode: "ranked" | "fixed";
-  // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row shape, see doc comment above.
+  // oxlint-disable-next-line typescript/no-explicit-any -- Heterogeneous entity rows require an intentionally dynamic callback boundary.
   rowLabel: (row: any) => ReactNode;
   /** Secondary stat/chip line. */
-  // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row shape, see doc comment above.
+  // oxlint-disable-next-line typescript/no-explicit-any -- Heterogeneous entity rows require an intentionally dynamic callback boundary.
   rowStat?: (row: any) => ReactNode;
   /** Fixed mode only: query options for the other rows a keeper can absorb. */
-  // biome-ignore lint/suspicious/noExplicitAny: heterogeneous row/query shape, see doc comment above.
+  // oxlint-disable-next-line typescript/no-explicit-any -- Heterogeneous entity queries require an intentionally dynamic callback boundary.
   candidateQuery?: (keeper: any) => any;
   copy: {
     /** Fixed mode gets the keeper's rendered label; ranked mode's is static. */

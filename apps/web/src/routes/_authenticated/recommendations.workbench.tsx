@@ -1,5 +1,6 @@
 import { recommendationWorkbenchSearch } from "@cubby/schemas/recommendations";
 import { createFileRoute } from "@tanstack/react-router";
+
 import { RecommendationWorkbench } from "~/app/recommendations/recommendation-workbench";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
@@ -21,7 +22,7 @@ function RecommendationWorkbenchPage() {
       ) : kind && source ? (
         <RecommendationWorkbench sourceId={source} kind={kind} />
       ) : (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Open this workbench from a current recommendation.
         </p>
       )}

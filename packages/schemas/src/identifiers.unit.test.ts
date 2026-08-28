@@ -96,6 +96,7 @@ describe("entity id lookups", () => {
     for (const entity of shortcodeEntities) {
       const derived = `${entity.toUpperCase()}_NOT_FOUND`;
       if (derived !== ENTITY_NOT_FOUND_REASON[entity]) {
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect(Object.keys(AppErrors)).not.toContain(derived);
       }
     }

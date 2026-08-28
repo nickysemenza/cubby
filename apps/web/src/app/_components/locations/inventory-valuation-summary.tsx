@@ -1,9 +1,11 @@
 import type { LocationValuation } from "@cubby/schemas/location";
 import { useMemo } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   calculateInventoryValuation,
   formatPricingCountsSummary,
@@ -82,7 +84,7 @@ export function InventoryValuationSummary({
   // full variant
   return (
     <div className={className}>
-      <div className="font-semibold text-lg">
+      <div className="text-lg font-semibold">
         {formatCurrency(totalValuation)}
       </div>
       {pricingSummary && (

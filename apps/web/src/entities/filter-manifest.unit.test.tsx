@@ -3,6 +3,7 @@ import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+
 import {
   entityFilterSearchFields,
   getEntityFilters,
@@ -225,7 +226,9 @@ describe("generated filter contracts", () => {
         }),
       ).toBe(true);
       if (contract.audit) {
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect(specs.map((spec) => spec.columnId)).toEqual(
+          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
           expect.arrayContaining(["createdAt", "updatedAt"]),
         );
       }

@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
@@ -25,6 +26,7 @@ import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import {
   analyzeGaps,
@@ -67,7 +69,7 @@ function PriceField({
 }) {
   return (
     <Stack gap="xs">
-      <p className="font-medium text-xs">Set a price</p>
+      <p className="text-xs font-medium">Set a price</p>
       <Row align="center" gap="sm" className="text-sm">
         <Input
           type="number"
@@ -115,7 +117,7 @@ function ConversionRowsField({
 }) {
   return (
     <Stack gap="sm">
-      <p className="font-medium text-xs">
+      <p className="text-xs font-medium">
         {hint.title}{" "}
         <span className="font-normal text-muted-foreground">{hint.detail}</span>
       </p>
@@ -170,7 +172,7 @@ function ConversionRowsField({
         align="center"
         gap="xs"
         onClick={onAdd}
-        className="text-muted-foreground text-xs hover:text-foreground"
+        className="text-xs text-muted-foreground hover:text-foreground"
       >
         <Plus className="size-3" /> Add another
       </Row>
@@ -189,7 +191,7 @@ function NaKindsField({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-      <span className="text-2xs text-muted-foreground uppercase tracking-wide">
+      <span className="text-2xs tracking-wide text-muted-foreground uppercase">
         N/A
       </span>
       {BASE_KINDS.map((kind) => {
@@ -257,13 +259,13 @@ function LivePanels({
         </Stack>
       )}
       <Stack gap="xs">
-        <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Unit graph (live)
         </p>
         <UnitMappingGraph mappings={previewMappings} />
       </Stack>
       <Stack gap="xs">
-        <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Coverage (live)
         </p>
         <div className="border border-[var(--border)] bg-background/60 p-2">
@@ -481,7 +483,7 @@ export function EnrichmentEditor({
 
       {initialConversion && row.product.length > 1 && (
         <Stack gap="xs">
-          <p className="font-medium text-xs">Store this conversion on</p>
+          <p className="text-xs font-medium">Store this conversion on</p>
           <StaticPicker
             items={row.product.map((candidate) => ({
               value: candidate.id,
@@ -501,7 +503,7 @@ export function EnrichmentEditor({
 
       {!gaps.usdaLinked && (
         <Stack gap="xs">
-          <p className="font-medium text-xs">
+          <p className="text-xs font-medium">
             Link a USDA food{" "}
             <span className="font-normal text-muted-foreground">
               — fills weight, volume &amp; calories
@@ -512,7 +514,7 @@ export function EnrichmentEditor({
       )}
 
       {gaps.priceIslanded && (
-        <p className="border bg-warning/10 px-2 py-2 text-warning-ink text-xs">
+        <p className="border bg-warning/10 px-2 py-2 text-xs text-warning-ink">
           Already priced, but “{gaps.islandedUnit}” isn’t linked to a weight —
           so the price can’t be reached from a recipe measure. Connect it below
           (e.g. 1 {gaps.islandedUnit} = N&nbsp;g) instead of adding a new price.

@@ -41,6 +41,7 @@ import type { EntityId } from "@cubby/schemas/identifiers";
 import { and, inArray, or, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
 import {
@@ -160,7 +161,7 @@ const collectCascadingImageIds = async (
     const imageColumn = imageJoinColumnFor(child.table);
     if (!imageColumn) continue;
     const rows = (await tx
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
       .select({ imageId: imageColumn as any })
       .from(child.table)
       .where(

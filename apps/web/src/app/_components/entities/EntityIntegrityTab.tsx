@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { HeartPulse, Trash2, Waypoints } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
@@ -30,6 +31,7 @@ import {
   integrityProblems,
   REFERENTIAL_LIVENESS_INPUT,
 } from "~/entities/entity-integrity.functions";
+
 import {
   type EntityGraphLens,
   EntityReferenceGraph,
@@ -127,7 +129,7 @@ export function EntityIntegrityTab() {
       </Grid>
 
       <Row justify="between" align="center" wrap gap="md">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           One node per entity — click a node (or a chip below) to inspect its
           relationships, incoming edges, and lifecycle dispositions.
         </p>
@@ -168,7 +170,7 @@ export function EntityIntegrityTab() {
  */
 function HairlineRow({ children }: { children: ReactNode }) {
   return (
-    <div className="border-[var(--border)] border-b py-1 last:border-b-0">
+    <div className="border-b border-[var(--border)] py-1 last:border-b-0">
       {children}
     </div>
   );
@@ -202,8 +204,14 @@ function EntityChip({
   return (
     <Badge
       variant="outline"
-      className="font-sans normal-case tracking-normal"
-      render={<button type="button" onClick={onClick} />}
+      className="font-sans tracking-normal normal-case"
+      render={
+        <button
+          type="button"
+          aria-label={`Filter to ${label}`}
+          onClick={onClick}
+        />
+      }
     >
       <Icon className="size-3" />
       {label}
@@ -261,9 +269,9 @@ function RelationshipRow({
   onSelect: (entity: Entity) => void;
 }) {
   return (
-    <div className="border-[var(--border)] border-b py-2 last:border-b-0">
+    <div className="border-b border-[var(--border)] py-2 last:border-b-0">
       <Row justify="between" align="center" gap="sm" wrap>
-        <span className="font-medium text-xs">{relationship.label}</span>
+        <span className="text-xs font-medium">{relationship.label}</span>
         <EntityChip
           entity={relationship.target}
           onClick={() => onSelect(relationship.target)}
@@ -288,7 +296,7 @@ function IncomingEdgeRow({ edge }: { edge: PhysicalEdge }) {
         {!edge.constrained && <Badge variant="outline">unconstrained</Badge>}
         {exempt && <Badge variant="warning">exempt</Badge>}
       </Row>
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         {edge.semantics.description}
       </p>
       {exempt && edge.semantics.liveness.kind === "allow-target-deleted" && (
@@ -359,7 +367,7 @@ function EntityDetailPanel({
   if (!entity || !row) {
     return (
       <Card className="flex h-[420px] items-center justify-center">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Select an entity in the graph to inspect it.
         </p>
       </Card>
@@ -405,7 +413,7 @@ function EntityDetailPanel({
           <Stack gap="sm">
             <Eyebrow>Relationships ({row.relationships.length})</Eyebrow>
             {row.relationships.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-xs text-muted-foreground">
                 No outgoing relationships.
               </p>
             ) : (
@@ -424,7 +432,7 @@ function EntityDetailPanel({
           <Stack gap="sm">
             <Eyebrow>Incoming edges ({row.incomingEdges.length})</Eyebrow>
             {row.incomingEdges.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-xs text-muted-foreground">
                 Nothing points at this entity.
               </p>
             ) : (
@@ -439,7 +447,7 @@ function EntityDetailPanel({
           <Stack gap="sm">
             <Eyebrow>Lifecycle operations</Eyebrow>
             {operations.length === 0 ? (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-xs text-muted-foreground">
                 No delete or merge operation declared.
               </p>
             ) : (

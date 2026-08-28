@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { OnChangeFn, RowSelectionState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+
 import type { EntityActionsEntry } from "../actions/entity-actions";
 import type {
   BulkAction,

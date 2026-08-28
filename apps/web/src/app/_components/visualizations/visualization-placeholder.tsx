@@ -27,7 +27,7 @@ export function VisualizationPlaceholder({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-3 inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-foreground text-sm hover:bg-muted"
+            className="mt-3 inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-foreground hover:bg-muted"
           >
             {retryLabel}
           </button>

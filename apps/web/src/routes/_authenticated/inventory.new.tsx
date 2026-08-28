@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import CreateInventoryItem from "~/app/inventory/new/new-inventory";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

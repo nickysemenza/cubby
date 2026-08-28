@@ -1,8 +1,10 @@
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+
 import { location } from "~/app/locations/location.functions";
 import { product } from "~/app/products/product.functions";
+
 import type { LabelItem } from "./sheet-layouts";
 
 // Stable fallback for disabled queries: an inline `= []` default creates a new

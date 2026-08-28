@@ -4,6 +4,7 @@ import type { UseSuspenseQueryOptions } from "@tanstack/react-query";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, notFound, useParams } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
+
 import type { PageLayout } from "~/components/layout/page-wrapper";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";

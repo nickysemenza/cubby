@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+
 import type { DiagnosticKey } from "~/entities/problem-query";
+
 import { diagnosticAdapters } from "./problem-diagnostics.service";
 
 describe("Problem diagnostic adapters", () => {

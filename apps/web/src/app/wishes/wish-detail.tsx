@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Heart, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -27,6 +28,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { patchCachedListItem } from "~/lib/optimistic-list";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   type DetailSection,
   DetailSections,

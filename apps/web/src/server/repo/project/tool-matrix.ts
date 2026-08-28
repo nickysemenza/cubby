@@ -56,6 +56,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+
 import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient } from "~/server/db";
@@ -74,6 +75,7 @@ import {
   notDeleted,
 } from "~/server/repo/database-helpers";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
+
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 import {

@@ -9,6 +9,7 @@ import {
 import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, inArray, lte, sql } from "drizzle-orm";
+
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -23,6 +24,7 @@ import {
   loadProjectTree,
 } from "~/server/repo/project/subtree";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+
 import {
   type ExpenseAllocationRow,
   type ExpenseAllocationScope,
@@ -252,20 +254,20 @@ export async function householdContributionLedger(
       row.costCents === null ? [] : [BigInt(row.costCents)],
     ),
   );
-  const consumedTotalCents = sum([
-    ...[...balances.values()].map((row) => row.consumed),
-  ]);
+  const consumedTotalCents = sum(
+    [...balances.values()].map((row) => row.consumed),
+  );
   const fundedTotalCents = sum(
     [...balances.values()].map((row) => row.initiallyOutlaid),
   );
   const transferNetCents = sum(
     [...balances.values()].map((row) => row.sent - row.received),
   );
-  const positionNetCents = sum([
-    ...[...balances.values()].map(
+  const positionNetCents = sum(
+    [...balances.values()].map(
       (row) => row.initiallyOutlaid + row.sent - row.received - row.consumed,
     ),
-  ]);
+  );
   const unpricedGaps: Gap[] = expenseFacts
     .filter((row) => row.costCents === null)
     .map((row) => ({

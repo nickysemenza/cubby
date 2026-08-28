@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
@@ -49,10 +50,12 @@ import {
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import type { SessionLocation } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
 
@@ -339,7 +342,7 @@ export function SessionCaptureActions({
                   className="border border-[var(--border)] p-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium text-sm">
+                    <div className="truncate text-sm font-medium">
                       {item.name}
                     </div>
                     <Description size="xs">
@@ -441,7 +444,7 @@ export function SessionCaptureActions({
               value={photoName}
               onChange={(event) => setPhotoName(event.target.value)}
               placeholder="e.g. blue tarp clamp"
-              autoFocus
+              ref={focusOnMount}
               disabled={photoIdentityPending}
             />
             <Button

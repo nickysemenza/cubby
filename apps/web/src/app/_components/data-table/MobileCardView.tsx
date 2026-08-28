@@ -10,12 +10,14 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
+
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
@@ -316,12 +318,7 @@ export function MobileCardView<TItem extends RowData>({
     );
 
     return (
-      <VirtualRow
-        key={row.id}
-        vi={vi}
-        virtualizer={virtualizer}
-        role="listitem"
-      >
+      <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
         {card}
       </VirtualRow>
     );
@@ -363,7 +360,7 @@ export function MobileCardView<TItem extends RowData>({
           )}
         </div>
       ) : emptyState ? (
-        <div className="px-2 py-6 text-center text-muted-foreground text-sm">
+        <div className="px-2 py-6 text-center text-sm text-muted-foreground">
           {emptyState}
         </div>
       ) : entity && isBrowserRoutedEntity(entity) ? (

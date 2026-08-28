@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, CalendarClock } from "lucide-react";
 import { useId, useMemo } from "react";
+
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { product as productOperations } from "~/app/products/product.functions";
@@ -64,7 +65,7 @@ function MovementControls({ order }: { order: "asc" | "desc" }) {
   const toId = useId();
   return (
     <Row align="end" wrap gap="sm">
-      <label htmlFor={fromId} className="text-muted-foreground text-xs">
+      <label htmlFor={fromId} className="text-xs text-muted-foreground">
         From
         <DatePickerInput
           id={fromId}
@@ -83,7 +84,7 @@ function MovementControls({ order }: { order: "asc" | "desc" }) {
           className="mt-1 w-40"
         />
       </label>
-      <label htmlFor={toId} className="text-muted-foreground text-xs">
+      <label htmlFor={toId} className="text-xs text-muted-foreground">
         To
         <DatePickerInput
           id={toId}
@@ -179,7 +180,7 @@ function MovementLine({
   groupDate: string;
 }) {
   return (
-    <div className="grid gap-2 border-[var(--border)] border-t px-4 py-2 md:grid-cols-[minmax(14rem,1fr)_8rem_10rem_minmax(12rem,1fr)] md:items-center">
+    <div className="grid gap-2 border-t border-[var(--border)] px-4 py-2 md:grid-cols-[minmax(14rem,1fr)_8rem_10rem_minmax(12rem,1fr)] md:items-center">
       <Stack gap="tight" className="min-w-0">
         <EntityInlineLink
           displayImage={undefined}
@@ -390,8 +391,8 @@ function LifecyclesView({
   return (
     <div className="overflow-x-auto border border-[var(--border)]">
       <div className="min-w-[64rem]">
-        <div className="grid grid-cols-[16rem_1fr] border-[var(--border)] border-b bg-muted/40">
-          <div className="sticky left-0 z-10 border-[var(--border)] border-r bg-muted p-2 font-mono text-xs uppercase tracking-wider">
+        <div className="grid grid-cols-[16rem_1fr] border-b border-[var(--border)] bg-muted/40">
+          <div className="sticky left-0 z-10 border-r border-[var(--border)] bg-muted p-2 font-mono text-xs tracking-wider uppercase">
             Product
           </div>
           <Row justify="between" className="p-2 font-mono text-xs">
@@ -409,11 +410,11 @@ function LifecyclesView({
           return (
             <div
               key={product.id}
-              className="grid grid-cols-[16rem_1fr] border-[var(--border)] border-b last:border-b-0"
+              className="grid grid-cols-[16rem_1fr] border-b border-[var(--border)] last:border-b-0"
             >
               <Stack
                 gap="tight"
-                className="sticky left-0 z-10 min-w-0 border-[var(--border)] border-r bg-background p-2"
+                className="sticky left-0 z-10 min-w-0 border-r border-[var(--border)] bg-background p-2"
               >
                 <EntityInlineLink
                   displayImage={undefined}
@@ -446,7 +447,7 @@ function LifecyclesView({
                   </Description>
                 )}
               </Stack>
-              <div className="relative h-16 bg-[length:25%_100%] bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px)]">
+              <div className="relative h-16 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px)] bg-[length:25%_100%]">
                 {visibleIntervals.map((interval) => {
                   const left = position(interval.start);
                   const right = position(interval.end);
@@ -571,7 +572,9 @@ export function ProductMovementViews({
           {data.omitted.plannedMovements > 0 && (
             <>
               {data.omitted.plannedMovements} planned movement
-              {data.omitted.plannedMovements === 1 ? " is" : "s are"} omitted.{" "}
+              {data.omitted.plannedMovements === 1
+                ? " is"
+                : "s are"} omitted.{" "}
               <Link
                 to="/expenses"
                 search={{ future: "true", product: "has" }}

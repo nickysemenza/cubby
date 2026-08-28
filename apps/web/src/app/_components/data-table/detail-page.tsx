@@ -12,6 +12,7 @@ import {
   useMemo,
   useState,
 } from "react";
+
 import { Row } from "~/components/layout";
 import { usePageDetailContext } from "~/components/page/Page";
 import {
@@ -24,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
+
 import {
   EntityActionButtons,
   type EntityActionRow,
@@ -247,9 +249,9 @@ function DetailAnchorIndex({
   return (
     <nav
       aria-label="Record sections"
-      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 items-stretch overflow-x-auto overscroll-x-contain border-border border-b bg-card px-1 [scrollbar-width:none] md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
+      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 [scrollbar-width:none] items-stretch overflow-x-auto overscroll-x-contain border-b border-border bg-card px-1 md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
     >
-      <span className="hidden shrink-0 pr-2 font-medium text-muted-foreground text-xs md:block">
+      <span className="hidden shrink-0 pr-2 text-xs font-medium text-muted-foreground md:block">
         Sections
       </span>
       {indexed.map((section) => (
@@ -263,7 +265,7 @@ function DetailAnchorIndex({
             jump(section.id);
           }}
           className={cn(
-            "relative flex min-h-11 shrink-0 items-center px-2 font-medium text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-0 md:py-1",
+            "relative flex min-h-11 shrink-0 items-center px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none md:min-h-0 md:py-1",
             activeId === section.id
               ? "text-primary after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-primary"
               : "text-muted-foreground hover:text-foreground",
@@ -405,7 +407,7 @@ function renderResponsiveLayout({
   }
   flushRun();
   return (
-    <div className="space-y-4 max-md:space-y-0 max-md:divide-y max-md:divide-border max-md:border-border max-md:border-y">
+    <div className="space-y-4 max-md:space-y-0 max-md:divide-y max-md:divide-border max-md:border-y max-md:border-border">
       {blocks}
     </div>
   );
@@ -629,7 +631,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       <TabsList
         variant="line"
         aria-label="Record views"
-        className="w-full justify-start border-border border-b bg-card px-2 md:px-4"
+        className="w-full justify-start border-b border-border bg-card px-2 md:px-4"
       >
         <TabsTrigger value="overview">Overview</TabsTrigger>
         {hasRelations ? (
@@ -659,7 +661,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
                 />
               </Row>
             ) : null}
-            <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
+            <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
               {renderResponsiveLayout({
                 sections: overviewSections,
                 visual,
@@ -682,7 +684,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
       {activeMode === "relations" && relationshipSection ? (
         <TabsContent value="relations" className="text-sm/5">
-          <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
+          <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
             {renderResponsiveLayout({
               sections: [{ ...relationshipSection, placement: "full" }],
             })}
@@ -692,7 +694,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 
       {activeMode === "activity" && resolvedActivitySection ? (
         <TabsContent value="activity" className="text-sm/5">
-          <div className="fade-in-0 slide-in-from-bottom-1 animate-in duration-150 motion-reduce:animate-none">
+          <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
             {renderResponsiveLayout({
               sections: [{ ...resolvedActivitySection, placement: "full" }],
             })}

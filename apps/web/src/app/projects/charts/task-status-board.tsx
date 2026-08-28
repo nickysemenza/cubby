@@ -7,9 +7,11 @@ import { taskStatusValues } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { getStatusChartColor } from "~/lib/status-colors";
+
 import { ProjectMark } from "../project-mark";
 import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
@@ -121,7 +123,7 @@ export function TaskStatusBoard({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.projectId} className="border-border/50 border-t">
+            <tr key={row.projectId} className="border-t border-border/50">
               <td className="max-w-[150px] truncate py-2 pr-2 font-medium">
                 {row.projectShortcode ? (
                   <Link
@@ -154,7 +156,7 @@ export function TaskStatusBoard({
                   <td key={status} className="px-2 py-2 text-center">
                     {count > 0 ? (
                       <span
-                        className="inline-flex h-6 w-8 items-center justify-center font-medium text-background text-xs"
+                        className="inline-flex h-6 w-8 items-center justify-center text-xs font-medium text-background"
                         style={{
                           backgroundColor: color,
                           opacity: 0.3 + intensity * 0.7,

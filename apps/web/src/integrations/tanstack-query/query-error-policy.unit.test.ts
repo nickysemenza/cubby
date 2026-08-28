@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { shouldToastQueryError } from "./query-error-policy";
 
 const query = (speculative: boolean, observers: number) => ({

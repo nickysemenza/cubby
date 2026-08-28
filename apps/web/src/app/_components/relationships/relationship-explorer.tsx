@@ -1,9 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+
 import { Button } from "~/components/ui/button";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { relatedData } from "~/lib/related-data.functions";
+
 import { useRelationshipRoutePreview } from "./relationship-route-preview";
 import { type RelationshipPreset, RelationshipTree } from "./relationship-tree";
 
@@ -117,13 +119,13 @@ export function RelationshipExplorer({
   if (views.length === 0) return null;
   if (previewsLoading) {
     return (
-      <p className="text-muted-foreground text-sm">Loading relationships…</p>
+      <p className="text-sm text-muted-foreground">Loading relationships…</p>
     );
   }
   if (query.isError) {
     return (
       <div className="space-y-2">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Relationships could not be loaded.
         </p>
         <Button
@@ -137,7 +139,7 @@ export function RelationshipExplorer({
     );
   }
   if (groups.every((group) => group.totalCount === 0)) {
-    return <p className="text-muted-foreground text-sm">No linked records.</p>;
+    return <p className="text-sm text-muted-foreground">No linked records.</p>;
   }
   return <RelationshipTree presets={presets} loadChildren={loadChildren} />;
 }

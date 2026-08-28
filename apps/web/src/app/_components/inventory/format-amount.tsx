@@ -2,6 +2,7 @@ import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReadonlyDeep } from "type-fest";
+
 import { NoneValue } from "~/components/ui/none-value";
 import {
   Tooltip,
@@ -12,6 +13,7 @@ import {
 import { convertAmountToPrice } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import { renderValueOrError } from "~/misc/result";
+
 import ValidInvalidIcon from "../icons/valid-invalid";
 
 /**

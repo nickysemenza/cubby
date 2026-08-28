@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+
 import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
+
 import { entityMutation } from "./entity-mutation.functions";
 
 const hasTag = (tags: readonly (readonly string[])[], tag: readonly string[]) =>

@@ -6,9 +6,11 @@ import type {
 } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
+
 import { Section, Stack } from "~/components/layout";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { parsePlainDate } from "~/lib/plain-date";
+
 import { CategoryBreakdown } from "./charts/category-breakdown";
 import { ProjectGantt } from "./charts/gantt/ProjectGantt";
 import { PlannedVsActual } from "./charts/planned-vs-actual";
@@ -114,7 +116,7 @@ function ProjectTimelineAgenda({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Dated work in order. The interactive Gantt is available on wider
         screens.
       </p>
@@ -122,7 +124,7 @@ function ProjectTimelineAgenda({
         <section className="border" aria-label="Project timeline agenda">
           {groups.map((group) => (
             <section key={group.day}>
-              <h3 className="flex min-h-8 items-center gap-2 border-b bg-muted px-2 font-mono text-2xs uppercase tracking-wider">
+              <h3 className="flex min-h-8 items-center gap-2 border-b bg-muted px-2 font-mono text-2xs tracking-wider uppercase">
                 {format(parsePlainDate(group.day), "EEE MMM d")}
                 <span className="ml-auto text-slate tabular-nums">
                   {group.entries.length}
@@ -140,7 +142,7 @@ function ProjectTimelineAgenda({
                         params={entityDetailParams(entry.task.id)}
                         className="flex min-h-11 min-w-0 items-center justify-between gap-2 px-2 py-1.5 hover:bg-muted"
                       >
-                        <span className="min-w-0 truncate font-medium text-sm">
+                        <span className="min-w-0 truncate text-sm font-medium">
                           {entry.task.name}
                         </span>
                         <span className="shrink-0 font-mono text-2xs text-slate">
@@ -156,7 +158,7 @@ function ProjectTimelineAgenda({
                         <Link
                           to={entities.project.routes.detail}
                           params={entityDetailParams(entry.task.projectId)}
-                          className="flex min-h-11 items-center border-t px-2 text-muted-foreground text-xs hover:bg-muted hover:text-foreground"
+                          className="flex min-h-11 items-center border-t px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
                           In project: {entry.task.projectName}
                         </Link>
@@ -172,7 +174,7 @@ function ProjectTimelineAgenda({
                         params={entityDetailParams(entry.project.id)}
                         className="flex min-h-11 min-w-0 items-center justify-between gap-2 px-2 py-1.5 hover:bg-muted"
                       >
-                        <span className="min-w-0 truncate font-medium text-sm">
+                        <span className="min-w-0 truncate text-sm font-medium">
                           {entry.project.name}
                         </span>
                         <span className="shrink-0 font-mono text-2xs text-slate">
@@ -198,14 +200,14 @@ function ProjectTimelineAgenda({
           ))}
         </section>
       ) : (
-        <p className="border-y py-4 text-center text-muted-foreground text-xs">
+        <p className="border-y py-4 text-center text-xs text-muted-foreground">
           No dated tasks or sub-projects yet.
         </p>
       )}
 
       {(unscheduledTasks.length > 0 || unscheduledProjects.length > 0) && (
         <section className="border" aria-label="Unscheduled project work">
-          <h3 className="flex min-h-8 items-center border-b bg-muted px-2 font-mono text-2xs uppercase tracking-wider">
+          <h3 className="flex min-h-8 items-center border-b bg-muted px-2 font-mono text-2xs tracking-wider uppercase">
             Not scheduled ·{" "}
             {unscheduledTasks.length + unscheduledProjects.length}
           </h3>
@@ -214,7 +216,7 @@ function ProjectTimelineAgenda({
               key={project.id}
               to={entities.project.routes.detail}
               params={entityDetailParams(project.id)}
-              className="flex min-h-11 items-center border-b px-2 font-medium text-sm hover:bg-muted"
+              className="flex min-h-11 items-center border-b px-2 text-sm font-medium hover:bg-muted"
             >
               Sub-project: {project.name}
             </Link>
@@ -224,7 +226,7 @@ function ProjectTimelineAgenda({
               key={task.id}
               to={entities.task.routes.detail}
               params={entityDetailParams(task.id)}
-              className="flex min-h-11 items-center border-b px-2 font-medium text-sm last:border-b-0 hover:bg-muted"
+              className="flex min-h-11 items-center border-b px-2 text-sm font-medium last:border-b-0 hover:bg-muted"
             >
               Task: {task.name}
             </Link>

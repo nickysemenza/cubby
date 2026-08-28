@@ -5,6 +5,7 @@ import { ChevronRight, Search, X } from "lucide-react";
 import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { Row, Stack } from "~/components/layout";
@@ -14,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { cn } from "~/lib/utils";
+
 import {
   flattenAllLocations,
   flattenAuditableLocations,
@@ -159,11 +161,11 @@ export function ParentPicker({
                 key={pass.rootId}
                 align="center"
                 gap="sm"
-                className="border-[var(--border)] border-b p-4 last:border-b-0"
+                className="border-b border-[var(--border)] p-4 last:border-b-0"
               >
                 <Stack gap="xs" className="min-w-0 flex-1">
                   <Row align="center" gap="sm" className="min-w-0">
-                    <span className="min-w-0 truncate font-medium text-sm">
+                    <span className="min-w-0 truncate text-sm font-medium">
                       {pass.location.name}
                     </span>
                     <Badge variant="outline">
@@ -256,10 +258,10 @@ export function ParentPicker({
               const sessionCount = flattenAuditableLocations(location).length;
               const expanded = expandedIds.has(location.id) || searching;
               return (
-                // biome-ignore lint/a11y/useSemanticElements: This row contains a separate expand button, so it cannot be a native button.
                 <div
-                  key={location.id}
+                  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- This composite tree row contains a separate disclosure button, so a native button would create invalid nested controls.
                   role="button"
+                  key={location.id}
                   tabIndex={0}
                   onClick={() => onSelect(location.id)}
                   onKeyDown={(event) => {
@@ -268,7 +270,7 @@ export function ParentPicker({
                       onSelect(location.id);
                     }
                   }}
-                  className="w-full border-[var(--border)] border-b bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted" /* tight: compact tree picker row */
+                  className="w-full border-b border-[var(--border)] bg-card py-2 pr-3 text-left transition-colors last:border-b-0 hover:bg-muted" /* tight: compact tree picker row */
                 >
                   <LocationTreeRow
                     location={location}

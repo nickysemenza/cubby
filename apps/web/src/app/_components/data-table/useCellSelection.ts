@@ -2,8 +2,10 @@ import type { RowData } from "@tanstack/react-table";
 import * as React from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+
 import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { resolveCellClearTarget } from "./cell-clear";
 import { flashElement } from "./cell-clipboard";
 import {
@@ -122,7 +124,6 @@ export function useCellSelection<TItem extends RowData>({
     .concat(`:${table.options.enableCellSelection !== false}`);
   // columnsSignature (a string) is the observable trigger; keying on it rather
   // than the fresh display-order arrays is intentional and stable.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: signature stands in for the column list
   const selectableColumnIds = React.useMemo(
     () =>
       [
@@ -137,6 +138,7 @@ export function useCellSelection<TItem extends RowData>({
             !NON_SELECTABLE_COLUMN_IDS.has(column.id),
         )
         .map((column) => column.id),
+    // oxlint-disable-next-line react/exhaustive-deps -- signature stands in for the column list
     [columnsSignature],
   );
   const colCount = selectableColumnIds.length;
@@ -188,7 +190,6 @@ export function useCellSelection<TItem extends RowData>({
       }),
     [state.sorting, state.columnFilters, state.pagination],
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: dataSignature is the intended trigger
   React.useEffect(() => {
     resetCellSelection(true);
   }, [dataSignature, resetCellSelection]);
@@ -202,7 +203,6 @@ export function useCellSelection<TItem extends RowData>({
       }),
     [state.columnOrder, state.columnPinning, state.columnVisibility],
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: serialized layout signature is the intentional reset trigger
   React.useEffect(() => {
     resetCellSelection(true);
   }, [layoutSignature, resetCellSelection]);

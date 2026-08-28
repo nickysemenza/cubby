@@ -4,6 +4,7 @@ import { flexRender } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useRef } from "react";
+
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Stack } from "~/components/layout";
@@ -23,6 +24,7 @@ import {
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
+
 import {
   type EntityActionsEntry,
   EntityActionsProvider,
@@ -30,9 +32,9 @@ import {
 } from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { CellSelectionContext } from "./cell-selection-context";
-import { DesktopDataRow as DataRow } from "./DesktopDataRow";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
+import { DesktopDataRow as DataRow } from "./DesktopDataRow";
 import {
   EntityEmptyState,
   FilteredEmptyState,
@@ -42,9 +44,9 @@ import {
 import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
-import TableHeaderLayout from "./TableHeaderLayout";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { columnWidthValue } from "./table-layout";
+import TableHeaderLayout from "./TableHeaderLayout";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
 import type { TableDensity } from "./useTableDensity";
@@ -358,10 +360,10 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     showColumnMenu ||
     Boolean(
       actions ??
-        bulkActionBar ??
-        additionalToolbarContent ??
-        groupConfig ??
-        hasFilterConfig,
+      bulkActionBar ??
+      additionalToolbarContent ??
+      groupConfig ??
+      hasFilterConfig,
     );
   const showPagination = !embedded || table.getPageCount() > 1;
   // The control is a page-workbench affordance. Embedded relationship ledgers
@@ -483,6 +485,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         {topSpacerHeight > 0 && (
           <tr>
             <td
+              aria-label="Virtualized rows above"
               colSpan={colSpan}
               className="border-0 p-0"
               style={{
@@ -500,12 +503,12 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             return (
               <TableRow
                 key="infinite-sentinel"
-                className="border-border border-b bg-background"
+                className="border-b border-border bg-background"
                 style={{ height: `${virtualRow.size}px` }}
               >
                 <TableCell
                   colSpan={colSpan}
-                  className="text-center text-muted-foreground text-xs"
+                  className="text-center text-xs text-muted-foreground"
                 >
                   <div ref={setDesktopInfiniteSentinel} className="h-px" />
                   {isFetchingNextPage ? "Loading more..." : null}
@@ -517,7 +520,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             return (
               <TableRow
                 key={`group-${item.title}`}
-                className="border-border/30 border-b"
+                className="border-b border-border/30"
                 style={{ height: `${virtualRow.size}px` }}
               >
                 <TableCell colSpan={colSpan} className="p-0">
@@ -612,6 +615,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         {bottomSpacerHeight > 0 && (
           <tr>
             <td
+              aria-label="Virtualized rows below"
               colSpan={colSpan}
               className="border-0 p-0"
               style={{
@@ -632,7 +636,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     // the viewport and the width-slack spacer into an absurd gutter.
     <Stack className="max-w-[90rem]">
       {!isMobile && externalToolbar && desktopToolbar && (
-        <div className="hidden shrink-0 border-border border-b bg-background md:block">
+        <div className="hidden shrink-0 border-b border-border bg-background md:block">
           {desktopToolbar}
         </div>
       )}
@@ -689,7 +693,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             {/* Toolbar — the column's fixed top end. Holds view options,
               filters reset, the bulk-action bar, and a page-size control. */}
             {showToolbar && !externalToolbar && (
-              <div className="shrink-0 border-border border-b bg-background">
+              <div className="shrink-0 border-b border-border bg-background">
                 {desktopToolbar}
               </div>
             )}
@@ -704,15 +708,16 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               past the wrapper's ceiling and hand the scroll back to the page.
               Cell selection (keyboard + mouse) is wired via containerProps;
               data-[cell-dragging] suppresses native text selection mid-drag. */}
-            <div
+            <section
+              // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The keyboard-navigable grid and horizontal scroll pane must be directly focusable.
+              tabIndex={0}
               ref={tableContainerRef}
               // Names the pane for the router's scroll restoration, which
               // otherwise addresses it by a positional nth-child path that
               // changes as chrome above it renders. See useTableVirtualizer.
               data-scroll-restoration-id={scrollRestorationId}
+              aria-label={`${ariaLabel} keyboard navigation`}
               className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
-              // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard cell navigation requires focusable container
-              tabIndex={0}
               {...cellSelectionContainerProps}
             >
               <Table
@@ -771,7 +776,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                     );
                     if (!hasFooter) return null;
                     return (
-                      <TableFooter className="border-t bg-card font-medium text-sm">
+                      <TableFooter className="border-t bg-card text-sm font-medium">
                         {footerGroups.map((footerGroup) => (
                           <TableRow
                             key={footerGroup.id}
@@ -849,14 +854,14 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                   {statusContent}
                 </div>
               )}
-            </div>
+            </section>
 
             {/* The column's fixed bottom end. Page-size and page nav stay put
               while the pane scrolls between the two ends, so neither needs
               `position: sticky` to stay reachable. */}
             {((!infiniteScroll && showPagination) ||
               showCellSelectionStats) && (
-              <div className="shrink-0 border-[var(--border)] border-t bg-background px-2 py-1">
+              <div className="shrink-0 border-t border-[var(--border)] bg-background px-2 py-1">
                 <DataTablePagination
                   table={table}
                   timing={timing}
@@ -867,7 +872,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             )}
             {desktopInspector && !embedded && (
               <div
-                className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-border border-l bg-card xl:block"
+                className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
                 data-desktop-inspector
               >
                 {desktopInspector}

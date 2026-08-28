@@ -1,4 +1,5 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";

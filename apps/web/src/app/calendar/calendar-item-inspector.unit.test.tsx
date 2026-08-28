@@ -1,10 +1,10 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
+
 import {
   CalendarInspectorBody,
   EditableCalendarItem,

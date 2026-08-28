@@ -1,4 +1,5 @@
 import { type ReactNode, Suspense } from "react";
+
 import { Description } from "~/components/ui/description";
 
 interface VisualizationPanelProps {
@@ -16,7 +17,7 @@ export function VisualizationPanel({
 }: VisualizationPanelProps) {
   return (
     <div>
-      <h3 className="mb-2 font-semibold text-lg">{title}</h3>
+      <h3 className="mb-2 text-lg font-semibold">{title}</h3>
       {description && <Description className="mb-4">{description}</Description>}
       <Suspense fallback={fallback}>{children}</Suspense>
     </div>

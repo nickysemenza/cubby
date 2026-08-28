@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
 import { Prose } from "./Prose";
 
 /**
@@ -33,19 +34,19 @@ const components = {
   ),
   th: (props: ElementProps<"th">) => (
     <th
-      className="border-border border-b px-2 py-1 font-medium text-foreground"
+      className="border-b border-border px-2 py-1 font-medium text-foreground"
       {...clean(props)}
     />
   ),
   td: (props: ElementProps<"td">) => (
     <td
-      className="border-border/50 border-b px-2 py-1 align-top text-muted-foreground"
+      className="border-b border-border/50 px-2 py-1 align-top text-muted-foreground"
       {...clean(props)}
     />
   ),
   blockquote: (props: ElementProps<"blockquote">) => (
     <blockquote
-      className="my-4 border-primary/40 border-l bg-muted/40 py-2 pl-2 text-muted-foreground"
+      className="my-4 border-l border-primary/40 bg-muted/40 py-2 pl-2 text-muted-foreground"
       {...clean(props)}
     />
   ),

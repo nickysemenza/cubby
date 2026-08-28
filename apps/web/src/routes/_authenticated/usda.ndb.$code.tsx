@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
@@ -81,7 +82,7 @@ function USDANDBLookupPage() {
       entity="usda-food"
       compact
     >
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Redirecting to USDA food...
       </p>
     </Page>

@@ -8,6 +8,7 @@ import {
   dataTypeLabel,
 } from "@cubby/usda-schemas";
 import { useCallback, useMemo } from "react";
+
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -18,6 +19,7 @@ import { usdaFood } from "~/entities/usda.functions";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
+
 import { createEntityInlineLinkColumn } from "../_components/data-table/columnHelpers";
 import type { TableStateReturn } from "../_components/data-table/useTableState";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";

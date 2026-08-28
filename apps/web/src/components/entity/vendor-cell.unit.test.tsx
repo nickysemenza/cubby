@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { VendorCell, VendorMark } from "./vendor-cell";
 
 vi.mock("~/app/_components/EntityPreviewLink", () => ({

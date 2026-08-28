@@ -1,5 +1,6 @@
 import { Keyboard, ScanBarcode } from "lucide-react";
 import { useCallback, useId, useRef, useState } from "react";
+
 import {
   PersistentScanner,
   UNIVERSAL_SCAN_FORMATS,
@@ -57,7 +58,7 @@ export function ScanWorkbench({ onResolve }: ScanWorkbenchProps) {
 
   return (
     <Stack gap="sm" className="w-full md:mx-auto md:max-w-2xl">
-      <div className="flex min-h-11 items-center justify-between border-border border-b px-2 md:border">
+      <div className="flex min-h-11 items-center justify-between border-b border-border px-2 md:border">
         <Description size="xs">
           Camera ready for Cubby and product codes
         </Description>

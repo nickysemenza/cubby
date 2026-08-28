@@ -1,19 +1,21 @@
 import type { WRichItem } from "@cubby/recipebridge";
 import { match } from "ts-pattern";
 import type { ReadonlyDeep } from "type-fest";
+
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
+
 import { tryFormatAmount } from "../inventory/format-amount";
 
 export const formatRichText = (text: ReadonlyDeep<WRichItem[]>) => {
-  return text.map((t, x) =>
+  return text.map((t, index) =>
     match(t)
       .with({ kind: "Text" }, (t) => t.value)
       .with({ kind: "Ing" }, (t) => (
         <span
           className="border-b-2 box-decoration-clone pb-px font-medium"
           style={{ borderBottomColor: INGREDIENT_PART_COLOR.name }}
-          // biome-ignore lint/suspicious/noArrayIndexKey: WRichItem array has no stable IDs
-          key={x}
+          // oxlint-disable-next-line react/no-array-index-key -- Rich-text tokens are positional, can repeat identical content, and carry no stable id.
+          key={index}
         >
           {t.value}
         </span>
@@ -30,8 +32,8 @@ export const formatRichText = (text: ReadonlyDeep<WRichItem[]>) => {
           <span
             className="border-b-2 box-decoration-clone pb-px font-medium"
             style={{ borderBottomColor: INGREDIENT_PART_COLOR.amount }}
-            // biome-ignore lint/suspicious/noArrayIndexKey: WRichItem array has no stable IDs
-            key={x}
+            // oxlint-disable-next-line react/no-array-index-key -- Rich-text tokens are positional, can repeat identical content, and carry no stable id.
+            key={index}
           >
             {tryFormatAmount(val)}
           </span>

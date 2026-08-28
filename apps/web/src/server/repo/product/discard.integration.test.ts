@@ -1,12 +1,14 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   entityEmbedding,
   expense,
   inventoryEntry,
   product,
 } from "~/server/db/schema";
+
 import { getDb } from "../database-helpers";
 import {
   createInventoryFixture as createInventoryEntry,
@@ -280,6 +282,7 @@ describe("discardProductUnits", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -302,6 +305,7 @@ describe("discardProductUnits", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 });

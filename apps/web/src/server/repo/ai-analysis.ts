@@ -1,6 +1,7 @@
 import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
+
 import type { AiFeature } from "~/server/ai/features";
 import type { Database } from "~/server/db";
 import { aiAnalysis } from "~/server/db/schema";

@@ -1,5 +1,6 @@
 import { ClipboardList, Code, Import, Link2 } from "lucide-react";
 import { type Control, Controller } from "react-hook-form";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -8,6 +9,7 @@ import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
+
 import { FormFieldGroup } from "../../forms/form-field-group";
 import { formatRichText } from "../richtext";
 import {
@@ -203,9 +205,13 @@ export function ImportToolsPanel({
             <div className="mt-2 min-h-[120px] rounded border border-[var(--border)] bg-muted/30 p-2">
               {richInstructions.length > 0 ? (
                 <Stack as="ol" gap="sm" className="list-decimal pl-4 text-sm">
-                  {richInstructions.map((richItems, idx) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
-                    <li key={idx}>{formatRichText(richItems)}</li>
+                  {richInstructions.map((richItems, index) => (
+                    <li
+                      // oxlint-disable-next-line react/no-array-index-key -- Instructions are a positional authored list without stable ids, and duplicate lines are valid.
+                      key={index}
+                    >
+                      {formatRichText(richItems)}
+                    </li>
                   ))}
                 </Stack>
               ) : (

@@ -2,12 +2,14 @@ import type { TaskOut } from "@cubby/schemas/project";
 import { Link } from "@tanstack/react-router";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { entities, entityDetailParams } from "~/entities/entities";
+
 import { formatDate, StatusIcon } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
 import { CalendarHeatmap } from "./calendar-heatmap";
 import { ChartEmpty } from "./chart-empty";
+import { ChartTooltip } from "./ChartTooltip";
 
 export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
   const { data, from, to, itemsByDay } = useMemo(() => {
@@ -56,7 +58,7 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
         <ChartTooltip>
           <strong>{day}</strong>: {value} task
           {Number(value) !== 1 ? "s" : ""} due
-          <div className="text-muted-foreground text-xs">
+          <div className="text-xs text-muted-foreground">
             Click to see tasks
           </div>
         </ChartTooltip>
@@ -81,7 +83,7 @@ export function TaskHeatmap({ tasks }: { tasks: TaskOut[] }) {
             {task.name}
           </Link>
           {task.projectId && task.projectName && (
-            <span className="ml-auto min-w-0 max-w-32 text-muted-foreground">
+            <span className="ml-auto max-w-32 min-w-0 text-muted-foreground">
               <EntityInlineLink
                 displayImage={undefined}
                 entity="project"

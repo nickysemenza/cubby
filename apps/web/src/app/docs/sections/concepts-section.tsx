@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
+
 import { Prose } from "../_components/Prose";
 import { EntityRelationshipsDiagram } from "./entity-relationships-diagram";
 

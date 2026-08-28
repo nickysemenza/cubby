@@ -1,4 +1,5 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { WishList } from "~/app/wishes/wish-list";
 import { ensureEntityListSsr } from "~/entities/entity-list-ssr";

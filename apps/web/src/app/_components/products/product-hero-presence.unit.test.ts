@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { heroPresence } from "./product-hero-presence";
 
 describe("heroPresence", () => {

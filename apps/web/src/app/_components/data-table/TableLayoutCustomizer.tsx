@@ -23,6 +23,7 @@ import {
   PinOff,
   RotateCcw,
 } from "lucide-react";
+
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
@@ -36,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
+
 import { columnLabel } from "./data-table-view-options";
 import type {
   CubbyColumn as Column,
@@ -267,13 +269,13 @@ function Zone<TData extends RowData>({
   });
   return (
     <section className="space-y-1">
-      <h3 className="font-medium text-2xs text-muted-foreground uppercase tracking-wider">
+      <h3 className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
         {label}
       </h3>
       <div
         ref={setNodeRef}
         className={cn(
-          "min-h-9 space-y-1 border border-border border-dashed p-1",
+          "min-h-9 space-y-1 border border-dashed border-border p-1",
           isOver && "border-primary bg-primary/5",
         )}
       >

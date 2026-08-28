@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+
 import type { CopiedGrid } from "./cell-clipboard-model";
 import {
   bufferMatches,

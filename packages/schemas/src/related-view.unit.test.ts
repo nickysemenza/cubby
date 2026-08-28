@@ -51,11 +51,13 @@ describe("relatedViewRegistry", () => {
         sourceId: "VEN-ABCD",
       }),
     ).toMatchObject({ offset: 0, limit: 25 });
-    expect(() =>
-      relatedSummaryInput.parse({
-        relationKey: "vendor.purchases",
-        sourceId: "VEN-ABCD",
-      }),
+    expect(
+      () =>
+        relatedSummaryInput.parse({
+          relationKey: "vendor.purchases",
+          sourceId: "VEN-ABCD",
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
     expect(
       relatedSummaryOutput.parse({
@@ -72,28 +74,32 @@ describe("relatedViewRegistry", () => {
         nextOffset: null,
       }),
     ).toBeTruthy();
-    expect(() =>
-      relatedSummaryInput.parse({
-        relationKey: "vendor.products",
-        sourceId: "VEN-ABCD",
-        extra: true,
-      }),
+    expect(
+      () =>
+        relatedSummaryInput.parse({
+          relationKey: "vendor.products",
+          sourceId: "VEN-ABCD",
+          extra: true,
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
-    expect(() =>
-      relatedSummaryOutput.parse({
-        data: [],
-        count: 0,
-        totals: {
-          expenseCount: 0,
-          purchaseCount: 0,
-          unpricedExpenseCount: 0,
-          netSpend: 0,
-          knownAcquiredUnits: 0,
-          unknownAcquisitionQuantityCount: 0,
-        },
-        nextOffset: null,
-        extra: true,
-      }),
+    expect(
+      () =>
+        relatedSummaryOutput.parse({
+          data: [],
+          count: 0,
+          totals: {
+            expenseCount: 0,
+            purchaseCount: 0,
+            unpricedExpenseCount: 0,
+            netSpend: 0,
+            knownAcquiredUnits: 0,
+            unknownAcquisitionQuantityCount: 0,
+          },
+          nextOffset: null,
+          extra: true,
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 

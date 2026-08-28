@@ -2,6 +2,7 @@ import { TZDate } from "@date-fns/tz";
 import { Link2, X } from "lucide-react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import {
   PROJECT_STATUS_LABELS,
@@ -21,6 +22,7 @@ import { GanttView } from "~/components/reui/gantt/gantt-view";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
+
 import { fromDayIndex } from "./gantt-date";
 import type { DayRange, GanttRow } from "./gantt-model";
 import { getTradeColor } from "./trade-colors";
@@ -166,7 +168,7 @@ function DependencyNames({
   if (rows.length === 0 && missingCount === 0) return null;
   return (
     <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-      <span className="font-mono text-2xs text-slate uppercase tracking-wider">
+      <span className="font-mono text-2xs tracking-wider text-slate uppercase">
         {label} · {rows.length + missingCount}
       </span>
       {rows.map((row) => (
@@ -389,7 +391,7 @@ export function CubbyGantt({
               aria-controls={disclosureId}
               aria-expanded={selectedId === row?.id}
               aria-label={`Show ${count} dependency ${count === 1 ? "relationship" : "relationships"} for ${rowName}`}
-              className="inline-flex size-7 items-center justify-center gap-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex size-7 items-center justify-center gap-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               onClick={() =>
                 row &&
                 setSelectedId((current) => (current === row.id ? null : row.id))
@@ -432,7 +434,7 @@ export function CubbyGantt({
           <button
             type="button"
             aria-label={`Clear dependency summary for ${selectedDisclosure.row.name}`}
-            className="ml-auto inline-flex size-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="ml-auto inline-flex size-7 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             onClick={() => setSelectedId(null)}
           >
             <X className="size-3" />
@@ -461,11 +463,11 @@ export function CubbyGantt({
           if (!data) return undefined;
           return cn(
             data.kind === "envelope" &&
-              "h-1! self-center rounded-none! border-(--gantt-event-color)/60 border-x bg-(--gantt-event-color)/20! p-0!",
+              "h-1! self-center rounded-none! border-x border-(--gantt-event-color)/60 bg-(--gantt-event-color)/20! p-0!",
             data.milestone &&
               "mx-auto size-3! rotate-45 rounded-none! border border-(--gantt-event-color) bg-(--gantt-event-color)/60! p-0!",
             data.critical && "ring-2 ring-primary/60",
-            data.openEnded && "rounded-e-none! border-e-2 border-e-dashed",
+            data.openEnded && "border-e-dashed rounded-e-none! border-e-2",
             data.status === "blocked" && "ring-2 ring-destructive/70",
             data.status === "later" && "border border-dashed",
             connectedIds &&

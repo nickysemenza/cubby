@@ -14,6 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { QrCode } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 import { QR_CODE_FORMATS } from "~/app/_components/inventory/persistent-scanner";
 import { ScanSheet } from "~/app/_components/inventory/scan-sheet";
 import { Button } from "~/components/ui/button";

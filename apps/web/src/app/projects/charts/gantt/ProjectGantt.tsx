@@ -23,9 +23,11 @@ import {
   useMemo,
   useState,
 } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities, entityDetailParams } from "~/entities/entities";
+
 import { ProjectMark } from "../../project-mark";
 import { type ChainNode, longestChains } from "./gantt-chain";
 import { toDayIndex, todayPlain } from "./gantt-date";
@@ -168,7 +170,7 @@ export function ProjectGantt({
     <Stack gap="sm">
       {chain != null && (
         <Row align="center" gap="xs" className="font-mono text-2xs text-slate">
-          <span className="uppercase tracking-wider">chain</span>
+          <span className="tracking-wider uppercase">chain</span>
           <span className="text-foreground">
             {chain.workDays}d work / {chain.elapsedDays}d elapsed
           </span>
@@ -195,7 +197,7 @@ export function ProjectGantt({
         <Stack gap="xs">
           <Row align="center" gap="xs" className="text-muted-foreground">
             <CalendarOff className="size-3 shrink-0" />
-            <span className="font-mono text-2xs uppercase tracking-wider">
+            <span className="font-mono text-2xs tracking-wider uppercase">
               Unscheduled · {unscheduled.length}
             </span>
           </Row>

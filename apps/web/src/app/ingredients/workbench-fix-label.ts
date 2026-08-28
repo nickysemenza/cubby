@@ -1,4 +1,5 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
+
 import { hasPriceEntry } from "./workbench-editor-core";
 
 const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {

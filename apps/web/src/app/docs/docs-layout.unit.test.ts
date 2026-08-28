@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { DOCS_NAV_LINK_CLASS } from "./docs-layout";
 
 describe("documentation navigation", () => {

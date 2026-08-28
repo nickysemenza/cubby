@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import type { AnyRouter } from "@tanstack/react-router";
+
 import { recordNavigation } from "./perf-store";
 
 type PendingNavigation = {

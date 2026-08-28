@@ -1,8 +1,10 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { memo } from "react";
+
 import type { BaseKind } from "~/lib/conversion-coverage";
-import { ConversionDialog } from "./ConversionDialog";
+
 import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";
+import { ConversionDialog } from "./ConversionDialog";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];

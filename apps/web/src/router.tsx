@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { RouteNotFound } from "~/components/lazy-route-not-found";
 import { RoutePending } from "~/components/route-pending";
@@ -10,8 +11,8 @@ import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
 import { SENTRY_DSN } from "~/lib/sentry-dsn";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
-import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 
+import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
 
 // Defined by Vite only for CF builds (build:cf), absent under `vite dev`.

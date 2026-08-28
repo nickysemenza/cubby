@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { estimateAiUsageCostUsd, parseSupportedEmbeddingModel } from "./models";
 
 describe("AI model pricing", () => {

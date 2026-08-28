@@ -13,8 +13,10 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
@@ -255,7 +257,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
   );
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: D3 force-directed graph visualization interaction
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Blank-canvas click is a pointer convenience; the selected-link panel has a keyboard-operable close button.
     <div
       ref={containerRef}
       className="relative h-[400px] w-full overflow-hidden border border-[var(--border)]"
@@ -263,15 +265,15 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
     >
       <svg
         ref={svgRef}
-        role="img"
         aria-label={chartSummary}
         aria-describedby={summaryId}
         width={dimensions.width}
         height={dimensions.height}
       >
+        <title>{chartSummary}</title>
         {/* Links */}
         <g>
-          {simulatedLinks.map((link, i) => {
+          {simulatedLinks.map((link) => {
             const source = resolvedNetworkNode(link.source);
             const target = resolvedNetworkNode(link.target);
             if (!source?.x || !target?.x) return null;
@@ -288,26 +290,37 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                 : 0.4;
 
             return (
-              <g
-                // biome-ignore lint/suspicious/noArrayIndexKey: d3 simulation links don't have stable IDs
-                key={i}
-              >
-                {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 graph link click interaction */}
+              <g key={linkKey}>
+                {/* oxlint-disable jsx-a11y/prefer-tag-over-role -- SVG has no native button; this single focusable edge exposes pressed state and keyboard activation. */}
                 <line
+                  role="button"
                   x1={source.x}
                   y1={source.y}
                   x2={target.x}
                   y2={target.y}
                   stroke="transparent"
                   strokeWidth={Math.max(getLinkWidth(link.weight) + 8, 12)}
-                  className="cursor-pointer"
+                  className="peer cursor-pointer outline-none"
+                  tabIndex={0}
+                  aria-label={`Show recipes containing ${source.name} and ${target.name}`}
+                  aria-pressed={isSelected}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedLinkKey((current) =>
                       current === linkKey ? null : linkKey,
                     );
                   }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setSelectedLinkKey((current) =>
+                        current === linkKey ? null : linkKey,
+                      );
+                    }
+                  }}
                 />
+                {/* oxlint-enable jsx-a11y/prefer-tag-over-role */}
                 {/* Visible line */}
                 <line
                   x1={source.x}
@@ -321,7 +334,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                   }
                   strokeWidth={getLinkWidth(link.weight)}
                   strokeOpacity={opacity}
-                  className="pointer-events-none"
+                  className="pointer-events-none peer-focus-visible:stroke-primary peer-focus-visible:stroke-[3px]"
                 />
               </g>
             );
@@ -344,13 +357,16 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                 : node.name;
 
             return (
-              // biome-ignore lint/a11y/noStaticElementInteractions: D3 graph node hover interaction
               <g
                 key={node.id}
                 transform={`translate(${node.x ?? 0}, ${node.y ?? 0})`}
-                className="cursor-pointer"
+                role="graphics-symbol"
+                tabIndex={0}
+                aria-label={`${node.name}, used in ${node.recipeCount} recipes`}
                 onMouseEnter={() => setHoveredNode(node)}
                 onMouseLeave={() => setHoveredNode(null)}
+                onFocus={() => setHoveredNode(node)}
+                onBlur={() => setHoveredNode(null)}
               >
                 <circle
                   r={radius}
@@ -364,7 +380,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                   <text
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-background font-semibold text-2xs"
+                    className="pointer-events-none fill-background text-2xs font-semibold"
                   >
                     {truncatedName}
                   </text>
@@ -389,7 +405,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               key={ingredient.id}
               to="/ingredients/$shortcode"
               params={{ shortcode: ingredient.id }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+              className="inline-flex min-h-11 items-center px-2 text-xs text-primary hover:underline sm:min-h-0"
             >
               {ingredient.name} ({ingredient.recipeCount})
             </Link>
@@ -410,13 +426,14 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             </div>
             <button
               type="button"
+              aria-label="Close recipe pair details"
               onClick={() => setSelectedLinkKey(null)}
-              className="-mt-0.5 text-lg text-muted-foreground leading-none hover:text-foreground" /* tight: × optical-align nudge */
+              className="-mt-0.5 text-lg leading-none text-muted-foreground hover:text-foreground" /* tight: × optical-align nudge */
             >
               ×
             </button>
           </div>
-          <div className="mt-2 text-muted-foreground text-xs">
+          <div className="mt-2 text-xs text-muted-foreground">
             Together in {selectedLink.weight} recipe
             {selectedLink.weight !== 1 ? "s" : ""}:
           </div>
@@ -426,7 +443,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                 key={recipe.id}
                 to="/recipes/$shortcode"
                 params={{ shortcode: recipe.id }}
-                className="block text-primary text-xs hover:underline"
+                className="block text-xs text-primary hover:underline"
               >
                 {recipe.name}
               </Link>
@@ -452,7 +469,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             Used in {hoveredNode.recipeCount} recipe
             {hoveredNode.recipeCount !== 1 ? "s" : ""}
           </div>
-          <div className="text-muted-foreground text-xs">
+          <div className="text-xs text-muted-foreground">
             {
               simulatedLinks.filter((l) => {
                 const sourceId =

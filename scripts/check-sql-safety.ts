@@ -19,7 +19,9 @@ const failures: string[] = [];
 for (const file of files) {
   const source = readFileSync(resolve(root, file), "utf8");
   const executableSource = source
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => "\n".repeat(comment.split("\n").length - 1))
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+      "\n".repeat(comment.split("\n").length - 1),
+    )
     .replace(/^\s*\/\/.*$/gm, "");
   for (const [name, pattern] of [
     ["ANY(${array})", unsafeAny],
@@ -28,7 +30,9 @@ for (const file of files) {
     pattern.lastIndex = 0;
     for (const match of executableSource.matchAll(pattern)) {
       const line = executableSource.slice(0, match.index).split("\n").length;
-      failures.push(`${file}:${line}: unsafe ${name}; use the typed query helper`);
+      failures.push(
+        `${file}:${line}: unsafe ${name}; use the typed query helper`,
+      );
     }
   }
 }

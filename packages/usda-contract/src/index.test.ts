@@ -18,14 +18,20 @@ describe("listFoodsQuery", () => {
       }).pageSize,
     ).toBe(MAX_LIST_FOODS_PAGE_SIZE);
 
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => listFoodsQuery.parse({ pageIndex: "-1" })).toThrow();
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => listFoodsQuery.parse({ pageIndex: "1.5" })).toThrow();
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => listFoodsQuery.parse({ pageSize: "0" })).toThrow();
-    expect(() =>
-      listFoodsQuery.parse({
-        pageSize: String(MAX_LIST_FOODS_PAGE_SIZE + 1),
-      }),
+    expect(
+      () =>
+        listFoodsQuery.parse({
+          pageSize: String(MAX_LIST_FOODS_PAGE_SIZE + 1),
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => listFoodsQuery.parse({ pageSize: "1.5" })).toThrow();
   });
 
@@ -52,10 +58,12 @@ describe("batchLookupBody", () => {
     }));
 
     expect(() => batchLookupBody.parse({ lookups })).not.toThrow();
-    expect(() =>
-      batchLookupBody.parse({
-        lookups: [...lookups, { kind: "fdc", fdc_id: 999_999 }],
-      }),
+    expect(
+      () =>
+        batchLookupBody.parse({
+          lookups: [...lookups, { kind: "fdc", fdc_id: 999_999 }],
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 });

@@ -1,8 +1,8 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
+
 import {
   computeInventoryValuation,
   computeInventoryValuations,
@@ -207,6 +207,7 @@ describe("computeInventoryValuation", () => {
   it.each(CASES)("$name", ({ amount, mappings, expected }) => {
     const result = computeInventoryValuation(amount, mappings);
     expect(result).toBe(expected);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (result !== null) expect(Number.isFinite(result)).toBe(true);
   });
 

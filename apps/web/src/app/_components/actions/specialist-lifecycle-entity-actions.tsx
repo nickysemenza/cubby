@@ -1,11 +1,13 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { image } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import { useActionMutation } from "../hooks/useActionMutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import type {
@@ -142,6 +144,7 @@ export function useDeleteCookbookEntityAction(): EntityActionHandles {
       });
       void navigate({ to: "/cookbooks" });
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, navigate],
   );
   const action = useStagedSpecialistDelete({
@@ -183,6 +186,7 @@ export function useDeleteImageEntityAction(): EntityActionHandles {
       });
       void navigate({ to: "/images" });
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, navigate],
   );
 

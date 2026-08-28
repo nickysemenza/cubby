@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import type { TableStateReturn } from "../data-table/useTableState";
 
 export interface ListQueryResponse<TData> {
@@ -20,7 +21,7 @@ export type ListQueryOptionsFn<TFilters> = (params: {
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
   groupBy?: string;
-  // biome-ignore lint/suspicious/noExplicitAny: intentional query-options boundary
+  // oxlint-disable-next-line typescript/no-explicit-any -- intentional query-options boundary
 }) => any;
 
 interface UsePaginatedTableCoreOptions<TFilters> {

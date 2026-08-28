@@ -2,6 +2,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
+
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import {
   PreviewCard,
@@ -11,6 +12,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 
 const EntityPreviewContent = lazy(() =>

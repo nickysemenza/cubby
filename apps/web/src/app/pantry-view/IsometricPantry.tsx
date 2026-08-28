@@ -10,9 +10,11 @@ import {
 } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
+
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+
 import { useIsometricPantry } from "./use-isometric-pantry";
 
 function CategoryLegend() {
@@ -25,7 +27,7 @@ function CategoryLegend() {
               className="size-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: getCategoryColor(cat) }}
             />
-            <span className="text-2xs text-muted-foreground leading-none">
+            <span className="text-2xs leading-none text-muted-foreground">
               {formatCategoryLabel(cat)}
             </span>
           </div>
@@ -35,7 +37,7 @@ function CategoryLegend() {
             className="size-2.5 shrink-0 rounded-sm"
             style={{ backgroundColor: getCategoryColor(null) }}
           />
-          <span className="text-2xs text-muted-foreground leading-none">
+          <span className="text-2xs leading-none text-muted-foreground">
             uncategorized
           </span>
         </div>
@@ -120,7 +122,7 @@ export function IsometricPantry() {
         </Button>
         <NativeSelect
           aria-label="Open pantry location"
-          className="ml-auto min-w-0 max-w-40 bg-card"
+          className="ml-auto max-w-40 min-w-0 bg-card"
           defaultValue=""
           onChange={(event) => {
             const shortcode = event.currentTarget.value;

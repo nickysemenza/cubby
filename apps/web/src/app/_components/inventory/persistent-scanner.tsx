@@ -16,10 +16,12 @@
 
 import { Flashlight, FlashlightOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+
 import { ScannerStatusOverlay } from "./scanner-status-overlay";
 import {
   BARCODE_FORMATS,
@@ -258,7 +260,7 @@ export function PersistentScanner({
             <Badge
               key={entry.key}
               variant={SCAN_CHIP_VARIANT[entry.status]}
-              className="max-w-44 font-sans normal-case tracking-normal"
+              className="max-w-44 font-sans tracking-normal normal-case"
               title={entry.label}
             >
               <span className="min-w-0 truncate">{entry.label}</span>

@@ -7,6 +7,7 @@
  */
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import { inArray, sql } from "drizzle-orm";
+
 import { PartialUpcBatchLookupError } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { upcLookupCache } from "~/server/db/schema";

@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
+
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
@@ -204,7 +206,6 @@ function Treemap({ data }: TreemapProps) {
 
           return (
             <g key={node.data.rowKey}>
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 treemap visualization hover interaction */}
               <rect
                 x={node.x0}
                 y={node.y0}
@@ -229,7 +230,7 @@ function Treemap({ data }: TreemapProps) {
                 >
                   <div className="flex h-full flex-col overflow-hidden">
                     <div
-                      className="font-medium text-xs"
+                      className="text-xs font-medium"
                       style={{
                         color: isDeepFill(node)
                           ? "var(--background)"

@@ -56,10 +56,7 @@ export type {
 
 export { UNRESOLVABLE_ENTITY_FILTER } from "./filter";
 
-export {
-  getErrorMessage,
-  AppErrors,
-} from "./error-utils";
+export { getErrorMessage, AppErrors } from "./error-utils";
 export type { AppErrorReason } from "./error-utils";
 
 export {
@@ -71,10 +68,7 @@ export {
   FOOD_CATEGORY,
   isNonFoodCategory,
 } from "./category-theme";
-export type {
-  InventoryPlacement,
-  ProductCategory,
-} from "./category-theme";
+export type { InventoryPlacement, ProductCategory } from "./category-theme";
 
 export {
   locationTypeValues,

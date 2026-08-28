@@ -47,6 +47,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -127,6 +128,7 @@ import { removeEntity } from "~/server/repo/removal";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
 import {
   currentProductConversionCoverageCondition,
   markProductConversionCoverageInputStale,
@@ -548,9 +550,9 @@ export const buildProductWhere = async (
     : undefined;
   const taskFilterActive = Boolean(
     taskStatuses?.length ||
-      filters.taskOpenOnly ||
-      filters.taskDueFrom ||
-      filters.taskDueTo,
+    filters.taskOpenOnly ||
+    filters.taskDueFrom ||
+    filters.taskDueTo,
   );
   const productIdsWithFilteredTasks = dbClient
     .select({ productId: task.subjectProductId })

@@ -9,7 +9,9 @@ import {
 } from "@cubby/schemas/problems";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+
 import { expectedProblemKeys, problemQuery } from "~/entities/problem-registry";
+
 import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
 export function registerProblemsTools(server: McpServer) {

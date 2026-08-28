@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { isRetryableNotionError } from "./notion";
 
 // Regression guard for the error classification preserved when `queryWithRetry`

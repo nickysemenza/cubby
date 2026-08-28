@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Minus, Stamp } from "lucide-react";
 import { type ReactNode, useId } from "react";
 import { toast } from "sonner";
+
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -37,6 +38,7 @@ import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
+
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
 
 const mono = "font-mono text-xs tabular-nums";
@@ -95,8 +97,8 @@ function printsLabels(entity: Entity) {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="border-border/70 border-t pt-4">
-      <h3 className="mb-2 font-mono text-muted-foreground text-xs uppercase tracking-wider">
+    <section className="border-t border-border/70 pt-4">
+      <h3 className="mb-2 font-mono text-xs tracking-wider text-muted-foreground uppercase">
         {title}
       </h3>
       {children}
@@ -110,13 +112,13 @@ function ContractRows({
   rows: readonly [label: string, value: ReactNode][];
 }) {
   return (
-    <dl className="divide-y divide-border/60 border-border/60 border-y">
+    <dl className="divide-y divide-border/60 border-y border-border/60">
       {rows.map(([label, value]) => (
         <div
           key={label}
           className="grid gap-1 py-2 sm:grid-cols-[10rem_minmax(0,1fr)]"
         >
-          <dt className="text-muted-foreground text-xs">{label}</dt>
+          <dt className="text-xs text-muted-foreground">{label}</dt>
           <dd className="min-w-0 text-sm">{value}</dd>
         </div>
       ))}
@@ -127,8 +129,8 @@ function ContractRows({
 function PrintedLabelContract({ entity }: { entity: "product" | "location" }) {
   const metadata = entityInspectorMetadata[entity];
   return (
-    <div className="border-primary/40 border-y bg-primary/[0.04] px-4 py-4">
-      <div className="flex items-center gap-2 font-medium text-primary text-sm">
+    <div className="border-y border-primary/40 bg-primary/[0.04] px-4 py-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-primary">
         <Stamp className="size-4" /> Printed-label contract
       </div>
       <p className="mt-1 text-sm">
@@ -167,7 +169,7 @@ function EntityIndex({
           aria-current={selected === entity ? "true" : undefined}
           onClick={() => onSelect(entity)}
           className={cn(
-            "min-h-11 border-border/60 border-r border-b px-4 py-2 text-left font-mono text-xs",
+            "min-h-11 border-r border-b border-border/60 px-4 py-2 text-left font-mono text-xs",
             selected === entity && "bg-primary text-primary-foreground",
           )}
         >
@@ -229,7 +231,7 @@ function ComparisonMatrix({
                 <TableCell className={mono}>
                   {metadata.mcpOperations.length}
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-xs">
+                <TableCell className="text-xs whitespace-nowrap">
                   {metadata.lifecycle.delete?.mode ?? "—"}
                   {metadata.lifecycle.merge ? " · merge" : ""}
                 </TableCell>
@@ -285,7 +287,7 @@ export function EntityInspector({
 
   return (
     <article className="space-y-6" aria-labelledby={headingId}>
-      <header className="border-primary border-l pl-3">
+      <header className="border-l border-primary pl-3">
         <div className="flex flex-wrap items-baseline gap-2">
           <h2 id={headingId} className="font-heading text-2xl">
             {metadata.singular}
@@ -297,7 +299,7 @@ export function EntityInspector({
             {metadata.sourceRefs ? "explicit port" : "workflow extension"}
           </Badge>
         </div>
-        <p className="mt-1 text-muted-foreground text-sm">
+        <p className="mt-1 text-sm text-muted-foreground">
           Compiled from the literal specification; SQL, transactions, and
           workflow behavior remain behind explicit runtime ports.
         </p>
@@ -387,7 +389,7 @@ export function EntityInspector({
 
       <Section title="Kernel actions and filters">
         <Chips items={metadata.kernelActions} />
-        <p className="my-2 text-muted-foreground text-xs">
+        <p className="my-2 text-xs text-muted-foreground">
           Missing detail records return null; routes translate that to not-found
           UI.
         </p>
@@ -458,7 +460,7 @@ export function EntityInspector({
             : descriptor.relationships.map((relation) => (
                 <div
                   key={relation.key}
-                  className="grid gap-1 border-border/60 border-b pb-2 text-xs sm:grid-cols-[9rem_1fr]"
+                  className="grid gap-1 border-b border-border/60 pb-2 text-xs sm:grid-cols-[9rem_1fr]"
                 >
                   <code>{relation.key}</code>
                   <span>
@@ -549,7 +551,7 @@ export function EntityInspector({
 
       <Collapsible>
         <div className="flex items-center justify-between border-y py-2">
-          <CollapsibleTrigger className="font-mono text-xs uppercase tracking-wider">
+          <CollapsibleTrigger className="font-mono text-xs tracking-wider uppercase">
             Compiled contract JSON
           </CollapsibleTrigger>
           <Button
@@ -632,9 +634,9 @@ export function EntityManifestGrid({
         ].map(([label, value]) => (
           <div
             key={label}
-            className="border-border/60 border-b px-4 py-2 lg:border-r lg:border-b-0"
+            className="border-b border-border/60 px-4 py-2 lg:border-r lg:border-b-0"
           >
-            <div className="text-muted-foreground text-xs">{label}</div>
+            <div className="text-xs text-muted-foreground">{label}</div>
             <div className="font-mono text-lg tabular-nums">{value}</div>
           </div>
         ))}

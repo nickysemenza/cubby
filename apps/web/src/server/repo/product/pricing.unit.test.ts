@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { MAX_KIT_PROJECTION_DEPTH } from "./kit-projection";
 import { effectiveProductPriceSql, resolveProductPricing } from "./pricing";
 import { expectedQuantitySql } from "./quantity-ledger";

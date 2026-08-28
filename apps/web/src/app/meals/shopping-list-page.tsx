@@ -4,6 +4,7 @@ import { Copy, RotateCcw } from "lucide-react";
 import { useId } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -14,6 +15,7 @@ import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { copyText } from "~/lib/clipboard";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";
 import { ShoppingMatrix } from "./shopping-matrix";
@@ -69,7 +71,7 @@ export function ShoppingListPage({
     <Stack>
       <Row align="end" wrap gap="md" className="print:hidden">
         <Stack gap="xs">
-          <label htmlFor={fromId} className="text-muted-foreground text-xs">
+          <label htmlFor={fromId} className="text-xs text-muted-foreground">
             From
           </label>
           <DatePickerInput
@@ -83,7 +85,7 @@ export function ShoppingListPage({
           />
         </Stack>
         <Stack gap="xs">
-          <label htmlFor={toId} className="text-muted-foreground text-xs">
+          <label htmlFor={toId} className="text-xs text-muted-foreground">
             To
           </label>
           <DatePickerInput
@@ -158,12 +160,13 @@ export function ShoppingListPage({
                   variant={isOut ? "outline" : "secondary"}
                   className={cn(
                     // Free-form meal names — opt out of the mono-uppercase stamp.
-                    "h-auto cursor-pointer px-2 py-1 font-sans text-xs normal-case tracking-normal",
+                    "h-auto cursor-pointer px-2 py-1 font-sans text-xs tracking-normal normal-case",
                     isOut && "border-dashed text-muted-foreground line-through",
                   )}
                   render={
                     <button
                       type="button"
+                      aria-label={`Toggle ${m.name || format(parseISO(m.date), "EEE M/d")}`}
                       onClick={() => toggleExcluded(m.id)}
                     />
                   }

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { Pencil, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import {
   createCurrencyColumn,
@@ -22,8 +23,8 @@ import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { product as productOperations } from "~/app/products/product.functions";
-import { project } from "~/app/projects/project.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
+import { project } from "~/app/projects/project.functions";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";

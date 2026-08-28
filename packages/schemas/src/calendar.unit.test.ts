@@ -20,7 +20,9 @@ describe("calendarRangeInput", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.error.issues).toContainEqual(
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect.objectContaining({
           message: "calendar range cannot exceed 366 days",
           path: ["endDateExclusive"],

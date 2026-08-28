@@ -2,6 +2,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
 import { useId } from "react";
+
 import { EntityStat } from "~/components/entity/entity-stat";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -12,6 +13,7 @@ import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
 import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
+
 import { LocationBreadcrumb } from "./location-breadcrumb";
 import { locationTypeOptionsWithTheme } from "./location-icons";
 
@@ -58,7 +60,7 @@ export function GalleryHeader({
         className="min-h-[32px] border-b bg-muted/30 px-4 py-1"
       >
         {stats && (
-          <div className="hidden items-center gap-2 border-r pr-2 text-muted-foreground text-xs md:flex">
+          <div className="hidden items-center gap-2 border-r pr-2 text-xs text-muted-foreground md:flex">
             <EntityStat
               entity="location"
               count={stats.locationCount}
@@ -189,7 +191,7 @@ export function GalleryHeader({
             />
             <Label
               htmlFor={hideNonMatchingId}
-              className="cursor-pointer text-muted-foreground text-xs"
+              className="cursor-pointer text-xs text-muted-foreground"
             >
               Hide non-matching
             </Label>
@@ -206,7 +208,7 @@ export function GalleryHeader({
               onTypeFilterChange(null);
               onEmptyFilterChange("all");
             }}
-            className="h-8 px-2 text-muted-foreground text-xs"
+            className="h-8 px-2 text-xs text-muted-foreground"
           >
             Clear
           </Button>

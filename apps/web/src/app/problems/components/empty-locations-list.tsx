@@ -2,11 +2,13 @@ import type { EmptyLocation } from "@cubby/schemas/problems";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
 import { type ReactNode, useState } from "react";
+
 import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { entityDetailLink } from "~/entities/entities";
+
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";
 import { createdAgoDetail } from "./render-helpers";
@@ -44,7 +46,7 @@ export function EmptyLocationsList({
             details.push(
               <p
                 key="ai-desc"
-                className="line-clamp-2 text-muted-foreground text-sm"
+                className="line-clamp-2 text-sm text-muted-foreground"
               >
                 {location.aiDescription}
               </p>,
@@ -59,10 +61,12 @@ export function EmptyLocationsList({
                 key="last-inventory"
                 align="center"
                 gap="xs"
-                className="text-muted-foreground text-sm"
+                className="text-sm text-muted-foreground"
               >
                 <Calendar className="size-3" />
-                Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
+                Last inventory {formatDistanceToNow(
+                  location.lastBulkInventory,
+                )}{" "}
                 ago
               </Row>,
             );

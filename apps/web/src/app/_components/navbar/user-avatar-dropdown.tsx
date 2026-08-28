@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { LogOut, Plug, Settings, User } from "lucide-react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Description } from "~/components/ui/description";
 import {
@@ -57,7 +58,7 @@ export const UserAvatarDropdown = () => {
         <DropdownMenuGroup>
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="font-medium text-sm leading-none">{user.name}</p>
+              <p className="text-sm leading-none font-medium">{user.name}</p>
               <Description size="xs" className="leading-none">
                 {user.email}
               </Description>

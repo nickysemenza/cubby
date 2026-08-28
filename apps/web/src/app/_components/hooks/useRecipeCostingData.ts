@@ -4,6 +4,7 @@ import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { chunk, keyBy } from "es-toolkit";
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { ingredient } from "~/app/ingredients/ingredient.functions";
 import { recipe } from "~/app/recipes/recipe.functions";
 import {
@@ -102,7 +103,6 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
   recipesRef.current = recipes;
   const signature = useMemo(() => recipeLinkSignature(recipes), [recipes]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: gated on signature; reads recipes via recipesRef
   useEffect(() => {
     let cancelled = false;
     const current = recipesRef.current;

@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
+
 import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
 
@@ -19,7 +20,7 @@ const interactiveImageVariants = cva(
         none: "",
         borderPrimary: "hover:border-primary",
         scale: "group-hover:scale-105",
-        both: "hover:border-primary group-hover:scale-105",
+        both: "group-hover:scale-105 hover:border-primary",
       },
       transition: {
         none: "",
@@ -50,7 +51,8 @@ const imageContentVariants = cva("object-cover", {
 });
 
 interface InteractiveImageProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "children">,
+  extends
+    Omit<React.HTMLAttributes<HTMLDivElement>, "children">,
     VariantProps<typeof interactiveImageVariants> {
   src: string;
   alt: string;

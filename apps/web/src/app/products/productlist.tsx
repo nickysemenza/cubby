@@ -9,6 +9,7 @@ import { uniq } from "es-toolkit";
 import { CalendarRange, Clock3, Rows3, Table2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
@@ -36,6 +37,7 @@ import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
+
 import { WithLocationSearch } from "../_components/combobox/with-search-hook";
 import {
   createBooleanColumn,
@@ -336,7 +338,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [foodByProductId],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
       // Custom columns (image/name prepended; related + audit dates appended by hook)
@@ -548,7 +549,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           const gaps = info.getValue();
           if (!gaps.length) return <NoneValue />;
           return (
-            <span className="text-muted-foreground text-xs">
+            <span className="text-xs text-muted-foreground">
               {gaps.map((gap) => gap.check.replaceAll("_", " ")).join(", ")}
             </span>
           );
@@ -563,7 +564,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
           const ids = info.getValue();
           if (!ids.length) return <NoneValue />;
           return (
-            <span className="text-muted-foreground text-xs">
+            <span className="text-xs text-muted-foreground">
               {ids.map((externalId) => externalId.source).join(", ")}
             </span>
           );
@@ -861,6 +862,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
         },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
     [columnHelper],
   );
 

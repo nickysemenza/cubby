@@ -23,16 +23,12 @@ export const extremeMtime = (
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!prune.has(entry.name)) {
-        acc = pick(
-          acc,
-          extremeMtime(full, { pick, seed, prune, extensions }),
-        );
+        acc = pick(acc, extremeMtime(full, { pick, seed, prune, extensions }));
       }
     } else if (extensions.some((ext) => entry.name.endsWith(ext))) {
       try {
         acc = pick(acc, statSync(full).mtimeMs);
-      } catch {
-      }
+      } catch {}
     }
   }
   return acc;

@@ -5,9 +5,11 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
 import { testEntityId, testUserId } from "@cubby/schemas/testing";
 import { describe, expect, expectTypeOf, it } from "vitest";
+
 import type { DrizzleTransaction } from "~/server/db";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { SHORTCODE_TABLE } from "~/server/repo/shortcode-utils";
+
 import { cascadeRemoval, type RemovableEntity } from "./core";
 
 const ACTOR: ActorContext = { userId: testUserId("user-1"), source: "ui" };
@@ -138,6 +140,7 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
 });
 
 describe("cascadeRemoval — the type-level lock", () => {
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses a hand-written delete entry", () => {
     // The mechanism this whole module exists for. Without the phantom witness
     // on `RemovalAuditEntry` this line compiles, and the invariant goes back to
@@ -151,6 +154,7 @@ describe("cascadeRemoval — the type-level lock", () => {
     void forged;
   });
 
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses ids branded for a different entity", () => {
     const { tx } = recordingTx();
     void cascadeRemoval(tx, {

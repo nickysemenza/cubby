@@ -12,6 +12,7 @@
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { CircleHelp } from "lucide-react";
+
 import {
   DestinationLocationField,
   resolveDestination,
@@ -21,6 +22,7 @@ import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+
 import type { MissingBin } from "./useLocationSweep";
 
 function MissingRow({
@@ -121,7 +123,7 @@ export function SweepMissingReview({
   return (
     <Stack gap="sm" className="border-t border-t-foreground pt-4">
       <Stack gap="tight">
-        <span className="font-mono text-[0.625rem] text-slate uppercase tracking-[0.05em]">
+        <span className="font-mono text-[0.625rem] tracking-[0.05em] text-slate uppercase">
           Not seen
         </span>
         <Description>

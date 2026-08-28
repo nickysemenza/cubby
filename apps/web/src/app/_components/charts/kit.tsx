@@ -9,8 +9,9 @@ import { sumBy } from "es-toolkit";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import {
   nivoBarChrome,
   nivoChartTheme,
@@ -275,7 +276,7 @@ export function CategoryDonut({
               dominantBaseline="central"
               style={{ fill: "var(--foreground)" }}
             >
-              <tspan x={centerX} dy="-0.5em" className="font-bold text-xl">
+              <tspan x={centerX} dy="-0.5em" className="text-xl font-bold">
                 {formatCurrency(shownCenterValue, 0)}
               </tspan>
               <tspan
@@ -298,22 +299,21 @@ export function CategoryDonut({
 
 type LineProps = ComponentProps<typeof ResponsiveLine>;
 
-interface SpendTrendProps
-  extends Pick<
-    LineProps,
-    | "data"
-    | "margin"
-    | "xScale"
-    | "xFormat"
-    | "yScale"
-    | "axisBottom"
-    | "colors"
-    | "areaOpacity"
-    | "legends"
-    | "markers"
-    | "pointColor"
-    | "pointBorderColor"
-  > {
+interface SpendTrendProps extends Pick<
+  LineProps,
+  | "data"
+  | "margin"
+  | "xScale"
+  | "xFormat"
+  | "yScale"
+  | "axisBottom"
+  | "colors"
+  | "areaOpacity"
+  | "legends"
+  | "markers"
+  | "pointColor"
+  | "pointBorderColor"
+> {
   /** Skip zero-value points in the per-series slice tooltip. */
   filterZeroValues?: boolean;
   seriesLabelClassName?: string;

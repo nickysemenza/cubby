@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import TableHeaderLayout from "./TableHeaderLayout";
+
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import TableHeaderLayout from "./TableHeaderLayout";
 
 interface TestRow {
   id: string;

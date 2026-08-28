@@ -1,6 +1,7 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import * as d3Force from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { Row } from "~/components/layout";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { wasm } from "~/lib/wasm";
@@ -210,14 +211,13 @@ export function UnitMappingGraph({
       ) : (
         <svg aria-hidden="true" width={width} height={height}>
           <g>
-            {simLinks.map((link, i) => {
+            {simLinks.map((link) => {
               const s = link.source as UNode;
               const t = link.target as UNode;
               if (s.x == null || t.x == null) return null;
               return (
                 <line
-                  // biome-ignore lint/suspicious/noArrayIndexKey: sim links lack stable ids
-                  key={i}
+                  key={`${s.id}-${t.id}`}
                   x1={s.x}
                   y1={s.y}
                   x2={t.x}

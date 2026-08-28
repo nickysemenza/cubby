@@ -3,6 +3,7 @@ import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
@@ -30,6 +31,7 @@ import { listActionableTasks } from "~/server/repo/task/actionable";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { taskListActionableWorkflow } from "~/server/workflows/task.server";
+
 import { makeProductInput } from "./repo.fixtures";
 
 describe("task repository — listActionableTasks", () => {
@@ -1696,6 +1698,7 @@ describe("task kernel — bulkUpdate", () => {
       ctx.actor,
     );
 
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(bulkUpdate([t.id], { name: "Renamed" })).rejects.toThrow();
   });
 });

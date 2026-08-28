@@ -1,5 +1,6 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useMemo } from "react";
+
 import { entityDialogLabel as labelFor } from "~/entities/entities";
 import {
   entityMutationOptionsFactory,

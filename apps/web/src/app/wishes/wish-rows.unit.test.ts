@@ -1,7 +1,7 @@
 import { testShortcode } from "@cubby/schemas/testing";
-
 import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
+
 import { wishPriceRange } from "./wish-price-range";
 import { buildWishRows, wishSubRows } from "./wish-rows";
 

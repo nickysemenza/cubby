@@ -7,12 +7,14 @@ import { useDraggable } from "@dnd-kit/core";
 import { Link } from "@tanstack/react-router";
 import { GripVertical, Package } from "lucide-react";
 import { useMemo } from "react";
+
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { useHydratedProductImages } from "~/app/_components/products/product-image-summaries";
 import { cn } from "~/lib/utils";
+
+import type { ItemDragData } from "./arrange-types";
 import { ArrangeMoveTo } from "./ArrangeMoveTo";
 import { ArrangeThumb } from "./ArrangeThumb";
-import type { ItemDragData } from "./arrange-types";
 
 interface ArrangeItemChipProps {
   item: InventoryItemForTree;

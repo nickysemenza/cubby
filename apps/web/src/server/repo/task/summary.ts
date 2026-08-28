@@ -11,9 +11,11 @@
  */
 import type { TaskSummaryOut } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
+
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+
 import { openTaskBlockingCtes } from "./blocking-sql";
 
 export async function getTaskSummary(db: Database): Promise<TaskSummaryOut> {

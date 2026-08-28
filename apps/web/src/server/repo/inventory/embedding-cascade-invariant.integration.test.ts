@@ -35,7 +35,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
  * one-line orphan assertions stay scattered across the suites that own them
  * (expense, cookbook, ingredient, discard, mutation-side-effects).
  */
-
 import {
   expenseCreateInput,
   projectCreateInput,
@@ -46,6 +45,7 @@ import { and, eq } from "drizzle-orm";
 import type { TestDbContext } from "tooling/test-setup";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
 import {

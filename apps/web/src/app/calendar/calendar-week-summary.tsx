@@ -1,7 +1,9 @@
 import type { CalendarDaySummary } from "@cubby/schemas/calendar";
 import { format } from "date-fns";
 import type { ReactNode } from "react";
+
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { householdCalendarDate } from "./calendar-period";
 
 const EMPTY_DAY_SUMMARY: CalendarDaySummary = {
@@ -52,7 +54,7 @@ function WeekSummaryGrid({
             <div className="mb-2 flex items-baseline gap-1 border-b pb-1">
               <span
                 className={cn(
-                  "font-mono text-2xs uppercase tracking-wider",
+                  "font-mono text-2xs tracking-wider uppercase",
                   isToday ? "text-primary" : "text-slate",
                 )}
               >

@@ -24,13 +24,14 @@ import {
 } from "@cubby/schemas/identifiers";
 import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+
 import { getErrorMessage } from "~/lib/error-utils";
+import { recordAiUsage } from "~/server/ai-usage";
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
-import { recordAiUsage } from "~/server/ai-usage";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";

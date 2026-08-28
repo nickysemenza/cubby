@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { TriangleAlert } from "lucide-react";
 import { useMemo } from "react";
+
 import { Row } from "~/components/layout";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/components/matrix/group-columns";
@@ -11,6 +12,7 @@ import { totalCell } from "~/components/matrix/matrix-chrome";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entityDetailLink } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import {
   formatAmount,
   haveText,
@@ -158,7 +160,7 @@ export function ShoppingMatrix({
           const group = groupByMealId.get(mealId);
           const first = runColumns[0]?.data;
           return (
-            <span className="normal-case tracking-normal">
+            <span className="tracking-normal normal-case">
               <Link
                 {...entityDetailLink("meal", mealId)}
                 className="font-medium hover:underline"
@@ -184,23 +186,24 @@ export function ShoppingMatrix({
               <Link
                 {...entityDetailLink("recipe", column.recipeId)}
                 title={column.recipeName}
-                className="block truncate font-medium normal-case tracking-normal hover:underline"
+                className="block truncate font-medium tracking-normal normal-case hover:underline"
               >
                 {column.recipeName}
               </Link>
               <Row justify="end" align="center" gap="tight">
                 {column.scale !== 1 && (
-                  <span className="font-normal text-2xs text-primary normal-case tracking-normal">
+                  <span className="text-2xs font-normal tracking-normal text-primary normal-case">
                     {column.scale}×
                   </span>
                 )}
                 {blocked && (
                   <span
-                    role="img"
                     title={`Missing ingredients from ${blocked.join(", ")}`}
-                    aria-label={`Incomplete: ${blocked.join(", ")}`}
                   >
-                    <TriangleAlert className="size-3 shrink-0 text-warning" />
+                    <TriangleAlert
+                      aria-label={`Incomplete: ${blocked.join(", ")}`}
+                      className="size-3 shrink-0 text-warning"
+                    />
                   </span>
                 )}
               </Row>

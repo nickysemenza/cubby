@@ -1,5 +1,6 @@
 import { hasFdcLink } from "@cubby/schemas/product";
 import { z } from "zod";
+
 import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
@@ -10,6 +11,7 @@ import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
+
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
 import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";

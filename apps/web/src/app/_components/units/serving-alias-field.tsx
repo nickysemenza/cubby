@@ -13,6 +13,7 @@ import {
 } from "@cubby/usda-schemas";
 import { Plus } from "lucide-react";
 import { useId, useMemo, useState } from "react";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -20,6 +21,7 @@ import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { wasm } from "~/lib/wasm";
+
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { NutrientsSummary } from "./NutrientsSummary";
 
@@ -115,7 +117,7 @@ export function ServingAliasField({
       align="end"
       gap="sm"
       wrap
-      className="border border-border border-dashed p-2"
+      className="border border-dashed border-border p-2"
     >
       <div className="w-28">
         <Label htmlFor={unitFieldId}>Unit</Label>

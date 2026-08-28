@@ -3,6 +3,7 @@ import { CheckIcon, ChevronDownIcon, XIcon } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
+import { focusOnMount as focusElementOnMount } from "~/hooks/focus-on-mount";
 
 /**
  * FilterableCombobox wraps Combobox with manual filtering.
@@ -56,9 +57,8 @@ interface FilterableComboboxProps {
   onSearchChange?: (query: string) => void;
   onOpenChange?: (open: boolean) => void;
   isLoading?: boolean;
-  /** Focus the filter input on mount (e.g. an inline cell editor that opens
-   * ready to type). Mirrors `<Input autoFocus />`. */
-  autoFocus?: boolean;
+  /** Focus the filter input on mount (e.g. an inline cell editor). */
+  focusOnMount?: boolean;
   /**
    * Render an inline `X` that clears the selection back to "no filter".
    * Opt-in: most consumers are pickers for a REQUIRED value (inline cell
@@ -84,7 +84,7 @@ export function FilterableCombobox({
   onSearchChange,
   onOpenChange,
   isLoading,
-  autoFocus,
+  focusOnMount,
   clearable,
   ariaLabel,
 }: FilterableComboboxProps) {
@@ -146,7 +146,7 @@ export function FilterableCombobox({
         {/* Input for filtering when open, display value when closed */}
         <ComboboxPrimitive.Input
           aria-label={ariaLabel}
-          autoFocus={autoFocus}
+          ref={focusOnMount ? focusElementOnMount : undefined}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
           placeholder={placeholder}
           value={open ? inputValue : selectedLabel}

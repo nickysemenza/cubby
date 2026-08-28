@@ -21,6 +21,7 @@ import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
+
 import {
   type VendorName,
   WithVendorSearch,
@@ -111,9 +112,10 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
-import { project } from "./project.functions";
+
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
+import { project } from "./project.functions";
 import { tradeOptions } from "./trade-options";
 
 /**
@@ -296,7 +298,6 @@ export function TaskList({
     enabled: subjectProductIds.length > 0,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<TaskOut>[]>(
     () => [
       ...selection.selectColumns,
@@ -390,6 +391,7 @@ export function TaskList({
         extraActions: combinedExtraActions,
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateTaskMutation changes every render but is functionally stable
     [
       showProjectColumn,
       nameEditable,
@@ -911,7 +913,6 @@ export function ExpenseList({
     deleteBulkAction,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
     () => [
       ...selection.selectColumns,
@@ -1041,6 +1042,7 @@ export function ExpenseList({
         extraActions: combinedExtraActions,
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable
     [
       showProjectColumn,
       nameEditable,
@@ -1207,7 +1209,6 @@ export function ProjectTable({
     entity: "project",
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProjectMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createImageColumn(columnHelper, {
@@ -1342,6 +1343,7 @@ export function ProjectTable({
         },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateProjectMutation changes every render but is functionally stable
     [columnHelper, projectImages],
   );
 
@@ -1374,10 +1376,10 @@ export function ProjectTable({
 
   // Expand once on search entry so nested matches are visible without fighting users.
   const searching = Boolean(table.getColumn("name")?.getFilterValue());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally edge-triggered on `searching` only
   useEffect(() => {
     if (!isTree) return;
     table.toggleAllRowsExpanded(searching);
+    // oxlint-disable-next-line react/exhaustive-deps -- intentionally edge-triggered on `searching` only
   }, [searching, isTree]);
 
   return (

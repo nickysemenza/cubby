@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   databaseStatementForTrace,
   MAX_DATABASE_STATEMENT_LENGTH,

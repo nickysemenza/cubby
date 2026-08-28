@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { PartialUpcBatchLookupError, UPCLookupClient } from "./upc-lookup";
 
 describe("UPCLookupClient lookupBatch health contract", () => {

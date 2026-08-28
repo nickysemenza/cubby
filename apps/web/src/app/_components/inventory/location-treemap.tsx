@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useMemo, useRef, useState } from "react";
+
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { Row, Stack } from "~/components/layout";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
@@ -9,6 +10,7 @@ import {
   useLocationHierarchy,
 } from "~/hooks/useLocationHierarchy";
 import { formatCurrency } from "~/lib/utils";
+
 import { formatPricingStatusSummary } from "../locations/calculate-inventory-valuation";
 import { LocationIcon } from "../locations/location-icons";
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
@@ -117,7 +119,6 @@ function Treemap({ data }: TreemapProps) {
 
           return (
             <g key={node.data.id}>
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 treemap visualization hover interaction */}
               <rect
                 x={node.x0}
                 y={node.y0}

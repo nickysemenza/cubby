@@ -2,6 +2,7 @@ import { expenseLineKindValues } from "@cubby/schemas/expense-line-kind";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { useCallback, useMemo } from "react";
+
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -48,8 +49,8 @@ export function PurchaseExpensesTable({
       <PurchaseExpenseRows purchaseId={purchaseId} kind="principal" />
       <Stack gap="sm">
         <div>
-          <h3 className="font-medium text-sm">Receipt adjustments</h3>
-          <p className="text-muted-foreground text-xs">
+          <h3 className="text-sm font-medium">Receipt adjustments</h3>
+          <p className="text-xs text-muted-foreground">
             Tax, shipping, discounts, fees, and tips remain spend but are not
             assigned to cost-type or trade analytics.
           </p>
@@ -92,7 +93,6 @@ function PurchaseExpenseRows({
     entityLabel: "Expense",
     entity: "expense",
   });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrappers are functionally stable
   const columns = useMemo(() => {
     const shared = [
       expenseCostColumn(
@@ -146,6 +146,7 @@ function PurchaseExpenseRows({
         });
       }),
     ];
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrappers are functionally stable
   }, [helper, kind]);
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",

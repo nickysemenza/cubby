@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -15,6 +16,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { mcp } from "~/lib/mcp.functions";
+
 import { McpUsageDashboard } from "./mcp-usage-dashboard";
 
 type ToolAnnotations = {
@@ -137,6 +139,7 @@ function CatalogInspector() {
         tool.name.toLowerCase().includes(q) ||
         tool.description?.toLowerCase().includes(q),
     );
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [tools, query]);
 
   const selected =
@@ -163,7 +166,7 @@ function CatalogInspector() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="whitespace-pre-wrap rounded-md bg-muted p-2 text-xs leading-relaxed">
+            <pre className="rounded-md bg-muted p-2 text-xs leading-relaxed whitespace-pre-wrap">
               {data.instructions}
             </pre>
           </CardContent>

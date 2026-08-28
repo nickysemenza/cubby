@@ -1,12 +1,14 @@
 import { formatDistanceToNow } from "date-fns";
 import { RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Progress } from "~/components/ui/progress";
 import { cn } from "~/lib/utils";
+
 import type { PassCounts } from "./queue-pass";
 import type { QueuePassResumeCandidate } from "./useQueuePass";
 
@@ -63,7 +65,7 @@ export function QueuePassPosition({
   className?: string;
 }) {
   return (
-    <div className={cn("text-right text-muted-foreground text-xs", className)}>
+    <div className={cn("text-right text-xs text-muted-foreground", className)}>
       {index + 1} of {total}
     </div>
   );
@@ -101,7 +103,7 @@ export function QueuePassResumePrompt<TExtra>({
     <Card className="mx-auto w-full max-w-xl">
       <CardContent className="p-4">
         <Stack gap="md">
-          <div className="font-medium text-base">{title}</div>
+          <div className="text-base font-medium">{title}</div>
           <Description>
             Started{" "}
             {formatDistanceToNow(candidate.startedAt, { addSuffix: true })}. You

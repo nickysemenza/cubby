@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { MarkdownText } from "~/components/markdown";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -31,6 +32,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { useIsMobile } from "~/hooks/useMobile";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./RecipeFlowRenderers";
 
@@ -48,7 +50,7 @@ function FlowLoading() {
         <Sparkles className="size-5 text-primary" />
         <div>
           <div className="font-heading font-semibold">Building recipe flow</div>
-          <div className="text-muted-foreground text-xs">
+          <div className="text-xs text-muted-foreground">
             Mapping ingredients to the authored cooking steps…
           </div>
         </div>
@@ -213,13 +215,13 @@ export function RecipeFlowView({
 
   return (
     <div className="border border-[var(--border)] bg-card">
-      <header className="border-primary border-b-2 px-4 py-2">
+      <header className="border-b-2 border-primary px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="my-0 font-heading font-semibold text-xl tracking-tight">
+            <h2 className="my-0 font-heading text-xl font-semibold tracking-tight">
               {scaledRecipe.name}
             </h2>
-            <div className="font-mono text-2xs text-slate uppercase tracking-wider">
+            <div className="font-mono text-2xs tracking-wider text-slate uppercase">
               {artifact.plan.sources.length} additions →{" "}
               {artifact.plan.operations.length} operations →{" "}
               {artifact.plan.outputOperationIds.length}{" "}
@@ -277,7 +279,7 @@ export function RecipeFlowView({
           {artifact.plan.setup.map((setup) => (
             <div
               key={setup.id}
-              className="flex items-center justify-between gap-2 border border-[var(--border)] border-dashed px-2 py-1 text-xs"
+              className="flex items-center justify-between gap-2 border border-dashed border-[var(--border)] px-2 py-1 text-xs"
             >
               <span>{setup.label}</span>
               <span className="flex flex-wrap gap-1">
@@ -285,7 +287,7 @@ export function RecipeFlowView({
                   <Badge
                     variant="outline"
                     key={`${annotation.kind}:${annotation.text}`}
-                    className="font-sans normal-case tracking-normal"
+                    className="font-sans tracking-normal normal-case"
                   >
                     {annotation.text}
                   </Badge>
@@ -298,11 +300,11 @@ export function RecipeFlowView({
 
       {artifact.warnings.length > 0 && (
         <details className="border-b px-4 py-2">
-          <summary className="cursor-pointer font-mono text-2xs text-warning-ink uppercase tracking-wider">
+          <summary className="cursor-pointer font-mono text-2xs tracking-wider text-warning-ink uppercase">
             {artifact.warnings.length} flow{" "}
             {artifact.warnings.length === 1 ? "warning" : "warnings"}
           </summary>
-          <ul className="mt-2 list-disc pl-4 text-muted-foreground text-xs">
+          <ul className="mt-2 list-disc pl-4 text-xs text-muted-foreground">
             {artifact.warnings.map((warning) => (
               <li
                 key={`${warning.code}:${warning.message}:${warning.nodeIds.join(",")}`}
@@ -360,7 +362,7 @@ export function RecipeFlowView({
                       <Badge
                         variant="outline"
                         key={`${annotation.kind}:${annotation.text}`}
-                        className="font-sans normal-case tracking-normal"
+                        className="font-sans tracking-normal normal-case"
                       >
                         {annotation.text}
                       </Badge>
@@ -372,7 +374,7 @@ export function RecipeFlowView({
                     key={instruction.key}
                     className="border border-[var(--border)] px-2 py-2"
                   >
-                    <div className="mb-1 font-mono text-2xs text-slate uppercase tracking-wider">
+                    <div className="mb-1 font-mono text-2xs tracking-wider text-slate uppercase">
                       {instruction.sectionName ?? "Method"} · step{" "}
                       {instruction.instructionIndex + 1}
                     </div>

@@ -7,8 +7,10 @@
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
 import { AsyncLocalStorage } from "node:async_hooks";
+
 import * as Sentry from "@sentry/cloudflare";
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
+
 import {
   TELEMETRY_SCHEMA_VERSION,
   withHtmlNoCache,

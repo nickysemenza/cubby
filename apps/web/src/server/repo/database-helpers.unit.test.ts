@@ -3,6 +3,7 @@ import { testEntityId } from "@cubby/schemas/testing";
 import { asc } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, project, projectDependency } from "~/server/db/schema";
 import {
@@ -93,6 +94,7 @@ describe("withTransactionOn", () => {
     // than being passed through as a transaction.
     await expect(
       withTransactionOn(fakeDb, async () => "unreachable"),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 });

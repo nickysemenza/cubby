@@ -1,7 +1,7 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { describe, expect, it } from "vitest";
+
 import { itemSpanLabel } from "./calendar-span";
 
 const projectSpan = (

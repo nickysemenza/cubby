@@ -5,15 +5,12 @@ import { createFileRoute } from "@tanstack/react-router";
 async function handler({ request }: { request: Request }) {
   try {
     const { handleMcpRequest } = await import("~/server/mcp/server");
-    const { unauthorizedResponse, verifyMcpToken } = await import(
-      "~/server/mcp/auth"
-    );
-    const { createMcpWorkflowCaller } = await import(
-      "~/server/mcp/workflow-caller"
-    );
-    const { createRequestContext, requireActor } = await import(
-      "~/server/request-context"
-    );
+    const { unauthorizedResponse, verifyMcpToken } =
+      await import("~/server/mcp/auth");
+    const { createMcpWorkflowCaller } =
+      await import("~/server/mcp/workflow-caller");
+    const { createRequestContext, requireActor } =
+      await import("~/server/request-context");
     const { boundedStaleDb } = await import("~/server/db");
     const { emitTelemetry } = await import("~/server/telemetry");
 

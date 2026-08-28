@@ -1,7 +1,9 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeOut } from "@cubby/schemas/recipe";
+
 import { wasm } from "~/lib/wasm";
+
 import { formatYield, getIngredientName } from "./recipe-utils";
 
 /**

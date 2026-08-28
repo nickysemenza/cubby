@@ -1,5 +1,6 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { asCardDropData, asDragData, asDropData } from "./board-types";
 
 describe("task board drag data parsing", () => {

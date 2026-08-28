@@ -7,6 +7,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
+
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
@@ -30,6 +31,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { StatusText } from "~/components/ui/status-text";
 import { entityDetailLink } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
+
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { costTypeOptions } from "./expense-options";
 
@@ -353,15 +355,15 @@ export function SplitExpenseDialog({
           )}
         </Row>
 
-        <Stack gap="tight" className="border-[var(--border)] border-t pt-2">
+        <Stack gap="tight" className="border-t border-[var(--border)] pt-2">
           <Row align="center" justify="between" gap="sm">
-            <span className="text-muted-foreground text-sm">Parts total</span>
+            <span className="text-sm text-muted-foreground">Parts total</span>
             <span className="font-mono text-sm tabular-nums">
               {formatCurrency(partsTotal)}
             </span>
           </Row>
           <Row align="center" justify="between" gap="sm">
-            <span className="text-muted-foreground text-sm">Original cost</span>
+            <span className="text-sm text-muted-foreground">Original cost</span>
             <span className="font-mono text-sm tabular-nums">
               {original != null ? formatCurrency(original) : <NoneValue />}
             </span>

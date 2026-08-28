@@ -4,12 +4,14 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
+
 import type { EditableEntity } from "~/entities/editing/types";
 import {
   type EntityDetailController,
   useEntityDetailController,
 } from "~/entities/editing/use-entity-detail-controller";
 import { entities } from "~/entities/entities";
+
 import { AuditLogList } from "../audit-log/audit-log-list";
 import type { DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";

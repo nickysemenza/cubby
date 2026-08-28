@@ -11,6 +11,7 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { Check } from "lucide-react";
 import { useEffect, useState } from "react";
+
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithIngredientSearch } from "~/app/_components/combobox/with-search-hook";
@@ -79,7 +80,6 @@ export function SweepProductFollowUp({
 
   // A fast sweep can raise a second follow-up before the first is dismissed;
   // without this the new product would inherit the previous one's draft.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting ON a new product is the point.
   useEffect(() => {
     setName(null);
     setPrice("");

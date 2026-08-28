@@ -3,6 +3,7 @@ import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useId } from "react";
 import { z } from "zod";
+
 import { EntityIntegrityTab } from "~/app/_components/entities/EntityIntegrityTab";
 import { EntityManifestGrid } from "~/app/_components/entities/EntityManifestGrid";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
@@ -83,7 +84,7 @@ function RecipeGraphTab() {
 
   return (
     <Stack gap="md">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Each arrow points from a recipe to the sub-recipe it uses as an
         ingredient. Click a node to open that recipe.
       </p>

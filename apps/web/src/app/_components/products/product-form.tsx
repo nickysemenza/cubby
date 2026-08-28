@@ -30,6 +30,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { type FC, useMemo } from "react";
 import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
+
 import {
   getOptionalIngredientId,
   optionalIngredientField,
@@ -44,6 +45,7 @@ import {
   isMoneyUnit,
 } from "~/lib/price-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
+
 import type { ComboboxItem } from "../combobox/combobox-types";
 import {
   buildUpdateObject,
@@ -135,7 +137,7 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
 
   return (
     <div>
-      <h3 className="my-0 break-words font-bold font-heading text-lg tracking-tight">
+      <h3 className="my-0 font-heading text-lg font-bold tracking-tight break-words">
         {v.name?.trim() || "Untitled product"}
       </h3>
       <div className="mt-2">
@@ -205,14 +207,13 @@ interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
 }
 
 // Props for edit mode
-interface EditProductFormProps
-  extends EditModeProps<
-    {
-      id: string;
-      data: Partial<ProductCreateInput>;
-    },
-    ProductWithIngredient
-  > {
+interface EditProductFormProps extends EditModeProps<
+  {
+    id: string;
+    data: Partial<ProductCreateInput>;
+  },
+  ProductWithIngredient
+> {
   entity: ProductWithIngredient;
   /** Rendered inside a modal — use a plain inline footer instead of the page sticky bar. */
   embedded?: boolean;
@@ -419,7 +420,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           @container must sit on a PARENT of the queried grid — a container
           never queries its own size. */}
       <div className="@container/product">
-        <div className="@3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start gap-6">
+        <div className="gap-6 @3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start">
           <Stack>
             <ProductFormFields
               form={form}
@@ -432,9 +433,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           </Stack>
 
           {/* Live fact-sheet — the detail page builds as you type */}
-          <aside className="@3xl/product:sticky @3xl/product:top-20 @3xl/product:block hidden">
+          <aside className="hidden @3xl/product:sticky @3xl/product:top-20 @3xl/product:block">
             <div className="max-h-[75vh] overflow-y-auto border border-[var(--border)] bg-card p-4">
-              <p className="eyebrow mb-2">Live preview</p>
+              <p className="mb-2 eyebrow">Live preview</p>
               <ProductLivePreview control={form.control} />
             </div>
           </aside>

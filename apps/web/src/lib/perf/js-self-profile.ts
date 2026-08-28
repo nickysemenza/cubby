@@ -39,7 +39,6 @@ interface ProfilerTrace {
   resources: string[];
 }
 declare global {
-  // eslint-disable-next-line no-var
   var Profiler: {
     new (init: ProfilerInit): { stop(): Promise<ProfilerTrace> };
   };

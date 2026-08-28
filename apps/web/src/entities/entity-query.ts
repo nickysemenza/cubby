@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+
 import { cookbook } from "./cookbook.functions";
 import { entityDetailFor } from "./entity-detail.functions";
 import {

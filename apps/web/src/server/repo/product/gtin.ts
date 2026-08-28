@@ -19,6 +19,7 @@ import {
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { product, productExternalId } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";

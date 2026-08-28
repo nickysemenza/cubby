@@ -33,7 +33,9 @@ const inputFiles = [
   join(PKG, "src", "usda-picker.ts"),
   join(ROOT, "packages", "design-tokens", "brand.css"),
 ];
-const newestInput = Math.max(...inputFiles.map((file) => statSync(file).mtimeMs));
+const newestInput = Math.max(
+  ...inputFiles.map((file) => statSync(file).mtimeMs),
+);
 const oldestBundle = () =>
   Math.min(
     ...readdirSync(DIST)

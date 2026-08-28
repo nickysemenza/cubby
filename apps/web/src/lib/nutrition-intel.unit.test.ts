@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { costPerNutrient, proteinPer100Kcal } from "./nutrition-intel";
 
 describe("costPerNutrient", () => {

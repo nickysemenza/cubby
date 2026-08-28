@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+
 import { getErrorMessage } from "~/lib/error-utils";
+
 import type { EditableEntity } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 
@@ -27,7 +29,6 @@ export function useEntityDetailController<TData, TResult = unknown>({
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string>();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a record identity change deliberately exits edit mode
   useEffect(() => {
     setIsEditing(false);
     setError(undefined);

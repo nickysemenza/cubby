@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { CrossTabTable, type CrossTabTableProps } from "./cross-tab-table";
 import type { CrossTabColumn } from "./group-columns";
 import { EMPTY_MARK } from "./matrix-chrome";

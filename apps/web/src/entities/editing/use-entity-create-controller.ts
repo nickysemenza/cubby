@@ -1,7 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+
 import { entities, entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import type { EditableEntity } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 

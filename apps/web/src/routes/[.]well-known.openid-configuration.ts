@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { openIdConfigHandler, preflightHandler } from "~/server/oauth/metadata";
 
 // OIDC discovery at the origin root. The canonical path-appended location

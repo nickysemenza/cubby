@@ -1,12 +1,14 @@
 import type { NutritionInfo } from "@cubby/usda-schemas";
 import { ChevronRight, ListTree } from "lucide-react";
 import { useState } from "react";
+
 import { Row } from "~/components/layout";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+
 import { NutritionInfoTable } from "../usda/nutrition";
 
 /**
@@ -35,7 +37,7 @@ export function FullNutrientBreakdown({
             type="button"
             align="center"
             gap="sm"
-            className="w-full rounded-md px-2 py-1 text-muted-foreground text-sm hover:bg-accent"
+            className="w-full rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
           />
         }
       >

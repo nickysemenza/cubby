@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+
 import { generateQrDataUrl } from "~/lib/label-generator";
+
 import type { LabelItem } from "./sheet-layouts";
 
 // Generate QR codes client-side (needed for sheet formats, not P-Touch)

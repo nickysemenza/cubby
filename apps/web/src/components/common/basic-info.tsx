@@ -1,4 +1,5 @@
 import type { FC, ReactNode } from "react";
+
 import { Stack } from "~/components/layout";
 
 export interface BasicInfoField {
@@ -31,9 +32,9 @@ export const BasicInfo: FC<BasicInfoProps> = ({
         {visibleFields.map((field) => (
           <div
             key={field.label}
-            className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-baseline gap-2 border-border border-b py-1.5" /* tight */
+            className="grid grid-cols-[6.5rem_minmax(0,1fr)_auto] items-baseline gap-2 border-b border-border py-1.5" /* tight */
           >
-            <span className="eyebrow min-w-0">{field.label}</span>
+            <span className="min-w-0 eyebrow">{field.label}</span>
             <span className="min-w-0 text-xs">{field.value}</span>
             {field.filterAction}
           </div>

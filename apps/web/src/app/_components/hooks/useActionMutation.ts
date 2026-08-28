@@ -2,17 +2,18 @@ import type { UseMutationOptions } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
+
 import type { EditableEntity } from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { getErrorMessage } from "~/lib/error-utils";
 
 /** A mutation-options factory supplied by either Start or a specialized transport. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<
-  // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
+  // oxlint-disable-next-line typescript/no-explicit-any -- positions only used as inference anchors
   any,
-  // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
+  // oxlint-disable-next-line typescript/no-explicit-any -- positions only used as inference anchors
   any,
-  // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
+  // oxlint-disable-next-line typescript/no-explicit-any -- positions only used as inference anchors
   any
 >;
 

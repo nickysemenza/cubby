@@ -23,6 +23,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
+
 import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -36,12 +37,13 @@ import {
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+
+import { type DetailSection, DetailSections } from "../data-table/detail-page";
+import { editableDetailSection } from "../data-table/editable-detail-section";
 import {
   DocumentViewerList,
   type DocumentViewTarget,
 } from "../DocumentViewerList";
-import { type DetailSection, DetailSections } from "../data-table/detail-page";
-import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
@@ -504,7 +506,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         rawData={product}
         heroImages={images}
         relationshipPreview={
-          <div className="border-border border-b bg-card px-2 py-2 md:px-4">
+          <div className="border-b border-border bg-card px-2 py-2 md:px-4">
             <ProductRelationshipRouteContent
               product={product}
               query={relationshipRouteQuery}

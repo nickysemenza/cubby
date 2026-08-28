@@ -3,9 +3,9 @@ import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
-
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
@@ -13,13 +13,14 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { relatedData } from "~/lib/related-data.functions";
+
 import {
   numberCellData,
   specFromCellData,
   tagsCellData,
 } from "../_components/data-table/cell-data";
-import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useCookbookOptions } from "../_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -41,8 +42,8 @@ import {
   perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
-import { recipe as recipeOperations } from "./recipe.functions";
 import { totalsLookStuck } from "./recipe-totals-staleness";
+import { recipe as recipeOperations } from "./recipe.functions";
 
 /**
  * A computed list-cell value (cost, calories) whose confidence depends on how
@@ -183,7 +184,6 @@ export function RecipeList({
 
   // Inline name editing on the hook-prepended name column. Stable reference
   // required (feeds the columns memo); the mutation's mutateAsync is stable.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
   const nameEditable = useMemo(
     () => ({
       onSave: async (newName: string, recipe: RecipeListItem) => {
@@ -193,13 +193,13 @@ export function RecipeList({
         });
       },
     }),
+    // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
     [],
   );
 
   // Memoize columns; updateRecipeMutation is NOT in dependencies because
   // useMutation returns a new object every render, but the closure captures
   // it correctly — see productlist.tsx for the same pattern.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
   const columns = useMemo(() => {
     // Inline-editable, copy/pastable tags column. The cellData drives both the
     // range copy/paste engine (meta.cellData) and the focused-cell clipboard
@@ -477,6 +477,7 @@ export function RecipeList({
         },
       }),
     ];
+    // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
   }, [columnHelper]);
 
   const deletableConfig = useDeletableConfig({

@@ -13,11 +13,13 @@
 import type { ScanStrayOut } from "@cubby/schemas/scan";
 import { ArrowDownToLine, X } from "lucide-react";
 import { useState } from "react";
+
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+
 import { tryFormatAmount } from "../format-amount";
 import type { QueuedBin } from "./sweep-bin-plan";
 import type { QueuedStray } from "./useLocationSweep";
@@ -34,7 +36,7 @@ const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 function GroupLabel({ show, children }: { show: boolean; children: string }) {
   if (!show) return null;
   return (
-    <span className="font-mono text-[0.625rem] text-slate uppercase tracking-[0.05em]">
+    <span className="font-mono text-[0.625rem] tracking-[0.05em] text-slate uppercase">
       {children}
     </span>
   );
@@ -77,7 +79,7 @@ export function SweepStrayReview({
   return (
     <Stack gap="sm" className="border-t border-t-foreground pt-4">
       <Stack gap="tight">
-        <span className="font-mono text-[0.625rem] text-slate uppercase tracking-[0.05em]">
+        <span className="font-mono text-[0.625rem] tracking-[0.05em] text-slate uppercase">
           Living elsewhere
         </span>
         <Description>

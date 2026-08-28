@@ -7,6 +7,7 @@ import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { Scale, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   ProductFoodSummariesProvider,
@@ -26,6 +27,7 @@ import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+
 import {
   createImageColumn,
   createNameColumn,
@@ -104,7 +106,7 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
         <Tooltip>
           <TooltipTrigger
             render={
-              <span className="shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums" />
+              <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums" />
             }
           >
             {recipes.length}
@@ -177,7 +179,6 @@ export function IngredientList() {
 
   // Memoize columns to prevent recreating on every render
   // Note: updateIngredientMutation is NOT in dependencies because useMutation returns a new object every render
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateIngredientMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createImageColumn(columnHelper, {
@@ -245,6 +246,7 @@ export function IngredientList() {
         cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateIngredientMutation changes every render but is functionally stable
     [columnHelper],
   );
 

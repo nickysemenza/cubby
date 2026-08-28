@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
@@ -15,6 +16,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 
@@ -99,7 +101,7 @@ export function ManifestCard({
           </span>
           <div className="min-w-0 flex-1">
             <Row align="start" gap="sm">
-              <span className="min-w-0 flex-1 font-heading font-medium text-sm leading-tight">
+              <span className="min-w-0 flex-1 font-heading text-sm leading-tight font-medium">
                 {name}
               </span>
               <Row align="center" gap="sm" className="mt-px shrink-0">
@@ -122,7 +124,7 @@ export function ManifestCard({
                     <ArrowUpRight className="size-3.5" />
                   </Link>
                 ) : null}
-                <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs text-muted-foreground uppercase tracking-wide">
+                <span className="rounded-sm bg-muted px-2 py-px font-mono text-2xs tracking-wide text-muted-foreground uppercase">
                   {tag}
                 </span>
               </Row>
@@ -131,7 +133,7 @@ export function ManifestCard({
               <Row
                 align="center"
                 gap="sm"
-                className="mt-1 text-muted-foreground text-xs"
+                className="mt-1 text-xs text-muted-foreground"
               >
                 {identity}
               </Row>
@@ -140,7 +142,7 @@ export function ManifestCard({
         </Row>
       ) : null}
       {crossLinks && crossLinks.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-border/60 border-y border-dashed py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-y border-dashed border-border/60 py-2 text-xs">
           {crossLinks.map((cl) => (
             <Link
               key={cl.label}
@@ -156,9 +158,12 @@ export function ManifestCard({
           ))}
         </div>
       )}
-      {body?.map((block, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: body blocks are a fixed positional list
-        <BodyBlockView key={i} block={block} />
+      {body?.map((block, index) => (
+        <BodyBlockView
+          // oxlint-disable-next-line react/no-array-index-key -- Manifest body blocks are a fixed positional presentation list without stable ids.
+          key={index}
+          block={block}
+        />
       ))}
     </div>
   );
@@ -191,7 +196,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
         {b.stats.map((s) => (
           <div key={s.label} className="flex flex-col">
             <SectionLabel>{s.label}</SectionLabel>
-            <span className="font-medium text-sm tabular-nums">{s.value}</span>
+            <span className="text-sm font-medium tabular-nums">{s.value}</span>
             {s.caption && (
               <span className="font-mono text-2xs text-muted-foreground">
                 {s.caption}
@@ -237,9 +242,9 @@ export function PriceValue({
 }) {
   return (
     <>
-      {from && <span className="text-muted-foreground text-xs">from </span>}
+      {from && <span className="text-xs text-muted-foreground">from </span>}
       {formatCurrency(amount)}
-      <span className="text-muted-foreground text-xs">/ea</span>
+      <span className="text-xs text-muted-foreground">/ea</span>
     </>
   );
 }
@@ -254,7 +259,7 @@ export function PreviewLoading() {
 
 export function PreviewDeleted({ label }: { label: string }) {
   return (
-    <span className="text-muted-foreground text-sm italic">
+    <span className="text-sm text-muted-foreground italic">
       {label} (deleted)
     </span>
   );

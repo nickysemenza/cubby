@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useEffect, useMemo } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -11,6 +12,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { backgroundBatch } from "~/lib/background-batch.functions";
 import { relatedness } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
+
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -68,9 +70,9 @@ export function RelatednessRail({
           align="center"
           justify="between"
           gap="sm"
-          className="border-border border-b pb-2"
+          className="border-b border-border pb-2"
         >
-          <span className="text-muted-foreground text-xs">
+          <span className="text-xs text-muted-foreground">
             {status === "stale"
               ? "Similarity index is stale."
               : "Similarity index has not been computed."}
@@ -91,7 +93,7 @@ export function RelatednessRail({
       )}
 
       {status === "unavailable" && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           Similarity is unavailable until embeddings are configured.
         </p>
       )}
@@ -103,7 +105,7 @@ export function RelatednessRail({
       </ProductImageSummariesProvider>
 
       {status === "ready" && relatednessQuery.data?.items.length === 0 && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           No related products yet.
         </p>
       )}
@@ -142,7 +144,7 @@ function RelatedProductRow({
       align="center"
       justify="between"
       gap="sm"
-      className="border-border border-b pb-1 last:border-b-0"
+      className="border-b border-border pb-1 last:border-b-0"
     >
       <EntityInlineLink
         entity="product"

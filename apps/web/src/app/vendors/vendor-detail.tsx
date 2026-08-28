@@ -1,6 +1,7 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { Info, Receipt } from "lucide-react";
 import type { FC } from "react";
+
 import { EntityHero } from "~/app/_components/EntityHero";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -9,6 +10,7 @@ import { Page } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   type DetailSection,
   DetailSections,

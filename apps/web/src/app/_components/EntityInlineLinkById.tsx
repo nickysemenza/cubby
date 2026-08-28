@@ -2,8 +2,10 @@ import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+
 import { Spinner } from "~/components/ui/spinner";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
+
 import { EntityInlineLink } from "./EntityInlineLink";
 
 // Entity types this inline link resolves to a name via the detail transport. Inventory &
@@ -47,7 +49,7 @@ export function EntityInlineLinkById({
   );
 
   // Single query hook instead of 4 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed generated query-options union
+  // oxlint-disable-next-line typescript/no-explicit-any -- useQuery cannot narrow the mixed generated query-options union
   const query = useQuery(queryOptions as any);
 
   // Inventory entries have no getByID that returns product info, so there is
@@ -55,14 +57,14 @@ export function EntityInlineLinkById({
   // public shortcode a URL needs. Render unlinked rather than build a uuid URL;
   // callers that can supply a shortcode should use `EntityInlineLink`.
   if (entityType === "inventory") {
-    return <span className="font-medium text-sm">Inventory Entry</span>;
+    return <span className="text-sm font-medium">Inventory Entry</span>;
   }
 
   // Cookbooks are browsed by name, not id, and have no getByID — link to the
   // cookbook index rather than resolving the id to a name here.
   if (entityType === "cookbook") {
     return (
-      <a href="/cookbooks" className="font-medium text-sm hover:underline">
+      <a href="/cookbooks" className="text-sm font-medium hover:underline">
         Cookbook
       </a>
     );
@@ -86,7 +88,7 @@ export function EntityInlineLinkById({
   // A fetchable type with no data → the entity was deleted. Any other type
   // (an audit row carrying an entityType outside our union) → just label it.
   return (
-    <span className="text-muted-foreground text-sm italic">
+    <span className="text-sm text-muted-foreground italic">
       {entityType}
       {isFetchable ? " (deleted)" : ""}
     </span>

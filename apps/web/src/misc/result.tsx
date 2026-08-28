@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+
 import type { Result } from "~/misc/result-types";
 
 export const renderValueOrError = <T, E = string>(

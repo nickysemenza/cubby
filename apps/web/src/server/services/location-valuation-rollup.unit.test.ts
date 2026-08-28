@@ -1,5 +1,6 @@
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { rollupLocationValuations } from "./location-valuation-rollup";
 
 const loc = (id: string, parentId?: string) => ({

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { match } from "ts-pattern";
+
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { Row, Stack } from "~/components/layout";
@@ -39,6 +40,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import {
   locationTypeNoun,
   type SessionLocation,
@@ -120,7 +122,7 @@ export function LocationReviewPane({
     <Stack gap="sm" className="min-w-0">
       <div className="sticky top-[var(--app-chrome-top)] z-20 min-w-0 border-b bg-background py-2 md:static md:border-b-0 md:bg-transparent md:py-0">
         <Row align="center" gap="sm" className="min-w-0">
-          <h2 className="min-w-0 flex-1 truncate font-heading font-semibold text-xl">
+          <h2 className="min-w-0 flex-1 truncate font-heading text-xl font-semibold">
             <Link
               to={entities.location.routes.detail}
               params={entityDetailParams(location.id)}
@@ -169,15 +171,15 @@ export function LocationReviewPane({
         )}
       </Button>
 
-      <section className="border-[var(--border)] border-t pt-4">
+      <section className="border-t border-[var(--border)] pt-4">
         <Row align="center" justify="between" className="mb-2">
-          <h3 className="font-medium text-sm">Expected contents</h3>
+          <h3 className="text-sm font-medium">Expected contents</h3>
           <Description size="xs">{items.length} tracked</Description>
         </Row>
         {items.length === 0 ? (
           <Description>No tracked contents in this {locationNoun}.</Description>
         ) : (
-          <div className="border-[var(--border)] border-y">
+          <div className="border-y border-[var(--border)]">
             {items.map((item) => (
               <ExpectedItemReviewRow
                 key={item.id}
@@ -248,9 +250,9 @@ export function LocationReviewPane({
             <Stack gap="lg">
               <SessionCaptureActions location={location} />
               {!isUnknownLocation && (
-                <section className="border-[var(--border)] border-t pt-4">
+                <section className="border-t border-[var(--border)] pt-4">
                   <Row align="center" justify="between" className="mb-4">
-                    <h3 className="font-medium text-sm">From Unknown</h3>
+                    <h3 className="text-sm font-medium">From Unknown</h3>
                     <Badge variant="outline">{unknownCount}</Badge>
                   </Row>
                   <UnknownTray
@@ -317,7 +319,7 @@ function LocationContextStrip({ location }: { location: SessionLocation }) {
               <button
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
-                className="text-primary text-xs hover:underline"
+                className="text-xs text-primary hover:underline"
               >
                 {expanded ? "Less" : "More"}
               </button>
@@ -413,7 +415,7 @@ function ExpectedItemReviewRow({
   return (
     <div
       className={cn(
-        "flex items-stretch border-[var(--border)] border-b bg-background transition-colors last:border-b-0",
+        "flex items-stretch border-b border-[var(--border)] bg-background transition-colors last:border-b-0",
         present && "border-positive/40 bg-positive/5",
         staged === "adjust" && "border-primary/40 bg-primary/5",
         staged === "remove" && "border-destructive/40 bg-destructive/5",
@@ -429,7 +431,7 @@ function ExpectedItemReviewRow({
         />
         <div className="min-w-0 flex-1">
           <div
-            className="truncate font-medium text-sm"
+            className="truncate text-sm font-medium"
             title={item.product.name}
           >
             {item.product.name}
@@ -447,7 +449,7 @@ function ExpectedItemReviewRow({
       <Button
         type="button"
         variant="ghost"
-        className="min-h-16 shrink-0 border-[var(--border)] border-l px-4"
+        className="min-h-16 shrink-0 border-l border-[var(--border)] px-4"
         onClick={() => setActionsOpen(true)}
         disabled={completed}
         aria-label={`Change ${item.product.name}`}

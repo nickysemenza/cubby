@@ -1,6 +1,7 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
+
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import {
   entities,
@@ -59,7 +60,7 @@ export function AuditEntityLink({
   const className = cn(
     // Fills the ledger row's height on phones so the tap target is the row
     // the reader is aiming at, not the 20px of text inside it.
-    "inline-flex min-h-11 min-w-0 items-center gap-2 font-medium text-primary text-sm sm:min-h-0",
+    "inline-flex min-h-11 min-w-0 items-center gap-2 text-sm font-medium text-primary sm:min-h-0",
     compact && "max-w-48 sm:max-w-72",
   );
 

@@ -3,6 +3,7 @@ import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { flattenPhotoStops, needsPhoto } from "./photo-pass-utils";
 
 function img(overrides: Partial<ImageOut> = {}): ImageOut {

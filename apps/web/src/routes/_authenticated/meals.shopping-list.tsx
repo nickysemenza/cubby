@@ -4,6 +4,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { Grid3x3, List } from "lucide-react";
+
 import {
   parseExcludedMeals,
   type ShoppingListView,

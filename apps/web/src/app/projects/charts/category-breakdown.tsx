@@ -1,7 +1,9 @@
 import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { useMemo, useState } from "react";
+
 import { Grid, Section, Stack } from "~/components/layout";
+
 import { capitalize, normalizeCostTypeKey } from "../shared";
 import { ExpenseDonut } from "./expense-donut";
 import { TradeBars } from "./trade-bars";

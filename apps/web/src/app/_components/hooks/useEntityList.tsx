@@ -5,6 +5,7 @@ import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { browserEntityDefinition, entities } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { getEntityFilters } from "~/entities/filter-manifest";
@@ -18,6 +19,7 @@ import {
   listEntities,
 } from "~/entities/generated/entity-lists.gen";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+
 import type { EntityActionSubject } from "../actions/entity-actions";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
@@ -53,7 +55,7 @@ export interface BaseListRow {
   images?: Array<{ id: string; url: string; filename: string }>;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: intentional
+// oxlint-disable-next-line typescript/no-explicit-any -- intentional
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
 /**
@@ -402,6 +404,7 @@ export function useEntityList<
     presentationState.listBulkActions.onRowSelectionChange?.((current) =>
       reconcileRowSelection(current, availableRowIds),
     );
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
   const table = useTableConfig({

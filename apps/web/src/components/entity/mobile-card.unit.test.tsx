@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { AnchorHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { MobileCard } from "./mobile-card";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -8,6 +9,7 @@ vi.mock("@tanstack/react-router", () => ({
     to,
     ...props
   }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string }) => (
+    // oxlint-disable-next-line jsx-a11y/anchor-has-content -- The router mock spreads content supplied by the component under test.
     <a href={to} {...props} />
   ),
 }));
@@ -80,6 +82,7 @@ describe.each(["row", "card"] as const)(
       expect(onClick).toHaveBeenCalledOnce();
       expect(title).toHaveClass("min-h-11");
       if (variant === "row") {
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect(screen.getByRole("group")).toHaveClass("min-h-11");
       }
     });

@@ -31,6 +31,7 @@ import { X } from "lucide-react";
 import { type FC, useEffect, useMemo } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { z } from "zod";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import {
   AmountFieldGroup,
@@ -43,6 +44,7 @@ import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Spinner } from "~/components/ui/spinner";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import { getLocationId, requiredLocationField } from "../form-fields";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 
@@ -106,13 +108,13 @@ export const ProductBulkAddToInventoryDialog: FC<
   // live list data, so an unrelated invalidation hands back a new array for
   // the same selection and would otherwise wipe in-progress quantity edits.
   const selectionKey = products.map((product) => product.id).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on selectionKey, not the array identity
   useEffect(() => {
     if (!open) return;
     form.reset({
       location: form.getValues("location"),
       items: rowsFor(products),
     });
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on selectionKey, not the array identity
   }, [selectionKey, open, form]);
 
   const location = form.watch("location");

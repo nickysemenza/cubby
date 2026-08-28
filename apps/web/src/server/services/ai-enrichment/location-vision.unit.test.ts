@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { isDetectedItemCoveredByInventoryName } from "./location-vision";
 
 // Pure string comparison — two names in, a boolean out. Lived in

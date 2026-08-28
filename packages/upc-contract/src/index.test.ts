@@ -18,12 +18,16 @@ describe("UPC transport contract", () => {
   });
 
   it("rejects invalid bounds at the shared boundary", () => {
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => upcSearchInput.parse({ query: "", limit: 0 })).toThrow();
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => bulkLookupRequestSchema.parse({ upcs: [] })).toThrow();
-    expect(() =>
-      bulkLookupRequestSchema.parse({
-        upcs: Array.from({ length: 201 }, () => "1"),
-      }),
+    expect(
+      () =>
+        bulkLookupRequestSchema.parse({
+          upcs: Array.from({ length: 201 }, () => "1"),
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 

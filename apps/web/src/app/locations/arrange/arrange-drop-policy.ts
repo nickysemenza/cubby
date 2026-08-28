@@ -1,5 +1,6 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
+
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import { asDragData } from "./arrange-types";
 

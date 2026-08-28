@@ -1,4 +1,5 @@
 import type { LocationType } from "@cubby/shared";
+
 import {
   adjustLight,
   type Camera,

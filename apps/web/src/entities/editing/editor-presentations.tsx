@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { Controller, type UseFormReturn } from "react-hook-form";
+
 import {
   WithProductSearch,
   WithProjectSearch,
@@ -50,6 +51,7 @@ import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Switch } from "~/components/ui/switch";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
+
 import type {
   EntityEditContext,
   EntityEditOperation,
@@ -98,7 +100,7 @@ function MealCaptureFields({ form }: EntityEditorFieldsProps) {
         name="name"
         label="Name"
         placeholder="Meal name (optional)"
-        autoFocus
+        focusOnMount
         nullable
       />
       <SelectField
@@ -128,7 +130,7 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         name="name"
         label="Name"
         placeholder="What needs doing?"
-        autoFocus
+        focusOnMount
       />
       <SelectField
         form={form}
@@ -175,7 +177,7 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
         name="name"
         label="Name"
         placeholder="What did you buy?"
-        autoFocus
+        focusOnMount
       />
       {!hasProduct ? (
         <SelectField
@@ -216,7 +218,7 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
                   checked={field.value === true}
                   onCheckedChange={field.onChange}
                 />
-                <span className="text-muted-foreground text-sm">
+                <span className="text-sm text-muted-foreground">
                   {field.value === true ? "Not bought yet" : "Already bought"}
                 </span>
               </Row>
@@ -273,7 +275,7 @@ function ProjectCaptureFields({ form }: EntityEditorFieldsProps) {
         name="name"
         label="Name"
         placeholder="What are you working on?"
-        autoFocus
+        focusOnMount
       />
       <SelectField
         form={form}
@@ -309,7 +311,7 @@ function VendorCaptureFields({ form }: EntityEditorFieldsProps) {
         name="name"
         label="Name"
         placeholder="Who are you paying?"
-        autoFocus
+        focusOnMount
       />
       <UnifiedTextField
         form={form}
@@ -527,7 +529,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
         name="name"
         label="What do you want?"
         placeholder="e.g. Metal milling machine"
-        autoFocus
+        focusOnMount
       />
       <NullableTextareaField
         form={form}
@@ -563,7 +565,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
                 />
                 <Label
                   htmlFor={inputId}
-                  className="min-w-0 cursor-pointer normal-case tracking-normal"
+                  className="min-w-0 cursor-pointer tracking-normal normal-case"
                 >
                   <span className="block truncate font-medium">
                     {product.name}

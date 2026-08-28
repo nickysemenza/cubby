@@ -1,10 +1,12 @@
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
+
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,
 } from "~/integrations/tanstack-query/operation-catalog";
 import type { QueryTiming } from "~/lib/query-timing";
+
 import type { TableStateReturn } from "../data-table/useTableState";
 import {
   flattenUniquePageItems,

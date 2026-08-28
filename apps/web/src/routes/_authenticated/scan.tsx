@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
+
 import { useProductLookupInvalidation } from "~/app/_components/inventory/hooks/useInventoryMutation";
 import { product } from "~/app/products/product.functions";
 import { ScanWorkbench } from "~/app/scan/ScanWorkbench";

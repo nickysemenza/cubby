@@ -6,10 +6,12 @@ import {
   type MealType,
 } from "@cubby/schemas/meal-classification";
 import { useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+
 import {
   createFilterableSelectColumn,
   createNameColumn,
@@ -71,6 +73,7 @@ export function MealTable() {
         });
       },
     }),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [updateMealMutation.mutateAsync],
   );
 
@@ -80,7 +83,6 @@ export function MealTable() {
     entity: "meal",
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateMealMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createPlainDateColumn(columnHelper, "date", {
@@ -192,6 +194,7 @@ export function MealTable() {
         ),
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateMealMutation changes every render but is functionally stable
     [columnHelper, nameEditable],
   );
 

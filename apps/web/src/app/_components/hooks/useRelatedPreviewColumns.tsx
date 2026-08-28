@@ -6,9 +6,11 @@ import type {
 } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
+
 import { getSortableFields } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { relatedData } from "~/lib/related-data.functions";
+
 import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import type {
   CubbyColumnDef as ColumnDef,
@@ -139,7 +141,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   filterOptions?: RuntimeFilterOptions;
   supportsServerSorting: boolean;
 }): {
-  // biome-ignore lint/suspicious/noExplicitAny: relation display columns are heterogeneous by design.
+  // oxlint-disable-next-line typescript/no-explicit-any -- relation display columns are heterogeneous by design.
   relatedColumns: ColumnDef<TData, any>[];
   rowContentVersion: unknown;
 } {

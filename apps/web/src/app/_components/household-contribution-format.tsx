@@ -4,6 +4,7 @@ import type {
 } from "@cubby/schemas/household-contribution";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
 import { Link } from "@tanstack/react-router";
+
 import { entityDetailLink } from "~/entities/entities";
 
 export const ledgerPartyLabel = (kind: LedgerPartyKind) =>

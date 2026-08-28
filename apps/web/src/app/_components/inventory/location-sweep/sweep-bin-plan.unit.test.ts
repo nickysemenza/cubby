@@ -1,6 +1,7 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   canGoMissing,
   planSweptBin,

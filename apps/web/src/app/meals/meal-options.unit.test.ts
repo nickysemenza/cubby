@@ -3,6 +3,7 @@ import {
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
 import { describe, expect, it } from "vitest";
+
 import { mealKindIcon, mealTypeIcon, mealTypeTimeLabel } from "./meal-options";
 
 describe("meal glyphs", () => {

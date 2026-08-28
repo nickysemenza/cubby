@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { USDAClient } from "./usda";
 
 // USDA now runs on Cloudflare Workers (always available), so a fetch/timeout/5xx
@@ -31,6 +32,7 @@ describe("USDAClient surfaces fetch failures", () => {
     const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFoodsBatch([{ kind: "upc", gtin_upc: "012345678905" }]),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -42,6 +44,7 @@ describe("USDAClient surfaces fetch failures", () => {
     const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFood({ kind: "upc", gtin_upc: "012345678905" }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -53,6 +56,7 @@ describe("USDAClient surfaces fetch failures", () => {
     const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFood({ kind: "ndb", ndb_number: 1234 }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -64,6 +68,7 @@ describe("USDAClient surfaces fetch failures", () => {
     const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFood({ kind: "ndb", ndb_number: 1234 }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 

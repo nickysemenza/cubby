@@ -1,4 +1,5 @@
 import { Search, X } from "lucide-react";
+
 import { Row } from "~/components/layout";
 import { Input } from "~/components/ui/input";
 import {
@@ -6,6 +7,7 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { cn } from "~/lib/utils";
+
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 
 const COLS_OPTIONS: ViewSwitcherOption<BoardColsMode>[] = [
@@ -45,7 +47,7 @@ export function BoardControls({
     <Row align="center" justify="between" gap="md" wrap>
       <Row align="center" gap="md" wrap className="hidden md:flex">
         <Row align="center" gap="sm">
-          <span className="text-muted-foreground text-sm">Columns</span>
+          <span className="text-sm text-muted-foreground">Columns</span>
           <ViewSwitcher
             ariaLabel="Board columns"
             options={COLS_OPTIONS}
@@ -55,7 +57,7 @@ export function BoardControls({
         </Row>
         {cols === "status" && (
           <Row align="center" gap="sm">
-            <span className="text-muted-foreground text-sm">Group by</span>
+            <span className="text-sm text-muted-foreground">Group by</span>
             <ViewSwitcher
               ariaLabel="Board swimlanes"
               options={LANE_OPTIONS}

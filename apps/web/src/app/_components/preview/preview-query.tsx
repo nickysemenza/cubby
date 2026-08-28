@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect } from "react";
+
 import { Button } from "~/components/ui/button";
+
 import { PreviewDeleted, PreviewLoading } from "./manifest-card";
 
 export function PreviewQuery<T>({
@@ -27,7 +29,7 @@ export function PreviewQuery<T>({
   if (query.isError && !query.data) {
     return (
       <div className="space-y-2" role="alert">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           {label} could not be loaded.
         </p>
         <Button

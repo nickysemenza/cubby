@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import {
   VerbButton,
   VerbMenuItem,
@@ -45,6 +46,7 @@ import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import {
   SHELF_VIEW_OPTIONS,
   ShelfCard,
@@ -185,7 +187,7 @@ function ValuationBreakdown({ location }: { location: InfLocation }) {
   if (breakdown.length === 0) return null;
 
   return (
-    <div className="mt-2 border-[var(--border)] border-t pt-2">
+    <div className="mt-2 border-t border-[var(--border)] pt-2">
       <Eyebrow className="mb-1">Direct items by manufacturer</Eyebrow>
       <Stack as="ul" gap="xs">
         {breakdown.slice(0, 6).map((b) => (
@@ -260,6 +262,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   // signal) — replaces the old Grouped/All toggle + per-type sub-headers.
   const sortedChildren = useMemo(
     () => sortBy(children, [groupRank, (c) => c.type, (c) => c.name]),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [children],
   );
   const childGroupLabel = locationChildGroupLabel(sortedChildren);
@@ -281,6 +284,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
     }
     const codes = eligible.map((c) => c.id).join(",");
     void navigate({ to: "/labels", search: { codes } });
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [children, navigate]);
 
   const handleChildCreated = useCallback(() => {
@@ -485,11 +489,11 @@ export function LocationContents({ location }: { location: InfLocation }) {
 
           {fixtureCount > 0 && (
             <details>
-              <summary className="cursor-pointer text-muted-foreground text-sm">
+              <summary className="cursor-pointer text-sm text-muted-foreground">
                 Installed fixtures · {fixtureCount}
               </summary>
               <Stack gap="sm" className="pt-2">
-                <p className="text-muted-foreground text-sm">
+                <p className="text-sm text-muted-foreground">
                   Wired or plumbed in. Kept as a record, never counted during a
                   recount.
                 </p>

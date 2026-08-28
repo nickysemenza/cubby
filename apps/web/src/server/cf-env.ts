@@ -6,6 +6,7 @@
 // return undefined and callers fall back to public URLs + global fetch.
 
 import { AsyncLocalStorage } from "node:async_hooks";
+
 import type { BackgroundQueueProducer } from "./background-queue-types";
 import type { TelemetryQueueProducer } from "./telemetry-queue-types";
 

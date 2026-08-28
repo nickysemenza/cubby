@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useSearch } from "@tanstack/react-router";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
+
 import { Badge } from "~/components/ui/badge";
 import { problemQuery } from "~/entities/problem-registry";
 

@@ -1,6 +1,7 @@
 import { manualUnitMapping } from "@cubby/schemas/unitmapping";
 import { getNutrientUnitString } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
+
 import { macroCoverage } from "./macro-coverage";
 
 // A `100 g = X <unit>` edge, the shape USDA nutrient synthesis emits.

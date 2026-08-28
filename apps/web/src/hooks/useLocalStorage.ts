@@ -52,7 +52,9 @@ export function useLocalStorage<T>(
       try {
         const currentValue = getSnapshot();
         const valueToStore =
-          value instanceof Function ? value(currentValue) : value;
+          typeof value === "function"
+            ? (value as (previous: T) => T)(currentValue)
+            : value;
 
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
         window.dispatchEvent(

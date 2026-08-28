@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router";
+
 import { cn } from "~/lib/utils";
+
 import {
   type NavItem,
   navItemLinkProps,
@@ -18,7 +20,7 @@ export const NavLink = ({ item }: { item: NavItem }) => {
     <Link
       {...navItemLinkProps(item, active)}
       className={cn(
-        "nav-link-animated inline-flex items-center gap-2 font-medium text-sm transition-colors hover:text-primary",
+        "nav-link-animated inline-flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary",
         !active && "text-muted-foreground",
       )}
       data-status={active ? "active" : undefined}

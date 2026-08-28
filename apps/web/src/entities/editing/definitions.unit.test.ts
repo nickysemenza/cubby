@@ -1,6 +1,7 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { entityEditRegistry } from "./definitions";
 import { buildEntityEdit, resolveEntityEdit } from "./kernel";
 import type { EditableEntity, EntityEditIntentDefinition } from "./types";
@@ -43,6 +44,7 @@ describe("entity edit definitions", () => {
           [string, EntityEditIntentDefinition<EditableEntity, never>]
         >) {
           if (operation !== "delete") {
+            // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
             expect(
               capability.fields.length,
               `${entity} ${operation}/${intent}`,

@@ -74,10 +74,10 @@ export async function* streamItems<
 >(
   items: readonly T[],
   // `| void` lets a no-payload step (an `async` fn with no return) be passed as-is.
-  // biome-ignore lint/suspicious/noConfusingVoidType: a step may return a per-item payload or nothing.
+  // A step may return a per-item payload or nothing.
   step: (item: T, index: number) => Promise<Item | void>,
   opts: {
-    // biome-ignore lint/suspicious/noConfusingVoidType: onError may return a per-item payload or nothing.
+    // onError may return a per-item payload or nothing.
     onError?: (item: T, index: number, error: unknown) => Item | void;
     finalize?: (summary: {
       succeeded: number;

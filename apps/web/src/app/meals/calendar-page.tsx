@@ -1,8 +1,10 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
 import { CalendarDays, Table as TableIcon } from "lucide-react";
+
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import type { CalendarPeriod } from "~/components/reui/event-calendar/event-calendar-types";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
+
 import type { MealCalendarView } from "./meal-search";
 import { MealTable } from "./meal-table";
 

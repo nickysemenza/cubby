@@ -1,5 +1,6 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
+
 import { monthKey, monthLabel } from "../shared";
 
 export interface ExpenseSeries {

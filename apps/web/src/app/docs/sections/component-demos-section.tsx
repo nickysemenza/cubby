@@ -1,6 +1,7 @@
 import { infLocation } from "@cubby/schemas/location";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { z } from "zod";
+
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
 import { formatRichText } from "~/app/_components/recipe/richtext";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
@@ -9,6 +10,7 @@ import {
   entitySummaryDataSchema,
 } from "~/components/entity/entity-summary-card";
 import { wasm } from "~/lib/wasm";
+
 import { EditableComponentDemo } from "../_components/EditableComponentDemo";
 import { Prose } from "../_components/Prose";
 import {

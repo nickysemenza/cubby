@@ -16,6 +16,7 @@ import { getTableColumns, getTableName, is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+
 import * as schema from "~/server/db/schema";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 

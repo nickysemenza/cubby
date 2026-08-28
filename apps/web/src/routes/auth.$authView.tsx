@@ -1,6 +1,7 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
+
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";

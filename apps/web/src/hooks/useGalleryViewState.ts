@@ -1,5 +1,6 @@
 import type { LocationType } from "@cubby/schemas/location";
 import { useCallback, useMemo } from "react";
+
 import { useLocalStorage } from "./useLocalStorage";
 
 export type EmptyFilter = "all" | "withItems" | "empty";

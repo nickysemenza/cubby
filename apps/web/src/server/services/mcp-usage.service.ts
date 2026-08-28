@@ -4,6 +4,7 @@ import type {
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
 import { groupBy, sumBy } from "es-toolkit";
+
 import type { Database } from "~/server/db";
 import { listMcpToolCatalog } from "~/server/mcp/server";
 import {

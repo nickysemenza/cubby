@@ -15,6 +15,7 @@ import {
   notExists,
   sql,
 } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import {
   image,
@@ -25,6 +26,7 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+
 import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";
 
 export const findDuplicateUniqueProducts = async (

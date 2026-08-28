@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
+
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Description } from "~/components/ui/description";
+
 import {
   getTagColor,
   getTagIcon,
@@ -17,7 +19,7 @@ interface TagInputProps {
   onChange: (tags: string[]) => void;
   className?: string;
   /** Focus the input on mount (inline cell editor opens ready to type). */
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
   /** Seed the input with an initial value (type-to-edit). */
   initialInputValue?: string;
   /** Enter with an empty input (the inline cell editor commits on it). */
@@ -37,7 +39,7 @@ export const TagInput: FC<TagInputProps> = ({
   value,
   onChange,
   className,
-  autoFocus,
+  focusOnMount,
   initialInputValue,
   onEmptyEnter,
 }) => {
@@ -76,7 +78,7 @@ export const TagInput: FC<TagInputProps> = ({
       value={value}
       onChange={onChange}
       className={className}
-      autoFocus={autoFocus}
+      focusOnMount={focusOnMount}
       initialInputValue={initialInputValue}
       onEmptyEnter={onEmptyEnter}
       placeholder="Add tag (e.g., cuisine:thai, quick)"

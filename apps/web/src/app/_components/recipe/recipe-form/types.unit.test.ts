@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { formSchema } from "./types";
 
 // A name-only recipe with one empty section — the form's initial state. The catch

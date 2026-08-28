@@ -2,8 +2,10 @@ import type { TaskOut } from "@cubby/schemas/project";
 import { format, parseISO } from "date-fns";
 import { keyBy } from "es-toolkit";
 import { useState } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+
 import type { BoardColumnKey } from "./board/board-types";
 import { TaskCard } from "./board/TaskCard";
 import { TaskDeleteDialog } from "./board/TaskDeleteDialog";
@@ -79,7 +81,7 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
       <div className="border">
         {groups.map((group) => (
           <section key={group.day}>
-            <h3 className="sticky top-0 z-10 flex items-baseline gap-2 border-b bg-muted px-2 py-1 font-mono text-2xs uppercase tracking-wider">
+            <h3 className="sticky top-0 z-10 flex items-baseline gap-2 border-b bg-muted px-2 py-1 font-mono text-2xs tracking-wider uppercase">
               <span>{format(parseISO(group.day), "EEE MMM d")}</span>
               <span className="ml-auto text-slate tabular-nums">
                 {group.tasks.length}

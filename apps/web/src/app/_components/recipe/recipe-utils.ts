@@ -4,10 +4,12 @@ import {
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
 import { match } from "ts-pattern";
+
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { wasm } from "~/lib/wasm";
+
 import { tryFormatAmount } from "../inventory/format-amount";
 import type { RecipeTreeRow } from "./recipe-tree";
 import { formatYield } from "./recipe-yield";

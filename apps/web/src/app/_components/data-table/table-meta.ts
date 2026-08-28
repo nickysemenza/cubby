@@ -49,7 +49,7 @@ export interface CubbyColumnMeta {
   filterConfig?: FilterConfig;
   // Column arrays intentionally erase their heterogeneous row/value types at
   // the shared chrome seam. Factories still retain TData at their call sites.
-  // biome-ignore lint/suspicious/noExplicitAny: heterogeneous table metadata
+  // oxlint-disable-next-line typescript/no-explicit-any -- heterogeneous table metadata
   cellData?: ColumnCellData<any>;
 }
 

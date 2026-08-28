@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { z } from "zod";
+
 import {
   VerbMenuItem,
   verbBulkAction,
@@ -11,6 +12,7 @@ import {
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
+
 import {
   createEditableAmountColumn,
   createSingleEntityInlineLinkColumn,
@@ -116,7 +118,6 @@ export function LocationInventoryTable({
   // returns a new object every render, but the closure captures mutateAsync
   // correctly and it is functionally stable — same reasoning as the columns
   // memo below.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation identity churns every render
   const bulkActions = useMemo(
     () => ({
       actions: [
@@ -175,6 +176,7 @@ export function LocationInventoryTable({
       // stay selected so it's visible which ones were being acted on.
       clearSelectionOnComplete: false,
     }),
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation identity churns every render
     [placement],
   );
 
@@ -182,7 +184,6 @@ export function LocationInventoryTable({
   // NOT in the dependency array because useMutation returns a new object
   // every render, but the closure captures mutateAsync correctly and it's
   // functionally stable — see productlist.tsx for the same pattern.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       columnHelper.accessor((row) => row.product.id, {
@@ -221,6 +222,7 @@ export function LocationInventoryTable({
         ),
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
     [columnHelper, unitMappingsByProductId],
   );
 

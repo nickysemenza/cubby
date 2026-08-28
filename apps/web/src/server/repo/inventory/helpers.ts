@@ -1,5 +1,6 @@
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { CollectionsIndexPage } from "~/app/collections/collections-index-page";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

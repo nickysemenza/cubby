@@ -1,8 +1,10 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import type * as React from "react";
+
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+
 import { LocationIcon } from "./location-icons";
 
 interface LocationTreeRowProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -59,7 +61,7 @@ export function LocationTreeRow({
         {showBranch && depth > 0 && (
           <div
             className={cn(
-              "ml-auto w-4 border-[var(--border)] border-b border-l",
+              "ml-auto w-4 border-b border-l border-[var(--border)]",
               compact ? "h-6" : "h-8",
             )}
           />

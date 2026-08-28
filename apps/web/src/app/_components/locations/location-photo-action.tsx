@@ -3,9 +3,11 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { Camera } from "lucide-react";
 import { useRef } from "react";
 import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { useLocationPhotoCapture } from "./use-location-photo-capture";
 
 /** Direct in-hand cover capture for the canonical Location detail page. */

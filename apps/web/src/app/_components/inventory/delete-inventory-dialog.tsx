@@ -1,5 +1,6 @@
 import pluralize from "pluralize";
 import { toast } from "sonner";
+
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";

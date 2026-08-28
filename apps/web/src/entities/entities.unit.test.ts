@@ -23,6 +23,7 @@ import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { wishSortableFields } from "@cubby/schemas/wish";
 import { describe, expect, expectTypeOf, it } from "vitest";
+
 import {
   browserEntityDefinition,
   type EntityDetailRoute,

@@ -1,5 +1,6 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { buildFinancialTransferPairSuggestions } from "./financial-transfer-pairing";
 
 const transactionShortcode = (seed: string) =>

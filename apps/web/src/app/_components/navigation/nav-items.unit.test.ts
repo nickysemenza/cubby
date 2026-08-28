@@ -1,6 +1,8 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
+
 import { entities } from "~/entities/entities";
+
 import { domainForRoute } from "./domain-wayfinding";
 import {
   bottomNavItems,
@@ -53,6 +55,7 @@ describe("workspace navigation contract", () => {
   it("keeps every primary destination in its route-level domain", () => {
     for (const group of primaryNavGroups) {
       for (const item of group.children) {
+        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(domainForRoute(String(item.to)), item.label).toBe(group.domain);
       }
     }
@@ -170,6 +173,7 @@ describe("getEntityNavGroup", () => {
     };
 
     for (const entity of entityKeys) {
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(getEntityNavGroup(entity)?.label, entity).toBe(expected[entity]);
     }
   });

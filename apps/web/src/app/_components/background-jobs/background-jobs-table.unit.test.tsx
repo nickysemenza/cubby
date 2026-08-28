@@ -6,7 +6,9 @@ import { flexRender } from "@tanstack/react-table";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import type { CubbyTable } from "~/app/_components/data-table/table-features";
+
 import type { BackgroundJobTableRow } from "./background-job-rows";
 import { buildBackgroundJobRows } from "./background-job-rows";
 import { BackgroundJobsTable } from "./background-jobs-table";

@@ -2,6 +2,7 @@ import { JsonEditor } from "json-edit-react";
 import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -67,7 +68,7 @@ export function EditableComponentDemo<T>({
     <div className={cn("my-6", className)}>
       {/* Header */}
       <Row align="center" gap="sm" className="mb-2">
-        <span className="inline-flex items-center rounded bg-secondary px-2 py-1 font-medium text-secondary-foreground text-xs">
+        <span className="inline-flex items-center rounded bg-secondary px-2 py-1 text-xs font-medium text-secondary-foreground">
           Interactive
         </span>
         {title && <span className="font-medium">{title}</span>}
@@ -100,7 +101,7 @@ export function EditableComponentDemo<T>({
       {/* JSON Editor (collapsible) */}
       {isEditing && (
         <div className="mb-4 overflow-hidden border border-[var(--border)]">
-          <div className="border-b bg-muted/50 px-4 py-2 font-medium text-xs">
+          <div className="border-b bg-muted/50 px-4 py-2 text-xs font-medium">
             Sample Data (editable)
           </div>
           <div className="max-h-80 overflow-auto p-2">
@@ -117,7 +118,7 @@ export function EditableComponentDemo<T>({
             />
           </div>
           {error && (
-            <div className="border-t bg-destructive/10 px-4 py-2 text-destructive text-xs">
+            <div className="border-t bg-destructive/10 px-4 py-2 text-xs text-destructive">
               Validation error: {error}
             </div>
           )}

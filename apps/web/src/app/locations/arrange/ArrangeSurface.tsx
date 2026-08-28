@@ -2,6 +2,7 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { Columns3, ListTree } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+
 import { collectTreeProductIds } from "~/app/_components/locations/location-gallery-data";
 import { ProductImageSummariesProvider } from "~/app/_components/products/product-image-summaries";
 import { location } from "~/app/locations/location.functions";
@@ -11,9 +12,10 @@ import {
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useHydrated } from "~/hooks/useHydrated";
+
+import { findUnknownRoot } from "./arrange-tree-utils";
 import { ArrangeBoard } from "./ArrangeBoard";
 import { ArrangeTree } from "./ArrangeTree";
-import { findUnknownRoot } from "./arrange-tree-utils";
 import { ArrangeDndProvider } from "./use-arrange-dnd";
 import { useArrangeMutations } from "./use-arrange-mutations";
 
@@ -115,7 +117,7 @@ export function ArrangeSurface({
           onValueChange={onViewChange}
         />
         <Row align="center" gap="sm">
-          <label htmlFor={depthId} className="text-muted-foreground text-xs">
+          <label htmlFor={depthId} className="text-xs text-muted-foreground">
             {view === "board" ? "Columns" : "Depth"}
           </label>
           <input

@@ -1,4 +1,5 @@
 import type { RowData } from "@tanstack/react-table";
+
 import type { CubbyTable } from "./table-features";
 
 export interface CellSelectionStats {

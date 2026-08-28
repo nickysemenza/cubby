@@ -1,6 +1,8 @@
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { ProductListItem } from "@cubby/schemas/product";
+
 import { formatCurrency } from "~/lib/utils";
+
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 

@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
+
 import { FormWrapper } from "~/app/_components/form-utils";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+
 import { getEntityEditorPresentation } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
 import type {
@@ -23,6 +25,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     surface: "dialog",
   };
   const session = useEntityEditSession(sessionRequest);
+  const resetSession = session.reset;
   const presentation = getEntityEditorPresentation(
     request as {
       entity: string;
@@ -40,11 +43,11 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     .map((issue) => issue.message);
 
   useEffect(() => {
-    if (open) session.reset();
-  }, [open, session.reset]);
+    if (open) resetSession();
+  }, [open, resetSession]);
 
   const close = () => {
-    session.reset();
+    resetSession();
     onOpenChange(false);
   };
 

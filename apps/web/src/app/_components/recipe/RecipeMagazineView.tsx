@@ -2,6 +2,7 @@ import type { RecipeOut } from "@cubby/schemas/recipe";
 import { sumBy } from "es-toolkit";
 import { Eye, EyeOff } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
@@ -12,6 +13,7 @@ import type {
   RecipeCosting,
 } from "~/lib/recipe-costing";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
@@ -20,8 +22,6 @@ import {
   IngredientQuantities,
   ingredientRowGrid,
 } from "./IngredientQuantities";
-import { RecipeHero } from "./RecipeHero";
-import { RecipeInstructions } from "./RecipeInstructions";
 import {
   buildRecipeKicker,
   getEffectiveServings,
@@ -30,6 +30,8 @@ import {
   type RecipeMacroStats,
   recipeMacroStats,
 } from "./recipe-utils";
+import { RecipeHero } from "./RecipeHero";
+import { RecipeInstructions } from "./RecipeInstructions";
 import { SectionHeading } from "./section-heading";
 
 // Macro split for the vitals card: each macro's color (warm chart ramp) + its
@@ -85,14 +87,14 @@ function VitalsPanel({
           {(stats.cost != null || stats.kcal != null) && (
             <Row align="baseline" justify="between" className="mb-2">
               {stats.cost != null && (
-                <span className="font-heading font-semibold text-2xl tracking-tight">
+                <span className="font-heading text-2xl font-semibold tracking-tight">
                   {formatCurrency(stats.cost)}
                 </span>
               )}
               {stats.kcal != null && (
-                <span className="font-mono text-muted-foreground text-sm tabular-nums">
+                <span className="font-mono text-sm text-muted-foreground tabular-nums">
                   {Math.round(stats.kcal)}
-                  <span className="ml-1 text-2xs uppercase tracking-wide">
+                  <span className="ml-1 text-2xs tracking-wide uppercase">
                     kcal
                   </span>
                 </span>
@@ -119,7 +121,7 @@ function VitalsPanel({
                     <div className="font-mono text-sm tabular-nums">
                       {Math.round(m.grams)}g
                     </div>
-                    <div className="flex items-center justify-center gap-1 text-2xs text-muted-foreground uppercase tracking-wide">
+                    <div className="flex items-center justify-center gap-1 text-2xs tracking-wide text-muted-foreground uppercase">
                       <span
                         className="inline-block size-1.5 rounded-full"
                         style={{ backgroundColor: m.color }}
@@ -137,7 +139,7 @@ function VitalsPanel({
               align="center"
               justify="between"
               gap="sm"
-              className="mt-2 border-border/60 border-t pt-2 text-2xs text-muted-foreground"
+              className="mt-2 border-t border-border/60 pt-2 text-2xs text-muted-foreground"
             >
               {proteinDensity != null && (
                 <span>{proteinDensity.toFixed(1)}g protein / 100 kcal</span>
@@ -152,7 +154,7 @@ function VitalsPanel({
         <button
           type="button"
           onClick={onToggle}
-          className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <Eye className="size-3.5" />
           Show nutrition &amp; cost
@@ -178,7 +180,7 @@ interface RecipeMagazineViewProps {
 function SpreadHeading({ children }: { children: ReactNode }) {
   return (
     <div className={sectionRuleClass}>
-      <h3 className="my-0 font-bold font-heading text-base">{children}</h3>
+      <h3 className="my-0 font-heading text-base font-bold">{children}</h3>
     </div>
   );
 }
@@ -320,7 +322,7 @@ export function RecipeMagazineView({
       <RecipeHero recipe={recipe} />
 
       {kicker && (
-        <Eyebrow className="border-foreground border-b pb-2 tracking-[0.12em]">
+        <Eyebrow className="border-b border-foreground pb-2 tracking-[0.12em]">
           {kicker}
         </Eyebrow>
       )}

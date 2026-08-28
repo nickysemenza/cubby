@@ -1,4 +1,5 @@
 import * as schemas from "@cubby/schemas/meal";
+
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,

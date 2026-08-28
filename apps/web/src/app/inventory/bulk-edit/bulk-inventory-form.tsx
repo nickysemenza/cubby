@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   getLocationId,
@@ -286,7 +287,7 @@ export default function BulkInventoryForm({
       </div>
 
       {selectedLocation && isTruncated && (
-        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-warning-ink text-xs">
+        <div className="mb-4 rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink">
           Showing {loadedCount} of {totalCount} entries. Bulk edit can't safely
           save a partial load (it would delete the {totalCount - loadedCount}{" "}
           not shown). Use the inventory session to audit this location.
@@ -296,7 +297,7 @@ export default function BulkInventoryForm({
       {selectedLocation && (
         <>
           <Row align="center" justify="between" className="mb-4">
-            <h3 className="font-medium text-lg">
+            <h3 className="text-lg font-medium">
               Inventory for {selectedLocation.name}
             </h3>
             <Button type="button" onClick={addInventoryItem} size="sm">

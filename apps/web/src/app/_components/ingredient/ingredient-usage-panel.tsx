@@ -2,6 +2,7 @@ import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -13,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+
 import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 import { IngredientUsageChart } from "./ingredient-usage-chart";
 
@@ -85,7 +87,7 @@ export function IngredientUsagePanel({
               key={row.ingredientId}
               to="/ingredients/$shortcode"
               params={{ shortcode: row.ingredientId }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+              className="inline-flex min-h-11 items-center px-2 text-xs text-primary hover:underline sm:min-h-0"
             >
               {row.name} ({row.recipeCount})
             </Link>
@@ -94,7 +96,7 @@ export function IngredientUsagePanel({
         {rows.length > limit && (
           <Link
             to="/ingredients"
-            className="inline-flex min-h-11 items-center text-primary text-xs hover:underline sm:min-h-0"
+            className="inline-flex min-h-11 items-center text-xs text-primary hover:underline sm:min-h-0"
           >
             View all {rows.length} ingredients →
           </Link>

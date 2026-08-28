@@ -8,6 +8,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { createFinancialAccount } from "./financial-account";
 import {
   createFinancialTransaction,
@@ -157,6 +158,7 @@ describe("settlement allocations — write path", () => {
           { purchaseId: b.id, amount: -7.0 },
         ],
       }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     await expect(
@@ -166,6 +168,7 @@ describe("settlement allocations — write path", () => {
           { purchaseId: b.id, amount: 3.24 },
         ],
       }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 

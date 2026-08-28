@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
+
 import {
   formatCategoryLabel,
   getCategoryColor,
@@ -10,6 +11,7 @@ import {
 import { product } from "~/app/products/product.functions";
 import { FILTER_NONE } from "~/entities/filters";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
@@ -187,12 +189,12 @@ function DonutChart({ data }: DonutChartProps) {
       className="relative h-100 w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
-        role="img"
         aria-label={chartSummary}
         aria-describedby={summaryId}
         width={dimensions.width}
         height={dimensions.height}
       >
+        <title>{chartSummary}</title>
         <g
           transform={`translate(${dimensions.width / 2}, ${dimensions.height / 2})`}
         >
@@ -210,7 +212,6 @@ function DonutChart({ data }: DonutChartProps) {
                   search={productCategoryDrilldown(slice.category)}
                   aria-label={`${categoryLabel}: ${slice.productCount.toLocaleString()} product${slice.productCount !== 1 ? "s" : ""}`}
                 >
-                  {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 donut chart hover interaction */}
                   <path
                     d={arc(
                       slice.startAngle,
@@ -233,7 +234,7 @@ function DonutChart({ data }: DonutChartProps) {
                     textAnchor="middle"
                     dominantBaseline="middle"
                     fill={sliceLabelColor(fill)}
-                    className="pointer-events-none font-medium text-xs capitalize"
+                    className="pointer-events-none text-xs font-medium capitalize"
                   >
                     {categoryLabel}
                   </text>
@@ -246,7 +247,7 @@ function DonutChart({ data }: DonutChartProps) {
           <text
             textAnchor="middle"
             dominantBaseline="middle"
-            className="fill-foreground font-semibold text-lg"
+            className="fill-foreground text-lg font-semibold"
             y={-8}
           >
             {hoveredSlice ? hoveredSlice.productCount : totalProducts}
@@ -290,15 +291,15 @@ function HoverTooltip({ slice }: { slice: CategoryData }) {
       </div>
       {slice.locations.length > 0 && (
         <div className="mt-2 border-t pt-2">
-          <div className="mb-1 font-medium text-xs">Top locations:</div>
+          <div className="mb-1 text-xs font-medium">Top locations:</div>
           {slice.locations.map((loc) => (
-            <div key={loc.id} className="text-muted-foreground text-xs">
+            <div key={loc.id} className="text-xs text-muted-foreground">
               {loc.name} ({loc.count})
             </div>
           ))}
         </div>
       )}
-      <div className="mt-2 border-t pt-2 text-muted-foreground text-xs">
+      <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
         Click to view products →
       </div>
     </VizTooltip>

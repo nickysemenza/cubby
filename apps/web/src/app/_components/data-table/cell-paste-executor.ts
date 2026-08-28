@@ -11,6 +11,7 @@
  */
 
 import pMap from "p-map";
+
 import type {
   CellKind,
   CellRect,

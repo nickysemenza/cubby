@@ -1,5 +1,6 @@
 import { render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { detailPage } from "./entity-routes";
 
 const queryState = vi.hoisted(() => ({ data: null as unknown }));

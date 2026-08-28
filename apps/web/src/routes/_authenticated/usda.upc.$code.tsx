@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
@@ -75,7 +76,7 @@ function USDAUPCLookupPage() {
       compact
       decoration="none"
     >
-      <p className="text-muted-foreground text-sm">Opening USDA food...</p>
+      <p className="text-sm text-muted-foreground">Opening USDA food...</p>
     </Page>
   );
 }

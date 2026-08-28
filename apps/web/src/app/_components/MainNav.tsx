@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import type * as React from "react";
+
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
+
 import { MainNavEnhancements } from "./navbar/main-nav-enhancements";
 
 interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
@@ -27,7 +29,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
       <Link to="/" className="flex min-h-11 items-center md:min-h-0">
         <Row align="center" gap="sm">
           <img src={LOGO_SRC} alt="" className="size-6 sm:h-7 sm:w-7" />
-          <span className="self-center whitespace-nowrap font-bold font-heading text-foreground text-lg tracking-tight sm:text-xl">
+          <span className="self-center font-heading text-lg font-bold tracking-tight whitespace-nowrap text-foreground sm:text-xl">
             cubby
           </span>
         </Row>
@@ -40,12 +42,12 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           className="ml-6 hidden items-center space-x-4 md:flex lg:space-x-6"
           {...props}
         >
-          <Link to="/" className="font-medium text-muted-foreground text-sm">
+          <Link to="/" className="text-sm font-medium text-muted-foreground">
             Home
           </Link>
           <Link
             to="/docs"
-            className="font-medium text-muted-foreground text-sm"
+            className="text-sm font-medium text-muted-foreground"
           >
             Docs
           </Link>
@@ -74,7 +76,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
           <Link
             to="/auth/$authView"
             params={{ authView: "sign-in" }}
-            className="font-medium text-sm"
+            className="text-sm font-medium"
           >
             Sign In
           </Link>

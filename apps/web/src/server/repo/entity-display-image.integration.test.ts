@@ -6,7 +6,9 @@ import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { projectImage, vendor as vendorTable } from "~/server/db/schema";
+
 import { upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { resolveEntityDisplayImages } from "./entity-display-image";

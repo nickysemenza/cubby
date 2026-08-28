@@ -1,6 +1,7 @@
 import { type InfLocation, infLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
+
 import { buildRooms, type InventoryData } from "./isometric-layout";
 
 describe("isometric pantry layout", () => {

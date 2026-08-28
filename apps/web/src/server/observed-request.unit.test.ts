@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { isObservedCancellation } from "./observed-request";
 
 describe("observed request cancellation", () => {

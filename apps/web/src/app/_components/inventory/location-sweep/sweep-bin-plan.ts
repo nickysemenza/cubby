@@ -16,6 +16,7 @@
  */
 
 import type { InfLocation } from "@cubby/schemas/location";
+
 import {
   getLocationTypeGroup,
   typeSupportsQrCode,

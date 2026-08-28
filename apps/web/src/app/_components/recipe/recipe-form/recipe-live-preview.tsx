@@ -1,9 +1,11 @@
 import type { FC } from "react";
 import { type Control, useWatch } from "react-hook-form";
+
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { cn } from "~/lib/utils";
+
 import { tryFormatAmount } from "../../inventory/format-amount";
 import {
   type DisplayQuantity,
@@ -49,11 +51,11 @@ export const RecipeLivePreview: FC<{
   return (
     <Stack>
       <div>
-        <h3 className="my-0 break-words font-bold font-heading text-lg tracking-tight">
+        <h3 className="my-0 font-heading text-lg font-bold tracking-tight break-words">
           {values.name?.trim() || "Untitled recipe"}
         </h3>
         {kicker && (
-          <Eyebrow className="mt-1 border-foreground border-b pb-1 tracking-[0.12em]">
+          <Eyebrow className="mt-1 border-b border-foreground pb-1 tracking-[0.12em]">
             {kicker}
           </Eyebrow>
         )}
@@ -61,14 +63,14 @@ export const RecipeLivePreview: FC<{
 
       {/* Notes markdown, headnote-style — mirrors the detail view's placement. */}
       {values.notes?.trim() && (
-        <MarkdownText className="text-muted-foreground text-xs">
+        <MarkdownText className="text-xs text-muted-foreground">
           {values.notes}
         </MarkdownText>
       )}
 
       {sections.map((section, sectionIndex) => (
         <Stack
-          // biome-ignore lint/suspicious/noArrayIndexKey: preview of positional draft sections
+          // oxlint-disable-next-line react/no-array-index-key -- Draft sections are positional form values without stable ids; content changes while typing.
           key={sectionIndex}
           gap="sm"
         >
@@ -80,15 +82,15 @@ export const RecipeLivePreview: FC<{
 
           {(section?.ingredients?.length ?? 0) > 0 && (
             <ul className="my-0 ml-0 list-none divide-y divide-dashed divide-border">
-              {section?.ingredients?.map((ing, i) => {
+              {section?.ingredients?.map((ing, ingredientIndex) => {
                 const name =
                   (ing?.type === "recipe"
                     ? ing?.recipe?.name
                     : ing?.ingredient?.name) || "…";
                 return (
                   <li
-                    // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
-                    key={i}
+                    // oxlint-disable-next-line react/no-array-index-key -- Draft ingredient rows are positional form values without stable ids; content changes while typing.
+                    key={ingredientIndex}
                     className={cn(ingredientRowGridNarrow, "py-1")}
                   >
                     <IngredientQuantities
@@ -104,16 +106,16 @@ export const RecipeLivePreview: FC<{
 
           {(section?.instructions?.length ?? 0) > 0 && (
             <Stack as="ol" gap="sm" className="my-0 ml-0 list-none">
-              {section?.instructions?.map((inst, i) => {
+              {section?.instructions?.map((inst, instructionIndex) => {
                 stepNumber += 1;
                 return (
                   <Row
                     as="li"
-                    // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
-                    key={i}
+                    // oxlint-disable-next-line react/no-array-index-key -- Draft instructions are positional form values without stable ids; duplicate text is valid.
+                    key={instructionIndex}
                     gap="sm"
                   >
-                    <span className="w-5 shrink-0 text-right font-heading font-medium text-base text-primary italic leading-snug">
+                    <span className="w-5 shrink-0 text-right font-heading text-base leading-snug font-medium text-primary italic">
                       {stepNumber}
                     </span>
                     <span className="min-w-0 text-xs/relaxed">
@@ -132,7 +134,7 @@ export const RecipeLivePreview: FC<{
           (s?.ingredients?.length ?? 0) === 0 &&
           (s?.instructions?.length ?? 0) === 0,
       ) && (
-        <p className="text-muted-foreground text-xs italic">
+        <p className="text-xs text-muted-foreground italic">
           The page builds itself as you type.
         </p>
       )}

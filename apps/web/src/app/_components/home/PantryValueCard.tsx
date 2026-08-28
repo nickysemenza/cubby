@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useId } from "react";
+
 import { location } from "~/app/locations/location.functions";
 import { Row } from "~/components/layout";
 import {
@@ -62,7 +63,7 @@ export function PantryValueCard() {
         action={inventoryAction}
       >
         <div className="space-y-3">
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             Pantry value is unavailable right now.
           </p>
           <Button
@@ -85,7 +86,7 @@ export function PantryValueCard() {
         title="Pantry value"
         action={inventoryAction}
       >
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Add inventory to see where its value lives.
         </p>
       </DashboardCard>
@@ -100,7 +101,7 @@ export function PantryValueCard() {
       description="Where is pantry value stored?"
       action={inventoryAction}
     >
-      <div className="font-mono font-semibold text-xl tabular-nums">
+      <div className="font-mono text-xl font-semibold tabular-nums">
         {formatCurrency(total)}
       </div>
       <figure className="mt-4" aria-labelledby={questionId}>
@@ -112,14 +113,14 @@ export function PantryValueCard() {
         <Row
           align="end"
           gap="sm"
-          className="h-24 border-[var(--border)] border-b px-1"
+          className="h-24 border-b border-[var(--border)] px-1"
         >
           {bars.map((b, i) => (
             <div
               key={b.id}
               title={`${b.name}: ${formatCurrency(b.value)}`}
               aria-hidden="true"
-              className="min-w-0 flex-1 border border-[var(--border)] border-b-0"
+              className="min-w-0 flex-1 border border-b-0 border-[var(--border)]"
               style={{
                 height: `${Math.max(8, (b.value / max) * 100)}%`,
                 backgroundColor: BAR_COLORS[i % BAR_COLORS.length],

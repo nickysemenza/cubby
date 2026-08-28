@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { ProductDetail } from "~/app/_components/products/product-detail";
 import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
 import {

@@ -3,11 +3,13 @@ import {
   getNutrientValueByKey,
   type NutrientsPer100,
 } from "@cubby/usda-schemas";
+
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 
 /**

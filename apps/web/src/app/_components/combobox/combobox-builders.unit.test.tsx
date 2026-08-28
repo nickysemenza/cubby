@@ -2,6 +2,7 @@ import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,

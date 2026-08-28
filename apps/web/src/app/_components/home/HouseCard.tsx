@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Hammer } from "lucide-react";
 import { useId } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/project-formatting";
 import { task } from "~/app/tasks/task.functions";
@@ -56,7 +57,7 @@ export function taskBriefingSecondary(
 
 function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
   return (
-    <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-border border-b py-2 last:border-b-0 sm:min-h-0 sm:py-1.5">
+    <div className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-border py-2 last:border-b-0 sm:min-h-0 sm:py-1.5">
       <EntityInlineLink
         entity="task"
         data={{ id: item.id, name: item.name, status: item.status }}
@@ -96,14 +97,14 @@ export function TodayAttention() {
 
   return (
     <section aria-labelledby={titleId} className="min-w-0">
-      <div className="flex items-start justify-between gap-3 border-border border-b pb-2">
+      <div className="flex items-start justify-between gap-3 border-b border-border pb-2">
         <div className="flex min-w-0 items-start gap-2">
           <Hammer className="mt-0.5 size-4 shrink-0 text-slate" aria-hidden />
           <div className="min-w-0">
-            <h2 id={titleId} className="font-heading font-semibold text-base">
+            <h2 id={titleId} className="font-heading text-base font-semibold">
               Next up
             </h2>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-xs text-muted-foreground">
               Unblocked household work, in its existing priority order.
             </p>
           </div>
@@ -122,7 +123,7 @@ export function TodayAttention() {
       {briefing.isLoading ? (
         <Skeleton className="mt-2 h-4 w-44" />
       ) : briefing.isError ? (
-        <p className="mt-2 text-muted-foreground text-xs">
+        <p className="mt-2 text-xs text-muted-foreground">
           Task summary is unavailable right now.
           <Button
             type="button"
@@ -140,19 +141,18 @@ export function TodayAttention() {
         </p>
       )}
 
-      <div className="mt-2 border-border border-y">
+      <div className="mt-2 border-y border-border">
         {briefing.isLoading ? (
-          <div
-            className="space-y-2 py-2"
-            role="status"
+          <output
+            className="block space-y-2 py-2"
             aria-label="Loading next tasks"
           >
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-4/5" />
-          </div>
+          </output>
         ) : briefing.isError ? (
           <div className="flex min-h-16 items-center justify-between gap-3 py-2">
-            <p className="text-muted-foreground text-xs">
+            <p className="text-xs text-muted-foreground">
               Couldn&apos;t load the next task queue:{" "}
               {getErrorMessage(briefing.error)}
             </p>
@@ -167,7 +167,7 @@ export function TodayAttention() {
             </Button>
           </div>
         ) : briefing.data?.next.length === 0 ? (
-          <p className="min-h-16 content-center py-2 text-muted-foreground text-sm">
+          <p className="min-h-16 content-center py-2 text-sm text-muted-foreground">
             Nothing ready right now. Open work is blocked or set aside.
           </p>
         ) : (

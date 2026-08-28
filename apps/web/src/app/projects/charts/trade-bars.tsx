@@ -2,9 +2,11 @@ import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
+
 import { HorizontalBarChart } from "~/app/_components/charts/kit";
 import { Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   getCostTypeColor,
   nivoBarChrome,
@@ -12,8 +14,8 @@ import {
   nivoCurrencyAxis,
   TRADE_LABELS,
 } from "../shared";
-import { ChartTooltip, TooltipExpenseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { ChartTooltip, TooltipExpenseBreakdown } from "./ChartTooltip";
 import { buildTradeCostPivot, PIVOT_COST_KEYS } from "./trade-cost-pivot";
 
 type BarDatum = {
@@ -107,7 +109,7 @@ export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
         theme={nivoChartTheme}
       />
       {hiddenCount > 0 && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           {hiddenCount} trade{hiddenCount === 1 ? "" : "s"} with net ≤ $0 hidden
           (refunds/credits).
         </p>

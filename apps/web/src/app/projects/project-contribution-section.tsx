@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, UsersRound, WalletCards } from "lucide-react";
 import { useId } from "react";
+
 import {
   ContributionGapTargets,
   contributionGapLabels,
@@ -34,7 +35,7 @@ export function ProjectContributionReport({
   const fundersHeadingId = `${id}-funders`;
   return (
     <Stack gap="lg">
-      <p className="m-0 text-muted-foreground text-xs/relaxed">
+      <p className="m-0 text-xs/relaxed text-muted-foreground">
         Spend stays whole-group here. Initial funding is historical; later
         reimbursements remain in the household ledger rather than changing this
         project.
@@ -61,7 +62,7 @@ export function ProjectContributionReport({
         <section aria-labelledby={beneficiariesHeadingId}>
           <h3
             id={beneficiariesHeadingId}
-            className="eyebrow mb-2 border-foreground border-b pb-1"
+            className="mb-2 border-b border-foreground pb-1 eyebrow"
           >
             Beneficiaries
           </h3>
@@ -107,7 +108,7 @@ export function ProjectContributionReport({
         <section aria-labelledby={fundersHeadingId}>
           <h3
             id={fundersHeadingId}
-            className="eyebrow mb-2 border-foreground border-b pb-1"
+            className="mb-2 border-b border-foreground pb-1 eyebrow"
           >
             Original funders
           </h3>

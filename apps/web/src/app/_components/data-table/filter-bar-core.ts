@@ -1,5 +1,7 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
+
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+
 import type { FilterConfig } from "./columnHelpers";
 
 type FilterOption = FilterableComboboxItem;

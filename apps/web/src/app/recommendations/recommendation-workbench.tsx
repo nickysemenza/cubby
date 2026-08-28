@@ -7,6 +7,7 @@ import type { RecommendationKind } from "@cubby/schemas/recommendations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
@@ -44,7 +45,7 @@ function ReadinessMessage({
 }) {
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         This product&apos;s similarity index is not ready yet, so current {kind}{" "}
         cannot be reviewed.
       </p>
@@ -100,13 +101,13 @@ function PlacementRecommendation({
   );
   if (recommendation.isLoading) {
     return (
-      <p className="text-muted-foreground text-sm">Loading recommendation…</p>
+      <p className="text-sm text-muted-foreground">Loading recommendation…</p>
     );
   }
   if (recommendation.isError) {
     return (
       <Stack gap="sm">
-        <p className="text-destructive text-sm">
+        <p className="text-sm text-destructive">
           Placement recommendations could not be loaded.
         </p>
         <RetryAction onRetry={() => void recommendation.refetch?.()} />
@@ -116,7 +117,7 @@ function PlacementRecommendation({
   if (!recommendation.data) {
     return (
       <Stack gap="sm">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           No current placement recommendation is available for this stock row.
         </p>
         <RetryAction
@@ -129,7 +130,7 @@ function PlacementRecommendation({
   const data = recommendation.data;
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         {data.productName} is parked in {data.sourceLocation.name}; another live
         stock row for this exact product is in {data.destination.name}.
       </p>
@@ -181,13 +182,13 @@ function TagPropagationRecommendation({
 
   if (recommendation.isLoading) {
     return (
-      <p className="text-muted-foreground text-sm">Loading tag proposals…</p>
+      <p className="text-sm text-muted-foreground">Loading tag proposals…</p>
     );
   }
   if (recommendation.isError) {
     return (
       <Stack gap="sm">
-        <p className="text-destructive text-sm">
+        <p className="text-sm text-destructive">
           Tag proposals could not be loaded.
         </p>
         <RetryAction onRetry={() => void recommendation.refetch?.()} />
@@ -197,7 +198,7 @@ function TagPropagationRecommendation({
   if (!recommendation.data) {
     return (
       <Stack gap="sm">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           No current tag proposal is available for this product.
         </p>
         <RetryAction
@@ -218,13 +219,13 @@ function TagPropagationRecommendation({
   const data = recommendation.data;
   if (data.proposals.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">No current tag proposals.</p>
+      <p className="text-sm text-muted-foreground">No current tag proposals.</p>
     );
   }
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Each tag has agreement from at least three current semantic neighbours.
         Accepting adds only that tag through the normal product update path.
       </p>
@@ -234,11 +235,11 @@ function TagPropagationRecommendation({
           align="center"
           justify="between"
           gap="sm"
-          className="border-border border-b pb-2"
+          className="border-b border-border pb-2"
         >
           <Stack gap="tight">
             <span className="text-sm">{proposal.tag}</span>
-            <span className="text-muted-foreground text-xs">
+            <span className="text-xs text-muted-foreground">
               {proposal.supportingProductCount} related products agree
             </span>
           </Stack>
@@ -290,12 +291,12 @@ function ProductRelatednessRecommendation({
 
   if (relatedness.isLoading)
     return (
-      <p className="text-muted-foreground text-sm">Loading recommendations…</p>
+      <p className="text-sm text-muted-foreground">Loading recommendations…</p>
     );
   if (relatedness.isError)
     return (
       <Stack gap="sm">
-        <p className="text-destructive text-sm">
+        <p className="text-sm text-destructive">
           Recommendations could not be loaded.
         </p>
         <RetryAction onRetry={() => void relatedness.refetch?.()} />
@@ -312,12 +313,12 @@ function ProductRelatednessRecommendation({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Review each relationship against the current catalogue. Dismissal hides
         this exact candidate for this product.
       </p>
       {items.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           No current recommendations.
         </p>
       ) : (
@@ -327,7 +328,7 @@ function ProductRelatednessRecommendation({
             align="center"
             justify="between"
             gap="sm"
-            className="border-border border-b pb-2"
+            className="border-b border-border pb-2"
           >
             <Stack gap="tight" className="min-w-0">
               <EntityInlineLink
@@ -336,7 +337,7 @@ function ProductRelatednessRecommendation({
                 displayImage={null}
                 truncate
               />
-              <span className="text-muted-foreground text-xs">
+              <span className="text-xs text-muted-foreground">
                 {item.evidence.map((evidence) => evidence.signal).join(" · ")}
               </span>
             </Stack>
@@ -376,17 +377,17 @@ function DuplicateProductRecommendation({
   );
 
   if (merged) {
-    return <p className="text-positive text-sm">Products merged.</p>;
+    return <p className="text-sm text-positive">Products merged.</p>;
   }
   if (recommendation.isLoading) {
     return (
-      <p className="text-muted-foreground text-sm">Loading recommendation…</p>
+      <p className="text-sm text-muted-foreground">Loading recommendation…</p>
     );
   }
   if (recommendation.isError) {
     return (
       <Stack gap="sm">
-        <p className="text-destructive text-sm">
+        <p className="text-sm text-destructive">
           Duplicate-product recommendations could not be loaded.
         </p>
         <RetryAction onRetry={() => void recommendation.refetch?.()} />
@@ -396,7 +397,7 @@ function DuplicateProductRecommendation({
   if (!recommendation.data) {
     return (
       <Stack gap="sm">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           No current duplicate-product candidate is available for this product.
         </p>
         <RetryAction
@@ -409,7 +410,7 @@ function DuplicateProductRecommendation({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Review the live duplicate cluster, choose the keeper, then inspect the
         merge impact before accepting.
       </p>

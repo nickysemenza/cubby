@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { location } from "~/app/locations/location.functions";
 import {
@@ -28,6 +29,7 @@ import {
   problems,
 } from "~/lib/problems.functions";
 import { search } from "~/lib/search.functions";
+
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
@@ -59,7 +61,7 @@ function MaintenanceRow({
   return (
     <Row align="start" justify="between" gap="md" className="py-4">
       <Stack gap="tight">
-        <span className="font-medium text-sm">{label}</span>
+        <span className="text-sm font-medium">{label}</span>
         <Description size="xs">{description}</Description>
       </Stack>
       <Row align="center" gap="sm" className="shrink-0">

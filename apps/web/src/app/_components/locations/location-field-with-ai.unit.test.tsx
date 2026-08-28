@@ -1,8 +1,8 @@
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
+
 import { LocationFieldWithAI } from "./location-field-with-ai";
 
 const mocks = vi.hoisted(() => ({

@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/entity-integrity";
 import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import { z } from "zod";
+
 import { annotateActiveSpanError } from "~/server/tracing";
 
 export type AppErrorCode = (typeof AppErrors)[AppErrorReason];

@@ -5,6 +5,7 @@ import {
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
+
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 
@@ -82,7 +83,7 @@ export function NutrientsSummary({
           <span
             key={code}
             className={cn(
-              "inline-flex items-baseline gap-1 whitespace-nowrap rounded-sm bg-muted",
+              "inline-flex items-baseline gap-1 rounded-sm bg-muted whitespace-nowrap",
               dense ? "px-1 py-0" : "px-1.5 py-0.5" /* tight: nutrient chip */,
             )}
           >

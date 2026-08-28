@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   calculateFinancialReconciliation,
   type FinancialReconciliationInput,
@@ -108,7 +109,9 @@ describe("calculateFinancialReconciliation", () => {
   ])("returns $status for $name", ({ input, status, delta }) => {
     const result = calculateFinancialReconciliation(input);
     expect(result.status).toBe(status);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (delta === null) expect(result.delta).toBeNull();
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     else expect(result.delta).toBeCloseTo(delta);
   });
 });

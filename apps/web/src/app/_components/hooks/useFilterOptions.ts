@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+
 import {
   filterOptionItems,
   type RuntimeFilterOptions,
@@ -42,6 +43,6 @@ export function useFilterOptions(
       Array.isArray(source) ? false : source.isLoading,
     ]),
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using the serialized key for deep comparison, mirrors useStandardColumns' `stableFilters`
+  // oxlint-disable-next-line react/exhaustive-deps -- intentional - using the serialized key for deep comparison, mirrors useStandardColumns' `stableFilters`
   return useMemo(() => map, [key]);
 }

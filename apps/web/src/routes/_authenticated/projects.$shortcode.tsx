@@ -1,10 +1,10 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+
 import {
   detailPage,
   notFoundPage,
 } from "~/app/_components/routing/entity-routes";
 import { expense } from "~/app/expenses/expense.functions";
-import { project } from "~/app/projects/project.functions";
 import { ProjectDetailPage } from "~/app/projects/project-detail-page";
 // Loader-only imports MUST come from this dependency-free module, never from
 // `project-detail-page` — the loader stays in the eager route chunk, so pulling
@@ -15,6 +15,7 @@ import {
   projectSubtreeExpensesFilters,
   projectSubtreeTasksFilters,
 } from "~/app/projects/project-query-params";
+import { project } from "~/app/projects/project.functions";
 import { task } from "~/app/tasks/task.functions";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";

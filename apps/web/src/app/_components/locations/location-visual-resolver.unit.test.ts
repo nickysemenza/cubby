@@ -3,6 +3,7 @@ import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   locationChildGroupLabel,
   resolveLocationVisual,

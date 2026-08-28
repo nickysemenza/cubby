@@ -11,7 +11,9 @@
  * column/History-affordance header count.
  */
 import type { TaskBoardInput, TaskBoardOut } from "@cubby/schemas/project";
+
 import type { Database } from "~/server/db";
+
 import { taskList } from "./lookup";
 
 /** Body cap for `recentDone` — mirrors board-model.ts's `DONE_COLUMN_CAP`. */

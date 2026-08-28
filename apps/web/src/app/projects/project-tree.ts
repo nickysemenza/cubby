@@ -17,6 +17,7 @@
  */
 
 import type { ProjectOut } from "@cubby/schemas/project";
+
 import { buildForest, foldForest } from "./project-forest";
 
 export type ProjectTreeRow = ProjectOut & { subRows: ProjectTreeRow[] };

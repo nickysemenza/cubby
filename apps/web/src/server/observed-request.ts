@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/tanstackstart-react";
+
 import type {
   ProductDetailPhase,
   StartOperationDefinition,

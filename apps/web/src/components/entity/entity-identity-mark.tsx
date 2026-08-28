@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
+
 import { EntityCover } from "~/components/entity/entity-cover";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";

@@ -6,11 +6,13 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { locationTypeNoun } from "~/app/inventory/session/session-utils";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+
 import { LocationTreeRow } from "./location-tree-row";
 
 function buildParentMap(
@@ -154,7 +156,7 @@ export function GallerySidebar({
       <Row align="center" justify="between" className="border-b px-2 py-2">
         <Row align="center" gap="sm">
           <ImageIcon className="size-3.5 text-slate" />
-          <span className="font-semibold text-foreground text-sm tracking-tight">
+          <span className="text-sm font-semibold tracking-tight text-foreground">
             Locations
           </span>
         </Row>
@@ -252,10 +254,9 @@ function SidebarTreeNode({
 
   return (
     <div>
-      {/* Non-semantic role="button" wrapper on purpose: the row is clickable
-          but contains a nested <button> for expand/collapse, so it can't be a
-          real <button> (no nested interactive controls). */}
       <LocationTreeRow
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- This composite tree row contains a separate disclosure button, so a native button would create invalid nested controls.
+        role="button"
         ref={isActive ? activeItemRef : undefined}
         location={location}
         depth={level}
@@ -305,11 +306,10 @@ function SidebarTreeNode({
             </Badge>
           )
         }
-        role="button"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative cursor-pointer border-[var(--border)] border-b py-3 pr-3 text-sm" /* tight: compact gallery tree row */,
+          "group relative cursor-pointer border-b border-[var(--border)] py-3 pr-3 text-sm" /* tight: compact gallery tree row */,
           "transition-colors duration-150 ease-out",
           !isActive && "hover:bg-muted",
           isActive && "bg-primary/5 text-primary",

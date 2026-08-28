@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+
 import type { ComboboxItem } from "./combobox-types";
 
 export const pagination = {

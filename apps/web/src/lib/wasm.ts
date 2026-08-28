@@ -9,6 +9,7 @@ import type * as RecipeBridge from "@cubby/recipebridge";
 import { flatten } from "flat";
 import { LRUCache } from "lru-cache";
 import type { ReadonlyDeep } from "type-fest";
+
 import { getFlag } from "~/lib/flags";
 import { recordWasmCache, recordWasmExec } from "~/lib/perf/perf-store";
 import { getTracer, TraceNames } from "~/server/tracing";
@@ -133,7 +134,6 @@ const tracedCall = (
       if (getFlag("perfOverlay")) recordWasmExec(name, durationMs, threw);
       // Flag-gated (default on in dev, off in CF prod) — flippable on /settings.
       if (getFlag("wasmSlowWarn") && durationMs > SLOW_WASM_THRESHOLD_MS) {
-        // eslint-disable-next-line no-console
         console.warn(
           `[wasm] ${name} took ${durationMs.toFixed(1)}ms`,
           args.map(summarizeArg).join(", "),

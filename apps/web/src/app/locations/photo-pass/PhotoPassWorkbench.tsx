@@ -1,4 +1,7 @@
-import { location } from "~/app/locations/location.functions";
+import type {
+  ImageShortcode,
+  LocationShortcode,
+} from "@cubby/schemas/identifiers";
 /**
  * Walk a queue of locations taking one photo each.
  *
@@ -19,17 +22,13 @@ import { location } from "~/app/locations/location.functions";
  * bookkeeping, and the advance cursor all live in `_components/queue-pass`,
  * shared with the recount session and the ingredient review queue.
  */
-
-import type {
-  ImageShortcode,
-  LocationShortcode,
-} from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Camera, Check, Home, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
@@ -43,6 +42,7 @@ import {
   type QueuePassPersistence,
   useQueuePass,
 } from "~/app/_components/queue-pass/useQueuePass";
+import { location } from "~/app/locations/location.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -56,8 +56,9 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import { PhotoPassStop } from "./PhotoPassStop";
+
 import { flattenPhotoStops, type PhotoStop } from "./photo-pass-utils";
+import { PhotoPassStop } from "./PhotoPassStop";
 
 export interface PhotoPassSearch {
   parent?: LocationShortcode;
@@ -108,7 +109,7 @@ function PhotoPassStart() {
           </Description>
 
           <Stack gap="sm">
-            <h2 className="my-0 font-heading font-semibold text-sm">
+            <h2 className="my-0 font-heading text-sm font-semibold">
               Start from a location
             </h2>
             <Description>
@@ -226,7 +227,7 @@ function ScanPass() {
             <Link
               to="/locations/photo-pass"
               search={{}}
-              className="inline-flex min-h-11 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
+              className="inline-flex min-h-11 items-center px-2 text-sm text-muted-foreground underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
             >
               Change mode
             </Link>
@@ -404,7 +405,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
           <Link
             to="/locations/photo-pass"
             search={{}}
-            className="inline-flex min-h-11 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
+            className="inline-flex min-h-11 items-center px-2 text-sm text-muted-foreground underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
           >
             Change scope
           </Link>
@@ -422,7 +423,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
           <Link
             to="/locations/photo-pass"
             search={{}}
-            className="inline-flex min-h-11 shrink-0 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
+            className="inline-flex min-h-11 shrink-0 items-center px-2 text-sm text-muted-foreground underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
           >
             Change scope
           </Link>
@@ -451,7 +452,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
             <Link
               to="/locations/photo-pass"
               search={{}}
-              className="inline-flex min-h-11 items-center px-2 text-muted-foreground text-sm underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
+              className="inline-flex min-h-11 items-center px-2 text-sm text-muted-foreground underline decoration-dotted underline-offset-2 md:min-h-8 md:px-0"
             >
               Start another pass
             </Link>

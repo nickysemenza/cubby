@@ -1,6 +1,7 @@
 import type { ImageAssociation } from "@cubby/schemas/image";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { ImageAssociationLinks } from "./image-associations";
 
 vi.mock("~/app/_components/EntityInlineLink", () => ({

@@ -12,6 +12,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -132,7 +133,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
     <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 p-6">
       {getIcon(category)}
 
-      <h2 className="font-semibold text-xl">
+      <h2 className="text-xl font-semibold">
         {category === "notFound"
           ? "Not found"
           : category === "staleBuild"
@@ -188,7 +189,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground text-xs"
+              className="text-xs text-muted-foreground"
             />
           }
         >
@@ -200,7 +201,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         <CollapsibleContent>
           <Stack
             gap="sm"
-            className="mt-2 w-[min(32rem,calc(100vw-3rem))] break-words border border-[var(--border)] bg-muted/50 p-2 text-left font-mono text-xs"
+            className="mt-2 w-[min(32rem,calc(100vw-3rem))] border border-[var(--border)] bg-muted/50 p-2 text-left font-mono text-xs break-words"
           >
             {code && (
               <div>
@@ -232,7 +233,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                   Stack trace
                 </summary>
-                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-2xs text-muted-foreground">
+                <pre className="mt-1 max-h-48 overflow-auto text-2xs whitespace-pre-wrap text-muted-foreground">
                   {stack}
                 </pre>
               </details>

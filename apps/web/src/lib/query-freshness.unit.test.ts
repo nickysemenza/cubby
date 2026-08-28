@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+
 import { calendar } from "~/app/calendar/calendar.functions";
 import { location } from "~/app/locations/location.functions";
 import { entityDetailFor } from "~/entities/entity-detail.functions";

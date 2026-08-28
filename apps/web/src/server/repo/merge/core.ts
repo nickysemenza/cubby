@@ -11,6 +11,7 @@ import type { EntityId } from "@cubby/schemas/identifiers";
 import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type {
   IncomingEdge,
@@ -90,7 +91,7 @@ export const repointEdge = async <E extends Entity>(
 ): Promise<string[]> => {
   if (args.from.length === 0) return [];
   const column = edgeColumn(entity, edgeKey);
-  // biome-ignore lint/suspicious/noExplicitAny: Drizzle's column->table back-reference is untyped.
+  // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's column-to-table back-reference is untyped.
   const table = (column as any).table as MergeableTable;
   const columns = getTableColumns(table);
   const property = Object.keys(columns).find(
@@ -107,10 +108,10 @@ export const repointEdge = async <E extends Entity>(
 
   const rows = await tx
     .update(table)
-    // biome-ignore lint/suspicious/noExplicitAny: dynamic single-column set, keyed by the edge's own property.
+    // oxlint-disable-next-line typescript/no-explicit-any -- Dynamic single-column update is keyed by the edge's own property.
     .set({ [property]: args.to } as any)
     .where(and(...conditions))
-    // biome-ignore lint/suspicious/noExplicitAny: AnyColumn is too narrow for returning().
+    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for returning().
     .returning({ id: table.id as any });
   return rows.map((row) => String(row.id));
 };
@@ -148,14 +149,14 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       ? await tx
           .delete(table)
           .where(inArray(table.id, ids))
-          // biome-ignore lint/suspicious/noExplicitAny: AnyColumn is too narrow for returning().
+          // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for returning().
           .returning({ id: table.id as any })
       : await tx
           .update(table)
-          // biome-ignore lint/suspicious/noExplicitAny: dynamic soft-delete over a structurally-typed table.
+          // oxlint-disable-next-line typescript/no-explicit-any -- Soft-delete is dynamic over the structurally-typed table.
           .set({ deletedAt: new Date() } as any)
           .where(and(inArray(table.id, ids), notDeleted(table)))
-          // biome-ignore lint/suspicious/noExplicitAny: AnyColumn is too narrow for returning().
+          // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for returning().
           .returning({ id: table.id as any });
 
   // A merge with no actor context (`mergeIngredients`) still has to cascade, so

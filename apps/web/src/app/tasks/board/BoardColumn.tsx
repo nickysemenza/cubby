@@ -3,12 +3,14 @@ import { TRADE_LABELS } from "@cubby/schemas/project";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
+
 import { getTradeColor } from "~/app/projects/charts/gantt/trade-colors";
 import { ProjectMarkById } from "~/app/projects/project-mark";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
+
 import { TASK_STATUS_LABELS } from "../task-options";
 import { cellTasks, DONE_COLUMN_CAP } from "./board-model";
 import {
@@ -100,12 +102,12 @@ export function ColumnHeader({
     >
       <Row align="center" gap="tight" className="min-w-0">
         {axisColorChip(column)}
-        <span className="truncate font-medium text-sm">
+        <span className="truncate text-sm font-medium">
           {axisLabel(column)}
         </span>
       </Row>
       <Row align="center" gap="tight" className="shrink-0">
-        <span className="text-muted-foreground text-xs tabular-nums">
+        <span className="text-xs text-muted-foreground tabular-nums">
           {count}
         </span>
         {showQuickAdd && (
@@ -203,12 +205,12 @@ export function BoardCell({
             <button
               type="button"
               onClick={() => onQuickAdd(taskCreatePreset(column, lane))}
-              className="flex min-h-16 w-full items-center justify-center border border-muted-foreground/30 border-dashed p-2 text-muted-foreground text-xs transition-colors hover:border-muted-foreground/50 hover:text-foreground"
+              className="flex min-h-16 w-full items-center justify-center border border-dashed border-muted-foreground/30 p-2 text-xs text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:text-foreground"
             >
               No tasks — click to add
             </button>
           ) : (
-            <p className="flex min-h-16 items-center justify-center border border-muted-foreground/20 border-dashed p-2 text-muted-foreground text-xs">
+            <p className="flex min-h-16 items-center justify-center border border-dashed border-muted-foreground/20 p-2 text-xs text-muted-foreground">
               No tasks
             </p>
           ))}

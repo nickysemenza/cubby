@@ -9,6 +9,7 @@
  * defaults (the ml-2 / align-middle nudge) so call sites stay declarative.
  */
 import type { ReactNode } from "react";
+
 import { cn } from "~/lib/utils";
 
 /** Numbered circle marking a method step. */
@@ -33,7 +34,7 @@ export const StepNumberBadge = ({
 export const BasePill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-2xs text-primary uppercase tracking-wide",
+      "ml-2 rounded-sm bg-primary/10 px-1 py-px align-middle font-mono text-2xs tracking-wide text-primary uppercase",
       className,
     )}
   >
@@ -45,7 +46,7 @@ export const BasePill = ({ className }: { className?: string }) => (
 export const NoWeightPill = ({ className }: { className?: string }) => (
   <span
     className={cn(
-      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-2xs text-warning-ink uppercase tracking-wide",
+      "ml-2 rounded-sm bg-warning/15 px-1 py-px align-middle font-mono text-2xs tracking-wide text-warning-ink uppercase",
       className,
     )}
   >
@@ -75,7 +76,7 @@ export const StubWarning = ({
 }) => (
   <span
     className={cn(
-      "font-mono text-2xs text-warning-ink uppercase tracking-wide",
+      "font-mono text-2xs tracking-wide text-warning-ink uppercase",
       className,
     )}
   >

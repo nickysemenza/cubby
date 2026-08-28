@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -46,7 +47,7 @@ export function TruncatedList<T>({
           <PopoverTrigger openOnHover closeDelay={150}>
             <Badge
               variant="secondary"
-              className="h-4 cursor-default px-1 font-normal text-2xs"
+              className="h-4 cursor-default px-1 text-2xs font-normal"
             >
               +{hiddenCount}
             </Badge>

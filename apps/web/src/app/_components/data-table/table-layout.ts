@@ -7,6 +7,7 @@ import type {
 } from "@tanstack/react-table";
 import { type Atom, batch, createAtom } from "@tanstack/store";
 import { type CSSProperties, useEffect, useMemo, useRef } from "react";
+
 import type { CubbyColumnDef } from "./table-features";
 
 const MIN_COLUMN_WIDTH = 48;
@@ -557,7 +558,6 @@ export function useCubbyTableLayout<TData extends RowData>({
   const visibilityKey = JSON.stringify(initialColumnVisibility);
   // Fresh column-def arrays are common; their stable signatures are the
   // intended inputs, not their referential identities.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: signatures stand in for fresh values
   const defaults = useMemo<CubbyTableLayoutV1>(
     () =>
       normalizeTableLayout(
@@ -571,6 +571,7 @@ export function useCubbyTableLayout<TData extends RowData>({
         },
         sizeBounds,
       ),
+    // oxlint-disable-next-line react/exhaustive-deps -- signatures stand in for fresh values
     [definitionKey, visibilityKey, sizeBoundsKey],
   );
 

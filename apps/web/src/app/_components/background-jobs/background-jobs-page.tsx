@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Eraser, StepForward } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -13,6 +14,7 @@ import {
   backgroundBatch,
   backgroundJob,
 } from "~/lib/background-batch.functions";
+
 import {
   buildBackgroundJobRows,
   type SelectedJobsState,
@@ -98,7 +100,6 @@ export function BackgroundJobsPage({
     if (didBatchSettle(previousStatus, currentStatus)) void refetchJobs();
   }, [currentStatus, refetchJobs]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the selected id is the reset signal; the effect deliberately resets local child-query controls without reading the id.
   useEffect(() => {
     setPageIndex(0);
     previousStatusRef.current = undefined;
@@ -210,7 +211,7 @@ export function BackgroundJobsPage({
   return (
     <>
       {scopedSet ? (
-        <Row align="center" gap="sm" className="text-muted-foreground text-sm">
+        <Row align="center" gap="sm" className="text-sm text-muted-foreground">
           <span>
             Showing {scopedSet.size} background{" "}
             {scopedSet.size === 1 ? "batch" : "batches"} from your last action.

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
@@ -74,12 +75,13 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
+
 import { BudgetStrip } from "./BudgetStrip";
 import type { TradeCostCell } from "./charts/trade-cost-matrix";
 import type { PivotCostKey } from "./charts/trade-cost-pivot";
-import { project as projectOperations } from "./project.functions";
 import { ProjectContributionSection } from "./project-contribution-section";
 import { projectDateDelta } from "./project-formatting";
 import { ProjectNotes } from "./project-notes";
@@ -91,6 +93,7 @@ import {
   projectSubtreeTasksFilters,
 } from "./project-query-params";
 import { ProjectResourcesSection } from "./project-tools-section";
+import { project as projectOperations } from "./project.functions";
 import {
   ExpenseList,
   PROJECT_STATUS_LABELS,
@@ -168,7 +171,7 @@ function EditableLocations({
             >
               <Badge
                 variant="outline"
-                className="font-sans normal-case tracking-normal"
+                className="font-sans tracking-normal normal-case"
               >
                 {loc}
               </Badge>
@@ -423,7 +426,7 @@ function SubProjectsList({
                     {PROJECT_STATUS_LABELS[child.status]}
                   </Badge>
                 </Row>
-                <span className="text-muted-foreground text-sm">
+                <span className="text-sm text-muted-foreground">
                   {formatCurrency(spent, 0)}
                   {estimate != null && ` / ${formatCurrency(estimate, 0)}`}
                 </span>
@@ -859,7 +862,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           rows={8}
           placeholder="Freeform markdown notes..."
           disabled={notesPending}
-          autoFocus
+          ref={focusOnMount}
         />
         <Row gap="xs">
           <Button
@@ -1027,7 +1030,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     content: (
       <Stack gap="sm">
         <Stack gap="xs">
-          <p className="eyebrow my-0">Blocked by</p>
+          <p className="my-0 eyebrow">Blocked by</p>
           <DependencyPicker
             value={blockedBy}
             onSave={async (ids) => {
@@ -1048,7 +1051,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         </Stack>
         {blocking.length > 0 && (
           <Stack gap="xs">
-            <p className="eyebrow my-0">Blocks</p>
+            <p className="my-0 eyebrow">Blocks</p>
             <Row wrap gap="sm">
               {blocking.map((p) => (
                 <DependencyBadge key={p.id} {...p} />

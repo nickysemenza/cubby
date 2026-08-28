@@ -1,6 +1,7 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   findMergeComponentCycle,
   planProductComponentMerge,

@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { location } from "~/app/locations/location.functions";
 import { entities, entityDetailParams } from "~/entities/entities";
+
 import { useAllInventoryItems } from "../_components/inventory/use-all-inventory-items";
 import {
   type Camera,
@@ -69,7 +71,6 @@ export function useIsometricPantry() {
   );
 
   // Auto-fit camera on first data load (uses real container dimensions)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: size triggers re-run on resize
   useEffect(() => {
     if (rooms.length > 0 && camera === null) {
       const container = containerRef.current;
@@ -97,7 +98,6 @@ export function useIsometricPantry() {
   }, []);
 
   // Canvas render — always use the canvas's actual CSS display size for the buffer
-  // biome-ignore lint/correctness/useExhaustiveDependencies: size triggers re-run on resize
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !camera) return;

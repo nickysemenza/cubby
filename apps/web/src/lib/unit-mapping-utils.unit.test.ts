@@ -1,8 +1,9 @@
 import { testShortcode } from "@cubby/schemas/testing";
-
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
+
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
+
 import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
 
 // Note: unit-mapping STRING parsing (the "4 lb = $5" formats) lives upstream in
@@ -69,6 +70,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
       "weight",
     );
     expect(grams.isOk()).toBe(true);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (grams.isOk()) expect(grams.value.value).toBeCloseTo(22.15, 0);
   });
 
@@ -82,6 +84,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
       mappings,
     );
     expect(twoItems.isOk()).toBe(true);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (twoItems.isOk()) expect(twoItems.value.value).toBeCloseTo(79.98, 2);
   });
 

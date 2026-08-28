@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+
 import type { StartOperationId } from "~/lib/start-operation-observability";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
 import type { StartOperationResult } from "~/server/start-operation.contract";
@@ -24,9 +25,8 @@ const dispatchStartOperationServerFunction = createServerFn({
       startOperationDispatchInput.parse(value) as StartOperationDispatchInput,
   )
   .handler(async ({ data, context }) => {
-    const { dispatchStartOperation } = await import(
-      "~/server/start-operation-dispatch.server"
-    );
+    const { dispatchStartOperation } =
+      await import("~/server/start-operation-dispatch.server");
     return (await dispatchStartOperation({
       operation: data.operation,
       input: data.input,

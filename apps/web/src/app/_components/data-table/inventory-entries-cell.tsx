@@ -7,9 +7,11 @@ import {
 import type { LocationType } from "@cubby/schemas/location";
 import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
+
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -130,7 +132,7 @@ export function InventoryEntriesCell<
     <Button
       size="icon"
       variant="ghost"
-      className="size-5 shrink-0 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/quickedit:opacity-100"
+      className="size-5 shrink-0 opacity-40 transition-opacity group-hover/quickedit:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       aria-label="Quick edit"
       onClick={(e) => {
         e.stopPropagation();

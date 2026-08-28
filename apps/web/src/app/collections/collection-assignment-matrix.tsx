@@ -13,6 +13,7 @@ import { Link } from "@tanstack/react-router";
 import { Check, ChevronLeft, ChevronRight, MapPin, Plus } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { Stack } from "~/components/layout";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import { Button } from "~/components/ui/button";
@@ -31,16 +32,18 @@ import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
-import {
-  type CollectionMatrixRow,
-  collection as collectionOperations,
-} from "./collection.functions";
+
 import {
   CopyableShortcode,
   ProductContextLine,
 } from "./collection-product-context";
+import {
+  type CollectionMatrixRow,
+  collection as collectionOperations,
+} from "./collection.functions";
 
 const SETTLE_MS = 400;
 const MOBILE_PAGE_SIZE = 25;
@@ -144,10 +147,10 @@ function MatrixLoadError({
   return (
     <div
       role="alert"
-      className="flex flex-col items-center gap-2 border-border border-y px-2 py-6 text-center"
+      className="flex flex-col items-center gap-2 border-y border-border px-2 py-6 text-center"
     >
       <p className="font-medium">Couldn’t load assignments</p>
-      <p className="max-w-prose text-muted-foreground text-xs">
+      <p className="max-w-prose text-xs text-muted-foreground">
         {error.message}
       </p>
       <Button variant="outline" onClick={onRetry}>
@@ -227,7 +230,7 @@ function NewCollectionDialog({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Painting"
-                autoFocus
+                ref={focusOnMount}
               />
             </Stack>
             <Stack gap="xs">
@@ -436,8 +439,8 @@ export function CollectionAssignmentMatrix({
 
   return (
     <Stack gap="xs" className="pb-24">
-      <div className="hidden border-border border-y bg-card md:block">
-        <div className="flex min-h-9 flex-wrap items-center gap-2 border-border border-b px-2">
+      <div className="hidden border-y border-border bg-card md:block">
+        <div className="flex min-h-9 flex-wrap items-center gap-2 border-b border-border px-2">
           <Tabs
             value={subject}
             onValueChange={(value) =>
@@ -554,7 +557,7 @@ export function CollectionAssignmentMatrix({
         </div>
       </div>
 
-      <div className="overflow-x-hidden border-border border-y md:hidden">
+      <div className="overflow-x-hidden border-y border-border md:hidden">
         {matrix.isLoading ? (
           <p className="px-2 py-6 text-center text-muted-foreground">
             Loading assignments…
@@ -568,7 +571,7 @@ export function CollectionAssignmentMatrix({
           <div className="grid gap-2 px-2 py-4">
             <label
               htmlFor={mobileSubjectId}
-              className="grid gap-1 font-medium text-xs"
+              className="grid gap-1 text-xs font-medium"
             >
               Show rows for
               <NativeSelect
@@ -589,7 +592,7 @@ export function CollectionAssignmentMatrix({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium">No Collections yet</p>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-xs text-muted-foreground">
                   Start with one {subject} from this page.
                 </p>
               </div>
@@ -598,10 +601,10 @@ export function CollectionAssignmentMatrix({
           </div>
         ) : (
           <div>
-            <div className="grid gap-2 border-border border-b bg-card px-2 py-2">
+            <div className="grid gap-2 border-b border-border bg-card px-2 py-2">
               <label
                 htmlFor={mobileSubjectId}
-                className="grid gap-1 font-medium text-xs"
+                className="grid gap-1 text-xs font-medium"
               >
                 Show rows for
                 <NativeSelect
@@ -621,7 +624,7 @@ export function CollectionAssignmentMatrix({
               </label>
               <label
                 htmlFor={mobileCollectionId}
-                className="grid gap-1 font-medium text-xs"
+                className="grid gap-1 text-xs font-medium"
               >
                 Assign to Collection
                 <NativeSelect
@@ -661,7 +664,7 @@ export function CollectionAssignmentMatrix({
               <section aria-labelledby={mobileRowsHeadingId}>
                 <h2
                   id={mobileRowsHeadingId}
-                  className="border-border border-b bg-muted/30 px-2 py-2 font-mono text-2xs text-muted-foreground uppercase tracking-wider"
+                  className="border-b border-border bg-muted/30 px-2 py-2 font-mono text-2xs tracking-wider text-muted-foreground uppercase"
                 >
                   {subjectLabel}
                 </h2>
@@ -748,7 +751,7 @@ export function CollectionAssignmentMatrix({
               </section>
             )}
 
-            <div className="border-border border-t">
+            <div className="border-t border-border">
               <MobileMatrixPager
                 page={mobilePage}
                 pageCount={mobilePageCount}
@@ -773,11 +776,11 @@ export function CollectionAssignmentMatrix({
             onRetry={() => matrix.refetch()}
           />
         ) : columns.length === 0 ? (
-          <p className="border-border border-y py-8 text-center text-muted-foreground">
+          <p className="border-y border-border py-8 text-center text-muted-foreground">
             Create a Collection before managing assignments.
           </p>
         ) : rows.length === 0 ? (
-          <p className="border-border border-y py-8 text-center text-muted-foreground">
+          <p className="border-y border-border py-8 text-center text-muted-foreground">
             No {subjectLabel.toLocaleLowerCase()} match these filters.
           </p>
         ) : (
@@ -793,7 +796,7 @@ export function CollectionAssignmentMatrix({
             caption="Collection assignment matrix"
             className="min-w-full"
             renderColumnHeader={(column) => (
-              <span className="block break-words text-center font-mono text-2xs uppercase tracking-wider">
+              <span className="block text-center font-mono text-2xs tracking-wider break-words uppercase">
                 {formatCollectionLabel(column.data)}
               </span>
             )}
@@ -821,7 +824,7 @@ export function CollectionAssignmentMatrix({
                   </Link>
                   {row.data.secondary && (
                     <div
-                      className="truncate font-normal text-2xs text-muted-foreground"
+                      className="truncate text-2xs font-normal text-muted-foreground"
                       title={row.data.secondary}
                     >
                       {row.data.secondary}
@@ -857,7 +860,7 @@ export function CollectionAssignmentMatrix({
                   title={`${row.data.name}: ${formatCollectionLabel(column.data)} — ${state}`}
                   onClick={() => schedule(row.data, column.data)}
                   className={cn(
-                    "group/cell relative grid h-12 w-full place-items-center border-border border-l focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-ring",
+                    "group/cell relative grid h-12 w-full place-items-center border-l border-border focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-ring",
                     assigned
                       ? "bg-primary/10 text-primary"
                       : "hover:bg-muted/40",
@@ -888,7 +891,7 @@ export function CollectionAssignmentMatrix({
         )}
       </div>
 
-      <div className="hidden items-center justify-between gap-2 border-border border-t pt-1 md:flex">
+      <div className="hidden items-center justify-between gap-2 border-t border-border pt-1 md:flex">
         <span className="font-mono text-2xs text-muted-foreground tabular-nums">
           {rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()} of{" "}
           {totalCount.toLocaleString()}

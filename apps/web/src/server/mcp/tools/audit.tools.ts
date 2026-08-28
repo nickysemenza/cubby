@@ -2,6 +2,7 @@
 
 import { auditLogListInput, auditLogListOut } from "@cubby/schemas/audit";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
 export function registerAuditTools(server: McpServer) {

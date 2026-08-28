@@ -4,6 +4,7 @@ import type {
   LocationShortcode,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
+
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
 import { EditableAmountCell } from "~/app/_components/data-table/editable-cell";
@@ -58,7 +59,7 @@ export function InventoryEntriesQuickEditDialog({
     >
       <Stack gap="xs">
         {entries.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No inventory entries.</p>
+          <p className="text-sm text-muted-foreground">No inventory entries.</p>
         ) : (
           entries.map((entry) => (
             <Row key={entry.id} align="center" gap="sm" wrap>

@@ -4,6 +4,7 @@ import type {
   SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { and, eq, type SQL, sql } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { entityEmbedding } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -159,6 +160,7 @@ export async function findSemanticEntityCandidates(
     });
     throw new Error(
       "Semantic search failed while reading entity embeddings. Check pgvector setup and embedding dimensions.",
+      { cause: error },
     );
   }
   return rows.map((row) => ({

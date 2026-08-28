@@ -1,5 +1,6 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { suggestionDismissal } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";

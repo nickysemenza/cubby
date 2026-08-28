@@ -1,6 +1,8 @@
 import { taskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import { groupTasksByDueDate } from "./TasksAgenda";
 
 const task = (name: string, dueDate: string | null, dueEndDate = dueDate) =>

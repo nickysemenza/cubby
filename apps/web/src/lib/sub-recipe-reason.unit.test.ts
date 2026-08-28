@@ -1,6 +1,7 @@
 import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
 import { subRecipeBlockReason } from "@cubby/schemas/availability";
 import { describe, expect, it } from "vitest";
+
 import { blockReasonText } from "./sub-recipe-reason";
 
 describe("blockReasonText", () => {

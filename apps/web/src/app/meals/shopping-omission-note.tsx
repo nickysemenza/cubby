@@ -3,6 +3,7 @@ import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 import { Info, TriangleAlert } from "lucide-react";
+
 import { Row, Stack } from "~/components/layout";
 import { entityDetailLink } from "~/entities/entities";
 import { blockReasonText } from "~/lib/sub-recipe-reason";

@@ -15,6 +15,7 @@ import { useCallback, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+
 import {
   getOptionalIngredientId,
   getOptionalProductShortcode,
@@ -36,6 +37,7 @@ import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { WithProductSearch } from "../combobox/with-search-hook";
 import { ProductFormFields } from "../products/product-form-fields";
@@ -307,7 +309,7 @@ export function QuickInventoryAdd({
         className="space-y-4"
       >
         <Row align="center" justify="between">
-          <h4 className="font-medium text-sm">New Product</h4>
+          <h4 className="text-sm font-medium">New Product</h4>
           <Button
             type="button"
             variant="ghost"
@@ -334,7 +336,7 @@ export function QuickInventoryAdd({
             type="button"
             onClick={() => setFieldsExpanded((prev) => !prev)}
             className={cn(
-              "flex w-full items-center gap-1 text-muted-foreground text-xs hover:text-foreground",
+              "flex w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground",
               "transition-colors",
             )}
           >
@@ -350,7 +352,7 @@ export function QuickInventoryAdd({
             className={cn(
               "overflow-hidden",
               "transition-all duration-200 ease-out",
-              "data-[panel-open]:fade-in-0 data-[panel-open]:animate-in",
+              "data-[panel-open]:animate-in data-[panel-open]:fade-in-0",
             )}
           >
             <div className="pt-4">

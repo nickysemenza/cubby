@@ -2,12 +2,14 @@ import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { LayoutGrid, LayoutList } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Image } from "~/components/ui/image";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { EntityIcon } from "~/entities/entities";
+
 import { useInfiniteScrollSentinel } from "../hooks/useInfiniteScrollSentinel";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
@@ -74,13 +76,13 @@ export function ShelfCard({
       </div>
       <div className="min-w-0 px-2 py-2">
         <div
-          className="line-clamp-2 font-medium text-sm leading-tight"
+          className="line-clamp-2 text-sm leading-tight font-medium"
           title={title}
         >
           {title}
         </div>
         {subtitle != null && subtitle !== "" && (
-          <div className="mt-1 truncate font-mono text-muted-foreground text-xs">
+          <div className="mt-1 truncate font-mono text-xs text-muted-foreground">
             {subtitle}
           </div>
         )}
@@ -104,7 +106,7 @@ export function ShelfEmpty({
   detail?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 py-6 text-muted-foreground text-sm">
+    <div className="flex flex-col items-center justify-center gap-1 py-6 text-sm text-muted-foreground">
       <div className="flex items-center gap-2">
         <EntityIcon entity={entity} className="size-4 opacity-40" />
         {label}
@@ -118,11 +120,7 @@ function ShelfSkeleton() {
   return (
     <div className={SHELF_GRID_CLASS}>
       {Array.from({ length: 12 }, (_, i) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholders
-          key={i}
-          className="overflow-hidden border border-[var(--border)]"
-        >
+        <div key={i} className="overflow-hidden border border-[var(--border)]">
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">
             <Skeleton className="h-3.5 w-3/4" />
@@ -178,13 +176,10 @@ export function ShelfGrid<T>({
         {items.map(renderCard)}
       </div>
       {infiniteScroll?.isTransitioning && (
-        <div
-          role="status"
-          className="flex items-center justify-center gap-1 py-2 text-muted-foreground text-xs"
-        >
+        <output className="flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground">
           <Spinner size="sm" />
           Updating…
-        </div>
+        </output>
       )}
       {infiniteScroll && <div ref={sentinelRef} className="h-10" aria-hidden />}
     </div>

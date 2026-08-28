@@ -8,6 +8,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { getDb } from "./database-helpers";
 import { createFinancialAccount } from "./financial-account";
 import {
@@ -507,6 +508,7 @@ describe("statement row ledger", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     await expect(
@@ -514,6 +516,7 @@ describe("statement row ledger", () => {
         INSERT INTO "StatementImport" ("source", "label", "fingerprint")
         VALUES ('Monarch', 'bad-slug.csv', 'fp-bad-slug')
       `),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -546,9 +549,11 @@ describe("statement row ledger", () => {
           },
           ctx.actor,
         ),
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
       await expect(
         deleteStatementRows(ctx.db, { filter }, ctx.actor),
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     }
 

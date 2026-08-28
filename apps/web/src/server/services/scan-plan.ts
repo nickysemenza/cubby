@@ -86,14 +86,12 @@ export function planScan(
   const here = facts.stock.find((row) => row.location.id === currentLocationId);
   const strays = facts.stock
     .filter((row) => row.location.id !== currentLocationId)
-    .map(
-      (row): ScanStray => ({
-        entryId: row.id,
-        location: row.location,
-        amount: row.amount,
-        ambiguousQuantity: row.amount.value > 1,
-      }),
-    );
+    .map((row): ScanStray => ({
+      entryId: row.id,
+      location: row.location,
+      amount: row.amount,
+      ambiguousQuantity: row.amount.value > 1,
+    }));
 
   if (here) {
     return {

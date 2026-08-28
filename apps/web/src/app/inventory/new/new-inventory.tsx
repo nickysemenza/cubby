@@ -1,6 +1,7 @@
 import type { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import type { FC } from "react";
 import type { z } from "zod";
+
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
 import { InventoryForm } from "~/app/_components/inventory/inventory-form";
 import { useEntityCreateController } from "~/entities/editing/use-entity-create-controller";

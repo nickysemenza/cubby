@@ -39,6 +39,7 @@ vi.mock("~/components/ui/responsive-sheet", () => ({
     children: ReactNode;
   }) =>
     open ? (
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- The mocked primitive exposes ARIA semantics without native dialog behavior.
       <div role="dialog" aria-label={String(title)}>
         {children}
       </div>

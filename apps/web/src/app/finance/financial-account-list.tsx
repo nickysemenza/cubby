@@ -3,9 +3,11 @@ import type {
   FinancialAccountOut,
 } from "@cubby/schemas/financial-account";
 import { useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+
 import {
   createBooleanColumn,
   renderOptionCell,
@@ -31,7 +33,6 @@ export function FinancialAccountList() {
     mutationFn: entityMutationOptionsFactory("financialAccount", "update"),
     entity: "financialAccount",
   });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
       helper.accessor("name", {
@@ -75,6 +76,7 @@ export function FinancialAccountList() {
         meta: { numeric: true, className: "w-24" },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
     [helper],
   );
   return (

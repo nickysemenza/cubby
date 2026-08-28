@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
+
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { ListWorkbenchModel } from "../data-table/ListWorkbench";
 import { reconcileRowSelection } from "../data-table/row-selection";
@@ -61,8 +62,9 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "includeCatalogActions"
 >;
 
-interface UseClientEntityListOptions<TData extends BaseListRow>
-  extends SharedListOptions<TData> {
+interface UseClientEntityListOptions<
+  TData extends BaseListRow,
+> extends SharedListOptions<TData> {
   /** Caller-provided rows (already filtered/assembled). No query is run. */
   data: TData[];
   /** Query state when the caller-provided rows still come from an async read. */
@@ -198,6 +200,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     presentationState.listBulkActions.onRowSelectionChange?.((current) =>
       reconcileRowSelection(current, availableRowIds),
     );
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
   // Boolean for the columns (does a selection column exist at all), predicate

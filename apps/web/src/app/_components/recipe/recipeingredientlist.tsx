@@ -2,6 +2,7 @@ import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
+
 import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
 import {
   EntitySummaryCard,
@@ -22,6 +23,7 @@ import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
+
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {
@@ -36,13 +38,13 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { CopyCorpusButton } from "./copy-corpus-button";
 import { EstimateMarker } from "./estimate-marker";
 import { IngredientModifier } from "./IngredientQuantities";
-import { MissingMeasureCell } from "./RecipeCostingCoverage";
 import {
   computeScalingPercentages,
   formatScalingPct,
   pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
 import { getIngredientName, type ServingBasis } from "./recipe-utils";
+import { MissingMeasureCell } from "./RecipeCostingCoverage";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
 // "absorbed" keeps its established meaning for frying oil; the rest read as
@@ -205,7 +207,7 @@ export const RecipeIngredientList: React.FC<{
             </div>
             {rawLine && rawLine !== name && (
               <div
-                className="truncate text-muted-foreground text-xs italic"
+                className="truncate text-xs text-muted-foreground italic"
                 title={rawLine}
               >
                 {rawLine}
@@ -249,8 +251,12 @@ export const RecipeIngredientList: React.FC<{
         return (
           <Stack gap="xs" className="text-sm">
             {amounts.map((amount, index) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: amounts are positional without stable IDs
-              <div key={index}>{tryFormatAmount(amount)}</div>
+              <div
+                // oxlint-disable-next-line react/no-array-index-key -- Ingredient amounts are a positional display list without stable ids, and equal amounts are valid.
+                key={index}
+              >
+                {tryFormatAmount(amount)}
+              </div>
             ))}
           </Stack>
         );
@@ -381,7 +387,7 @@ export const RecipeIngredientList: React.FC<{
           header: () => (
             <div className="flex flex-col leading-tight">
               <span>{n.label}</span>
-              <span className="font-normal text-2xs text-muted-foreground lowercase">
+              <span className="text-2xs font-normal text-muted-foreground lowercase">
                 {n.unit}
               </span>
             </div>

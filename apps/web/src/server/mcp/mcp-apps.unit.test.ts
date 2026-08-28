@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
+
 import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
+
 import { registerMcpApps } from "./apps";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
 

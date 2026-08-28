@@ -16,6 +16,7 @@ import {
   getLocationValuationInputs,
   writeLocationValuations,
 } from "~/server/repo/location";
+
 import { rollupLocationValuations } from "./location-valuation-rollup";
 
 export class LocationValuationService {

@@ -4,6 +4,7 @@ import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   expense,
   location,
@@ -31,6 +32,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { createTask } from "~/server/repo/task";
 import { findOrCreateVendor } from "~/server/repo/vendor";
+
 import { getProductRelationshipRoute } from "./relationship-route";
 
 describe("getProductRelationshipRoute", () => {

@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { render, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import type { CubbyRow as Row } from "../data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
 import type {
@@ -91,6 +92,7 @@ describe("production entity action catalog", () => {
         ).toBeGreaterThan(0);
         expect(new Set(action.surfaces).size).toBe(action.surfaces.length);
         if (action.group === "destructive") {
+          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
           expect(action.verb).toBe("delete");
         }
       }

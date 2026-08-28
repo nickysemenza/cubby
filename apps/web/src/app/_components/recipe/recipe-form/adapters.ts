@@ -8,10 +8,12 @@ import type {
 } from "@cubby/schemas/recipe";
 import { match, P } from "ts-pattern";
 import type { z } from "zod";
+
 import {
   getOptionalIngredientId,
   getOptionalRecipeId,
 } from "~/app/_components/form-fields";
+
 import { buildUpdateObject } from "../../form-utils";
 import {
   haveIngredientsChanged,
@@ -40,35 +42,34 @@ export const recipeToFormValues = (
     ? recipe.sections.map((section) => ({
         id: section.id,
         name: section.name,
-        ingredients: section.ingredients.map(
-          (ing): IngItem =>
-            match(ing)
-              .with({ type: "ingredient" }, (ing) => ({
-                id: ing.id,
-                type: "ingredient" as const,
-                ingredient: {
-                  id: ing.ingredient.id,
-                  name: ing.ingredient.name,
-                },
-                recipe: null,
-                amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
-                rawLine: ing.rawLine ?? null,
-                modifier: ing.modifier ?? null,
-                aliases: ing.ingredient.aliases ?? [],
-              }))
-              .with({ type: "recipe" }, (ing) => ({
-                id: ing.id,
-                type: "recipe" as const,
-                ingredient: null,
-                recipe: {
-                  id: ing.recipe.id,
-                  name: ing.recipe.name,
-                },
-                amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
-                rawLine: ing.rawLine ?? null,
-                modifier: ing.modifier ?? null,
-              }))
-              .exhaustive(),
+        ingredients: section.ingredients.map((ing): IngItem =>
+          match(ing)
+            .with({ type: "ingredient" }, (ing) => ({
+              id: ing.id,
+              type: "ingredient" as const,
+              ingredient: {
+                id: ing.ingredient.id,
+                name: ing.ingredient.name,
+              },
+              recipe: null,
+              amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
+              rawLine: ing.rawLine ?? null,
+              modifier: ing.modifier ?? null,
+              aliases: ing.ingredient.aliases ?? [],
+            }))
+            .with({ type: "recipe" }, (ing) => ({
+              id: ing.id,
+              type: "recipe" as const,
+              ingredient: null,
+              recipe: {
+                id: ing.recipe.id,
+                name: ing.recipe.name,
+              },
+              amounts: ing.amounts.length > 0 ? ing.amounts : [blankAmount],
+              rawLine: ing.rawLine ?? null,
+              modifier: ing.modifier ?? null,
+            }))
+            .exhaustive(),
         ),
         instructions: section.instructions,
       }))

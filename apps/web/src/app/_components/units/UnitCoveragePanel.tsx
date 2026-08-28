@@ -2,6 +2,7 @@ import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { ChevronRight, Network } from "lucide-react";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -12,6 +13,7 @@ import {
 import { Label } from "~/components/ui/label";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
+
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { ServingAliasField } from "./serving-alias-field";
 import { UnitPriceLine } from "./unit-price-line";
@@ -108,7 +110,7 @@ export function UnitCoveragePanel({
               type="button"
               align="center"
               gap="sm"
-              className="w-full rounded-md px-2 py-1 text-muted-foreground text-sm hover:bg-accent"
+              className="w-full rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
             />
           }
         >

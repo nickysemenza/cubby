@@ -9,9 +9,8 @@ export const Route = createFileRoute("/api/workflow-stream/$operation")({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
-        const { dispatchWorkflowStream } = await import(
-          "~/server/workflow-stream-dispatch.server"
-        );
+        const { dispatchWorkflowStream } =
+          await import("~/server/workflow-stream-dispatch.server");
         return await dispatchWorkflowStream(params.operation, request);
       },
     },

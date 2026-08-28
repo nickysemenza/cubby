@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <meta name="theme-color" content="#f7f9fc" />
     <title>Offline · Cubby</title>
     <style>
@@ -14,12 +17,23 @@
         --hairline: #d9dee7;
         --accent: #2563eb;
       }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; height: 100%; }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
       body {
         background: var(--bg);
         color: var(--ink);
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -36,7 +50,12 @@
         background: var(--surface);
         padding: 2rem;
       }
-      svg { width: 3rem; height: 3rem; margin: 0 auto 1rem; display: block; }
+      svg {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        display: block;
+      }
       h1 {
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         letter-spacing: -0.02em;
@@ -44,7 +63,11 @@
         font-weight: 700;
         margin: 0 0 0.5rem;
       }
-      p { color: var(--muted); margin: 0 0 1.75rem; line-height: 1.5; }
+      p {
+        color: var(--muted);
+        margin: 0 0 1.75rem;
+        line-height: 1.5;
+      }
       button {
         min-height: 44px;
         appearance: none;
@@ -58,7 +81,9 @@
         cursor: pointer;
         transition: background 120ms cubic-bezier(0.2, 0, 0, 1);
       }
-      button:hover { background: color-mix(in oklab, var(--accent) 88%, var(--ink)); }
+      button:hover {
+        background: color-mix(in oklab, var(--accent) 88%, var(--ink));
+      }
       button:focus-visible {
         outline: 2px solid var(--surface);
         box-shadow: 0 0 0 4px var(--accent);
@@ -68,7 +93,16 @@
   <body>
     <main>
       <svg viewBox="0 0 64 64" aria-hidden="true">
-        <rect x="2" y="2" width="60" height="60" rx="8" fill="#ffffff" stroke="#d9dee7" stroke-width="1.5" />
+        <rect
+          x="2"
+          y="2"
+          width="60"
+          height="60"
+          rx="8"
+          fill="#ffffff"
+          stroke="#d9dee7"
+          stroke-width="1.5"
+        />
         <rect x="9" y="10" width="46" height="2" rx="1" fill="#d9dee7" />
         <rect x="9" y="30" width="46" height="2" rx="1" fill="#d9dee7" />
         <rect x="9" y="50" width="46" height="2" rx="1" fill="#d9dee7" />
@@ -80,7 +114,10 @@
         <rect x="44" y="38" width="8" height="10" rx="2" fill="#b5477c" />
       </svg>
       <h1>You're offline</h1>
-      <p>Cubby needs a connection to load this page. Check your network and try again.</p>
+      <p>
+        Cubby needs a connection to load this page. Check your network and try
+        again.
+      </p>
       <button type="button" onclick="location.reload()">Try again</button>
     </main>
   </body>

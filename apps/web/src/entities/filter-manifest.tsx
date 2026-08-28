@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+
 import type { FilterConfig } from "~/app/_components/data-table/columnHelpers";
 import {
   barFieldFromConfig,
@@ -10,6 +11,7 @@ import {
   type RuntimeFilterOptions,
 } from "~/app/_components/hooks/filter-option-types";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+
 import {
   type FilterKind,
   type FilterSpecCore,

@@ -1,6 +1,7 @@
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
+
 import { formatAmount, shortClass, shortText } from "./meal-format";
 import type { ShoppingRow } from "./shopping-model";
 
@@ -30,7 +31,7 @@ export function ShoppingCard({
         <span className={cn("font-medium", isChecked && "line-through")}>
           {item.name}
         </span>
-        <span className="text-muted-foreground text-xs tabular-nums">
+        <span className="text-xs text-muted-foreground tabular-nums">
           Need {formatAmount(need, item.basisUnit)}
           {item.haveValue != null
             ? ` · have ${formatAmount(item.haveValue, item.basisUnit)}`
@@ -39,7 +40,7 @@ export function ShoppingCard({
       </Stack>
       <span
         className={cn(
-          "shrink-0 text-right font-medium text-sm tabular-nums",
+          "shrink-0 text-right text-sm font-medium tabular-nums",
           shortClass(row),
         )}
       >

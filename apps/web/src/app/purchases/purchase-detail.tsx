@@ -9,6 +9,7 @@ import {
   Scale,
 } from "lucide-react";
 import { type FC, useState } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -23,6 +24,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
+
 import { WithVendorShortcodeSearch } from "../_components/combobox/with-vendor-search";
 import {
   type DetailSection,
@@ -35,7 +37,6 @@ import { RelationshipSummaryTable } from "../_components/relationships/relations
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import { purchase as purchaseOperations } from "./purchase.functions";
 import { PurchaseDocuments } from "./purchase-documents";
 import { PurchaseExpensesTable } from "./purchase-expenses-table";
 import { PurchaseProductsTable } from "./purchase-products-table";
@@ -44,6 +45,7 @@ import {
   ReconciliationBadge,
   ReconciliationNote,
 } from "./purchase-reconciliation";
+import { purchase as purchaseOperations } from "./purchase.functions";
 
 const EMPTY_PURCHASE_PRODUCTS: PurchaseProductOut[] = [];
 
@@ -339,7 +341,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       content: (
         <Stack gap="sm">
           <Row align="center" justify="between" gap="sm">
-            <span className="text-muted-foreground text-sm">Stated</span>
+            <span className="text-sm text-muted-foreground">Stated</span>
             <span className="font-mono text-sm tabular-nums">
               {purchase.statedTotal != null ? (
                 formatCurrency(purchase.statedTotal)
@@ -349,7 +351,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             </span>
           </Row>
           <Row align="center" justify="between" gap="sm">
-            <span className="text-muted-foreground text-sm">Expenses</span>
+            <span className="text-sm text-muted-foreground">Expenses</span>
             <span className="font-mono text-sm tabular-nums">
               {formatCurrency(purchase.expenseTotal)}
             </span>
@@ -358,7 +360,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
             align="center"
             justify="between"
             gap="sm"
-            className="border-[var(--border)] border-t pt-2"
+            className="border-t border-[var(--border)] pt-2"
           >
             <ReconciliationBadge purchase={purchase} />
           </Row>

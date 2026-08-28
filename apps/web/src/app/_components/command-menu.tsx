@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import * as React from "react";
+
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -39,6 +40,8 @@ import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useDebug } from "~/hooks/useDebug";
 import { setFlag, useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
+
+import { recordCommandMenuOpened } from "./command-menu-loader";
 import {
   EntityPaletteActionGroup,
   EntityPaletteActionsHost,
@@ -49,7 +52,6 @@ import { getRecents, pushRecent } from "./command-menu/recents";
 import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
-import { recordCommandMenuOpened } from "./command-menu-loader";
 import { completeNavLeaves } from "./navigation/nav-items";
 import {
   entityTypeMap,
@@ -385,12 +387,12 @@ export function GlobalCommandMenu({
                       className="flex items-center gap-2"
                     >
                       <Equal className="size-4 shrink-0 text-primary" />
-                      <span className="truncate font-mono font-semibold text-sm tabular-nums">
+                      <span className="truncate font-mono text-sm font-semibold tabular-nums">
                         {conversion.input} {conversion.ingredientName} ={" "}
                         {conversion.result}
                       </span>
                       {conversion.cost && (
-                        <span className="ml-auto shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+                        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                           ≈ {conversion.cost}
                         </span>
                       )}
@@ -408,23 +410,17 @@ export function GlobalCommandMenu({
 
                 {/* Empty state */}
                 {isEmpty && !isLoading && !parsedShortcode && (
-                  <div
-                    role="status"
-                    className="py-6 text-center text-muted-foreground text-xs/relaxed"
-                  >
+                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
                     {scopeLabel
                       ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
                       : "Nothing matched — try another word."}
-                  </div>
+                  </output>
                 )}
 
                 {searchScope && !hasSearch && (
-                  <div
-                    role="status"
-                    className="py-6 text-center text-muted-foreground text-xs/relaxed"
-                  >
+                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
                     Type to search {scopeLabel}.
-                  </div>
+                  </output>
                 )}
 
                 {/* A structurally valid shortcode can always navigate directly: the
@@ -445,7 +441,7 @@ export function GlobalCommandMenu({
                           {shortcodeResult?.name ??
                             entities[parsedShortcode.type].label}
                         </span>
-                        <span className="ml-auto font-mono text-muted-foreground text-xs">
+                        <span className="ml-auto font-mono text-xs text-muted-foreground">
                           {parsedShortcode.shortcode}
                         </span>
                       </CommandItem>
@@ -488,7 +484,7 @@ export function GlobalCommandMenu({
                                 {item.title}
                               </div>
                               {item.subtitle && (
-                                <div className="truncate text-muted-foreground text-xs">
+                                <div className="truncate text-xs text-muted-foreground">
                                   {item.subtitle}
                                 </div>
                               )}
@@ -502,7 +498,7 @@ export function GlobalCommandMenu({
                               )}
                             </div>
                             <div className="max-w-28 shrink-0 self-start pt-1 text-right">
-                              <span className="block truncate font-mono text-2xs text-slate uppercase tracking-wider">
+                              <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
                                 {entities[entityTypeMap[item.entityType]].label}
                               </span>
                               <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
@@ -665,7 +661,7 @@ export function GlobalCommandMenu({
                         </span>
                       </CommandItem>
                     </CommandGroup>
-                    <div className="px-2 pt-2 pb-1 text-muted-foreground text-xs">
+                    <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
                       Tip: paste a shortcode (PRD-, LOC-, RCP-…) to jump
                       instantly.
                     </div>

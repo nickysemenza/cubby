@@ -1,9 +1,11 @@
 import { X } from "lucide-react";
 import type { FC } from "react";
+
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { cn } from "~/lib/utils";
+
 import {
   getTagColor,
   getTagDisplayLabel,
@@ -39,7 +41,7 @@ export const RecipeTag: FC<RecipeTagProps> = ({
       variant="outline"
       className={cn(
         // User-entered tag text — opt out of the badge's mono-uppercase stamp.
-        "gap-1 font-normal font-sans normal-case tracking-normal",
+        "gap-1 font-sans font-normal tracking-normal normal-case",
         size === "sm" && "px-2 py-0 text-xs",
         onRemove && "pr-1",
         className,

@@ -2,6 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+
 import type { EntityActionSubject } from "~/app/_components/actions/entity-actions";
 import {
   browserEntityDefinition,
@@ -39,7 +40,7 @@ interface FilterDef {
 /** Simple filter definition - string expands to text filter with placeholder */
 export type FilterInput = string | FilterDef;
 
-// biome-ignore lint/suspicious/noExplicitAny: intentional
+// oxlint-disable-next-line typescript/no-explicit-any -- intentional
 type AnyColumnDef<TData extends BaseListRow> = ColumnDef<TData, any>;
 
 /** Base interface for entities in list views */
@@ -155,14 +156,17 @@ export function useStandardColumns<TData extends BaseListRow>({
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
   const filtersKey = JSON.stringify(filters);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using filtersKey for deep comparison
-  const stableFilters = useMemo(() => filters, [filtersKey]);
+  const stableFilters = useMemo(
+    () => filters,
+    // oxlint-disable-next-line react/exhaustive-deps -- filtersKey is the intentional deep-comparison trigger.
+    [filtersKey],
+  );
 
   // Same stabilization for the (much rarer) hidden-columns opt-out.
   const hiddenFilterColumnsKey = JSON.stringify(hiddenFilterColumns ?? []);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using hiddenFilterColumnsKey for deep comparison
   const hiddenFilterColumnSet = useMemo(
     () => new Set(hiddenFilterColumns ?? []),
+    // oxlint-disable-next-line react/exhaustive-deps -- intentional - using hiddenFilterColumnsKey for deep comparison
     [hiddenFilterColumnsKey],
   );
 

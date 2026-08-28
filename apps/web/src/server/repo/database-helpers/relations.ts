@@ -18,6 +18,7 @@
  */
 
 import { type AnyColumn, and, asc, sql } from "drizzle-orm";
+
 import {
   inventoryEntry,
   location,
@@ -37,6 +38,7 @@ import {
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { stockOnly } from "~/server/repo/inventory/placement";
+
 import { notDeleted } from "./query";
 
 /**

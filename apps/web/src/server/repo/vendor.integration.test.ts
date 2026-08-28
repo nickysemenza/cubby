@@ -12,6 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   auditLog,
   expense,
@@ -21,6 +22,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses, expenseList } from "./expense";
 import {

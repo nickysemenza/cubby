@@ -3,6 +3,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
 import { Focus, GripVertical } from "lucide-react";
 import { useEffect, useRef } from "react";
+
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
@@ -13,10 +14,11 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
-import { ArrangeMoveTo } from "./ArrangeMoveTo";
-import { ArrangeThumb } from "./ArrangeThumb";
+
 import { parentIdOf } from "./arrange-tree-utils";
 import type { LocationDragData } from "./arrange-types";
+import { ArrangeMoveTo } from "./ArrangeMoveTo";
+import { ArrangeThumb } from "./ArrangeThumb";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 /** Hover-to-drill delay: long enough to avoid firing on a pass-through drag. */
@@ -99,12 +101,13 @@ export function ArrangeLocationRow({
 
   return (
     <LocationTreeRow
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- The draggable tree row contains its own button, so a native grouping element would create invalid nested controls.
+      role="group"
       ref={(element) => {
         setNodeRef(element);
         setDropNodeRef(element);
       }}
       location={node}
-      role="group"
       aria-label={`${node.name} location drop target`}
       depth={depth}
       active={isOver}
@@ -171,7 +174,7 @@ export function ArrangeLocationRow({
           />
         </Row>
       }
-      className={cn("select-none rounded py-1", isDragging && "opacity-40")}
+      className={cn("rounded py-1 select-none", isDragging && "opacity-40")}
     />
   );
 }

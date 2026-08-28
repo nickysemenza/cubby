@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { scrubSentryEvent } from "./sentry-scrub";
 
 describe("scrubSentryEvent", () => {

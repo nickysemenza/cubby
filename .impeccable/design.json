@@ -54,18 +54,45 @@
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Largest record identity only." },
-      "headline": { "displayName": "Headline", "purpose": "Page and major-region headings." },
-      "body": { "displayName": "Body", "purpose": "Ordinary UI prose and explanations." },
-      "body-control": { "displayName": "Dense control", "purpose": "Desktop controls and compact workbench chrome." },
-      "data": { "displayName": "Data", "purpose": "Quantities, money, dates, shortcodes, and aligned values." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Largest record identity only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page and major-region headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Ordinary UI prose and explanations."
+      },
+      "body-control": {
+        "displayName": "Dense control",
+        "purpose": "Desktop controls and compact workbench chrome."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Quantities, money, dates, shortcodes, and aligned values."
+      }
     },
     "shadows": [
-      { "name": "overlay", "value": "0 8px 24px rgb(23 26 33 / 0.12)", "purpose": "Popover, menu, dialog, and sheet planes only." }
+      {
+        "name": "overlay",
+        "value": "0 8px 24px rgb(23 26 33 / 0.12)",
+        "purpose": "Popover, menu, dialog, and sheet planes only."
+      }
     ],
     "motion": [
-      { "name": "fast", "value": "120ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Small overlay and toast state changes." },
-      { "name": "standard", "value": "180ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Inspector and sheet spatial transitions." }
+      {
+        "name": "fast",
+        "value": "120ms cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Small overlay and toast state changes."
+      },
+      {
+        "name": "standard",
+        "value": "180ms cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Inspector and sheet spatial transitions."
+      }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
@@ -133,10 +160,26 @@
       "Docked wide-desktop context and canonical phone routes"
     ],
     "rules": [
-      { "name": "The Three Channels Rule", "body": "Interaction, domain identity, and status each keep a separate color meaning.", "section": "colors" },
-      { "name": "The Calm Grid Rule", "body": "Large data surfaces remain neutral; meaningful state and selection carry color.", "section": "colors" },
-      { "name": "The Two Voices Rule", "body": "Inter speaks and JetBrains Mono measures.", "section": "typography" },
-      { "name": "The Resting Plane Rule", "body": "Resting surfaces separate with tone or a hairline; shadow is reserved for temporary overlays.", "section": "elevation" }
+      {
+        "name": "The Three Channels Rule",
+        "body": "Interaction, domain identity, and status each keep a separate color meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Calm Grid Rule",
+        "body": "Large data surfaces remain neutral; meaningful state and selection carry color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Inter speaks and JetBrains Mono measures.",
+        "section": "typography"
+      },
+      {
+        "name": "The Resting Plane Rule",
+        "body": "Resting surfaces separate with tone or a hairline; shadow is reserved for temporary overlays.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Keep tables dense and ordinary content at normal density.",

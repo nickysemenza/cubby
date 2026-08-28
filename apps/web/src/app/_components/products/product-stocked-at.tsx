@@ -4,6 +4,7 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FC, useCallback, useMemo, useState } from "react";
+
 import {
   VerbMenuItem,
   verbBulkAction,
@@ -28,6 +29,7 @@ import { product as productOperations } from "~/app/products/product.functions";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+
 import { ShelfEmpty } from "../data-table/shelf";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { buildProductLocationBreakdown } from "./product-location-breakdown";
@@ -169,7 +171,6 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     [product],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       createSingleEntityInlineLinkColumn(helper, "location", "location", {
@@ -232,6 +233,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           ),
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, product.unitMappings],
   );
 

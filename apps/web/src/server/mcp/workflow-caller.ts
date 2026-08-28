@@ -7,6 +7,7 @@ import {
   type productFindOrCreateByUPCInput,
 } from "@cubby/schemas/product";
 import type { z } from "zod";
+
 import {
   clearDataException,
   findProductExternalIdCollisions,
@@ -17,8 +18,8 @@ import { patchProductExternalIds } from "~/server/repo/product";
 import { reclassifyPurchaseDocument } from "~/server/repo/purchase";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { verifyProductImages } from "~/server/services/image-verification.service";
-import { getProductWithFood } from "~/server/services/product.service";
 import { lookupUPC } from "~/server/services/product-orchestration.service";
+import { getProductWithFood } from "~/server/services/product.service";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
 import { listAuditLog } from "~/server/workflows/audit-log";
 import { previewOperation } from "~/server/workflows/entity-integrity-preview.server";
@@ -73,14 +74,14 @@ import {
   splitExpenseWorkflow,
 } from "~/server/workflows/purchase.server";
 import {
+  insertImportWorkflow,
+  scrapeWorkflow,
+} from "~/server/workflows/recipe-import.server";
+import {
   explainCostingWorkflow,
   getAllTagsWorkflow,
   getMakeableWorkflow,
 } from "~/server/workflows/recipe.server";
-import {
-  insertImportWorkflow,
-  scrapeWorkflow,
-} from "~/server/workflows/recipe-import.server";
 import {
   findRelatedSearchHitsWorkflow,
   findSearchHitsWorkflow,

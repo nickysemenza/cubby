@@ -7,6 +7,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { ListTodo } from "lucide-react";
 import { match } from "ts-pattern";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange } from "~/app/projects/shared";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -30,8 +31,9 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { getErrorMessage } from "~/lib/error-utils";
-import { task } from "./task.functions";
+
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "./task-options";
+import { task } from "./task.functions";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({
@@ -183,14 +185,14 @@ export function NextTasks({ filters }: { filters: TaskFilters }) {
 function NextTasksBody({ data }: { data: ActionableTasksOut }) {
   return (
     <Stack gap="lg">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Next is an actionable-work renderer: it includes open top-level tasks
         and explains blockers. Compatible project, trade, search, and due-date
         filters are applied by the server.
       </p>
       <Section title="Next" description="Unblocked tasks you can act on now.">
         {data.next.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             Nothing next right now — everything open is blocked or set aside.
           </p>
         ) : (
@@ -200,7 +202,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
 
       {data.later.length > 0 && (
         <details className="group">
-          <summary className="flex cursor-pointer items-center gap-2 font-medium text-muted-foreground text-sm hover:text-foreground">
+          <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
             Someday ({data.later.length})
           </summary>
           <div className="mt-2">
@@ -214,7 +216,7 @@ function NextTasksBody({ data }: { data: ActionableTasksOut }) {
         description="Open tasks waiting on something else, with the chain of why."
       >
         {data.blocked.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Nothing is blocked.</p>
+          <p className="text-sm text-muted-foreground">Nothing is blocked.</p>
         ) : (
           <Stack gap="md">
             {data.blocked.map((bt) => (

@@ -2,6 +2,7 @@ import { ExternalLink, MoreVertical, Plus, Trash } from "lucide-react";
 import type { FC, KeyboardEvent } from "react";
 import { useState } from "react";
 import { Controller, type UseFormReturn, useFieldArray } from "react-hook-form";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { cn } from "~/lib/utils";
+
 import {
   WithIngredientSearch,
   WithRecipeSearch,
@@ -150,7 +152,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
   return (
     <div className="w-full">
       {fields.length === 0 ? (
-        <div className="py-1 text-muted-foreground text-sm italic">
+        <div className="py-1 text-sm text-muted-foreground italic">
           No ingredients yet — add the first row below.
         </div>
       ) : (

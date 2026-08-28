@@ -2,8 +2,9 @@ import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { ResponsiveBar } from "@nivo/bar";
 import { Carrot } from "lucide-react";
 import { useId, useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 
 // Cap the bar count so the chart stays legible; the full list lives in the table.
@@ -41,15 +42,14 @@ export function IngredientUsageChart({
   const chartHeight = Math.max(300, data.length * 28 + 60);
 
   return (
-    <div
-      role="img"
+    <figure
       aria-label={chartSummary}
       aria-describedby={summaryId}
       style={{ height: chartHeight }}
     >
-      <p id={summaryId} className="sr-only">
+      <figcaption id={summaryId} className="sr-only">
         {chartSummary}.
-      </p>
+      </figcaption>
       <ResponsiveBar
         data={data}
         keys={["recipes"]}
@@ -78,6 +78,6 @@ export function IngredientUsageChart({
         )}
         theme={nivoChartTheme}
       />
-    </div>
+    </figure>
   );
 }

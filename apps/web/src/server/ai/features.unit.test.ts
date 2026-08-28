@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,

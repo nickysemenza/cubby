@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { buildForest, type ForestNode, foldForest } from "./project-forest";
 
 /** The two fields a forest walk reads — nothing else is needed here. */

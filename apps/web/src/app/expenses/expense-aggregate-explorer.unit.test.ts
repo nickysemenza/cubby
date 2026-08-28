@@ -1,5 +1,6 @@
 import type { ExpenseAnalyzeReadyOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
+
 import {
   buildExpenseAnalyzeTableRows,
   canCompareExpenseAnalysis,

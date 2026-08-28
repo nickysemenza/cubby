@@ -7,6 +7,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { VendorMark } from "~/components/entity/vendor-cell";
@@ -15,6 +16,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
+
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {
@@ -190,7 +192,6 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   expenseHrefRef.current = expenseHref;
   const columnsKey = columns.join(",");
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: columnsKey is the deep-compare stand-in for `columns`; expenseHref is read through a ref
   const tableColumns = useMemo<CubbyColumnDef<SummaryTableRow>[]>(() => {
     const build = (column: Column) => {
       switch (column) {
@@ -304,6 +305,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
         },
       }),
     ];
+    // oxlint-disable-next-line react/exhaustive-deps -- columnsKey is the deep-compare stand-in for `columns`; expenseHref is read through a ref
   }, [helper, columnsKey, targetEntity, nullLabel]);
 
   const sorting = useMemo<SortingState>(
@@ -358,6 +360,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
       // No select-all on an aggregate table; the loaded set is the whole answer.
       loadAllPages: async () => rows,
     }),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [
       query.fetchNextPage,
       query.hasNextPage,

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { SearchDebugPage } from "~/app/_components/search/search-debug-page";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

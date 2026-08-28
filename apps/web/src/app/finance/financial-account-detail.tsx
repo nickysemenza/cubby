@@ -1,12 +1,14 @@
 import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import { Info, ReceiptText } from "lucide-react";
 import { useState } from "react";
+
 import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
 import {
