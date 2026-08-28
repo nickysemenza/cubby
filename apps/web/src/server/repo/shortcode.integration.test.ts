@@ -37,6 +37,8 @@ import {
 } from "./repo.fixtures";
 import {
   lookupShortcodes,
+  resolveAllOrThrow,
+  resolveAllPresent,
   resolveLiveShortcode,
   resolveLiveShortcodes,
   resolveShortcode,
@@ -318,6 +320,69 @@ describe("resolution", () => {
       id: loc.entityId,
     });
     expect(resolved.size).toBe(2);
+  });
+
+  it("preserves input order and duplicates across canonical and legacy spellings", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Mixed Resolver Product" }),
+      ctx.actor,
+    );
+    const loc = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Mixed Resolver Location" }),
+      ctx.actor,
+    );
+    const productLegacy = `P-${prod.id.slice(SHORTCODE_PREFIX.product.length)}`;
+    const locationLegacy = `L-${loc.id.slice(SHORTCODE_PREFIX.location.length)}`;
+    const productInputs = [
+      ` ${productLegacy.toLowerCase()} `,
+      prod.id,
+      productLegacy,
+      prod.id,
+    ];
+
+    const live = await resolveLiveShortcodes(ctx.db, productInputs, "product");
+    expect(productInputs.map((code) => live.get(code))).toEqual([
+      prod.entityId,
+      prod.entityId,
+      prod.entityId,
+      prod.entityId,
+    ]);
+    expect(await resolveAllOrThrow(ctx.db, "product", productInputs)).toEqual([
+      prod.entityId,
+      prod.entityId,
+      prod.entityId,
+      prod.entityId,
+    ]);
+    expect(
+      await resolveAllPresent(ctx.db, "product", [
+        productLegacy,
+        "PRD-2222",
+        prod.id,
+        locationLegacy,
+        productLegacy,
+      ]),
+    ).toEqual([prod.entityId, prod.entityId, prod.entityId]);
+
+    const mixed = await resolveShortcodes(ctx.db, [
+      productLegacy,
+      ` ${locationLegacy.toLowerCase()} `,
+      prod.id,
+      loc.id,
+    ]);
+    expect([...mixed.keys()]).toEqual(
+      expect.arrayContaining([prod.id, loc.id]),
+    );
+    expect(mixed.get(prod.id)).toEqual({
+      entity: "product",
+      id: prod.entityId,
+    });
+    expect(mixed.get(loc.id)).toEqual({
+      entity: "location",
+      id: loc.entityId,
+    });
+    expect(mixed.size).toBe(2);
   });
 
   it("looks codes back up from ids, keyed per entity", async () => {

@@ -30,7 +30,7 @@ let operationSequence = 0;
 
 const nextOperationId = () => `op-${++operationSequence}`;
 
-export function isOperationCancellation(error: unknown): boolean {
+function isOperationCancellation(error: unknown): boolean {
   return (
     isCancelledError(error) ||
     (error instanceof DOMException && error.name === "AbortError") ||

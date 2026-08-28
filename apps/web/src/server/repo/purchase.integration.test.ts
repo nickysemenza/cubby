@@ -15,6 +15,7 @@ import {
   projectCreateInput,
 } from "@cubby/schemas/project";
 import {
+  linkExpensesToPurchaseInput,
   purchaseCreateInput,
   reconcilePurchase,
   splitExpenseInput,
@@ -502,6 +503,38 @@ describe("purchase repository — linkExpensesToPurchase", () => {
         await purchaseUuid(ctx.db, originalCharge!),
       ),
     ).toHaveLength(0);
+  });
+
+  it("links a raw lowercase, whitespace-padded expense code through canonical map keys", async () => {
+    const { output: line } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({ name: "raw shortcode line", cost: 17 }),
+      ),
+      ctx.actor,
+    );
+    const vendorId = await vendorShortcodeByName(ctx.db, "Raw Link Vendor");
+    const { output: target } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        date: "2024-01-15",
+        vendorId,
+        orderId: "RAW-LINK-1",
+      }),
+      ctx.actor,
+    );
+    const input = linkExpensesToPurchaseInput.parse({
+      purchaseId: target.id,
+      expenseIds: [line.id],
+    });
+    Reflect.set(input.expenseIds, 0, ` ${line.id.toLowerCase()} `);
+
+    const linked = await linkExpensesToPurchase(ctx.db, input, ctx.actor);
+
+    expect(linked.expenseCount).toBe(1);
+    expect((await expenseByShortcode(ctx.db, line.id)).purchaseId).toBe(
+      target.id,
+    );
   });
 
   it("refuses an unknown charge, and no-ops on a selection with no live lines", async () => {

@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import pluralize from "pluralize";
@@ -16,23 +15,14 @@ import {
   updateQueriesByTags,
 } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
+import { removeCachedListItems } from "~/lib/optimistic-list";
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
 import type {
   EntityActionDefinition,
   EntityActionRow,
 } from "../actions/entity-actions";
 import type { BulkAction } from "../data-table/bulk-actions.types";
-
-interface DeletableConfig {
-  /** Delete mutation options factory. */
-  mutationOptions: (callbacks: {
-    onSuccess: () => void;
-    onError: (err: { message?: string }) => void;
-  }) => unknown;
-  entityLabel: string;
-  /** Entity slug — picks the registered-command delete path vs the legacy mutation. */
-  entity: Entity;
-}
+import type { DeletableConfig } from "./useDeletableConfig";
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
   deletable: DeletableConfig | undefined;
@@ -55,82 +45,6 @@ interface UseOptimisticDeleteReturn<TData extends { id: string }> {
   deleteDialog: ReactNode | null;
   /** Opens the delete confirmation dialog for one item (e.g. swipe actions) */
   requestDelete: (item: TData) => void;
-}
-
-type CachedList = {
-  items?: Array<{ id: string }>;
-  data?: Array<{ id: string }>;
-  count?: number;
-  meta?: { totalCount?: number; [key: string]: unknown };
-};
-
-type CachedInfiniteList = {
-  pages?: unknown[];
-  pageParams?: unknown[];
-};
-
-function removeDeletedIdsFromCache(
-  old: unknown,
-  deletedIds: Set<string>,
-): unknown {
-  if (Array.isArray(old)) {
-    return old.filter(
-      (item) =>
-        !(
-          item &&
-          typeof item === "object" &&
-          deletedIds.has(String((item as { id?: unknown }).id))
-        ),
-    );
-  }
-
-  if (!old || typeof old !== "object") {
-    return old;
-  }
-
-  const maybeInfinite = old as CachedInfiniteList;
-  if (Array.isArray(maybeInfinite.pages)) {
-    return {
-      ...maybeInfinite,
-      pages: maybeInfinite.pages.map((page) =>
-        removeDeletedIdsFromCache(page, deletedIds),
-      ),
-    };
-  }
-
-  const list = old as CachedList;
-  const source = Array.isArray(list.items)
-    ? "items"
-    : Array.isArray(list.data)
-      ? "data"
-      : null;
-
-  if (source === null) {
-    return old;
-  }
-
-  const current = list[source] ?? [];
-  const next = current.filter((item) => !deletedIds.has(item.id));
-  const removed = current.length - next.length;
-  if (removed === 0) {
-    return old;
-  }
-
-  return {
-    ...list,
-    [source]: next,
-    ...(typeof list.count === "number"
-      ? { count: Math.max(0, list.count - removed) }
-      : null),
-    ...(list.meta && typeof list.meta.totalCount === "number"
-      ? {
-          meta: {
-            ...list.meta,
-            totalCount: Math.max(0, list.meta.totalCount - removed),
-          },
-        }
-      : null),
-  };
 }
 
 /**
@@ -157,9 +71,7 @@ export function useOptimisticDelete<
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
   const queryClient = useQueryClient();
   const registeredDelete =
-    deletable !== undefined &&
-    deletable.entity !== "image" &&
-    deletable.entity !== "cookbook";
+    deletable !== undefined && deletable.entity !== "image";
   const commandEntity = (
     registeredDelete ? deletable.entity : "product"
   ) as EditableEntity;
@@ -221,7 +133,7 @@ export function useOptimisticDelete<
         const previousData = snapshotQueriesByTags(queryClient, patched);
         const deletedIds = new Set(variables.ids);
         updateQueriesByTags(queryClient, patched, (old) =>
-          removeDeletedIdsFromCache(old, deletedIds),
+          removeCachedListItems(old, deletedIds),
         );
         return { previousData };
       },

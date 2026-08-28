@@ -11,7 +11,7 @@ import {
  * Scope: this is a CLIENT artifact served as a static asset from `dist/client`.
  * It runs in the browser, NOT inside the Cloudflare Worker — SSR is untouched.
  *
- * Strategy (see docs/plans/2026-06-02-mobile-web-implementation-plan.md):
+ * Strategy:
  *  - Precache the build's hashed static assets + WASM blobs (injected
  *    `__WB_MANIFEST`) + the `/offline` page, for instant warm loads and so the
  *    scanner / cost math survive a flaky network.

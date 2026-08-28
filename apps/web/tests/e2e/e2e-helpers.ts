@@ -1,6 +1,4 @@
-import type { TaskStatus } from "@cubby/schemas/project";
 import { expect, type Locator, type Page } from "@playwright/test";
-import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 
 /**
  * Wait until React has hydrated the authenticated application shell.
@@ -227,8 +225,7 @@ function cellEditorInput(page: Page): Locator {
  * leaves no partial edit, and a repeated identical value is a no-op commit.
  *
  * Detail pages need none of this: they are never in cell-selection mode and have
- * no transition curtain, so a single click opens the editor — they call
- * `fillCellEditor` directly.
+ * no transition curtain, so a single click opens the editor.
  */
 export async function editListCell(
   page: Page,
@@ -256,18 +253,6 @@ export function waitForEntityMutation(page: Page) {
       response.url().includes("/_serverFn/") &&
       response.ok(),
   );
-}
-
-export async function fillCellEditor(page: Page, value: string) {
-  const input = cellEditorInput(page);
-  await expect(input).toBeVisible();
-  await expect(input).toBeEnabled();
-  await input.fill(value);
-  await input.press("Enter");
-  // Enter only dispatches the commit. The editor closes after the async save
-  // succeeds, which is the semantic completion boundary for callers that may
-  // immediately open another cell or assert the rendered value.
-  await expect(input).toHaveCount(0, { timeout: 15_000 });
 }
 
 export async function editDetailCell(
@@ -350,38 +335,6 @@ export async function createLocation(
   if (!shortcode)
     throw new Error(`Location shortcode missing from ${page.url()}`);
   return shortcode;
-}
-
-export async function createTask(
-  page: Page,
-  name: string,
-  opts: { dueDate?: string; status?: TaskStatus } = {},
-) {
-  await page.goto("/tasks");
-  await waitForAppHydration(page);
-  await page.getByRole("button", { name: "New", exact: true }).click();
-
-  const dialog = page.getByRole("dialog", { name: "New Task" });
-  await expect(dialog).toBeVisible({ timeout: 10000 });
-  await dialog.getByLabel("Name").fill(name);
-  if (opts.status && opts.status !== "not_started") {
-    await selectComboboxItem(
-      page,
-      dialog.getByRole("combobox", { name: "Status" }),
-      TASK_STATUS_LABELS[opts.status],
-    );
-  }
-  if (opts.dueDate) {
-    const [year, month, day] = opts.dueDate.split("-").map(Number);
-    if (!year || !month || !day) {
-      throw new Error(`Invalid task due date: ${opts.dueDate}`);
-    }
-    const dueDateInput = dialog.getByLabel("Due date");
-    await dueDateInput.fill(opts.dueDate);
-    await dueDateInput.press("Enter");
-  }
-  await dialog.getByRole("button", { name: /^Create$/ }).click();
-  await expect(dialog).not.toBeVisible({ timeout: 10000 });
 }
 
 export async function createProduct(

@@ -17,6 +17,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { expenseAggregateFields } from "~/server/repo/expense-aggregate-sql";
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
 import {
   EMPTY_PROJECT_CONTENT_DATES,
@@ -45,18 +46,20 @@ export async function projectRollups(
   if (projectIds.length === 0) return out;
   for (const id of projectIds) out.set(id, { ...EMPTY_PROJECT_OWN_ROLLUP });
 
+  const expenseAggregates = expenseAggregateFields();
+
   const [expenseRows, taskRows] = await Promise.all([
     getDb(db)
       .select({
         projectId: expense.projectId,
-        spent: sql<number>`coalesce(sum(${expense.cost}), 0)::float`,
+        spent: expenseAggregates.net,
         // Split the blended `spent` into its three economically distinct parts
         // (see spend.ts / BudgetStrip). actualSpent + committedSpent −
         // contributions === spent.
-        actualSpent: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.cost} > 0 and ${expense.future} = false), 0)::float`,
-        committedSpent: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.cost} > 0 and ${expense.future} = true), 0)::float`,
-        contributions: sql<number>`coalesce(-sum(${expense.cost}) filter (where ${expense.cost} < 0), 0)::float`,
-        expenseCount: sql<number>`count(*)::int`,
+        actualSpent: expenseAggregates.actual,
+        committedSpent: expenseAggregates.committed,
+        contributions: expenseAggregates.credits,
+        expenseCount: expenseAggregates.count,
       })
       .from(expense)
       .where(and(inArray(expense.projectId, projectIds), notDeleted(expense)))

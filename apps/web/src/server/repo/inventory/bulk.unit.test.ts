@@ -10,10 +10,8 @@ import { bulkMoveInventoryEntries } from "./bulk";
  * `bulkMoveInventoryEntries`, and its payload is already resolved to uuids by
  * the router, so the comparison is two strings.
  *
- * The integration test this replaces went through `inventoryRouter.bulkMove`,
- * which resolves both location codes and every inventory code before the guard
- * runs — so it seeded a product, a location and an entry via `seedFromCSV` to
- * reach a check that never touches the database.
+ * The integration test this replaces resolved every code before the guard, so
+ * it seeded records only to reach a check that never touches the database.
  */
 const explodingDb = new Proxy(
   {},
