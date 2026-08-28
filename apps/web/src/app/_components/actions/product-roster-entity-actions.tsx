@@ -7,11 +7,8 @@ import { booleanCellOptions } from "~/lib/select-options";
 import { useActionMutation } from "../hooks/useActionMutation";
 import { SetFieldDialog } from "../tracker/set-field-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-  EntityActionRow,
-} from "./entity-actions";
+import { defineEntityAction } from "./entity-action-definition";
+import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 interface ProductRosterActionRow extends EntityActionRow {
   name: string;
@@ -128,7 +125,7 @@ function useSetProductStockTrackingAction(): EntityActionHandles {
 }
 
 export const productRosterEntityActionDefinitions = [
-  {
+  defineEntityAction({
     id: "print-labels",
     verb: "printLabels",
     entities: ["product"],
@@ -139,8 +136,8 @@ export const productRosterEntityActionDefinitions = [
     placement: { inspector: "overflow", detail: "overflow" },
     preserveSelection: true,
     use: usePrintProductLabelsAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setStockTracking",
     entities: ["product"],
     arity: "both",
@@ -149,5 +146,5 @@ export const productRosterEntityActionDefinitions = [
     priority: 300,
     preserveSelection: true,
     use: useSetProductStockTrackingAction,
-  },
-] as const satisfies readonly EntityActionDefinition[];
+  }),
+] as const;

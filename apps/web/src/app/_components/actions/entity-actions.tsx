@@ -18,7 +18,6 @@ import type {
   BulkActionAvailability,
   BulkActionResult,
 } from "../data-table/bulk-actions.types";
-import type { ActionSurface } from "./action-items";
 import {
   VerbButton,
   VerbMenuItem,
@@ -27,6 +26,14 @@ import {
 } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
+import {
+  defineEntityAction,
+  type EntityActionArity,
+  type EntityActionDefinition,
+  type EntityActionGroup,
+  type EntityActionPlacement,
+  type EntityActionSurface,
+} from "./entity-action-definition";
 import { ingredientEntityActionDefinitions } from "./ingredient-entity-actions";
 import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 import { mergeEntityActionDefinitions } from "./merge-entity-actions";
@@ -41,6 +48,7 @@ import {
   useSetTaskDueDateAction,
   useSetTaskStatusAction,
   useSetTradeEntityAction,
+  trackerEntities,
 } from "./tracker-entity-actions";
 import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 import { useDiscardInventoryAction } from "./use-discard-inventory-action";
@@ -85,17 +93,7 @@ const isEntityActionRow = (row: {
   id: string | number;
 }): row is EntityActionRow => typeof row.id === "string";
 
-/** Where a registered domain action is allowed to appear. */
-type EntityActionSurface =
-  | "row"
-  | "selection"
-  | "inspector"
-  | "detail"
-  | ActionSurface;
-
-type EntityActionArity = "single" | "multi" | "both";
-type EntityActionGroup = "primary" | "organize" | "lifecycle" | "destructive";
-type EntityActionPlacement = "primary" | "secondary" | "overflow";
+export type { EntityActionDefinition } from "./entity-action-definition";
 
 type EntityActionAvailability = BulkActionAvailability;
 
@@ -253,47 +251,13 @@ export interface EntityActionHandles {
   ) => EntityActionAvailability;
 }
 
-export interface EntityActionDefinition {
-  /** Stable action id. Defaults to the verb's kebab-case bulk-action id. */
-  id?: string;
-  /** Presentation (label/icon/tone) resolves through `verbDef(verb)`. */
-  verb: ActionVerbId;
-  /** Rosters that offer this action. */
-  entities: readonly Entity[];
-  arity: EntityActionArity;
-  /** Extra floor beyond what `arity` implies. */
-  minSelection?: number;
-  /** Optional ceiling beyond what `arity` implies. */
-  maxSelection?: number;
-  /** Defaults to row + selection + inspector + detail. */
-  surfaces?: readonly EntityActionSurface[];
-  /** Stable cross-surface grouping. */
-  group?: EntityActionGroup;
-  /** Lower numbers lead within a group. Registry order breaks ties. */
-  priority?: number;
-  /** Per-surface placement override. */
-  placement?: Partial<Record<EntityActionSurface, EntityActionPlacement>>;
-  /** Definition-level availability; the hook may refine it at runtime. */
-  availability?: (
-    context: EntityActionResolutionContext,
-  ) => EntityActionAvailability;
-  /** Keep the selection after a successful run (e.g. a refusable batch). */
-  preserveSelection?: boolean;
-  /**
-   * The implementation. A React hook, so it may hold state, open dialogs and
-   * own its mutation — which is the whole reason behavior lives here rather
-   * than as an id the call site dereferences.
-   */
-  use: (entity: Entity) => EntityActionHandles;
-}
-
 /**
  * The registry. Order is the order actions appear within their surface, after
  * the generic "Copy codes" and before the contract's "Delete" (see
  * `useListBulkActions`).
  */
 const entityActions: readonly EntityActionDefinition[] = [
-  {
+  defineEntityAction({
     id: "copy-shortcodes",
     verb: "copyCodes",
     entities: shortcodeEntities,
@@ -318,8 +282,8 @@ const entityActions: readonly EntityActionDefinition[] = [
         dialog: null,
       };
     },
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "copyIdentifiers",
     entities: ["usda-food"],
     arity: "both",
@@ -343,8 +307,8 @@ const entityActions: readonly EntityActionDefinition[] = [
         dialog: null,
       };
     },
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "addToInventory",
     entities: ["product"],
     // A selection shares its location while retaining per-row quantities.
@@ -355,8 +319,8 @@ const entityActions: readonly EntityActionDefinition[] = [
     priority: 100,
     surfaces: ["row", "selection", "inspector", "detail", "palette-quick"],
     use: useAddToInventoryAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "discard",
     // `inventory`, not `product`: an entry names its amount and its shelf, so a
     // selection of entries is already a complete instruction. A product row is
@@ -369,7 +333,7 @@ const entityActions: readonly EntityActionDefinition[] = [
     // Cancelling staged discard details leaves selection intact.
     preserveSelection: true,
     use: useDiscardInventoryAction,
-  },
+  }),
   ...recipeEntityActionDefinitions,
   ...ingredientEntityActionDefinitions,
   ...inventoryLocationEntityActionDefinitions,
@@ -377,7 +341,7 @@ const entityActions: readonly EntityActionDefinition[] = [
   ...productRosterEntityActionDefinitions,
   ...specialistLifecycleEntityActionDefinitions,
   deleteEntityActionDefinition,
-  {
+  defineEntityAction({
     verb: "markPurchased",
     entities: ["expense"],
     arity: "single",
@@ -385,49 +349,49 @@ const entityActions: readonly EntityActionDefinition[] = [
     group: "primary",
     priority: 50,
     use: useMarkExpensePurchasedAction,
-  },
-  {
+  }),
+  defineEntityAction({
     id: "move",
     verb: "moveToProject",
-    entities: ["expense", "task"],
+    entities: trackerEntities,
     arity: "both",
     group: "organize",
     priority: 100,
     use: useMoveToProjectEntityAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setStatus",
     entities: ["task"],
     arity: "both",
     group: "organize",
     priority: 200,
     use: useSetTaskStatusAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setTrade",
-    entities: ["expense", "task"],
+    entities: trackerEntities,
     arity: "both",
     group: "organize",
     priority: 300,
     use: useSetTradeEntityAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setCostType",
     entities: ["expense"],
     arity: "both",
     group: "organize",
     priority: 400,
     use: useSetExpenseCostTypeAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setDueDate",
     entities: ["task"],
     arity: "both",
     group: "organize",
     priority: 400,
     use: useSetTaskDueDateAction,
-  },
-  {
+  }),
+  defineEntityAction({
     id: "create-project",
     verb: "createProjectFrom",
     entities: ["task"],
@@ -437,7 +401,7 @@ const entityActions: readonly EntityActionDefinition[] = [
     priority: 500,
     preserveSelection: true,
     use: useCreateProjectFromTasksAction,
-  },
+  }),
 ];
 
 export interface EntityActionCatalogDescriptor extends Omit<
@@ -461,6 +425,25 @@ const appliesTo = (
 ) =>
   definition.entities.includes(entity) &&
   (definition.surfaces ?? DEFAULT_SURFACES).includes(surface);
+
+/**
+ * The sole heterogeneous-registry escape hatch. Definitions are correlated at
+ * construction time; filtering above proves this runtime entity is in the
+ * selected roster before React invokes its hook.
+ */
+const resolveEntityActionHandles = (
+  definition: EntityActionDefinition,
+  entity: Entity,
+): EntityActionHandles => {
+  if (!definition.entities.includes(entity)) {
+    throw new Error(`Action ${definition.verb} does not support ${entity}`);
+  }
+  // SAFETY: defineEntityAction correlates `use` with `entities`, and the
+  // membership check above proves this entity belongs to that exact roster.
+  return (definition.use as (allowedEntity: Entity) => EntityActionHandles)(
+    entity,
+  );
+};
 
 const hasExplicitSurface = (
   definition: EntityActionDefinition,
@@ -562,7 +545,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
   // `entity` over a module-level registry — see the invariant above.
   const resolved = matching.map((definition) => ({
     definition,
-    handles: definition.use(entity),
+    handles: resolveEntityActionHandles(definition, entity),
   }));
 
   const actionAvailability = (

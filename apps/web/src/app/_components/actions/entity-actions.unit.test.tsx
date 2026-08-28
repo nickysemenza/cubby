@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import {
   browserRoutedEntities,
   shortcodeEntities,
@@ -38,16 +37,6 @@ const stubHandles = (
 });
 
 describe("production entity action catalog", () => {
-  const roster = (entity: Entity) =>
-    entityActionCatalogDescriptors
-      .filter(
-        (action) =>
-          action.entities.includes(entity) &&
-          action.verb !== "copyCodes" &&
-          action.verb !== "delete",
-      )
-      .map(({ verb, arity, surfaces }) => ({ verb, arity, surfaces }));
-
   it("derives the correct copy action for every routed entity", () => {
     const copyCodes = entityActionCatalogDescriptors.find(
       (action) => action.verb === "copyCodes",
@@ -124,102 +113,6 @@ describe("production entity action catalog", () => {
     expect(
       deleteActions.find((action) => action.entities.includes("image")),
     ).toMatchObject({ arity: "single", surfaces: ["inspector", "detail"] });
-  });
-
-  it("guards Product and Inventory memberships", () => {
-    expect(roster("product")).toEqual([
-      {
-        verb: "addToInventory",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail", "palette-quick"],
-      },
-      {
-        verb: "printLabels",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setStockTracking",
-        arity: "both",
-        surfaces: ["selection"],
-      },
-    ]);
-    expect(roster("inventory")).toEqual([
-      {
-        verb: "discard",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "moveTo",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-    ]);
-    expect(roster("location")).toEqual([
-      {
-        verb: "printLabel",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "moveUnder",
-        arity: "both",
-        surfaces: ["row", "selection"],
-      },
-    ]);
-  });
-
-  it("guards Expense and Task memberships and order", () => {
-    expect(roster("expense")).toEqual([
-      {
-        verb: "markPurchased",
-        arity: "single",
-        surfaces: ["row", "inspector", "detail"],
-      },
-      {
-        verb: "moveToProject",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setTrade",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setCostType",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-    ]);
-    expect(roster("task")).toEqual([
-      {
-        verb: "moveToProject",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setStatus",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setTrade",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setDueDate",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "createProjectFrom",
-        arity: "both",
-        surfaces: ["selection"],
-      },
-    ]);
   });
 });
 

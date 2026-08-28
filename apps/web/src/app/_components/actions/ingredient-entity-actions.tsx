@@ -6,11 +6,8 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-  EntityActionRow,
-} from "./entity-actions";
+import { defineEntityAction } from "./entity-action-definition";
+import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 /**
  * Ingredient merge owns the staged rows and its confirmation dialog. Returning
@@ -83,7 +80,7 @@ function useMergeIngredientsEntityAction(): EntityActionHandles {
 }
 
 export const ingredientEntityActionDefinitions = [
-  {
+  defineEntityAction({
     verb: "merge",
     entities: ["ingredient"],
     arity: "multi",
@@ -91,5 +88,5 @@ export const ingredientEntityActionDefinitions = [
     group: "organize",
     priority: 100,
     use: useMergeIngredientsEntityAction,
-  },
-] as const satisfies readonly EntityActionDefinition[];
+  }),
+] as const;

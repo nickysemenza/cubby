@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import {
   parseShortcodeFor,
   type TaskShortcode,
@@ -32,7 +31,8 @@ import type {
   EntityActionRow,
 } from "./entity-actions";
 
-type TrackerEntity = Extract<Entity, "expense" | "task">;
+export const trackerEntities = ["expense", "task"] as const;
+export type TrackerEntity = (typeof trackerEntities)[number];
 type StageSource = "row" | "catalog";
 
 interface TrackerActionRow extends EntityActionRow {
@@ -44,11 +44,6 @@ interface TrackerActionRow extends EntityActionRow {
   status?: string;
   dueDate?: string | null;
   dueEndDate?: string | null;
-}
-
-function requireTrackerEntity(entity: Entity): TrackerEntity {
-  if (entity === "expense" || entity === "task") return entity;
-  throw new Error(`Tracker action does not support ${entity}`);
 }
 
 const asTrackerRow = (row: EntityActionRow): TrackerActionRow => ({
@@ -139,9 +134,8 @@ const rowMenuItem = (
 );
 
 export function useMoveToProjectEntityAction(
-  entity: Entity,
+  trackerEntity: TrackerEntity,
 ): EntityActionHandles {
-  const trackerEntity = requireTrackerEntity(entity);
   const staged = useStagedRows();
   const bulkMutation = useTrackerBulkMutation(trackerEntity, "Moved");
   const expenseUpdate = useUpdateMutation({
@@ -201,8 +195,9 @@ export function useMoveToProjectEntityAction(
   };
 }
 
-export function useSetTradeEntityAction(entity: Entity): EntityActionHandles {
-  const trackerEntity = requireTrackerEntity(entity);
+export function useSetTradeEntityAction(
+  trackerEntity: TrackerEntity,
+): EntityActionHandles {
   const staged = useStagedRows();
   const mutation = useTrackerBulkMutation(trackerEntity);
   return {

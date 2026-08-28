@@ -4,21 +4,13 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 
 import { cookbook } from "./cookbook.functions";
+import { isGeneratedBrowserCrudEntity } from "./entity-contracts";
 import { entityDetailFor } from "./entity-detail.functions";
-import {
-  type GeneratedBrowserCrudEntity,
-  generatedBrowserCrudEntities,
-} from "./generated/entity-routes.gen";
 import { image } from "./image.functions";
 import { usdaFood } from "./usda.functions";
 
 export const fdcIdFromParam = (id: string): number => Number.parseInt(id, 10);
 export const usdaRouteId = (fdcId: number): string => String(fdcId);
-
-const isGeneratedBrowserCrudEntity = (
-  entity: Entity,
-): entity is GeneratedBrowserCrudEntity =>
-  generatedBrowserCrudEntities.some((candidate) => candidate === entity);
 
 /**
  * Map an entity + route id to its detail query options — the single source for

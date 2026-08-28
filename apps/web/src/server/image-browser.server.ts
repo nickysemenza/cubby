@@ -15,10 +15,7 @@ import {
   type EntityKernelContext,
   executeEntity,
 } from "~/server/entity-kernel";
-import {
-  implementOperationDomain,
-  type OperationExecutionAdapter,
-} from "~/server/operation-domain.server";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getImagesByProjectIds } from "~/server/repo/image";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
@@ -100,69 +97,69 @@ const productionImageBrowserPorts = {
     if (result.action !== "delete") {
       throw new Error("Image delete returned the wrong entity action");
     }
-    return { deleted: result.deleted, sideEffects: result.sideEffects };
+    return {
+      deleted: result.deletedReferences.length,
+      sideEffects: result.sideEffects,
+    };
   },
 } satisfies ImageBrowserPorts;
 
-export function createImageHandlers(
-  portOverrides: Partial<ImageBrowserPorts> = {},
-  adapter?: OperationExecutionAdapter,
+/** Update the stored row, then reload the enriched projection consumers render. */
+export async function updateImageThenReload<TContext>(
+  ports: {
+    update(context: TContext, input: ImageUpdateInput): Promise<void>;
+    get(
+      context: TContext,
+      id: string,
+      missing: "error" | "null",
+    ): Promise<ImageWithEntity | null>;
+  },
+  context: TContext,
+  input: ImageUpdateInput,
+): Promise<ImageWithEntity> {
+  await ports.update(context, input);
+  const refreshed = await ports.get(context, input.id, "error");
+  if (refreshed === null)
+    throw new Error("Updated image could not be reloaded");
+  return refreshed;
+}
+
+/**
+ * Keep the shortcode-facing projection aligned with the paired resolver result.
+ * A zip is only valid when resolution preserves input cardinality.
+ */
+export function projectImageSummaries<TImage>(
+  projectIds: readonly ProjectShortcode[],
+  entityIds: readonly string[],
+  imagesByEntityId: Readonly<Record<string, readonly TImage[]>>,
 ) {
-  const ports = { ...productionImageBrowserPorts, ...portOverrides };
-  return implementOperationDomain(
-    image,
-    {
-      list: {
-        readPolicy: "strong",
-        run: (context, input) => ports.list(context, input),
-      },
-      detail: {
-        readPolicy: "strong",
-        run: (context, input) => ports.get(context, input.id, "null"),
-      },
-      update: async (context, input) => {
-        await ports.update(context, input);
-        const refreshed = await ports.get(context, input.id, "error");
-        if (refreshed === null) {
-          throw new Error("Updated image could not be reloaded");
-        }
-        return refreshed;
-      },
-      delete: (context, input) => ports.delete(context, input),
-      projectSummaries: {
-        readPolicy: "strong",
-        run: async (context, input) => {
-          const entityIds = await resolveAllOrThrow(
-            context.db,
-            "project",
-            input.projectIds,
-          );
-          const shortcodeByEntityId = new Map<string, ProjectShortcode>(
-            entityIds.map((entityId, index) => {
-              const shortcode = input.projectIds[index];
-              if (!shortcode) {
-                throw new Error(
-                  "Project resolution changed result cardinality",
-                );
-              }
-              return [entityId, shortcode];
-            }),
-          );
-          const imagesByEntityId = await getImagesByProjectIds(
-            context.db,
-            entityIds,
-          );
-          return Object.fromEntries(
-            Object.entries(imagesByEntityId).flatMap(([entityId, images]) => {
-              const shortcode = shortcodeByEntityId.get(entityId);
-              return shortcode ? [[shortcode, images]] : [];
-            }),
-          );
-        },
-      },
-    },
-    adapter,
+  if (entityIds.length !== projectIds.length) {
+    throw new Error("Project resolution changed result cardinality");
+  }
+  const shortcodeByEntityId = new Map<string, ProjectShortcode>(
+    entityIds.map((entityId, index): [string, ProjectShortcode] => {
+      const shortcode = projectIds[index];
+      if (!shortcode) {
+        throw new Error("Project resolution changed result cardinality");
+      }
+      return [entityId, shortcode];
+    }),
   );
+  const entries: [ProjectShortcode, TImage[]][] = [];
+  for (const [entityId, images] of Object.entries(imagesByEntityId)) {
+    const shortcode = shortcodeByEntityId.get(entityId);
+    if (shortcode) entries.push([shortcode, [...images]]);
+  }
+  return Object.fromEntries(entries);
+}
+
+async function loadProjectImageSummaries(
+  context: EntityKernelContext,
+  projectIds: readonly ProjectShortcode[],
+) {
+  const entityIds = await resolveAllOrThrow(context.db, "project", projectIds);
+  const imagesByEntityId = await getImagesByProjectIds(context.db, entityIds);
+  return projectImageSummaries(projectIds, entityIds, imagesByEntityId);
 }
 
 export const imageHandlers = implementOperationDomain(image, {
@@ -176,44 +173,14 @@ export const imageHandlers = implementOperationDomain(image, {
       productionImageBrowserPorts.get(context, input.id, "null"),
   },
   update: async (context, input) => {
-    await productionImageBrowserPorts.update(context, input);
-    const refreshed = await productionImageBrowserPorts.get(
-      context,
-      input.id,
-      "error",
-    );
-    if (refreshed === null) {
-      throw new Error("Updated image could not be reloaded");
-    }
-    return refreshed;
+    return updateImageThenReload(productionImageBrowserPorts, context, input);
   },
   delete: (context, input) =>
     productionImageBrowserPorts.delete(context, input),
   projectSummaries: {
     readPolicy: "strong",
-    run: async (context, input) => {
-      const entityIds = await resolveAllOrThrow(
-        context.db,
-        "project",
-        input.projectIds,
-      );
-      const shortcodeByEntityId = new Map<string, ProjectShortcode>(
-        input.projectIds.map((shortcode, index) => [
-          entityIds[index]!,
-          shortcode,
-        ]),
-      );
-      const imagesByEntityId = await getImagesByProjectIds(
-        context.db,
-        entityIds,
-      );
-      return Object.fromEntries(
-        Object.entries(imagesByEntityId).flatMap(([entityId, images]) => {
-          const shortcode = shortcodeByEntityId.get(entityId);
-          return shortcode ? [[shortcode, images]] : [];
-        }),
-      );
-    },
+    run: (context, input) =>
+      loadProjectImageSummaries(context, input.projectIds),
   },
 });
 

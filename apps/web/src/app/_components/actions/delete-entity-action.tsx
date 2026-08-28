@@ -9,6 +9,7 @@ import type { EntityCommands } from "~/entities/editing/use-entity-commands";
 import { entities, entityDialogLabel } from "~/entities/entities";
 import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
 
+import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 /** The delete dialog depends on this small command surface, not the form kernel. */
@@ -122,7 +123,7 @@ export function useDeleteEntityAction(
   };
 }
 
-export const deleteEntityActionDefinition = {
+export const deleteEntityActionDefinition = defineEntityAction({
   verb: "delete",
   entities: [
     "product",
@@ -145,4 +146,4 @@ export const deleteEntityActionDefinition = {
   group: "destructive",
   priority: 100,
   use: useDeleteEntityAction,
-} as const;
+});

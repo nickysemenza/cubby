@@ -16,11 +16,8 @@ import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import { BulkReparentLocationsDialog } from "../locations/bulk-reparent-locations-dialog";
 import { typeSupportsQrCode } from "../locations/location-type-theme";
 import { VerbMenuItem } from "./action-verb-ui";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-  EntityActionRow,
-} from "./entity-actions";
+import { defineEntityAction } from "./entity-action-definition";
+import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 const inventoryMoveRow = z.object({
   id: inventoryShortcode,
@@ -200,7 +197,7 @@ function useMoveLocationUnderAction(): EntityActionHandles {
 }
 
 export const inventoryLocationEntityActionDefinitions = [
-  {
+  defineEntityAction({
     id: "move-inventory",
     verb: "moveTo",
     entities: ["inventory"],
@@ -209,8 +206,8 @@ export const inventoryLocationEntityActionDefinitions = [
     group: "organize",
     priority: 100,
     use: useMoveInventoryEntityAction,
-  },
-  {
+  }),
+  defineEntityAction({
     id: "print-location-labels",
     verb: "printLabel",
     entities: ["location"],
@@ -221,8 +218,8 @@ export const inventoryLocationEntityActionDefinitions = [
     placement: { inspector: "overflow", detail: "overflow" },
     preserveSelection: true,
     use: usePrintLocationLabelsAction,
-  },
-  {
+  }),
+  defineEntityAction({
     id: "move-location-under",
     verb: "moveUnder",
     entities: ["location"],
@@ -231,5 +228,5 @@ export const inventoryLocationEntityActionDefinitions = [
     group: "organize",
     priority: 200,
     use: useMoveLocationUnderAction,
-  },
-] as const satisfies readonly EntityActionDefinition[];
+  }),
+] as const;

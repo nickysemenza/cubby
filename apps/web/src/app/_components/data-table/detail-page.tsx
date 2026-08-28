@@ -1,6 +1,5 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Clock } from "lucide-react";
@@ -112,9 +111,6 @@ function modeForHash({
     valid: overviewIds.has(sectionId),
   };
 }
-
-const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
-  entityManifest[entity].auditable;
 
 function isDetailMode(value: string): value is DetailMode {
   return value === "overview" || value === "relations" || value === "activity";

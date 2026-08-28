@@ -1,6 +1,4 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
-import type { Entity } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
@@ -18,9 +16,6 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import type { DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-
-const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
-  entityManifest[entity].auditable;
 
 const commonSectionTypeList = z.array(
   z.enum(["images", "unit-mappings", "history"]),
