@@ -5,6 +5,7 @@ import {
   type ShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
+
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { CellClipboardSpec } from "./cell-clipboard";
 import { entityCellData, specFromCellData } from "./cell-data";

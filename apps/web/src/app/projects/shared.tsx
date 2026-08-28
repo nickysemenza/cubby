@@ -21,6 +21,7 @@ import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
+
 import {
   type VendorName,
   WithVendorSearch,
@@ -111,9 +112,10 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
-import { project } from "./project.functions";
+
 import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
+import { project } from "./project.functions";
 import { tradeOptions } from "./trade-options";
 
 /**

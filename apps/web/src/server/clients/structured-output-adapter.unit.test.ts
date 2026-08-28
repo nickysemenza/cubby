@@ -1,5 +1,6 @@
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { describe, expect, it } from "vitest";
+
 import { surfaceStructuredOutputRunErrors } from "./structured-output-adapter";
 
 function streamOf(...chunks: StreamChunk[]): AsyncIterable<StreamChunk> {

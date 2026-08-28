@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { buildSelectOptions } from "./select-options";
 
 describe("buildSelectOptions", () => {

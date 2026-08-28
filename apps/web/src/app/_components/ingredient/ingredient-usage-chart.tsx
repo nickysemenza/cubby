@@ -2,8 +2,9 @@ import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
 import { ResponsiveBar } from "@nivo/bar";
 import { Carrot } from "lucide-react";
 import { useId, useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 
 // Cap the bar count so the chart stays legible; the full list lives in the table.

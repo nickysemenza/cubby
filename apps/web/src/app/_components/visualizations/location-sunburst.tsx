@@ -1,15 +1,17 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
+
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
   type LocationHierarchyNode,
   useLocationHierarchy,
 } from "~/hooks/useLocationHierarchy";
 import { formatCurrency } from "~/lib/utils";
+
 import { formatPricingStatusSummary } from "../locations/calculate-inventory-valuation";
-import { LocationTypeLabel } from "../locations/LocationTypeLabel";
 import { LocationIcon } from "../locations/location-icons";
+import { LocationTypeLabel } from "../locations/LocationTypeLabel";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
@@ -244,7 +246,7 @@ function Sunburst({ data }: SunburstProps) {
                     transform={`rotate(${labelPos.rotation}, ${labelPos.x}, ${labelPos.y})`}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none font-medium text-2xs"
+                    className="pointer-events-none text-2xs font-medium"
                     fill={
                       node.data.totalCount === 0
                         ? "var(--muted-foreground)"
@@ -267,7 +269,7 @@ function Sunburst({ data }: SunburstProps) {
           <text
             textAnchor="middle"
             dominantBaseline="middle"
-            className="fill-foreground font-medium text-sm"
+            className="fill-foreground text-sm font-medium"
           >
             {hoveredNode ? hoveredNode.data.name : `${data.totalCount} items`}
           </text>
@@ -298,7 +300,7 @@ function Sunburst({ data }: SunburstProps) {
               key={node.data.id}
               to="/locations/$shortcode"
               params={{ shortcode: node.data.shortcode }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+              className="inline-flex min-h-11 items-center px-2 text-xs text-primary hover:underline sm:min-h-0"
             >
               {node.data.name} ({node.data.totalCount})
             </Link>

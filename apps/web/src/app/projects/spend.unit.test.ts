@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { budgetRemaining, splitExpenseSpend } from "./spend";
 
 describe("splitExpenseSpend", () => {

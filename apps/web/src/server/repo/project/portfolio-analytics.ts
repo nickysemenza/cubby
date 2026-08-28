@@ -25,6 +25,7 @@ import type {
   ProjectPortfolioAnalyticsOut,
 } from "@cubby/schemas/project";
 import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -33,6 +34,7 @@ import {
   EXPENSE_MONTH_BUCKET,
   expenseAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
+
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP } from "./helpers";
 import { loadProjectSubtreeRollups, projectCompletionYear } from "./subtree";

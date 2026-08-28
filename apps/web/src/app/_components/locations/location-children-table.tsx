@@ -1,4 +1,4 @@
-import { location } from "~/app/locations/location.functions";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 /**
  * The Table-view rendering of a location's sub-locations: one row per
  * descendant, twirling down through every level in a single fetch.
@@ -7,15 +7,16 @@ import { location } from "~/app/locations/location.functions";
  * packout stack shows "4 drawer packout · 4 locs" and the drawers themselves
  * are a page away. This surface trades the photos for depth.
  */
-
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { useEffect, useMemo } from "react";
+
+import { location } from "~/app/locations/location.functions";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   createFilterableSelectColumn,
   createImageColumn,
@@ -25,9 +26,9 @@ import {
 import { ListWorkbench } from "../data-table/ListWorkbench";
 import { createCubbyColumnHelper } from "../data-table/table-features";
 import { useClientEntityList } from "../hooks/useClientEntityList";
-import { LocationTypeLabel } from "./LocationTypeLabel";
 import { locationTypeOptionsWithTheme } from "./location-icons";
 import { resolveLocationPrimaryVisual } from "./location-visual-resolver";
+import { LocationTypeLabel } from "./LocationTypeLabel";
 
 /**
  * `subRows` rather than reusing `children`: `useClientEntityList` walks

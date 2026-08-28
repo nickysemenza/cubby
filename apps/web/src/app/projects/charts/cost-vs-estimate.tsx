@@ -1,12 +1,14 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
+
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { formatCurrency } from "~/lib/utils";
+
 import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
-import { ChartTooltip } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { ChartTooltip } from "./ChartTooltip";
 import { HorizontalBarChart } from "./horizontal-bar-chart";
 
 type Datum = {
@@ -57,15 +59,13 @@ export function CostVsEstimate({
         // No estimate (null or 0) means "% of estimate" is undefined — leave
         // those projects off the chart rather than showing a misleading N/A
         // bar of 0 or infinite height.
-        .map(
-          (d): Datum => ({
-            ...d,
-            // Negative `actual` (net contributions exceeding spend) is real —
-            // it just yields a negative percent, which reads fine on an axis
-            // that already spans through 0.
-            percent: (d.actual / d.estimate) * 100,
-          }),
-        )
+        .map((d): Datum => ({
+          ...d,
+          // Negative `actual` (net contributions exceeding spend) is real —
+          // it just yields a negative percent, which reads fine on an axis
+          // that already spans through 0.
+          percent: (d.actual / d.estimate) * 100,
+        }))
         .sort((a, b) => b.percent - a.percent)
         .slice(0, 15)
     );
@@ -145,7 +145,7 @@ export function CostVsEstimate({
             />
           </strong>{" "}
           — {Math.round(Number(d.percent))}% of estimate
-          <div className="mt-1 text-muted-foreground text-xs">
+          <div className="mt-1 text-xs text-muted-foreground">
             {formatCurrency(Number(d.actual), 0)} actual /{" "}
             {formatCurrency(Number(d.estimate), 0)} estimate
           </div>

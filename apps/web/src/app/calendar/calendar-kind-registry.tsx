@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/meal-classification";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { LucideIcon } from "lucide-react";
+
 import type { BadgeVariant } from "~/components/ui/badge";
 import {
   expenseCaptureRequest,
@@ -20,6 +21,7 @@ import type {
   EntityEditRecord,
 } from "~/entities/editing/types";
 import { entities } from "~/entities/entities";
+
 import {
   mealKindBadgeVariant,
   mealTypeIcon,

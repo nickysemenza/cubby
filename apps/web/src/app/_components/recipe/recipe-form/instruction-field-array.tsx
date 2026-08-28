@@ -1,8 +1,10 @@
 import { Plus } from "lucide-react";
 import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+
 import { RequiredTextareaField } from "../../form-utils";
 import { FieldArrayItemControls } from "./field-array-item-controls";
 import type { RecipeFormValues } from "./types";
@@ -24,7 +26,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
   return (
     <Stack gap="sm" className="w-full">
       {fields.length === 0 ? (
-        <div className="text-muted-foreground text-sm italic">
+        <div className="text-sm text-muted-foreground italic">
           No instructions added yet
         </div>
       ) : (

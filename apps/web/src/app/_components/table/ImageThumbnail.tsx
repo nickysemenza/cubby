@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+
 import { EntityCover } from "~/components/entity/entity-cover";
 
 interface ImageData {

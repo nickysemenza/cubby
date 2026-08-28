@@ -8,6 +8,7 @@ import type {
   PublicStartOperationError,
   StartOperationResult,
 } from "~/server/start-operation.contract";
+
 import type { CubbyOperationMeta } from "./operation-meta";
 import {
   beginObservedOperation,
@@ -106,9 +107,8 @@ async function dispatchStartOperation<Input>(
   input: Input,
   transport: { signal?: AbortSignal; headers: HeadersInit },
 ): Promise<StartOperationResult<unknown>> {
-  const { dispatchStartOperationTransport } = await import(
-    "~/server-functions/start-operation-dispatch.functions"
-  );
+  const { dispatchStartOperationTransport } =
+    await import("~/server-functions/start-operation-dispatch.functions");
   return await dispatchStartOperationTransport({
     data: { operation, input },
     signal: transport.signal,

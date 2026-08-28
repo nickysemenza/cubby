@@ -1,6 +1,7 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
+
 import { createActionFor } from "~/app/_components/actions/action-items";
 import { IconPattern } from "~/components/common/icon-pattern";
 import { Button } from "~/components/ui/button";
@@ -13,6 +14,7 @@ import {
 } from "~/components/ui/empty";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { EntityIcon, entities } from "~/entities/entities";
+
 import type { CubbyTable as Table } from "./table-features";
 
 interface EntityEmptyConfig {

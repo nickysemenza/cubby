@@ -4,6 +4,7 @@
  */
 
 import type { InventoryItemForTree } from "@cubby/schemas/location";
+
 import type { inventoryEntry, location, product } from "~/server/db/schema";
 import type {
   MappableImageRecord,

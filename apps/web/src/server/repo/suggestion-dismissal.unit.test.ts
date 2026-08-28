@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { suggestionCandidateKey } from "./suggestion-dismissal";
 
 describe("suggestionCandidateKey", () => {

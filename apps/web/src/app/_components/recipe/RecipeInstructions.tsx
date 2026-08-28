@@ -1,9 +1,11 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
+
 import { formatRichText } from "./richtext";
 import { SectionHeading } from "./section-heading";
 
@@ -43,7 +45,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
       {recipe.sections.map((section, sectionIndex) => (
         <div
           key={section.id}
-          className="fade-in slide-in-from-bottom-2 animate-in duration-300"
+          className="animate-in duration-300 fade-in slide-in-from-bottom-2"
         >
           <SectionHeading
             sectionName={section.name}
@@ -72,7 +74,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                     {/* Step number - big italic serif numeral, cookbook style */}
                     <div
                       className={cn(
-                        "w-8 shrink-0 text-right font-heading font-medium text-2xl text-primary italic leading-none",
+                        "w-8 shrink-0 text-right font-heading text-2xl leading-none font-medium text-primary italic",
                         isDone && "text-muted-foreground/50",
                       )}
                     >
@@ -81,7 +83,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                     {/* Instruction text with highlighted ingredients and measurements */}
                     <p
                       className={cn(
-                        "flex-1 pt-1 text-foreground leading-relaxed",
+                        "flex-1 pt-1 leading-relaxed text-foreground",
                         isDone && "text-muted-foreground line-through",
                       )}
                     >

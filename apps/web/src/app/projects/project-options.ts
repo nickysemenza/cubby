@@ -1,6 +1,8 @@
 import { projectKindValues, projectStatusValues } from "@cubby/schemas/project";
+
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { getStatusChartColor } from "~/lib/status-colors";
+
 import { capitalize, PROJECT_STATUS_LABELS } from "./project-formatting";
 
 /**

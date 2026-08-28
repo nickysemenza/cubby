@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -10,6 +11,7 @@ import { Input } from "~/components/ui/input";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
 type ProductDetail = NonNullable<EntityDetailByEntity["product"]>;
@@ -146,7 +148,7 @@ function TitleSizeFix({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Read “{token}” from the product name. Check it describes one unit of
         this product, not a multi-pack.
       </p>
@@ -187,7 +189,7 @@ function PriceFix({ id, close }: { id: string; close: () => void }) {
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Not a food — just needs a price.
       </p>
       <Row align="center" gap="sm" className="text-sm">
@@ -267,7 +269,7 @@ function DisconnectedFix({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Add the missing conversion(s) to connect the groups.
       </p>
       {bridges.map((b, i) => (
@@ -290,7 +292,7 @@ function DisconnectedFix({
         </Row>
       ))}
       {isError && (
-        <p className="text-destructive text-xs">
+        <p className="text-xs text-destructive">
           Couldn't load this product's current conversions.
         </p>
       )}

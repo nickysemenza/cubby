@@ -32,7 +32,9 @@ import {
 } from "@cubby/schemas/purchase";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+
 import { executeEntity } from "~/server/entity-kernel";
+
 import { READ_ONLY_CLOSED, registerRouterTool, WRITE_CLOSED } from "./_shared";
 
 /**

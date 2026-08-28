@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useMemo } from "react";
 import { toast } from "sonner";
+
 import { DebugDialog } from "~/app/_components/data-table/DebugDialog";
 import RTable from "~/app/_components/data-table/Table";
 import {
@@ -47,6 +48,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Spinner } from "~/components/ui/spinner";
 import { copyText } from "~/lib/clipboard";
+
 import type {
   BackgroundBatchRow,
   BackgroundJobRow,

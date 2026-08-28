@@ -6,9 +6,11 @@ import type {
 } from "@cubby/schemas/related-view";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
+
 import { getSortableFields } from "~/entities/entities";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { relatedData } from "~/lib/related-data.functions";
+
 import { RelatedPreviewCell } from "../data-table/related-preview-cell";
 import type {
   CubbyColumnDef as ColumnDef,

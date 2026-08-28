@@ -1,8 +1,10 @@
 import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { createExpense } from "~/server/repo/expense";
 import { createProject } from "~/server/repo/project";
+
 import { householdContributionLedger, projectContribution } from "./reports";
 
 describe("household contribution reports", () => {

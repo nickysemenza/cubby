@@ -6,8 +6,9 @@ import {
   screen,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { BulkActionBar } from "./BulkActionBar";
+
 import type { BulkAction } from "./bulk-actions.types";
+import { BulkActionBar } from "./BulkActionBar";
 import type { CubbyRow as Row } from "./table-features";
 import { useBulkActions } from "./useBulkActions";
 

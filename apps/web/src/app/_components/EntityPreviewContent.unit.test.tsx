@@ -8,7 +8,9 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { wishOut } from "@cubby/schemas/wish";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import {
   toFinancialAccountCard,
   toFinancialTransactionCard,

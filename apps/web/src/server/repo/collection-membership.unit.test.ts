@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { deriveCollectionMembership } from "./collection-membership";
 
 const product = (id: string, tags: string[] = []) => ({ id, tags });

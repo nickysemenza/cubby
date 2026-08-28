@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+
 import {
   Tooltip,
   TooltipContent,

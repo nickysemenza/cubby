@@ -14,6 +14,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import type { FilterSpecCore } from "~/entities/filters";
+
 import { useTableState } from "./useTableState";
 
 const URL_BACKED_SPECS: readonly FilterSpecCore[] = [

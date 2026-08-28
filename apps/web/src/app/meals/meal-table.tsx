@@ -6,10 +6,12 @@ import {
   type MealType,
 } from "@cubby/schemas/meal-classification";
 import { useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+
 import {
   createFilterableSelectColumn,
   createNameColumn,

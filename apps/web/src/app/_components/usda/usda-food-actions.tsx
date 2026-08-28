@@ -4,6 +4,7 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useRouter } from "@tanstack/react-router";
 import { Link2, PackagePlus } from "lucide-react";
 import { useState } from "react";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import {
@@ -17,6 +18,7 @@ import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import { WithIngredientSearch } from "../combobox/with-search-hook";

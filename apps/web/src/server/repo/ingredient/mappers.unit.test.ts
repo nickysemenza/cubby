@@ -5,6 +5,7 @@ import {
 import { productWithMappingsOut } from "@cubby/schemas/product";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   dbIngredientToAPI,
   dbIngredientToTopLevelShape,

@@ -1,6 +1,7 @@
 import { type UserId, userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
+
 import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
 
 /**

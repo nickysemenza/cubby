@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { pageFromManualHref, resolveWikiLinks } from "./manual-wiki-links";
 
 const DOCS = [

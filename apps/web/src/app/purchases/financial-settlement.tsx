@@ -1,8 +1,10 @@
 import type { PurchaseOut } from "@cubby/schemas/purchase";
+
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Description } from "~/components/ui/description";
 import { formatCurrency } from "~/lib/utils";
+
 import { LinkedTransactions } from "../finance/linked-transactions";
 
 type FinancialPurchase = PurchaseOut & {
@@ -58,20 +60,20 @@ export function FinancialSettlement({
         </span>
       </Row>
       <Row align="center" justify="between">
-        <span className="text-muted-foreground text-sm">Posted</span>
+        <span className="text-sm text-muted-foreground">Posted</span>
         <span className="font-mono tabular-nums">
           {formatCurrency(settlement.postedTotal)}
         </span>
       </Row>
       <Row align="center" justify="between">
-        <span className="text-muted-foreground text-sm">Projected</span>
+        <span className="text-sm text-muted-foreground">Projected</span>
         <span className="font-mono tabular-nums">
           {formatCurrency(settlement.projectedTotal)}
         </span>
       </Row>
       {settlement.delta != null && (
         <Row align="center" justify="between">
-          <span className="text-muted-foreground text-sm">Delta</span>
+          <span className="text-sm text-muted-foreground">Delta</span>
           <span className="font-mono tabular-nums">
             {formatCurrency(settlement.delta)}
           </span>

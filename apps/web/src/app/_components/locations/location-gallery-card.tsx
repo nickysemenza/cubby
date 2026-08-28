@@ -4,10 +4,12 @@ import type {
 } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { type Ref, useMemo } from "react";
+
 import { Row } from "~/components/layout";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { useHydratedProductImages } from "../products/product-image-summaries";
 import { LocationIcon } from "./location-icons";
 import { LocationVisual } from "./location-visual";
@@ -100,7 +102,7 @@ export const LocationGalleryCard = function LocationGalleryCard({
               <Link
                 to="/locations/$shortcode"
                 params={{ shortcode: location.id }}
-                className="min-w-0 truncate font-medium text-xs hover:text-primary hover:underline"
+                className="min-w-0 truncate text-xs font-medium hover:text-primary hover:underline"
                 title={location.name}
               >
                 {location.name}

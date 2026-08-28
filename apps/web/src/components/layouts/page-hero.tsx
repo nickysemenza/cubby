@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
+
 import {
   domainForEntity,
   domainWayfinding,
@@ -44,13 +45,13 @@ const heroVariants = cva(
   },
 );
 
-const titleVariants = cva("break-words font-heading tracking-tight", {
+const titleVariants = cva("font-heading tracking-tight break-words", {
   variants: {
     variant: {
       // Both steps use the compact text-2xl heading; the list variant keeps its
       // identity from the accent bar under the title, not a larger type size.
-      list: "font-bold text-2xl",
-      compact: "font-bold text-2xl",
+      list: "text-2xl font-bold",
+      compact: "text-2xl font-bold",
     },
   },
   defaultVariants: { variant: "list" },
@@ -180,7 +181,7 @@ function DetailBreadcrumb({
     <nav
       aria-label="Breadcrumb"
       className={cn(
-        "hidden flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs md:flex",
+        "hidden flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground md:flex",
       )}
     >
       {group && (
@@ -279,18 +280,18 @@ function ListWorkbench({
   actions,
 }: ListWorkbenchProps) {
   return (
-    <div className="flex min-h-11 items-center gap-1 border-border border-b bg-card px-2 py-1 sm:gap-2">
+    <div className="flex min-h-11 items-center gap-1 border-b border-border bg-card px-2 py-1 sm:gap-2">
       <div className="flex min-w-0 shrink-0 items-baseline gap-2">
-        <h1 className="truncate font-bold font-heading text-base tracking-tight max-md:sr-only sm:text-lg">
+        <h1 className="truncate font-heading text-base font-bold tracking-tight max-md:sr-only sm:text-lg">
           {title}
         </h1>
         {count !== undefined && (
-          <span className="shrink-0 font-mono text-2xs text-slate uppercase tabular-nums tracking-wider">
+          <span className="shrink-0 font-mono text-2xs tracking-wider text-slate uppercase tabular-nums">
             {formatCount(count)}
           </span>
         )}
       </div>
-      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-w-0 flex-1 [scrollbar-width:none] items-center gap-1 overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden">
         {controls}
         <div
           className="flex shrink-0 items-center gap-1"
@@ -298,7 +299,7 @@ function ListWorkbench({
         />
       </div>
       {actions && (
-        <div className="flex min-w-0 items-center gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden">
           {actions}
         </div>
       )}
@@ -494,12 +495,12 @@ function DetailPlate({
           >
             <div className="min-w-0">
               <DetailBreadcrumb entity={entity} heroNo={heroNo} />
-              <h1 className="break-words font-bold font-heading text-xl leading-6 tracking-tight sm:text-3xl sm:leading-9">
+              <h1 className="font-heading text-xl leading-6 font-bold tracking-tight break-words sm:text-3xl sm:leading-9">
                 {name}
               </h1>
             </div>
             <DetailPlateActions actions={heroActions} />
-            <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-muted-foreground text-xs">
+            <div className="col-span-2 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
               {heroNo && (
                 <span className="md:hidden">
                   <CopyableHeroNo heroNo={heroNo} />
@@ -511,26 +512,27 @@ function DetailPlate({
               {onFileSince && <span>Added {onFileSince}</span>}
             </div>
           </div>
-          {heroStats && heroStats.length > 0 && (
-            // Compact record stats — hairline separators, plain-language
-            // labels, and tabular numerals.
-            <div className="mt-4 flex border-border border-t pt-2">
-              {heroStats.map((stat, i) => (
-                <div
-                  key={stat.label}
-                  className={cn(
-                    "min-w-0 flex-1",
-                    i > 0 && "border-border border-l pl-4",
-                  )}
-                >
-                  <Eyebrow as="div">{stat.label}</Eyebrow>
-                  <div className="truncate font-mono font-semibold text-base tabular-nums">
-                    {stat.value}
+          {heroStats &&
+            heroStats.length > 0 && (
+              // Compact record stats — hairline separators, plain-language
+              // labels, and tabular numerals.
+              <div className="mt-4 flex border-t border-border pt-2">
+                {heroStats.map((stat, i) => (
+                  <div
+                    key={stat.label}
+                    className={cn(
+                      "min-w-0 flex-1",
+                      i > 0 && "border-l border-border pl-4",
+                    )}
+                  >
+                    <Eyebrow as="div">{stat.label}</Eyebrow>
+                    <div className="truncate font-mono text-base font-semibold tabular-nums">
+                      {stat.value}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
         </CardContent>
       </Card>
     </>
@@ -560,7 +562,7 @@ function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
                 Actions
               </PopoverTrigger>
               <PopoverContent align="end" className="w-56">
-                <PopoverTitle className="font-mono text-2xs text-slate uppercase tracking-wider">
+                <PopoverTitle className="font-mono text-2xs tracking-wider text-slate uppercase">
                   Record actions
                 </PopoverTitle>
                 <fieldset

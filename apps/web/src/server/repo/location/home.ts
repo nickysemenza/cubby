@@ -1,5 +1,6 @@
 import type { LocationId } from "@cubby/schemas/identifiers";
 import { and, asc, isNull } from "drizzle-orm";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { location } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";

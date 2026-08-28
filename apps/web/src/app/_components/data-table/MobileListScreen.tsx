@@ -2,12 +2,14 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import { type ReactNode, useRef } from "react";
+
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Button } from "~/components/ui/button";
 import { PullToRefresh } from "~/components/ui/pull-to-refresh";
 import { useHydrated } from "~/hooks/useHydrated";
 import { cn } from "~/lib/utils";
+
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
@@ -121,7 +123,7 @@ export function MobileListScreen<TItem extends RowData>({
         showViewOptions={portalWorkbenchUtilities}
         portalWorkbenchUtilities={portalWorkbenchUtilities}
         workbenchUtilityViewport="mobile"
-        className="mb-0 flex-wrap overflow-x-hidden border-border border-b"
+        className="mb-0 flex-wrap overflow-x-hidden border-b border-border"
         isTransitioning={isTransitioning}
       />
 

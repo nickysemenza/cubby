@@ -2,7 +2,6 @@
 // Porcelain Transit type system: Inter carries headings and UI prose while
 // JetBrains Mono is reserved for aligned data, measures, dates, and codes.
 import "../fonts.css";
-
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -12,6 +11,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import * as React from "react";
+
 import {
   loadCommandMenu,
   markCommandMenuOpen,
@@ -29,7 +29,9 @@ import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { useFlag } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
+
 import { Provider } from "../integrations/tanstack-query/root-provider";
+
 import appCss from "../styles.css?url";
 
 // Lazy: the command menu pulls in cmdk + react-markdown + the agent stream,
@@ -271,7 +273,7 @@ function RootComponent() {
     <Provider queryClient={queryClient}>
       <a
         href={`#${mainContentId}`}
-        className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-4 py-2 font-medium text-foreground text-sm transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
+        className="fixed start-2 top-0 z-[100] -translate-y-full border border-foreground bg-card px-4 py-2 text-sm font-medium text-foreground transition-transform focus:top-[calc(env(safe-area-inset-top)+0.5rem)] focus:translate-y-0"
       >
         Skip to main content
       </a>

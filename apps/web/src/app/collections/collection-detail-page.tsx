@@ -10,19 +10,21 @@ import {
   Search,
 } from "lucide-react";
 import { useId } from "react";
+
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import { collection as collectionOperations } from "./collection.functions";
+
 import {
   CopyableShortcode,
   ProductPlacementsPopover,
   ProductPurchasesPopover,
   ProductTradeBadges,
 } from "./collection-product-context";
+import { collection as collectionOperations } from "./collection.functions";
 
 const PAGE_SIZE = 50;
 
@@ -35,9 +37,9 @@ function CollectionDetailLoading() {
           <Skeleton key={key} className="h-20" />
         ))}
       </div>
-      <div className="border-border border-y">
+      <div className="border-y border-border">
         {[0, 1, 2, 3].map((key) => (
-          <Skeleton key={key} className="h-24 border-border border-b" />
+          <Skeleton key={key} className="h-24 border-b border-border" />
         ))}
       </div>
     </Stack>
@@ -73,11 +75,11 @@ export function CollectionDetailPage({
   if (result.isLoading) return <CollectionDetailLoading />;
   if (result.error)
     return (
-      <div className="border-destructive/40 border-y py-8 text-center">
+      <div className="border-y border-destructive/40 py-8 text-center">
         <p className="font-medium text-destructive">
           Could not load this Collection
         </p>
-        <p className="mt-1 text-muted-foreground text-xs">
+        <p className="mt-1 text-xs text-muted-foreground">
           {result.error.message}
         </p>
       </div>
@@ -86,8 +88,8 @@ export function CollectionDetailPage({
 
   return (
     <Stack gap="lg">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-border border-y py-2">
-        <p className="text-muted-foreground text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-y border-border py-2">
+        <p className="text-xs text-muted-foreground">
           <span className="font-medium text-foreground tabular-nums">
             {data.collection.productCount}
           </span>{" "}
@@ -108,7 +110,7 @@ export function CollectionDetailPage({
 
       <section aria-labelledby={rootsHeadingId}>
         <div className="mb-2 flex items-baseline justify-between gap-2">
-          <h2 id={rootsHeadingId} className="font-semibold text-sm">
+          <h2 id={rootsHeadingId} className="text-sm font-semibold">
             Location roots
           </h2>
           <span className="font-mono text-2xs text-muted-foreground tabular-nums">
@@ -140,19 +142,19 @@ export function CollectionDetailPage({
                       to="/locations/$shortcode"
                       params={{ shortcode: root.id }}
                       title={root.path.join(" / ")}
-                      className="line-clamp-2 font-medium leading-tight hover:text-primary hover:underline"
+                      className="line-clamp-2 leading-tight font-medium hover:text-primary hover:underline"
                     >
                       {root.name}
                     </Link>
                     <p
-                      className="mt-1 truncate text-muted-foreground text-xs"
+                      className="mt-1 truncate text-xs text-muted-foreground"
                       title={parentPath || "Top-level location"}
                     >
                       {parentPath || "Top-level location"}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                       <CopyableShortcode code={root.id} />
-                      <span className="flex items-center gap-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+                      <span className="flex items-center gap-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase">
                         <MapPin className="size-3" aria-hidden /> Tagged root
                       </span>
                     </div>
@@ -162,9 +164,9 @@ export function CollectionDetailPage({
             })}
           </div>
         ) : (
-          <div className="border-border border-y py-6 text-center">
-            <p className="font-medium text-sm">No tagged Location roots</p>
-            <p className="mt-1 text-muted-foreground text-xs">
+          <div className="border-y border-border py-6 text-center">
+            <p className="text-sm font-medium">No tagged Location roots</p>
+            <p className="mt-1 text-xs text-muted-foreground">
               Membership currently comes from direct Product tags.
             </p>
           </div>
@@ -174,7 +176,7 @@ export function CollectionDetailPage({
       <section aria-labelledby={productsHeadingId}>
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 id={productsHeadingId} className="font-semibold text-sm">
+            <h2 id={productsHeadingId} className="text-sm font-semibold">
               {formatCollectionLabel(collection)} products
             </h2>
             <p className="mt-1 font-mono text-2xs text-muted-foreground tabular-nums">
@@ -200,8 +202,8 @@ export function CollectionDetailPage({
         </div>
 
         {data.products.length ? (
-          <div className="border-border border-y">
-            <div className="hidden grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] items-center gap-x-2 border-border border-b bg-card px-2 py-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider lg:grid">
+          <div className="border-y border-border">
+            <div className="hidden grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] items-center gap-x-2 border-b border-border bg-card px-2 py-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase lg:grid">
               <span aria-hidden />
               <span>Product</span>
               <span>Current locations</span>
@@ -211,7 +213,7 @@ export function CollectionDetailPage({
               {data.products.map((product) => (
                 <article
                   key={product.id}
-                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-border border-b p-2 transition-colors last:border-b-0 odd:bg-card hover:bg-muted/30 lg:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] lg:items-center"
+                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-b border-border p-2 transition-colors last:border-b-0 odd:bg-card hover:bg-muted/30 lg:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] lg:items-center"
                 >
                   <EntityCover
                     images={
@@ -232,12 +234,12 @@ export function CollectionDetailPage({
                       to="/products/$shortcode"
                       params={{ shortcode: product.id }}
                       title={product.name}
-                      className="line-clamp-2 font-medium leading-tight hover:text-primary hover:underline"
+                      className="line-clamp-2 leading-tight font-medium hover:text-primary hover:underline"
                     >
                       {product.name}
                     </Link>
                     {product.manufacturer && (
-                      <p className="mt-1 truncate text-muted-foreground text-xs">
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
                         {product.manufacturer}
                       </p>
                     )}
@@ -253,7 +255,7 @@ export function CollectionDetailPage({
                   </div>
 
                   <div className="col-start-2 min-w-0 lg:col-start-auto">
-                    <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider lg:sr-only">
+                    <p className="mb-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase lg:sr-only">
                       Current locations
                     </p>
                     {product.placements.length ? (
@@ -282,14 +284,14 @@ export function CollectionDetailPage({
                         )}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground text-xs">
+                      <p className="text-xs text-muted-foreground">
                         Not currently placed
                       </p>
                     )}
                   </div>
 
                   <div className="col-start-2 min-w-0 lg:col-start-auto">
-                    <p className="mb-1 font-mono text-2xs text-muted-foreground uppercase tracking-wider lg:sr-only">
+                    <p className="mb-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase lg:sr-only">
                       Purchase history
                     </p>
                     <ProductPurchasesPopover purchases={product.purchases} />
@@ -303,13 +305,13 @@ export function CollectionDetailPage({
             </div>
           </div>
         ) : (
-          <div className="border-border border-y py-6 text-center">
+          <div className="border-y border-border py-6 text-center">
             <PackageSearch
               className="mx-auto size-5 text-muted-foreground"
               aria-hidden
             />
             <p className="mt-2 font-medium">No matching products</p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-1 text-xs text-muted-foreground">
               Try a product name or manufacturer.
             </p>
           </div>

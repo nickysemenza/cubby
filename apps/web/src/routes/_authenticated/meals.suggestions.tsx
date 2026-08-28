@@ -3,6 +3,7 @@ import {
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+
 import {
   mealSuggestionsSearchDefaults,
   mealSuggestionsSearchSchema,

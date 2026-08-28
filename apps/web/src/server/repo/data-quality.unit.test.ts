@@ -5,6 +5,7 @@ import {
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
+
 import {
   productAnyDataGapCondition,
   productDataGapCondition,

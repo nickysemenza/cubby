@@ -1,5 +1,7 @@
 import { Profiler, type ProfilerOnRenderCallback, type ReactNode } from "react";
+
 import { useFlag } from "~/lib/flags";
+
 import { recordRender } from "./perf-store";
 
 const onRender: ProfilerOnRenderCallback = (id, phase, actualDuration) => {

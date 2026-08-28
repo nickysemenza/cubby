@@ -6,6 +6,7 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
+
 import { setCfEnv } from "~/server/cf-env";
 import { executeEntity } from "~/server/entity-kernel";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
@@ -20,6 +21,7 @@ import {
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
 import { mergeProductsWorkflow } from "./product.server";
 
 describe("product mutation recipe-cost staleness", () => {

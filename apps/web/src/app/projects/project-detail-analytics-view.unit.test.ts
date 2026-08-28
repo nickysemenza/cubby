@@ -1,6 +1,8 @@
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import {
   buildProjectAgendaGroups,
   formatProjectAgendaTaskDate,

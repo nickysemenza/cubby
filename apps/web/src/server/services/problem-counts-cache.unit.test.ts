@@ -1,5 +1,6 @@
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { expectedProblemKeys } from "~/entities/problem-registry";
 import type { ProblemCountsCacheAdapter } from "~/server/cf-env";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -100,9 +101,8 @@ describe("problem-counts KV snapshot", () => {
         coveredThrough: "2026-08-20T17:29:00.000Z",
       }),
     );
-    const { refreshCachedProblemCounts } = await import(
-      "./problem-counts-cache"
-    );
+    const { refreshCachedProblemCounts } =
+      await import("./problem-counts-cache");
 
     await expect(
       refreshCachedProblemCounts(db, upc, adapter, "2026-08-20T17:00:00.000Z"),
@@ -121,9 +121,8 @@ describe("problem-counts KV snapshot", () => {
         coveredThrough: "2026-08-20T17:29:00.000Z",
       }),
     );
-    const { refreshCachedProblemCounts } = await import(
-      "./problem-counts-cache"
-    );
+    const { refreshCachedProblemCounts } =
+      await import("./problem-counts-cache");
 
     await expect(
       refreshCachedProblemCounts(db, upc, adapter, "2026-08-20T18:00:00.000Z"),
@@ -158,9 +157,8 @@ describe("problem-counts KV snapshot", () => {
     });
     const { adapter, values } = memoryCache(previous);
     findProblemCountsMock.mockRejectedValue(new Error("detector failed"));
-    const { refreshCachedProblemCounts } = await import(
-      "./problem-counts-cache"
-    );
+    const { refreshCachedProblemCounts } =
+      await import("./problem-counts-cache");
 
     await expect(
       refreshCachedProblemCounts(db, upc, adapter, "2026-08-20T18:00:00.000Z"),

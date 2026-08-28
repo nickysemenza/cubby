@@ -17,6 +17,7 @@ import {
   notFound,
   redirect,
 } from "@tanstack/react-router";
+
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";

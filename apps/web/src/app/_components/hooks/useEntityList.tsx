@@ -5,6 +5,7 @@ import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { browserEntityDefinition, entities } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { getEntityFilters } from "~/entities/filter-manifest";
@@ -18,6 +19,7 @@ import {
   listEntities,
 } from "~/entities/generated/entity-lists.gen";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+
 import type { EntityActionSubject } from "../actions/entity-actions";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";

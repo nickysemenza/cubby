@@ -1,7 +1,9 @@
 import { problemsCountSchema } from "@cubby/schemas/mcp";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
 import { describe, expect, it, vi } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import { callMcpTool } from "./mcp-test-utils";
 import { createMcpServer } from "./server";
 

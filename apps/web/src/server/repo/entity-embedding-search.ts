@@ -4,6 +4,7 @@ import type {
   SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { and, eq, type SQL, sql } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { entityEmbedding } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";

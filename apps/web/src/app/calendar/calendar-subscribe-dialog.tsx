@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -66,7 +67,7 @@ function FeedRow({
       {/* `break-all`, not `truncate`: a 43-char token makes these URLs far wider
           than the dialog, and truncating on one line pushed the buttons out of
           reach. Wrapping keeps the whole URL selectable for a manual copy. */}
-      <span className="break-all font-mono text-muted-foreground text-xs">
+      <span className="font-mono text-xs break-all text-muted-foreground">
         {url}
       </span>
     </Stack>

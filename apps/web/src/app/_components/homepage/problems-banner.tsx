@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
+
 import { problems } from "~/lib/problems.functions";
 import { cn } from "~/lib/utils";
 
@@ -48,7 +49,7 @@ export function ProblemsBanner() {
     >
       {defects > 0 ? (
         <>
-          <span className="font-mono font-semibold text-xs tabular-nums">
+          <span className="font-mono text-xs font-semibold tabular-nums">
             {defects.toLocaleString()}
           </span>
           <span className="text-xs">{problemsBannerMessage(defects)}</span>

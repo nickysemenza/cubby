@@ -26,6 +26,7 @@ import { format } from "date-fns";
 import { type FC, useId, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { product as productOperations } from "~/app/products/product.functions";
 import { Row, Stack } from "~/components/layout";
@@ -39,6 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+
 import {
   NullableNumericField,
   PlainDateField,
@@ -271,8 +273,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
                 <div
                   className={
                     warning.tone === "destructive"
-                      ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-destructive text-xs"
-                      : "rounded border-2 border-warning bg-warning/10 p-2 text-warning-ink text-xs"
+                      ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-xs text-destructive"
+                      : "rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink"
                   }
                 >
                   {warning.message}

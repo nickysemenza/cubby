@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+
 import type { InfiniteScrollControls } from "./useInfiniteTableList";
 
 export function useInfiniteScrollSentinel(

@@ -1,5 +1,6 @@
 import type { CategoryAudit as CategoryAuditResult } from "@cubby/schemas/ai";
 import { Sparkles } from "lucide-react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -91,7 +92,7 @@ function SuggestionRow({
               key={name}
               variant="outline"
               // Free-form product names — opt out of the mono-uppercase stamp.
-              className="font-sans text-xs normal-case tracking-normal"
+              className="font-sans text-xs tracking-normal normal-case"
             >
               {name}
             </Badge>

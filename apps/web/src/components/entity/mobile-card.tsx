@@ -6,6 +6,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+
 import type { MobileMetaValue } from "~/app/_components/data-table/useMobileListModel";
 import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -69,7 +70,7 @@ function PrimaryTitle({
         />
       )}
       <span
-        className="block min-w-0 flex-1 truncate font-medium text-sm leading-snug"
+        className="block min-w-0 flex-1 truncate text-sm leading-snug font-medium"
         title={title}
       >
         {title}
@@ -142,7 +143,7 @@ function RightValueSlot({
     return (
       <span
         className={cn(
-          "-my-1 flex min-h-11 min-w-0 max-w-32 items-center overflow-hidden text-2xs text-muted-foreground",
+          "-my-1 flex min-h-11 max-w-32 min-w-0 items-center overflow-hidden text-2xs text-muted-foreground",
           TOUCH_TRIGGER_CLASS,
         )}
       >
@@ -151,7 +152,7 @@ function RightValueSlot({
     );
   }
   return (
-    <span className="flex min-w-0 max-w-28 items-center overflow-hidden whitespace-nowrap font-mono text-2xs text-muted-foreground tabular-nums [&_*]:truncate">
+    <span className="flex max-w-28 min-w-0 items-center overflow-hidden font-mono text-2xs whitespace-nowrap text-muted-foreground tabular-nums [&_*]:truncate">
       {node}
     </span>
   );
@@ -183,7 +184,7 @@ export function MobileRowShell({
   return (
     <div
       className={cn(
-        "grid min-h-11 w-full max-w-full gap-x-2 overflow-hidden border-border/60 border-b px-2 py-2",
+        "grid min-h-11 w-full max-w-full gap-x-2 overflow-hidden border-b border-border/60 px-2 py-2",
         leading.length === 2
           ? "grid-cols-[auto_auto_1fr_auto]"
           : leading.length === 1

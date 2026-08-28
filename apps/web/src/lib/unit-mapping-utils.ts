@@ -12,6 +12,7 @@ import {
   type NutrientKey,
 } from "@cubby/usda-schemas";
 import type { ReadonlyDeep } from "type-fest";
+
 import { wasm } from "~/lib/wasm";
 
 // Mapping synthesis (portions, the bare-count-guarded serving edge, nutrition

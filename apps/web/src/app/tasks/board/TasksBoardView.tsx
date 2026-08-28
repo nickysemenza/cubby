@@ -7,12 +7,14 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useHydratedLoading } from "~/hooks/useHydrated";
+
 import { task } from "../task.functions";
-import { BoardControls } from "./BoardControls";
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
+import { BoardControls } from "./BoardControls";
 import { TaskBoard } from "./TaskBoard";
 import type { BoardCacheTarget } from "./use-board-mutations";
 
@@ -122,7 +124,7 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
         search={searchValue}
         onSearchChange={setSearchValue}
       />
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Board is a top-level layout and loads at most 20 recently completed
         cards.{" "}
         <a

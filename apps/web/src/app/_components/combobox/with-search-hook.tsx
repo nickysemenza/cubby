@@ -10,12 +10,14 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { lazy, Suspense } from "react";
+
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { location } from "~/app/locations/location.functions";
 import { product } from "~/app/products/product.functions";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { search } from "~/lib/search.functions";
+
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,

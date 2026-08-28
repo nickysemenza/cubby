@@ -21,7 +21,7 @@ export function ColumnResizeHandle({
     <div
       aria-hidden="true"
       title="Drag to resize · double-click to reset"
-      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none select-none bg-transparent transition-colors hover:bg-primary/50 group-hover/th:bg-border data-[dragging]:bg-primary"
+      className="absolute top-0 right-0 z-10 h-full w-1.5 cursor-col-resize touch-none bg-transparent transition-colors select-none group-hover/th:bg-border hover:bg-primary/50 data-[dragging]:bg-primary"
       onMouseDown={(event) => {
         event.preventDefault();
         event.stopPropagation();

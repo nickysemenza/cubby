@@ -8,6 +8,7 @@ import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import {
@@ -18,6 +19,7 @@ import { createLocation } from "~/server/repo/location";
 import { quickCreateProduct } from "~/server/repo/product";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+
 import {
   resolveScanStrays,
   scanAtLocation,

@@ -17,10 +17,12 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { inventoryEntry } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+
 import { stockOnly } from "./placement";
 
 /**

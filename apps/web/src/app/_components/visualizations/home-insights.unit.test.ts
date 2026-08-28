@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+
 import { productSearchSchema } from "~/entities/list-search";
+
 import {
   LOCATION_SUNBURST_DESCRIPTION,
   LOCATION_SUNBURST_METRIC,

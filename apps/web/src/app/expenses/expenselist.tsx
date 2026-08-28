@@ -3,6 +3,7 @@ import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import {
@@ -23,6 +24,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { purchaseLabel } from "~/lib/purchase-label";
+
 import {
   createProductLinkColumn,
   createProjectLinkColumn,
@@ -35,12 +37,12 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import { expense } from "./expense.functions";
 import {
   createExpenseProductImageColumn,
   ExpenseProductImages,
 } from "./expense-product-image-column";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
+import { expense } from "./expense.functions";
 
 // Scoped rather than a plain `useNavigate()` so `search` stays typed to this
 // route's schema (which is where `productId` is declared) without importing

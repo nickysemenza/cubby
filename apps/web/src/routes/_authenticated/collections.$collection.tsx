@@ -6,6 +6,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { z } from "zod";
+
 import { CollectionDetailPage } from "~/app/collections/collection-detail-page";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

@@ -12,7 +12,7 @@
   // tree while letting a pathological request fail fast instead of burning 2 min
   // of CPU. Single-user app, so the headroom is negligible cost.
   "limits": {
-    "cpu_ms": 45000
+    "cpu_ms": 45000,
   },
   "observability": {
     "enabled": true,
@@ -24,7 +24,7 @@
       "invocation_logs": true,
       // Named OTLP destination configured in the CF dashboard (Workers
       // Observability → Destinations) pointing at Grafana Cloud Loki.
-      "destinations": ["grafana-logs"]
+      "destinations": ["grafana-logs"],
     },
     "traces": {
       "enabled": true,
@@ -32,14 +32,14 @@
       "head_sampling_rate": 1,
       // Named OTLP destination pointing at Grafana Cloud Tempo. Captures CF
       // platform auto-spans + our cloudflare:workers custom spans.
-      "destinations": ["grafana-traces"]
-    }
+      "destinations": ["grafana-traces"],
+    },
   },
   "routes": [
     {
       "pattern": "cubby.nickysemenza.com",
-      "custom_domain": true
-    }
+      "custom_domain": true,
+    },
   ],
   // Prod is custom-domain only — keep the production *.workers.dev URL off so
   // cubby.nickysemenza.com is the sole prod origin. Per-PR preview deploys
@@ -52,13 +52,13 @@
   "preview_urls": true,
   // Place Worker near the database rather than the user (SSR-heavy app)
   "placement": {
-    "mode": "smart"
+    "mode": "smart",
   },
   // Worker-to-worker service bindings (prod only — dev falls back to the
   // public *_API_URL vars below since vite dev runs plain Node).
   "services": [
     { "binding": "USDA_API", "service": "usda-api" },
-    { "binding": "UPC_LOOKUP", "service": "upc-lookup" }
+    { "binding": "UPC_LOOKUP", "service": "upc-lookup" },
   ],
   // Workers AI binding — exposes `env.AI.gateway("cubby")` for routing the
   // Anthropic/OpenAI adapters through Cubby's authenticated AI Gateway with
@@ -80,12 +80,12 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "adc9757dfffd45bc94d5c2a66b2ad410"
+      "id": "adc9757dfffd45bc94d5c2a66b2ad410",
     },
     {
       "binding": "HYPERDRIVE_CACHED",
-      "id": "427dd7a2876c4dccbe056d37fa7374ff"
-    }
+      "id": "427dd7a2876c4dccbe056d37fa7374ff",
+    },
   ],
   // Generic persisted background jobs offloaded off the request path. Queue
   // messages are small wakeups (`batchId` + `jobId`); payloads, retries, and
@@ -96,7 +96,7 @@
   "queues": {
     "producers": [
       { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" },
-      { "binding": "TELEMETRY_QUEUE", "queue": "cubby-telemetry" }
+      { "binding": "TELEMETRY_QUEUE", "queue": "cubby-telemetry" },
     ],
     "consumers": [
       {
@@ -113,7 +113,7 @@
         // client, and Neon's connection ceiling is the real limit here.
         "max_concurrency": 3,
         "max_retries": 3,
-        "dead_letter_queue": "cubby-background-dlq"
+        "dead_letter_queue": "cubby-background-dlq",
       },
       {
         "queue": "cubby-telemetry",
@@ -121,12 +121,12 @@
         "max_batch_timeout": 5,
         "max_concurrency": 1,
         "max_retries": 3,
-        "dead_letter_queue": "cubby-telemetry-dlq"
-      }
-    ]
+        "dead_letter_queue": "cubby-telemetry-dlq",
+      },
+    ],
   },
   "triggers": {
-    "crons": ["0 12 * * *"]
+    "crons": ["0 12 * * *"],
   },
   "vars": {
     "NODE_ENV": "production",
@@ -139,15 +139,15 @@
     "R2_PUBLIC_URL": "https://media.nickysemenza.com",
     "R2_KEY_PREFIX": "cubby",
     "USDA_API_URL": "https://usda-api.nicky.workers.dev/",
-    "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"
+    "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev",
   },
   "kv_namespaces": [
     {
       "binding": "PROBLEM_COUNTS_KV",
       "id": "f9ed579a3aa14850aca805868d2d0ef9",
-      "preview_id": "6d96659e5ff74a918e9cabb6453da5c0"
-    }
-  ]
+      "preview_id": "6d96659e5ff74a918e9cabb6453da5c0",
+    },
+  ],
   // Required secrets (set via `wrangler secret put <NAME>`):
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID

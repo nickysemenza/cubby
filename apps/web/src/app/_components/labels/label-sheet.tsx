@@ -1,5 +1,6 @@
 import { getLocationTypeColor } from "~/app/_components/locations/location-type-theme";
 import { getCategoryColor } from "~/app/_components/products/category-theme";
+
 import type { LabelItem, SHEET_LAYOUTS, SheetFormat } from "./sheet-layouts";
 
 function getLabelColor(item: LabelItem): string {
@@ -79,7 +80,7 @@ function LabelCell({
       </div>
       <div className="flex min-w-0 flex-col justify-center">
         <div
-          className="line-clamp-3 font-bold text-foreground leading-tight"
+          className="line-clamp-3 leading-tight font-bold text-foreground"
           style={{ fontSize: layout.nameSize }}
         >
           {item.name}
@@ -122,7 +123,7 @@ export function LabelSheet({
         key={`spacer-${i}`}
         className={
           preview
-            ? "rounded-md border border-border/40 border-dashed"
+            ? "rounded-md border border-dashed border-border/40"
             : undefined
         }
         style={{ height: layout.labelHeight, width: layout.labelWidth }}
@@ -150,7 +151,7 @@ export function LabelSheet({
         gridChildren.push(
           <div
             key={`page-sep-${i}`}
-            className="col-span-full my-2 border-muted-foreground/30 border-t border-dashed"
+            className="col-span-full my-2 border-t border-dashed border-muted-foreground/30"
           />,
         );
       }
@@ -183,7 +184,7 @@ export function LabelSheet({
       aria-label="Label sheet preview"
       // biome-ignore lint/a11y/noNoninteractiveTabindex: the fixed-width paper preview must receive focus so keyboard users can scroll it horizontally
       tabIndex={0}
-      className="w-full min-w-0 max-w-full overflow-x-auto print:hidden"
+      className="w-full max-w-full min-w-0 overflow-x-auto print:hidden"
     >
       {sheet}
     </section>

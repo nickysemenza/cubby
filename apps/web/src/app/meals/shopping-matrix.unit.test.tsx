@@ -10,7 +10,9 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
+
 import { ShoppingMatrix } from "./shopping-matrix";
 import { buildShoppingColumns, buildShoppingRows } from "./shopping-model";
 

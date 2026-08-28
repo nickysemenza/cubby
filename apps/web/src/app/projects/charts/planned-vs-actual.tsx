@@ -2,7 +2,9 @@ import { isPrincipalExpense } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+
 import { formatCurrency } from "~/lib/utils";
+
 import { capitalize } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 import {
@@ -31,12 +33,10 @@ export function PlannedVsActual({ expenses }: { expenses: ExpenseOut[] }) {
       buckets.set(costType, entry);
     }
     return Array.from(buckets.entries())
-      .map(
-        ([costType, values]): PlannedActualDatum => ({
-          category: capitalize(costType),
-          ...values,
-        }),
-      )
+      .map(([costType, values]): PlannedActualDatum => ({
+        category: capitalize(costType),
+        ...values,
+      }))
       .filter((datum) => datum.actual > 0 || datum.planned > 0)
       .sort(
         (left, right) =>
@@ -49,7 +49,7 @@ export function PlannedVsActual({ expenses }: { expenses: ExpenseOut[] }) {
       <div>
         <ChartEmpty icon={CalendarClock} title="No principal expense data." />
         {adjustmentTotal !== 0 ? (
-          <p className="mt-2 text-center text-muted-foreground text-xs">
+          <p className="mt-2 text-center text-xs text-muted-foreground">
             Total spend is {formatCurrency(adjustmentTotal, 0)} in purchase
             adjustments, with no principal cost-type bars.
           </p>
@@ -62,7 +62,7 @@ export function PlannedVsActual({ expenses }: { expenses: ExpenseOut[] }) {
     <div>
       <PlannedActualBar data={data} />
       {adjustmentTotal !== 0 ? (
-        <p className="mt-2 text-center text-muted-foreground text-xs">
+        <p className="mt-2 text-center text-xs text-muted-foreground">
           Total spend also includes {formatCurrency(adjustmentTotal, 0)} in
           purchase adjustments not assigned to a cost type.
         </p>

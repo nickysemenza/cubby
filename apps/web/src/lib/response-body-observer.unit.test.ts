@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+
 import { observeResponseBody } from "./response-body-observer";
 
 describe("observeResponseBody", () => {

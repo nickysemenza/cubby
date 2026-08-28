@@ -3,6 +3,7 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
+
 import { verbDef } from "~/app/_components/actions/action-verbs";
 import { ConfidenceReasoningCard } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
@@ -15,6 +16,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { usdaFood } from "~/entities/usda.functions";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
+
 import {
   EnrichmentEditor,
   type EnrichmentEditorHandle,
@@ -106,7 +108,7 @@ function QueueUsdaPicker({
           as="p"
           align="center"
           gap="sm"
-          className="text-muted-foreground text-sm"
+          className="text-sm text-muted-foreground"
         >
           <Spinner className="size-3" /> Finding a USDA match…
         </Row>
@@ -114,7 +116,7 @@ function QueueUsdaPicker({
 
       {food && (
         <div className="border border-positive/40 bg-positive/5 p-2">
-          <p className="mb-1 font-medium text-2xs text-positive uppercase tracking-wide">
+          <p className="mb-1 text-2xs font-medium tracking-wide text-positive uppercase">
             Selected
           </p>
           <UsdaFoodResultRow food={food} />
@@ -123,7 +125,7 @@ function QueueUsdaPicker({
 
       {!noMatch && (alternatives.length > 0 || altLoading) && (
         <Stack gap="sm">
-          <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Other USDA matches
           </p>
           {altLoading && alternatives.length === 0 ? (
@@ -131,7 +133,7 @@ function QueueUsdaPicker({
               as="p"
               align="center"
               gap="sm"
-              className="text-muted-foreground text-xs"
+              className="text-xs text-muted-foreground"
             >
               <Spinner className="size-3" /> Searching…
             </Row>
@@ -221,8 +223,8 @@ export function ReviewCard({
           header: (
             <Row align="start" justify="between" gap="sm">
               <div>
-                <div className="font-medium text-lg">{row.name}</div>
-                <div className="text-muted-foreground text-xs">
+                <div className="text-lg font-medium">{row.name}</div>
+                <div className="text-xs text-muted-foreground">
                   × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
                   {row.product.length > 0 && " · has product"}
                 </div>
@@ -263,7 +265,7 @@ export function ReviewCard({
             <Stack gap="sm">
               {mergeOptions.length > 0 && (
                 <Stack gap="xs">
-                  <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                  <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                     Possible duplicate{mergeOptions.length === 1 ? "" : "s"}
                   </p>
                   <div className="divide-y border border-dashed">

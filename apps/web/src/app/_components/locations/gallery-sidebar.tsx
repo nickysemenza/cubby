@@ -6,11 +6,13 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { locationTypeNoun } from "~/app/inventory/session/session-utils";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+
 import { LocationTreeRow } from "./location-tree-row";
 
 function buildParentMap(
@@ -154,7 +156,7 @@ export function GallerySidebar({
       <Row align="center" justify="between" className="border-b px-2 py-2">
         <Row align="center" gap="sm">
           <ImageIcon className="size-3.5 text-slate" />
-          <span className="font-semibold text-foreground text-sm tracking-tight">
+          <span className="text-sm font-semibold tracking-tight text-foreground">
             Locations
           </span>
         </Row>
@@ -309,7 +311,7 @@ function SidebarTreeNode({
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(
-          "group relative cursor-pointer border-[var(--border)] border-b py-3 pr-3 text-sm" /* tight: compact gallery tree row */,
+          "group relative cursor-pointer border-b border-[var(--border)] py-3 pr-3 text-sm" /* tight: compact gallery tree row */,
           "transition-colors duration-150 ease-out",
           !isActive && "hover:bg-muted",
           isActive && "bg-primary/5 text-primary",

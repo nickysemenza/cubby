@@ -1,6 +1,7 @@
 import { Trash2 } from "lucide-react";
 import pluralize from "pluralize";
 import { type ReactNode, useState } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Stack } from "~/components/layout";
 import {
@@ -51,7 +52,7 @@ export function UnusedIngredientDeleteFix({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Delete <span className="font-medium">{name}</span>?{" "}
         {alsoDeleteProducts
           ? "Its linked product(s) are deleted too."

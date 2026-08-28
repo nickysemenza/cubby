@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
 import { type ReactNode, useEffect, useMemo } from "react";
+
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
@@ -45,6 +46,7 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { formatCurrency } from "~/lib/utils";
+
 import { tryFormatAmount } from "./inventory/format-amount";
 import { LocationIcon } from "./locations/location-icons";
 import {

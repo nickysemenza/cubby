@@ -1,5 +1,6 @@
 import type { ImageOut } from "@cubby/schemas/image";
 import type { FC } from "react";
+
 import {
   clean,
   type ElementProps,

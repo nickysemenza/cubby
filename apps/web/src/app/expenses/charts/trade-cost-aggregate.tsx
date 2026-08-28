@@ -6,8 +6,9 @@ import {
 } from "@cubby/schemas/project";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
 import { pivotTradeCostContributions } from "~/app/projects/charts/trade-cost-pivot";
 import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
@@ -120,7 +121,7 @@ export function TradeBarsAggregate({
         theme={nivoChartTheme}
       />
       {hiddenCount > 0 && (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           {hiddenCount} trade{hiddenCount === 1 ? "" : "s"} with net ≤ $0 hidden
           (refunds/credits).
         </p>

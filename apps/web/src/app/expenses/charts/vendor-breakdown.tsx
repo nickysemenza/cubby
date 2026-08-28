@@ -1,5 +1,6 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
 import { Store } from "lucide-react";
+
 import { NetBarBreakdown } from "~/app/_components/charts/kit";
 
 /**

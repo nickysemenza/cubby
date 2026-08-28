@@ -2,10 +2,12 @@ import {
   type CalendarFiltersInput,
   calendarFiltersInput,
 } from "@cubby/schemas/calendar";
+
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
 } from "~/entities/filters";
+
 import { calendarFilterSpecs } from "./calendar-filter-specs";
 
 export type CalendarFilters = CalendarFiltersInput;

@@ -1,14 +1,16 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
 import { ChevronRight, GripVertical } from "lucide-react";
+
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
-import { ArrangeMoveTo } from "./ArrangeMoveTo";
-import { ArrangeThumb } from "./ArrangeThumb";
+
 import { locationItemCount, parentIdOf } from "./arrange-tree-utils";
 import type { LocationDragData } from "./arrange-types";
+import { ArrangeMoveTo } from "./ArrangeMoveTo";
+import { ArrangeThumb } from "./ArrangeThumb";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 interface ArrangeLocationCardProps {
@@ -92,13 +94,13 @@ export function ArrangeLocationCard({
           className="flex min-h-11 min-w-0 flex-1 items-center gap-2 text-left md:min-h-0"
         >
           <span
-            className="min-w-0 flex-1 truncate font-medium text-sm"
+            className="min-w-0 flex-1 truncate text-sm font-medium"
             title={node.name}
           >
             {node.name}
           </span>
           {count > 0 && (
-            <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
               {count}
             </span>
           )}

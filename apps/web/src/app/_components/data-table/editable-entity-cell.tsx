@@ -3,9 +3,11 @@
 import { Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useState } from "react";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
@@ -104,7 +106,7 @@ export function EditableEntityCell<TId extends string>({
           clipboard={edit.clipboard}
           hidePencilIcon
           aria-label={`Edit ${label}`}
-          className="shrink-0 p-1 opacity-0 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/pencil:opacity-100"
+          className="shrink-0 p-1 opacity-0 transition-opacity group-hover/pencil:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         >
           <Pencil className="size-3 text-muted-foreground" />
         </CellEditTrigger>

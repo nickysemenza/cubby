@@ -2,6 +2,7 @@ import type {
   DuplicateProductIdentity,
   DuplicateVendor,
 } from "@cubby/schemas/problems";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { product } from "~/app/products/product.functions";
@@ -40,7 +41,7 @@ export function OrphanedDeleteFix({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Delete <span className="font-medium">{name}</span>? It has no inventory,
         no expenses, and isn't linked to an ingredient.
       </p>
@@ -99,7 +100,7 @@ export function DuplicateVendorMergeFix({
 
   return (
     <Stack gap="sm">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Merge <span className="font-medium">{variant.value}</span> (
         {purchases(variant.count)}) into{" "}
         <span className="font-medium">{variant.canonical}</span> (

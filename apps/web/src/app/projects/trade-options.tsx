@@ -21,8 +21,10 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
+
 import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
+
 import { TRADE_LABELS } from "./project-formatting";
 
 /**

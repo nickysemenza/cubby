@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import {
   type EventCalendarRenderEventProps,
@@ -40,7 +41,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
-import { calendar } from "./calendar.functions";
+
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarFilters } from "./calendar-filters";
 import { KIND_ICONS } from "./calendar-icons";
@@ -57,6 +58,7 @@ import {
   shiftCalendarPeriod,
 } from "./calendar-period";
 import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
+import { calendar } from "./calendar.functions";
 
 const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,
@@ -415,7 +417,7 @@ export function UnifiedCalendar({
           >
             <ChevronRight />
           </Button>
-          <h2 className="font-heading font-semibold text-base">
+          <h2 className="font-heading text-base font-semibold">
             {periodTitle}
           </h2>
           <ChoiceSwitcher
@@ -585,7 +587,7 @@ function CalendarDaySheet({
         </div>
 
         <Stack gap="xs">
-          <span className="font-mono text-slate text-xs uppercase tracking-wider">
+          <span className="font-mono text-xs tracking-wider text-slate uppercase">
             Add
           </span>
           <Row wrap gap="xs">
@@ -643,7 +645,7 @@ export function CalendarRangeError({ onRetry }: { onRetry: () => void }) {
 function SummaryValue({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="font-mono text-slate uppercase tracking-wider">
+      <div className="font-mono tracking-wider text-slate uppercase">
         {label}
       </div>
       <div className="font-semibold tabular-nums">{value}</div>

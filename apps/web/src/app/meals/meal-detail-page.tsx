@@ -13,6 +13,7 @@ import { format, parseISO } from "date-fns";
 import { ClipboardList, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
@@ -35,13 +36,14 @@ import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
+
 import { EditableCell } from "../_components/data-table/editable-cell";
-import { meal as mealOperations } from "./meal.functions";
 import {
   mealKindBadgeVariant,
   mealKindOptions,
   mealTypeOptions,
 } from "./meal-options";
+import { meal as mealOperations } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 type MealDetail = EntityDetailByEntity["meal"];
@@ -295,7 +297,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                       gap="sm"
                       className="border border-[var(--border)] p-2 opacity-60"
                     >
-                      <span className="flex-1 truncate font-medium text-sm">
+                      <span className="flex-1 truncate text-sm font-medium">
                         Adding recipe…
                       </span>
                     </Row>
@@ -422,7 +424,7 @@ function RecipeRow({
     <Row align="center" gap="sm" className="border border-[var(--border)] p-2">
       <Link
         {...entityDetailLink("recipe", mr.recipe.id)}
-        className="flex-1 truncate font-medium text-sm hover:underline"
+        className="flex-1 truncate text-sm font-medium hover:underline"
         title={mr.recipe.name}
       >
         {mr.recipe.name}
@@ -438,7 +440,7 @@ function RecipeRow({
           onBlur={commitScale}
           aria-label="Scale"
         />
-        <span className="text-muted-foreground text-xs">×</span>
+        <span className="text-xs text-muted-foreground">×</span>
       </Row>
       <span className="w-16 text-right text-sm tabular-nums">
         {mr.scaledTotals ? formatCurrency(mr.scaledTotals.costTotal) : "—"}

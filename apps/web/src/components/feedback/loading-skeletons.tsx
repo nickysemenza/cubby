@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils";
 function SkeletonLedgerRow({ index }: { index: number }) {
   const nameWidths = ["w-3/5", "w-2/5", "w-1/2", "w-2/3", "w-1/3"];
   return (
-    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-2 border-border border-b py-2">
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)_4rem] items-center gap-2 border-b border-border py-2">
       <Skeleton className="h-3 w-full" />
       <Skeleton className={cn("h-3", nameWidths[index % nameWidths.length])} />
       <Skeleton className="h-3 w-full" />
@@ -47,7 +47,7 @@ function LedgerRowsLoading({
           band stands in for the list's toolbar instead of repeating a second
           title-shaped block beneath it. */}
       <div className="flex h-10 items-center border-b bg-muted/40 px-4">
-        <span className="text-muted-foreground text-xs">{label}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
       </div>
       <div className="px-4">
         <SkeletonGrid count={count} />
@@ -72,15 +72,15 @@ export function DetailSpecPlateLoading({ label }: { label: string }) {
   return (
     <div role="status" aria-busy="true" aria-label={label}>
       <div className="border border-border bg-card px-4 py-3">
-        <p className="text-muted-foreground text-xs">{label}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
         <Skeleton className="mt-2 h-8 w-64 max-w-full" />
       </div>
-      <div className="grid border-border border-x sm:grid-cols-2">
+      <div className="grid border-x border-border sm:grid-cols-2">
         {Array.from({ length: 6 }, (_, index) => (
           <div
             // biome-ignore lint/suspicious/noArrayIndexKey: static loading plate
             key={index}
-            className="border-border border-b p-4 sm:odd:border-r"
+            className="border-b border-border p-4 sm:odd:border-r"
           >
             <Skeleton className="mb-2 h-2.5 w-20" />
             <Skeleton className="h-4 w-3/5" />
@@ -101,10 +101,10 @@ export function DashboardSectionLoading({
 }) {
   return (
     <div role="status" aria-busy="true" aria-label={label}>
-      <p className="border border-border bg-muted/40 px-4 py-2 text-muted-foreground text-xs">
+      <p className="border border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
         {label}
       </p>
-      <div className="divide-y divide-border border-border border-x border-b">
+      <div className="divide-y divide-border border-x border-b border-border">
         {Array.from({ length: sections }, (_, index) => (
           <section
             // biome-ignore lint/suspicious/noArrayIndexKey: static loading regions
@@ -124,7 +124,7 @@ export function DashboardSectionLoading({
 // Simple loading text with spinner for inline use
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground text-xs">
+    <div className="flex items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
       <Spinner />
       {text}
     </div>

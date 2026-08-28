@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { Route } from "./docs.$section";
 
 describe("documentation section route", () => {

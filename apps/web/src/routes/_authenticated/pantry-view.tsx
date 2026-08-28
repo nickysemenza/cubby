@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { IsometricPantry } from "~/app/pantry-view/IsometricPantry";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

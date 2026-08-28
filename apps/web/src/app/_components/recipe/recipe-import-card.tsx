@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { AlertCircle, Check, ExternalLink } from "lucide-react";
 import { memo, useMemo } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Badge, badgeVariants } from "~/components/ui/badge";
@@ -16,6 +17,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import { normalize } from "./cookbook-import/import-order";
 import type { ImportResult } from "./cookbook-import/types";
@@ -210,7 +212,7 @@ function RecipeImportCardImpl({
         )}
 
         {notesMarkdown && (
-          <MarkdownText className="mt-2 text-muted-foreground text-xs">
+          <MarkdownText className="mt-2 text-xs text-muted-foreground">
             {notesMarkdown}
           </MarkdownText>
         )}
@@ -276,7 +278,7 @@ function RecipeImportCardImpl({
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
               <Stack key={si} gap="xs">
                 {section.name && (
-                  <div className="font-medium text-muted-foreground text-xs">
+                  <div className="text-xs font-medium text-muted-foreground">
                     {section.name}
                   </div>
                 )}
@@ -294,11 +296,11 @@ function RecipeImportCardImpl({
                 // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
                 <Stack key={si} gap="xs">
                   {section.name && (
-                    <div className="font-medium text-muted-foreground text-xs">
+                    <div className="text-xs font-medium text-muted-foreground">
                       {section.name}
                     </div>
                   )}
-                  <ol className="list-decimal space-y-1 pl-4 text-muted-foreground text-xs leading-snug">
+                  <ol className="list-decimal space-y-1 pl-4 text-xs leading-snug text-muted-foreground">
                     {richBySection[si]?.map((rich, ii) => (
                       // biome-ignore lint/suspicious/noArrayIndexKey: ordered by line
                       <li key={ii}>{rich}</li>
@@ -322,14 +324,14 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
       <Link
         to="/recipes/$shortcode"
         params={{ shortcode: result.id }}
-        className="flex items-center gap-1 text-positive text-sm"
+        className="flex items-center gap-1 text-sm text-positive"
       >
         <Check className="size-4" /> Imported
       </Link>
     );
   }
   return (
-    <Row as="span" align="center" gap="xs" className="text-destructive text-sm">
+    <Row as="span" align="center" gap="xs" className="text-sm text-destructive">
       <AlertCircle className="size-4" /> {result.message}
     </Row>
   );

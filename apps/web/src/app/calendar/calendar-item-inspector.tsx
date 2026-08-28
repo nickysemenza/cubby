@@ -2,6 +2,7 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import { useState } from "react";
+
 import {
   FormWrapper,
   NullableNumericField,
@@ -25,6 +26,7 @@ import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session
 import { entityDetailLink } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
 import { formatCurrency } from "~/lib/utils";
+
 import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 

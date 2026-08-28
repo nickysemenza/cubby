@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+
 import type { IngItem } from "./types";
 
 /** A draft amount, where either part may be blank while the row is half-typed. */

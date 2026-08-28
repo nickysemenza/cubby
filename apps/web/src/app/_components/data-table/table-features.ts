@@ -27,6 +27,7 @@ import {
   type TableState,
   tableFeatures,
 } from "@tanstack/react-table";
+
 import type { CubbyColumnMeta, CubbyTableMeta } from "./table-meta";
 
 /**

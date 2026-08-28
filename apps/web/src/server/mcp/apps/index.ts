@@ -13,6 +13,7 @@ import {
   registerAppResource,
 } from "@modelcontextprotocol/ext-apps/server";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { APP_ORIGIN } from "~/lib/auth";
 
 export function registerMcpApps(server: McpServer) {
@@ -22,9 +23,8 @@ export function registerMcpApps(server: McpServer) {
     USDA_PICKER.uri,
     { description: USDA_PICKER.description },
     async () => {
-      const { USDA_PICKER_HTML, withCubbyOrigin } = await import(
-        "@cubby/mcp-apps"
-      );
+      const { USDA_PICKER_HTML, withCubbyOrigin } =
+        await import("@cubby/mcp-apps");
       return {
         contents: [
           {

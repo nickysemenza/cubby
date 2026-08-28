@@ -6,6 +6,7 @@ import { Check, Pencil, RotateCcw, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
@@ -17,6 +18,7 @@ import {
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
+
 import { StaticPicker } from "../combobox/static-picker";
 import { DatePickerInput } from "../date-picker-input";
 import {
@@ -228,7 +230,7 @@ function EditableDisplay({
           clipboard={clipboard}
           hidePencilIcon
           aria-label="Edit value"
-          className="shrink-0 p-1 opacity-40 pointer-coarse:opacity-100 transition-opacity focus-visible:opacity-100 group-hover/editable:opacity-100"
+          className="shrink-0 p-1 opacity-40 transition-opacity group-hover/editable:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
         >
           <Pencil className="size-3 text-muted-foreground" />
         </CellEditTrigger>
@@ -497,7 +499,7 @@ function EditableInputEditor<T>({
       onClick={(e) => e.stopPropagation()}
     >
       {prefix && (
-        <span className="text-muted-foreground text-sm">{prefix}</span>
+        <span className="text-sm text-muted-foreground">{prefix}</span>
       )}
       {multiline ? (
         <Textarea

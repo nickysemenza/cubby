@@ -7,6 +7,7 @@ import {
   expenseAnalyzeRowDimensionSchema,
 } from "@cubby/schemas/project";
 import { z } from "zod";
+
 import { isExpenseDateRangePreset } from "./expense-date-presets";
 
 const expenseAnalyzeMetricSchema = z.enum([
@@ -89,8 +90,8 @@ export function normalizeExpenseAnalyzeConfig(
     isExpenseDateRangePreset(dates.date);
   const comparisonAllowed = Boolean(
     boundedDates &&
-      config.rowDimension !== "month" &&
-      columnDimension !== "month",
+    config.rowDimension !== "month" &&
+    columnDimension !== "month",
   );
   const comparison = comparisonAllowed ? config.comparison : "none";
   const projection =

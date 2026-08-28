@@ -27,7 +27,9 @@ import {
   sql,
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
+
 import {
   FindOrCreateConflictError,
   findOrCreate,
@@ -127,7 +129,7 @@ export async function generateUniqueShortcode<T extends ShortcodeType>(
  */
 const isShortcodeCollision = (error: unknown, tableName: string): boolean => {
   const indexName = `${tableName}_shortcode_unique`;
-  for (let cursor = error; cursor && typeof cursor === "object"; ) {
+  for (let cursor = error; cursor && typeof cursor === "object";) {
     const { code, constraint, message, cause } = cursor as {
       code?: string;
       constraint?: string;

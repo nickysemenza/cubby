@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { Controller, type UseFormReturn } from "react-hook-form";
+
 import {
   WithProductSearch,
   WithProjectSearch,
@@ -50,6 +51,7 @@ import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { Switch } from "~/components/ui/switch";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
+
 import type {
   EntityEditContext,
   EntityEditOperation,
@@ -216,7 +218,7 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
                   checked={field.value === true}
                   onCheckedChange={field.onChange}
                 />
-                <span className="text-muted-foreground text-sm">
+                <span className="text-sm text-muted-foreground">
                   {field.value === true ? "Not bought yet" : "Already bought"}
                 </span>
               </Row>
@@ -563,7 +565,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
                 />
                 <Label
                   htmlFor={inputId}
-                  className="min-w-0 cursor-pointer normal-case tracking-normal"
+                  className="min-w-0 cursor-pointer tracking-normal normal-case"
                 >
                   <span className="block truncate font-medium">
                     {product.name}

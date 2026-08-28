@@ -1,10 +1,12 @@
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   createProductFixture as createProduct,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+
 import { getProductRelationshipRoute } from "./relationship-route";
 
 describe("getProductRelationshipRoute query budget", () => {

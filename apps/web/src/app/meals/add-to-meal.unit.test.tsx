@@ -1,5 +1,4 @@
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 

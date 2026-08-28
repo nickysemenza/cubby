@@ -1,4 +1,5 @@
 import type { LinkProps } from "@tanstack/react-router";
+
 import { completeNavLeaves, findActiveTo } from "./nav-items";
 
 type MobileTabId = "today" | "inventory" | "scan" | "search" | "more";

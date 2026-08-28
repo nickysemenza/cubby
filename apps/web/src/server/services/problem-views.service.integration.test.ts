@@ -1,7 +1,9 @@
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { problemQueryDeclarations } from "~/entities/problem-registry";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
+
 import {
   countEntitiesMissingEmbeddings,
   findEntitiesMissingEmbeddings,

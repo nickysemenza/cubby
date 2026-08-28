@@ -1,9 +1,11 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { MACRO_KEYS } from "@cubby/usda-schemas";
 import { Check } from "lucide-react";
+
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { BASE_KINDS } from "~/lib/conversion-coverage";
+
 import { macroCoverage } from "./macro-coverage";
 
 const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
@@ -85,7 +87,7 @@ export function MacroChips({ mappings }: { mappings: UnitMapping[] }) {
   if (present.size === 0) return null;
   return (
     <Row gap="xs" wrap align="center">
-      <span className="text-2xs text-muted-foreground uppercase tracking-wide">
+      <span className="text-2xs tracking-wide text-muted-foreground uppercase">
         macros
       </span>
       {MACRO_KEYS.map((key) => chip(key, key, present.has(key)))}

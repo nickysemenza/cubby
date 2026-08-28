@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import { type FC, useState } from "react";
+
 import { Row } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
@@ -37,7 +38,7 @@ export const EntityHero: FC<EntityHeroProps> = ({
 
   return (
     <Card
-      className={cn("fade-in slide-in-from-bottom-2 animate-in")}
+      className={cn("animate-in fade-in slide-in-from-bottom-2")}
       style={{ animationFillMode: "both" }}
     >
       <CardHeader className="pb-4">
@@ -62,7 +63,7 @@ export const EntityHero: FC<EntityHeroProps> = ({
                 className="absolute inset-0 h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.02]"
               />
             </div>
-            <figcaption className="eyebrow pt-2">
+            <figcaption className="pt-2 eyebrow">
               Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
             </figcaption>
           </figure>
@@ -95,7 +96,7 @@ export const EntityHero: FC<EntityHeroProps> = ({
             </div>
             <Link
               to="/images"
-              className="ml-auto flex-shrink-0 text-muted-foreground text-sm hover:text-foreground"
+              className="ml-auto flex-shrink-0 text-sm text-muted-foreground hover:text-foreground"
             >
               View All
             </Link>

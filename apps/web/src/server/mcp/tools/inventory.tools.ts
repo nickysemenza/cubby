@@ -3,6 +3,7 @@ import {
   moveInventoryEntriesPayload,
 } from "@cubby/schemas/inventory";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import {
   getCaller,
   registerMcpTool,

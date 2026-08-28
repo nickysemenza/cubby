@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { diffWords } from "./inline-text-diff.logic";
 
 // Collapse segments back to the two source strings to prove the diff is lossless.

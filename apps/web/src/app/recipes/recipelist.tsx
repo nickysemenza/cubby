@@ -3,9 +3,9 @@ import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row, Stack } from "~/components/layout";
-
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
@@ -13,13 +13,14 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { relatedData } from "~/lib/related-data.functions";
+
 import {
   numberCellData,
   specFromCellData,
   tagsCellData,
 } from "../_components/data-table/cell-data";
-import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { EditableCell } from "../_components/data-table/editable-cell";
+import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { useActionMutation } from "../_components/hooks/useActionMutation";
 import { useCookbookOptions } from "../_components/hooks/useCookbookOptions";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
@@ -41,8 +42,8 @@ import {
   perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
-import { recipe as recipeOperations } from "./recipe.functions";
 import { totalsLookStuck } from "./recipe-totals-staleness";
+import { recipe as recipeOperations } from "./recipe.functions";
 
 /**
  * A computed list-cell value (cost, calories) whose confidence depends on how

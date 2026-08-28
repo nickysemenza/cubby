@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { classifyHttpWorkload } from "./workload";
 
 describe("performance workload classification", () => {

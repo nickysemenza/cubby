@@ -11,6 +11,7 @@
 
 import type { ProductWithTitleDerivableSize } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
+
 import type { DiagnosticKey } from "~/entities/problem-query";
 import { env } from "~/env";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";

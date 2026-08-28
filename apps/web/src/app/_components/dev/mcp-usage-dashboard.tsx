@@ -8,6 +8,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -38,10 +39,10 @@ const windows: Array<{ label: string; value: McpUsageWindow }> = [
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border border-border bg-card p-4">
-      <div className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
+      <div className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
         {label}
       </div>
-      <div className="mt-1 font-semibold text-2xl">
+      <div className="mt-1 text-2xl font-semibold">
         {typeof value === "number" ? formatCount(value) : value}
       </div>
     </div>
@@ -73,7 +74,7 @@ function ChartCard({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="font-mono text-xs uppercase tracking-wide">
+        <CardTitle className="font-mono text-xs tracking-wide uppercase">
           {title}
         </CardTitle>
       </CardHeader>
@@ -238,13 +239,13 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
       </ChartCard>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="font-mono text-xs uppercase tracking-wide">
+          <CardTitle className="font-mono text-xs tracking-wide uppercase">
             Caller breakdown
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <div className="mb-2 text-muted-foreground text-xs">Surfaces</div>
+            <div className="mb-2 text-xs text-muted-foreground">Surfaces</div>
             {data.surfaces.map((row) => (
               <div key={row.key} className="flex justify-between border-t py-2">
                 <span>{row.label}</span>
@@ -253,7 +254,7 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
             ))}
           </div>
           <div>
-            <div className="mb-2 text-muted-foreground text-xs">Users</div>
+            <div className="mb-2 text-xs text-muted-foreground">Users</div>
             {data.users.map((row) => (
               <div key={row.key} className="flex justify-between border-t py-2">
                 <span>{row.label}</span>
@@ -262,7 +263,7 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
             ))}
           </div>
           <div>
-            <div className="mb-2 text-muted-foreground text-xs">
+            <div className="mb-2 text-xs text-muted-foreground">
               Entities acted on
             </div>
             {data.entities.map((row) => (
@@ -628,7 +629,7 @@ export function McpUsageDashboard() {
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="mb-2 text-muted-foreground text-xs">
+                  <div className="mb-2 text-xs text-muted-foreground">
                     Users
                   </div>
                   {selected.users.map((user) => (
@@ -638,7 +639,7 @@ export function McpUsageDashboard() {
                   ))}
                 </div>
                 <div>
-                  <div className="mb-2 text-muted-foreground text-xs">
+                  <div className="mb-2 text-xs text-muted-foreground">
                     Clients
                   </div>
                   {selected.clients.map((client) => (
@@ -663,7 +664,7 @@ export function McpUsageDashboard() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
+        <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
           Entity
         </span>
         <Button

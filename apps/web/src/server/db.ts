@@ -1,14 +1,17 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   drizzle as drizzleNodePostgres,
   type NodePgDatabase,
 } from "drizzle-orm/node-postgres";
 import pg from "pg";
+
 import { env } from "~/env";
 import { databaseStatementForTrace } from "~/lib/db-query-telemetry";
+
+import { beginDatabaseAcquire, beginDatabaseQuery } from "./db-observability";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
-import { beginDatabaseAcquire, beginDatabaseQuery } from "./db-observability";
 import { TraceNames, withTrace } from "./tracing";
 
 // Re-export Database type for use throughout the application

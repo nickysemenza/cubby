@@ -1,7 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { describe, expect, it } from "vitest";
+
 import { planScan, type ScanFacts } from "./scan-plan";
 
 const HERE = testShortcode("location", "LOC-HERE");

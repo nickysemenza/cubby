@@ -28,6 +28,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
+
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
 import {
@@ -36,6 +37,7 @@ import {
   notDeleted,
 } from "~/server/repo/database-helpers";
 import { effectiveTaskDueDateSql } from "~/server/repo/task/helpers";
+
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
 
 export function dashboardKindLocationConditions(

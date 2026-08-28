@@ -32,7 +32,7 @@ export function OrphanedClientMaintenance({
 
   return (
     <Row align="center" gap="sm" wrap>
-      <span className="text-muted-foreground text-xs">
+      <span className="text-xs text-muted-foreground">
         {count} abandoned registration{count === 1 ? "" : "s"} — connect
         attempts that never reached the consent screen.
       </span>

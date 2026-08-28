@@ -1,11 +1,14 @@
 import { ChevronRight } from "lucide-react";
 import type * as React from "react";
 import { type ReactNode, useState } from "react";
+
 import { cn } from "~/lib/utils";
 import { stackVariants } from "~/styles/layouts";
 
-interface CollapsibleSectionProps
-  extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
+interface CollapsibleSectionProps extends Omit<
+  React.HTMLAttributes<HTMLElement>,
+  "title"
+> {
   /** Section heading (rendered as an `h2` inside the disclosure summary). */
   title: ReactNode;
   /** Muted sub-line beside the title, visible while collapsed. */
@@ -50,9 +53,9 @@ export function CollapsibleSection({
         open={open}
         onToggle={(event) => setOpen(event.currentTarget.open)}
       >
-        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 border-border border-b pb-1 transition-colors hover:text-foreground sm:min-h-0 [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 border-b border-border pb-1 transition-colors hover:text-foreground sm:min-h-0 [&::-webkit-details-marker]:hidden">
           <ChevronRight className="size-3.5 shrink-0 text-slate transition-transform group-open:rotate-90" />
-          <h2 className="font-heading font-semibold text-sm">{title}</h2>
+          <h2 className="font-heading text-sm font-semibold">{title}</h2>
           {summary && (
             <span className="truncate font-mono text-2xs text-muted-foreground uppercase">
               {summary}

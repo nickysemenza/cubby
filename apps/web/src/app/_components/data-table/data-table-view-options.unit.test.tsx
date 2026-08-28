@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { columnLabel } from "./data-table-view-options";
 import type { CubbyColumn as Column } from "./table-features";
 

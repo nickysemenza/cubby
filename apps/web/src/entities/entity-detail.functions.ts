@@ -1,6 +1,7 @@
 import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
+
 import {
   defineOperationDomain,
   type OperationQueryKey,
@@ -10,6 +11,7 @@ import type {
   CubbyOperationMeta,
   OperationFreshnessPolicy,
 } from "~/integrations/tanstack-query/operation-meta";
+
 import {
   type DetailEntity,
   type EntityDetailByEntity,

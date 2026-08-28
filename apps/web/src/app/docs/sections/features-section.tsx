@@ -1,4 +1,5 @@
 import { AlertTriangle, Apple, Scale } from "lucide-react";
+
 import { Grid, Row } from "~/components/layout";
 import {
   Card,
@@ -7,6 +8,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
+
 import { Prose } from "../_components/Prose";
 
 export function FeaturesSection() {

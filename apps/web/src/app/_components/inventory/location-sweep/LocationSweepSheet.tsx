@@ -13,6 +13,7 @@
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
+
 import {
   PersistentScanner,
   UNIVERSAL_SCAN_FORMATS,
@@ -22,6 +23,7 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
+
 import { SweepMissingReview } from "./SweepMissingReview";
 import { SweepProductFollowUp } from "./SweepProductFollowUp";
 import { SweepStrayReview } from "./SweepStrayReview";

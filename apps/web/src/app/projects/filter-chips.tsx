@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 
@@ -61,11 +62,11 @@ function ChipRow({
 }) {
   return (
     <Row align="center" wrap gap="sm" role="group" aria-label={label}>
-      <span className="font-medium text-muted-foreground text-xs">
+      <span className="text-xs font-medium text-muted-foreground">
         {label}:
       </span>
       {children}
-      {hint && <span className="text-muted-foreground text-xs">{hint}</span>}
+      {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
     </Row>
   );
 }

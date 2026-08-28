@@ -1,5 +1,6 @@
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
+
 import {
   Card,
   CardContent,
@@ -65,7 +66,7 @@ export function DashboardCard({
 }: DashboardCardProps) {
   return (
     <Card className="flex flex-col">
-      <CardHeader className="border-border border-b pb-2">
+      <CardHeader className="border-b border-border pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Icon className="size-3.5 shrink-0 text-slate" />

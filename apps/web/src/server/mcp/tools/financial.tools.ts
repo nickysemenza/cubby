@@ -18,6 +18,7 @@ import {
   updateStatementRowsInput,
 } from "@cubby/schemas/statement-row";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import {
   READ_ONLY_CLOSED,
   registerRouterTool,

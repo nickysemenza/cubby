@@ -13,11 +13,13 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 import { searchIngredientsForMerge } from "~/server/repo/ingredient";
+
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
 export interface IngredientMergeSuggestion {

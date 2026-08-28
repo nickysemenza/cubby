@@ -1,10 +1,12 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { LogIn, MoreHorizontal } from "lucide-react";
 import * as React from "react";
+
 import { Row } from "~/components/layout";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
+
 import { resolveMobileRoute } from "./mobile-route-descriptor";
 import { bottomNavItems, publicNavItems, useActiveTo } from "./nav-items";
 import { WorkspaceNavigator } from "./workspace-navigator";
@@ -53,7 +55,7 @@ function BottomNavItem({
       {...rest}
     >
       {Icon && <Icon className="size-5" aria-hidden="true" />}
-      <span className="font-medium text-2xs">{label}</span>
+      <span className="text-2xs font-medium">{label}</span>
     </Comp>
   );
 }
@@ -74,7 +76,7 @@ export function BottomNav() {
   return (
     <nav
       className={cn(
-        "safe-bottom fixed inset-x-0 bottom-0 z-50 border-border border-t bg-card md:hidden print:hidden",
+        "safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card md:hidden print:hidden",
         keyboardOpen && "hidden",
       )}
       aria-label="Main navigation"

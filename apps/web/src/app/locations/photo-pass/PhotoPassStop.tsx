@@ -11,6 +11,7 @@
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { Camera, SkipForward } from "lucide-react";
 import { useRef } from "react";
+
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -19,6 +20,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
+
 import type { PhotoStop } from "./photo-pass-utils";
 
 export function PhotoPassStop({
@@ -58,7 +60,7 @@ export function PhotoPassStop({
                   size={18}
                   colored
                 />
-                <h2 className="my-0 min-w-0 truncate font-heading font-semibold text-base">
+                <h2 className="my-0 min-w-0 truncate font-heading text-base font-semibold">
                   {stop.name}
                 </h2>
               </Row>

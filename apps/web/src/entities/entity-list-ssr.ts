@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+
 import { browserEntityDefinition } from "./entities";
 import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 import type { ListEntity } from "./generated/entity-lists.gen";

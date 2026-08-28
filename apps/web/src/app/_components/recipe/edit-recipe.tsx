@@ -1,6 +1,8 @@
 import type { RecipeOut, RecipeUpdateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
+
 import { useEntityDetailController } from "~/entities/editing/use-entity-detail-controller";
+
 import { RecipeForm } from "./recipe-form";
 
 interface EditRecipeFormProps {

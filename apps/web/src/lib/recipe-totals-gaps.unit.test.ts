@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   type BaseKind,
   type ConversionCoverage,

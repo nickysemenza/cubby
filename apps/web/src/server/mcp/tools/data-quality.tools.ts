@@ -4,6 +4,7 @@ import {
   setDataExceptionInput,
 } from "@cubby/schemas/data-quality";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { getCaller, registerMcpTool, WRITE_CLOSED } from "./_shared";
 
 export function registerDataQualityTools(server: McpServer) {

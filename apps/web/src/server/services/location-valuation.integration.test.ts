@@ -16,6 +16,7 @@
 
 import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { createExpense } from "~/server/repo/expense";
 import { getLocationById } from "~/server/repo/location";
 import {
@@ -26,6 +27,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+
 import { LocationValuationService } from "./location-valuation.service";
 
 describe("LocationValuationService.recompute", () => {

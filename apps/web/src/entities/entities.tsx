@@ -26,12 +26,14 @@ import {
   ReceiptText,
   Store,
 } from "lucide-react";
+
 import {
   domainForEntity,
   domainWayfinding,
 } from "~/app/_components/navigation/domain-wayfinding";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { entityListFor } from "./entity-list.functions";
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
 import type { EntityColor, EntityDefinition } from "./types";

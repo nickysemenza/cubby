@@ -11,6 +11,7 @@ import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda-schemas";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+
 import {
   capitalize,
   PROJECT_STATUS_LABELS,
@@ -21,6 +22,7 @@ import { usdaRouteId } from "~/entities/entity-query";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { EntityPreviewLink } from "./EntityPreviewLink";
 import { LocationIcon } from "./locations/location-icons";
 import type { HoverPreviewEntity } from "./preview/preview-entities";

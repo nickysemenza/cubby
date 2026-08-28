@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -150,7 +151,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
               variant="outline"
               className={cn(
                 // Free-form user-entered chips — opt out of the mono-uppercase stamp.
-                "gap-1 pr-1 font-normal font-sans normal-case tracking-normal",
+                "gap-1 pr-1 font-sans font-normal tracking-normal normal-case",
                 chipClassName?.(tag),
               )}
               style={chipStyle?.(tag)}

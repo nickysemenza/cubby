@@ -3,6 +3,7 @@ import { locationType } from "@cubby/schemas/location";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
+
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";

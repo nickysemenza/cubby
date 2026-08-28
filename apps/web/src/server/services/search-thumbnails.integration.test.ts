@@ -2,6 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { updateLocation } from "~/server/repo/location";
 import { updateProduct } from "~/server/repo/product";
 import {
@@ -12,6 +13,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { refreshSearchDocument } from "~/server/repo/search-document";
+
 import { findSearchHits } from "./search.service";
 
 /**

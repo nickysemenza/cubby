@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+
 import type { CellRect, CopiedCell, PasteOp } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";
 import {

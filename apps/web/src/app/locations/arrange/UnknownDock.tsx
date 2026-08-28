@@ -1,8 +1,10 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { HelpCircle } from "lucide-react";
+
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationRow } from "./ArrangeLocationRow";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
@@ -23,7 +25,7 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
     return (
       <Stack
         gap="sm"
-        className="w-full shrink-0 rounded-none border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-72"
+        className="w-full shrink-0 rounded-none border border-dashed border-[var(--border-strong)] bg-background p-4 lg:w-72"
       >
         <Description size="sm">Unknown staging — provisioning…</Description>
       </Stack>
@@ -38,13 +40,13 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
       aria-label="Unknown staging drop target"
       gap="sm"
       className={cn(
-        "w-full shrink-0 rounded-none border border-[var(--border-strong)] border-dashed bg-background p-4 lg:w-72",
+        "w-full shrink-0 rounded-none border border-dashed border-[var(--border-strong)] bg-background p-4 lg:w-72",
         isOver && "bg-primary/10",
       )}
     >
       <Row align="center" gap="sm">
         <HelpCircle className="size-4 text-muted-foreground" />
-        <span className="font-medium text-sm">Unknown staging</span>
+        <span className="text-sm font-medium">Unknown staging</span>
         <Description as="span" size="2xs" className="ml-auto">
           {count}
         </Description>

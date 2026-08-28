@@ -2,6 +2,7 @@ import type { ExpenseCostTypeAggregate } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
+
 import { CategoryDonut } from "~/app/_components/charts/kit";
 import { capitalize } from "~/app/projects/project-formatting";
 import { getCostTypeColor } from "~/lib/status-colors";
@@ -52,7 +53,7 @@ export function CostTypeDonut({
       renderTooltipExtra={(id) => {
         const count = data.find((d) => d.id === id)?.count ?? 0;
         return (
-          <div className="mt-1 text-muted-foreground text-xs">
+          <div className="mt-1 text-xs text-muted-foreground">
             {count} expense{count === 1 ? "" : "s"}
           </div>
         );

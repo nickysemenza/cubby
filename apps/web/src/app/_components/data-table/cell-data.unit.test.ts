@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+
 import { amountCellData, dateCellData, entityCellData } from "./cell-data";
 
 interface Row {

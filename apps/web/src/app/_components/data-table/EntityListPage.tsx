@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
+
 import { usePageCount } from "~/components/page/Page";
 import { browserEntityDefinition, entities } from "~/entities/entities";
+
 import {
   type BaseListRow,
   type UseEntityListOptions,
@@ -30,8 +32,8 @@ export interface EntityListPageProps<
   TData extends BaseListRow,
   TFilters,
   TRow extends BaseListRow = TData,
-> extends UseEntityListOptions<TData, TFilters, TRow>,
-    WorkbenchProps<TData> {
+>
+  extends UseEntityListOptions<TData, TFilters, TRow>, WorkbenchProps<TData> {
   /**
    * Row-preview sheet. Defaults to the entity's own preview keyed on `id`;
    * pass `{ idField }` for a list whose row id lives elsewhere (USDA's

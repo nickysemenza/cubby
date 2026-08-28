@@ -7,7 +7,9 @@ import {
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { productComponent } from "~/server/db/schema";
+
 import { getDb } from "../database-helpers";
 import { createExpense } from "../expense";
 import {

@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+
 import {
   type EntityCommand,
   type EntityKernelContext,
@@ -11,6 +12,7 @@ import {
   entityMutationResultSchema,
   entityQueryResultSchema,
 } from "~/server/entity-kernel/contracts";
+
 import { getEntityKernelContext } from "../kernel-context";
 import { registerMcpTool, WRITE_DESTRUCTIVE_CLOSED } from "./_shared";
 

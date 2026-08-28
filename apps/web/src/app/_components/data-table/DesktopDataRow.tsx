@@ -7,9 +7,11 @@ import {
   memo,
   type PointerEvent,
 } from "react";
+
 import { Button } from "~/components/ui/button";
 import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+
 import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { DebugDialog } from "./DebugDialog";
 import type { CubbyRow as Row } from "./table-features";

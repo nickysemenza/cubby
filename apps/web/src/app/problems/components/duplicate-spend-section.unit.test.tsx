@@ -7,6 +7,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { PROBLEM_SECTIONS } from "./problem-sections";
 
 // Router-free render, the same shape the expense-section tests use: resolve

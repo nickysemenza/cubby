@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { shouldUseSemanticComboboxFallback } from "./combobox-fallback";
 import { embeddingTextHash } from "./hash";
 import { SEMANTIC_SEARCH_EVALS } from "./search-evals";

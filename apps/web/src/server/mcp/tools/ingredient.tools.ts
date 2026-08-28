@@ -3,6 +3,7 @@ import {
   ingredientResolveOrCreateResponseOut,
 } from "@cubby/schemas/ingredient";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { registerRouterTool, WRITE_CLOSED } from "./_shared";
 
 export function registerIngredientTools(server: McpServer) {

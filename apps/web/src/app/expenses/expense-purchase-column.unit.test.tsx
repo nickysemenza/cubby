@@ -3,6 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 
 vi.mock("@tanstack/react-router", () => ({

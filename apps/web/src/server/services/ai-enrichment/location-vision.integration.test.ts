@@ -1,7 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,
@@ -18,6 +18,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+
 import {
   approveDetectedInventoryItem,
   detectInventoryItems,

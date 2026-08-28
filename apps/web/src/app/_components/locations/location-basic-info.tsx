@@ -1,13 +1,15 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import type { FC } from "react";
+
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+
 import { EntityInlineLink } from "../EntityInlineLink";
-import { LocationTypeLabel } from "./LocationTypeLabel";
 import { LocationIconWithLabel } from "./location-icons";
+import { LocationTypeLabel } from "./LocationTypeLabel";
 
 interface LocationBasicInfoProps {
   location: InfLocation;

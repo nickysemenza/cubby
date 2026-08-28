@@ -1,5 +1,6 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type { CSSProperties, ReactNode } from "react";
+
 import { cn, formatCurrency } from "~/lib/utils";
 
 /**
@@ -47,7 +48,7 @@ export function TooltipExpenseBreakdown({
   const remaining = sorted.length - top.length;
 
   return (
-    <div className="mt-1 space-y-1 border-border/60 border-t pt-1 text-muted-foreground text-xs">
+    <div className="mt-1 space-y-1 border-t border-border/60 pt-1 text-xs text-muted-foreground">
       {top.map((p) => (
         <div key={p.id} className="flex items-baseline justify-between gap-4">
           <span className="truncate">{p.name}</span>

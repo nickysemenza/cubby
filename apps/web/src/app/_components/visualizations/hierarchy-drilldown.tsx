@@ -3,6 +3,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import { useMemo, useState } from "react";
+
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { cn } from "~/lib/utils";
 
@@ -91,7 +92,7 @@ function sortedRows(node: HierarchyDrilldownNode): DrilldownRow[] {
 function RowAnnotations({ annotations }: { annotations?: readonly string[] }) {
   if (!annotations?.length) return null;
   return (
-    <span className="font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+    <span className="font-mono text-2xs tracking-wider text-muted-foreground uppercase">
       {annotations.join(" · ")}
     </span>
   );
@@ -133,9 +134,9 @@ export function HierarchyDrilldown({
   return (
     <section
       aria-label={ariaLabel}
-      className={cn("border-border border-y bg-card font-sans", className)}
+      className={cn("border-y border-border bg-card font-sans", className)}
     >
-      <div className="border-border border-b bg-muted/20 px-2 py-1 sm:px-4">
+      <div className="border-b border-border bg-muted/20 px-2 py-1 sm:px-4">
         <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:min-h-8">
           <div className="flex min-w-0 items-center gap-1">
             {path.length > 1 && (
@@ -144,7 +145,7 @@ export function HierarchyDrilldown({
                 onClick={() =>
                   setPathIds(path.slice(1, -1).map((node) => node.id))
                 }
-                className="-ml-1 inline-flex min-h-10 shrink-0 items-center gap-1 px-1 font-medium text-primary text-xs underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] motion-reduce:transition-none sm:min-h-8"
+                className="-ml-1 inline-flex min-h-10 shrink-0 items-center gap-1 px-1 text-xs font-medium text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
               >
                 <ChevronLeft aria-hidden="true" className="size-3.5" />
                 Back
@@ -199,7 +200,7 @@ export function HierarchyDrilldown({
                             )
                           }
                           title={node.label}
-                          className="min-h-10 max-w-40 truncate px-1 text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] motion-reduce:transition-none sm:min-h-8"
+                          className="min-h-10 max-w-40 truncate px-1 text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
                         >
                           {node.label}
                         </button>
@@ -210,7 +211,7 @@ export function HierarchyDrilldown({
               </ol>
             </nav>
           </div>
-          <span className="shrink-0 font-mono text-foreground text-xs tabular-nums">
+          <span className="shrink-0 font-mono text-xs text-foreground tabular-nums">
             {focused.metricLabel}
           </span>
         </div>
@@ -243,7 +244,7 @@ export function HierarchyDrilldown({
                   </span>
                   <RowAnnotations annotations={row.annotations} />
                 </span>
-                <span className="shrink-0 font-mono text-foreground text-xs tabular-nums">
+                <span className="shrink-0 font-mono text-xs text-foreground tabular-nums">
                   {row.metricLabel}
                 </span>
               </>
@@ -269,7 +270,7 @@ export function HierarchyDrilldown({
                       ])
                     }
                     aria-label={`Drill into ${metricDescription}`}
-                    className="relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-left text-primary text-xs underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] motion-reduce:transition-none sm:min-h-9 sm:px-4"
+                    className="relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-left text-xs text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-9 sm:px-4"
                   >
                     {content}
                     <ChevronRight
@@ -282,7 +283,7 @@ export function HierarchyDrilldown({
                     to="/locations/$shortcode"
                     params={{ shortcode: row.node.locationShortcode }}
                     aria-label={`Open location ${metricDescription}`}
-                    className="group relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-primary text-xs underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-[-2px] motion-reduce:transition-none sm:min-h-9 sm:px-4"
+                    className="group relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-xs text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-9 sm:px-4"
                   >
                     {content}
                     <MapPin
@@ -291,7 +292,7 @@ export function HierarchyDrilldown({
                     />
                   </Link>
                 ) : (
-                  <div className="relative flex min-h-11 min-w-0 items-center gap-2 px-2 py-1 text-foreground text-xs sm:min-h-9 sm:px-4">
+                  <div className="relative flex min-h-11 min-w-0 items-center gap-2 px-2 py-1 text-xs text-foreground sm:min-h-9 sm:px-4">
                     {content}
                     <span aria-hidden="true" className="size-3.5 shrink-0" />
                   </div>
@@ -302,10 +303,10 @@ export function HierarchyDrilldown({
         </ul>
       ) : (
         <div className="flex min-h-11 items-center justify-between px-2 py-1 sm:min-h-9 sm:px-4">
-          <span className="text-muted-foreground text-xs">Directly here</span>
+          <span className="text-xs text-muted-foreground">Directly here</span>
           <output
             aria-label={`Directly here: ${focused.metricLabel}`}
-            className="font-mono text-foreground text-xs tabular-nums"
+            className="font-mono text-xs text-foreground tabular-nums"
           >
             {focused.metricLabel}
           </output>

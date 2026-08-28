@@ -1,5 +1,6 @@
 import type { LocationInventoryBreakdownOut } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
+
 import {
   HierarchyDrilldown,
   type HierarchyDrilldownNode,
@@ -47,7 +48,7 @@ function LocationInventoryBreakdownSkeleton() {
   return (
     <div
       aria-label="Loading contents breakdown"
-      className="border-border border-y bg-card px-2 py-2 sm:px-4"
+      className="border-y border-border bg-card px-2 py-2 sm:px-4"
       role="status"
     >
       <Skeleton className="h-3 w-36" />
@@ -59,7 +60,7 @@ function LocationInventoryBreakdownSkeleton() {
 
 function LocationInventoryBreakdownError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="flex min-h-11 items-center justify-between gap-2 border-destructive/40 border-y bg-card px-2 py-2 text-xs sm:px-4">
+    <div className="flex min-h-11 items-center justify-between gap-2 border-y border-destructive/40 bg-card px-2 py-2 text-xs sm:px-4">
       <span className="text-muted-foreground">
         Couldn&apos;t load the contents breakdown.
       </span>

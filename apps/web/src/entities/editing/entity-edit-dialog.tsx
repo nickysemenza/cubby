@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+
 import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type { EntityEditResultFor } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";

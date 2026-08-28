@@ -4,6 +4,7 @@ import {
   maintenanceCountsSchema,
 } from "@cubby/schemas/problems";
 import { describe, expect, it } from "vitest";
+
 import { AUTO_FIX_SECTION_IDS, buildAutoFixPlan } from "./auto-fix-registry";
 
 const problems = (overrides: Partial<AllProblems> = {}): AllProblems => ({

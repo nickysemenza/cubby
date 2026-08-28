@@ -1,6 +1,7 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+
 import { Row } from "~/components/layout";
 import {
   Table,
@@ -19,6 +20,7 @@ import {
   conversionCoverage,
 } from "~/lib/conversion-coverage";
 import { wasm } from "~/lib/wasm";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import { KindIcon } from "./kind-icon";
 

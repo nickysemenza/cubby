@@ -1,5 +1,6 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { type ReactNode, useMemo } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { StatusText } from "~/components/ui/status-text";
 import {
@@ -8,6 +9,7 @@ import {
   type CoverageTier,
   conversionCoverage,
 } from "~/lib/conversion-coverage";
+
 import { CoverageChips, MacroChips } from "./CoverageChips";
 import { KindIcon } from "./kind-icon";
 
@@ -58,7 +60,7 @@ export function ConversionCapabilitiesSummary({
           {coverage && compact && showTier && mappings.length > 0 && (
             <StatusText
               tone={TIER_TONE[coverage.tier]}
-              className="font-mono text-2xs uppercase tracking-wide"
+              className="font-mono text-2xs tracking-wide uppercase"
             >
               {TIER_LABEL[coverage.tier]}
             </StatusText>
@@ -78,7 +80,7 @@ export function ConversionCapabilitiesSummary({
           {coverage && !compact && (
             <StatusText
               tone={TIER_TONE[coverage.tier]}
-              className="font-mono text-2xs uppercase tracking-wide"
+              className="font-mono text-2xs tracking-wide uppercase"
             >
               {TIER_LABEL[coverage.tier]}
             </StatusText>

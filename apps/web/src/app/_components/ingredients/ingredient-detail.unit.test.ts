@@ -2,7 +2,9 @@ import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { foodSummary } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
+
 import { selectNutritionProduct } from "./ingredient-detail";
 
 // `food.nutritionInfo` is a required (non-nullable) field on `foodSummary`, so

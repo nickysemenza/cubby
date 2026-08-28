@@ -1,5 +1,6 @@
 import { Clock } from "lucide-react";
 import type { FC } from "react";
+
 import { cn } from "~/lib/utils";
 
 export interface QueryTiming {
@@ -27,7 +28,7 @@ export const QueryTimingIndicator: FC<QueryTimingIndicatorProps> = ({
   return (
     <span
       className={cn(
-        "flex items-center gap-1 text-muted-foreground text-xs",
+        "flex items-center gap-1 text-xs text-muted-foreground",
         className,
       )}
     >

@@ -1,19 +1,20 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useMemo, useRef } from "react";
+
 import { verbBulkAction } from "../actions/action-verb-ui";
 import {
   type EntityActionDefinition,
   type EntityActionsEntry,
   useEntityActions,
 } from "../actions/entity-actions";
-import {
-  BulkActionBar,
-  type BulkActionBarProps,
-} from "../data-table/BulkActionBar";
 import type {
   BulkAction,
   BulkActionsConfig,
 } from "../data-table/bulk-actions.types";
+import {
+  BulkActionBar,
+  type BulkActionBarProps,
+} from "../data-table/BulkActionBar";
 import type {
   CubbyRow as Row,
   CubbyTable as Table,

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Circle } from "lucide-react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { type DetailSection, DetailSections } from "./detail-page";
 
 const mocks = vi.hoisted(() => ({

@@ -4,6 +4,7 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -12,6 +13,7 @@ import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { multiSelectFilterFn } from "~/entities/filters";
+
 import {
   createCurrencyColumn,
   createEditableAmountColumn,
@@ -189,7 +191,7 @@ export function InventoryItemList() {
                   compact
                 />
                 {upc && (
-                  <div className="text-muted-foreground text-xs">
+                  <div className="text-xs text-muted-foreground">
                     <TableLink
                       to="/usda/upc/$code"
                       params={{ code: upc }}

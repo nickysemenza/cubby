@@ -1,10 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
 import { LocationForm } from "~/app/_components/locations/location-form";
 import { ProductForm } from "~/app/_components/products/product-form";
 import { entities, entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { useEntityCommands } from "./use-entity-commands";
 
 /** Full-page adapter for rich create forms. Navigation is page-owned; the

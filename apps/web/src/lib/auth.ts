@@ -4,6 +4,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, openAPI } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+
 import { env } from "~/env";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";

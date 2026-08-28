@@ -36,6 +36,7 @@ import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { AppErrorReason } from "@cubby/shared";
 import { inArray } from "drizzle-orm";
+
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { createBlockedError } from "~/server/errors/app-error";

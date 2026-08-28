@@ -2,9 +2,11 @@ import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+
 import { Badge } from "~/components/ui/badge";
 import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
+
 import { LocationIcon } from "./location-icons";
 import {
   locationChildGroupLabel,
@@ -48,7 +50,7 @@ function SourceLink({
         to="/products/$shortcode"
         params={{ shortcode: location.product.id }}
         aria-label={`Open product ${location.product.name}`}
-        className="block size-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="block size-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
       >
         {children}
       </Link>
@@ -60,7 +62,7 @@ function SourceLink({
         to="/images/$shortcode"
         params={{ shortcode: visual.primaryImage.id }}
         aria-label={`Open photo of ${location.name}`}
-        className="block size-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="block size-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
       >
         {children}
       </Link>
@@ -126,7 +128,7 @@ function ChildContactSheet({
             to="/locations/$shortcode"
             params={{ shortcode: child.id }}
             aria-label={`Open ${child.name}`}
-            className="min-h-0 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+            className="min-h-0 overflow-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none focus-visible:ring-inset"
           >
             {image}
           </Link>
@@ -195,7 +197,7 @@ export function LocationVisual({
       )}
     >
       {hasIdentity && (
-        <div className="relative min-h-0 overflow-hidden border-border border-r">
+        <div className="relative min-h-0 overflow-hidden border-r border-border">
           {interactive ? (
             <SourceLink location={location}>
               <PrimaryImage
@@ -212,7 +214,7 @@ export function LocationVisual({
           {interactive && ownImageCount > 1 && (
             <Link
               to="/images"
-              className="absolute bottom-1 left-1 bg-foreground px-1 font-mono text-2xs text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="absolute bottom-1 left-1 bg-foreground px-1 font-mono text-2xs text-background focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
             >
               +{ownImageCount - 1} photos
             </Link>
@@ -251,7 +253,7 @@ export function LocationVisual({
       aria-label={`Visual overview of ${location.name}`}
     >
       <div className="aspect-video md:aspect-[4/3]">{media}</div>
-      <figcaption className="grid grid-cols-2 border-border border-t bg-card">
+      <figcaption className="grid grid-cols-2 border-t border-border bg-card">
         <span className="min-w-0 px-2 py-1 font-mono text-2xs text-muted-foreground uppercase sm:py-2">
           {visual.primarySource === "product"
             ? `Product · ${location.product?.name ?? "linked vessel"}`
@@ -259,7 +261,7 @@ export function LocationVisual({
               ? "Location photo"
               : "Location"}
         </span>
-        <span className="min-w-0 border-border border-l px-2 py-1 text-right font-mono text-2xs text-muted-foreground uppercase sm:py-2">
+        <span className="min-w-0 border-l border-border px-2 py-1 text-right font-mono text-2xs text-muted-foreground uppercase sm:py-2">
           {visual.childCount > 0
             ? `${visual.childCount} ${childLabel}`
             : "No compartments"}

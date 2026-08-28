@@ -1,6 +1,8 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
+
 import { entities } from "~/entities/entities";
+
 import { domainForRoute } from "./domain-wayfinding";
 import {
   bottomNavItems,

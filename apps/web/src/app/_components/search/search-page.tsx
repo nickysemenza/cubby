@@ -6,6 +6,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { Search } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
+
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Row, Stack } from "~/components/layout";
@@ -17,6 +18,7 @@ import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { search } from "~/lib/search.functions";
 import { cn } from "~/lib/utils";
+
 import { getRecents, pushRecent } from "../command-menu/recents";
 import { useEntityPreview } from "../hooks/useEntityPreview";
 import {
@@ -115,7 +117,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
 
   return (
     <Stack gap="md" className="container mx-auto p-1">
-      <div className="sticky top-[var(--app-chrome-top)] z-20 -mx-1 space-y-1 border-border border-b bg-background px-1 pb-1">
+      <div className="sticky top-[var(--app-chrome-top)] z-20 -mx-1 space-y-1 border-b border-border bg-background px-1 pb-1">
         <div className="relative">
           <Search className="absolute top-1/2 left-2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -173,12 +175,12 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           {relatedResults.length > 0 && (
             <section
               aria-labelledby={relatedHeadingId}
-              className="border-foreground border-t-2 pt-2"
+              className="border-t-2 border-foreground pt-2"
             >
               <Row align="baseline" justify="between" className="mb-1">
                 <h2
                   id={relatedHeadingId}
-                  className="font-bold font-heading text-base"
+                  className="font-heading text-base font-bold"
                 >
                   Related
                 </h2>
@@ -210,7 +212,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           !related.isPlaceholderData &&
           related.data?.status === "unavailable" &&
           primary.data?.length ? (
-            <p className="text-muted-foreground text-xs">
+            <p className="text-xs text-muted-foreground">
               Related matches are temporarily unavailable.
             </p>
           ) : null}
@@ -280,7 +282,7 @@ function SearchResults({
   if (feedback)
     return <SearchResultsFeedback state={feedback} onRetry={onRetry} />;
   return (
-    <div className="border-border border-y">
+    <div className="border-y border-border">
       {data.map((item) => (
         <SearchRow
           key={`${item.entityType}:${item.id}`}
@@ -311,7 +313,7 @@ function SearchRow({
     original: item as SearchHit & Record<string, unknown>,
   };
   return (
-    <div className="group flex items-center gap-4 border-border border-b px-2 py-2 last:border-b-0 hover:bg-muted/45">
+    <div className="group flex items-center gap-4 border-b border-border px-2 py-2 last:border-b-0 hover:bg-muted/45">
       <SearchResultMedia item={item} variant="list" />
       <div className="min-w-0 flex-1">
         <Link
@@ -325,12 +327,12 @@ function SearchRow({
           onFocus={() => onPrefetch(previewRow)}
           onBlur={() => onPrefetchEnd(previewRow)}
           onClick={() => rememberSearchResult(item)}
-          className="block truncate font-medium text-sm hover:text-primary"
+          className="block truncate text-sm font-medium hover:text-primary"
         >
           {item.title}
         </Link>
         {item.subtitle && (
-          <span className="block truncate text-muted-foreground text-xs">
+          <span className="block truncate text-xs text-muted-foreground">
             {item.subtitle}
           </span>
         )}
@@ -383,7 +385,7 @@ function MobileSearchResults({
   if (feedback)
     return <SearchResultsFeedback state={feedback} onRetry={onRetry} mobile />;
   return (
-    <div className="border-border border-y">
+    <div className="border-y border-border">
       {data.map((item) => (
         <MobileCard
           key={`${item.entityType}:${item.id}`}
@@ -432,7 +434,7 @@ export function SearchResultsFeedback({
 }) {
   if (state === "loading") {
     return (
-      <div className="py-8 text-center text-muted-foreground text-sm">
+      <div className="py-8 text-center text-sm text-muted-foreground">
         Searching…
       </div>
     );
@@ -457,7 +459,7 @@ export function SearchResultsFeedback({
   return (
     <div
       className={cn(
-        "py-8 text-center text-muted-foreground text-sm",
+        "py-8 text-center text-sm text-muted-foreground",
         mobile && "flex min-h-32 items-center justify-center",
       )}
     >
@@ -481,7 +483,7 @@ function SearchLanding({
     <Stack gap="md">
       {jumps.length > 0 && (
         <Stack gap="xs">
-          <span className="eyebrow px-1 font-medium">Jump back</span>
+          <span className="px-1 eyebrow font-medium">Jump back</span>
           {jumps.map((jump) => {
             const entity = entityTypeMap[jump.entityType];
             return (

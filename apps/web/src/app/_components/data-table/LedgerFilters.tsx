@@ -1,13 +1,15 @@
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
+
 import { humanize } from "~/entities/filters";
+
 import type { FilterConfig } from "./columnHelpers";
-import { FilterBar } from "./FilterBar";
 import {
   barFieldFromConfig,
   type FilterBarField,
   filterStateToBarFilters,
 } from "./filter-bar-core";
+import { FilterBar } from "./FilterBar";
 import type { CubbyTable as Table } from "./table-features";
 import { useFilterBarDraft } from "./useFilterBarDraft";
 

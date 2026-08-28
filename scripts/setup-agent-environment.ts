@@ -17,23 +17,18 @@ const run = (command: string, args: readonly string[]) =>
   });
 
 const gitPath = (kind: string) =>
-  execFileSync(
-    "git",
-    ["rev-parse", "--path-format=absolute", kind],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    },
-  ).trim();
+  execFileSync("git", ["rev-parse", "--path-format=absolute", kind], {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 
 const isLinkedWorktree = () => {
   try {
     // Keep this pre-install implementation aligned with
     // apps/web/tooling/git-worktree.ts, which cannot be imported before install.
     return (
-      normalize(gitPath("--git-dir")) !==
-      normalize(gitPath("--git-common-dir"))
+      normalize(gitPath("--git-dir")) !== normalize(gitPath("--git-common-dir"))
     );
   } catch {
     return false;

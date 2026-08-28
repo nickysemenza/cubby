@@ -2,8 +2,10 @@ import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
+
 import { recordCommandSearch } from "~/lib/perf/perf-store";
 import { search } from "~/lib/search.functions";
+
 import { type QuickAction, quickActions } from "./quick-actions";
 
 const COMMAND_SEARCH_RESULT_LIMIT = 8;

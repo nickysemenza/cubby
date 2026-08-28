@@ -1,7 +1,9 @@
 import type { WRichItem } from "@cubby/recipebridge";
 import { match } from "ts-pattern";
 import type { ReadonlyDeep } from "type-fest";
+
 import { INGREDIENT_PART_COLOR } from "~/lib/ingredient-part-colors";
+
 import { tryFormatAmount } from "../inventory/format-amount";
 
 export const formatRichText = (text: ReadonlyDeep<WRichItem[]>) => {

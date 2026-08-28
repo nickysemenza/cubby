@@ -1,4 +1,5 @@
 import { PROBLEM_CLASS, type ProblemKey } from "@cubby/schemas/problems";
+
 import { basicProblemQueries } from "~/entities/problem-queries/basic";
 import { derivedProblemQueries } from "~/entities/problem-queries/derived";
 import { productCoverageProblemQueries } from "~/entities/problem-queries/product-coverage";

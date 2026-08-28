@@ -5,6 +5,7 @@ import {
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
+
 import { cn } from "~/lib/utils";
 
 /**
@@ -57,13 +58,13 @@ function NutrientRow({
   return (
     <div
       className={cn(
-        "flex items-baseline justify-between gap-2 border-border border-t py-1 text-sm",
+        "flex items-baseline justify-between gap-2 border-t border-border py-1 text-sm",
         indented && "pl-4",
       )}
     >
       <span className={indented ? "text-muted-foreground" : "font-medium"}>
         {info.displayName}{" "}
-        <span className="font-mono text-muted-foreground text-xs tabular-nums">
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">
           {trimAmount(value)}
           {info.unit.toLowerCase()}
         </span>
@@ -99,23 +100,23 @@ export function NutritionLabel({
 
   return (
     <div className="max-w-sm border-4 border-foreground bg-background p-4 font-mono text-foreground">
-      <div className="border-foreground border-b-8 pb-1">
-        <h3 className="font-black text-2xl leading-tight tracking-tight">
+      <div className="border-b-8 border-foreground pb-1">
+        <h3 className="text-2xl leading-tight font-black tracking-tight">
           Nutrition Facts
         </h3>
-        <p className="text-muted-foreground text-xs">{servingLabel}</p>
+        <p className="text-xs text-muted-foreground">{servingLabel}</p>
       </div>
 
       {kcal > 0 && (
-        <div className="flex items-baseline justify-between border-foreground border-b-4 py-1">
-          <span className="font-bold text-lg">Calories</span>
-          <span className="font-bold text-2xl tabular-nums">
+        <div className="flex items-baseline justify-between border-b-4 border-foreground py-1">
+          <span className="text-lg font-bold">Calories</span>
+          <span className="text-2xl font-bold tabular-nums">
             {Math.round(kcal)}
           </span>
         </div>
       )}
 
-      <div className="flex justify-end border-border border-b py-1 text-2xs text-muted-foreground uppercase tracking-wider">
+      <div className="flex justify-end border-b border-border py-1 text-2xs tracking-wider text-muted-foreground uppercase">
         % Daily Value*
       </div>
 
@@ -127,7 +128,7 @@ export function NutritionLabel({
         />
       ))}
 
-      <p className="border-foreground border-t-4 pt-1 text-2xs text-muted-foreground">
+      <p className="border-t-4 border-foreground pt-1 text-2xs text-muted-foreground">
         * % Daily Value based on a 2,000 calorie diet.{note ? ` ${note}` : ""}
       </p>
     </div>

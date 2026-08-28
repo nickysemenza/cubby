@@ -2,6 +2,7 @@ import {
   productLookupResponseSchema,
   upcLookupInput,
 } from "@cubby/upc-contract";
+
 import {
   defineOperationDomain,
   query,

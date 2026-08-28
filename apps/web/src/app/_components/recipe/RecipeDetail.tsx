@@ -14,6 +14,7 @@ import {
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { match } from "ts-pattern";
+
 import { EntitySummaryCard } from "~/components/entity/entity-summary-card";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -32,19 +33,11 @@ import {
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
 import { cn } from "~/lib/utils";
+
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { NutritionLabel } from "../nutrition/NutritionLabel";
-import { RecipeTotalsCoverageButton } from "./RecipeCostingCoverage";
-import { type RecipeFlowLayoutMode, RecipeFlowView } from "./RecipeFlowView";
-import { RecipeMagazineView } from "./RecipeMagazineView";
-import { RecipePrepSheetView } from "./RecipePrepSheetView";
-import {
-  type MissingWeightLink,
-  RecipeScaleControl,
-} from "./RecipeScaleControl";
-import { RecipeSpecView } from "./RecipeSpecView";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
@@ -53,7 +46,16 @@ import {
   getIngredientName,
   getServingBasis,
 } from "./recipe-utils";
+import { RecipeTotalsCoverageButton } from "./RecipeCostingCoverage";
+import { type RecipeFlowLayoutMode, RecipeFlowView } from "./RecipeFlowView";
 import { RecipeIngredientList } from "./recipeingredientlist";
+import { RecipeMagazineView } from "./RecipeMagazineView";
+import { RecipePrepSheetView } from "./RecipePrepSheetView";
+import {
+  type MissingWeightLink,
+  RecipeScaleControl,
+} from "./RecipeScaleControl";
+import { RecipeSpecView } from "./RecipeSpecView";
 import { useRecipeTree } from "./useRecipeTree";
 
 // d3-hierarchy is heavy and only renders in the Data view, so keep it out of the
@@ -308,7 +310,7 @@ const RecipeDetailInner: React.FC<{
                   format: exportFormat,
                   scale: factor === 1 ? undefined : factor,
                 }}
-                className="inline-flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 title="Open the print / export sheet"
               >
                 <Printer className="size-3" />
@@ -458,7 +460,7 @@ const RecipeDetailInner: React.FC<{
           whenever the costing engine has produced nutrient totals. */}
           {nutritionNutrients && (
             <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
-              <summary className="eyebrow cursor-pointer marker:content-none">
+              <summary className="cursor-pointer eyebrow marker:content-none">
                 <Apple className="mr-2 inline size-3 align-[-2px]" />
                 Nutrition
               </summary>

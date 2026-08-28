@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { copyText } from "~/lib/clipboard";
@@ -25,6 +26,7 @@ import {
   stopCollectors,
 } from "~/lib/perf/perf-store";
 import { cn } from "~/lib/utils";
+
 import { type LiveQueryStats, readLiveQueryStats } from "./use-query-stats";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
@@ -139,7 +141,7 @@ export function PerfOverlay() {
       <Row
         align="center"
         gap="xs"
-        className="border-border/60 border-b bg-muted/40 px-2 py-1"
+        className="border-b border-border/60 bg-muted/40 px-2 py-1"
       >
         <Activity className="size-3 text-primary" />
         <span className="font-semibold">perf</span>
@@ -180,14 +182,14 @@ export function PerfOverlay() {
       </Row>
 
       {/* Tabs */}
-      <div className="flex border-border/60 border-b">
+      <div className="flex border-b border-border/60">
         {TABS.map((t) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              "flex-1 px-1 py-1 text-2xs uppercase tracking-wide transition-colors",
+              "flex-1 px-1 py-1 text-2xs tracking-wide uppercase transition-colors",
               tab === t
                 ? "bg-primary/10 font-semibold text-primary"
                 : "text-muted-foreground hover:bg-muted/50",
@@ -275,11 +277,11 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
         {events.map((e) => (
           <tr
             key={`${e.at}-${e.kind}-${e.label}-${e.ms}`}
-            className="border-border/30 border-t"
+            className="border-t border-border/30"
           >
             <td className="py-0.5 pr-1 align-middle" /* tight */>
               <span
-                className="font-semibold text-3xs uppercase"
+                className="text-3xs font-semibold uppercase"
                 style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
               >
                 {SLOW_TAG[e.kind]}
@@ -288,12 +290,12 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
             <td className="truncate py-0.5" /* tight */ title={e.label}>
               {e.label}
             </td>
-            <td className="whitespace-nowrap pl-1 text-right text-2xs text-muted-foreground">
+            <td className="pl-1 text-right text-2xs whitespace-nowrap text-muted-foreground">
               {Math.round((now - e.at) / 1000)}s
             </td>
             <td
               className={cn(
-                "whitespace-nowrap pl-1 text-right font-semibold",
+                "pl-1 text-right font-semibold whitespace-nowrap",
                 e.ms > 100 ? "text-destructive" : "text-warning-ink",
               )}
             >
@@ -333,7 +335,7 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
             const hitPct = lookups > 0 ? (s.hits / lookups) * 100 : null;
             const avg = s.executions > 0 ? s.totalMs / s.executions : 0;
             return (
-              <tr key={name} className="border-border/30 border-t">
+              <tr key={name} className="border-t border-border/30">
                 <td className="truncate py-0.5" /* tight */>
                   {name}
                   {s.throws > 0 && (
@@ -412,7 +414,7 @@ function QueriesTab({
             </thead>
             <tbody>
               {rows.map(([key, stat]) => (
-                <tr key={key} className="border-border/30 border-t">
+                <tr key={key} className="border-t border-border/30">
                   <td
                     className="max-w-36 truncate py-0.5"
                     title={stat.operation}
@@ -435,7 +437,7 @@ function QueriesTab({
                       </span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap text-right text-2xs">
+                  <td className="text-right text-2xs whitespace-nowrap">
                     {stat.fetches}/{stat.reuses}/{stat.cancelled}/{stat.errors}
                   </td>
                   <td className="text-right text-muted-foreground">
@@ -455,8 +457,8 @@ function QueriesTab({
         </>
       )}
       {snap.mutations.length > 0 && (
-        <div className="border-border/50 border-t pt-1">
-          <div className="px-1 font-semibold text-2xs text-muted-foreground">
+        <div className="border-t border-border/50 pt-1">
+          <div className="px-1 text-2xs font-semibold text-muted-foreground">
             recent mutations
           </div>
           <table className="w-full">
@@ -464,7 +466,7 @@ function QueriesTab({
               {snap.mutations.slice(0, 8).map((mutation) => (
                 <tr
                   key={`${mutation.id}-${mutation.at}`}
-                  className="border-border/30 border-t"
+                  className="border-t border-border/30"
                 >
                   <td
                     className="max-w-44 truncate py-0.5"
@@ -530,7 +532,7 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
         </thead>
         <tbody>
           {rows.map(([id, s]) => (
-            <tr key={id} className="border-border/30 border-t align-top">
+            <tr key={id} className="border-t border-border/30 align-top">
               <td className="py-0.5" /* tight */>
                 <Row align="center" gap="xs">
                   <span className="truncate">{id}</span>

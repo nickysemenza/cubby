@@ -2,6 +2,7 @@ import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { z } from "zod";
+
 import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 
 // Deterministic ids/shortcodes for these static demo fixtures. We must NOT call

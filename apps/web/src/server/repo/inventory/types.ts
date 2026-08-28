@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
+
 import type {
   inventoryEntry,
   location,

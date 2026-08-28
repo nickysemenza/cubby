@@ -1,6 +1,7 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
 import type { z } from "zod";
+
 import { entityDetail } from "~/entities/entity-detail.functions";
 import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
 import { entityInspectorHealth } from "~/entities/entity-inspector-health.functions";

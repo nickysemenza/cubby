@@ -10,6 +10,7 @@ import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
 import { formatCurrency } from "~/lib/utils";
+
 import { getCellSelectionStats } from "./cell-selection-stats";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import type { CubbyTable as Table } from "./table-features";
@@ -69,14 +70,14 @@ export function DataTablePagination<TData extends RowData>({
       </div>
 
       {showPaginationControls && (
-        <div className="flex flex-col space-y-1 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0 lg:space-x-4">
+        <div className="flex flex-col space-y-1 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4 lg:space-x-4">
           <Row
             align="center"
             justify="between"
             gap="sm"
             className="sm:justify-start"
           >
-            <p className="font-medium font-mono text-2xs text-muted-foreground uppercase tracking-wider">
+            <p className="font-mono text-2xs font-medium tracking-wider text-muted-foreground uppercase">
               Rows per page
             </p>
             <RowsPerPageSelect table={table} />

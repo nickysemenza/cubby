@@ -1,4 +1,5 @@
 import { GitGraph } from "lucide-react";
+
 import { Row } from "~/components/layout";
 import { formatBuildDate } from "~/lib/utils";
 
@@ -21,7 +22,7 @@ export function AppFooter() {
               target="_blank"
               rel="noopener noreferrer"
               title={`View ${__SOURCE_BRANCH__}@${__SOURCE_COMMIT__} on GitHub`}
-              className="inline-flex min-h-11 items-center px-1 underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:min-h-0 sm:px-0"
+              className="inline-flex min-h-11 items-center px-1 underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:min-h-0 sm:px-0"
             >
               {__SOURCE_COMMIT__}
             </a>

@@ -1,21 +1,22 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { quickCreateProduct } from "~/server/repo/product";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+
 import { LocationValuationService } from "./location-valuation.service";
-import { createProductWriteActions } from "./product.service";
 import {
   applyUpcDataWithSideEffects,
   findOrCreateByCode,
   findOrCreateByUPC,
 } from "./product-orchestration.service";
+import { createProductWriteActions } from "./product.service";
 import { RecipeCostingService } from "./recipe-costing.service";
 
 // Fakes never hit the network — `findFood`/`lookup` are the only methods the

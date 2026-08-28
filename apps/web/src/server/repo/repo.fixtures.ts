@@ -17,10 +17,12 @@ import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { eq } from "drizzle-orm";
+
 import { mock } from "~/lib/test/mock-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { type image, product } from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
 import { getDb } from "./database-helpers";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
@@ -55,11 +57,8 @@ type ProductFixtureInput<
  * seed the UUID-only repo boundary or exercise the shortcode-only router.
  */
 export const makeProductInput = <
-  Ingredient extends
-    | IngredientId
-    | IngredientShortcode
-    | null
-    | undefined = undefined,
+  Ingredient extends IngredientId | IngredientShortcode | null | undefined =
+    undefined,
 >(
   overrides: Omit<Partial<ProductCreateInput>, "ingredientId"> & {
     ingredientId?: Ingredient;

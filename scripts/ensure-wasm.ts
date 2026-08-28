@@ -45,7 +45,11 @@ const sourceRoots = () => {
         "--manifest-path",
         join(ROOT, "recipebridge/Cargo.toml"),
       ],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 26 },
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+        maxBuffer: 1 << 26,
+      },
     );
     for (const p of JSON.parse(out).packages) {
       if (p.source === null) roots.add(dirname(p.manifest_path));

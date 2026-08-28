@@ -2,6 +2,7 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import { useDroppable } from "@dnd-kit/core";
 import { useEffect, useId, useRef } from "react";
+
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import type { ArrangeDropData } from "./arrange-types";
 import { useArrangeDndState } from "./use-arrange-dnd";

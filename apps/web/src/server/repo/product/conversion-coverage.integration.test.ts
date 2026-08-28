@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import type { USDAClient } from "~/server/clients/usda";
 import { productConversionCoverage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -8,6 +9,7 @@ import {
   findCoverageProblems,
   rebuildProductConversionCoverageProjection,
 } from "~/server/services/problems.service";
+
 import { updateIngredient } from "../ingredient";
 import {
   attachProductComponents,

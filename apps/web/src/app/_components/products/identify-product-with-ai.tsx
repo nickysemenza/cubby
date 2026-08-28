@@ -3,11 +3,13 @@ import { Sparkles } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { ConfidenceReasoningCard } from "../ai/ai-suggest";
 import type { PendingImage } from "../PendingImageUpload";
 
@@ -92,7 +94,7 @@ export function IdentifyProductButton<
       </Button>
 
       {result?.basisKey === basisKey && (
-        <Stack gap="xs" className="border-border border-t pt-2">
+        <Stack gap="xs" className="border-t border-border pt-2">
           <ConfidenceReasoningCard
             label="AI Identification"
             confidence={result.value.confidence}

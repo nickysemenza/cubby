@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+
 import { UnifiedTextField } from "../form-utils";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 

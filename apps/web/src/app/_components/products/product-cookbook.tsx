@@ -1,6 +1,8 @@
 import type { ProductCookbookRefOut } from "@cubby/schemas/product";
+
 import { Row } from "~/components/layout/row";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 
 /**

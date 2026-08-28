@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { decideReadConsistency, isBrowserUiRequest } from "./read-consistency";
 
 const request = (options?: {

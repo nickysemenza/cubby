@@ -5,11 +5,13 @@ import {
   type MealType,
 } from "@cubby/schemas/meal-classification";
 import { format, parseISO } from "date-fns";
+
 import {
   tryFormatAmount,
   tryFormatAmountShopper,
 } from "~/app/_components/inventory/format-amount";
 import { formatCurrency } from "~/lib/utils";
+
 import type { ShoppingRow } from "./shopping-model";
 
 /**

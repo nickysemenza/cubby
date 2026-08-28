@@ -13,6 +13,7 @@ import type {
 import { and, eq, inArray, max } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
+
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -33,6 +34,7 @@ import {
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
 import { assertLiveTargets } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import { stockOnly } from "./placement";

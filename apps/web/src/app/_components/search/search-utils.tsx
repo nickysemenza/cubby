@@ -1,11 +1,13 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
+
 import { ProjectMark } from "~/app/projects/project-mark";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { IconTile } from "~/components/ui/icon-tile";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import { pushRecent } from "../command-menu/recents";
 import {
   getLocationIcon,

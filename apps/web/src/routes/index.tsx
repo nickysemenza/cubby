@@ -1,7 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
-import { TodayAttention } from "~/app/_components/home/HouseCard";
+
 import { getHomeAsOfWindow } from "~/app/_components/home/home-as-of-window";
+import { TodayAttention } from "~/app/_components/home/HouseCard";
 import { TodayMeals } from "~/app/_components/home/MealsCard";
 import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
 import { DailyPasses } from "~/app/_components/home/QuickActionsCard";
@@ -146,7 +147,7 @@ function Home() {
       >
         <Suspense
           fallback={
-            <p className="min-h-24 text-muted-foreground text-sm" role="status">
+            <p className="min-h-24 text-sm text-muted-foreground" role="status">
               Loading record counts…
             </p>
           }
@@ -165,7 +166,7 @@ function Home() {
       <CollapsibleSection title="Insights" summary="Four exploratory views">
         <Suspense
           fallback={
-            <p className="min-h-24 text-muted-foreground text-sm" role="status">
+            <p className="min-h-24 text-sm text-muted-foreground" role="status">
               Loading insights…
             </p>
           }

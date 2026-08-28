@@ -26,7 +26,7 @@ export function CoreNutrientCoverage({
               "border px-1.5 py-0.5 font-mono text-2xs" /* tight: dense nutrient-coverage badge */,
               present
                 ? "border-border text-foreground"
-                : "border-border/40 border-dashed text-muted-foreground/40",
+                : "border-dashed border-border/40 text-muted-foreground/40",
             )}
           >
             {n.short}

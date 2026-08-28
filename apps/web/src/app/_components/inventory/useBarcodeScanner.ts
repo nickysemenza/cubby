@@ -14,7 +14,9 @@
 
 import { BarcodeDetector } from "barcode-detector/ponyfill";
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { getErrorMessage } from "~/lib/error-utils";
+
 import {
   centerBoxRect,
   computeScanRoi,

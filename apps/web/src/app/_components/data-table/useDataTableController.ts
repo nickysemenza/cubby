@@ -1,10 +1,12 @@
 import { useElementScrollRestoration } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
+
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
@@ -192,7 +194,7 @@ export function useDataTableController<TItem extends RowData>({
       "overflow-hidden",
       verticalAlign === "top" ? "align-top" : "align-middle",
     ),
-    row: cn(dConfig.rowClass, "table-row-hover border-border border-b"),
+    row: cn(dConfig.rowClass, "table-row-hover border-b border-border"),
     sortIcon: "h-3 w-3",
   };
 

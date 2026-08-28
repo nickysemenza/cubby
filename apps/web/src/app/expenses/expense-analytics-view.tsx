@@ -6,6 +6,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+
 import { Grid, Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
 import { getEntityFilters } from "~/entities/filter-manifest";
@@ -15,6 +16,7 @@ import {
   soleValue,
 } from "~/entities/filters";
 import { formatCurrency } from "~/lib/utils";
+
 import { CostTypeDonut } from "./charts/cost-type-donut";
 import { CumulativeSpend } from "./charts/cumulative-spend";
 import { MonthlySpend } from "./charts/monthly-spend";
@@ -25,7 +27,6 @@ import {
   TradeCostMatrixAggregate,
 } from "./charts/trade-cost-aggregate";
 import { VendorBreakdown } from "./charts/vendor-breakdown";
-import { expense } from "./expense.functions";
 import {
   type ExpenseAnalyzeConfig,
   expenseAnalyzeConfigFromSearch,
@@ -33,6 +34,7 @@ import {
   normalizeExpenseAnalyzeConfig,
 } from "./expense-analyze-config";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
+import { expense } from "./expense.functions";
 
 const route = getRouteApi("/_authenticated/expenses/");
 

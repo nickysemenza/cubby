@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -20,6 +21,7 @@ import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
 import { useLocationTree } from "~/hooks/useLocationTree";
 import { cn } from "~/lib/utils";
+
 import { LocationVisual } from "../locations/location-visual";
 
 interface LocationTreeProps {
@@ -168,12 +170,12 @@ export function LocationTree({ data }: LocationTreeProps) {
 
   return (
     <Stack gap="sm" className="min-w-0">
-      <div className="border-[var(--border)] border-y bg-card">
+      <div className="border-y border-[var(--border)] bg-card">
         <Row
           align="center"
           wrap
           gap="sm"
-          className="border-[var(--border)] border-b p-2"
+          className="border-b border-[var(--border)] p-2"
         >
           <div className="relative min-w-48 flex-1">
             <Search
@@ -199,7 +201,7 @@ export function LocationTree({ data }: LocationTreeProps) {
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Clear tree search"
-                className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors duration-100 ease-cozy hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-[-2px]"
+                className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors duration-100 ease-cozy hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
               >
                 <X className="size-3.5" />
               </button>
@@ -248,7 +250,7 @@ export function LocationTree({ data }: LocationTreeProps) {
           align="center"
           justify="between"
           gap="sm"
-          className="min-h-7 border-[var(--border)] border-b bg-muted/30 px-2 py-1 font-mono text-2xs text-slate uppercase tracking-wider"
+          className="min-h-7 border-b border-[var(--border)] bg-muted/30 px-2 py-1 font-mono text-2xs tracking-wider text-slate uppercase"
           aria-live="polite"
         >
           <span>
@@ -281,10 +283,10 @@ export function LocationTree({ data }: LocationTreeProps) {
           </ul>
         ) : (
           <div className="px-4 py-8 text-center">
-            <p className="font-medium text-sm">
+            <p className="text-sm font-medium">
               {isSearching ? "No matching locations" : "No locations yet"}
             </p>
-            <p className="mt-1 text-muted-foreground text-xs">
+            <p className="mt-1 text-xs text-muted-foreground">
               {isSearching
                 ? "Try a shorter name or clear the search to see the whole house."
                 : "Locations will appear here once the household tree has been created."}
@@ -328,7 +330,7 @@ function LocationBranch({
       <Row
         align="center"
         gap="xs"
-        className="group min-h-10 min-w-0 border-[var(--border)] border-b px-2 py-1 transition-colors duration-100 ease-cozy hover:bg-muted/40 sm:min-h-7"
+        className="group min-h-10 min-w-0 border-b border-[var(--border)] px-2 py-1 transition-colors duration-100 ease-cozy hover:bg-muted/40 sm:min-h-7"
       >
         {hasVisibleChildren ? (
           <button
@@ -342,7 +344,7 @@ function LocationBranch({
                 ? `${location.name} is expanded for search`
                 : `${expanded ? "Collapse" : "Expand"} ${location.name}`
             }
-            className="flex size-10 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-100 ease-cozy hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-[-2px] disabled:text-muted-foreground/60 sm:size-5"
+            className="flex size-10 shrink-0 items-center justify-center text-muted-foreground transition-colors duration-100 ease-cozy hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary disabled:text-muted-foreground/60 sm:size-5"
           >
             <ChevronRight
               className={cn(
@@ -359,7 +361,7 @@ function LocationBranch({
           to="/locations/$shortcode"
           params={{ shortcode: location.id }}
           aria-label={location.name}
-          className="flex min-h-10 min-w-0 flex-1 items-center gap-2 py-1 font-medium text-foreground text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:min-h-0 sm:text-xs"
+          className="flex min-h-10 min-w-0 flex-1 items-center gap-2 py-1 text-sm font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:min-h-0 sm:text-xs"
           title={location.name}
         >
           <LocationVisual
@@ -395,7 +397,7 @@ function LocationBranch({
         <ul
           id={groupId}
           hidden={!expanded}
-          className="ml-2 min-w-0 border-[var(--border)] border-l pl-2 sm:ml-4 sm:pl-4"
+          className="ml-2 min-w-0 border-l border-[var(--border)] pl-2 sm:ml-4 sm:pl-4"
         >
           {node.inventoryItems.map((item) => (
             <InventoryRow key={item.id} item={item} />
@@ -424,14 +426,14 @@ function InventoryRow({ item }: { item: InventoryItemForTree }) {
       <Row
         align="center"
         gap="sm"
-        className="min-h-10 min-w-0 border-[var(--border)] border-b border-dashed px-2 py-1 text-muted-foreground transition-colors duration-100 ease-cozy hover:bg-muted/30 hover:text-foreground sm:min-h-7"
+        className="min-h-10 min-w-0 border-b border-dashed border-[var(--border)] px-2 py-1 text-muted-foreground transition-colors duration-100 ease-cozy hover:bg-muted/30 hover:text-foreground sm:min-h-7"
       >
         <span aria-hidden className="size-10 shrink-0 sm:size-5" />
         <EntityIcon entity="inventory" size={14} className="shrink-0" />
         <Link
           to="/inventory/$shortcode"
           params={{ shortcode: item.id }}
-          className="flex min-h-10 min-w-0 flex-1 items-center truncate text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:min-h-0 sm:text-xs"
+          className="flex min-h-10 min-w-0 flex-1 items-center truncate text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:min-h-0 sm:text-xs"
           title={item.productName}
         >
           {item.productName}

@@ -2,6 +2,7 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { EntityInlineLink } from "./EntityInlineLink";
 
 vi.mock("./EntityPreviewLink", () => ({

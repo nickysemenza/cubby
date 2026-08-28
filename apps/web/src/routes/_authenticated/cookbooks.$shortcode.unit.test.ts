@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+
 import { cookbook } from "~/entities/cookbook.functions";
+
 import { Route } from "./cookbooks.$shortcode";
 
 describe("cookbook detail loader", () => {

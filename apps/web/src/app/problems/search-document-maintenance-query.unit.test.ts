@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   SEARCH_DOCUMENT_MAINTENANCE_POLL_MS,
   searchDocumentMaintenanceRefetchInterval,

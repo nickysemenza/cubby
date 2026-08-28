@@ -1,8 +1,8 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { CalendarItemPresentation } from "./calendar-item-row";
 
 const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {

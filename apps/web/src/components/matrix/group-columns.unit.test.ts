@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { type CrossTabColumn, groupColumnRuns } from "./group-columns";
 
 const col = (key: string, groupKey?: string): CrossTabColumn<string> => ({

@@ -1,6 +1,7 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { ScopeChip } from "./ScopeChip";
 
 describe("ScopeChip", () => {

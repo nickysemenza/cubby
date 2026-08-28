@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   type ProductOwnershipTimeline,
   TOOL_TIMELINE_GRACE_DAYS,

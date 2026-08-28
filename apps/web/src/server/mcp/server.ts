@@ -8,7 +8,9 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+
 import { TraceNames, withTrace } from "~/server/tracing";
+
 import { registerMcpApps } from "./apps";
 import {
   getRegisteredTool,
@@ -17,8 +19,8 @@ import {
 } from "./tools/_shared";
 import { registerAuditTools } from "./tools/audit.tools";
 import { registerDataQualityTools } from "./tools/data-quality.tools";
-import { registerEntityTools } from "./tools/entity.tools";
 import { registerEntityIntegrityTools } from "./tools/entity-integrity.tools";
+import { registerEntityTools } from "./tools/entity.tools";
 import { registerFinancialTools } from "./tools/financial.tools";
 import { registerImageTools } from "./tools/image.tools";
 import { registerIngredientTools } from "./tools/ingredient.tools";

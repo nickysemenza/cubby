@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { EllipsisVertical, Plus } from "lucide-react";
+
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -7,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+
 import { actionItems } from "../_components/actions/action-items";
 
 // Contextual inventory actions, sourced from the canonical registry so their

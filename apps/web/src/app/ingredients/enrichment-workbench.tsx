@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import type { z } from "zod";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
@@ -41,6 +42,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+
 import {
   type EquivalenceDraft,
   enrichmentWorkbenchQueryInput,
@@ -579,7 +581,7 @@ export function EnrichmentWorkbench({
               gap="sm"
               className="sticky bottom-4 border border-[var(--border)] bg-background/95 px-4 py-2 backdrop-blur"
             >
-              <span className="font-medium text-sm">
+              <span className="text-sm font-medium">
                 {selected.size} selected
               </span>
               <span className="text-border">|</span>

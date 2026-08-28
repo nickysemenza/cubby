@@ -1,6 +1,7 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
+
 import type {
   cookbook,
   ingredient,
@@ -15,6 +16,7 @@ import type {
   RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 import type { LocationIdentityProductRow } from "~/server/repo/location/internal-types";
+
 import type { MappableProductExternalId } from "./external-id-types";
 import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";

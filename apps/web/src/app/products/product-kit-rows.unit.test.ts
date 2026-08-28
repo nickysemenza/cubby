@@ -2,6 +2,7 @@ import { productListItemOut } from "@cubby/schemas/product";
 import { kitComponentRowOut } from "@cubby/schemas/product-components";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   buildProductTreeRows,
   groupComponentsByParent,

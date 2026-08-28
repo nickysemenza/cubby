@@ -1,5 +1,6 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { type FC, useMemo } from "react";
+
 import { computePerUnitPrices } from "~/lib/price-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 
@@ -55,11 +56,11 @@ export const UnitPriceLine: FC<{
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
       <span className="eyebrow">Unit price</span>
-      <span className="font-mono text-primary text-sm tabular-nums">
+      <span className="font-mono text-sm text-primary tabular-nums">
         {natural}
       </span>
       {perGram && (
-        <span className="font-mono text-muted-foreground text-xs tabular-nums">
+        <span className="font-mono text-xs text-muted-foreground tabular-nums">
           {perGram}
         </span>
       )}

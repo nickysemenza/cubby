@@ -6,10 +6,12 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
+
 import { vendor } from "~/app/vendors/vendor.functions";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { search } from "~/lib/search.functions";
+
 import {
   buildSearchHitComboboxItem,
   buildVendorNameComboboxItem,

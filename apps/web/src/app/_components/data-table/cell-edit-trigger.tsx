@@ -2,7 +2,9 @@
 
 import { Pencil } from "lucide-react";
 import * as React from "react";
+
 import { cn } from "~/lib/utils";
+
 import {
   type CellClipboardSpec,
   registerCellClipboard,
@@ -13,8 +15,7 @@ import {
   CellSelectionContext,
 } from "./cell-selection-context";
 
-interface CellEditTriggerProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface CellEditTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** React 19 ref-as-prop (forwardRef is deprecated). */
   ref?: React.Ref<HTMLButtonElement>;
   /**
@@ -111,8 +112,8 @@ export function CellEditTrigger({
         // `select-none` replaces what <button> gave for free: double-click is
         // the edit gesture in cell-selection mode, and on a selectable span it
         // would paint a native word selection under the editor.
-        "group inline-flex select-none items-center gap-1 px-2 py-1 text-left hover:bg-muted",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group inline-flex items-center gap-1 px-2 py-1 text-left select-none hover:bg-muted",
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         "data-[clipboard-flash]:ring-2 data-[clipboard-flash]:ring-ring",
         className,
       )}
@@ -141,7 +142,7 @@ export function CellEditTrigger({
     >
       {children}
       {!hidePencilIcon && (
-        <Pencil className="ml-1 size-3 text-muted-foreground opacity-0 pointer-coarse:opacity-100 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+        <Pencil className="ml-1 size-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:opacity-100" />
       )}
     </button>
   );

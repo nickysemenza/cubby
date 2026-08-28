@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+
 import { cn } from "~/lib/utils";
+
 import { type CrossTabColumn, groupColumnRuns } from "./group-columns";
 import {
   bodyRule,
@@ -188,7 +190,7 @@ export function CrossTabTable<R, C>({
                 <th
                   key={run.columns[0]?.key ?? run.groupKey}
                   colSpan={run.columns.length}
-                  className="border-border border-l px-2 py-1 text-left font-medium"
+                  className="border-l border-border px-2 py-1 text-left font-medium"
                 >
                   {run.groupKey === undefined
                     ? null

@@ -1,6 +1,6 @@
 import { testEntityId } from "@cubby/schemas/testing";
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { Database } from "~/server/db";
 import type { USDAService } from "~/server/services/usda.service";
 

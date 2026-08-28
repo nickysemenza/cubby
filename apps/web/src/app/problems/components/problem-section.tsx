@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, type LucideIcon, Wrench, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
+
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Grid, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -25,6 +26,7 @@ import type {
 } from "~/entities/entities";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import { useRecipeUsage } from "./recipe-usage-context";
 
 // Cap each section's initial render so one noisy detector (e.g. 50+ unit-coverage
@@ -285,7 +287,7 @@ export function ProblemSection<T>({
         {meter && (
           <Stack gap="xs" className="pt-2">
             <Progress value={meter.total - total} max={meter.total} />
-            <span className="font-mono text-slate text-xs uppercase tracking-wider">
+            <span className="font-mono text-xs tracking-wider text-slate uppercase">
               {meter.total - total} of {meter.total} {meter.doneLabel}
               {" · "}
               {total} remaining
@@ -458,7 +460,7 @@ function ProblemCard({ rendered }: { rendered: RenderedProblemItem }) {
         <div className="flex flex-wrap gap-1">{badges}</div>
       )}
       {recipeCount !== undefined && (
-        <div className="text-muted-foreground text-xs">
+        <div className="text-xs text-muted-foreground">
           Used in {recipeCount} {recipeCount === 1 ? "recipe" : "recipes"}
         </div>
       )}

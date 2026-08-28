@@ -6,6 +6,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
 import {
   AgentAnswer,
   AgentSourceContent,
@@ -104,7 +105,7 @@ function AskPage() {
 
         {!hasRun && (
           <Stack gap="sm">
-            <Row align="center" gap="snug" className="eyebrow px-1">
+            <Row align="center" gap="snug" className="px-1 eyebrow">
               <Sparkles className="size-3.5" />
               Try asking
             </Row>
@@ -158,7 +159,7 @@ function AskPage() {
               toolCalls={
                 toolCalls.length > 0 ? (
                   <details className="border border-border/50 px-2 py-2">
-                    <summary className="eyebrow cursor-pointer">
+                    <summary className="cursor-pointer eyebrow">
                       {toolCalls.length} tool call
                       {toolCalls.length === 1 ? "" : "s"}
                     </summary>

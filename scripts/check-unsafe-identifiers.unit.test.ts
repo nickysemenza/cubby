@@ -20,9 +20,10 @@ describe("unsafe identifier guard", () => {
       fixture("unsafe-helper-declaration.txt"),
     );
 
-    assert.deepEqual(violations.map((violation) => violation.kind), [
-      "unsafe-helper-declaration",
-    ]);
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      ["unsafe-helper-declaration"],
+    );
   });
 
   it("rejects imported unsafe helpers and calls through aliases", () => {
@@ -31,10 +32,10 @@ describe("unsafe identifier guard", () => {
       fixture("unsafe-helper-import-and-call.txt"),
     );
 
-    assert.deepEqual(violations.map((violation) => violation.kind), [
-      "unsafe-helper-import",
-      "unsafe-helper-call",
-    ]);
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      ["unsafe-helper-import", "unsafe-helper-call"],
+    );
   });
 
   it("rejects namespace imports and member calls", () => {
@@ -43,11 +44,10 @@ describe("unsafe identifier guard", () => {
       fixture("member-and-namespace.txt"),
     );
 
-    assert.deepEqual(violations.map((violation) => violation.kind), [
-      "unsafe-helper-import",
-      "unsafe-helper-call",
-      "unsafe-helper-call",
-    ]);
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      ["unsafe-helper-import", "unsafe-helper-call", "unsafe-helper-call"],
+    );
   });
 
   it("rejects production imports of the test-only identifier module", () => {
@@ -56,9 +56,10 @@ describe("unsafe identifier guard", () => {
       fixture("testing-module-import.txt"),
     );
 
-    assert.deepEqual(violations.map((violation) => violation.kind), [
-      "unsafe-helper-import",
-    ]);
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      ["unsafe-helper-import"],
+    );
   });
 
   it("rejects re-exports and non-static module loading bypasses", () => {
@@ -67,13 +68,16 @@ describe("unsafe identifier guard", () => {
       fixture("module-bypass-imports.txt"),
     );
 
-    assert.deepEqual(violations.map((violation) => violation.kind), [
-      "unsafe-helper-import",
-      "unsafe-helper-import",
-      "unsafe-helper-import",
-      "unsafe-helper-import",
-      "unsafe-helper-import",
-    ]);
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      [
+        "unsafe-helper-import",
+        "unsafe-helper-import",
+        "unsafe-helper-import",
+        "unsafe-helper-import",
+        "unsafe-helper-import",
+      ],
+    );
   });
 
   it("allows test-only module loading in test paths", () => {
@@ -127,13 +131,16 @@ const required = require("@cubby/schemas/testing");
       fixture("adversarial-bypasses.txt"),
     );
 
-    assert.deepEqual(violations.map((violation) => violation.kind), [
-      "unsafe-helper-call",
-      "unsafe-helper-declaration",
-      "unsafe-helper-call",
-      "unsafe-helper-import",
-      "unsafe-helper-import",
-    ]);
+    assert.deepEqual(
+      violations.map((violation) => violation.kind),
+      [
+        "unsafe-helper-call",
+        "unsafe-helper-declaration",
+        "unsafe-helper-call",
+        "unsafe-helper-import",
+        "unsafe-helper-import",
+      ],
+    );
   });
 
   it("does not treat ordinary parsing or strings as violations", () => {

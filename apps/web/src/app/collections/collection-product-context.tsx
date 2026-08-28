@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Check, ClipboardCopy, MapPin, ReceiptText } from "lucide-react";
 import { useEffect, useState } from "react";
+
 import { TradeBadge } from "~/app/projects/trade-options";
 import {
   Popover,
@@ -82,7 +83,7 @@ export function ProductPlacementsPopover({
         {placements.length} {placements.length === 1 ? "location" : "locations"}
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-80 p-0">
-        <PopoverHeader className="border-border border-b p-2">
+        <PopoverHeader className="border-b border-border p-2">
           <PopoverTitle>Current locations</PopoverTitle>
         </PopoverHeader>
         <div className="max-h-72 overflow-y-auto">
@@ -91,9 +92,9 @@ export function ProductPlacementsPopover({
               key={placement.id}
               to="/locations/$shortcode"
               params={{ shortcode: placement.id }}
-              className="block border-border border-b p-2 transition-colors last:border-b-0 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
+              className="block border-b border-border p-2 transition-colors last:border-b-0 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
             >
-              <span className="block font-medium text-xs">
+              <span className="block text-xs font-medium">
                 {placement.name}
               </span>
               <span className="mt-1 block text-2xs text-muted-foreground">
@@ -132,19 +133,19 @@ export function ProductPurchasesPopover({
         {purchases.length} {purchases.length === 1 ? "purchase" : "purchases"}
       </PopoverTrigger>
       <PopoverContent side="bottom" align="start" className="w-80 p-0">
-        <PopoverHeader className="border-border border-b p-2">
+        <PopoverHeader className="border-b border-border p-2">
           <PopoverTitle>Purchase history</PopoverTitle>
         </PopoverHeader>
         <div className="max-h-80 overflow-y-auto">
           {purchases.map((purchase) => (
             <div
               key={purchase.id}
-              className="border-border border-b p-2 last:border-b-0"
+              className="border-b border-border p-2 last:border-b-0"
             >
               <Link
                 to="/purchases/$shortcode"
                 params={{ shortcode: purchase.id }}
-                className="font-medium text-xs hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                className="text-xs font-medium hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-ring"
               >
                 {purchaseLabel(purchase)}
               </Link>

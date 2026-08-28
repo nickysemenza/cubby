@@ -5,6 +5,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { sampleLocations } from "~/app/docs/_data/samples";
 
 vi.mock("@tanstack/react-router", () => ({

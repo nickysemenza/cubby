@@ -5,6 +5,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { ShoppingCart } from "lucide-react";
+
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 // Meal planning calendar (month overview and weekly focus).
 import { MEAL_VIEW_OPTIONS, MealCalendarPage } from "~/app/meals/calendar-page";

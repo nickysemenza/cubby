@@ -7,9 +7,11 @@ import type {
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, GitMerge } from "lucide-react";
 import { useId, useMemo } from "react";
+
 import { Badge } from "~/components/ui/badge";
 import { Table, TableBody, TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
@@ -64,7 +66,7 @@ function FlowSourceContent({
 
   return (
     <>
-      <span className="min-w-0 font-medium text-xs leading-tight">
+      <span className="min-w-0 text-xs leading-tight font-medium">
         {usage.type === "recipe" ? (
           <Link
             to="/recipes/$shortcode"
@@ -87,7 +89,7 @@ function FlowSourceContent({
         )}
         <IngredientModifier modifier={usage.modifier} />
         {source.role && (
-          <span className="block font-mono text-2xs text-slate uppercase tracking-wider">
+          <span className="block font-mono text-2xs tracking-wider text-slate uppercase">
             {source.role}
           </span>
         )}
@@ -110,7 +112,7 @@ function FlowOperationContent({
 }) {
   return (
     <>
-      <span className="font-mono text-2xs text-slate uppercase tracking-wider">
+      <span className="font-mono text-2xs tracking-wider text-slate uppercase">
         {operation.label}
       </span>
       {operation.outputLabel && (
@@ -124,7 +126,7 @@ function FlowOperationContent({
             <Badge
               variant={annotation.kind === "cue" ? "outline" : "slate"}
               key={`${annotation.kind}:${annotation.text}`}
-              className="font-sans normal-case tracking-normal"
+              className="font-sans tracking-normal normal-case"
             >
               {annotation.text}
             </Badge>
@@ -383,7 +385,7 @@ export function RecipeFlowTable({
           <TableRow key={source.id} className="h-14 hover:bg-transparent">
             <TableCell
               className={cn(
-                "min-w-56 whitespace-normal border-r bg-card",
+                "min-w-56 border-r bg-card whitespace-normal",
                 selectedOperationId != null &&
                   !related.has(source.id) &&
                   "opacity-40",
@@ -418,7 +420,7 @@ export function RecipeFlowTable({
                   key={column}
                   rowSpan={placement.rowEnd - placement.rowStart + 1}
                   className={cn(
-                    "min-w-40 whitespace-normal border-r border-b bg-muted p-0 text-center align-middle",
+                    "min-w-40 border-r border-b bg-muted p-0 text-center align-middle whitespace-normal",
                     outputs.has(operation.id) && "bg-positive/10",
                     dimmed && "opacity-40",
                   )}

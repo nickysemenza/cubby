@@ -2,9 +2,11 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+
 import { NetBarBreakdown } from "~/app/_components/charts/kit";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
+
 import { ProjectChartLabel, ProjectChartTick } from "../project-mark";
 import { ChartTooltip } from "./ChartTooltip";
 

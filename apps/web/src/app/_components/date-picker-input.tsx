@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import {
   Popover,
   PopoverContent,
@@ -169,8 +170,8 @@ export function DatePickerInput({
   const isPickerElement = (element: Element | null) =>
     Boolean(
       element &&
-        (rootRef.current?.contains(element) ||
-          element.closest('[data-slot="popover-content"]')),
+      (rootRef.current?.contains(element) ||
+        element.closest('[data-slot="popover-content"]')),
     );
 
   const handleCompositeBlur = (event: FocusEvent<HTMLDivElement>) => {
@@ -254,7 +255,7 @@ export function DatePickerInput({
           <PopoverTrigger
             aria-label="Open calendar"
             disabled={disabled}
-            className="inline-flex h-full w-7 shrink-0 items-center justify-center border-border border-l text-muted-foreground transition-colors hover:bg-input/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-[2px] focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
+            className="inline-flex h-full w-7 shrink-0 items-center justify-center border-l border-border text-muted-foreground transition-colors hover:bg-input/40 hover:text-foreground focus-visible:ring-[2px] focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
           >
             <CalendarIcon className="size-3.5" />
           </PopoverTrigger>
@@ -263,7 +264,7 @@ export function DatePickerInput({
           <p
             id={errorId}
             role="alert"
-            className="mt-1 text-destructive text-xs"
+            className="mt-1 text-xs text-destructive"
           >
             {error}
           </p>
@@ -272,7 +273,7 @@ export function DatePickerInput({
       <PopoverContent align="start" className="w-auto p-0">
         <Suspense
           fallback={
-            <div className="p-4 text-muted-foreground text-xs">Loading…</div>
+            <div className="p-4 text-xs text-muted-foreground">Loading…</div>
           }
         >
           <Calendar

@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { ChevronRight, Network, RotateCcw } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
+
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Button } from "~/components/ui/button";
 import type { EntityDetailRoute } from "~/entities/entities";
@@ -11,6 +12,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import { TableLink } from "../table/TableLink";
 
 /** The maximum number of entity rows an Expand all request may reveal. */
@@ -113,7 +115,7 @@ function EntityRow({
     <div>
       <div
         className={cn(
-          "flex min-w-0 items-center gap-1 border-[var(--border)] border-t px-2 py-1 text-sm",
+          "flex min-w-0 items-center gap-1 border-t border-[var(--border)] px-2 py-1 text-sm",
           item.cycle && "text-muted-foreground",
         )}
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
@@ -166,7 +168,7 @@ function EntityRow({
           </span>
         )}
         {item.cycle && (
-          <span className="shrink-0 font-mono text-2xs text-slate uppercase tracking-wider">
+          <span className="shrink-0 font-mono text-2xs tracking-wider text-slate uppercase">
             Reference
           </span>
         )}
@@ -203,7 +205,7 @@ function GroupRow({
     <div>
       <button
         type="button"
-        className="flex min-h-11 w-full items-center gap-1 border-[var(--border)] border-t px-2 py-1 text-left font-mono text-2xs text-slate uppercase tracking-wider hover:bg-muted md:min-h-0"
+        className="flex min-h-11 w-full items-center gap-1 border-t border-[var(--border)] px-2 py-1 text-left font-mono text-2xs tracking-wider text-slate uppercase hover:bg-muted md:min-h-0"
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
         aria-expanded={expanded}
         onClick={onToggle}
@@ -221,14 +223,14 @@ function GroupRow({
           {visibleItems.map((item) => renderEntity(item, depth + 1))}
           {visibleItems.length === 0 && !loading && !error && (
             <p
-              className="border-[var(--border)] border-t px-2 py-1 text-muted-foreground text-sm"
+              className="border-t border-[var(--border)] px-2 py-1 text-sm text-muted-foreground"
               style={{ paddingLeft: `${(depth + 1) * 1.25 + 0.5}rem` }}
             >
               No linked records.
             </p>
           )}
           {loading && (
-            <p className="border-[var(--border)] border-t px-2 py-1 text-muted-foreground text-sm">
+            <p className="border-t border-[var(--border)] px-2 py-1 text-sm text-muted-foreground">
               Loading…
             </p>
           )}
@@ -467,7 +469,7 @@ export function RelationshipTree({
       >
         {expandedNode && loadingNodes.has(nodeKey) && (
           <p
-            className="border-[var(--border)] border-t px-2 py-1 text-muted-foreground text-sm"
+            className="border-t border-[var(--border)] px-2 py-1 text-sm text-muted-foreground"
             style={{ paddingLeft: `${(depth + 1) * 1.25 + 0.5}rem` }}
           >
             Loading connections…
@@ -498,7 +500,7 @@ export function RelationshipTree({
 
   return (
     <section className={cn("min-w-0", className)} aria-label="Relationships">
-      <div className="flex flex-wrap items-center gap-1 border-[var(--border)] border-b pb-2">
+      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--border)] pb-2">
         {presets.map((preset) => (
           <Button
             key={preset.key}
@@ -522,7 +524,7 @@ export function RelationshipTree({
           </Button>
         </span>
       </div>
-      <div className="border-[var(--border)] border-x border-b">
+      <div className="border-x border-b border-[var(--border)]">
         {activePreset.groups.map((group) => {
           const stateKey = groupStateKey(activePreset.key, group.key);
           return (
@@ -543,7 +545,7 @@ export function RelationshipTree({
         })}
       </div>
       {limitMessage && (
-        <p className="mt-2 text-muted-foreground text-sm">{limitMessage}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{limitMessage}</p>
       )}
     </section>
   );

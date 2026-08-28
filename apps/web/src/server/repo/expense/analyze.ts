@@ -34,6 +34,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -41,6 +42,7 @@ import {
   EXPENSE_MONTH_BUCKET,
   expenseAggregateFields,
 } from "~/server/repo/expense-aggregate-sql";
+
 import { buildExpenseWhereClause } from "./lookup";
 
 const ROW_LIMIT = 200;

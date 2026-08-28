@@ -1,5 +1,6 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
+
 import {
   describeRecordedSpendChange,
   fillRecordedSpendMonths,

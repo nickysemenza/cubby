@@ -1,7 +1,9 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { useCallback } from "react";
+
 import { useUpcLookup } from "~/app/_components/inventory/hooks/useUpcLookup";
+
 import type { ComboboxItem } from "../combobox/combobox-types";
 
 /**

@@ -1,8 +1,9 @@
 import type { LocationSuggestionAiResult } from "@cubby/schemas/ai";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { describe, expect, it } from "vitest";
+
 import type { LocationPutAwayCandidate } from "~/server/repo/location";
+
 import {
   formatLocationCandidates,
   resolveSuggestedLocation,

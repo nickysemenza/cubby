@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { type ChainNode, longestChains } from "./gantt-chain";
 
 function node(params: {

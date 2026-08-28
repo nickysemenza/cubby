@@ -1,6 +1,7 @@
 import { ResponsiveCalendar } from "@nivo/calendar";
 import type { ComponentProps, ReactNode } from "react";
 import { useState } from "react";
+
 import { nivoMotion } from "~/lib/nivo-theme";
 
 interface CalendarHeatmapProps<T> {
@@ -63,13 +64,13 @@ export function CalendarHeatmap<T>({
       {selectedDay && selectedItems.length > 0 && (
         <div className="border border-[var(--border)] bg-muted/30 p-4">
           <div className="mb-2 flex items-center justify-between">
-            <span className="font-medium text-sm">
+            <span className="text-sm font-medium">
               {summary(selectedDay, selectedItems)}
             </span>
             <button
               type="button"
               onClick={() => setSelectedDay(null)}
-              className="text-muted-foreground text-xs hover:text-foreground"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               Close
             </button>

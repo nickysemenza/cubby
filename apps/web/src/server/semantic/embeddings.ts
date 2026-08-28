@@ -1,9 +1,11 @@
 import { LRUCache } from "lru-cache";
+
 import { env } from "~/env";
 import { recordAiUsage } from "~/server/ai-usage";
 import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
+
 import { getSemanticEmbeddingConfig } from "./config";
 
 interface EmbeddingResponse {

@@ -26,6 +26,7 @@ import { eq } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
@@ -46,6 +47,7 @@ import {
   upcLookupCache,
   vendor as vendorTable,
 } from "~/server/db/schema";
+
 import { findViewProblems } from "../services/problem-views.service";
 import {
   findAllProblems,

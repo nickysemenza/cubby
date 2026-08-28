@@ -1,13 +1,14 @@
 import type { TaskOut } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
+
+import { cellTasks } from "./board-model";
+import type { BoardColumnKey } from "./board-types";
 import {
   axisColorChip,
   axisLabel,
   BoardCell,
   type CardRenderProps,
 } from "./BoardColumn";
-import { cellTasks } from "./board-model";
-import type { BoardColumnKey } from "./board-types";
 
 /**
  * The phone form of the task board.
@@ -55,7 +56,7 @@ export function BoardAgenda({
 
   if (visibleGroups.length === 0) {
     return (
-      <p className="flex min-h-32 items-center justify-center border border-muted-foreground/20 border-dashed p-4 text-muted-foreground text-sm">
+      <p className="flex min-h-32 items-center justify-center border border-dashed border-muted-foreground/20 p-4 text-sm text-muted-foreground">
         No tasks to show
       </p>
     );
@@ -68,7 +69,7 @@ export function BoardAgenda({
           key={group.column.status}
           className="border border-border bg-card"
         >
-          <h3 className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-b-foreground bg-card px-2 py-1 font-mono text-2xs uppercase tracking-wider">
+          <h3 className="sticky top-0 z-10 flex items-center gap-2 border-b-2 border-b-foreground bg-card px-2 py-1 font-mono text-2xs tracking-wider uppercase">
             {axisColorChip(group.column)}
             <span>{axisLabel(group.column)}</span>
             <span className="ml-auto text-slate tabular-nums">

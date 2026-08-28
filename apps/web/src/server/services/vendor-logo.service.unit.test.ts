@@ -1,7 +1,7 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-
 import type * as ExternalFetch from "@cubby/shared/external-fetch";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import type * as ImageIntegrity from "~/server/services/image-integrity";
 
 const mocks = vi.hoisted(() => ({

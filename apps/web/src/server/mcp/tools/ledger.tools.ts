@@ -7,6 +7,7 @@ import {
   suggestFinancialTransferPairsInput,
 } from "@cubby/schemas/household-contribution";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
 /** Standard entity surface only: detailed ledger invariants stay in the repos. */

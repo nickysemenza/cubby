@@ -17,16 +17,16 @@
       "enabled": true,
       "head_sampling_rate": 1,
       "invocation_logs": true,
-      "destinations": ["grafana-logs"]
+      "destinations": ["grafana-logs"],
     },
     "traces": {
       "enabled": true,
       "head_sampling_rate": 1,
-      "destinations": ["grafana-traces"]
-    }
+      "destinations": ["grafana-traces"],
+    },
   },
   "placement": {
-    "mode": "smart"
+    "mode": "smart",
   },
 
   "d1_databases": [
@@ -34,18 +34,18 @@
       "binding": "DB",
       "database_name": "usda-api-index",
       "database_id": "e2e0037c-6046-4b66-85d9-03ceb0770db6",
-      "migrations_dir": "edge-migrations"
-    }
+      "migrations_dir": "edge-migrations",
+    },
   ],
 
   "r2_buckets": [
     {
       "binding": "USDA_BUNDLES",
-      "bucket_name": "usda-api-bundles"
-    }
+      "bucket_name": "usda-api-bundles",
+    },
   ],
 
   "vars": {
-    "SENTRY_ENVIRONMENT": "production"
-  }
+    "SENTRY_ENVIRONMENT": "production",
+  },
 }

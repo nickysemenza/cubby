@@ -1,5 +1,7 @@
 import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
+
 import { wasm } from "~/lib/wasm";
+
 import type {
   MassGramsPort,
   YieldFractionPort,

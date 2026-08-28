@@ -11,7 +11,9 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { auditLog, purchaseProduct } from "~/server/db/schema";
+
 import { getDb, notDeleted } from "./database-helpers";
 import { createExpense } from "./expense";
 import { deleteProducts } from "./product";

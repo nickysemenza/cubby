@@ -1,6 +1,8 @@
 import { telemetryMessageV1Schema } from "@cubby/schemas/telemetry";
+
 import type { Database } from "~/server/db";
 import { persistTelemetryMessages } from "~/server/repo/telemetry";
+
 import type { TelemetryQueueBatch } from "./telemetry-queue-types";
 
 export async function processTelemetryQueueBatch(

@@ -1,8 +1,8 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { testShortcode } from "@cubby/schemas/testing";
-
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { describe, expect, it } from "vitest";
+
 import {
   computeInventoryValuation,
   computeInventoryValuations,

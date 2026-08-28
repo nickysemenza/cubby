@@ -4,11 +4,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const markdownFiles = execFileSync(
-  "git",
-  ["ls-files", "--", "*.md", "*.mdx"],
-  { cwd: repositoryRoot, encoding: "utf8" },
-)
+const markdownFiles = execFileSync("git", ["ls-files", "--", "*.md", "*.mdx"], {
+  cwd: repositoryRoot,
+  encoding: "utf8",
+})
   .trim()
   .split("\n")
   .filter(Boolean)
@@ -34,7 +33,9 @@ for (const file of markdownFiles) {
       continue;
     }
 
-    const path = decodeURIComponent(target.split("#", 1)[0]?.split("?", 1)[0] ?? "");
+    const path = decodeURIComponent(
+      target.split("#", 1)[0]?.split("?", 1)[0] ?? "",
+    );
     if (!path) continue;
     if (!existsSync(resolve(repositoryRoot, dirname(file), path))) {
       const line = content.slice(0, match.index).split("\n").length;
@@ -48,5 +49,7 @@ if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
   process.exitCode = 1;
 } else {
-  console.log(`Checked relative links in ${markdownFiles.length} Markdown files.`);
+  console.log(
+    `Checked relative links in ${markdownFiles.length} Markdown files.`,
+  );
 }

@@ -1,5 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
+
 import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
+
 import {
   type EntityDetailScoped,
   entityDetailFor,

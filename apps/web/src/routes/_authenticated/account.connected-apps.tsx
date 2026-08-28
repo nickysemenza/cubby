@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { oauth } from "~/app/account/connected-apps.functions";
 import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
@@ -70,14 +71,14 @@ function ConnectedAppsPage() {
 
   return (
     <Page variant="list" title="Connected apps">
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         Applications you've authorized to reach cubby's MCP API over OAuth.
         Revoking kills the app's tokens immediately; it can reconnect by signing
         in again.
       </p>
 
       {isLoading ? (
-        <p className="text-muted-foreground text-xs">Loading…</p>
+        <p className="text-xs text-muted-foreground">Loading…</p>
       ) : error ? (
         <Stack gap="sm">
           <ErrorDisplay error={error} />
@@ -86,7 +87,7 @@ function ConnectedAppsPage() {
           </Button>
         </Stack>
       ) : !apps?.length ? (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           Nothing connected. Add cubby as a connector in Claude (or any MCP
           client) pointing at <code>/api/mcp</code> to authorize one.
         </p>
@@ -126,12 +127,12 @@ function ConnectedAppsPage() {
                     ))}
                   </Row>
                 </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
+                <TableCell className="text-xs text-muted-foreground">
                   {app.grantedAt
                     ? new Date(app.grantedAt).toLocaleDateString()
                     : "—"}
                 </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
+                <TableCell className="text-xs text-muted-foreground">
                   {app.lastActiveAt
                     ? new Date(app.lastActiveAt).toLocaleString()
                     : "never"}

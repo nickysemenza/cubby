@@ -1,5 +1,6 @@
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import { useState } from "react";
+
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";

@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
 import { type ReactNode, Suspense, useState } from "react";
+
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
@@ -9,6 +10,7 @@ import { useHydrated } from "~/hooks/useHydrated";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
+
 import {
   AuthenticatedShellAccount,
   AuthenticatedShellControls,
@@ -82,7 +84,7 @@ export function AuthenticatedAppShell({
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         {/* Today owns the Cubby mark. Working routes use semantic local chrome
             so a deep link still says where it is and where Back will go. */}
-        <div className="safe-top sticky top-0 z-40 border-border border-b bg-card md:hidden print:hidden">
+        <div className="safe-top sticky top-0 z-40 border-b border-border bg-card md:hidden print:hidden">
           <MobileRouteBar pathname={pathname} onSearchClick={onSearchClick} />
           {navigationProgress}
         </div>
@@ -147,7 +149,7 @@ function MobileRouteBar({
       >
         <ChevronLeft className="size-5" />
       </Button>
-      <p className="truncate font-heading font-semibold text-sm tracking-tight">
+      <p className="truncate font-heading text-sm font-semibold tracking-tight">
         {descriptor.label}
       </p>
       <Suspense fallback={<div className="h-8 w-20" aria-hidden="true" />}>
@@ -162,8 +164,8 @@ function DesktopCommandHeader({
   navigationProgress,
 }: Pick<AuthenticatedAppShellProps, "onSearchClick" | "navigationProgress">) {
   return (
-    <header className="sticky top-0 z-40 hidden h-12 items-center border-border border-b bg-card px-4 md:flex md:px-6 print:hidden">
-      <p className="font-medium text-muted-foreground text-xs">Cubby</p>
+    <header className="sticky top-0 z-40 hidden h-12 items-center border-b border-border bg-card px-4 md:flex md:px-6 print:hidden">
+      <p className="text-xs font-medium text-muted-foreground">Cubby</p>
       <Button
         variant="ghost"
         size="sm"
@@ -214,14 +216,14 @@ function WorkspaceSidebar({
   return (
     <aside
       className={cn(
-        "sticky top-0 hidden h-dvh shrink-0 border-border border-r bg-card md:flex md:w-[var(--app-sidebar-collapsed-width)] md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
+        "sticky top-0 hidden h-dvh shrink-0 border-r border-border bg-card md:flex md:w-[var(--app-sidebar-collapsed-width)] md:flex-col lg:transition-[width] lg:duration-150 print:hidden",
         expanded
           ? "lg:w-[var(--app-sidebar-expanded-width)]"
           : "lg:w-[var(--app-sidebar-collapsed-width)]",
       )}
       aria-label="Workspace navigation"
     >
-      <div className="flex h-12 items-center border-border border-b px-2">
+      <div className="flex h-12 items-center border-b border-border px-2">
         <Link
           to="/"
           aria-label="Cubby home"
@@ -229,7 +231,7 @@ function WorkspaceSidebar({
         >
           <img src={LOGO_SRC} alt="" className="size-6 shrink-0" />
           {expanded && (
-            <span className="hidden truncate font-heading font-semibold text-lg tracking-tight lg:block">
+            <span className="hidden truncate font-heading text-lg font-semibold tracking-tight lg:block">
               cubby
             </span>
           )}
@@ -250,7 +252,7 @@ function WorkspaceSidebar({
           />
         ))}
       </nav>
-      <div className="border-border border-t p-2">
+      <div className="border-t border-border p-2">
         <SidebarUtilityLinks
           expanded={expanded}
           activeTo={activeTo}
@@ -295,7 +297,7 @@ function SidebarUtilityLinks({
   onOpenUtility: () => void;
 }) {
   return (
-    <div className="mb-1 border-border border-b pb-1">
+    <div className="mb-1 border-b border-border pb-1">
       <div className={cn("md:block", expanded && "lg:hidden")}>
         <Suspense fallback={<SidebarRailLeafFallback item={settingsNavItem} />}>
           <RailLeaf
@@ -336,7 +338,7 @@ function SidebarUtilityLinks({
             <Wrench className="size-3.5" />
             <span className="truncate">Tools & data</span>
           </Button>
-          <div className="flex h-8 items-center gap-2 px-2 text-muted-foreground text-xs">
+          <div className="flex h-8 items-center gap-2 px-2 text-xs text-muted-foreground">
             <Suspense fallback={<div className="size-7" aria-hidden="true" />}>
               <ShellAccount />
             </Suspense>
@@ -356,8 +358,8 @@ function SidebarToday({
   expanded: boolean;
 }) {
   return (
-    <section className="mb-4 border-border border-y py-2" aria-label="Today">
-      {expanded && <p className="eyebrow hidden px-2 pb-1 lg:block">Today</p>}
+    <section className="mb-4 border-y border-border py-2" aria-label="Today">
+      {expanded && <p className="hidden px-2 pb-1 eyebrow lg:block">Today</p>}
       {todayNavItems.map((item) => (
         <div key={item.to}>
           <div className={cn("md:block", expanded && "lg:hidden")}>
@@ -443,7 +445,7 @@ function SidebarExpandedDomainGroup({
       }
       aria-label={group.label}
     >
-      <div className="mb-1 flex h-6 items-center gap-2 font-medium text-foreground text-xs">
+      <div className="mb-1 flex h-6 items-center gap-2 text-xs font-medium text-foreground">
         <span
           style={domain ? { color: `var(${domain.accentToken})` } : undefined}
           aria-hidden="true"

@@ -1,6 +1,8 @@
 import type { ProductCategory } from "@cubby/schemas/product";
+
 import { DotLabel } from "~/components/ui/dot-label";
 import { NoneValue } from "~/components/ui/none-value";
+
 import { getCategoryColor } from "./category-theme";
 
 interface CategoryLabelProps {

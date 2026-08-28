@@ -5,6 +5,7 @@ import {
   type ProblemKey,
 } from "@cubby/schemas/problems";
 import { describe, expect, it } from "vitest";
+
 import { PROBLEM_SECTIONS } from "./problem-sections";
 
 type Section = (typeof PROBLEM_SECTIONS)[number];

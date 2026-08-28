@@ -13,6 +13,7 @@ import { CalendarPlus, Info, Link2, ListChecks } from "lucide-react";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import {
   WithProductSearch,
   WithProjectSearch,
@@ -38,6 +39,7 @@ import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
+
 import { DependencyPicker } from "../_components/data-table/dependency-picker";
 import {
   type DetailSection,
@@ -175,7 +177,7 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
   return (
     <Stack gap="sm">
       {subtasks.length === 0 && !pendingSubtaskName ? (
-        <p className="text-muted-foreground text-sm">No subtasks yet.</p>
+        <p className="text-sm text-muted-foreground">No subtasks yet.</p>
       ) : (
         <Stack gap="xs">
           {subtasks.map((subtask) => (
@@ -506,7 +508,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       content: (
         <Stack gap="sm">
           <Stack gap="xs">
-            <p className="eyebrow my-0">Blocked by</p>
+            <p className="my-0 eyebrow">Blocked by</p>
             <DependencyPicker
               value={blockedBy}
               onSave={async (ids) => {
@@ -527,7 +529,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           </Stack>
           {blocking.length > 0 && (
             <Stack gap="xs">
-              <p className="eyebrow my-0">Blocks</p>
+              <p className="my-0 eyebrow">Blocks</p>
               <Row wrap gap="sm">
                 {blocking.map((t) => (
                   <TaskDependencyBadge key={t.id} {...t} />

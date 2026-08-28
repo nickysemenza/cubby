@@ -6,10 +6,12 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Lightbulb } from "lucide-react";
 import { useMemo, useState } from "react";
+
 import { project } from "~/app/projects/project.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { householdLocalDate } from "~/lib/household-date";
+
 import { expense as expenseOperations } from "./expense.functions";
 import {
   type ProjectSuggestion,
@@ -82,7 +84,7 @@ export function ProjectSuggestionChips({
   return (
     <Stack gap="xs" className="border-t pt-2">
       <Row align="center" gap="sm" wrap>
-        <Row align="center" gap="xs" className="text-slate text-xs">
+        <Row align="center" gap="xs" className="text-xs text-slate">
           <Lightbulb className="size-3" />
           ACTIVE THEN
         </Row>

@@ -1,7 +1,9 @@
 import type { CostType, ProjectStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { format } from "date-fns";
+
 import { parsePlainDate } from "~/lib/plain-date";
+
 import { diffDays } from "./charts/gantt/gantt-date";
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {

@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
+
 import type { QueryTiming } from "~/lib/query-timing";
+
 import type { EntityActionsEntry } from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import RTable, { type RTableProps } from "./Table";
@@ -42,8 +44,9 @@ export interface ListWorkbenchModel<TItem extends RowData> {
 }
 
 /** Server-backed lists always provide the complete asynchronous controls. */
-export interface ServerListWorkbenchModel<TItem extends RowData>
-  extends ListWorkbenchModel<TItem> {
+export interface ServerListWorkbenchModel<
+  TItem extends RowData,
+> extends ListWorkbenchModel<TItem> {
   isLoading: boolean;
   error: Error | null;
   timing: QueryTiming;
@@ -78,8 +81,9 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "verticalAlign"
 >;
 
-export interface ListWorkbenchProps<TItem extends RowData>
-  extends CallerOwnedProps<TItem> {
+export interface ListWorkbenchProps<
+  TItem extends RowData,
+> extends CallerOwnedProps<TItem> {
   model: ListWorkbenchModel<TItem>;
   /** Page lists own the page workbench; relationship ledgers use compact chrome. */
   mode?: "page" | "embedded";

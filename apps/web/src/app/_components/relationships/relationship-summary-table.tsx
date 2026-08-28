@@ -7,6 +7,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { VendorMark } from "~/components/entity/vendor-cell";
@@ -15,6 +16,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
+
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {

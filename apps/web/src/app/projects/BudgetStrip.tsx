@@ -1,5 +1,6 @@
 import { Row, Stack } from "~/components/layout";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { budgetRemaining, type SpendSplit } from "./spend";
 
 /**
@@ -90,7 +91,7 @@ function Figure({
 }) {
   return (
     <Stack gap="tight">
-      <span className="eyebrow my-0">{label}</span>
+      <span className="my-0 eyebrow">{label}</span>
       <span
         className={cn(
           "font-mono text-sm tabular-nums",

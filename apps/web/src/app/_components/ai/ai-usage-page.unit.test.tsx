@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { AiUsageTableStatus, UsageEntityLink } from "./ai-usage-page";
 
 vi.mock("~/app/_components/EntityInlineLinkById", () => ({

@@ -19,6 +19,7 @@ import {
   scanAtLocationInput,
   scanAtLocationOut,
 } from "@cubby/schemas/scan";
+
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,

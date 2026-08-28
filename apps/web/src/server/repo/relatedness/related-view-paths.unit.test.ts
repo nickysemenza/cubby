@@ -4,6 +4,7 @@ import {
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
 import { describe, expect, it } from "vitest";
+
 import { compileTraversal } from "./traversal";
 
 describe("related view traversal paths", () => {

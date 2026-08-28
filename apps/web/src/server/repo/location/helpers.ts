@@ -12,6 +12,7 @@ import type {
   LocationOut,
 } from "@cubby/schemas/location";
 import { sumBy } from "es-toolkit";
+
 import type { location } from "~/server/db/schema";
 import {
   isNotDeleted,
@@ -28,6 +29,7 @@ import {
   primaryGtinOf,
 } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
+
 import { mapLocationIdentityProduct } from "./identity-product";
 import type {
   LocationIdentityProductRow,

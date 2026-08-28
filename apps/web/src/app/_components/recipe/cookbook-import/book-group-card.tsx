@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useMemo, useRef } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
@@ -19,6 +20,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { importRecipeSignature } from "~/lib/recipe-signature";
+
 import {
   RecipeImportCard,
   type RecipeImportStatus,
@@ -142,7 +144,7 @@ export function BookGroupCard({
       {book.expanded && (book.recipes.length > 0 || ready) && (
         <CardContent className="space-y-2">
           {ready && name.length === 0 && (
-            <p className="text-warning-ink text-xs">
+            <p className="text-xs text-warning-ink">
               Set a book name before importing.
             </p>
           )}
@@ -292,7 +294,7 @@ function ExtractStatus({ book }: { book: Book }) {
         as="span"
         align="center"
         gap="xs"
-        className="text-muted-foreground text-xs"
+        className="text-xs text-muted-foreground"
       >
         <Spinner className="size-3" /> Extracting {e.done}/{e.total}
       </Row>
@@ -304,7 +306,7 @@ function ExtractStatus({ book }: { book: Book }) {
         as="span"
         align="center"
         gap="xs"
-        className="text-destructive text-xs"
+        className="text-xs text-destructive"
       >
         <AlertCircle className="size-3" /> {e.message}
       </Row>
@@ -346,7 +348,7 @@ function FailedChunksPanel({
           as="span"
           align="center"
           gap="xs"
-          className="text-warning-ink text-xs"
+          className="text-xs text-warning-ink"
         >
           <AlertCircle className="size-3" />
           {failed.length} chunk{failed.length === 1 ? "" : "s"} failed to

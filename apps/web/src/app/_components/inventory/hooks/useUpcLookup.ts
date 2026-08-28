@@ -8,8 +8,10 @@ import { upc as upcSchema } from "@cubby/usda-schemas";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
+
 import { product } from "~/app/products/product.functions";
 import { getErrorMessage } from "~/lib/error-utils";
+
 import { useProductLookupInvalidation } from "./useInventoryMutation";
 
 interface UseUpcLookupOptions {

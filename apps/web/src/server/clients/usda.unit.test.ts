@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { USDAClient } from "./usda";
 
 // USDA now runs on Cloudflare Workers (always available), so a fetch/timeout/5xx

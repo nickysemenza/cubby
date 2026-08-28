@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemsCoverage } from "@cubby/schemas/problems";
 import { ChevronDown, ListFilter } from "lucide-react";
 import { Fragment } from "react";
+
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Collapsible,
@@ -179,9 +180,9 @@ export function ProblemAssembly({
     listLocations.length === 1 ? listLocations[0] : undefined;
 
   return (
-    <Collapsible className="mt-2 border-border border-t pt-2">
+    <Collapsible className="mt-2 border-t border-border pt-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-2xs text-slate uppercase tracking-wider">
+        <span className="font-mono text-2xs tracking-wider text-slate uppercase">
           {isBranching ? "Any branch" : "Assembly"}
         </span>
         {queries.map((query, queryIndex) => (
@@ -194,9 +195,9 @@ export function ProblemAssembly({
             {assemblyChips(query).map((chip, chipIndex) => (
               <Fragment key={`${query.key}-${chip}`}>
                 {chipIndex > 0 && (
-                  <span className="text-muted-foreground text-xs">AND</span>
+                  <span className="text-xs text-muted-foreground">AND</span>
                 )}
-                <span className="border border-border bg-muted/40 px-2 py-1 text-foreground text-xs">
+                <span className="border border-border bg-muted/40 px-2 py-1 text-xs text-foreground">
                   {chip}
                 </span>
               </Fragment>
@@ -218,7 +219,7 @@ export function ProblemAssembly({
         )}
         {queries.some((query) => query.freshness.kind === "projection") &&
           projectionFreshness?.state !== "fresh" && (
-            <span className="border border-warning/40 bg-warning/10 px-2 py-1 text-warning-ink text-xs">
+            <span className="border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning-ink">
               {projectionFreshness?.state === "unavailable"
                 ? "Projection unavailable"
                 : "Projection stale"}
@@ -229,7 +230,7 @@ export function ProblemAssembly({
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent>
-        <div className="mt-2 space-y-2 border-border border-l pl-2 text-muted-foreground text-xs">
+        <div className="mt-2 space-y-2 border-l border-border pl-2 text-xs text-muted-foreground">
           {queries.map((query) => (
             <div key={query.key}>
               {isBranching && (

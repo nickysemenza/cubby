@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
+
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
@@ -37,6 +38,7 @@ import {
   findRelatedSearchHits,
   findSearchHits,
 } from "~/server/services/search.service";
+
 import type { EntityKernelBinding, EntityKernelContext } from "./adapter";
 import {
   type EntityCommand,

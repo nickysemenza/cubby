@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, TriangleAlert } from "lucide-react";
 import { match } from "ts-pattern";
+
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { buttonVariants } from "~/components/ui/button";
@@ -157,12 +158,12 @@ function TotalsGapList({
           >
             <div className="min-w-0 flex-1">
               <Row align="center" wrap gap="sm">
-                <span className="font-medium text-sm">{gap.name}</span>
+                <span className="text-sm font-medium">{gap.name}</span>
                 {missing.map((c) => (
                   <Badge
                     key={c.key}
                     variant="outline"
-                    className="border-warning/40 px-2 py-0 font-normal text-2xs text-warning-ink"
+                    className="border-warning/40 px-2 py-0 text-2xs font-normal text-warning-ink"
                   >
                     {c.label}
                   </Badge>
@@ -213,7 +214,7 @@ export function RecipeTotalsCoverageButton({
     <Popover>
       <PopoverTrigger
         className={cn(
-          "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-warning-ink text-xs hover:bg-warning/10",
+          "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-xs text-warning-ink hover:bg-warning/10",
         )}
       >
         <TriangleAlert className="size-3.5" />

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { AiSmokeTest } from "~/app/_components/dev/ai-smoke-test";
 import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";

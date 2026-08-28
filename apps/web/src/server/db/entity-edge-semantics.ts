@@ -31,6 +31,7 @@
 
 import type { Entity } from "@cubby/schemas/entity";
 import type { EdgeSemantics } from "@cubby/schemas/entity-integrity";
+
 import type { IncomingEdgeMap } from "./entity-incoming-edges";
 
 export const ENTITY_EDGE_SEMANTICS = {

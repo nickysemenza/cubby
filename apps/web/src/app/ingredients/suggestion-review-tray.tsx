@@ -1,5 +1,6 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { X } from "lucide-react";
+
 import { confidenceColor } from "~/app/_components/ai/ai-suggest";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -7,6 +8,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Progress } from "~/components/ui/progress";
 import { cn } from "~/lib/utils";
+
 import { UnitInput } from "./workbench-editor-core";
 import type { Suggestion } from "./workbench-row";
 
@@ -43,7 +45,7 @@ export function SuggestionReviewTray({
   return (
     <Stack gap="sm" className="border border-[var(--border)] bg-muted/20 p-4">
       <Row align="center" justify="between" gap="sm">
-        <span className="font-medium text-sm">
+        <span className="text-sm font-medium">
           Review {suggestionCount} USDA suggestion
           {suggestionCount === 1 ? "" : "s"}
         </span>

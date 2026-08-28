@@ -7,6 +7,7 @@ import { flexRender } from "@tanstack/react-table";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import type { CubbyTable } from "../data-table/table-features";
 
 const mocks = vi.hoisted(() => {

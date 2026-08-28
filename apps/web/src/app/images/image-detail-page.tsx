@@ -1,4 +1,5 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
+
 import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import {
   ImageDetail,

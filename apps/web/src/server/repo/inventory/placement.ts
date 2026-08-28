@@ -1,5 +1,6 @@
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { and, eq, type SQL, sql } from "drizzle-orm";
+
 import { inventoryEntry } from "~/server/db/schema";
 
 /**

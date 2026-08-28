@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import type { ColumnVisibilityState as VisibilityState } from "@tanstack/react-table";
 import { groupBy } from "es-toolkit";
 import { type FC, useEffect, useMemo, useState } from "react";
+
 import {
   createProjectLinkColumn,
   createTextColumn,
@@ -43,6 +44,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
 import { formatCurrency } from "~/lib/utils";
+
 import { createCubbyColumnHelper } from "../data-table/table-features";
 
 const EMPTY_EXPENSES: ExpenseOut[] = [];
@@ -327,7 +329,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
             <Link
               to="/expenses"
               search={{ productId: primaryKit.parentProductId }}
-              className="text-primary text-xs hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               See the kit's expenses →
             </Link>
@@ -421,7 +423,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
           ))}
         </Row>
       )}
-      <p className="text-muted-foreground text-sm">
+      <p className="text-sm text-muted-foreground">
         Net cost: <span className="font-mono">{formatCurrency(netCost)}</span>
         {split.contributions > 0 && (
           <>
@@ -432,7 +434,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
         )}
       </p>
       {product.pricing.derivedPrice !== null && (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           Historical unit cost: {formatCurrency(product.pricing.derivedPrice)}
           {product.pricing.partial
             ? ` from ${product.pricing.knownExpenseCount} quantified expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}`
@@ -456,7 +458,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
       <Link
         to="/expenses"
         search={{ productId: product.id }}
-        className="text-primary text-xs hover:underline"
+        className="text-xs text-primary hover:underline"
       >
         See all in ledger →
       </Link>

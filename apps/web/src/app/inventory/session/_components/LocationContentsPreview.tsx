@@ -1,8 +1,10 @@
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+
 import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
+
 import type { InventoryItem } from "./types";
 
 const MAX_THUMBS = 4;

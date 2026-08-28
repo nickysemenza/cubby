@@ -2,6 +2,7 @@ import { productShortcode } from "@cubby/shared";
 import { createFileRoute } from "@tanstack/react-router";
 import { ClipboardList, Save } from "lucide-react";
 import { useId } from "react";
+
 import {
   ProductRelationshipRouteFrame,
   type RouteBranch,
@@ -229,7 +230,7 @@ function DesignSmokeTest() {
                   style={{ background: surface }}
                 >
                   <div className="h-1.5" style={{ background: accent }} />
-                  <div className="px-2.5 py-2 font-medium text-xs">{label}</div>
+                  <div className="px-2.5 py-2 text-xs font-medium">{label}</div>
                 </div>
               ))}
             </div>
@@ -242,7 +243,7 @@ function DesignSmokeTest() {
           </CardHeader>
           <CardContent className="grid gap-4 p-0 lg:grid-cols-[minmax(0,1fr)_26rem]">
             <div className="min-w-0 px-3 pb-3 lg:py-3">
-              <p className="mb-2 text-muted-foreground text-xs">
+              <p className="mb-2 text-xs text-muted-foreground">
                 The compact strip keeps direct context close to the workbench.
               </p>
               <ProductRelationshipRouteFrame
@@ -375,7 +376,7 @@ function DesignSmokeTest() {
                   </label>
                   <label
                     htmlFor={disabledCheckboxId}
-                    className="flex min-h-11 items-center gap-2 text-muted-foreground text-sm md:min-h-0 md:text-xs"
+                    className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground md:min-h-0 md:text-xs"
                   >
                     <Checkbox id={disabledCheckboxId} disabled /> Disabled
                   </label>

@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
+
 import type { AuditEntityType } from "@cubby/schemas/audit";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { auditLog, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
+
 import { insertAndReturn, withTransaction } from "./database-helpers";
 import { updateProduct } from "./product";
 import {

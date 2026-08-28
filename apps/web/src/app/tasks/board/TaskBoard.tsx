@@ -12,6 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { keyBy } from "es-toolkit";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
@@ -27,16 +28,7 @@ import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
-import { BoardAgenda } from "./BoardAgenda";
-import {
-  axisColorChip,
-  axisKey,
-  axisLabel,
-  BoardCell,
-  BoardColumn,
-  type CardRenderProps,
-  ColumnHeader,
-} from "./BoardColumn";
+
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 import {
   buildColumns,
@@ -50,6 +42,16 @@ import {
   asDropData,
   type TaskCreatePreset,
 } from "./board-types";
+import { BoardAgenda } from "./BoardAgenda";
+import {
+  axisColorChip,
+  axisKey,
+  axisLabel,
+  BoardCell,
+  BoardColumn,
+  type CardRenderProps,
+  ColumnHeader,
+} from "./BoardColumn";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { edgeForDrop, useBoardDnd } from "./use-board-dnd";
 import {
@@ -217,7 +219,7 @@ export function TaskBoard({
   // blank board with no explanation.
   const board =
     columns.length === 0 ? (
-      <p className="flex min-h-32 items-center justify-center border border-muted-foreground/20 border-dashed p-4 text-muted-foreground text-sm">
+      <p className="flex min-h-32 items-center justify-center border border-dashed border-muted-foreground/20 p-4 text-sm text-muted-foreground">
         No tasks to show
       </p>
     ) : lanes ? (
@@ -245,7 +247,7 @@ export function TaskBoard({
             <Fragment key={axisKey(laneKey)}>
               <Row align="center" gap="tight" className="min-w-0 pt-1">
                 {axisColorChip(laneKey)}
-                <span className="truncate font-medium text-muted-foreground text-sm">
+                <span className="truncate text-sm font-medium text-muted-foreground">
                   {axisLabel(laneKey)}
                 </span>
               </Row>
@@ -361,7 +363,7 @@ export function TaskBoard({
         <DragOverlay dropAnimation={null}>
           {activeTask && (
             <DragPreviewFrame className="w-64 p-2">
-              <p className="font-medium text-sm">{activeTask.name}</p>
+              <p className="text-sm font-medium">{activeTask.name}</p>
               <p className="mt-1 font-mono text-2xs text-muted-foreground">
                 Moving task
               </p>

@@ -1,7 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { getCollectionDetail, getCollectionMatrix } from "./collection";
 import { createExpense } from "./expense";
 import { updateProduct } from "./product";

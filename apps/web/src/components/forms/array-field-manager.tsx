@@ -1,6 +1,7 @@
 import { Plus, X } from "lucide-react";
 import type * as React from "react";
 import { type Control, type FieldValues, useFieldArray } from "react-hook-form";
+
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
@@ -75,14 +76,14 @@ export const ArrayFieldManager = <
   return (
     <div className={cn("space-y-2", className)}>
       <div className="flex items-center justify-between">
-        <h3 className={cn("eyebrow my-0 font-medium", titleClassName)}>
+        <h3 className={cn("my-0 eyebrow font-medium", titleClassName)}>
           {title}
         </h3>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          className="border-[1.5px] border-border border-dashed"
+          className="border-[1.5px] border-dashed border-border"
           onClick={handleAdd}
           disabled={!canAdd}
         >
@@ -92,7 +93,7 @@ export const ArrayFieldManager = <
       </div>
 
       {fields.length === 0 && (
-        <div className="text-muted-foreground text-sm italic">
+        <div className="text-sm text-muted-foreground italic">
           No {title.toLowerCase()} added yet
         </div>
       )}

@@ -16,6 +16,7 @@ import {
 } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
@@ -265,15 +266,14 @@ export async function findTrackerEmbeddingRefsForProjects(
     }),
   ]);
   return [
-    ...tasks.map(
-      (row): SearchableEntityRef => ({ entityType: "task", entityId: row.id }),
-    ),
-    ...expenses.map(
-      (row): SearchableEntityRef => ({
-        entityType: "expense",
-        entityId: row.id,
-      }),
-    ),
+    ...tasks.map((row): SearchableEntityRef => ({
+      entityType: "task",
+      entityId: row.id,
+    })),
+    ...expenses.map((row): SearchableEntityRef => ({
+      entityType: "expense",
+      entityId: row.id,
+    })),
   ];
 }
 
@@ -333,25 +333,19 @@ export async function findEmbeddingRefsForPurchases(
   ]);
   return [
     ...(includePurchases
-      ? purchaseIds.map(
-          (entityId): SearchableEntityRef => ({
-            entityType: "purchase",
-            entityId,
-          }),
-        )
+      ? purchaseIds.map((entityId): SearchableEntityRef => ({
+          entityType: "purchase",
+          entityId,
+        }))
       : []),
-    ...expenses.map(
-      (row): SearchableEntityRef => ({
-        entityType: "expense",
-        entityId: row.id,
-      }),
-    ),
-    ...transactions.map(
-      (row): SearchableEntityRef => ({
-        entityType: "financialTransaction",
-        entityId: row.id,
-      }),
-    ),
+    ...expenses.map((row): SearchableEntityRef => ({
+      entityType: "expense",
+      entityId: row.id,
+    })),
+    ...transactions.map((row): SearchableEntityRef => ({
+      entityType: "financialTransaction",
+      entityId: row.id,
+    })),
   ];
 }
 

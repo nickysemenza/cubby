@@ -1,4 +1,5 @@
 import { type DataType, dataTypeLabel } from "@cubby/usda-schemas";
+
 import { cn } from "~/lib/utils";
 
 // Color per USDA data_type, encoding BOTH identity and the generic/branded

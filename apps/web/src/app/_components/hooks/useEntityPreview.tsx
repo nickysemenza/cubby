@@ -11,6 +11,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import {
@@ -19,6 +20,7 @@ import {
   isBrowserRoutedEntity,
 } from "~/entities/entities";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
+
 import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
 export interface PreviewState {

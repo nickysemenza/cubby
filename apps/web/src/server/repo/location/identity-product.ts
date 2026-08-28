@@ -10,7 +10,9 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationIdentityProductOut } from "@cubby/schemas/location";
+
 import { isNotDeleted, mapImages } from "~/server/repo/database-helpers";
+
 import type { LocationIdentityProductRow } from "./internal-types";
 
 export const mapLocationIdentityProduct = (

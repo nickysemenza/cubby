@@ -3,9 +3,11 @@ import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
+
 import { Button } from "~/components/ui/button";
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
+
 import { formatAmounts } from "../../inventory/format-amount";
 import { DriftIndicator } from "../../parse-drift-indicator";
 import { useResolveIngredientName } from "../use-resolve-ingredient-names";
@@ -121,7 +123,7 @@ export function IngredientReparse({
   return (
     <div className="mt-1 flex flex-col gap-y-1 pl-6">
       <span
-        className="truncate text-muted-foreground text-xs italic"
+        className="truncate text-xs text-muted-foreground italic"
         title={rawLine}
       >
         from: {rawLine}

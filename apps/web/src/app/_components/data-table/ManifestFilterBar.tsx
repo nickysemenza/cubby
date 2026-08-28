@@ -1,5 +1,6 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
+
 import type { RuntimeFilterOptions } from "~/app/_components/hooks/filter-option-types";
 import {
   type FilterSpec,
@@ -7,8 +8,9 @@ import {
 } from "~/entities/filter-manifest";
 import { decodeFilters, encodeFilters } from "~/entities/filters";
 import { cn } from "~/lib/utils";
-import { FilterBar } from "./FilterBar";
+
 import { filterStateToBarFilters } from "./filter-bar-core";
+import { FilterBar } from "./FilterBar";
 import { useFilterBarDraft } from "./useFilterBarDraft";
 
 interface ManifestFilterBarProps {

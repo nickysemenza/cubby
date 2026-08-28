@@ -38,10 +38,7 @@
       "enabled": false
     },
     {
-      "matchPackageNames": [
-        "@playwright/test",
-        "mcr.microsoft.com/playwright"
-      ],
+      "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
       "groupName": "Playwright runtime",
       "groupSlug": "playwright-runtime"
     },

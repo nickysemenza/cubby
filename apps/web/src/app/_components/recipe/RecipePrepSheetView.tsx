@@ -1,10 +1,12 @@
 import { Grid3x3, ShoppingCart } from "lucide-react";
 import { memo, useMemo, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
+
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import { IngredientComponentGrid } from "./IngredientComponentGrid";
 import {
@@ -53,7 +55,7 @@ function ShoppingList({
   if (needs.length === 0) return null;
   return (
     <details className="border border-[var(--border)] bg-muted/30 px-4 py-2 print:border-0 print:bg-transparent print:px-0">
-      <summary className="eyebrow cursor-pointer marker:content-none">
+      <summary className="cursor-pointer eyebrow marker:content-none">
         <ShoppingCart className="mr-2 inline size-3 align-[-2px]" />
         Shopping list
         <span className="ml-1 text-muted-foreground">· full batch</span>
@@ -70,7 +72,7 @@ function ShoppingList({
             justify="between"
             gap="sm"
             key={need.ingredientId}
-            className="border-border/50 border-b border-dashed py-1"
+            className="border-b border-dashed border-border/50 py-1"
           >
             <span className="truncate" title={need.name}>
               <EntityPreviewLink
@@ -82,7 +84,7 @@ function ShoppingList({
                 {need.name}
               </EntityPreviewLink>
             </span>
-            <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+            <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
               {need.grams != null ? gramText(need.grams) : "—"}
               {need.estimated && <span className="text-warning"> ~</span>}
             </span>
@@ -105,10 +107,10 @@ function PrepRow({
       <Row
         align="baseline"
         gap="sm"
-        className="border-border/60 border-b border-dashed py-2"
+        className="border-b border-dashed border-border/60 py-2"
       >
         <span className="size-3.5 shrink-0" />
-        <span className="flex-1 text-muted-foreground text-sm italic">
+        <span className="flex-1 text-sm text-muted-foreground italic">
           {row.name}{" "}
           <StubWarning>
             {row.reason === "cycle" ? "↻ cycle" : "missing"}
@@ -129,7 +131,7 @@ function PrepRow({
     <Row
       align="baseline"
       gap="sm"
-      className="border-border/60 border-b border-dashed py-2"
+      className="border-b border-dashed border-border/60 py-2"
     >
       <input
         type="checkbox"
@@ -162,7 +164,7 @@ function PrepRow({
       </span>
       <IngredientQuantities
         quantities={quantities}
-        className="shrink-0 whitespace-nowrap text-xs"
+        className="shrink-0 text-xs whitespace-nowrap"
         emptyText="—"
       />
     </Row>
@@ -207,7 +209,7 @@ function Component({
         <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-2xs text-primary">
           {index + 1}
         </span>
-        <h3 className="my-0 font-heading font-medium text-base leading-tight tracking-tight">
+        <h3 className="my-0 font-heading text-base leading-tight font-medium tracking-tight">
           <EntityPreviewLink
             displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
@@ -217,7 +219,7 @@ function Component({
             {node.recipe.name}
           </EntityPreviewLink>
         </h3>
-        <div className="ml-auto text-right font-mono text-2xs text-slate uppercase leading-tight tracking-wider">
+        <div className="ml-auto text-right font-mono text-2xs leading-tight tracking-wider text-slate uppercase">
           {makes && (
             <div>
               makes {makes}
@@ -252,16 +254,16 @@ function Component({
 
       {/* Per-serving macro split (kcal · P · F · C), the macro atom. */}
       {macro && macro.parts.length > 0 && (
-        <div className="mb-2 font-mono text-2xs text-muted-foreground lowercase tracking-wide">
+        <div className="mb-2 font-mono text-2xs tracking-wide text-muted-foreground lowercase">
           {macro.basisLabel} · {macro.parts.join(" · ")}
         </div>
       )}
 
-      <div className="border-[var(--border)] border-t">
+      <div className="border-t border-[var(--border)]">
         {node.sections.map((section, si) => (
           <div key={section.id}>
             {node.sections.length > 1 && section.name && (
-              <div className="eyebrow pt-2 pb-1">{section.name}</div>
+              <div className="pt-2 pb-1 eyebrow">{section.name}</div>
             )}
             {section.rows.map((row) => (
               <PrepRow key={row.id} row={row} gramById={gramById} />
@@ -271,7 +273,7 @@ function Component({
                 {steps.map((step) => (
                   <Row as="li" gap="sm" key={step.n}>
                     <StepNumberBadge>{step.n}</StepNumberBadge>
-                    <span className="text-muted-foreground text-sm leading-snug">
+                    <span className="text-sm leading-snug text-muted-foreground">
                       <MarkdownText className="[&_p]:my-0">
                         {step.text}
                       </MarkdownText>
@@ -312,13 +314,13 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
 
   return (
     <Stack gap="lg" className="border border-[var(--border)] bg-card px-6 py-6">
-      <header className="border-primary border-b-2 pb-2">
+      <header className="border-b-2 border-primary pb-2">
         <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-          <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
+          <h2 className="my-0 font-heading text-2xl font-semibold tracking-tight">
             {recipe.name}
           </h2>
           {recipe.yield?.value ? (
-            <span className="text-muted-foreground text-sm">
+            <span className="text-sm text-muted-foreground">
               {formatYield(recipe.yield)}
             </span>
           ) : null}
@@ -349,7 +351,7 @@ export const RecipePrepSheetView = memo(function RecipePrepSheetView({
           }}
           className="border border-[var(--border)] bg-muted/30 px-4 py-2 print:hidden"
         >
-          <summary className="eyebrow cursor-pointer marker:content-none">
+          <summary className="cursor-pointer eyebrow marker:content-none">
             <Grid3x3 className="mr-2 inline size-3 align-[-2px]" />
             Ingredient × component grid
           </summary>

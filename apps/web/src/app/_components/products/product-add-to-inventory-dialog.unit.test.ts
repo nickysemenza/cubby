@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { kitsAccountedByParts } from "./product-add-to-inventory-dialog";
 
 describe("kitsAccountedByParts", () => {

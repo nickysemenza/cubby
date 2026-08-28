@@ -134,7 +134,8 @@ const tagLiteral = (node: unknown): string[] | undefined => {
       ? element.value
       : undefined,
   );
-  return parts.every((part): part is string => part !== undefined) && parts.length
+  return parts.every((part): part is string => part !== undefined) &&
+    parts.length
     ? parts
     : undefined;
 };
@@ -150,7 +151,8 @@ const rippleReference = (node: unknown): string[][] | undefined => {
   if (!isNode(node) || node.type !== "MemberExpression") return undefined;
   const object = node.object as AstNode | undefined;
   const property = node.property as AstNode | undefined;
-  if (object?.type !== "Identifier" || object.name !== "ripple") return undefined;
+  if (object?.type !== "Identifier" || object.name !== "ripple")
+    return undefined;
   const name =
     property?.type === "Identifier"
       ? (property.name as string)
@@ -251,7 +253,8 @@ for (const file of sourceFiles(webSource).sort()) {
     }
     // (c) collect both sides of the tag contract
     if (node.type === "Property" && propertyName(node) === "tags") {
-      for (const tag of tagListLiteral(node.value) ?? []) declaredTags.push(tag);
+      for (const tag of tagListLiteral(node.value) ?? [])
+        declaredTags.push(tag);
     }
 
     // A DECLARATION position is an object-literal property or a JSX attribute.
@@ -297,7 +300,7 @@ for (const file of sourceFiles(webSource).sort()) {
     if (isTest || INVALIDATION_ENGINE.has(resolve(file))) return;
     throw new Error(
       `${where(node)}: \`${name}\` is not readable by check-invalidation-authority (got a ${String((value as AstNode | undefined)?.type ?? "missing value")}). ` +
-        "Write it as a literal tag list (`[[\"product\"]]`), a `ripple.<row>` reference, or a function — " +
+        'Write it as a literal tag list (`[["product"]]`), a `ripple.<row>` reference, or a function — ' +
         "a function is deferred to operation-tags.unit.test.ts, which replays it against a declared sample input.",
     );
   });

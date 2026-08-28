@@ -1,5 +1,7 @@
 import type { RowData, RowSelectionState } from "@tanstack/react-table";
+
 import { Checkbox } from "~/components/ui/checkbox";
+
 import type { CubbyColumnDef } from "./table-features";
 
 /**

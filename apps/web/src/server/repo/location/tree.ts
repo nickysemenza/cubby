@@ -1,11 +1,10 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
+import type { LocationId } from "@cubby/schemas/identifiers";
 /**
  * Location tree and hierarchy operations.
  * Build location trees, type counts, and import updates.
  */
-
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
   InfLocation,
   InventoryItemForTree,
@@ -13,6 +12,7 @@ import type {
   LocationInventoryBreakdownOut,
 } from "@cubby/schemas/location";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
+
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -32,6 +32,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { parseLocationType } from "~/server/repo/location/parse-type";
+
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 

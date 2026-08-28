@@ -2,6 +2,7 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { ExternalLink } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { type FC, useEffect, useRef } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { buttonVariants } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -63,11 +64,11 @@ const DocumentViewer: FC<{
   return (
     <Stack gap="xs" ref={containerRef} className="scroll-mt-16">
       <Row align="center" gap="sm" className="min-w-0">
-        <span className="min-w-0 flex-1 truncate font-medium text-sm">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {doc.filename}
         </span>
         {doc.size !== undefined && doc.size > 0 && (
-          <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+          <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
             {prettyBytes(doc.size)}
           </span>
         )}

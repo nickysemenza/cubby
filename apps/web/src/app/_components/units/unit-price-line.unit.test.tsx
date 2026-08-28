@@ -1,8 +1,9 @@
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+
 import { formatUnitPrice, UnitPriceLine } from "./unit-price-line";
 
 /**

@@ -19,10 +19,16 @@ type Advisory = {
 };
 
 const policy = JSON.parse(
-  readFileSync(new URL("../security-audit-allowlist.json", import.meta.url), "utf8"),
+  readFileSync(
+    new URL("../security-audit-allowlist.json", import.meta.url),
+    "utf8",
+  ),
 ) as { entries: AllowlistEntry[] };
 const now = new Date();
-const allowlist = new Map<string, Omit<AllowlistEntry, "expires"> & { expires: Date }>();
+const allowlist = new Map<
+  string,
+  Omit<AllowlistEntry, "expires"> & { expires: Date }
+>();
 
 for (const entry of policy.entries) {
   const reviewedAt = new Date(entry.reviewedAt);
@@ -71,5 +77,7 @@ if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
   process.exitCode = 1;
 } else {
-  console.log("Security audit gate passed (no unallowlisted critical/high advisory)");
+  console.log(
+    "Security audit gate passed (no unallowlisted critical/high advisory)",
+  );
 }

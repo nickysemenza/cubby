@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
+
 import {
   httpRouteTemplate,
   SERVER_FUNCTION_TRACE_ROUTE,

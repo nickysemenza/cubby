@@ -11,6 +11,7 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { Check } from "lucide-react";
 import { useEffect, useState } from "react";
+
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithIngredientSearch } from "~/app/_components/combobox/with-search-hook";

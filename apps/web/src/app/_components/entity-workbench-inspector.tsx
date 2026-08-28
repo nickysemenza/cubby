@@ -3,6 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import { useCallback, useState } from "react";
+
 import {
   EntityActionButtons,
   type EntityActionRow,
@@ -13,6 +14,7 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
+
 import { EntityPreviewContent } from "./EntityPreviewContent";
 import { EntityInspectorFrame, type InspectorTab } from "./inspector-frame";
 import {
@@ -49,10 +51,10 @@ function UnsupportedOverview({ entity, id }: { entity: Entity; id: string }) {
     <div className="space-y-2 px-3 py-3">
       <div className="flex items-center gap-2">
         <EntityIcon entity={entity} colored className="size-3.5" />
-        <p className="font-medium text-foreground text-xs">{label}</p>
+        <p className="text-xs font-medium text-foreground">{label}</p>
       </div>
-      <p className="font-mono text-muted-foreground text-xs">{id}</p>
-      <p className="text-muted-foreground text-xs">
+      <p className="font-mono text-xs text-muted-foreground">{id}</p>
+      <p className="text-xs text-muted-foreground">
         {isBrowserRoutedEntity(entity)
           ? "Open the full record to inspect its details."
           : "Use Relations or Activity to inspect linked records."}

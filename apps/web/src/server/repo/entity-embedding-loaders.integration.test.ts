@@ -10,8 +10,10 @@ import {
 } from "@cubby/schemas/search";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
 import { entityEmbedding } from "~/server/db/schema";
+
 import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import {

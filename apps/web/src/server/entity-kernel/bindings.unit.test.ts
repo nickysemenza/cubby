@@ -1,8 +1,10 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
+
 import { mock } from "~/lib/test/mock-schema";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
+
 import { ENTITY_KERNEL_ENTITIES, entityCommandSchema } from "./contracts";
 
 describe("entity kernel bindings", () => {

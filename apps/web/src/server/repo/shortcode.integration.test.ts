@@ -23,6 +23,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+
 import { location, product } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";

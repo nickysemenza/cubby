@@ -2,6 +2,7 @@ import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
 import { sumBy } from "es-toolkit";
 import { FileText } from "lucide-react";
 import { useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { VendorCell } from "~/components/entity/vendor-cell";
@@ -15,6 +16,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
+
 import {
   createCurrencyColumn,
   createPlainDateColumn,

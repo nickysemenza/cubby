@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import type { Database } from "~/server/db";
 
 const recordAiUsageMock = vi.hoisted(() => vi.fn());

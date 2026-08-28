@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { proposeSizeFromTitle, sizeUnitAlternation } from "./title-unit-size";
 
 /**

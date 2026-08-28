@@ -1,6 +1,7 @@
 import * as React from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
+
 import {
   perServingRange,
   perUnitSuffix,
@@ -271,7 +272,7 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
       <CardHeader className="pb-2">
         <CardTitle>{title}</CardTitle>
         {description && (
-          <p className="text-muted-foreground text-sm">{description}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         )}
       </CardHeader>
       <CardContent>

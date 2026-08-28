@@ -4,11 +4,12 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
+
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { TasksBoardView } from "~/app/tasks/board/TasksBoardView";
 import { NextTasks } from "~/app/tasks/next-tasks";
-import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
 import { TaskList } from "~/app/tasks/tasklist";
+import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Skeleton } from "~/components/ui/skeleton";

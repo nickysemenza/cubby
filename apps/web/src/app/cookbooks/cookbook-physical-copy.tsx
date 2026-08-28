@@ -6,6 +6,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { BookMarked, Link2, Link2Off } from "lucide-react";
 import { useState } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { product } from "~/app/products/product.functions";
@@ -238,7 +239,7 @@ function ProductPickerDialog({
                   type="button"
                   disabled={isPending}
                   onClick={() => onPick(item.id)}
-                  className="flex w-full items-center gap-2 rounded-sm p-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  className="flex w-full items-center gap-2 rounded-sm p-2 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
                 >
                   {item.coverImageUrl ? (
                     <Image

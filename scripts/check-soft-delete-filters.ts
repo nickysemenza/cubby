@@ -260,8 +260,7 @@ const tablePattern = new RegExp(
 );
 const callPattern = /\b(exists|notExists)\s*\(/g;
 const tableRefQuoted = /\b(?:FROM|JOIN)\s+"(\w+)"(?:\s+(?:AS\s+)?(\w+))?/g;
-const tableRefInterp =
-  /\b(?:FROM|JOIN)\s+\$\{(\w+)\}(?:\s+(?:AS\s+)?(\w+))?/g;
+const tableRefInterp = /\b(?:FROM|JOIN)\s+\$\{(\w+)\}(?:\s+(?:AS\s+)?(\w+))?/g;
 type Violation = { file: string; line: number; detail: string };
 const violations: Violation[] = [];
 
@@ -337,13 +336,16 @@ for (const file of serverSources()) {
         // review history).
         const localOpen = occ.index + occ[0].length - 1;
         const span = balancedSlice(literal, localOpen);
-        const nextStart =
-          occurrences[idx + 1]?.index ?? literal.length;
+        const nextStart = occurrences[idx + 1]?.index ?? literal.length;
         const body = span
           ? literal.slice(span[0], span[1])
           : literal.slice(occ.index, nextStart);
 
-        const refs: Array<{ table: string; alias: string; aliasIsBare: boolean }> = [];
+        const refs: Array<{
+          table: string;
+          alias: string;
+          aliasIsBare: boolean;
+        }> = [];
         tableRefQuoted.lastIndex = 0;
         let ref;
         while ((ref = tableRefQuoted.exec(body))) {

@@ -7,6 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type FC, type ReactNode, useMemo, useState } from "react";
+
 import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import {
@@ -18,6 +19,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { formatCurrency } from "~/lib/utils";
+
 import { tryFormatAmount } from "../inventory/format-amount";
 import { CategoryLabel } from "./CategoryLabel";
 import { heroPresence } from "./product-hero-presence";
@@ -30,7 +32,7 @@ const Field: FC<{ label: string; children: ReactNode }> = ({
   label,
   children,
 }) => (
-  <div className="grid grid-cols-[7.25rem_minmax(0,1fr)] gap-2 border-border border-b py-1.5 last:border-b-0">
+  <div className="grid grid-cols-[7.25rem_minmax(0,1fr)] gap-2 border-b border-border py-1.5 last:border-b-0">
     <dt className="text-muted-foreground">{label}</dt>
     <dd className="min-w-0 text-right text-foreground">{children}</dd>
   </div>
@@ -62,7 +64,7 @@ const Overview: FC<{
     <div className="space-y-3 px-3 py-3">
       <dl
         data-testid="product-inspector-truth"
-        className="border-border border-y"
+        className="border-y border-border"
       >
         <Field label={presence.onHand.label}>
           <span className="font-mono tabular-nums">
@@ -104,7 +106,7 @@ const Overview: FC<{
         />
       </div>
 
-      <dl className="border-border border-y">
+      <dl className="border-y border-border">
         <Field label="Category">
           <span className="inline-flex justify-end">
             <CategoryLabel category={product.category} />
@@ -169,8 +171,8 @@ const Overview: FC<{
       </dl>
 
       {product.notes ? (
-        <section className="border-border border-t pt-2">
-          <h3 className="font-semibold text-foreground text-xs">Notes</h3>
+        <section className="border-t border-border pt-2">
+          <h3 className="text-xs font-semibold text-foreground">Notes</h3>
           <p className="mt-1 whitespace-pre-wrap text-muted-foreground">
             {product.notes}
           </p>
@@ -209,7 +211,7 @@ function ProductInspectorContent({
       id={product.id}
       name={product.name}
       eyebrow={
-        <span className="inline-flex items-center gap-1 font-medium text-2xs text-[var(--domain-pantry)]">
+        <span className="inline-flex items-center gap-1 text-2xs font-medium text-[var(--domain-pantry)]">
           <span
             aria-hidden
             className="size-1.5 rounded-full bg-[var(--domain-pantry)]"

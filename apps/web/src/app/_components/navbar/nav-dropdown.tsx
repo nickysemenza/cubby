@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
+
 import {
   type NavGroup,
   navItemLinkProps,
@@ -22,7 +24,7 @@ export const NavDropdown = ({ group }: { group: NavGroup }) => {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "nav-link-animated flex items-center gap-2 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
+          "nav-link-animated flex items-center gap-2 text-sm font-medium transition-colors hover:text-primary focus:outline-none",
           isGroupActive ? "text-foreground" : "text-muted-foreground",
         )}
         data-status={isGroupActive ? "active" : undefined}

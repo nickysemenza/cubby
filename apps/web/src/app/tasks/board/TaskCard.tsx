@@ -4,6 +4,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { Ban, EllipsisVertical, GripVertical } from "lucide-react";
+
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { todayPlain } from "~/app/projects/charts/gantt/gantt-date";
@@ -29,6 +30,7 @@ import {
 import { entities, entityDetailParams } from "~/entities/entities";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { cn } from "~/lib/utils";
+
 import { TASK_STATUS_LABELS, taskStatusBadgeVariant } from "../task-options";
 import type {
   BoardColumnKey,
@@ -180,7 +182,7 @@ export function TaskCard({
             </Button>
             <button
               type="button"
-              className="line-clamp-2 min-h-11 min-w-0 text-left font-medium text-sm underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
+              className="line-clamp-2 min-h-11 min-w-0 text-left text-sm font-medium underline-offset-2 hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-0"
               title={task.name}
               onClick={open}
             >
@@ -261,24 +263,25 @@ export function TaskCard({
             </Badge>
           )}
           {showTrade && <TradeBadge trade={task.trade} />}
-          {showProject && task.projectId && (
-            // biome-ignore lint/a11y/noStaticElementInteractions: bare stopPropagation guard so a card click doesn't fire when the inner link is used
-            <span
-              onClick={(e) => e.stopPropagation()}
-              className="min-w-0 max-w-40"
-              title={task.projectName ?? undefined}
-            >
-              <EntityInlineLink
-                displayImage={undefined}
-                entity="project"
-                truncate
-                data={{
-                  id: task.projectId,
-                  name: task.projectName ?? "",
-                }}
-              />
-            </span>
-          )}
+          {showProject &&
+            task.projectId && (
+              // biome-ignore lint/a11y/noStaticElementInteractions: bare stopPropagation guard so a card click doesn't fire when the inner link is used
+              <span
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-40 min-w-0"
+                title={task.projectName ?? undefined}
+              >
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="project"
+                  truncate
+                  data={{
+                    id: task.projectId,
+                    name: task.projectName ?? "",
+                  }}
+                />
+              </span>
+            )}
           {task.blockedByIds.length > 0 && (
             <Tooltip>
               <TooltipTrigger

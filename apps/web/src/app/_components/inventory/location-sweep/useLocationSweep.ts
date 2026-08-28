@@ -1,4 +1,4 @@
-import { location } from "~/app/locations/location.functions";
+import type { LocationShortcode } from "@cubby/schemas/identifiers";
 /**
  * The state behind a location sweep: a serialized scan queue and the strays it
  * turns up.
@@ -18,8 +18,6 @@ import { location } from "~/app/locations/location.functions";
  * lookup already in flight, so every scan also carries the anchor it was READ
  * at and a late result against a stale anchor is discarded outright.
  */
-
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type {
   ResolveScanStraysOut,
   ScanAtLocationOut,
@@ -28,15 +26,18 @@ import type {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
 import { inventory } from "~/app/inventory/inventory.functions";
+import { location } from "~/app/locations/location.functions";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";
-import type { SweepFollowUp } from "./SweepProductFollowUp";
+
 import type { QueuedBin, SweepBinVerdict } from "./sweep-bin-plan";
 import { canGoMissing, planSweptBin } from "./sweep-bin-plan";
+import type { SweepFollowUp } from "./SweepProductFollowUp";
 
 /** How many recently-scanned chips the viewfinder shows (newest first). */
 const RECENT_SCAN_LIMIT = 5;

@@ -2,6 +2,7 @@ import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+
 import { callMcpTool } from "./mcp-test-utils";
 import { listMcpToolCatalog } from "./server";
 import { registerMcpTool, stripMockFromJsonSchema } from "./tools/_shared";

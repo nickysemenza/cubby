@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useAgentStream } from "~/app/_components/hooks/useAgentStream";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -170,7 +171,7 @@ function EndpointCard({
           <StatusBadge state={state} />
         </Row>
         {state.error && (
-          <pre className="overflow-auto whitespace-pre-wrap text-2xs text-destructive">
+          <pre className="overflow-auto text-2xs whitespace-pre-wrap text-destructive">
             {state.error}
           </pre>
         )}
@@ -224,12 +225,12 @@ function AgentStreamCard() {
           )}
         </Row>
         {stream.error && (
-          <pre className="overflow-auto whitespace-pre-wrap text-2xs text-destructive">
+          <pre className="overflow-auto text-2xs whitespace-pre-wrap text-destructive">
             {stream.error}
           </pre>
         )}
         {stream.answer && (
-          <div className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-2 text-xs/relaxed">
+          <div className="max-h-72 overflow-auto rounded-md bg-muted/40 p-2 text-xs/relaxed whitespace-pre-wrap">
             {stream.answer}
           </div>
         )}

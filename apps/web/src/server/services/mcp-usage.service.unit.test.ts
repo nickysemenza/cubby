@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type * as McpUsage from "~/server/repo/mcp-usage";
 
 const getMcpUsageAggregateData = vi.fn();

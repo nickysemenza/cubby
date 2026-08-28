@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
+
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
 import {
   canAllowConsent,
@@ -122,7 +123,7 @@ function ConsentPage() {
     <AuthEntryFrame>
       <Card>
         <CardHeader>
-          <div className="text-slate text-xs">Authorize access</div>
+          <div className="text-xs text-slate">Authorize access</div>
           <CardTitle>{appName}</CardTitle>
           <CardDescription>
             {clientState.kind === "loading"
@@ -138,13 +139,13 @@ function ConsentPage() {
               <div className="font-mono text-2xs text-slate">{clientId}</div>
             )}
             {clientState.kind === "invalid" && (
-              <p role="alert" className="text-destructive text-xs">
+              <p role="alert" className="text-xs text-destructive">
                 {clientState.message}
               </p>
             )}
             {clientState.kind === "error" && (
               <Stack gap="sm">
-                <p role="alert" className="text-destructive text-xs">
+                <p role="alert" className="text-xs text-destructive">
                   {clientState.message}
                 </p>
                 <div>
@@ -156,12 +157,12 @@ function ConsentPage() {
             )}
             {scopes.length > 0 && (
               <Stack gap="sm">
-                <div className="text-slate text-xs">Permissions requested</div>
+                <div className="text-xs text-slate">Permissions requested</div>
                 <Stack gap="xs" as="ul">
                   {scopes.map((s) => (
                     <Row key={s} align="center" gap="sm" as="li">
                       <Badge variant="secondary">{s}</Badge>
-                      <span className="text-muted-foreground text-xs">
+                      <span className="text-xs text-muted-foreground">
                         {SCOPE_DESCRIPTIONS[s] ?? "Additional access"}
                       </span>
                     </Row>
@@ -170,13 +171,13 @@ function ConsentPage() {
               </Stack>
             )}
 
-            <p className="text-muted-foreground text-xs">
+            <p className="text-xs text-muted-foreground">
               Approving also lets this application read and modify your
               inventory, recipes, and other Cubby data through the MCP API.
             </p>
 
             {decisionError && (
-              <p role="alert" className="text-destructive text-xs">
+              <p role="alert" className="text-xs text-destructive">
                 {decisionError}
               </p>
             )}

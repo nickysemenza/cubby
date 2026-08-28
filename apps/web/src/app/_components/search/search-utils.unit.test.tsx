@@ -1,6 +1,7 @@
 import type { SearchHit } from "@cubby/schemas/search";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { SearchResultMedia } from "./search-utils";
 
 /**

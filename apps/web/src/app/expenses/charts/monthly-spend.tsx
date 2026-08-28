@@ -2,8 +2,9 @@ import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
 import { ResponsiveBar } from "@nivo/bar";
 import { CalendarDays } from "lucide-react";
 import { useMemo } from "react";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
+
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
+import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { monthLabel } from "~/app/projects/project-formatting";
 import {
   nivoBarChrome,

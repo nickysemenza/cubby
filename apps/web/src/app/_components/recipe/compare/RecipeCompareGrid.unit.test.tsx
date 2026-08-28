@@ -1,8 +1,8 @@
 import { testShortcode } from "@cubby/schemas/testing";
-
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { type ComparedRecipe, RecipeCompareGrid } from "./RecipeCompareGrid";
 
 vi.mock("@tanstack/react-router", () => ({

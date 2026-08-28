@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { hasActiveFilters, isNarrowed } from "./entity-empty-states";
 import type { CubbyTable as Table } from "./table-features";
 

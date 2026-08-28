@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { ChartNoAxesColumnIncreasing } from "lucide-react";
 import { useId, useMemo } from "react";
+
 import { expense } from "~/app/expenses/expense.functions";
 import { Row } from "~/components/layout";
 import {
@@ -12,6 +13,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/utils";
+
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
 
 export function fillRecordedSpendMonths(
@@ -80,7 +82,7 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
         </>
       ) : query.isError ? (
         <div className="space-y-3">
-          <p className="text-muted-foreground text-sm">
+          <p className="text-sm text-muted-foreground">
             Spend is unavailable right now.
           </p>
           <Button
@@ -93,18 +95,18 @@ export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
           </Button>
         </div>
       ) : query.data?.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-muted-foreground">
           No recorded expenses in this period.
         </p>
       ) : (
         <>
           <Row align="baseline" gap="xs">
-            <span className="font-mono font-semibold text-xl tabular-nums">
+            <span className="font-mono text-xl font-semibold tabular-nums">
               {formatCurrency(current?.net ?? 0)}
             </span>
-            <span className="text-muted-foreground text-xs">this month</span>
+            <span className="text-xs text-muted-foreground">this month</span>
           </Row>
-          <p className="mt-1 text-muted-foreground text-xs">
+          <p className="mt-1 text-xs text-muted-foreground">
             {describeRecordedSpendChange(current, previous)} Recorded expenses
             only; open Ledger to review the entries behind this total.
           </p>
@@ -135,7 +137,7 @@ function RecordedSpendBars({
       </figcaption>
       <div
         aria-hidden="true"
-        className="flex h-32 gap-1 border-[var(--border)] border-b px-1"
+        className="flex h-32 gap-1 border-b border-[var(--border)] px-1"
       >
         {monthly.map((row) => {
           const magnitude = (Math.abs(row.net) / maxMagnitude) * 100;

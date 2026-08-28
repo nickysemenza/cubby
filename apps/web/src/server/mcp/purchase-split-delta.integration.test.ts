@@ -18,11 +18,13 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
 import { createMcpServer } from "./server";
 import {
   createMcpWorkflowCaller,

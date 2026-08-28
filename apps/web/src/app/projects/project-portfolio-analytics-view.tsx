@@ -1,6 +1,8 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
+
 import { Section, Stack } from "~/components/layout";
 import { Skeleton } from "~/components/ui/skeleton";
+
 import { CostVsEstimate } from "./charts/cost-vs-estimate";
 import { MonthlyTrend } from "./charts/monthly-trend";
 import { OpenTasksByProject } from "./charts/open-tasks-by-project";

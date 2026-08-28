@@ -5,12 +5,14 @@ import { FileText, X } from "lucide-react";
 import prettyBytes from "pretty-bytes";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
+
 import type { PendingImage } from "./PendingImageUpload";
 
 /** A document row — the PendingImage shape plus the file size for display. */
@@ -58,7 +60,7 @@ function DocumentRow({
         {document.filename}
       </span>
       {document.size != null && document.size > 0 && (
-        <span className="shrink-0 font-mono text-muted-foreground text-xs tabular-nums">
+        <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
           {prettyBytes(document.size)}
         </span>
       )}
@@ -218,7 +220,7 @@ export function PendingDocumentUpload({
         onFilesAdded={handleFilesAdded}
         disabled={uploading}
       />
-      {uploading && <p className="text-muted-foreground text-xs">Uploading…</p>}
+      {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
       {(pendingDocuments.length > 0 || currentExistingDocuments.length > 0) && (
         <Stack gap="xs">
           {currentExistingDocuments.map((doc) => (

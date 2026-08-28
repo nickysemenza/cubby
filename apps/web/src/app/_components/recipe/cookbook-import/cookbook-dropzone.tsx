@@ -1,4 +1,5 @@
 import { useId } from "react";
+
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row } from "~/components/layout/row";
 import { Input } from "~/components/ui/input";
@@ -30,7 +31,7 @@ export function CookbookDropzone({
       <Row align="center" justify="center" wrap gap="sm">
         <Label
           htmlFor={jsonInputId}
-          className="cursor-pointer text-muted-foreground text-xs underline hover:text-foreground"
+          className="cursor-pointer text-xs text-muted-foreground underline hover:text-foreground"
         >
           or import JSON
         </Label>

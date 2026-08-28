@@ -15,6 +15,7 @@ import {
   Suspense,
   useMemo,
 } from "react";
+
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
 import {
   type CubbyRow,
@@ -60,6 +61,7 @@ import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import {
   defaultFilters,
   type Filters,
@@ -70,11 +72,11 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import { project } from "./project.functions";
 import {
   ProjectDataExpenseList,
   ProjectDataTaskList,
 } from "./project-data-lists";
+import { project } from "./project.functions";
 import {
   capitalize,
   formatDate,
@@ -433,7 +435,7 @@ function OverviewView({
           <Link
             to="/projects"
             search={{ view: "data", statuses: ["done"] }}
-            className="text-muted-foreground text-xs hover:text-foreground hover:underline"
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
           >
             {data.completedCount} completed project
             {data.completedCount !== 1 ? "s" : ""} — view completed →
@@ -476,7 +478,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
               {task.name}
             </Link>
             {task.projectName && task.projectId && (
-              <span className="min-w-0 max-w-40 text-muted-foreground text-xs">
+              <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
                 <EntityInlineLink
                   displayImage={undefined}
                   entity="project"
@@ -486,7 +488,7 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
               </span>
             )}
             {task.dueDate && (
-              <span className="ml-auto shrink-0 text-muted-foreground text-xs">
+              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                 {formatDate(task.dueDate)}
               </span>
             )}
@@ -531,7 +533,7 @@ function DataViewContent({
   return (
     <Stack className="pt-4">
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Projects</h2>
+        <h2 className="font-heading text-xl font-semibold">Projects</h2>
         <ProjectTable
           locations={locations}
           completionYears={completionYears}
@@ -546,7 +548,7 @@ function DataViewContent({
       </Stack>
 
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Tasks</h2>
+        <h2 className="font-heading text-xl font-semibold">Tasks</h2>
         <ProjectDataTaskList projectScope={projectScope} />
         <HiddenByDateNote
           count={hiddenByDate.tasks}
@@ -556,7 +558,7 @@ function DataViewContent({
       </Stack>
 
       <Stack as="section">
-        <h2 className="font-heading font-semibold text-xl">Expenses</h2>
+        <h2 className="font-heading text-xl font-semibold">Expenses</h2>
         <ProjectDataExpenseList projectScope={projectScope} />
         <HiddenByDateNote
           count={hiddenByDate.expenses}
@@ -751,7 +753,7 @@ function ServerProjectGallery({
         </Stack>
         {dockedInspector ? (
           <div
-            className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-border border-l bg-card xl:block"
+            className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
             data-desktop-inspector
           >
             {dockedInspector}
@@ -897,7 +899,7 @@ export function ProjectCard({
                 key={loc}
                 variant="outline"
                 // Free-form location names — opt out of the mono-uppercase stamp.
-                className="font-sans normal-case tracking-normal"
+                className="font-sans tracking-normal normal-case"
               >
                 {loc}
               </Badge>

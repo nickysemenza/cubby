@@ -8,6 +8,7 @@ import type { QueryDataSourceResponse } from "@notionhq/client/build/src/api-end
 import { LRUCache } from "lru-cache";
 import pRetry from "p-retry";
 import { z } from "zod";
+
 import { getErrorMessage } from "~/lib/error-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
 

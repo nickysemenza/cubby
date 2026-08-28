@@ -1,6 +1,7 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { ListFilter, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+
 import { Button } from "~/components/ui/button";
 import {
   FilterableCombobox,
@@ -16,6 +17,7 @@ import {
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
+
 import type { Filter, FilterBarField } from "./filter-bar-core";
 
 const EMPTY_FILTER_OPTIONS: NonNullable<FilterBarField["options"]> = [];
@@ -166,7 +168,7 @@ export function FilterBar({
         <button
           key={field.key}
           type="button"
-          className="min-h-10 bg-card px-2 text-left text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-md:min-h-11"
+          className="min-h-10 bg-card px-2 text-left text-sm transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none max-md:min-h-11"
           onClick={() => addField(field)}
         >
           {field.label}
@@ -203,13 +205,13 @@ export function FilterBar({
                   />
                 }
               >
-                <span className="border-border border-r px-2 font-mono text-2xs text-slate uppercase tracking-wide">
+                <span className="border-r border-border px-2 font-mono text-2xs tracking-wide text-slate uppercase">
                   {label}
                 </span>
                 <span className="min-w-0 truncate px-2 text-xs">{summary}</span>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-80">
-                <PopoverTitle className="font-bold font-heading">
+                <PopoverTitle className="font-heading font-bold">
                   Filter by {label}
                 </PopoverTitle>
                 <FilterEditor
@@ -223,7 +225,7 @@ export function FilterBar({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className="h-full shrink-0 border-border border-l"
+              className="h-full shrink-0 border-l border-border"
               aria-label={`Remove ${label} filter`}
               onClick={() =>
                 onChange(filters.filter((item) => item.id !== filter.id))
@@ -263,7 +265,7 @@ export function FilterBar({
               Filter
             </PopoverTrigger>
             <PopoverContent align="start" className="w-64">
-              <PopoverTitle className="font-bold font-heading">
+              <PopoverTitle className="font-heading font-bold">
                 Add filter
               </PopoverTitle>
               {filterChoices}

@@ -3,6 +3,7 @@ import type { ExpenseOut, Trade } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { Fragment, type ReactElement, useMemo } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
@@ -22,6 +23,7 @@ import {
   PreviewCardTrigger,
 } from "~/components/ui/preview-card";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { capitalize, TRADE_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 import {
@@ -158,7 +160,7 @@ export function TradeCostMatrix({
                 scope="row"
                 className={cn(
                   stickyRowHeaderCard,
-                  "px-2 py-2 text-left font-medium text-sm",
+                  "px-2 py-2 text-left text-sm font-medium",
                 )}
               >
                 {TRADE_LABELS[row.trade]}

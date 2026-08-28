@@ -1,6 +1,7 @@
 import type { WIngredient } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import { describe, expect, it } from "vitest";
+
 import { amountsEqual, computeParseDrift, hasDrift } from "./parse-drift";
 
 // Minimal fresh-parse builder — only the fields computeParseDrift reads.

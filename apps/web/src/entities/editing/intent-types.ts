@@ -222,7 +222,9 @@ export type EntityEditIntent<
 export type EntityEditDraft<E extends TypedEditableEntity> =
   EntityEditSpecification<E>["draft"];
 export type EntityEditRecordFor<E extends TypedEditableEntity> = {
-  [K in keyof EntityEditSpecification<E>["record"]]: EntityEditSpecification<E>["record"][K];
+  [
+    K in keyof EntityEditSpecification<E>["record"]
+  ]: EntityEditSpecification<E>["record"][K];
 };
 /** Standard CRUD routers return at least identity and may return any subset of
  * the entity's editable fields. Rich callers can narrow their own result. */

@@ -2,6 +2,7 @@ import type { TaskShortcode } from "@cubby/schemas/identifiers";
 import type { TaskBulkReorderInput, TaskOut } from "@cubby/schemas/project";
 import type { DragEndEvent } from "@dnd-kit/core";
 import { useCallback, useRef } from "react";
+
 import { cellTasks, computeMove, computeRank } from "./board-model";
 import {
   asCardDropData,

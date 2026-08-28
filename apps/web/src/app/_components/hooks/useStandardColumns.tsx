@@ -2,6 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+
 import type { EntityActionSubject } from "~/app/_components/actions/entity-actions";
 import {
   browserEntityDefinition,

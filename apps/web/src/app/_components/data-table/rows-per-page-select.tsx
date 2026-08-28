@@ -1,6 +1,8 @@
 import type { RowData } from "@tanstack/react-table";
+
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { cn } from "~/lib/utils";
+
 import type { CubbyTable as Table } from "./table-features";
 
 /** Page-size options offered across the data-table chrome. */

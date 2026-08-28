@@ -1,7 +1,9 @@
 import { mcpToolName } from "@cubby/schemas/entity-manifest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
+
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
+
 import { callMcpTool } from "./mcp-test-utils";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
 import { type ExecuteEntity, registerEntityTools } from "./tools/entity.tools";

@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
@@ -83,11 +84,11 @@ export default function EntityCount() {
               {isLoading ? (
                 <Skeleton className="h-6 w-10" />
               ) : countsQuery.isError ? (
-                <p className="font-mono font-semibold text-muted-foreground text-xl leading-none tracking-tight">
+                <p className="font-mono text-xl leading-none font-semibold tracking-tight text-muted-foreground">
                   —
                 </p>
               ) : (
-                <p className="font-mono font-semibold text-xl tabular-nums leading-none tracking-tight">
+                <p className="font-mono text-xl leading-none font-semibold tracking-tight tabular-nums">
                   {formatCount(count ?? 0)}
                 </p>
               )}

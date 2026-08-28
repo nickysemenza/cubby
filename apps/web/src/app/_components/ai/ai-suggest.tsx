@@ -2,6 +2,7 @@ import type { Confidence } from "@cubby/schemas/ai";
 import { Sparkles } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -149,7 +150,7 @@ export function FieldWithAISuggest<
       </Row>
 
       {suggestion && (
-        <Stack gap="xs" className="border-border border-t pt-2">
+        <Stack gap="xs" className="border-t border-border pt-2">
           <ConfidenceReasoningCard
             confidence={suggestion.result.confidence}
             reasoning={suggestion.result.reasoning}

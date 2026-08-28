@@ -1,6 +1,8 @@
 import { type LocationType, locationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
+
 import { Row } from "~/components/layout";
+
 import { getLocationGlyph, getLocationTypeColor } from "./location-type-theme";
 
 /**

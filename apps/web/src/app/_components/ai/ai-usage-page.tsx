@@ -3,6 +3,7 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
 import { Grid, Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -97,12 +98,12 @@ function UsageMetric({
 }) {
   return (
     <div className="border border-border bg-card p-4">
-      <div className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
+      <div className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
         {label}
       </div>
-      <div className="mt-1 font-semibold text-2xl">{value}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
       {detail ? (
-        <div className="text-muted-foreground text-xs">{detail}</div>
+        <div className="text-xs text-muted-foreground">{detail}</div>
       ) : null}
     </div>
   );
@@ -132,7 +133,7 @@ export function AiUsageTableStatus({
           <Spinner />
         ) : error ? (
           <Stack role="alert" gap="sm" className="items-start py-2">
-            <p className="text-destructive text-sm">
+            <p className="text-sm text-destructive">
               AI usage data could not load.
             </p>
             <Button type="button" variant="outline" onClick={onRetry}>
@@ -241,7 +242,7 @@ export function AiUsagePage() {
           ))}
         </Row>
         <Row gap="sm" align="center" wrap>
-          <span className="text-muted-foreground text-sm">Recent calls</span>
+          <span className="text-sm text-muted-foreground">Recent calls</span>
           {[25, 50, 100, 200].map((value) => (
             <Button
               key={value}
@@ -282,7 +283,7 @@ export function AiUsagePage() {
       ) : null}
 
       <section className="border border-border bg-card p-4">
-        <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+        <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Usage by feature / model / day
         </h2>
         <Table className="table-auto">
@@ -338,7 +339,7 @@ export function AiUsagePage() {
       </section>
 
       <section className="border border-border bg-card p-4">
-        <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+        <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Recent calls
         </h2>
         <Table className="table-auto">

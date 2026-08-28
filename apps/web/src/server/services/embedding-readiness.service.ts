@@ -1,5 +1,6 @@
 import type { EmbeddingReadiness } from "@cubby/schemas/relatedness";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
+
 import type { Database } from "~/server/db";
 import { getEntityEmbeddingReadiness } from "~/server/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";

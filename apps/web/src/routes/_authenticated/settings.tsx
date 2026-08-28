@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronDown, Wrench } from "lucide-react";
 import { useState } from "react";
+
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { CategoryAudit } from "~/app/_components/insights/category-audit";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
@@ -150,7 +151,7 @@ function FlagRow({
     <Row align="start" justify="between" gap="md" className="py-4">
       <Stack gap="tight">
         <Row align="center" gap="sm">
-          <span className="font-medium text-sm">{def.label}</span>
+          <span className="text-sm font-medium">{def.label}</span>
           <code className="font-mono text-2xs text-muted-foreground">
             {flagKey}
           </code>
@@ -223,14 +224,14 @@ function DiagnosticsCard() {
                 className="py-2"
               >
                 <Stack gap="tight" className="min-w-0">
-                  <code className="block truncate font-mono text-muted-foreground text-xs">
+                  <code className="block truncate font-mono text-xs text-muted-foreground">
                     {result.label}
                   </code>
                   {result.error && (
-                    <p className="text-destructive text-xs">{result.error}</p>
+                    <p className="text-xs text-destructive">{result.error}</p>
                   )}
                 </Stack>
-                <span className="shrink-0 font-medium font-mono text-sm tabular-nums">
+                <span className="shrink-0 font-mono text-sm font-medium tabular-nums">
                   {result.durationMs} ms
                 </span>
               </Row>
@@ -239,7 +240,7 @@ function DiagnosticsCard() {
               align="center"
               justify="between"
               gap="md"
-              className="py-2 text-muted-foreground text-xs"
+              className="py-2 text-xs text-muted-foreground"
             >
               <span>
                 Last run {new Date(dataUpdatedAt).toLocaleTimeString()}
@@ -267,7 +268,7 @@ function AppearanceCard() {
       <CardContent className="max-md:px-2">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-1 max-md:grid-cols-1">
           <Stack gap="tight">
-            <span className="font-medium text-sm">Table density</span>
+            <span className="text-sm font-medium">Table density</span>
             <Description size="xs">Row height in data tables.</Description>
           </Stack>
           <div className="grid grid-cols-3 gap-1">

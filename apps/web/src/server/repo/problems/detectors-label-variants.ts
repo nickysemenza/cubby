@@ -37,6 +37,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { DuplicateVendor, LabelVariant } from "@cubby/schemas/problems";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQL, sql } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { product, purchase, vendor } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";

@@ -26,6 +26,7 @@ import type {
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { uniq } from "es-toolkit";
+
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -42,6 +43,7 @@ import {
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
+
 import { importImageFromUPC } from "./image-import";
 import type { LocationValuationService } from "./location-valuation.service";
 import { runMutationSideEffects } from "./mutation-side-effects";

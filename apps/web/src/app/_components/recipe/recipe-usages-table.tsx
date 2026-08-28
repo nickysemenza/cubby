@@ -1,6 +1,7 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
 import { AlertCircle } from "lucide-react";
 import { useMemo } from "react";
+
 import {
   Table,
   TableBody,
@@ -16,6 +17,7 @@ import {
 } from "~/components/ui/tooltip";
 import { computeParseDrift, type ParseDrift } from "~/lib/parse-drift";
 import { wasm } from "~/lib/wasm";
+
 import { EntityInlineLink } from "../EntityInlineLink";
 import { formatAmounts } from "../inventory/format-amount";
 import { DriftIndicator } from "../parse-drift-indicator";
@@ -127,7 +129,7 @@ export function RecipeUsagesTable({
                 </Tooltip>
               )}
             </TableCell>
-            <TableCell className="whitespace-normal align-top text-muted-foreground">
+            <TableCell className="align-top whitespace-normal text-muted-foreground">
               {row.drift.modifier !== null ? (
                 <DriftIndicator
                   axis="modifier"
@@ -139,7 +141,7 @@ export function RecipeUsagesTable({
                 (row.modifier ?? "")
               )}
             </TableCell>
-            <TableCell className="whitespace-normal align-top">
+            <TableCell className="align-top whitespace-normal">
               {row.rawLine ? (
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="text-muted-foreground">{row.rawLine}</span>

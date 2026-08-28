@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 
@@ -73,7 +74,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
             el;
           setupObserver(el);
         }}
-        className="scrollbar-none flex snap-x snap-mandatory gap-0 overflow-x-auto"
+        className="flex snap-x snap-mandatory scrollbar-none gap-0 overflow-x-auto"
         style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
       >
         {images.map((image, index) => (
@@ -112,7 +113,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
       )}
 
       {/* Figure caption — the gallery reads as a numbered plate */}
-      <div className="eyebrow border-border border-b bg-card px-2 py-1 sm:px-4 sm:py-2">
+      <div className="border-b border-border bg-card px-2 py-1 eyebrow sm:px-4 sm:py-2">
         Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
       </div>
     </div>

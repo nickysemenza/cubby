@@ -1,6 +1,7 @@
 import { type InfLocation, infLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { buildLocationGalleryData } from "./location-gallery-data";
 
 const location = (

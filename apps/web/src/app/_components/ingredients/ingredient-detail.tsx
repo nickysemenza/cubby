@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
+
 import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -22,6 +23,7 @@ import {
   getAllUnitMappingsFromProduct,
   getIngredientMappings,
 } from "~/lib/unit-mapping-utils";
+
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";

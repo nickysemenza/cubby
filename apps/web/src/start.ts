@@ -3,6 +3,7 @@
  * Global middleware is registered here
  */
 import { createCsrfMiddleware, createStart } from "@tanstack/react-start";
+
 import { fetchWithRequestDiagnostics } from "~/lib/request-id";
 import { privateServerFunctionResponses } from "~/server/middleware/private-server-functions";
 import { tracingMiddleware } from "~/server/middleware/tracing";

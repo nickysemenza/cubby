@@ -1,6 +1,7 @@
 import type { ExpenseProjectAggregate } from "@cubby/schemas/project";
 import { Building2 } from "lucide-react";
 import { useMemo } from "react";
+
 import { NetBarBreakdown } from "~/app/_components/charts/kit";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import {

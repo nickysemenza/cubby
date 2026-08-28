@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
+
 import type {
   EntityDetailParams,
   EntityDetailRoute,

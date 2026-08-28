@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   clampWindow,
   FALLBACK_MAX_SPAN_DAYS,

@@ -1,10 +1,12 @@
 import type { AgentResult, AgentSource } from "@cubby/schemas/agent";
 import type { ReactNode } from "react";
+
 import { Row } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { IconTile } from "~/components/ui/icon-tile";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
+
 import { entityTypeMap } from "../search/search-utils";
 
 /** Turn a tool name like "list_inventory" into "inventory" for status text. */
@@ -30,7 +32,7 @@ export function AgentSourceContent({ source }: { source: AgentSource }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{source.name}</div>
         {source.detail && (
-          <div className="truncate text-muted-foreground text-xs">
+          <div className="truncate text-xs text-muted-foreground">
             {source.detail}
           </div>
         )}
@@ -93,7 +95,7 @@ export function AgentAnswer({
           align="center"
           justify="center"
           gap="sm"
-          className="py-6 text-muted-foreground text-sm"
+          className="py-6 text-sm text-muted-foreground"
         >
           <Spinner />
           {toolStatus ? `Looking up ${humanizeTool(toolStatus)}…` : "Thinking…"}

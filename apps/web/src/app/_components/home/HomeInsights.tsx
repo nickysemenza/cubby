@@ -1,6 +1,7 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { ListChecks, MapPin, PieChart, Share2 } from "lucide-react";
 import { useState } from "react";
+
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";

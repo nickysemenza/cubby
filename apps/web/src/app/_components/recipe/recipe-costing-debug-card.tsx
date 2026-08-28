@@ -5,12 +5,14 @@ import type {
 } from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
 import { formatCurrency } from "~/lib/utils";
+
 import { CopyJsonButton } from "./copy-debug-button";
 
 /**
@@ -88,7 +90,7 @@ export const RecipeCostingDebugCard: React.FC<{
         <CardHeader className="pb-2">
           <CardTitle>Costing Debug</CardTitle>
         </CardHeader>
-        <CardContent className="text-destructive text-sm">
+        <CardContent className="text-sm text-destructive">
           explain failed: {error.message}
         </CardContent>
       </Card>

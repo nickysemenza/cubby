@@ -14,8 +14,10 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
@@ -305,11 +307,11 @@ function Graph({
       {hovered && (
         <VizTooltip className="top-3 left-3 max-w-xs border">
           <div className="font-medium">{hovered.name}</div>
-          <div className="mt-1 text-muted-foreground text-xs">
+          <div className="mt-1 text-xs text-muted-foreground">
             {hovered.cookbookName ?? "No cookbook"}
             {hovered.external ? " · external" : ""}
           </div>
-          <div className="mt-1 text-muted-foreground text-xs">
+          <div className="mt-1 text-xs text-muted-foreground">
             Used by {inDegree.get(hovered.id) ?? 0} recipe
             {(inDegree.get(hovered.id) ?? 0) === 1 ? "" : "s"} · click to open
           </div>

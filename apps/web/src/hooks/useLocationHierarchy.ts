@@ -3,6 +3,7 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
+
 import {
   emptyPricingStatus,
   mergePricingStatus,

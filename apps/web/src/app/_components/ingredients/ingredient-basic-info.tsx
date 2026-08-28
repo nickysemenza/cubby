@@ -1,5 +1,6 @@
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { FC } from "react";
+
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";

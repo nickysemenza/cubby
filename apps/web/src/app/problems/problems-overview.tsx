@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { AlertTriangle, CheckCircle, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/components/layout";
@@ -22,6 +23,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { problems as problemOperations } from "~/lib/problems.functions";
+
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
 import { MaintenanceCard } from "./components/maintenance-card";

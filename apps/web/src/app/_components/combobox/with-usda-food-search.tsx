@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -19,6 +20,7 @@ import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
+
 import { confidenceColor } from "../ai/ai-suggest";
 import { UsdaFoodResultRow } from "../usda/usda-food-result-row";
 import type { ComboboxItem } from "./combobox-types";

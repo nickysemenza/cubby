@@ -5,12 +5,14 @@ import { format } from "date-fns";
 import { sumBy } from "es-toolkit";
 import { ListFilter } from "lucide-react";
 import type { FC } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
 import { parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
+
 import { expense as expenseOperations } from "./expense.functions";
 
 // Module-level so the fallback keeps a stable reference across renders.
@@ -121,7 +123,7 @@ export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
         </Stack>
       )}
 
-      <p className="border-[var(--border)] border-t pt-2 text-muted-foreground text-sm">
+      <p className="border-t border-[var(--border)] pt-2 text-sm text-muted-foreground">
         {lines.length} expense{lines.length === 1 ? "" : "s"} ·{" "}
         <span className="font-mono tabular-nums">{formatCurrency(total)}</span>
         {/* Called out rather than folded in as zero: a purchase that doesn't

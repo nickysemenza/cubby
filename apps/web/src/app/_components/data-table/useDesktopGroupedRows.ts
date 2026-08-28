@@ -1,5 +1,6 @@
 import type { RowData } from "@tanstack/react-table";
 import { useMemo } from "react";
+
 import type { CubbyRow as Row } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 

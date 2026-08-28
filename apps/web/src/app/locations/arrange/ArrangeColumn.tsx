@@ -4,8 +4,10 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { HelpCircle, Home } from "lucide-react";
+
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { cn } from "~/lib/utils";
+
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationCard } from "./ArrangeLocationCard";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
@@ -54,11 +56,11 @@ export function ArrangeColumn({
       className={cn(
         "flex w-[calc(100vw-2rem)] shrink-0 snap-start flex-col border sm:w-72",
         pinned
-          ? "border-[var(--border-strong)] border-dashed"
+          ? "border-dashed border-[var(--border-strong)]"
           : "border-[var(--border)]",
       )}
     >
-      <div className="flex items-center gap-2 border-[var(--border)] border-b px-2 py-2">
+      <div className="flex items-center gap-2 border-b border-[var(--border)] px-2 py-2">
         {pinned ? (
           <HelpCircle className="size-4 shrink-0 text-muted-foreground" />
         ) : headerLocation ? (
@@ -66,10 +68,10 @@ export function ArrangeColumn({
         ) : (
           <Home className="size-4 shrink-0 text-muted-foreground" />
         )}
-        <span className="min-w-0 flex-1 truncate font-medium text-sm">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
           {headerLocation?.name ?? "Home"}
         </span>
-        <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {nodes.length + items.length}
         </span>
       </div>
@@ -102,7 +104,7 @@ export function ArrangeColumn({
           ) : null,
         )}
         {isEmpty && (
-          <p className="px-1 py-2 text-muted-foreground text-xs">
+          <p className="px-1 py-2 text-xs text-muted-foreground">
             {pinned
               ? "Drop anything here to stage it, then open another column and drag it back out."
               : "Nothing here"}

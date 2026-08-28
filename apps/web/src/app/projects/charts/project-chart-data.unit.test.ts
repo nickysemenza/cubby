@@ -1,6 +1,7 @@
 import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import {
   buildCumulativeSpendPoints,
   buildExpenseCalendar,

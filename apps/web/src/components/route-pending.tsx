@@ -1,4 +1,5 @@
 import { useLocation, useParams } from "@tanstack/react-router";
+
 import {
   completeNavLeaves,
   findActiveTo,
@@ -25,7 +26,7 @@ export function RoutePending() {
   return (
     <PageWrapper>
       <header className="border-b bg-card px-4 py-4">
-        <h1 className="font-heading font-semibold text-2xl">{destination}</h1>
+        <h1 className="font-heading text-2xl font-semibold">{destination}</h1>
       </header>
       <DashboardSectionLoading label={label} />
     </PageWrapper>

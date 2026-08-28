@@ -3,6 +3,7 @@ import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+
 import {
   VerbMenuItem,
   verbBulkAction,
@@ -23,8 +24,8 @@ import {
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
-import { product } from "~/app/products/product.functions";
 import { groupComponentsByParent } from "~/app/products/product-kit-rows";
+import { product } from "~/app/products/product.functions";
 import { Badge } from "~/components/ui/badge";
 import {
   Empty,
@@ -33,6 +34,7 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+
 import { purchase } from "./purchase.functions";
 
 const EMPTY_PRODUCTS: PurchaseProductOut[] = [];

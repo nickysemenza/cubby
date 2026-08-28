@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+
 import { selfLinkLabel } from "~/lib/link-label";
 import { cn } from "~/lib/utils";
 
@@ -99,18 +100,18 @@ const components = {
   ),
   h1: (props: ElementProps<"h1">) => (
     <h1
-      className="mb-1 font-heading font-semibold text-base"
+      className="mb-1 font-heading text-base font-semibold"
       {...clean(props)}
     />
   ),
   h2: (props: ElementProps<"h2">) => (
     <h2
-      className="mb-1 font-heading font-semibold text-base"
+      className="mb-1 font-heading text-base font-semibold"
       {...clean(props)}
     />
   ),
   h3: (props: ElementProps<"h3">) => (
-    <h3 className="mb-1 font-heading font-semibold text-sm" {...clean(props)} />
+    <h3 className="mb-1 font-heading text-sm font-semibold" {...clean(props)} />
   ),
   table: (props: ElementProps<"table">) => (
     <div className="mb-2 overflow-x-auto last:mb-0">
@@ -119,16 +120,16 @@ const components = {
   ),
   th: (props: ElementProps<"th">) => (
     <th
-      className="border-border border-b px-2 py-1 font-medium"
+      className="border-b border-border px-2 py-1 font-medium"
       {...clean(props)}
     />
   ),
   td: (props: ElementProps<"td">) => (
-    <td className="border-border/50 border-b px-2 py-1" {...clean(props)} />
+    <td className="border-b border-border/50 px-2 py-1" {...clean(props)} />
   ),
   blockquote: (props: ElementProps<"blockquote">) => (
     <blockquote
-      className="mb-2 border-border border-l-2 pl-2 text-muted-foreground last:mb-0"
+      className="mb-2 border-l-2 border-border pl-2 text-muted-foreground last:mb-0"
       {...clean(props)}
     />
   ),

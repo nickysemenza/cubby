@@ -1,6 +1,7 @@
 import { calendarItemKind } from "@cubby/schemas/calendar";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createElement } from "react";
+
 import { futureFilterOptions } from "~/app/expenses/expense-options";
 import {
   PROJECT_STATUS_OPTIONS,
@@ -10,6 +11,7 @@ import { tradeOptions } from "~/app/projects/trade-options";
 import { taskStatusOptions } from "~/app/tasks/task-options";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import type { FilterSpec } from "~/entities/filter-manifest";
+
 import { KIND_ICONS } from "./calendar-icons";
 
 /**

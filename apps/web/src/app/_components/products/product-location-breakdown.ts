@@ -5,7 +5,9 @@ import type {
   LocationAncestorOut,
   LocationType,
 } from "@cubby/schemas/location";
+
 import type { HierarchyDrilldownNode } from "~/app/_components/visualizations/hierarchy-drilldown";
+
 import { tryFormatAmount } from "../inventory/format-amount";
 
 interface LocationPathRef {

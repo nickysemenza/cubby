@@ -1,10 +1,12 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import {
   createIngredientFixture,
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+
 import { recomputeRecipesForPriceAffectedProducts } from "./expense-pricing.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
 

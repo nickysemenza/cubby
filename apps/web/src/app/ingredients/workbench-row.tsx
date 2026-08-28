@@ -4,6 +4,7 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { type Ref, useState } from "react";
+
 import { verbDef } from "~/app/_components/actions/action-verbs";
 import { confidenceColor } from "~/app/_components/ai/ai-suggest";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
@@ -15,6 +16,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { TableCell, TableRow } from "~/components/ui/table";
 import { cn } from "~/lib/utils";
+
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import { ingredient } from "./ingredient.functions";
@@ -137,10 +139,10 @@ export function WorkbenchRow({
         </TableCell>
         <TableCell className="whitespace-normal">
           <div className="font-medium">{row.name}</div>
-          <div className="text-muted-foreground text-xs">
+          <div className="text-xs text-muted-foreground">
             × {row.recipeCount} recipe{row.recipeCount === 1 ? "" : "s"}
             {suggestion && (
-              <span className="ml-2 text-info">
+              <span className="text-info ml-2">
                 · AI: {suggestion.food.foodInfo.description}{" "}
                 <span className={confidenceColor[suggestion.confidence]}>
                   ({suggestion.confidence})
@@ -206,7 +208,7 @@ export function WorkbenchRow({
         <TableRow className="bg-muted/20">
           <TableCell />
           <TableCell />
-          <TableCell colSpan={3} className="whitespace-normal pr-4">
+          <TableCell colSpan={3} className="pr-4 whitespace-normal">
             <WorkbenchEditor
               row={row}
               initialFood={suggestion?.food ?? null}
@@ -264,7 +266,7 @@ function WorkbenchEditor({
                 as="p"
                 align="center"
                 gap="xs"
-                className="text-positive text-xs"
+                className="text-xs text-positive"
               >
                 <Check className="size-3" />
                 {food.foodInfo.description}
@@ -289,7 +291,7 @@ function WorkbenchEditor({
         footer:
           row.recipeCount > 0 ? (
             <Stack gap="sm">
-              <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Appears in {row.recipeCount} recipe
                 {row.recipeCount === 1 ? "" : "s"}
               </p>
@@ -302,7 +304,7 @@ function WorkbenchEditor({
                   />
                 </div>
               ) : (
-                <p className="text-muted-foreground text-xs">
+                <p className="text-xs text-muted-foreground">
                   {usages.isLoading ? "Loading usages…" : "No live usages."}
                 </p>
               )}

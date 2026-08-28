@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { listMcpToolCatalog } from "./server";
 
 // Schema walk: no OUTPUT schema exposes a uuid-shaped id outside the declared

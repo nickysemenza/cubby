@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { Page } from "~/components/page/Page";
 import { EntityEditPage } from "~/entities/editing/entity-edit-page";
 import { pageTitle } from "~/lib/page-title";

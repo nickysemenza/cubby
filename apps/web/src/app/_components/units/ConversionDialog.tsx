@@ -7,6 +7,7 @@ import * as React from "react";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+
 import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { Row, Stack } from "~/components/layout";
@@ -31,6 +32,7 @@ import type { BaseKind } from "~/lib/conversion-coverage";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
+
 import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";
 import { kindIconMap } from "./kind-icons";
 import { UnitMappingGraph } from "./unit-mapping-graph";
@@ -200,7 +202,7 @@ function ConversionDialogContent({
           />
 
           <Stack gap="sm">
-            <h4 className="font-medium text-sm">Conversion Graph</h4>
+            <h4 className="text-sm font-medium">Conversion Graph</h4>
             <UnitMappingGraph
               mappings={mappings}
               includeNutrients={showNutrients}
@@ -210,7 +212,7 @@ function ConversionDialogContent({
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Stack gap="sm">
-            <h4 className="font-medium text-sm">Available Unit Mappings</h4>
+            <h4 className="text-sm font-medium">Available Unit Mappings</h4>
             <UnitMappingsTable mappings={filteredMappings} />
           </Stack>
           <div>
@@ -233,7 +235,7 @@ function ConversionDialogContent({
 
             {Object.keys(conversions).length > 0 && (
               <Stack gap="sm" className="mt-4">
-                <h4 className="font-medium text-sm">Conversion Results</h4>
+                <h4 className="text-sm font-medium">Conversion Results</h4>
                 <Stack gap="sm">
                   {effectiveKinds.map((kind) => {
                     const result = conversions[kind];

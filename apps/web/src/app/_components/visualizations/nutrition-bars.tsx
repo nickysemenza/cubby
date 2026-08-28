@@ -1,12 +1,14 @@
 import { TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
+
 import { StatTile } from "~/components/ui/stat-tile";
 import { formatNumberRange, rangeMidpoint } from "~/lib/format-range";
 import type {
   CalculateTotalsResult,
   IngredientDataItem,
 } from "~/lib/recipe-costing";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 const SEGMENT_COLORS = [
@@ -115,7 +117,7 @@ export default function NutritionBars({
             <div
               key={row.key}
               title={`${row.name}: ${Math.round(row.kcal)} kcal`}
-              className="h-full border-[var(--border)] border-r last:border-r-0"
+              className="h-full border-r border-[var(--border)] last:border-r-0"
               style={{
                 width: `${(row.kcal / totalKcal) * 100}%`,
                 backgroundColor: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
@@ -142,7 +144,7 @@ export default function NutritionBars({
       </div>
 
       <div>
-        <div className="eyebrow mb-2">Macros, whole recipe</div>
+        <div className="mb-2 eyebrow">Macros, whole recipe</div>
         <div className="space-y-2">
           {macroTotals.map((m) => (
             <div key={m.key}>
@@ -156,7 +158,7 @@ export default function NutritionBars({
               </div>
               <div className="h-3.5 overflow-hidden border-[1.5px] border-[var(--border)] bg-card">
                 <div
-                  className="h-full border-[var(--border)] border-r-[1.5px]"
+                  className="h-full border-r-[1.5px] border-[var(--border)]"
                   style={{
                     width: `${Math.min(100, (rangeMidpoint(m.grams, m.gramsUpper) / maxMacro) * 100)}%`,
                     backgroundColor: m.color,

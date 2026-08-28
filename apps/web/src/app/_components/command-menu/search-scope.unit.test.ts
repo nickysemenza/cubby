@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { parseCommandSearchScope } from "./search-scope";
 
 describe("parseCommandSearchScope", () => {

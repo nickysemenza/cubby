@@ -1,9 +1,11 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+
 import { useLocalStorage } from "~/hooks/useLocalStorage";
-import { meal } from "./meal.functions";
+
 import { getDefaultShoppingRange } from "./meal-search";
+import { meal } from "./meal.functions";
 import {
   buildShoppingColumns,
   buildShoppingRows,

@@ -3,6 +3,7 @@ import {
   type IngredientPart,
 } from "~/lib/ingredient-part-colors";
 import { cn } from "~/lib/utils";
+
 import { InlineTextDiff } from "./inline-text-diff";
 
 type DriftAxis = IngredientPart;

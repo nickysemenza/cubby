@@ -5,8 +5,10 @@ import type {
 import { Package } from "lucide-react";
 import type { FC } from "react";
 import type { z } from "zod";
+
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
+
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
 import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";

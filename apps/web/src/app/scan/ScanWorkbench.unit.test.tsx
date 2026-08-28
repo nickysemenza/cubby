@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { ScanWorkbench } from "./ScanWorkbench";
 
 vi.mock("~/app/_components/inventory/persistent-scanner", () => ({

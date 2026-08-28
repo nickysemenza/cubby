@@ -3,6 +3,7 @@ import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { TagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
+
 import type { Database } from "~/server/db";
 import {
   getProductsByShortcodes,
@@ -13,6 +14,7 @@ import {
   getActiveSuggestionDismissalKeys,
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
+
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
 import { findSimilarEntitiesForPair } from "./semantic-search.service";
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+
 import { Row } from "~/components/layout";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { NoneValue } from "~/components/ui/none-value";
@@ -30,14 +31,14 @@ export const InfoRow = ({
         lands the dots right on the text baseline. */}
     <span
       aria-hidden
-      className="min-w-6 flex-1 border-border/80 border-b-2 border-dotted"
+      className="min-w-6 flex-1 border-b-2 border-dotted border-border/80"
     />
     <Row
       as="span"
       align="center"
       justify="end"
       gap="tight"
-      className="min-w-0 max-w-[65%] text-right text-sm"
+      className="max-w-[65%] min-w-0 text-right text-sm"
     >
       <span className="min-w-0">{children ?? <NoneValue />}</span>
       {action}

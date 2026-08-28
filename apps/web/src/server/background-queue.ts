@@ -3,6 +3,7 @@ import {
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
 import { match } from "ts-pattern";
+
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   advanceWorkflowIfReady,
@@ -36,6 +37,7 @@ import {
 import { embeddingTextHash } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
 import { TraceNames, withTrace } from "~/server/tracing";
+
 import {
   BACKGROUND_MESSAGE_VERSION,
   type BackgroundQueueDeliveredMessage,
@@ -221,9 +223,8 @@ async function runBackgroundJobPayload(
             },
           ]);
           if (jobIds.length > 0) {
-            const { dispatchQueuedBackgroundJobs } = await import(
-              "./background-dispatch"
-            );
+            const { dispatchQueuedBackgroundJobs } =
+              await import("./background-dispatch");
             await dispatchQueuedBackgroundJobs(db, {
               batchId,
               jobIds,
@@ -264,9 +265,8 @@ async function runBackgroundJobPayload(
       return "succeeded" as const;
     })
     .with({ kind: "entity-embedding.backfill.coordinator" }, async (p) => {
-      const { continueEntityEmbeddingBackfillWorkflow } = await import(
-        "./services/semantic-search.service"
-      );
+      const { continueEntityEmbeddingBackfillWorkflow } =
+        await import("./services/semantic-search.service");
       return await continueEntityEmbeddingBackfillWorkflow(
         db,
         batchId,
@@ -274,9 +274,8 @@ async function runBackgroundJobPayload(
       );
     })
     .with({ kind: "search-document.repair.coordinator" }, async (p) => {
-      const { continueSearchDocumentRepairWorkflow } = await import(
-        "./services/search.service"
-      );
+      const { continueSearchDocumentRepairWorkflow } =
+        await import("./services/search.service");
       return await continueSearchDocumentRepairWorkflow(db, batchId, p.payload);
     })
     .with({ kind: "location-ai.description.refresh" }, async (p) => {
@@ -311,19 +310,16 @@ async function runBackgroundJobPayload(
       return "succeeded" as const;
     })
     .with({ kind: "location-valuation.recompute" }, async () => {
-      const { LocationValuationService } = await import(
-        "./services/location-valuation.service"
-      );
+      const { LocationValuationService } =
+        await import("./services/location-valuation.service");
       await new LocationValuationService(db).recompute();
       return "succeeded" as const;
     })
     .with({ kind: "problems.counts.refresh" }, async (p) => {
-      const { createUpcLookupClient } = await import(
-        "~/server/clients/upc-lookup"
-      );
-      const { refreshCachedProblemCounts } = await import(
-        "./services/problem-counts-cache"
-      );
+      const { createUpcLookupClient } =
+        await import("~/server/clients/upc-lookup");
+      const { refreshCachedProblemCounts } =
+        await import("./services/problem-counts-cache");
       const cache = getProblemCountsCache();
       if (!cache) return "skipped" as const;
       return await refreshCachedProblemCounts(
@@ -334,9 +330,8 @@ async function runBackgroundJobPayload(
       );
     })
     .with({ kind: "usda-match.retry" }, async (p) => {
-      const { retryUsdaMatch } = await import(
-        "./services/ai-enrichment/usda-match"
-      );
+      const { retryUsdaMatch } =
+        await import("./services/ai-enrichment/usda-match");
       // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
       // what turns those into the queue's own attempts/backoff.
       await retryUsdaMatch(db, p.payload.ingredientId);

@@ -4,6 +4,7 @@ import type {
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import type { z } from "zod";
+
 import {
   mapImages,
   parseInventoryAmount,
@@ -18,6 +19,7 @@ import {
   primaryGtinOf,
 } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
+
 import type { InventoryEntryDeepDB, InventoryEntryListDB } from "./types";
 
 type InventoryEntryBaseDB = Pick<

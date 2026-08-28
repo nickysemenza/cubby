@@ -1,9 +1,11 @@
 import { calendarFilterFields } from "@cubby/schemas/calendar";
 import { describe, expect, it } from "vitest";
+
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
 } from "~/entities/filters";
+
 import { calendarFilterSpecs } from "./calendar-filter-specs";
 import { buildCalendarFilters } from "./calendar-filters";
 import { calendarSearchSchema } from "./calendar-search";

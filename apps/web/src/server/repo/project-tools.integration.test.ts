@@ -9,8 +9,10 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
+
 import { householdLocalDate } from "~/lib/household-date";
 import { auditLog, projectToolUsage } from "~/server/db/schema";
+
 import { getDb, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { deleteProducts, updateProduct } from "./product";
@@ -1049,7 +1051,11 @@ describe("project tool matrix", () => {
       "Alpha reno",
       "Beta shop",
     ]);
-    expect(all.columns.map((column) => column.icon)).toEqual([null, "🛠️", null]);
+    expect(all.columns.map((column) => column.icon)).toEqual([
+      null,
+      "🛠️",
+      null,
+    ]);
     expect(all.totals.matchingProjects).toBe(3);
 
     const scoped = await projectToolMatrix(

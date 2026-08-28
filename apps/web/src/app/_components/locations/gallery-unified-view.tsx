@@ -3,8 +3,10 @@ import type {
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import type { RefCallback } from "react";
+
 import { Stack } from "~/components/layout";
 import { cn } from "~/lib/utils";
+
 import { LocationGalleryCard } from "./location-gallery-card";
 
 interface GalleryUnifiedViewProps {

@@ -1,6 +1,7 @@
 import { uniq } from "es-toolkit";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
+
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -123,7 +124,7 @@ export function BulkActionDialog<T extends { id: string }>({
         <div className="min-w-0 space-y-2">
           <ul
             className={cn(
-              "min-w-0 space-y-1 overflow-y-auto text-muted-foreground text-sm",
+              "min-w-0 space-y-1 overflow-y-auto text-sm text-muted-foreground",
               effect ? "max-h-48" : "max-h-32",
             )}
           >
@@ -183,7 +184,7 @@ export function BulkActionDialog<T extends { id: string }>({
         {blockedReasons.length > 0 ? (
           <div
             role="alert"
-            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-destructive text-sm"
+            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
           >
             {blockedCount} of {count}{" "}
             {pluralize(itemNoun.toLowerCase(), blockedCount)} cannot proceed:{" "}
@@ -194,7 +195,7 @@ export function BulkActionDialog<T extends { id: string }>({
         {error ? (
           <div
             role="alert"
-            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-destructive text-sm"
+            className="border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
           >
             {error}
           </div>
@@ -204,7 +205,7 @@ export function BulkActionDialog<T extends { id: string }>({
           className={cn(footerNote && "sm:items-center sm:justify-between")}
         >
           {footerNote ? (
-            <p className="text-muted-foreground text-xs">{footerNote}</p>
+            <p className="text-xs text-muted-foreground">{footerNote}</p>
           ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

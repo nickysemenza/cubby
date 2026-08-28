@@ -1,6 +1,7 @@
 import type { RowData } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check } from "lucide-react";
 import { type RefObject, useEffect, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Eyebrow } from "~/components/ui/eyebrow";
@@ -11,6 +12,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { cn } from "~/lib/utils";
+
 import type {
   CubbyColumn as Column,
   CubbyTable as ITable,
@@ -116,7 +118,7 @@ export function MobileSortSheet<TItem extends RowData>({
           <Button
             variant="outline"
             onClick={() => setOpen(true)}
-            className="h-11 gap-1 px-2 font-mono text-2xs uppercase tracking-wider"
+            className="h-11 gap-1 px-2 font-mono text-2xs tracking-wider uppercase"
             aria-label={`Sort — currently ${activeLabel}`}
           >
             <ArrowUpDown className="size-3.5" />
@@ -138,7 +140,7 @@ export function MobileSortSheet<TItem extends RowData>({
           showCloseButton={false}
           className="flex max-h-[70vh] flex-col rounded-none"
         >
-          <SheetHeader className="border-[var(--border)] border-b p-4">
+          <SheetHeader className="border-b border-[var(--border)] p-4">
             <SheetTitle>Sort</SheetTitle>
           </SheetHeader>
 
@@ -182,7 +184,7 @@ export function MobileSortSheet<TItem extends RowData>({
 
           <Row
             gap="sm"
-            className="safe-bottom border-[var(--border)] border-t p-4"
+            className="safe-bottom border-t border-[var(--border)] p-4"
           >
             <Button
               variant="outline"
@@ -230,14 +232,14 @@ function SortOption({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        "min-h-12 w-full border-[var(--border)] border-b px-4 text-left transition-colors active:bg-muted/60",
+        "min-h-12 w-full border-b border-[var(--border)] px-4 text-left transition-colors active:bg-muted/60",
         selected && "text-primary",
       )}
     >
       {/* `as="span"`: a <button>'s content model is phrasing content, and the
           primitives default to <div>. */}
       <Stack as="span" gap="tight" className="min-w-0">
-        <span className="truncate font-mono text-xs uppercase tracking-wider">
+        <span className="truncate font-mono text-xs tracking-wider uppercase">
           {label}
         </span>
         {detail && (

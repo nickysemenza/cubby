@@ -7,6 +7,7 @@ import type {
 } from "@tanstack/react-table";
 import { type Atom, batch, createAtom } from "@tanstack/store";
 import { type CSSProperties, useEffect, useMemo, useRef } from "react";
+
 import type { CubbyColumnDef } from "./table-features";
 
 const MIN_COLUMN_WIDTH = 48;

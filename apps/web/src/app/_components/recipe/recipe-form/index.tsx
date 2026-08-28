@@ -12,6 +12,7 @@ import {
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
+
 import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
 import {
@@ -30,6 +31,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
+
 import {
   FormWrapper,
   getSubmitButtonText,
@@ -474,7 +476,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               images still auto-import via autoImportUrl. */}
           <Card>
             <CardContent className="space-y-2 px-4 py-4">
-              <h3 className="eyebrow my-0 flex items-center gap-2 font-medium">
+              <h3 className="my-0 flex items-center gap-2 eyebrow font-medium">
                 <ImageIcon className="size-3.5" />
                 Photos
               </h3>
@@ -493,7 +495,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
           <Stack gap="sm">
             <Row align="center" justify="between">
-              <h3 className="eyebrow my-0 font-medium">Recipe sections</h3>
+              <h3 className="my-0 eyebrow font-medium">Recipe sections</h3>
             </Row>
 
             {sectionFields.map((sectionField, sectionIndex) => (
@@ -503,7 +505,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 className="border border-[var(--border)] bg-card p-4"
               >
                 <Row align="center" justify="between">
-                  <h4 className="my-0 font-heading font-semibold text-sm">
+                  <h4 className="my-0 font-heading text-sm font-semibold">
                     Section {sectionIndex + 1}
                     {sectionField.name ? `: ${sectionField.name}` : ""}
                   </h4>
@@ -546,10 +548,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                 </Row>
 
                 {/* Ingredients and Instructions side by side */}
-                <div className="flex flex-col space-y-2 md:flex-row md:space-x-2 md:space-y-0">
+                <div className="flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2">
                   {/* Ingredients */}
                   <div className="md:w-1/2">
-                    <h5 className="eyebrow mb-2 font-medium">Ingredients</h5>
+                    <h5 className="mb-2 eyebrow font-medium">Ingredients</h5>
                     <IngredientFieldArray
                       form={form}
                       sectionIndex={sectionIndex}
@@ -565,7 +567,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                       placeholder="E.g., 'Main Course', 'Sauce', etc."
                       nullable={true}
                     />
-                    <h5 className="eyebrow mb-2 font-medium">Instructions</h5>
+                    <h5 className="mb-2 eyebrow font-medium">Instructions</h5>
                     <InstructionFieldArray
                       form={form}
                       sectionIndex={sectionIndex}
@@ -598,7 +600,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         {/* Live page preview — the cookbook spread builds as you type */}
         <aside className="hidden xl:sticky xl:top-20 xl:block">
           <div className="max-h-[75vh] overflow-y-auto border border-[var(--border)] bg-card p-4">
-            <p className="eyebrow mb-2">Live preview</p>
+            <p className="mb-2 eyebrow">Live preview</p>
             <RecipeLivePreview control={form.control} />
           </div>
         </aside>

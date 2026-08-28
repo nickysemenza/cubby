@@ -26,6 +26,7 @@ import type {
   ScanAtLocationInput,
   ScanAtLocationOut,
 } from "@cubby/schemas/scan";
+
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -43,6 +44,7 @@ import {
   resolveCreatedOrInvariant,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+
 import { runMutationSideEffects } from "./mutation-side-effects";
 import { findOrCreateByCode } from "./product-orchestration.service";
 import { planScan, type ScanFacts } from "./scan-plan";

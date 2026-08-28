@@ -1,6 +1,7 @@
 import { uniq } from "es-toolkit";
 import { AlertCircle, AlertTriangle, Eye, EyeOff, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
+
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -21,6 +22,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { cn } from "~/lib/utils";
+
 import { EntityInlineLink } from "../../EntityInlineLink";
 import { formatAmounts } from "../../inventory/format-amount";
 import { DecompositionView } from "../decomposition-view";
@@ -295,7 +297,7 @@ function IngredientRow({
             `whitespace-normal` lets the mono line wrap instead of overflowing the
             fixed-layout column; underlines clone across wraps (box-decoration). */}
       {showRaw && (
-        <TableCell className="whitespace-normal break-words text-xs leading-loose">
+        <TableCell className="text-xs leading-loose break-words whitespace-normal">
           <DecompositionView rawLine={item.raw} className="text-foreground" />
         </TableCell>
       )}

@@ -1,8 +1,9 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import { testEntityId } from "@cubby/schemas/testing";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { Database } from "~/server/db";
+
 import {
   mutationSideEffectEventSchema,
   mutationSideEffectManifest,
@@ -107,9 +108,8 @@ describe("runMutationSideEffectsForEntities batching", () => {
   });
 
   it("dispatches one entity-embedding batch per wave, not one per entity", async () => {
-    const { runMutationSideEffectsForEntities } = await import(
-      "./mutation-side-effects"
-    );
+    const { runMutationSideEffectsForEntities } =
+      await import("./mutation-side-effects");
     dispatchBackgroundJobsMock.mockResolvedValue({
       batchId: "batch-1",
       jobIds: ["job-1", "job-2", "job-3"],
@@ -164,9 +164,8 @@ describe("runMutationSideEffectsForEntities batching", () => {
   });
 
   it("dedupes embedding refs collected across different handlers in the same wave", async () => {
-    const { runMutationSideEffectsForEntities } = await import(
-      "./mutation-side-effects"
-    );
+    const { runMutationSideEffectsForEntities } =
+      await import("./mutation-side-effects");
     dispatchBackgroundJobsMock.mockResolvedValue({
       batchId: "batch-1",
       jobIds: ["job-1", "job-2"],

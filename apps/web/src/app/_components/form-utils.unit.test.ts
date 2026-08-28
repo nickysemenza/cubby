@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { ComboboxItem } from "./combobox/combobox-types";
 import {
   buildUpdateObject,

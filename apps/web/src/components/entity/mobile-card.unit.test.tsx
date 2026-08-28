@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { AnchorHTMLAttributes } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { MobileCard } from "./mobile-card";
 
 vi.mock("@tanstack/react-router", () => ({

@@ -1,6 +1,8 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
+
 import { householdLocalDate } from "~/lib/household-date";
+
 import type { EntityEditRegistry } from "./registry";
 import type {
   EditableEntity,

@@ -7,6 +7,7 @@ import type {
   FoodSummary,
 } from "@cubby/usda-schemas";
 import { initClient } from "@ts-rest/core";
+
 import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 
 // Per-request abort ceiling for usda-api fetches. Generous for caller-side

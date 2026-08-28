@@ -1,5 +1,6 @@
 import { format, startOfYear, subDays, subMonths } from "date-fns";
 import { describe, expect, it } from "vitest";
+
 import {
   costRangeOptions,
   productQuantityRangeOptions,

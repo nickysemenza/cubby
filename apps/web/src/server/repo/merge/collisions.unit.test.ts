@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { planSlotCollisions } from "./collisions";
 
 type Row = { id: string; slot: string | null };

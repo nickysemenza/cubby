@@ -2,6 +2,7 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation } from "@cubby/schemas/location";
 import pluralize from "pluralize";
 import { useState } from "react";
+
 import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
 import { passCounts } from "~/app/_components/queue-pass/queue-pass";
 import { Row, Stack } from "~/components/layout";
@@ -17,6 +18,7 @@ import {
   SheetTitle,
 } from "~/components/ui/sheet";
 import { cn } from "~/lib/utils";
+
 import { locationTypeNoun, type SessionLocation } from "../session-utils";
 import { QrJumpButton } from "./QrJumpButton";
 import type { InventoryItem, ItemResolution } from "./types";
@@ -115,7 +117,7 @@ function SessionLocationList({
               type="button"
               onClick={() => onSelect(location.id)}
               className={cn(
-                "w-full border-[var(--border)] border-b py-1.5 pr-2 text-left transition-colors hover:bg-muted" /* tight: compact session tree row */,
+                "w-full border-b border-[var(--border)] py-1.5 pr-2 text-left transition-colors hover:bg-muted" /* tight: compact session tree row */,
                 currentId === location.id && "bg-primary/5",
               )}
             >
@@ -180,7 +182,7 @@ export function MobileLocationSwitcher({
   });
 
   return (
-    <div className="sticky top-[var(--app-chrome-top)] z-20 border-[var(--border)] border-b bg-background pb-2 lg:hidden">
+    <div className="sticky top-[var(--app-chrome-top)] z-20 border-b border-[var(--border)] bg-background pb-2 lg:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <button
           type="button"
@@ -188,7 +190,7 @@ export function MobileLocationSwitcher({
           className="flex w-full items-center justify-between gap-2 border bg-card px-4 py-2 text-left"
         >
           <span
-            className="min-w-0 truncate font-medium text-sm"
+            className="min-w-0 truncate text-sm font-medium"
             title={parent.name}
           >
             {parent.name}

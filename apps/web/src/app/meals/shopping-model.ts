@@ -5,7 +5,9 @@ import type {
   ShoppingListOut,
 } from "@cubby/schemas/meal";
 import { sumBy } from "es-toolkit";
+
 import { availabilityStatusFor } from "~/lib/recipe-costing";
+
 import { shortText } from "./meal-format";
 
 // The shared model behind every shopping-list renderer (desktop table, mobile

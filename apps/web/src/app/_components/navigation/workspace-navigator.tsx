@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, Search, Wrench } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+
 import { actionItems } from "~/app/_components/actions/action-items";
 import { AuthenticatedShellAccount } from "~/app/_components/navigation/authenticated-shell-controls";
 import { Stack } from "~/components/layout";
@@ -8,6 +9,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { cn } from "~/lib/utils";
+
 import { domainWayfinding } from "./domain-wayfinding";
 import {
   completeNavLeaves,
@@ -107,12 +109,12 @@ function GroupDisclosure({
   const domain = group.domain ? domainWayfinding(group.domain) : null;
   return (
     <details
-      className="border-border border-b border-l"
+      className="border-b border-l border-border"
       style={
         domain ? { borderLeftColor: `var(${domain.accentToken})` } : undefined
       }
     >
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-2 font-medium text-sm hover:bg-muted [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-2 text-sm font-medium hover:bg-muted [&::-webkit-details-marker]:hidden">
         <span
           style={domain ? { color: `var(${domain.accentToken})` } : undefined}
           aria-hidden="true"
@@ -121,7 +123,7 @@ function GroupDisclosure({
         </span>
         {group.label}
       </summary>
-      <div className="border-border border-t bg-background p-1">
+      <div className="border-t border-border bg-background p-1">
         {group.children.map((item) => (
           <NavigatorLink
             key={item.to}
@@ -215,7 +217,7 @@ export function WorkspaceNavigator({
                 />
               ))
             ) : (
-              <p className="py-6 text-center text-muted-foreground text-sm">
+              <p className="py-6 text-center text-sm text-muted-foreground">
                 No destination matched “{query.trim()}”.
               </p>
             )}
@@ -224,12 +226,12 @@ export function WorkspaceNavigator({
           <>
             <section
               aria-label="Account"
-              className="flex min-h-12 items-center gap-2 border-border border-y px-2 py-1"
+              className="flex min-h-12 items-center gap-2 border-y border-border px-2 py-1"
             >
               <AuthenticatedShellAccount />
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-sm">Household account</p>
-                <p className="truncate text-muted-foreground text-xs">
+                <p className="text-sm font-medium">Household account</p>
+                <p className="truncate text-xs text-muted-foreground">
                   Identity and application preferences
                 </p>
               </div>
@@ -240,7 +242,7 @@ export function WorkspaceNavigator({
               />
             </section>
             <section aria-labelledby={householdHeadingId}>
-              <h3 id={householdHeadingId} className="eyebrow px-2 pb-1">
+              <h3 id={householdHeadingId} className="px-2 pb-1 eyebrow">
                 Household
               </h3>
               {mobileHouseholdItems.map((item) => (
@@ -253,7 +255,7 @@ export function WorkspaceNavigator({
               ))}
             </section>
             <section aria-labelledby={workspaceHeadingId}>
-              <h3 id={workspaceHeadingId} className="eyebrow px-2 pb-1">
+              <h3 id={workspaceHeadingId} className="px-2 pb-1 eyebrow">
                 Workspace
               </h3>
               {primaryNavGroups.map((group) => (
@@ -288,7 +290,7 @@ export function WorkspaceNavigator({
             </Button>
             {workspaceUtilitySections.map((section) => (
               <section key={section.title} aria-label={section.title}>
-                <h3 className="eyebrow px-2 pb-1">{section.title}</h3>
+                <h3 className="px-2 pb-1 eyebrow">{section.title}</h3>
                 {section.items.map((item) => (
                   <NavigatorLink
                     key={item.to}

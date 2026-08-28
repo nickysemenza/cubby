@@ -2,10 +2,12 @@ import type { ProjectStatus } from "@cubby/schemas/project";
 import { projectStatusValues } from "@cubby/schemas/project";
 import { ListFilter } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+
 import {
   activeFilterCount,
   DATE_RANGE_PRESETS,
@@ -130,7 +132,7 @@ function DashboardFilterControls({
         <Stack gap="xs">
           <label
             htmlFor={yearId}
-            className="font-mono text-2xs text-muted-foreground uppercase tracking-wider"
+            className="font-mono text-2xs tracking-wider text-muted-foreground uppercase"
           >
             Calendar year
           </label>
@@ -155,7 +157,7 @@ function DashboardFilterControls({
         <Stack gap="xs">
           <label
             htmlFor={completionYearId}
-            className="font-mono text-2xs text-muted-foreground uppercase tracking-wider"
+            className="font-mono text-2xs tracking-wider text-muted-foreground uppercase"
           >
             Completed
           </label>
@@ -196,7 +198,7 @@ export function ActiveScopeSummary({
 
   return (
     <Row align="center" justify="between" gap="sm" wrap>
-      <p className="text-muted-foreground text-xs">
+      <p className="text-xs text-muted-foreground">
         {scopeSummary.join(" · ")}
       </p>
       <Button type="button" variant="ghost" size="sm" onClick={onClear}>

@@ -3,6 +3,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { Ellipsis } from "lucide-react";
 import type { ReactNode } from "react";
 import { createContext, Fragment, useContext, useMemo, useRef } from "react";
+
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -11,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { copyIdentifiers, copyShortcodes } from "~/lib/clipboard";
+
 import type {
   BulkAction,
   BulkActionAvailability,
@@ -398,8 +400,10 @@ const entityActions: readonly EntityActionDefinition[] = [
   },
 ];
 
-export interface EntityActionCatalogDescriptor
-  extends Omit<EntityActionDefinition, "use" | "surfaces"> {
+export interface EntityActionCatalogDescriptor extends Omit<
+  EntityActionDefinition,
+  "use" | "surfaces"
+> {
   surfaces: readonly EntityActionSurface[];
 }
 

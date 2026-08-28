@@ -1,6 +1,8 @@
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import type { z } from "zod";
+
 import { formatCurrency } from "~/lib/utils";
+
 import { ShelfCard, ShelfEmpty, ShelfGrid } from "../data-table/shelf";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { useHydratedProductImages } from "../products/product-image-summaries";

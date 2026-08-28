@@ -3,13 +3,15 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { sumBy } from "es-toolkit";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
+
 import { CategoryDonut } from "~/app/_components/charts/kit";
 import { Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
 import { sumByKey } from "~/misc/array-helpers";
+
 import { capitalize, getCostTypeColor } from "../shared";
-import { TooltipExpenseBreakdown } from "./ChartTooltip";
 import { ChartEmpty } from "./chart-empty";
+import { TooltipExpenseBreakdown } from "./ChartTooltip";
 
 export function ExpenseDonut({
   expenses,
@@ -90,7 +92,7 @@ export function ExpenseDonut({
       <Stack gap="tight">
         <ChartEmpty icon={ShoppingBag} title="No principal expense data." />
         {adjustmentTotal !== 0 ? (
-          <p className="text-center text-muted-foreground text-xs">
+          <p className="text-center text-xs text-muted-foreground">
             Total spend is {formatCurrency(adjustmentTotal, 0)} in purchase
             adjustments, with no principal category slices.
           </p>
@@ -124,14 +126,14 @@ export function ExpenseDonut({
         emptyTitle="No principal expense data."
       />
       {showExcludedCaption && (
-        <p className="text-center text-muted-foreground text-xs">
+        <p className="text-center text-xs text-muted-foreground">
           Ring shows {formatCurrency(total, 0)} positive spend; center is the
           net total, which excludes {formatCurrency(Math.abs(excludedTotal), 0)}{" "}
           in refunds/credits.
         </p>
       )}
       {!selected && adjustmentTotal !== 0 && (
-        <p className="text-center text-muted-foreground text-xs">
+        <p className="text-center text-xs text-muted-foreground">
           Total includes {formatCurrency(adjustmentTotal, 0)} in purchase
           adjustments not assigned to a category slice.
         </p>

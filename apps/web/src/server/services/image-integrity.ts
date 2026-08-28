@@ -1,5 +1,6 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { imageDimensionsFromData } from "image-dimensions";
+
 import { createAppError } from "~/server/errors/app-error";
 
 const MIME_BY_DIMENSION_TYPE: Record<string, string> = {

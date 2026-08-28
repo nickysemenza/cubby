@@ -1,7 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-
 import { describe, expect, it } from "vitest";
+
 import {
   type HarvestRow,
   harvestEquivalences,

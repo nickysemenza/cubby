@@ -5,6 +5,7 @@ import type {
   ExpenseFacetCountsOut,
 } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
+
 import {
   expenseAnalyzeTraceAttributes,
   expenseFacetTraceAttributes,

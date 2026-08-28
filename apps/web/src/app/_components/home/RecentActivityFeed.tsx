@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Clock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+
 import { DashboardCard } from "~/components/layout/dashboard-card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
+
 import { AuditLogList } from "../audit-log/audit-log-list";
 
 interface RecentActivityFeedProps {

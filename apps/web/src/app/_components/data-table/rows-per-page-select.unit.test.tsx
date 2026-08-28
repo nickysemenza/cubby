@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import type { CubbyTable as Table } from "./table-features";
 

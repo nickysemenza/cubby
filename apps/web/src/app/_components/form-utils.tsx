@@ -9,6 +9,7 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { toast } from "sonner";
+
 import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
@@ -18,6 +19,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
+
 import type { ComboboxItem, PickerEntity } from "./combobox/combobox-types";
 import { EntityPicker } from "./combobox/entity-picker";
 import { StaticPicker } from "./combobox/static-picker";
@@ -636,7 +638,7 @@ export function SideBySideFields({
   return (
     <div
       className={cn(
-        "flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0",
+        "flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2",
         className,
       )}
     >

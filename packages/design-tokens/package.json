@@ -2,11 +2,11 @@
   "name": "@cubby/design-tokens",
   "version": "0.1.0",
   "private": true,
+  "files": [
+    "brand.css"
+  ],
   "type": "module",
   "exports": {
     "./brand.css": "./brand.css"
-  },
-  "files": [
-    "brand.css"
-  ]
+  }
 }

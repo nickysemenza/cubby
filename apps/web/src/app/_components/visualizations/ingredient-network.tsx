@@ -13,8 +13,10 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { recipe } from "~/app/recipes/recipe.functions";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizOverlay, VizTooltip } from "./viz-overlay";
 
@@ -364,7 +366,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                   <text
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-background font-semibold text-2xs"
+                    className="pointer-events-none fill-background text-2xs font-semibold"
                   >
                     {truncatedName}
                   </text>
@@ -389,7 +391,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               key={ingredient.id}
               to="/ingredients/$shortcode"
               params={{ shortcode: ingredient.id }}
-              className="inline-flex min-h-11 items-center px-2 text-primary text-xs hover:underline sm:min-h-0"
+              className="inline-flex min-h-11 items-center px-2 text-xs text-primary hover:underline sm:min-h-0"
             >
               {ingredient.name} ({ingredient.recipeCount})
             </Link>
@@ -411,12 +413,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             <button
               type="button"
               onClick={() => setSelectedLinkKey(null)}
-              className="-mt-0.5 text-lg text-muted-foreground leading-none hover:text-foreground" /* tight: × optical-align nudge */
+              className="-mt-0.5 text-lg leading-none text-muted-foreground hover:text-foreground" /* tight: × optical-align nudge */
             >
               ×
             </button>
           </div>
-          <div className="mt-2 text-muted-foreground text-xs">
+          <div className="mt-2 text-xs text-muted-foreground">
             Together in {selectedLink.weight} recipe
             {selectedLink.weight !== 1 ? "s" : ""}:
           </div>
@@ -426,7 +428,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                 key={recipe.id}
                 to="/recipes/$shortcode"
                 params={{ shortcode: recipe.id }}
-                className="block text-primary text-xs hover:underline"
+                className="block text-xs text-primary hover:underline"
               >
                 {recipe.name}
               </Link>
@@ -452,7 +454,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             Used in {hoveredNode.recipeCount} recipe
             {hoveredNode.recipeCount !== 1 ? "s" : ""}
           </div>
-          <div className="text-muted-foreground text-xs">
+          <div className="text-xs text-muted-foreground">
             {
               simulatedLinks.filter((l) => {
                 const sourceId =

@@ -31,7 +31,9 @@ function stagedPaths(): readonly string[] {
     { cwd: repoRoot, encoding: "utf8" },
   );
   if (result.status !== 0) {
-    throw new Error(result.stderr || "check-staged: could not read staged files");
+    throw new Error(
+      result.stderr || "check-staged: could not read staged files",
+    );
   }
   return parseStagedPaths(result.stdout);
 }

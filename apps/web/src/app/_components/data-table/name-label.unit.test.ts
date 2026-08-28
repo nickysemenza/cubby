@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { nameLabel } from "./name-label";
 
 type Meal = { date: string };

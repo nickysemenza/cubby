@@ -7,6 +7,7 @@ import {
   previewOperationSchema,
 } from "@cubby/schemas/entity-integrity";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
 export function registerEntityIntegrityTools(server: McpServer) {

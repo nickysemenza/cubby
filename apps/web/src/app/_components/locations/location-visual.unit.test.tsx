@@ -5,6 +5,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { LocationVisual } from "./location-visual";
 
 vi.mock("@tanstack/react-router", () => ({

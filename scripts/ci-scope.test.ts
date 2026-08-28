@@ -14,7 +14,10 @@ test("agent, documentation, and editor-only changes are inert", () => {
     dependencies: false,
     unknown: false,
   });
-  assert.equal(classifyPaths(["docs/todos.md", ".vscode/settings.json"]).inert, true);
+  assert.equal(
+    classifyPaths(["docs/todos.md", ".vscode/settings.json"]).inert,
+    true,
+  );
 });
 
 test("a web-only change runs web CI without auxiliary or Rust work", () => {
@@ -32,9 +35,10 @@ test("a web-only change runs web CI without auxiliary or Rust work", () => {
 });
 
 test("each auxiliary worker follows its transitive workspace dependencies", () => {
-  assert.deepEqual(classifyPaths(["packages/usda-contract/src/index.ts"]).workers, [
-    "usda-api",
-  ]);
+  assert.deepEqual(
+    classifyPaths(["packages/usda-contract/src/index.ts"]).workers,
+    ["usda-api"],
+  );
   assert.deepEqual(classifyPaths(["packages/shared/src/index.ts"]).workers, [
     "upc-lookup",
   ]);

@@ -1,7 +1,9 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
+
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
+
 import { classifyScannedLocation } from "../session-utils";
 
 /**

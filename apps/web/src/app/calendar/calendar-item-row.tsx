@@ -1,7 +1,9 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
 import { cn, formatCurrency } from "~/lib/utils";
+
 import { calendarItemPresentation } from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";
 

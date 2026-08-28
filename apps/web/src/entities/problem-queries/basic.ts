@@ -1,4 +1,5 @@
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
+
 import { defineProblem, type ProblemQuery } from "~/entities/problem-query";
 
 /** Exact entity-grain Problems whose membership is a small reusable assembly. */

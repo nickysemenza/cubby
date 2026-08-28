@@ -8,6 +8,7 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { z } from "zod";
+
 import type { Database } from "~/server/db";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
@@ -17,11 +18,12 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
-import { createProductWriteActions } from "~/server/services/product.service";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
 } from "~/server/services/product-orchestration.service";
+import { createProductWriteActions } from "~/server/services/product.service";
+
 import {
   deleteProducts,
   getProductByID,

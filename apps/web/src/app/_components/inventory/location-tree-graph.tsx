@@ -2,6 +2,7 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useLocationTree } from "~/hooks/useLocationTree";
 

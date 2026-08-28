@@ -1,6 +1,7 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { entityEditRegistry } from "./definitions";
 import { buildEntityEdit, resolveEntityEdit } from "./kernel";
 import type { EditableEntity, EntityEditIntentDefinition } from "./types";

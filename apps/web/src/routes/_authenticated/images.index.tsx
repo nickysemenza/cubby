@@ -1,5 +1,6 @@
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Suspense } from "react";
+
 import { listPage } from "~/app/_components/routing/entity-routes";
 import ImageList from "~/app/images/imagelist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";

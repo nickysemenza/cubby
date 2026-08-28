@@ -5,12 +5,14 @@ import {
 import type { InfLocation } from "@cubby/schemas/location";
 import { ChevronRight, CornerDownRight } from "lucide-react";
 import { useRef } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+
+import { pathToNode } from "./arrange-tree-utils";
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationRow } from "./ArrangeLocationRow";
-import { pathToNode } from "./arrange-tree-utils";
 import { UnknownDock } from "./UnknownDock";
 import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
@@ -220,7 +222,7 @@ function CollapsedRow({ node, roots, depth, onDrill }: CollapsedRowProps) {
       gap="sm"
       onClick={() => onDrill(node.id)}
       className={cn(
-        "cursor-pointer rounded py-1 text-muted-foreground text-xs hover:text-foreground",
+        "cursor-pointer rounded py-1 text-xs text-muted-foreground hover:text-foreground",
         isOver && "bg-primary/10 text-primary",
       )}
       style={{ paddingLeft: `${depth * 1.25 + 1.25}rem` }}

@@ -1,6 +1,7 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { CalendarClock } from "lucide-react";
 import { useMemo } from "react";
+
 import { monthLabel } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 import {
@@ -17,13 +18,11 @@ export function PlannedVsActualByMonth({
   const data = useMemo(
     () =>
       rows
-        .map(
-          (row): PlannedActualDatum => ({
-            category: monthLabel(row.month),
-            actual: row.actual,
-            planned: row.planned,
-          }),
-        )
+        .map((row): PlannedActualDatum => ({
+          category: monthLabel(row.month),
+          actual: row.actual,
+          planned: row.planned,
+        }))
         .filter((datum) => datum.actual > 0 || datum.planned > 0),
     [rows],
   );

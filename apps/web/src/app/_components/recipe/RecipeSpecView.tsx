@@ -1,11 +1,13 @@
 import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
+
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { cn } from "~/lib/utils";
 import { renderValueOrMissing } from "~/misc/result";
+
 import { dottedEntityLink, EntityPreviewLink } from "../EntityPreviewLink";
 import {
   buildDisplayQuantities,
@@ -77,7 +79,7 @@ function CostCell({ node, rowId }: { node: RecipeTreeNode; rowId: string }) {
   const price = node.costing?.rows.find((r) => r.id === rowId)?.priceInfo
     ?.price;
   return (
-    <span className="text-right font-mono text-muted-foreground text-xs tabular-nums">
+    <span className="text-right font-mono text-xs text-muted-foreground tabular-nums">
       {price ? (
         renderValueOrMissing(price, (m) => tryFormatAmount(m))
       ) : (
@@ -163,7 +165,7 @@ function SpecRow({
   if (row.kind === "stub") {
     return (
       <div className={rowGrid[variant]}>
-        <span className="py-1 text-muted-foreground text-sm italic">
+        <span className="py-1 text-sm text-muted-foreground italic">
           {row.name}{" "}
           <StubWarning>
             {row.reason === "cycle" ? "↻ cycle" : "missing"}
@@ -188,7 +190,7 @@ function SpecRow({
 
   const line = (
     <div className={cn(rowGrid[variant], "align-top")}>
-      <span className="py-1 font-medium text-sm leading-snug">
+      <span className="py-1 text-sm leading-snug font-medium">
         {isSubrecipe && (
           <span aria-hidden className="mr-1" style={{ color: accentColor }}>
             {isExpanded ? "▾" : "▸"}
@@ -289,7 +291,7 @@ function SpecNode({
   return (
     <Stack gap="xs">
       {!isRoot && (
-        <div className="eyebrow mb-1 flex flex-wrap items-center gap-x-2">
+        <div className="mb-1 flex flex-wrap items-center gap-x-2 eyebrow">
           <EntityPreviewLink
             displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
@@ -323,7 +325,7 @@ function SpecNode({
       {node.sections.map((section) => (
         <Fragment key={section.id}>
           {showSectionNames && section.name && (
-            <div className="eyebrow pt-2">{section.name}</div>
+            <div className="pt-2 eyebrow">{section.name}</div>
           )}
           {section.rows.map((row) => (
             <SpecRow
@@ -350,7 +352,7 @@ function SpecNode({
               {section.steps.map((step) => (
                 <Row as="li" gap="sm" key={step.n}>
                   <StepNumberBadge>{step.n}</StepNumberBadge>
-                  <span className="text-foreground text-xs leading-snug">
+                  <span className="text-xs leading-snug text-foreground">
                     <MarkdownText className="[&_p]:my-0">
                       {step.text}
                     </MarkdownText>
@@ -389,11 +391,11 @@ export const RecipeSpecView = memo(function RecipeSpecView({
   return (
     <div className="border border-[var(--border)] bg-card px-6 py-6">
       <header className="mb-4 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h2 className="my-0 font-heading font-semibold text-2xl tracking-tight">
+        <h2 className="my-0 font-heading text-2xl font-semibold tracking-tight">
           {recipe.name}
         </h2>
         {recipe.yield?.value ? (
-          <span className="font-heading text-primary text-sm">
+          <span className="font-heading text-sm text-primary">
             Yields {formatYield(recipe.yield)}
           </span>
         ) : null}
@@ -408,7 +410,7 @@ export const RecipeSpecView = memo(function RecipeSpecView({
       <div
         className={cn(
           rowGrid[variant],
-          "eyebrow border-primary border-b-2 pb-2",
+          "border-b-2 border-primary pb-2 eyebrow",
         )}
       >
         <span>Ingredient</span>
@@ -428,7 +430,7 @@ export const RecipeSpecView = memo(function RecipeSpecView({
       </div>
 
       {variant === "detail" && footnote && (
-        <p className="mt-4 font-heading text-primary text-xs italic">
+        <p className="mt-4 font-heading text-xs text-primary italic">
           {footnote}
         </p>
       )}

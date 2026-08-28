@@ -10,8 +10,10 @@ import type {
   FoodSummary,
 } from "@cubby/usda-schemas";
 import { uniq } from "es-toolkit";
+
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
+
 import type { USDAClient } from "../clients/usda";
 
 const FOOD_DATA_TYPES = new Set<DataType>([

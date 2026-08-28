@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
+
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
+
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
@@ -229,7 +231,7 @@ function Treemap({ data }: TreemapProps) {
                 >
                   <div className="flex h-full flex-col overflow-hidden">
                     <div
-                      className="font-medium text-xs"
+                      className="text-xs font-medium"
                       style={{
                         color: isDeepFill(node)
                           ? "var(--background)"

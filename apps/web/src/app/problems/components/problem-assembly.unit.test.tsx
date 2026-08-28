@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
+
 import { ProblemAssembly, problemListLocation } from "./problem-assembly";
 
 describe("problemListLocation", () => {

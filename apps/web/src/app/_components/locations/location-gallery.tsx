@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
+
 import { location } from "~/app/locations/location.functions";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -24,6 +25,7 @@ import {
 } from "~/hooks/useGalleryViewState";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { useIsMobile } from "~/hooks/useMobile";
+
 import { ProductImageSummariesProvider } from "../products/product-image-summaries";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
@@ -481,7 +483,7 @@ export function LocationGallery() {
           <button
             type="button"
             onClick={() => setLocationTypeFilter(null)}
-            className="mt-2 text-primary text-sm hover:underline"
+            className="mt-2 text-sm text-primary hover:underline"
           >
             Clear type filter
           </button>

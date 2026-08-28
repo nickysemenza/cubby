@@ -100,6 +100,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
 import {
   account,
   apikey,
@@ -228,7 +229,10 @@ const softDeletedAt = () => ({
   deletedAt: timestamp("deletedAt", { mode: "date" }),
 });
 const pkUuid = <T extends string = string>() =>
-  uuid("id").primaryKey().default(sql`gen_random_uuid()`).$type<T>();
+  uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`)
+    .$type<T>();
 
 /**
  * The entity's public id (`PRD-4K7M`) — what URLs, QR labels, and MCP expose.
@@ -343,8 +347,14 @@ export const cookbook = pgTable(
     id: pkUuid<CookbookId>(),
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
-    author: text("author").array().notNull().default(sql`'{}'::text[]`),
-    subjects: text("subjects").array().notNull().default(sql`'{}'::text[]`),
+    author: text("author")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    subjects: text("subjects")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     sourceLabel: text("sourceLabel").notNull(),
     rawJson: jsonb("rawJson").notNull().$type<ImportRecipe[]>(),
     coverImageId: uuid("coverImageId").references(() => image.id),
@@ -410,7 +420,10 @@ export const ingredient = pgTable(
     id: pkUuid<IngredientId>(),
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
-    aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
+    aliases: text("aliases")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     // Base measurement kinds the user has marked "not applicable" for this
     // ingredient (e.g. volume on whole lemons you only ever buy by count). The
     // coverage layer drops these from the graded universe so the ingredient can
@@ -549,7 +562,10 @@ export const product = pgTable(
     id: pkUuid<ProductId>(),
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
-    aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
+    aliases: text("aliases")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     manufacturer: text("manufacturer").notNull(),
     // Explicit USDA link by FoodData Central id (the universal PK across all food
     // types). Takes precedence over UPC auto-resolution and can reach
@@ -578,7 +594,10 @@ export const product = pgTable(
     // `recipe.tags` (nullable), so the presence predicate is a plain
     // `cardinality(tags) = 0`. No GIN index: ~380 products, and every extra GIN
     // index widens the standing `db:push` drift for no measurable gain.
-    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     // Manual per-item valuation/replacement-price override. The effective price
     // falls back to the live Expense-derived unit cost when this is null; that
     // aggregate remains read-time so Expense stays the only historical-money
@@ -768,8 +787,14 @@ export const location = pgTable(
     id: pkUuid<LocationId>(),
     shortcode: shortcodeColumn(),
     name: text("name").notNull(),
-    aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
-    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    aliases: text("aliases")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     ...baseTimestamps(),
     ...softDeletedAt(),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
@@ -882,8 +907,14 @@ export const searchDocument = pgTable(
     title: text("title").notNull(),
     subtitle: text("subtitle"),
     typeHint: text("typeHint"),
-    aliases: text("aliases").array().notNull().default(sql`ARRAY[]::text[]`),
-    keywords: text("keywords").array().notNull().default(sql`ARRAY[]::text[]`),
+    aliases: text("aliases")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    keywords: text("keywords")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     body: text("body").notNull(),
     semanticText: text("semanticText").notNull(),
     normalizedText: text("normalizedText").notNull(),
@@ -1113,7 +1144,10 @@ export const project = pgTable(
       .notNull()
       .default("planning"),
     kind: text("kind", { enum: projectKindValues }),
-    locations: text("locations").array().notNull().default(sql`'{}'::text[]`),
+    locations: text("locations")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     // double precision (not `real`): this is a dollar ledger — float4 loses
     // cents above ~$16k, which the import reconciliation actually caught.
     costEstimate: doublePrecision("costEstimate"),

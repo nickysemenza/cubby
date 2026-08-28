@@ -32,6 +32,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+
 import { householdLocalDate } from "~/lib/household-date";
 import {
   describeToolTimelineConflict,
@@ -68,6 +69,7 @@ import {
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
+
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
 
@@ -1334,14 +1336,12 @@ export async function suggestProjectTools(
     ...taskTrades.map((row) => row.trade),
     ...expenseTrades.map((row) => row.trade),
   ])
-    .map(
-      (trade): ProjectTradeSignal => ({
-        trade,
-        taskCount: taskCountByTrade.get(trade) ?? 0,
-        expenseCount: expenseByTrade.get(trade)?.expenseCount ?? 0,
-        grossSpend: expenseByTrade.get(trade)?.grossSpend ?? 0,
-      }),
-    )
+    .map((trade): ProjectTradeSignal => ({
+      trade,
+      taskCount: taskCountByTrade.get(trade) ?? 0,
+      expenseCount: expenseByTrade.get(trade)?.expenseCount ?? 0,
+      grossSpend: expenseByTrade.get(trade)?.grossSpend ?? 0,
+    }))
     .sort(
       (a, b) =>
         b.taskCount - a.taskCount ||

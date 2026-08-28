@@ -11,12 +11,14 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   auditLog,
   expense as expenseTable,
   product,
   productComponent,
 } from "~/server/db/schema";
+
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts, updateProduct } from "./product";
 import {

@@ -2,9 +2,11 @@ import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { describe, expect, it, vi } from "vitest";
+
 import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
+
 import { EntityActionsProvider } from "../actions/entity-actions";
 import {
   createActionsColumn,

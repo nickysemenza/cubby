@@ -15,6 +15,7 @@
  */
 
 import { type ReactNode, useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -25,6 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
+
 import type { ScanFeedbackEntry } from "./persistent-scanner";
 import { PersistentScanner } from "./persistent-scanner";
 import type { BarcodeFormat } from "./useBarcodeScanner";

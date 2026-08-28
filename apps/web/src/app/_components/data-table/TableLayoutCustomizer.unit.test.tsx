@@ -1,10 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import TableLayoutCustomizer from "./TableLayoutCustomizer";
+
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
+import TableLayoutCustomizer from "./TableLayoutCustomizer";
 
 type TestRow = Record<string, unknown>;
 

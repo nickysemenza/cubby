@@ -1,5 +1,6 @@
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import { describe, expect, it } from "vitest";
+
 import {
   createAppError,
   createBlockedError,

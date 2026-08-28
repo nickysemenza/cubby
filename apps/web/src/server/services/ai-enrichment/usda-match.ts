@@ -11,6 +11,7 @@ import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+
 import { getErrorMessage } from "~/lib/error-utils";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
@@ -19,6 +20,7 @@ import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 import { getIngredientByID } from "~/server/repo/ingredient";
 import type { USDAService } from "~/server/services/usda.service";
+
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
 export interface UsdaFoodSuggestion {

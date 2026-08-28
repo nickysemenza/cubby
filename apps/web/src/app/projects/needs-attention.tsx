@@ -13,8 +13,10 @@ import {
   Ruler,
   Tag,
 } from "lucide-react";
+
 import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
+
 import { attentionEvidence } from "./attention-presentation";
 import { formatDate } from "./project-formatting";
 
@@ -119,7 +121,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
       <Row
         align="center"
         gap="sm"
-        className="font-medium text-sm text-warning-ink"
+        className="text-sm font-medium text-warning-ink"
       >
         <AlertTriangle className="size-4" />
         Needs Attention ({items.length})
@@ -179,7 +181,7 @@ function AttentionGroup({
 }) {
   return (
     <details className="group">
-      <summary className="flex cursor-pointer items-center gap-2 font-medium text-warning-ink text-xs hover:text-warning-ink/80">
+      <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-warning-ink hover:text-warning-ink/80">
         {icon}
         {title}
       </summary>

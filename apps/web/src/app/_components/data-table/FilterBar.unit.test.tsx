@@ -1,8 +1,9 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FilterBar } from "./FilterBar";
+
 import type { Filter, FilterBarField } from "./filter-bar-core";
+import { FilterBar } from "./FilterBar";
 
 const fields: FilterBarField[] = [
   { key: "name", label: "Name", type: "text" },

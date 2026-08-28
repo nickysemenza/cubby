@@ -3,8 +3,10 @@ import { parseShortcode } from "@cubby/shared";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { CheckIcon, XIcon } from "lucide-react";
 import * as React from "react";
+
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
+
 import type { ComboboxItem, PickerEntity } from "./combobox-types";
 
 const statusToneClass = {
@@ -258,7 +260,7 @@ export function EntityPicker<TId extends string>({
           <ComboboxPrimitive.Popup
             className={cn(
               "max-w-(--available-width) origin-(--transform-origin) rounded-none border border-[var(--border)] bg-popover text-popover-foreground",
-              "data-open:fade-in-0 data-open:zoom-in-95 data-open:animate-in",
+              "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
               wide
                 ? "w-[min(44rem,calc(100vw-16px))]"
                 : "w-[min(24rem,calc(100vw-16px))]",
@@ -269,7 +271,7 @@ export function EntityPicker<TId extends string>({
               <button
                 type="button"
                 aria-label={`Clear ${label}`}
-                className="flex w-full items-center gap-2 border-[var(--border)] border-b px-2 py-2 text-left text-muted-foreground text-sm hover:bg-accent hover:text-foreground"
+                className="flex w-full items-center gap-2 border-b border-[var(--border)] px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -297,7 +299,7 @@ export function EntityPicker<TId extends string>({
                     {showGroup && (
                       <div
                         role="presentation"
-                        className="border-[var(--border)] border-b bg-muted/40 px-2 py-1 font-mono text-[0.625rem] text-muted-foreground uppercase tracking-wider first:border-t-0"
+                        className="border-b border-[var(--border)] bg-muted/40 px-2 py-1 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase first:border-t-0"
                       >
                         {group.label}
                       </div>
@@ -317,8 +319,8 @@ export function EntityPicker<TId extends string>({
                         .filter(Boolean)
                         .join(" ")}
                       className={cn(
-                        "relative flex cursor-default select-none items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none",
-                        "data-[selected]:bg-accent/50 data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                        "relative flex cursor-default items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none select-none",
+                        "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/50",
                         "data-disabled:cursor-not-allowed data-disabled:bg-muted/20 data-disabled:text-muted-foreground",
                         renderItem && "items-start whitespace-normal",
                       )}
@@ -356,7 +358,7 @@ export function EntityPicker<TId extends string>({
                               {item.name}
                             </span>
                             {item.secondary && (
-                              <span className="max-w-40 truncate text-muted-foreground text-xs">
+                              <span className="max-w-40 truncate text-xs text-muted-foreground">
                                 {item.secondary}
                               </span>
                             )}
@@ -372,17 +374,17 @@ export function EntityPicker<TId extends string>({
                             )}
                           </span>
                           {item.detail && (
-                            <span className="truncate text-muted-foreground text-xs">
+                            <span className="truncate text-xs text-muted-foreground">
                               {item.detail}
                             </span>
                           )}
                           {facts.length > 0 && (
-                            <span className="truncate font-mono text-muted-foreground text-xs tabular-nums">
+                            <span className="truncate font-mono text-xs text-muted-foreground tabular-nums">
                               {facts.join(" · ")}
                             </span>
                           )}
                           {disabledReason && (
-                            <span className="truncate text-muted-foreground text-xs">
+                            <span className="truncate text-xs text-muted-foreground">
                               {disabledReason}
                             </span>
                           )}
@@ -398,7 +400,7 @@ export function EntityPicker<TId extends string>({
             </ComboboxPrimitive.List>
 
             {(isLoading || error || visibleItems.length === 0) && (
-              <div className="border-[var(--border)] border-t px-2 py-4 text-sm">
+              <div className="border-t border-[var(--border)] px-2 py-4 text-sm">
                 {isLoading ? (
                   <span className="flex items-center gap-2 text-muted-foreground">
                     <Spinner /> Searching…
@@ -415,7 +417,7 @@ export function EntityPicker<TId extends string>({
               <button
                 type="button"
                 disabled={isCreating}
-                className="flex w-full items-center border-[var(--border)] border-t px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
+                className="flex w-full items-center border-t border-[var(--border)] px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
                 onClick={async (event) => {
                   event.preventDefault();
                   event.stopPropagation();

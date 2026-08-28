@@ -30,6 +30,7 @@ import type {
 } from "@cubby/schemas/project";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -37,6 +38,7 @@ import {
   expenseAggregateFields as aggregateSelect,
   EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
 } from "~/server/repo/expense-aggregate-sql";
+
 import { buildExpenseWhereClause } from "./lookup";
 
 /**

@@ -20,6 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
@@ -30,6 +31,7 @@ import {
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Card, CardContent } from "~/components/ui/card";
 import { useImageState } from "~/hooks/useImageState";
+
 import {
   buildUpdateObject,
   type CreateModeProps,
@@ -74,8 +76,10 @@ interface CreateLocationFormProps extends CreateModeProps<LocationCreateInput> {
 }
 
 // Props for edit mode
-interface EditLocationFormProps
-  extends EditModeProps<LocationUpdateInput, LocationOut> {
+interface EditLocationFormProps extends EditModeProps<
+  LocationUpdateInput,
+  LocationOut
+> {
   entity: LocationOut & {
     parent?: LocationOut | null;
     images?: ImageOut[]; // Images from DB

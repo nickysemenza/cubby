@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Search, Send } from "lucide-react";
 import { useState } from "react";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -20,6 +21,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { search } from "~/lib/search.functions";
+
 import { getSearchResultRoute } from "./search-utils";
 
 function SearchResultEntityLink({ item }: { item: SearchHit }) {
@@ -29,7 +31,7 @@ function SearchResultEntityLink({ item }: { item: SearchHit }) {
 function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
   return (
     <section className="border border-border bg-card p-4">
-      <h2 className="mb-2 font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+      <h2 className="mb-2 font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         {title}
       </h2>
       <Table className="table-auto">
@@ -109,7 +111,7 @@ export function SearchDebugPage() {
 
       <Stack gap="sm" className="border border-border bg-card p-4">
         <Row align="center" justify="between" gap="sm" wrap>
-          <h2 className="font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+          <h2 className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Semantic backfill
           </h2>
           <Row gap="sm" wrap>
@@ -152,7 +154,7 @@ export function SearchDebugPage() {
       </Stack>
 
       {backfill.data ? (
-        <p className="text-muted-foreground text-xs">
+        <p className="text-xs text-muted-foreground">
           {backfill.data.reused ? "Reusing" : "Started"} embedding backfill in{" "}
           <Link
             to="/background-jobs"
@@ -167,7 +169,7 @@ export function SearchDebugPage() {
 
       {debugQuery.isLoading ? <Spinner /> : null}
       {debugQuery.error ? (
-        <p className="text-destructive text-sm">{debugQuery.error.message}</p>
+        <p className="text-sm text-destructive">{debugQuery.error.message}</p>
       ) : null}
       {debugQuery.data ? (
         <>
@@ -186,7 +188,7 @@ export function SearchDebugPage() {
       <section className="border border-border bg-card p-4">
         <Row align="center" justify="between" gap="sm" wrap>
           <Stack gap="xs">
-            <h2 className="font-mono font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+            <h2 className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               AI usage
             </h2>
           </Stack>

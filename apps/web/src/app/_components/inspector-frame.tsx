@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, X } from "lucide-react";
 import type { ReactNode } from "react";
+
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
@@ -82,21 +83,21 @@ export function EntityInspectorFrame({
   return (
     <aside
       aria-label={`${label} inspector`}
-      className="h-full w-full max-w-full overflow-y-auto bg-card text-foreground text-xs"
+      className="h-full w-full max-w-full overflow-y-auto bg-card text-xs text-foreground"
     >
-      <header className="border-border border-b p-3">
+      <header className="border-b border-border p-3">
         <div className="flex items-start gap-2">
           {leading ?? (
             <EntityIcon entity={entity} colored className="mt-0.5 size-4" />
           )}
           <div className="min-w-0 flex-1">
             {eyebrow ?? (
-              <span className="font-medium text-2xs text-muted-foreground">
+              <span className="text-2xs font-medium text-muted-foreground">
                 {label}
               </span>
             )}
             <h2
-              className="truncate font-semibold text-foreground text-sm"
+              className="truncate text-sm font-semibold text-foreground"
               title={name ?? label}
             >
               {name ?? label}
@@ -128,7 +129,7 @@ export function EntityInspectorFrame({
       <Tabs value={activeTab} onValueChange={selectTab}>
         <TabsList
           variant="line"
-          className="w-full justify-start border-border border-b px-2"
+          className="w-full justify-start border-b border-border px-2"
         >
           <TabsTrigger value="overview">Overview</TabsTrigger>
           {hasRelations ? (

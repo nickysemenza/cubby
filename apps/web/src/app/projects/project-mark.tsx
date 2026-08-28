@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+
 import { project } from "./project.functions";
 
 const markClasses = {
@@ -125,7 +127,7 @@ export function ProjectChartTick({
     <g transform={`translate(${x}, ${y})`}>
       <foreignObject x={-width} y={-10} width={width - 4} height={20}>
         <div
-          className="flex h-5 items-center justify-end gap-1 overflow-hidden pr-1 text-foreground text-xs"
+          className="flex h-5 items-center justify-end gap-1 overflow-hidden pr-1 text-xs text-foreground"
           title={identity.name}
         >
           <ProjectMark icon={identity.icon} size={12} />

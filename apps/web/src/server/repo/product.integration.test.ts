@@ -9,6 +9,7 @@ import type { FoodSummary } from "@cubby/usda-schemas";
 import { and, eq, sql } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+
 import {
   image,
   inventoryEntry,
@@ -22,6 +23,7 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
@@ -40,9 +42,9 @@ import {
   setProductsStockTracked,
   updateProduct,
 } from "./product";
+import { attachProductComponents } from "./product-components";
 import { readProductDetail } from "./product/detail";
 import { loadProductQuantityLedgers } from "./product/quantity-ledger";
-import { attachProductComponents } from "./product-components";
 import { createProject } from "./project";
 import {
   attachPurchaseProducts,

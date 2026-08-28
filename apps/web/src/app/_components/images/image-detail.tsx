@@ -1,6 +1,7 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { ImageIcon, Info, Link2 } from "lucide-react";
 import prettyBytes from "pretty-bytes";
+
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
   type DetailSection,
@@ -14,6 +15,7 @@ import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { Image } from "~/components/ui/image";
 import { image as imageOperations } from "~/entities/image.functions";
+
 import { EditableCell } from "../data-table/editable-cell";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 
@@ -24,7 +26,7 @@ interface ImageDetailProps {
 /** The record's media, shared by the phone hero and desktop detail rail. */
 export function ImageDetailMedia({ image }: ImageDetailProps) {
   return (
-    <div className="relative aspect-square w-full overflow-hidden border-border border-y bg-card md:max-w-sm md:rounded-md md:border">
+    <div className="relative aspect-square w-full overflow-hidden border-y border-border bg-card md:max-w-sm md:rounded-md md:border">
       {image.status === "UPLOADED" ? (
         <Image
           src={image.url}
@@ -90,7 +92,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
             />
           </dd>
           <dt className="text-muted-foreground">Type</dt>
-          <dd className="min-w-0 break-all font-mono text-xs">
+          <dd className="min-w-0 font-mono text-xs break-all">
             {image.contentType}
           </dd>
           <dt className="text-muted-foreground">Size</dt>

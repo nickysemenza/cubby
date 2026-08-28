@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FieldError as RHFFieldError } from "react-hook-form";
+
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 
 /**
@@ -37,7 +38,7 @@ export function FormFieldGroup({
       {label && <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>}
       {children}
       {description && (
-        <p className="text-muted-foreground text-xs">{description}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       )}
       {error && <FieldError errors={[error]} />}
     </Field>

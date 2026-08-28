@@ -2,6 +2,7 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));

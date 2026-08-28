@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { barFieldFromConfig } from "./filter-bar-core";
 
 describe("barFieldFromConfig", () => {

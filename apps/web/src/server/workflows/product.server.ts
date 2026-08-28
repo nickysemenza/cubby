@@ -43,6 +43,7 @@ import type {
 import type { productPurchasesInput } from "@cubby/schemas/purchase";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { z } from "zod";
+
 import { streamItems, streamProgress } from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import { executeEntity } from "~/server/entity-kernel";
@@ -59,8 +60,6 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
-import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -68,6 +67,8 @@ import {
   listKitMembership,
   listProductComponents,
 } from "~/server/repo/product-components";
+import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
+import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
 import {
   listProductProjectUses,
   setProductProjectUses,
@@ -85,17 +86,17 @@ import {
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 import {
-  createProductWithFood,
-  createProductWriteActions,
-  getProductSummaries,
-  updateProductWithFood,
-} from "~/server/services/product.service";
-import {
   applyUpcDataWithSideEffects,
   backfillUPCImages,
   findOrCreateByCode,
   findOrCreateByUPC,
 } from "~/server/services/product-orchestration.service";
+import {
+  createProductWithFood,
+  createProductWriteActions,
+  getProductSummaries,
+  updateProductWithFood,
+} from "~/server/services/product.service";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
 
 export type ProductWorkflowContext = ReturnType<typeof requireActor>;
@@ -129,8 +130,8 @@ export async function searchProductsWorkflow(
       query: nameQuery,
       hasStructuredFilters: Boolean(
         filters.manufacturerFilter ||
-          filters.upcFilter ||
-          filters.categoryFilter,
+        filters.upcFilter ||
+        filters.categoryFilter,
       ),
     })
   ) {

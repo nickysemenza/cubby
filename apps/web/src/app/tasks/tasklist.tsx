@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useMemo } from "react";
+
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import {
   taskDueColumn,
@@ -15,6 +16,7 @@ import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
+
 import {
   createParentLinkColumn,
   createProjectLinkColumn,

@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Wand2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
@@ -18,6 +19,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { getErrorMessage } from "~/lib/error-utils";
 import { problems as problemOperations } from "~/lib/problems.functions";
+
 import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
@@ -173,7 +175,7 @@ function AutoFixTooltip({ tasks }: { tasks: AutoFixTask[] }) {
       ) : (
         <span>Nothing to auto-fix right now.</span>
       )}
-      <Row gap="xs" className="border-border/60 border-t pt-2">
+      <Row gap="xs" className="border-t border-border/60 pt-2">
         <span className="text-muted-foreground">
           Not included: fetching UPC images, re-parsing recipe lines, pruning
           aliases, and anything that deletes or overwrites data — those keep

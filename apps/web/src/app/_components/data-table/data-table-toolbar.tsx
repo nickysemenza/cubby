@@ -2,12 +2,14 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+
 import { Row } from "~/components/layout";
 import { usePageWorkbenchTarget } from "~/components/page/Page";
 import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
-import { DataTableViews } from "./DataTableViews";
+
 import { DataTableViewOptions } from "./data-table-view-options";
+import { DataTableViews } from "./DataTableViews";
 import { LedgerFilters } from "./LedgerFilters";
 import { ProblemWorklistStatus } from "./problem-worklist";
 import type { CubbyTable as Table } from "./table-features";
@@ -101,7 +103,7 @@ export function DataTableToolbar<TData extends RowData>({
               align="center"
               gap="xs"
               aria-live="polite"
-              className="text-muted-foreground text-xs"
+              className="text-xs text-muted-foreground"
             >
               <Spinner size="sm" />
               Updating…

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { FilterFieldConfig } from "./filter-bar-core";
 import {
   barFiltersToFilterState,

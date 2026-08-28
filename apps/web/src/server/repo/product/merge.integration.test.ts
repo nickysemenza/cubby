@@ -5,6 +5,7 @@ import type { ProductCreateInput } from "@cubby/schemas/product";
 import { and, asc, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
 import {
   inventoryEntry,
   product,

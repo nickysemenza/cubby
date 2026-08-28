@@ -1,6 +1,7 @@
 import type { ExpenseCumulativePoint } from "@cubby/schemas/project";
 import { TrendingUp } from "lucide-react";
 import { useMemo } from "react";
+
 import { SpendTrend } from "~/app/_components/charts/kit";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { monthLabel } from "~/app/projects/project-formatting";

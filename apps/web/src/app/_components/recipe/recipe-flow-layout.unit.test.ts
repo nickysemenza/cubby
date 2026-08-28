@@ -6,6 +6,7 @@ import {
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
 import { buildRecipeFlowLayout } from "./recipe-flow-layout";
 
 const SECTION_ID = "00000000-0000-4000-8000-000000000001";

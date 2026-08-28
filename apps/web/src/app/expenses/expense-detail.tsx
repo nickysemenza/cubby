@@ -5,6 +5,7 @@ import type {
 import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
 import { Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
+
 import {
   WithProductSearch,
   WithProjectSearch,
@@ -27,6 +28,7 @@ import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
+
 import {
   type DetailSection,
   DetailSections,

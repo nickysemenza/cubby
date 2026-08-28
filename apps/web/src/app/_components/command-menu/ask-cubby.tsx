@@ -3,8 +3,10 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
+
 import { Row, Stack } from "~/components/layout";
 import { CommandGroup, CommandItem } from "~/components/ui/command";
+
 import { AgentAnswer, AgentSourceContent } from "../agent/AgentAnswer";
 import { useAgentStream } from "../hooks/useAgentStream";
 
@@ -94,7 +96,7 @@ function ToolCalls({ calls }: { calls: AgentResult["toolCalls"] }) {
             key={i}
             align="center"
             gap="sm"
-            className="font-mono text-muted-foreground text-xs"
+            className="font-mono text-xs text-muted-foreground"
           >
             <span className={call.ok ? "text-primary" : "text-destructive"}>
               {call.ok ? "✓" : "✗"}
