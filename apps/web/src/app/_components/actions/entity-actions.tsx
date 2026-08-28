@@ -438,8 +438,9 @@ const resolveEntityActionHandles = (
   if (!definition.entities.includes(entity)) {
     throw new Error(`Action ${definition.verb} does not support ${entity}`);
   }
-  // SAFETY: defineEntityAction correlates `use` with `entities`, and the
-  // membership check above proves this entity belongs to that exact roster.
+  // SAFETY: EntityActionDefinition's private brand admits only values produced
+  // by defineEntityAction, which correlates `use` with `entities`; the check
+  // above proves this entity belongs to that exact roster.
   return (definition.use as (allowedEntity: Entity) => EntityActionHandles)(
     entity,
   );

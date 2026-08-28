@@ -935,7 +935,11 @@ export const deleteTasks = async (
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);
-    const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
+    const explicitlyDeletedIds = new Set(ids);
+    const cascadedSubtasks = liveSubtasks.filter(
+      (subtask) => !explicitlyDeletedIds.has(subtask.id),
+    );
+    const allIds = [...ids, ...cascadedSubtasks.map((subtask) => subtask.id)];
 
     // Over `allIds`, not `ids`: the cascaded subtasks are removals too. Their
     // public shortcodes are returned below so callers report what was actually
@@ -961,7 +965,9 @@ export const deleteTasks = async (
     return {
       deletedShortcodes: [
         ...shortcodes,
-        ...liveSubtasks.map((row) => parseShortcodeFor("task", row.shortcode)),
+        ...cascadedSubtasks.map((row) =>
+          parseShortcodeFor("task", row.shortcode),
+        ),
       ],
     };
   });

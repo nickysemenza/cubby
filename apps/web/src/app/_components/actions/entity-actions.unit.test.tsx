@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CubbyRow as Row } from "../data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
+import { defineEntityAction } from "./entity-action-definition";
 import type {
   EntityActionDefinition,
   EntityActionHandles,
@@ -122,39 +123,39 @@ describe("production entity action catalog", () => {
  * up. Injected through `useEntityActions`' test seam.
  */
 const REGISTRY: readonly EntityActionDefinition[] = [
-  {
+  defineEntityAction({
     verb: "addToInventory",
     entities: ["product"],
     arity: "both",
     use: () => stubHandles("addToInventory", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "merge",
     entities: ["product", "vendor"],
     arity: "multi",
     use: () => stubHandles("merge", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "discard",
     entities: ["product"],
     arity: "single",
     use: () => stubHandles("discard", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setStatus",
     entities: ["task"],
     arity: "both",
     surfaces: ["selection"],
     use: () => stubHandles("setStatus", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "printLabels",
     entities: ["product"],
     arity: "both",
     // Nothing to run on this invocation — a surface that could not supply the
     // action's context.
     use: () => stubHandles("printLabels", null),
-  },
+  }),
 ];
 
 const resolve = (entity: "product" | "vendor" | "task") =>
@@ -214,7 +215,7 @@ describe("useEntityActions", () => {
   it("normalizes selection metadata", () => {
     const run = vi.fn(succeeds);
     const registry: readonly EntityActionDefinition[] = [
-      {
+      defineEntityAction({
         verb: "duplicate",
         entities: ["product"],
         arity: "single",
@@ -228,8 +229,8 @@ describe("useEntityActions", () => {
             ? { status: "disabled", reason: "Already duplicated" }
             : { status: "available" },
         use: () => stubHandles("duplicate", run),
-      },
-      {
+      }),
+      defineEntityAction({
         verb: "markAsStock",
         entities: ["product"],
         arity: "both",
@@ -237,7 +238,7 @@ describe("useEntityActions", () => {
         group: "primary",
         priority: 200,
         use: () => stubHandles("markAsStock", run),
-      },
+      }),
     ];
 
     const { result } = renderHook(() =>
@@ -284,7 +285,7 @@ describe("useEntityActions", () => {
 
   it("resolves inspector actions independently from detail actions", () => {
     const registry: readonly EntityActionDefinition[] = [
-      {
+      defineEntityAction({
         verb: "duplicate",
         entities: ["product"],
         arity: "single",
@@ -293,7 +294,7 @@ describe("useEntityActions", () => {
         placement: { inspector: "secondary" },
         preserveSelection: true,
         use: () => stubHandles("duplicate", succeeds),
-      },
+      }),
     ];
 
     const { result } = renderHook(() =>

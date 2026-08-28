@@ -1719,6 +1719,34 @@ describe("task kernel — bulkUpdate", () => {
     );
   });
 
+  it("reports a child once when parent and child are both requested", async () => {
+    const { output: parent } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "delete both parent" }),
+      ctx.actor,
+    );
+    const { output: subtask } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "delete both child",
+        parentTaskId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await executeEntity(kernelContext(), {
+      action: "delete",
+      entity: "task",
+      ids: [parent.id, subtask.id],
+    });
+    if (result.action !== "delete") throw new Error("unreachable");
+    expect(result.deletedReferences).toEqual([
+      { entity: "task", id: parent.id },
+      { entity: "task", id: subtask.id },
+    ]);
+  });
+
   it("refuses half a due-date window rather than nulling the other half", async () => {
     const { output: t } = await createTask(
       ctx.db,

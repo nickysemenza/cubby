@@ -19,6 +19,7 @@ import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
 } from "./generated/entity-routes.gen";
+import { countPrimaryDeletedReferences } from "./mutation-results";
 
 export type StandardEntity = GeneratedBrowserCrudEntity;
 export type StandardAction = "create" | "update" | "delete" | "bulkUpdate";
@@ -185,7 +186,7 @@ function deleteMutationOptions<E extends StandardEntity>(
       if (result.entity !== entity || result.action !== "delete")
         throw new Error("Entity mutation result did not match its command");
       return {
-        deleted: result.deletedReferences.length,
+        deleted: countPrimaryDeletedReferences(result),
         sideEffects: result.sideEffects,
       };
     },

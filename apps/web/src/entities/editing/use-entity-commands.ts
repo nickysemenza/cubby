@@ -10,6 +10,7 @@ import { getAppErrorDetails } from "~/lib/error-utils";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import type { StandardEntity } from "../entity-contracts";
+import { countPrimaryDeletedReferences } from "../mutation-results";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
@@ -374,7 +375,7 @@ export function useEntityCommands<E extends EditableEntity>(
           throw new Error(`${entity} delete returned ${execution.operation}.`);
         }
         return {
-          deleted: execution.result.deletedReferences.length,
+          deleted: countPrimaryDeletedReferences(execution.result),
           sideEffects: execution.result.sideEffects,
         };
       } catch (error) {

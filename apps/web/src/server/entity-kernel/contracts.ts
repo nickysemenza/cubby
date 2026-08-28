@@ -200,9 +200,23 @@ export const entityQueryResultSchema = z.discriminatedUnion("action", [
 export const entityDeleteResultSchema = z.object({
   action: z.literal("delete"),
   entity: entityKernelEntitySchema,
-  deletedReferences: z.array(
-    z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
-  ),
+  deletedReferences: z
+    .array(
+      z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
+    )
+    .superRefine((references, context) => {
+      const seen = new Set<string>();
+      for (const reference of references) {
+        const key = `${reference.entity}:${reference.id}`;
+        if (seen.has(key)) {
+          context.addIssue({
+            code: "custom",
+            message: `Duplicate deleted reference: ${key}`,
+          });
+        }
+        seen.add(key);
+      }
+    }),
   affectedEdges: z.array(
     z.object({
       edge: z.string().min(1),

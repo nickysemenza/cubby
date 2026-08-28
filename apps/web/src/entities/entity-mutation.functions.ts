@@ -15,6 +15,7 @@ import type {
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
 import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
+import { countPrimaryDeletedReferences } from "./mutation-results";
 
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<
@@ -98,7 +99,7 @@ export function flattenEntityMutationResult(
     return { ...result.item, sideEffects: result.sideEffects };
   if (result.action === "delete")
     return {
-      deleted: result.deletedReferences.length,
+      deleted: countPrimaryDeletedReferences(result),
       sideEffects: result.sideEffects,
     };
   if (result.action === "bulkUpdate")

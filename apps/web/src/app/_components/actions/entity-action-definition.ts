@@ -22,12 +22,17 @@ export type EntityActionGroup =
   | "destructive";
 export type EntityActionPlacement = "primary" | "secondary" | "overflow";
 
+const entityActionDefinitionBrand: unique symbol = Symbol(
+  "EntityActionDefinition",
+);
+
 /**
  * The registry's deliberately erased shape. `use` receives `never` because a
  * heterogeneous list cannot safely expose one entity parameter; the catalog
  * builder preserves that correlation until the checked dispatcher below.
  */
 export interface EntityActionDefinition {
+  readonly [entityActionDefinitionBrand]: true;
   id?: string;
   verb: ActionVerbId;
   entities: readonly Entity[];
@@ -45,12 +50,22 @@ export interface EntityActionDefinition {
   use: (entity: never) => EntityActionHandles;
 }
 
+type EntityActionDefinitionInput<
+  TEntities extends readonly Entity[],
+  TUse extends (...args: never[]) => EntityActionHandles,
+> = Omit<
+  EntityActionDefinition,
+  "entities" | "use" | typeof entityActionDefinitionBrand
+> & {
+  entities: TEntities;
+  use: TUse;
+};
+
 type TypedEntityActionDefinition<
   TEntities extends readonly Entity[],
   TUse extends (...args: never[]) => EntityActionHandles,
-> = Omit<EntityActionDefinition, "entities" | "use"> & {
-  entities: TEntities;
-  use: TUse;
+> = EntityActionDefinitionInput<TEntities, TUse> & {
+  readonly [entityActionDefinitionBrand]: true;
 };
 
 /**
@@ -62,18 +77,21 @@ export function defineEntityAction<
   const TEntities extends readonly Entity[],
   TUse extends () => EntityActionHandles,
 >(
-  definition: TypedEntityActionDefinition<TEntities, TUse>,
+  definition: EntityActionDefinitionInput<TEntities, TUse>,
 ): TypedEntityActionDefinition<TEntities, TUse>;
 export function defineEntityAction<
   const TEntities extends readonly Entity[],
   TUse extends (entity: TEntities[number]) => EntityActionHandles,
 >(
-  definition: TypedEntityActionDefinition<TEntities, TUse>,
+  definition: EntityActionDefinitionInput<TEntities, TUse>,
 ): TypedEntityActionDefinition<TEntities, TUse>;
 export function defineEntityAction(
-  definition: Omit<EntityActionDefinition, "use"> & {
+  definition: Omit<
+    EntityActionDefinition,
+    "use" | typeof entityActionDefinitionBrand
+  > & {
     use: (...args: never[]) => EntityActionHandles;
   },
 ): EntityActionDefinition {
-  return definition;
+  return { ...definition, [entityActionDefinitionBrand]: true };
 }
