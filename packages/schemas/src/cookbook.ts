@@ -9,12 +9,21 @@ const cookbookBundleEntry = z.object({
   book: z.string(),
   recipes: importRecipesSchema,
 });
+type CookbookBundleEntry = z.infer<typeof cookbookBundleEntry>;
+
+const isCookbookBundleEntry = (
+  entry: ImportRecipe | CookbookBundleEntry,
+): entry is CookbookBundleEntry => "recipes" in entry;
+
 export const cookbookBundleSchema = z
   .union([importRecipesSchema, z.array(cookbookBundleEntry)])
   .transform((data): ImportRecipe[] =>
-    data.length > 0 && "recipes" in (data[0] as object)
-      ? (data as z.infer<typeof cookbookBundleEntry>[]).flatMap((b) =>
-          b.recipes.map((r) => ({ ...r, source: r.source ?? b.book })),
-        )
-      : (data as ImportRecipe[]),
+    data.flatMap((entry) =>
+      isCookbookBundleEntry(entry)
+        ? entry.recipes.map((recipe) => ({
+            ...recipe,
+            source: recipe.source ?? entry.book,
+          }))
+        : [entry],
+    ),
   );

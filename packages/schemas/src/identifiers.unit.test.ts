@@ -19,6 +19,7 @@ import {
 const sorted = (xs: readonly string[]) => [...xs].sort();
 
 const UUID = "3f7c1a52-9d0b-4e21-8b6a-1c2d3e4f5a6b";
+type EntityIdFixture = string;
 
 /**
  * The generic shape both lookups exist to enable: an entity known only as a
@@ -28,7 +29,7 @@ const UUID = "3f7c1a52-9d0b-4e21-8b6a-1c2d3e4f5a6b";
  */
 const parseFor = <E extends ShortcodeEntity>(
   entity: E,
-  value: unknown,
+  value: EntityIdFixture,
 ): EntityId<E> => parseEntityId(entity, value);
 
 describe("entity id lookups", () => {

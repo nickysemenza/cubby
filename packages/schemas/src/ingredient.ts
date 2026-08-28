@@ -269,17 +269,17 @@ export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
  * Input schema for creating ingredients. Overrides the base `name` (lax for
  * reads) with a non-empty constraint; keep the mock hint for test fixtures.
  */
-const ingredientCreateShape = {
+const ingredientCreateFields = {
   name: requiredName("Ingredient name")
     .describe("Ingredient name")
     .meta({ mock: "food.ingredient" }),
   aliases: ingredientBaseFields.aliases.default([]),
   naKinds: z.array(baseKind).optional().default([]),
 };
-export const ingredientCreateInput = z.object(ingredientCreateShape);
+export const ingredientCreateInput = z.object(ingredientCreateFields);
 export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
 
-export const ingredientUpdateData = deriveUpdateData(ingredientCreateShape, {
+export const ingredientUpdateData = deriveUpdateData(ingredientCreateFields, {
   omit: ["name", "aliases"],
   extend: {
     name: requiredName("Ingredient name")
@@ -344,8 +344,8 @@ export const ingredientResolvableNamesInput = z.object({
 });
 
 export const mcpIngredientCreateInput = z.object({
-  name: ingredientCreateShape.name,
-  aliases: ingredientCreateShape.aliases,
+  name: ingredientCreateFields.name,
+  aliases: ingredientCreateFields.aliases,
 });
 /**
  * Slim MCP projection of an ingredient list/detail row.

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { entitySchema, type Entity } from "./entity-core";
 import { imageEntities } from "./entity-manifest";
+import { nonEmptyTuple } from "./identifiers";
 
 export { entitySchema, type Entity } from "./entity-core";
 
@@ -8,9 +9,13 @@ export { entitySchema, type Entity } from "./entity-core";
 // keys are the image-bearing entities. `entity-manifest.ts` imports `Entity`
 // above as a type only, so deriving this runtime roster has no module cycle.
 type EntityImageValue = Uppercase<(typeof imageEntities)[number]>;
-const entityImageValues = imageEntities.map((entity) =>
-  entity.toUpperCase(),
-) as [EntityImageValue, ...EntityImageValue[]];
+const isEntityImageValue = (value: string): value is EntityImageValue =>
+  imageEntities.some((entity) => entity.toUpperCase() === value);
+const entityImageValues = nonEmptyTuple<EntityImageValue>(
+  imageEntities
+    .map((entity) => entity.toUpperCase())
+    .filter(isEntityImageValue),
+);
 export const entityImage = z.enum(entityImageValues);
 export type EntityImage = z.infer<typeof entityImage>;
 

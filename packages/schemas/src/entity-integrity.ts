@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nonEmptyTuple } from "./identifiers";
 import { entitySchema } from "./entity-core";
 import {
   anyShortcodeSchema,
@@ -327,10 +328,7 @@ export const previewOperationInputSchema = z
       `The parent entity: ${relationParentEntitySchema.options.join(", ")}.`,
     ),
     parentId: anyShortcodeSchema(
-      relationParentEntitySchema.options as unknown as [
-        RelationParentEntity,
-        ...RelationParentEntity[],
-      ],
+      nonEmptyTuple<RelationParentEntity>(relationParentEntitySchema.options),
     ).describe(
       `The ${relationParentEntitySchema.options.join("/")} row the relation hangs off. Its prefix must agree with \`entity\`.`,
     ),

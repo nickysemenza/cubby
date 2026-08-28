@@ -448,7 +448,7 @@ export const infLocationWithSideEffects = infLocation.and(
 
 const optionalLocationShortcode = locationShortcode.nullable().optional();
 
-const locationCreateShape = {
+const locationCreateFields = {
   // Override the output/read `name` (which stays lax for reads) with a non-empty
   // constraint on the create/update boundary.
   name: requiredName("Location name").describe("name of location"),
@@ -477,11 +477,11 @@ const locationCreateShape = {
   pendingImageIds: z.array(imageShortcode).optional(),
 };
 
-export const locationCreateInput = z.object(locationCreateShape);
+export const locationCreateInput = z.object(locationCreateFields);
 
 // Every create field optional; `removeImageIds` is update-only. (The update
 // `parentId` inherits the create field's description — harmless doc, same type.)
-export const locationUpdateData = deriveUpdateData(locationCreateShape, {
+export const locationUpdateData = deriveUpdateData(locationCreateFields, {
   extend: {
     // Public `IMG-` codes, as returned by `LocationOut.images[].id` — resolved
     // to uuids in the repo before they reach the `LocationImage` join table.

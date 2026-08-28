@@ -133,7 +133,7 @@ export const LIVE_PROJECT_STATUSES = [
 ] as const satisfies readonly ProjectStatus[];
 
 export const isLiveProjectStatus = (status: ProjectStatus): boolean =>
-  (LIVE_PROJECT_STATUSES as readonly ProjectStatus[]).includes(status);
+  new Set<ProjectStatus>(LIVE_PROJECT_STATUSES).has(status);
 
 export const projectKindValues = [
   "furniture",
@@ -188,7 +188,7 @@ export const tradeValues = [
 export const tradeSchema = z.enum(tradeValues);
 export type Trade = z.infer<typeof tradeSchema>;
 
-export const TRADE_LABELS: Record<Trade, string> = {
+export const TRADE_LABELS = {
   planning: "Planning",
   demolition: "Demo & Cleanup",
   building: "Building & Framing",
@@ -208,7 +208,7 @@ export const TRADE_LABELS: Record<Trade, string> = {
   crafts: "Arts & Crafts",
   auto: "Auto",
   other: "Other",
-};
+} as const satisfies Record<Trade, string>;
 
 export const UNASSIGNED_TRADE_LABEL = "No trade signal";
 export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
@@ -255,7 +255,7 @@ const projectFields = {
   notionPageUrl,
 };
 
-const projectCreateShape = {
+const projectCreateFields = {
   ...projectFields,
   status: projectStatusSchema.default("planning"),
   kind: projectKindSchema.nullable().default(null),
@@ -270,13 +270,13 @@ const projectCreateShape = {
   notionPageUrl: notionPageUrl.default(null),
 };
 
-export const projectCreateInput = z.object(projectCreateShape);
+export const projectCreateInput = z.object(projectCreateFields);
 export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
 
 // Every create field optional, with the create-time `.default(...)` stripped
 // (see deriveUpdateData — an omitted key must leave the row unchanged, not
 // reset to the default); `blockedByIds` is update-only.
-export const projectUpdateData = deriveUpdateData(projectCreateShape, {
+export const projectUpdateData = deriveUpdateData(projectCreateFields, {
   extend: {
     blockedByIds: z
       .array(projectShortcode)
@@ -441,7 +441,7 @@ const taskFields = {
   sortOrder: z.number().nullable(),
 };
 
-const taskCreateShape = {
+const taskCreateFields = {
   ...taskFields,
   status: taskStatusSchema.default("not_started"),
   projectId: projectShortcode.nullable().default(null),
@@ -452,12 +452,12 @@ const taskCreateShape = {
   sortOrder: z.number().nullable().default(null),
 };
 
-export const taskCreateInput = z.object(taskCreateShape);
+export const taskCreateInput = z.object(taskCreateFields);
 export type TaskCreateInput = z.infer<typeof taskCreateInput>;
 
 // Every create field optional, with the create-time `.default(...)` stripped
 // (see deriveUpdateData); `blockedByIds` is update-only.
-export const taskUpdateData = deriveUpdateData(taskCreateShape, {
+export const taskUpdateData = deriveUpdateData(taskCreateFields, {
   extend: {
     blockedByIds: z
       .array(taskShortcode)
@@ -754,7 +754,7 @@ const expenseFields = {
     ),
 };
 
-const expenseCreateShape = {
+const expenseCreateFields = {
   ...expenseFields,
   lineKind: expenseLineKindSchema.optional(),
   // Deliberately never inferred — see `expenseLineBasisValues`.
@@ -785,10 +785,10 @@ const expenseCreateShape = {
   sourceClaims: ledgerSourceClaims.nullable().default([]),
 };
 
-export const expenseCreateInput = z.object(expenseCreateShape);
+export const expenseCreateInput = z.object(expenseCreateFields);
 export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 
-export const expenseUpdateData = deriveUpdateData(expenseCreateShape);
+export const expenseUpdateData = deriveUpdateData(expenseCreateFields);
 export type ExpenseUpdateData = z.infer<typeof expenseUpdateData>;
 export const expenseUpdateInput = z.object({
   id: expenseShortcode,
@@ -2024,9 +2024,7 @@ export const describeAttentionItem = (
         : `${name} end date ${item.facts.override} is before the latest dated work (${item.facts.derived})`;
     default: {
       const exhaustive: never = item;
-      throw new Error(
-        `Unhandled attention type: ${String((exhaustive as { type: string }).type)}`,
-      );
+      throw new Error(`Unhandled attention type: ${String(exhaustive)}`);
     }
   }
 };

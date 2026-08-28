@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { previewOperationInputSchema } from "./entity-integrity";
 
-const parse = (input: unknown) => previewOperationInputSchema.safeParse(input);
-const errorPaths = (input: unknown): string[] => {
+type RejectedPreviewInput =
+  | {
+      operation: "merge";
+      entity: "product";
+      keepId: string;
+      mergeIds: string[];
+    }
+  | { operation: "delete"; entity: "product"; ids: string[] };
+type PreviewFixture =
+  | z.input<typeof previewOperationInputSchema>
+  | RejectedPreviewInput;
+
+const parse = (input: PreviewFixture) =>
+  previewOperationInputSchema.safeParse(input);
+const errorPaths = (input: PreviewFixture): string[] => {
   const result = parse(input);
   return result.success
     ? []

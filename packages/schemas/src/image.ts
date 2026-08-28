@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   createPaginatedResponseSchemaWithContext,
@@ -86,9 +87,11 @@ export const isDisplayableImageFile = (file: DisplayableFile): boolean =>
   file.storageStatus !== "missing" &&
   file.storageStatus !== "metadata_mismatch";
 
+export type PartitionedEntityFiles<T> = { images: T[]; documents: T[] };
+
 export const partitionEntityFiles = <T extends { contentType: string }>(
   files: T[],
-): { images: T[]; documents: T[] } => ({
+): PartitionedEntityFiles<T> => ({
   images: files.filter(isDisplayableImageFile),
   documents: files.filter(isDocumentFile),
 });
@@ -221,10 +224,9 @@ export const attachableImageEntity = z.enum([
 ]);
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
-const attachableImageEntities = attachableImageEntity.options as unknown as [
-  ShortcodeEntity,
-  ...ShortcodeEntity[],
-];
+const attachableImageEntities = nonEmptyTuple<ShortcodeEntity>(
+  attachableImageEntity.options,
+);
 export const attachableImageEntityId = anyShortcodeSchema(
   attachableImageEntities,
 );

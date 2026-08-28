@@ -109,14 +109,20 @@ type AnyEntityId = {
   [E in ShortcodeEntity]: EntityId<E>;
 }[ShortcodeEntity];
 
+export function nonEmptyTuple<T>(values: readonly T[]): [T, ...T[]] {
+  const [first, ...rest] = values;
+  if (first === undefined) throw new Error("Expected at least one value");
+  return [first, ...rest];
+}
+
 /** Parse an untrusted or storage-originated value into one entity's UUID brand. */
-export function parseEntityId<E extends ShortcodeEntity>(
+export function parseEntityId<E extends ShortcodeEntity, TInput>(
   entity: E,
-  value: unknown,
+  value: TInput,
 ): EntityId<E>;
-export function parseEntityId(
+export function parseEntityId<TInput>(
   entity: ShortcodeEntity,
-  value: unknown,
+  value: TInput,
 ): AnyEntityId {
   return ENTITY_ID_SCHEMA[entity].parse(value);
 }
@@ -135,12 +141,19 @@ export interface EntityRefFor<E extends ShortcodeEntity> {
   id: EntityId<E>;
 }
 
+type ParsedEntityRef<E extends ShortcodeEntity, Schema extends z.ZodType> = {
+  entity: E;
+  id: z.output<Schema>;
+};
+
+type EntityRefParser = <TInput>(value: TInput) => EntityRef;
+
 const entityRefParser =
   <E extends ShortcodeEntity, Schema extends z.ZodType>(
     entity: E,
     schema: Schema,
   ) =>
-  (value: unknown): { entity: E; id: z.output<Schema> } => ({
+  <TInput>(value: TInput): ParsedEntityRef<E, Schema> => ({
     entity,
     id: schema.parse(value),
   });
@@ -167,16 +180,16 @@ const PARSE_ENTITY_REF = {
   task: entityRefParser("task", taskId),
   vendor: entityRefParser("vendor", vendorId),
   wish: entityRefParser("wish", wishId),
-} as const satisfies Record<ShortcodeEntity, (value: unknown) => EntityRef>;
+} as const satisfies Record<ShortcodeEntity, EntityRefParser>;
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
-export function parseEntityRef<E extends ShortcodeEntity>(
+export function parseEntityRef<E extends ShortcodeEntity, TInput>(
   entity: E,
-  value: unknown,
+  value: TInput,
 ): EntityRef<E>;
-export function parseEntityRef(
+export function parseEntityRef<TInput>(
   entity: ShortcodeEntity,
-  value: unknown,
+  value: TInput,
 ): EntityRef {
   return PARSE_ENTITY_REF[entity](value);
 }

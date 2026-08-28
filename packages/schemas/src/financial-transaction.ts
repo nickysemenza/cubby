@@ -93,11 +93,13 @@ const purchaseSettlementSignRules = {
 >;
 
 const purchaseSettlementKindList = purchaseSettlementKinds.join(", ");
+const purchaseSettlementKindSet = new Set<FinancialTransactionKind>(
+  purchaseSettlementKinds,
+);
 
 export const isPurchaseSettlementKind = (
   kind: FinancialTransactionKind,
-): kind is PurchaseSettlementKind =>
-  purchaseSettlementKinds.includes(kind as PurchaseSettlementKind);
+): kind is PurchaseSettlementKind => purchaseSettlementKindSet.has(kind);
 
 export const financialTransactionSettlementViolation = (value: {
   /**
@@ -266,7 +268,7 @@ export type FinancialTransactionAllocationInput = z.infer<
   typeof financialTransactionAllocationInput
 >;
 
-const financialTransactionCreateShape = {
+const financialTransactionCreateFields = {
   ...financialTransactionFields,
   purchaseId: purchaseShortcode.nullable().default(null),
   /**
@@ -371,7 +373,7 @@ const validSettlementState = <T extends z.ZodType>(schema: T) =>
   });
 
 export const financialTransactionCreateInput = validSettlementState(
-  postedRequiresDate(z.object(financialTransactionCreateShape).strict()),
+  postedRequiresDate(z.object(financialTransactionCreateFields).strict()),
 );
 export type FinancialTransactionCreateInput = z.infer<
   typeof financialTransactionCreateInput
@@ -380,7 +382,7 @@ export type FinancialTransactionCreateInput = z.infer<
 // A partial update can modify only one half of the posted/status pair. The
 // repository validates the resulting persisted state after applying the patch.
 export const financialTransactionUpdateData = deriveUpdateData(
-  financialTransactionCreateShape,
+  financialTransactionCreateFields,
 ).strict();
 export type FinancialTransactionUpdateData = z.infer<
   typeof financialTransactionUpdateData

@@ -52,6 +52,8 @@ export const dateRangeFields = <Prefix extends string>(
   prefix: Prefix,
 ): DateRangeFields<Prefix> => {
   const bound = plainDate.optional();
+  // SAFETY: the two computed keys are derived from the same Prefix used by the
+  // return type, and both values are the shared optional plain-date schema.
   return {
     [`${prefix}From`]: bound,
     [`${prefix}To`]: bound,
@@ -105,6 +107,8 @@ export const numericRangeFields = <Prefix extends string>(
   if (finite) base = base.finite();
   const min = base.optional();
   const max = base.optional();
+  // SAFETY: both computed keys are derived from Prefix and each value is the
+  // optional numeric schema built from the same constrained base.
   return {
     [`${prefix}Min`]: describe ? min.describe(describe.min) : min,
     [`${prefix}Max`]: describe ? max.describe(describe.max) : max,
@@ -114,7 +118,7 @@ export const numericRangeFields = <Prefix extends string>(
 type StripDefault<F> =
   F extends z.ZodDefault<infer Inner extends z.ZodType> ? Inner : F;
 
-type UpdateShape<
+type UpdateFields<
   T extends z.ZodRawShape,
   OmitK extends keyof T,
   E extends z.ZodRawShape,
@@ -132,7 +136,7 @@ type UpdateShape<
  * update would coerce it to `[]` and silently wipe the existing rows. This was
  * previously prevented by hand-writing each `xUpdateData`; now it's one helper.
  *
- * @param createShape the raw shape object behind the create schema (`z.object(shape)`)
+ * @param createFields the raw fields object behind the create schema (`z.object(createFields)`)
  * @param opts.extend update-only fields the create shape lacks (e.g. `removeImageIds`)
  * @param opts.omit  server-managed create fields to drop from the update surface
  */
@@ -141,20 +145,20 @@ export function deriveUpdateFields<
   const OmitK extends keyof T = never,
   E extends z.ZodRawShape = Record<never, never>,
 >(
-  createShape: T,
+  createFields: T,
   opts: { extend?: E; omit?: readonly OmitK[] } = {},
-): UpdateShape<T, OmitK, E> {
-  const omit = new Set<keyof T>(opts.omit ?? []);
-  const shape: Record<string, z.ZodType> = {};
-  const entries = Object.entries(createShape) as [keyof T, z.ZodType][];
-  for (const [key, field] of entries) {
+): UpdateFields<T, OmitK, E> {
+  const omit = new Set<PropertyKey>(opts.omit ?? []);
+  const fields: Record<string, z.core.$ZodType> = {};
+  for (const [key, field] of Object.entries(createFields)) {
     if (omit.has(key)) continue;
-    const base =
-      field instanceof z.ZodDefault ? (field.unwrap() as z.ZodType) : field;
-    shape[key as string] = base.optional();
+    const base = field instanceof z.ZodDefault ? field.unwrap() : field;
+    fields[key] = z.optional(base);
   }
-  Object.assign(shape, opts.extend ?? {});
-  return shape as UpdateShape<T, OmitK, E>;
+  Object.assign(fields, opts.extend ?? {});
+  // SAFETY: each retained create key is copied with its default removed and
+  // made optional; extend contributes exactly E, so this matches UpdateFields.
+  return fields as UpdateFields<T, OmitK, E>;
 }
 
 export function deriveUpdateData<
@@ -162,12 +166,13 @@ export function deriveUpdateData<
   const OmitK extends keyof T = never,
   E extends z.ZodRawShape = Record<never, never>,
 >(
-  createShape: T,
+  createFields: T,
   opts: { extend?: E; omit?: readonly OmitK[] } = {},
-): z.ZodObject<UpdateShape<T, OmitK, E>> {
-  return z.object(deriveUpdateFields(createShape, opts)) as z.ZodObject<
-    UpdateShape<T, OmitK, E>
-  >;
+): z.ZodObject<UpdateFields<T, OmitK, E>> {
+  const fields = deriveUpdateFields(createFields, opts);
+  // SAFETY: deriveUpdateFields constructs exactly the raw shape described by
+  // UpdateFields; Zod's object constructor preserves that shape at runtime.
+  return z.object(fields) as z.ZodObject<UpdateFields<T, OmitK, E>>;
 }
 
 /**
@@ -176,8 +181,10 @@ export function deriveUpdateData<
  * identity function for a raw array of comparable values, or a field accessor
  * (e.g. `(row) => row.key`) for an array of objects deduped by one field.
  */
-export function uniqueBy<T>(
-  keyFn: (item: T) => unknown,
+type UniqueKey = string | number | boolean | bigint | symbol | null | undefined;
+
+export function uniqueBy<T = UniqueKey>(
+  keyFn: (item: T) => UniqueKey,
   message: string,
 ): [(items: T[]) => boolean, string] {
   return [(items) => new Set(items.map(keyFn)).size === items.length, message];

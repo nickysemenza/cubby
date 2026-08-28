@@ -27,28 +27,30 @@ import { productMcpOut, productTopLevelOut } from "./product";
  * one `instanceof` checks work against) is its subtype, hence the localized
  * cast — same pattern `deriveUpdateFields` already uses for the same reason.
  */
-function acceptsNull(schema: z.ZodType): boolean {
+function acceptsNull(schema: z.core.$ZodType): boolean {
   if (schema instanceof z.ZodNullable) return true;
-  if (schema instanceof z.ZodOptional)
-    return acceptsNull(schema.unwrap() as z.ZodType);
-  if (schema instanceof z.ZodDefault)
-    return acceptsNull(schema.unwrap() as z.ZodType);
+  if (schema instanceof z.ZodOptional) return acceptsNull(schema.unwrap());
+  if (schema instanceof z.ZodDefault) return acceptsNull(schema.unwrap());
   return false;
 }
 
 /**
- * Look up `key` in `shape`. The caller always got `key` from
- * `Object.keys(shape)`, so the lookup is never actually undefined — this just
+ * Look up `key` in a schema field map. The caller always got `key` from
+ * `Object.keys(fields)`, so the lookup is never actually undefined — this just
  * says so past `noUncheckedIndexedAccess`.
  */
-function field(shape: Record<string, z.ZodType>, key: string): z.ZodType {
-  const value = shape[key];
+type ProductFieldMap =
+  | typeof productTopLevelOut.shape
+  | typeof productMcpOut.shape;
+
+function field(fields: ProductFieldMap, key: string): z.ZodType {
+  const value = Object.entries(fields).find(([name]) => name === key)?.[1];
   if (!value) throw new Error(`expected a schema at key "${key}"`);
   return value;
 }
 
-const plainShape = productTopLevelOut.shape as Record<string, z.ZodType>;
-const mcpShape = productMcpOut.shape as Record<string, z.ZodType>;
+const plainFields = productTopLevelOut.shape;
+const mcpFields = productMcpOut.shape;
 
 /**
  * The keys `productMcpOut` is allowed to hold that `productTopLevelOut` has no
@@ -70,8 +72,8 @@ const DERIVED_KEYS = new Set([
 
 describe("productMcpOut stays within productTopLevelOut", () => {
   it("adds no key beyond the documented derived ones", () => {
-    const unexpected = Object.keys(mcpShape).filter(
-      (key) => !(key in plainShape) && !DERIVED_KEYS.has(key),
+    const unexpected = Object.keys(mcpFields).filter(
+      (key) => !(key in plainFields) && !DERIVED_KEYS.has(key),
     );
     expect(
       unexpected,
@@ -80,16 +82,16 @@ describe("productMcpOut stays within productTopLevelOut", () => {
   });
 
   it("matches nullability on every shared key", () => {
-    const mismatches = Object.keys(mcpShape)
-      .filter((key) => key in plainShape)
+    const mismatches = Object.keys(mcpFields)
+      .filter((key) => key in plainFields)
       .filter(
         (key) =>
-          acceptsNull(field(mcpShape, key)) !==
-          acceptsNull(field(plainShape, key)),
+          acceptsNull(field(mcpFields, key)) !==
+          acceptsNull(field(plainFields, key)),
       )
       .map(
         (key) =>
-          `${key}: mcp accepts null = ${acceptsNull(field(mcpShape, key))}, plain accepts null = ${acceptsNull(field(plainShape, key))}`,
+          `${key}: mcp accepts null = ${acceptsNull(field(mcpFields, key))}, plain accepts null = ${acceptsNull(field(plainFields, key))}`,
       );
     expect(mismatches).toEqual([]);
   });
@@ -101,9 +103,9 @@ describe("productMcpOut stays within productTopLevelOut", () => {
    * resolved value has its own name on both sides.
    */
   it("keeps `price` the raw override on both sides, with the resolved value named separately", () => {
-    expect(Object.keys(mcpShape)).toContain("effectivePrice");
-    expect(Object.keys(mcpShape)).not.toContain("priceOverride");
-    expect(field(mcpShape, "price").description).toContain("override");
-    expect(field(plainShape, "price").description).toContain("override");
+    expect(Object.keys(mcpFields)).toContain("effectivePrice");
+    expect(Object.keys(mcpFields)).not.toContain("priceOverride");
+    expect(field(mcpFields, "price").description).toContain("override");
+    expect(field(plainFields, "price").description).toContain("override");
   });
 });

@@ -54,7 +54,7 @@ export type DataType = z.infer<typeof dataTypeEnum>;
 
 // Human-friendly labels for the USDA data_type enum. Anything not listed falls
 // back to a title-cased version of the raw value.
-const DATA_TYPE_LABELS: Partial<Record<DataType, string>> = {
+const DATA_TYPE_LABELS = {
   branded_food: "Branded",
   sr_legacy_food: "SR Legacy",
   foundation_food: "Foundation",
@@ -64,7 +64,7 @@ const DATA_TYPE_LABELS: Partial<Record<DataType, string>> = {
   market_acquisition: "Market",
   sample_food: "Sample",
   sub_sample_food: "Sub-sample",
-};
+} as const satisfies Partial<Record<DataType, string>>;
 
 export function dataTypeLabel(dataType: DataType): string {
   return (
@@ -82,7 +82,7 @@ export function dataTypeLabel(dataType: DataType): string {
 // (more-complete) reference foods out-rank sparse branded label data. The five
 // sampling/research types carry ~0 nutrients and sort last (and are normally
 // hidden by foodsOnly). Drives SQL ordering in usda-api (dataTypePriorityCase).
-export const DATA_TYPE_PRIORITY: Record<DataType, number> = {
+export const DATA_TYPE_PRIORITY = {
   sr_legacy_food: 0,
   survey_fndds_food: 1,
   foundation_food: 2,
@@ -92,7 +92,7 @@ export const DATA_TYPE_PRIORITY: Record<DataType, number> = {
   sample_food: 4,
   sub_sample_food: 4,
   experimental_food: 4,
-};
+} as const satisfies Record<DataType, number>;
 
 //select distinct serving_size_unit from branded_food;
 export const branded_food_serving_size_unit = z.enum([

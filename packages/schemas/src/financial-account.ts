@@ -92,7 +92,7 @@ const financialAccountFields = {
   notes: z.string().nullable(),
 };
 
-const financialAccountCreateShape = {
+const financialAccountCreateFields = {
   ...financialAccountFields,
   provisional: z.boolean().default(false),
   sourceAliases: financialAccountSourceAliases.default([]),
@@ -101,14 +101,14 @@ const financialAccountCreateShape = {
 };
 
 export const financialAccountCreateInput = z.object(
-  financialAccountCreateShape,
+  financialAccountCreateFields,
 );
 export type FinancialAccountCreateInput = z.infer<
   typeof financialAccountCreateInput
 >;
 
 export const financialAccountUpdateData = deriveUpdateData(
-  financialAccountCreateShape,
+  financialAccountCreateFields,
 );
 export type FinancialAccountUpdateData = z.infer<
   typeof financialAccountUpdateData

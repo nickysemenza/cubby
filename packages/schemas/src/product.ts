@@ -106,7 +106,7 @@ export const hasFoodIndicators = (product: {
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
-const productCreateShape = {
+const productCreateFields = {
   // Override the output/read `name` (lax for reads) with a non-empty constraint on
   // the create/update boundary; keep the mock hint for test fixtures.
   name: requiredName("Product name")
@@ -184,13 +184,13 @@ const productCreateShape = {
   pendingImageIds: z.array(imageShortcode).optional(),
 };
 
-export const productCreateInput = z.object(productCreateShape);
+export const productCreateInput = z.object(productCreateFields);
 
 // A partial update makes every create field optional and — critically — strips
 // the create-time `.default([])` off `unitMappings`/`externalIds` so omitting
 // them leaves the existing rows UNCHANGED (see deriveUpdateData). `removeImageIds`
 // is update-only.
-export const productUpdateData = deriveUpdateData(productCreateShape, {
+export const productUpdateData = deriveUpdateData(productCreateFields, {
   extend: {
     // Public `IMG-` codes, as returned by the web `ProductOut.images[].id` —
     // resolved to uuids in the repo before they reach the `ProductImage` join

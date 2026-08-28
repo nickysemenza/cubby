@@ -23,16 +23,16 @@ const ledgerPartyFields = {
   notes: z.string().nullable(),
 };
 
-const ledgerPartyCreateShape = {
+const ledgerPartyCreateFields = {
   name: requiredName("Ledger party name"),
   kind: ledgerPartyKind,
   notes: z.string().nullable().default(null),
 };
 
-export const ledgerPartyCreateInput = z.object(ledgerPartyCreateShape);
+export const ledgerPartyCreateInput = z.object(ledgerPartyCreateFields);
 export type LedgerPartyCreateInput = z.infer<typeof ledgerPartyCreateInput>;
 
-export const ledgerPartyUpdateData = deriveUpdateData(ledgerPartyCreateShape);
+export const ledgerPartyUpdateData = deriveUpdateData(ledgerPartyCreateFields);
 export type LedgerPartyUpdateData = z.infer<typeof ledgerPartyUpdateData>;
 
 export const ledgerPartyUpdateInput = z.object({

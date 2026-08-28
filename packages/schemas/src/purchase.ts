@@ -61,7 +61,7 @@ const purchaseFields = {
   notes: z.string().nullable(),
 };
 
-const purchaseCreateShape = {
+const purchaseCreateFields = {
   ...purchaseFields,
   orderId: z.string().nullable().default(null),
   displayLabel: z.string().nullable().optional(),
@@ -80,7 +80,7 @@ const purchaseCreateShape = {
   pendingImageIds: z.array(imageShortcode).optional(),
 };
 
-export const purchaseCreateInput = z.object(purchaseCreateShape);
+export const purchaseCreateInput = z.object(purchaseCreateFields);
 export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
 
 /**
@@ -89,7 +89,7 @@ export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
  * purchase that doesn't exist yet — so they come in through `extend`, exactly as
  * `productUpdateData` does.
  */
-export const purchaseUpdateData = deriveUpdateData(purchaseCreateShape, {
+export const purchaseUpdateData = deriveUpdateData(purchaseCreateFields, {
   extend: {
     // Public `IMG-` codes — these name documents `get_purchase`/`getPurchaseByID`
     // already handed back through `PurchaseOut.images[].id`, so a client passes
@@ -372,10 +372,16 @@ export const splitExpenseInput = z.object({
 });
 export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
 
+export type SplitExpenseDelta = {
+  originalCost: number | null;
+  partsSum: number;
+  delta: number | null;
+};
+
 export const splitExpenseDelta = (
   originalCost: number | null,
   partCosts: number[],
-): { originalCost: number | null; partsSum: number; delta: number | null } => {
+): SplitExpenseDelta => {
   const partsSumCents = partCosts.reduce(
     (sum, cost) => sum + Math.round(cost * 100),
     0,

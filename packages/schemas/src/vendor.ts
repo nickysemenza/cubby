@@ -39,17 +39,17 @@ const vendorFields = {
   notes: z.string().nullable(),
 };
 
-const vendorCreateShape = {
+const vendorCreateFields = {
   ...vendorFields,
   website: z.string().nullable().default(null),
   orderUrlTemplate: z.string().nullable().default(null),
   notes: z.string().nullable().default(null),
 };
 
-export const vendorCreateInput = z.object(vendorCreateShape);
+export const vendorCreateInput = z.object(vendorCreateFields);
 export type VendorCreateInput = z.infer<typeof vendorCreateInput>;
 
-export const vendorUpdateData = deriveUpdateData(vendorCreateShape);
+export const vendorUpdateData = deriveUpdateData(vendorCreateFields);
 export type VendorUpdateData = z.infer<typeof vendorUpdateData>;
 export const vendorUpdateInput = z.object({
   id: vendorShortcode,

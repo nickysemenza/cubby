@@ -51,22 +51,22 @@ export const mealKindSchema = z.enum(mealKindValues);
 export type MealKind = z.infer<typeof mealKindSchema>;
 
 /** Display text. Never capitalize a raw slug — `eating_out` has no nice form. */
-export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+export const MEAL_TYPE_LABELS = {
   breakfast: "Breakfast",
   brunch: "Brunch",
   lunch: "Lunch",
   dinner: "Dinner",
   snack: "Snack",
   dessert: "Dessert",
-};
+} as const satisfies Record<MealType, string>;
 
-export const MEAL_KIND_LABELS: Record<MealKind, string> = {
+export const MEAL_KIND_LABELS = {
   cooked: "Cooked",
   leftovers: "Leftovers",
   eating_out: "Eating out",
   takeout: "Takeout / delivery",
   other: "Other",
-};
+} as const satisfies Record<MealKind, string>;
 
 /**
  * Canonical wall-clock start of each slot, in minutes from household-local
@@ -80,14 +80,14 @@ export const MEAL_KIND_LABELS: Record<MealKind, string> = {
  * Must stay in the same order as `mealTypeValues`, which is that tuple's whole
  * contract.
  */
-export const MEAL_TYPE_START_MINUTES: Record<MealType, number> = {
+export const MEAL_TYPE_START_MINUTES = {
   breakfast: 9 * 60,
   brunch: 11 * 60,
   lunch: 12 * 60,
   snack: 15 * 60,
   dinner: 19 * 60,
   dessert: 20 * 60,
-};
+} as const satisfies Record<MealType, number>;
 
 /** Every slot is a half-hour block. */
 export const MEAL_SLOT_DURATION_MINUTES = 30;

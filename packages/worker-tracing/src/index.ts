@@ -105,9 +105,7 @@ export async function withSpan<T>(
 /** The subset of Hono's `app` surface this helper needs — kept structural
  * (not imported from `hono`) so this package stays dependency-light. */
 export interface ErrorCapturingApp {
-  onError(
-    handler: (err: Error, c: unknown) => Response | Promise<Response>,
-  ): unknown;
+  onError(handler: (err: Error) => Response | Promise<Response>): void;
 }
 
 /**
@@ -128,7 +126,7 @@ export interface ErrorCapturingApp {
  */
 export function registerSentryErrorCapture(
   app: ErrorCapturingApp,
-  capture: (err: unknown) => void,
+  capture: (err: Error) => void,
   message = "Internal Server Error",
 ): void {
   app.onError((err) => {

@@ -9,7 +9,7 @@ import { registerSentryErrorCapture } from "./index";
  */
 function createFakeApp() {
   let onErrorHandler:
-    | ((err: Error, c: unknown) => Response | Promise<Response>)
+    | ((err: Error) => Response | Promise<Response>)
     | undefined;
   return {
     app: {
@@ -22,7 +22,7 @@ function createFakeApp() {
     // escape app.fetch() (which is the whole gap this helper works around).
     trigger: async (err: Error) => {
       if (!onErrorHandler) throw new Error("onError was never registered");
-      return onErrorHandler(err, {});
+      return onErrorHandler(err);
     },
   };
 }

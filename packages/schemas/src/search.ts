@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { backgroundBatchRefSchema } from "./background-jobs";
 import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
-import { anyShortcodeSchema } from "./identifiers";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifiers";
 import {
   activeRelatednessPairKeys,
   embeddingReadinessSchema,
@@ -13,10 +13,8 @@ export { searchableEntities } from "./entity-manifest";
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
 
-const searchableEntityTypes = searchableEntities as unknown as [
-  ShortcodeEntity,
-  ...ShortcodeEntity[],
-];
+const searchableEntityTypes =
+  nonEmptyTuple<ShortcodeEntity>(searchableEntities);
 export const searchableEntityIdSchema = anyShortcodeSchema(
   searchableEntityTypes,
 );
@@ -56,10 +54,7 @@ export type SimilarEntityPair = z.infer<typeof similarEntityPairSchema>;
 
 export const similarEntityPairs = Object.fromEntries(
   similarEntityPairKeys.map((key) => [key, relatednessPairRegistry[key]]),
-) as unknown as Record<
-  SimilarEntityPair,
-  { source: SearchableEntity; target: SearchableEntity }
->;
+);
 
 export const similarEntitiesInputSchema = z.object({
   pair: similarEntityPairSchema.describe(

@@ -40,7 +40,7 @@ import {
 } from "@cubby/schemas/project";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { problemQueryDeclarations } from "~/entities/problem-registry";
 import {
@@ -645,6 +645,80 @@ const presentCoverageExactRows = async (
   };
 };
 
+const exactProblemPresentationRowSchema = z.object({
+  id: z.string(),
+  name: z.string().nullish(),
+  manufacturer: z.string().nullish(),
+  expectedQuantity: z.number().nullish(),
+  inventoryEntry: z
+    .array(
+      z.object({
+        amount: z.object({ value: z.number().optional() }).optional(),
+        location: z
+          .object({ id: z.string().optional(), name: z.string().optional() })
+          .nullish(),
+      }),
+    )
+    .nullish(),
+  onHandUnits: z.number().nullish(),
+  cost: z.number().nullish(),
+  date: z.string().nullish(),
+  purchaseId: z.string().nullish(),
+  vendor: z.string().nullish(),
+  projectName: z.string().nullish(),
+  primaryGtin: z.string().nullish(),
+  quantityLedger: z
+    .object({ expectedQuantity: z.number().optional() })
+    .nullish(),
+  key: z.string().nullish(),
+  filename: z.string().nullish(),
+  contentType: z.string().nullish(),
+  size: z.number().nullish(),
+  createdAt:
+    allProblemsSchema.shape.unknownParkedItems.element.shape.createdAt.nullish(),
+  entityType: z.string().nullish(),
+  entityId: z.string().nullish(),
+  recipes: z
+    .array(
+      z.object({
+        recipe: z
+          .object({
+            totals: z
+              .object({
+                costCovered: z.number().optional(),
+                ingredientCount: z.number().optional(),
+              })
+              .nullish(),
+          })
+          .optional(),
+      }),
+    )
+    .nullish(),
+  amount:
+    allProblemsSchema.shape.unknownParkedItems.element.shape.amount.optional(),
+  product: allProblemsSchema.shape.unknownParkedItems.element.shape.product
+    .extend({ effectivePrice: z.number().nullish() })
+    .optional(),
+  location:
+    allProblemsSchema.shape.unknownParkedItems.element.shape.location.optional(),
+  website: z.string().nullish(),
+  purchaseCount: z.number().nullish(),
+  vendorName: z.string().nullish(),
+  orderId: z.string().nullish(),
+  orderUrl: z.string().nullish(),
+  statedTotal: z.number().nullish(),
+  expenseTotal: z.number().nullish(),
+  expenseCount: z.number().nullish(),
+  unpricedExpenseCount: z.number().nullish(),
+  reconciliation: z
+    .object({ postedRefundTotal: z.number().optional() })
+    .nullish(),
+  financialReconciliation:
+    allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.shape.financialReconciliation.optional(),
+});
+
+type FastProblemCard = ProblemsFast[FastEntityProblemKey][number];
+
 /**
  * Card-only projections for exact fast Problems.
  *
@@ -654,7 +728,7 @@ const presentCoverageExactRows = async (
  * rich card from accidentally becoming a second detector.
  */
 const presentFastExactRows = (
-  key: string,
+  key: FastEntityProblemKey,
   page: ExactProblemPage,
   hydration?: {
     vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
@@ -671,14 +745,11 @@ const presentFastExactRows = (
       ProblemsFast["financialTransactionAllocationDefects"][number]
     >;
   },
-): unknown[] =>
+): FastProblemCard[] =>
   page.data.map((row) => {
-    const r = row as Record<string, unknown>;
-    const id = String(r.id);
-    const inventory = (r.inventoryEntry ?? []) as Array<{
-      amount?: { value?: number };
-      location?: { id?: string; name?: string };
-    }>;
+    const r = exactProblemPresentationRowSchema.parse(row);
+    const id = r.id;
+    const inventory = r.inventoryEntry ?? [];
     const locations = inventory.flatMap((entry) =>
       entry.location?.id && entry.location.name
         ? [{ id: entry.location.id, name: entry.location.name }]
@@ -686,20 +757,20 @@ const presentFastExactRows = (
     );
     switch (key) {
       case "duplicateInventory":
-        return {
+        return allProblemsSchema.shape.duplicateInventory.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
-          expectedQuantity: (r.expectedQuantity ?? null) as number | null,
+          expectedQuantity: r.expectedQuantity ?? null,
           locations,
-        };
+        });
       case "soldButStillStocked": {
         const totals = hydration?.soldTotals?.get(id);
         if (!totals)
           throw new Error(
             `Canonical sold-but-stocked Problem selected ${id}, but bounded presentation hydration found no row`,
           );
-        return {
+        return allProblemsSchema.shape.soldButStillStocked.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
@@ -710,131 +781,123 @@ const presentFastExactRows = (
             [...locations, ...totals.servingLocations],
             (location) => location.id,
           ),
-        };
+        });
       }
       case "unlinkedExitExpenses":
-        return {
+        return allProblemsSchema.shape.unlinkedExitExpenses.element.parse({
           id,
           name: String(r.name),
           cost: Number(r.cost),
-          date: (r.date ?? null) as string | null,
+          date: r.date ?? null,
           purchaseId: String(r.purchaseId),
-          vendorName: (r.vendor ?? null) as string | null,
-        };
+          vendorName: r.vendor ?? null,
+        });
       case "purchaselessExitExpenses":
-        return {
+        return allProblemsSchema.shape.purchaselessExitExpenses.element.parse({
           id,
           name: String(r.name),
           cost: Number(r.cost),
-          date: (r.date ?? null) as string | null,
-          projectName: (r.projectName ?? null) as string | null,
-        };
+          date: r.date ?? null,
+          projectName: r.projectName ?? null,
+        });
       case "productsWithNoImages":
-        return {
+        return allProblemsSchema.shape.productsWithNoImages.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
-          primaryGtin: (r.primaryGtin ?? null) as string | null,
-        };
+          primaryGtin: r.primaryGtin ?? null,
+        });
       // Only the parent is reported. The units it double-counts are named by
       // its own components table, and repeating them here would make one
       // physical mistake look like several rows.
       case "kitsCountedTwice": {
         // `r.expectedQuantity` is the MANUAL Product column and is null on
         // every kit; the acquired-units number lives on the derived ledger.
-        const ledger = r.quantityLedger as { expectedQuantity?: number } | null;
-        return {
+        const ledger = r.quantityLedger;
+        return allProblemsSchema.shape.kitsCountedTwice.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
           ownUnits: Number(r.onHandUnits ?? 0),
           expectedUnits: Number(ledger?.expectedQuantity ?? 0),
-        };
+        });
       }
       case "unreferencedImages":
-        return {
+        return allProblemsSchema.shape.unreferencedImages.element.parse({
           id,
           key: String(r.key),
           filename: String(r.filename),
           contentType: String(r.contentType),
           size: Number(r.size),
-          createdAt: r.createdAt as Date,
-          targetType: (r.entityType ?? null) as string | null,
-          targetId: (r.entityId ?? null) as string | null,
-        };
+          createdAt: r.createdAt,
+          targetType: r.entityType ?? null,
+          targetId: r.entityId ?? null,
+        });
       case "understatedCostMeals": {
-        const recipes = (r.recipes ?? []) as Array<{
-          recipe?: {
-            totals?: { costCovered?: number; ingredientCount?: number } | null;
-          };
-        }>;
-        return {
+        const recipes = r.recipes ?? [];
+        return allProblemsSchema.shape.understatedCostMeals.element.parse({
           id,
-          name: (r.name ?? null) as string | null,
-          date: r.date as string,
+          name: r.name ?? null,
+          date: r.date,
           recipeCount: recipes.filter(
             (entry) =>
               (entry.recipe?.totals?.costCovered ?? 0) <
               (entry.recipe?.totals?.ingredientCount ?? 0),
           ).length,
-        };
+        });
       }
       case "unknownParkedItems":
-        return {
+        return allProblemsSchema.shape.unknownParkedItems.element.parse({
           id,
           amount: r.amount,
           createdAt: r.createdAt,
           product: r.product,
           location: r.location,
-        };
+        });
       case "inventoryWithoutPricePath":
-        return {
+        return allProblemsSchema.shape.inventoryWithoutPricePath.element.parse({
           id,
           amount: r.amount,
-          effectivePrice: Number(
-            (r.product as { effectivePrice?: number } | undefined)
-              ?.effectivePrice ?? 0,
-          ),
+          effectivePrice: Number(r.product?.effectivePrice ?? 0),
           product: r.product,
           location: r.location,
-        };
+        });
       case "vendorsWithoutLogos": {
         const counts = hydration?.vendorExpenseCounts?.get(id);
         if (!counts)
           throw new Error(
             `Canonical vendor-logo Problem selected ${id}, but bounded presentation hydration found no row`,
           );
-        return {
+        return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
           id,
           name: String(r.name),
-          website: (r.website ?? null) as string | null,
+          website: r.website ?? null,
           purchaseCount: Number(r.purchaseCount ?? 0),
           expenseRowCount: counts.expenseRowCount,
-        };
+        });
       }
       case "purchasesNotReconciling":
-        return {
+        return allProblemsSchema.shape.purchasesNotReconciling.element.parse({
           id,
-          vendorName: (r.vendorName ?? null) as string | null,
-          orderId: (r.orderId ?? null) as string | null,
-          orderUrl: (r.orderUrl ?? null) as string | null,
-          date: (r.date ?? null) as string | null,
+          vendorName: r.vendorName ?? null,
+          orderId: r.orderId ?? null,
+          orderUrl: r.orderUrl ?? null,
+          date: r.date ?? null,
           statedTotal: Number(r.statedTotal),
           expenseTotal: Number(r.expenseTotal),
           expenseCount: Number(r.expenseCount),
           unpricedExpenseCount: Number(r.unpricedExpenseCount),
-          postedRefundTotal: Number(
-            (r.reconciliation as { postedRefundTotal?: number } | undefined)
-              ?.postedRefundTotal ?? 0,
-          ),
-        };
+          postedRefundTotal: Number(r.reconciliation?.postedRefundTotal ?? 0),
+        });
       case "purchaseFinancialSettlementMismatches":
-        return {
-          id,
-          vendorName: (r.vendorName ?? null) as string | null,
-          expenseTotal: Number(r.expenseTotal),
-          financialReconciliation: r.financialReconciliation,
-        };
+        return allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
+          {
+            id,
+            vendorName: r.vendorName ?? null,
+            expenseTotal: Number(r.expenseTotal),
+            financialReconciliation: r.financialReconciliation,
+          },
+        );
       case "financialTransactionAllocationDefects": {
         const hydrated = hydration?.allocationDefects?.get(id);
         if (hydrated) return hydrated;
@@ -1341,7 +1404,7 @@ const presentTrackerProblem = (
 ): ProjectAttentionItem[] => {
   const type = trackerTypeFor(key);
   return page.data.flatMap((row) => {
-    const id = String((row as { id: unknown }).id);
+    const id = z.object({ id: z.string() }).parse(row).id;
     const item = index.get(`${type}:${id}`);
     // A miss is a benign race, not an invariant break: membership and the rule
     // engine each evaluate `householdLocalDate()` independently, so a request
@@ -1437,18 +1500,16 @@ export const findProblemCounts = async (
   upcLookupClient: UPCLookupClient,
 ): Promise<ProblemsCount> => {
   const declarations = problemQueryDeclarations();
-  const tasks = Object.fromEntries(
-    declarations.map((definition) => [
-      definition.key,
-      async () =>
-        (
-          await executeProblem(db, definition.key, {
-            mode: "count",
-            diagnostic: { upcLookupClient },
-          })
-        ).count,
-    ]),
-  ) as Record<string, () => Promise<number>>;
+  const tasks: Record<string, () => Promise<number>> = {};
+  for (const definition of declarations) {
+    tasks[definition.key] = async () =>
+      (
+        await executeProblem(db, definition.key, {
+          mode: "count",
+          diagnostic: { upcLookupClient },
+        })
+      ).count;
+  }
   const counts = await traceAllBounded(tasks, 4);
   const byType = problemsCountSchema.shape.byType.parse(
     Object.fromEntries(
@@ -1462,7 +1523,7 @@ export const findProblemCounts = async (
     declarations.reduce(
       (total, definition) =>
         definition.problemClass === problemClass
-          ? total + byType[definition.key]
+          ? total + (byType[definition.key] ?? 0)
           : total,
       0,
     );
