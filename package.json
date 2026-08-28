@@ -37,7 +37,7 @@
     "test:changed:postgres": "pnpm --filter @cubby/web test:changed:postgres",
     "test:file": "pnpm --filter @cubby/web test:file",
     "test:file:postgres": "pnpm --filter @cubby/web test:file:postgres",
-    "test:scripts": "node --test scripts/ci-scope.test.ts scripts/check-staged.test.ts scripts/oxlint-config.test.ts scripts/run-checks.test.ts",
+    "test:scripts": "node --test scripts/anti-slop-rules.test.ts scripts/ci-scope.test.ts scripts/check-staged.test.ts scripts/oxlint-config.test.ts scripts/run-checks.test.ts",
     "test:ui:watch": "pnpm --filter @cubby/web test:watch",
     "test:e2e": "pnpm -r test:e2e",
     "test:e2e:postgres": "pnpm --filter @cubby/web test:e2e:postgres",
@@ -47,6 +47,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@oxlint/plugins": "1.80.0",
     "@types/node": "^26.1.1",
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",

@@ -1,0 +1,14 @@
+import { ZodRawShape } from "zod";
+
+export const responseShape = {};
+export type ResultShape = typeof responseShape;
+
+export function buildShape(): object {
+  return {};
+}
+
+export class PayloadShape {
+  #privateShape = {};
+}
+
+export const { shape } = { shape: {} };

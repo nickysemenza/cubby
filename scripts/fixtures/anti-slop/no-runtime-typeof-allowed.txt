@@ -1,0 +1,6 @@
+export function isText(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+export const isNumber = (value: unknown): value is number =>
+  typeof value === "number";
