@@ -90,38 +90,11 @@ import { createVendor, getVendorByID, vendorList } from "./vendor";
 import { createWish, wishList } from "./wish";
 
 /**
- * Declaration-driven twin of `filter-application.integration.test.ts`, for
- * SORTS instead of filters.
- *
- * The invariant: **a column must sort by the same value it displays.** For
- * every entity exporting `<entity>SortableFields`, and for every field it
- * declares, this seeds a world where the field's rendered cell takes at least
- * two distinct values, sorts the list by that field in both directions, and
- * asserts the RENDERED CELL VALUES on the returned rows are monotone in the
- * sort direction. It is driven entirely by the declarations — a new entity or
- * a newly-spread sortable field is covered with no edit here.
- *
- * What this catches, precisely:
- *
- *  - WOULD have caught the `location.inventoryEntries` bug: the cell listed
- *    every installed fixture (49 chips) while the sort's correlated subquery
- *    counted only `placement = 'stock'` rows (25), so a location with fixtures
- *    but no loose stock rendered a populated chip list yet sorted as if it were
- *    empty. Fixed in `location/crud.ts`'s `resolveLocationSort`; this guard is
- *    what stops it returning.
- *  - WOULD have caught any of the four historical `buildSelection`
- *    self-join bugs (see the doc comment on `correlated()` in
- *    `database-helpers/query.ts` — "It has produced four bugs in this repo"):
- *    an interpolated Drizzle column in a correlated ORDER BY binds to the
- *    subquery's OWN column and silently returns 0/null for every row, while
- *    the SELECT list (built the same way, or via a different, correct path)
- *    still renders the real value. Sort and cell would visibly disagree.
- *  - Would NOT have caught the product `purchaseDate` bug that motivated this
- *    work: the cell, the sort, and both filter bounds all read the SAME
- *    fragment (`productAcquisitionDateSql`) and were wrong TOGETHER. This
- *    guard only proves sort and cell AGREE — it has no opinion on whether the
- *    thing they agree on is the fact the user wanted. Say this plainly: it is
- *    not a substitute for a test that knows the correct domain answer.
+ * Every declared sort must order by the value its list cell displays. Each
+ * field gets two distinct values and is checked in both directions. This
+ * guards the installed-inventory mismatch and correlated self-join regressions.
+ * It cannot catch a shared semantic error such as the old Product purchase-date
+ * bug, where the cell, sort, and filters all used the same wrong fragment.
  */
 
 const PAGE: PaginationParams = { pageIndex: 0, pageSize: 100 };
@@ -144,31 +117,13 @@ const getByPath = (row: unknown, path: string): unknown =>
     return (acc as Record<string, unknown>)[key];
   }, row);
 
-/**
- * How a declared field's id is translated into a lookup on the rendered row.
- * A `string` is a dotted path (identity — the field id itself — when the
- * field has no entry here); a `function` is a computed accessor for a cell
- * shape too irregular for a path (an array-of-refs reduced to its minimum
- * name, mirroring a `MIN(...)` sort).
- *
- * Every entry earns its place by a real naming/shape mismatch between the
- * sortable-field id and the row's own key — never a blanket rename. Kept
- * free of fields that no longer exist by the staleness test below.
- */
+/** Map sortable-field ids to genuinely different list-row shapes. */
 type CellAccessor = string | ((row: Record<string, unknown>) => unknown);
 
 const FIELD_ALIASES: Record<string, CellAccessor> = {
-  // The column id is `expenses` (persisted per-user in a localStorage key, so
-  // it can't be renamed to match), but the accessor productlist.tsx binds to
-  // — and the value `resolveProductSort`'s "expenses" branch recomputes — is
-  // `expenseCount`. See product/crud.ts:867's comment on the id/key split.
+  // `expenses` is persisted as a column id; the row value is `expenseCount`.
   "product.expenses": "expenseCount",
-  // `location` has no matching top-level key on `ProductListItem` at all —
-  // the cell is composed client-side from `inventoryEntry[].location.name`
-  // (createInventoryEntriesColumn in productlist.tsx), and the sort is
-  // `MIN(l.name)` over the same join (resolveProductSort's "location"
-  // branch). Reduce to the alphabetically-first live location name so the two
-  // stay comparable.
+  // Match the cell's locations to the sort's `MIN(location.name)`.
   "product.location": (row) => {
     const entries = row.inventoryEntry as
       | Array<{ location?: { name?: unknown } }>
@@ -179,55 +134,34 @@ const FIELD_ALIASES: Record<string, CellAccessor> = {
     if (names.length === 0) return undefined;
     return names.reduce((min, name) => (name < min ? name : min));
   },
-  // `valuation` is a persisted jsonb rollup ({directValuation, ...}); the
-  // sort resolver explicitly extracts `->>'directValuation'` because "that is
-  // what the list cell renders in compact mode" (location/crud.ts).
+  // The list displays the direct value from the persisted rollup.
   "location.valuation": "valuation.directValuation",
-  // "InventoryEntry does not have a name, just ID" (inventory.ts) — the sort
-  // (and the "product" sort, the same resolver branch) both order by the
-  // joined Product's name.
+  // Inventory's display name belongs to its joined Product.
   "inventory.name": "product.name",
-  // `amount` is a jsonb `{value, unit}` object with no `.name`/`.count` for
-  // the generic sniffers to find; the generic column path sorts the raw
-  // jsonb (structural, not numeric) with no special-case resolver, so this
-  // guard only seeds same-unit entries — see seedWorld's comment on why that
-  // keeps the comparison meaningful.
+  // The guard seeds one unit so structural JSON order reaches numeric value.
   "inventory.amount": "amount.value",
-  // Persisted jsonb rollup; the sort extracts these two keys with a jsonb
-  // `->>` cast (recipe/crud.ts), same pattern as location.valuation.
+  // Recipe totals are persisted JSON rollups.
   "recipe.costTotal": "totals.costTotal",
   "recipe.caloriesTotal": "totals.caloriesTotal",
-  // The real `Recipe.totalMinutes` column, surfaced nested under
-  // `meta.times.totalMinutes` by `recipeMetaFromColumns`.
+  // The mapper nests the real column under `meta.times`.
   "recipe.totalMinutes": "meta.times.totalMinutes",
-  // The sort orders by `tags[1]` (SQL's 1-indexed first element) only; the
-  // cell is the full chip list. Compare the same first element.
+  // SQL sorts by the first tag; the cell renders the full chip list.
   "recipe.tags": (row) => {
     const tags = row.tags as string[] | null | undefined;
     return tags && tags.length > 0 ? tags[0] : undefined;
   },
-  // joinedNameSort resolves these through a live join and the mapper exposes
-  // the joined name under `*Name`, never under the bare relation id.
+  // Joined-name sorts surface the label under `*Name`.
   "task.project": "projectName",
   "task.subjectProduct": "subjectProductName",
   "expense.project": "projectName",
   "expense.product": "productName",
-  // `dbPurchaseToAPI` resolves the vendor's display name onto `vendorName`;
-  // `vendor` itself is only the raw FK.
+  // `vendor` is the raw FK; `vendorName` is the displayed value.
   "purchase.vendor": "vendorName",
-  // `expectedQuantity` is nested under `quantityLedger` on `ProductListItem`
-  // (`deriveProductQuantityShape`, product/mappers.ts) — no top-level key.
+  // The mapper nests expected quantity under its ledger.
   "product.expectedQuantity": "quantityLedger.expectedQuantity",
 };
 
-/**
- * Sortable fields with no comparable rendered cell on the LIST row at all —
- * either no cell exists, or the sort's projection is a different value from
- * the one the cell shows (so comparing them would test the wrong thing, not
- * a real disagreement). Each entry names why; the staleness test below fails
- * the moment one of these fields would actually be comparable, so an entry
- * that stops being true is caught rather than silently kept.
- */
+/** Fields with no scalar list-cell value comparable to their sort projection. */
 const SORT_ONLY_FIELDS: Record<string, string> = {
   "product.identity_strength":
     "no rendered cell — a ranking heuristic (barcode > other external id > manufacturer+model > model > none) used only to order the enrichment worklist, never displayed as a value.",
@@ -319,17 +253,9 @@ const isMonotone = (
 type SeedActor = Parameters<typeof createVendor>[2];
 
 /**
- * Two rows per entity, deliberately seeded so every generically-testable
- * sortable field has at least two DISTINCT non-null cell values — otherwise
- * both an ascending and a descending sort trivially "pass" without exercising
- * anything (see the `distinct` check in the loop below).
- *
- * A few persisted rollups (recipe totals/minutes, location valuation/last-
- * bulk-inventory, inventory verifiedAt, wish acquiredAt) are seeded with a
- * direct table write rather than a repo call: those values are computed by
- * a recompute pipeline or a dedicated session-completion action this test has
- * no cheap way to drive, and a raw write still exercises the SAME sort/cell
- * code this guard checks — it only skips recomputing the number honestly.
+ * Seed two distinct non-null cell values per sortable field. Computed rollups
+ * are written directly because this guard checks their sort/cell contract,
+ * not the separate recomputation pipeline.
  */
 const seedWorld = async (ctx: { db: Database; actor: SeedActor }) => {
   const { db, actor } = ctx;
@@ -543,8 +469,7 @@ const seedWorld = async (ctx: { db: Database; actor: SeedActor }) => {
   // `location.inventoryEntries` its teeth. `stockOnly()` governs the cell, the
   // sort, and the count filters alike (inventory/placement.ts: "Counting,
   // auditing, browsing → EXCLUDE"), so with stock-only rows the two populations
-  // are identical and the assertion is vacuous — it passed against the real
-  // pre-fix code until these existed.
+  // are identical and the assertion is vacuous.
   //
   // The counts are chosen so a regression INVERTS the order rather than merely
   // tying it: stock-only is Alpha 2 / Beta 1, but counting fixtures makes it
@@ -1119,14 +1044,9 @@ describe("every declared sortable field sorts by the value it displays", () => {
 
 describe("sort guard coverage", () => {
   /**
-   * The registry above must cover every `<entity>SortableFields` the schemas
-   * package exports. Scanned from source rather than listed, so a new
-   * entity's sortable fields are covered the moment they're declared.
-   * `usda-food`'s export is spelled `usdaFoodSortableFields` (not
-   * `usda-foodSortableFields`) and `statementRow` isn't an `Entity` at all —
-   * both fail `entitySchema.safeParse` and are correctly excluded, same as
-   * `locationPickerSortableFields` (a narrower variant of `location`, not a
-   * distinct entity).
+   * Scan conventional entity exports so newly declared sorts require a guard.
+   * `usdaFood`, `statementRow`, and the narrower `locationPicker` intentionally
+   * fail entity parsing and remain outside this repository-list contract.
    */
   it("registers every entity that declares sortable fields", () => {
     const schemaSrc = fileURLToPath(

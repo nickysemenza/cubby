@@ -17,8 +17,6 @@ const matchStateSearchValue = z.union([
   statementRowMatchState,
   z.literal("all"),
 ]);
-export type MatchStateSearchValue = z.infer<typeof matchStateSearchValue>;
-
 const searchSchema = z.object({
   matchState: matchStateSearchValue.optional().catch(undefined),
   disposition: statementRowDisposition.optional().catch(undefined),
