@@ -45,11 +45,20 @@ async function expectCleanVisualState(page: Page) {
   await page.addStyleTag({
     content: `
       [data-testid="problems-badge"] {
-        flex: 0 0 3rem !important;
-        inline-size: 3rem !important;
-        min-inline-size: 3rem !important;
-        max-inline-size: 3rem !important;
+        flex: 0 0 2.75rem !important;
+        inline-size: 2.75rem !important;
+        min-inline-size: 2.75rem !important;
+        max-inline-size: 2.75rem !important;
         overflow: hidden !important;
+      }
+
+      @media (min-width: 768px) {
+        [data-testid="problems-badge"] {
+          flex-basis: 2.125rem !important;
+          inline-size: 2.125rem !important;
+          min-inline-size: 2.125rem !important;
+          max-inline-size: 2.125rem !important;
+        }
       }
     `,
   });
