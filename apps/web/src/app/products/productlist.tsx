@@ -338,7 +338,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [foodByProductId],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutations change every render but are functionally stable
   const columns = useMemo(
     () => [
       // Custom columns (image/name prepended; related + audit dates appended by hook)
@@ -863,6 +862,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
         },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
     [columnHelper],
   );
 

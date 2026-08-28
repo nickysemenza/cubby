@@ -52,11 +52,13 @@ export function BudgetStrip({
         />
       </Row>
 
-      <div
+      <figure
         className="relative h-3 w-full overflow-hidden bg-muted"
-        role="img"
         aria-label={`Spent ${formatCurrency(actual, 0)} of estimate ${estimate != null ? formatCurrency(estimate, 0) : "unset"}${committed > 0 ? `, ${formatCurrency(committed, 0)} committed` : ""}`}
       >
+        <figcaption className="sr-only">
+          Budget progress: {formatCurrency(actual, 0)} spent
+        </figcaption>
         <div className="flex h-full w-full">
           <div
             className="h-full bg-positive transition-all"
@@ -75,7 +77,7 @@ export function BudgetStrip({
             style={{ left: `${estimateMarkerPct}%` }}
           />
         )}
-      </div>
+      </figure>
     </Stack>
   );
 }

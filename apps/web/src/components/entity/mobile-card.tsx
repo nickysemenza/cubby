@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import {
+  Children,
   Fragment,
   type HTMLAttributes,
   type MouseEvent,
@@ -195,16 +196,8 @@ export function MobileRowShell({
       )}
       {...divProps}
     >
-      {leading.map((node, index) => (
-        <div
-          // Callers key their own nodes ("select"/"image"); the index is the
-          // fallback for the fixed-order slots.
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-order slots
-          key={index}
-          className={cn(span, align)}
-        >
-          {node}
-        </div>
+      {Children.map(leading, (node) => (
+        <div className={cn(span, align)}>{node}</div>
       ))}
       {title}
       <div
@@ -283,10 +276,8 @@ export function MobileCard({
                 gap="sm"
                 className="ml-auto shrink-0"
               >
-                {rightValues?.map((node, index) => (
+                {Children.map(rightValues, (node, index) => (
                   <RightValueSlot
-                    // biome-ignore lint/suspicious/noArrayIndexKey: positional slots
-                    key={index}
                     node={node}
                     interactive={rightValueInteractive?.[index]}
                   />

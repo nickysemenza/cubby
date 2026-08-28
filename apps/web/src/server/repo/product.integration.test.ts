@@ -2691,11 +2691,14 @@ describe("product repository", () => {
           productId: taxImmune.entityId,
           productQuantity: 5,
         });
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
         await expect(write).rejects.toThrow();
         // Pin the specific constraint, not just any rejection — a
         // NOT_NULL/FK typo elsewhere in the insert would also throw.
         await write.catch((error: unknown) => {
+          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
           expect((error as { cause?: { constraint?: string } }).cause).toEqual(
+            // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
             expect.objectContaining({
               code: "23514",
               constraint: "Expense_lineKind_productId_check",

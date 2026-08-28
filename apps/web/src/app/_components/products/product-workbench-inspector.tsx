@@ -288,7 +288,7 @@ export function ProductWorkbenchInspector({
   // `entityPreviewQueryOptions` is deliberately a cross-entity union. Its
   // runtime entity is fixed above, but TanStack cannot recover that narrowing
   // from the generated query-options union.
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the generated cross-entity options union
+  // oxlint-disable-next-line typescript/no-explicit-any -- useQuery cannot narrow the generated cross-entity options union
   const query = useQuery(queryOptions as any);
   const parsedProduct = productWithFoodOut.safeParse(query.data);
   const product = parsedProduct.success ? parsedProduct.data : undefined;

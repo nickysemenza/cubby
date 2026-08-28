@@ -23,7 +23,7 @@ export interface ChipsInputProps {
   placeholder?: string;
   /** Focus the text input on mount. Opt-in — used by the inline cell editor so
    * it opens ready to type; the recipe form leaves it off. */
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
   /** Seed the text input with an initial value (type-to-edit: the character
    * that opened the editor starts a NEW chip; existing chips are kept). */
   initialInputValue?: string;
@@ -81,7 +81,7 @@ export const ChipsInput: FC<ChipsInputProps> = ({
   onChange,
   className,
   placeholder = "Add value...",
-  autoFocus,
+  focusOnMount,
   initialInputValue,
   onEmptyEnter,
   normalize = defaultNormalize,
@@ -97,6 +97,10 @@ export const ChipsInput: FC<ChipsInputProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focusOnMount) inputRef.current?.focus();
+  }, [focusOnMount]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -174,7 +178,6 @@ export const ChipsInput: FC<ChipsInputProps> = ({
           <Input
             id={id}
             ref={inputRef}
-            autoFocus={autoFocus}
             value={inputValue}
             onChange={(e) => {
               setInputValue(e.target.value);

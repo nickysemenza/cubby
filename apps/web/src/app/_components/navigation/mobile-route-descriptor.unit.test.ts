@@ -41,6 +41,7 @@ describe("mobile route descriptors", () => {
 
   it("keeps every declared inventory domain owned by the Inventory tab", () => {
     for (const prefix of mobileInventoryPrefixesForTest) {
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(resolveMobileRoute(`${prefix}/deep-link`).tab, prefix).toBe(
         "inventory",
       );

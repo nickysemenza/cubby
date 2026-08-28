@@ -257,6 +257,7 @@ describe("proposeSizeFromTitle", () => {
         "tbsp",
         "tablespoon",
       ]) {
+        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(aliases.has(stem), stem).toBe(true);
       }
     });
@@ -283,7 +284,9 @@ describe("proposeSizeFromTitle", () => {
         "Bag of Sugar, 5\tlb",
         "Bag of Sugar, 5lb",
       ]) {
+        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(proposeSizeFromTitle(title), title).not.toBeNull();
+        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(sqlLike.test(title), title).toBe(true);
       }
     });

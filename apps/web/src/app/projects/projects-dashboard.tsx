@@ -177,9 +177,9 @@ function MainDashboard({ view }: { view: DashboardView }) {
   const statusesKey = search.statuses?.join(",");
   const kindsKey = search.kinds?.join(",");
   const locationsKey = search.locations?.join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives above, not the array references, on purpose
   const filters = useMemo<Filters>(
     () => filtersFromSearch(search),
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the joined-string primitives above, not the array references, on purpose
     [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
 
@@ -226,11 +226,12 @@ function MainDashboard({ view }: { view: DashboardView }) {
     />
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the joined-string primitives, not the Set references
   const scopeInput = useMemo(
     () => filtersToScopeInput(filters),
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the joined-string primitives, not the Set references
     [statusesKey, kindsKey, locationsKey, search.date, search.completed],
   );
+
   const projectScope = useMemo<EmbeddedProjectScope>(
     () => ({
       statuses: scopeInput.statusScope,
@@ -840,7 +841,6 @@ export function ProjectCard({
       onBlur={() => inspection?.onRowHoverEnd()}
     >
       {inspection ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: wrapper only prevents the card link from handling checkbox clicks
         <div
           role="presentation"
           className="absolute top-0 right-0 z-10 flex min-h-11 min-w-11 items-center justify-center"

@@ -410,23 +410,17 @@ export function GlobalCommandMenu({
 
                 {/* Empty state */}
                 {isEmpty && !isLoading && !parsedShortcode && (
-                  <div
-                    role="status"
-                    className="py-6 text-center text-xs/relaxed text-muted-foreground"
-                  >
+                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
                     {scopeLabel
                       ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
                       : "Nothing matched — try another word."}
-                  </div>
+                  </output>
                 )}
 
                 {searchScope && !hasSearch && (
-                  <div
-                    role="status"
-                    className="py-6 text-center text-xs/relaxed text-muted-foreground"
-                  >
+                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
                     Type to search {scopeLabel}.
-                  </div>
+                  </output>
                 )}
 
                 {/* A structurally valid shortcode can always navigate directly: the

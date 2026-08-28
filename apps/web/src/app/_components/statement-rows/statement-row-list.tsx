@@ -113,11 +113,11 @@ function SearchBox({
   const [debounced] = useDebouncedValue(text, { wait: 400 });
   const lastRef = useRef(value);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: onChange is the navigate callback, stable per render cycle; including it would refire on every parent render
   useEffect(() => {
     if (debounced === lastRef.current) return;
     lastRef.current = debounced;
     onChange(debounced);
+    // oxlint-disable-next-line react/exhaustive-deps -- onChange is the navigate callback, stable per render cycle; including it would refire on every parent render
   }, [debounced]);
 
   // External reset (e.g. a "Clear filters" action) — sync without fighting

@@ -95,13 +95,9 @@
     *,
     *::before,
     *::after {
-      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
       animation-duration: 0.01ms !important;
-      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
       animation-iteration-count: 1 !important;
-      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
       transition-duration: 0.01ms !important;
-      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
       scroll-behavior: auto !important;
     }
   }
@@ -465,9 +461,7 @@
 
   /* Sonner injects its own border/shadow, hence the overrides. */
   .cn-toast {
-    /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
     border-color: var(--border) !important;
-    /* biome-ignore lint/complexity/noImportantStyles: sonner sets inline border/shadow */
     box-shadow: var(--shadow-chunky-lg) !important;
   }
 
@@ -560,7 +554,6 @@
       background: white;
     }
     * {
-      /* biome-ignore lint/complexity/noImportantStyles: print reset must beat shadow utilities */
       box-shadow: none !important;
     }
   }

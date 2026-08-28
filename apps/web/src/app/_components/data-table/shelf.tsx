@@ -120,11 +120,7 @@ function ShelfSkeleton() {
   return (
     <div className={SHELF_GRID_CLASS}>
       {Array.from({ length: 12 }, (_, i) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholders
-          key={i}
-          className="overflow-hidden border border-[var(--border)]"
-        >
+        <div key={i} className="overflow-hidden border border-[var(--border)]">
           <Skeleton className="aspect-square w-full rounded-none" />
           <div className="space-y-2 px-2 py-2">
             <Skeleton className="h-3.5 w-3/4" />
@@ -180,13 +176,10 @@ export function ShelfGrid<T>({
         {items.map(renderCard)}
       </div>
       {infiniteScroll?.isTransitioning && (
-        <div
-          role="status"
-          className="flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground"
-        >
+        <output className="flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground">
           <Spinner size="sm" />
           Updating…
-        </div>
+        </output>
       )}
       {infiniteScroll && <div ref={sentinelRef} className="h-10" aria-hidden />}
     </div>

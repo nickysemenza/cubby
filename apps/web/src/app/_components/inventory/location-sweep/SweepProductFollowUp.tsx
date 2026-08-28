@@ -80,7 +80,6 @@ export function SweepProductFollowUp({
 
   // A fast sweep can raise a second follow-up before the first is dismissed;
   // without this the new product would inherit the previous one's draft.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting ON a new product is the point.
   useEffect(() => {
     setName(null);
     setPrice("");

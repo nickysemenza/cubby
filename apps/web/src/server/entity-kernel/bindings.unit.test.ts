@@ -88,6 +88,7 @@ describe("entity kernel bindings", () => {
           action,
           ...actionInput,
         });
+        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(
           parsed.success,
           parsed.success

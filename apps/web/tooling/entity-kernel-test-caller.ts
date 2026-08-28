@@ -8,7 +8,7 @@ import type {
 } from "~/server/entity-kernel/contracts";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-// biome-ignore lint/suspicious/noExplicitAny: test callers deliberately expose each entity's schema-inferred wire shape
+// oxlint-disable-next-line typescript/no-explicit-any -- Test callers deliberately expose each entity's schema-inferred wire shape.
 type WireValue = any;
 
 export function withEntityKernelMutations<T extends object>(

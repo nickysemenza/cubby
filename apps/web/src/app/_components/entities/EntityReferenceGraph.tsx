@@ -218,7 +218,7 @@ export function EntityReferenceGraph({
         </defs>
 
         <g>
-          {simLinks.map((link, i) => {
+          {simLinks.map((link) => {
             const source = link.source as GraphNode;
             const target = link.target as GraphNode;
             if (source.x == null || target.x == null) return null;
@@ -230,8 +230,7 @@ export function EntityReferenceGraph({
             const active = edgeActive(source.id, target.id);
             return (
               <line
-                // biome-ignore lint/suspicious/noArrayIndexKey: d3 links lack stable ids
-                key={i}
+                key={`${source.id}-${target.id}`}
                 x1={(source.x ?? 0) + (dx / len) * sr}
                 y1={(source.y ?? 0) + (dy / len) * sr}
                 x2={(target.x ?? 0) - (dx / len) * tr}
@@ -257,7 +256,6 @@ export function EntityReferenceGraph({
             const mergeable =
               lens === "lifecycle" && entityManifest[node.id].lifecycle.merge;
             return (
-              // biome-ignore lint/a11y/noStaticElementInteractions: graph node hover/select
               <g
                 key={node.id}
                 transform={`translate(${node.x ?? 0}, ${node.y ?? 0})`}
@@ -266,9 +264,24 @@ export function EntityReferenceGraph({
                   "transition-opacity",
                   onSelect ? "cursor-pointer" : "cursor-default",
                 )}
+                role={onSelect ? "button" : undefined}
+                tabIndex={onSelect ? 0 : undefined}
+                aria-label={onSelect ? `Select ${node.id}` : undefined}
                 onMouseEnter={() => setHovered(node.id)}
                 onMouseLeave={() => setHovered(null)}
-                onClick={() => onSelect?.(node.id)}
+                onFocus={() => setHovered(node.id)}
+                onBlur={() => setHovered(null)}
+                onClick={onSelect ? () => onSelect(node.id) : undefined}
+                onKeyDown={
+                  onSelect
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          onSelect(node.id);
+                        }
+                      }
+                    : undefined
+                }
               >
                 {hasSelf && (
                   <circle

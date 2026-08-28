@@ -67,7 +67,6 @@ export function LocationList() {
     entity: "location",
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateLocationMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createImageColumn(columnHelper, {
@@ -180,6 +179,7 @@ export function LocationList() {
         },
       ),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateLocationMutation changes every render but is functionally stable
     [columnHelper],
   );
 

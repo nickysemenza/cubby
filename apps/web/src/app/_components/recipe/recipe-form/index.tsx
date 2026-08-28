@@ -325,11 +325,11 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // form instead of a blank one they have to re-trigger by hand. The ref guards
   // against re-firing on re-renders (and React 18 StrictMode's double-mount).
   const autoScrapeFired = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — initialUrl/autoScrape are fixed per form instance and doScrape reads the current URL off the form
   useEffect(() => {
     if (autoScrapeFired.current || !autoScrape) return;
     autoScrapeFired.current = true;
     if (initialUrl) void doScrape();
+    // oxlint-disable-next-line react/exhaustive-deps -- mount-only — initialUrl/autoScrape are fixed per form instance and doScrape reads the current URL off the form
   }, []);
 
   // Handle import - auto-creates missing ingredients and populates form

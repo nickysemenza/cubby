@@ -263,7 +263,6 @@ function RootComponent() {
   }, [commandMenuOpen]);
 
   const routeContent = (
-    // biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id
     <PerfProfiler id="route">
       <Outlet />
     </PerfProfiler>

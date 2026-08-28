@@ -192,7 +192,6 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   expenseHrefRef.current = expenseHref;
   const columnsKey = columns.join(",");
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: columnsKey is the deep-compare stand-in for `columns`; expenseHref is read through a ref
   const tableColumns = useMemo<CubbyColumnDef<SummaryTableRow>[]>(() => {
     const build = (column: Column) => {
       switch (column) {
@@ -306,6 +305,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
         },
       }),
     ];
+    // oxlint-disable-next-line react/exhaustive-deps -- columnsKey is the deep-compare stand-in for `columns`; expenseHref is read through a ref
   }, [helper, columnsKey, targetEntity, nullLabel]);
 
   const sorting = useMemo<SortingState>(
@@ -360,6 +360,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
       // No select-all on an aggregate table; the loaded set is the whole answer.
       loadAllPages: async () => rows,
     }),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [
       query.fetchNextPage,
       query.hasNextPage,

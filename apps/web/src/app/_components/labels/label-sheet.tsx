@@ -181,9 +181,9 @@ export function LabelSheet({
 
   return (
     <section
-      aria-label="Label sheet preview"
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: the fixed-width paper preview must receive focus so keyboard users can scroll it horizontally
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The fixed-width paper preview must be directly focusable so keyboard users can scroll it horizontally.
       tabIndex={0}
+      aria-label="Label sheet preview"
       className="w-full max-w-full min-w-0 overflow-x-auto print:hidden"
     >
       {sheet}

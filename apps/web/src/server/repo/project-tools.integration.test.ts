@@ -2123,6 +2123,7 @@ describe("project tool matrix", () => {
         true,
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
     await expect(
       setProductProjectUses(
@@ -2131,6 +2132,7 @@ describe("project tool matrix", () => {
         [projectId],
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     await deleteProjects(ctx.db, [doomed.id], ctx.actor);
@@ -2138,12 +2140,15 @@ describe("project tool matrix", () => {
     // project would clear a checkbox that never cleared anything.
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, true, ctx.actor),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
     await expect(
       setProjectToolUsage(ctx.db, projectId, tool.entityId, false, ctx.actor),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
     await expect(
       setProductProjectUses(ctx.db, tool.entityId, [projectId], ctx.actor),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 

@@ -298,7 +298,6 @@ export function TaskList({
     enabled: subjectProductIds.length > 0,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<TaskOut>[]>(
     () => [
       ...selection.selectColumns,
@@ -392,6 +391,7 @@ export function TaskList({
         extraActions: combinedExtraActions,
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateTaskMutation changes every render but is functionally stable
     [
       showProjectColumn,
       nameEditable,
@@ -913,7 +913,6 @@ export function ExpenseList({
     deleteBulkAction,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
     () => [
       ...selection.selectColumns,
@@ -1043,6 +1042,7 @@ export function ExpenseList({
         extraActions: combinedExtraActions,
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable
     [
       showProjectColumn,
       nameEditable,
@@ -1209,7 +1209,6 @@ export function ProjectTable({
     entity: "project",
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProjectMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createImageColumn(columnHelper, {
@@ -1344,6 +1343,7 @@ export function ProjectTable({
         },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateProjectMutation changes every render but is functionally stable
     [columnHelper, projectImages],
   );
 
@@ -1376,10 +1376,10 @@ export function ProjectTable({
 
   // Expand once on search entry so nested matches are visible without fighting users.
   const searching = Boolean(table.getColumn("name")?.getFilterValue());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally edge-triggered on `searching` only
   useEffect(() => {
     if (!isTree) return;
     table.toggleAllRowsExpanded(searching);
+    // oxlint-disable-next-line react/exhaustive-deps -- intentionally edge-triggered on `searching` only
   }, [searching, isTree]);
 
   return (

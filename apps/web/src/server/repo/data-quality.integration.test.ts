@@ -412,6 +412,7 @@ describe("computed purchase and product data quality", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     const quality = await setDataException(

@@ -290,7 +290,7 @@ export function useEntityPreview(
         intent.timer = null;
         intent.started = true;
         void queryClient.prefetchQuery({
-          // biome-ignore lint/suspicious/noExplicitAny: the generated entity union cannot be narrowed at this dispatch seam
+          // oxlint-disable-next-line typescript/no-explicit-any -- the generated entity union cannot be narrowed at this dispatch seam
           ...(queryOptions as any),
           meta: { ...queryOptions.meta, speculative: true },
         });

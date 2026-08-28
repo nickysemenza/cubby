@@ -147,9 +147,9 @@ function Home() {
       >
         <Suspense
           fallback={
-            <p className="min-h-24 text-sm text-muted-foreground" role="status">
+            <output className="block min-h-24 text-sm text-muted-foreground">
               Loading record counts…
-            </p>
+            </output>
           }
         >
           <EntityCount />
@@ -166,9 +166,9 @@ function Home() {
       <CollapsibleSection title="Insights" summary="Four exploratory views">
         <Suspense
           fallback={
-            <p className="min-h-24 text-sm text-muted-foreground" role="status">
+            <output className="block min-h-24 text-sm text-muted-foreground">
               Loading insights…
-            </p>
+            </output>
           }
         >
           <HomeInsights />

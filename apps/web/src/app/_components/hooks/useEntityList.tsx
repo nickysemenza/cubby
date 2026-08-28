@@ -55,7 +55,7 @@ export interface BaseListRow {
   images?: Array<{ id: string; url: string; filename: string }>;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: intentional
+// oxlint-disable-next-line typescript/no-explicit-any -- intentional
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
 /**
@@ -404,6 +404,7 @@ export function useEntityList<
     presentationState.listBulkActions.onRowSelectionChange?.((current) =>
       reconcileRowSelection(current, availableRowIds),
     );
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
   const table = useTableConfig({

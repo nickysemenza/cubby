@@ -92,6 +92,7 @@ describe("production entity action catalog", () => {
         ).toBeGreaterThan(0);
         expect(new Set(action.surfaces).size).toBe(action.surfaces.length);
         if (action.group === "destructive") {
+          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
           expect(action.verb).toBe("delete");
         }
       }

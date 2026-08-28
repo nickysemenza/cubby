@@ -119,6 +119,7 @@ export function ExpenseAnalyticsView() {
         replace: true,
       });
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [navigate, activeCell],
   );
   const handleOpenLedger = useCallback(

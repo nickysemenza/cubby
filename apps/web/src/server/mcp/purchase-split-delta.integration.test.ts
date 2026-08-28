@@ -113,6 +113,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
+    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
     expect(result.isError, errorText(result)).not.toBe(true);
     const out = structured(result);
     expect(out.originalCost).toBe(100);
@@ -149,6 +150,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
+    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
     expect(result.isError, errorText(result)).not.toBe(true);
     const out = structured(result);
     expect(out.originalCost).toBe(100);
@@ -185,6 +187,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
       workflowContext(ctx.db, ctx.actor.userId),
     );
 
+    // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
     expect(result.isError, errorText(result)).not.toBe(true);
     const out = structured(result);
     expect(out.originalCost).toBeNull();

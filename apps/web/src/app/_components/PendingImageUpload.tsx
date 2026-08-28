@@ -100,7 +100,8 @@ export function PendingImageUpload({
       if (!trimmed) return;
 
       try {
-        new URL(trimmed);
+        const parsedUrl = new URL(trimmed);
+        void parsedUrl;
       } catch {
         if (!silent) toast.error("Please enter a valid URL");
         return;

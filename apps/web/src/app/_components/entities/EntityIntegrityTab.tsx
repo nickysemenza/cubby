@@ -205,7 +205,13 @@ function EntityChip({
     <Badge
       variant="outline"
       className="font-sans tracking-normal normal-case"
-      render={<button type="button" onClick={onClick} />}
+      render={
+        <button
+          type="button"
+          aria-label={`Filter to ${label}`}
+          onClick={onClick}
+        />
+      }
     >
       <Icon className="size-3" />
       {label}

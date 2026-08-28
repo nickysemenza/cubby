@@ -130,7 +130,7 @@ function EditableTagsEditor({
   }, [editedTags, value, commit]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Inline table-editor controls own keyboard behavior; this wrapper only blocks the row click.
     <div
       className="inline-flex items-start gap-1"
       onClick={(e) => e.stopPropagation()}
@@ -139,7 +139,7 @@ function EditableTagsEditor({
         value={editedTags}
         onChange={setEditedTags}
         className="w-64"
-        autoFocus
+        focusOnMount
         initialInputValue={seedText ?? undefined}
         // Enter with text chips it; Enter again (empty input) commits — so the
         // whole edit is type → Enter → Enter without reaching for the ✓.

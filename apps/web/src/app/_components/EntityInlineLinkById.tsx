@@ -49,7 +49,7 @@ export function EntityInlineLinkById({
   );
 
   // Single query hook instead of 4 disabled ones
-  // biome-ignore lint/suspicious/noExplicitAny: useQuery cannot narrow the mixed generated query-options union
+  // oxlint-disable-next-line typescript/no-explicit-any -- useQuery cannot narrow the mixed generated query-options union
   const query = useQuery(queryOptions as any);
 
   // Inventory entries have no getByID that returns product info, so there is

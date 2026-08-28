@@ -485,6 +485,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         {topSpacerHeight > 0 && (
           <tr>
             <td
+              aria-label="Virtualized rows above"
               colSpan={colSpan}
               className="border-0 p-0"
               style={{
@@ -614,6 +615,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         {bottomSpacerHeight > 0 && (
           <tr>
             <td
+              aria-label="Virtualized rows below"
               colSpan={colSpan}
               className="border-0 p-0"
               style={{
@@ -706,15 +708,16 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               past the wrapper's ceiling and hand the scroll back to the page.
               Cell selection (keyboard + mouse) is wired via containerProps;
               data-[cell-dragging] suppresses native text selection mid-drag. */}
-            <div
+            <section
+              // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The keyboard-navigable grid and horizontal scroll pane must be directly focusable.
+              tabIndex={0}
               ref={tableContainerRef}
               // Names the pane for the router's scroll restoration, which
               // otherwise addresses it by a positional nth-child path that
               // changes as chrome above it renders. See useTableVirtualizer.
               data-scroll-restoration-id={scrollRestorationId}
+              aria-label={`${ariaLabel} keyboard navigation`}
               className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
-              // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard cell navigation requires focusable container
-              tabIndex={0}
               {...cellSelectionContainerProps}
             >
               <Table
@@ -851,7 +854,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                   {statusContent}
                 </div>
               )}
-            </div>
+            </section>
 
             {/* The column's fixed bottom end. Page-size and page nav stay put
               while the pane scrolls between the two ends, so neither needs

@@ -282,6 +282,7 @@ describe("discardProductUnits", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -304,6 +305,7 @@ describe("discardProductUnits", () => {
         },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 });

@@ -487,7 +487,6 @@ const RecipeDetailInner: React.FC<{
 const RecipeDetail: React.FC<React.ComponentProps<typeof RecipeDetailInner>> = (
   props,
 ) => (
-  // biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id
   <PerfProfiler id="RecipeDetail">
     <RecipeDetailInner {...props} />
   </PerfProfiler>

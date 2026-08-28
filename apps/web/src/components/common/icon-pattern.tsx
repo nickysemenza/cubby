@@ -95,7 +95,7 @@ export function IconPattern({ className }: IconPatternProps) {
           const scale = 0.7 + seededRandom(i * 17) * 0.5;
           return (
             <Icon
-              // biome-ignore lint/suspicious/noArrayIndexKey: static decorative pattern, order never changes
+              // oxlint-disable-next-line react/no-array-index-key -- This fixed decorative pattern never reorders or preserves icon state.
               key={i}
               className="size-5 text-foreground"
               style={{

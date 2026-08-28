@@ -1116,6 +1116,7 @@ describe("consolidated household ledger", () => {
           reconciliationDecision: "amounts_match",
           reconciliationNote: null,
         }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 

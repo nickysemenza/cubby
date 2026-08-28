@@ -95,7 +95,7 @@ export function CreateProjectFromTasksDialog({
           name="name"
           label="Name"
           placeholder="What are you working on?"
-          autoFocus
+          focusOnMount
         />
         <SelectField
           form={form}

@@ -85,6 +85,7 @@ const DocumentViewer: FC<{
           Open
         </a>
       </Row>
+      {/* oxlint-disable-next-line react/iframe-missing-sandbox -- Native previews require browser document rendering; the source is a trusted Cubby object URL. */}
       <iframe
         key={iframeKey}
         src={src}

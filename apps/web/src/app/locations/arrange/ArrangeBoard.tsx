@@ -86,7 +86,6 @@ export function ArrangeBoard({
 
   // Keep the newly active Miller column visible without making Unknown the
   // default mobile destination.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: length is the intended trigger, not a read
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {

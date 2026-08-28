@@ -308,7 +308,7 @@ export const updateProject = async (
     }
 
     const changes: Record<string, { from: unknown; to: unknown }> = {
-      ...(computeChanges(before, updated, [...AUDIT_FIELDS]) ?? {}),
+      ...computeChanges(before, updated, [...AUDIT_FIELDS]),
     };
     if (resolvedBlockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(

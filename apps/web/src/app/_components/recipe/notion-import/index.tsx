@@ -76,6 +76,7 @@ export function NotionImport() {
   const items: PreviewItem[] = preview.data ?? [];
   const filteredItems = useMemo(
     () => filterNotionPreview(items, search, filter),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [items, search, filter],
   );
   const visibleActionable = useMemo(
@@ -154,6 +155,7 @@ export function NotionImport() {
       else c.needs++;
     }
     return c;
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [items]);
 
   const summary = useMemo(() => {

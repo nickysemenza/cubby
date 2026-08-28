@@ -141,7 +141,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   filterOptions?: RuntimeFilterOptions;
   supportsServerSorting: boolean;
 }): {
-  // biome-ignore lint/suspicious/noExplicitAny: relation display columns are heterogeneous by design.
+  // oxlint-disable-next-line typescript/no-explicit-any -- relation display columns are heterogeneous by design.
   relatedColumns: ColumnDef<TData, any>[];
   rowContentVersion: unknown;
 } {

@@ -35,7 +35,7 @@ import {
 } from "./useRelatedPreviewColumns";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 
-// biome-ignore lint/suspicious/noExplicitAny: column accessors intentionally vary.
+// oxlint-disable-next-line typescript/no-explicit-any -- column accessors intentionally vary.
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 const NO_FILTERS: FilterInput[] = [];
 
@@ -107,6 +107,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     if (previousSelectionScopeKeyRef.current === selectionScopeKey) return;
     previousSelectionScopeKeyRef.current = selectionScopeKey;
     listBulkActions.state.clearSelection();
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [selectionScopeKey, listBulkActions.state.clearSelection]);
   return {
     tableState,
@@ -235,6 +236,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
         ? (row: TData) =>
             rowActionGuard(row) ? state.combinedExtraActions?.(row) : null
         : state.combinedExtraActions,
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [rowActionGuard, state.combinedExtraActions],
   );
   const allColumns = useStandardColumns<TData>({

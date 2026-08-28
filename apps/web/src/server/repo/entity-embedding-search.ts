@@ -160,6 +160,7 @@ export async function findSemanticEntityCandidates(
     });
     throw new Error(
       "Semantic search failed while reading entity embeddings. Check pgvector setup and embedding dimensions.",
+      { cause: error },
     );
   }
   return rows.map((row) => ({

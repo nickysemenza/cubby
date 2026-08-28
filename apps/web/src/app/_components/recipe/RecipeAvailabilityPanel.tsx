@@ -123,8 +123,8 @@ export function RecipeAvailabilityPanel({
           <span className="text-muted-foreground">Need</span>
           {shortfalls.map((row, i) => (
             <Row
-              // biome-ignore lint/suspicious/noArrayIndexKey: a recipe can repeat an ingredient across sections; this list is positional (server order) and never reordered or spliced, so the index IS the identity.
-              key={`${row.ingredientId ?? row.name}-${i}`}
+              // oxlint-disable-next-line react/no-array-index-key -- Recipes may repeat an ingredient across sections; this server-ordered list is positional and never reordered.
+              key={i}
               as="span"
               align="center"
               gap="xs"
@@ -143,10 +143,10 @@ export function RecipeAvailabilityPanel({
           All ingredients ({data.ingredients.length})
         </summary>
         <Stack gap="tight" className="mt-2">
-          {data.ingredients.map((row, i) => (
+          {data.ingredients.map((row, index) => (
             <Row
-              // biome-ignore lint/suspicious/noArrayIndexKey: positional server-ordered list — see the shortfall map above.
-              key={`${row.ingredientId ?? row.name}-${i}`}
+              // oxlint-disable-next-line react/no-array-index-key -- Recipes may repeat an ingredient across sections; this server-ordered list is positional and never reordered.
+              key={index}
               align="center"
               justify="between"
               gap="sm"

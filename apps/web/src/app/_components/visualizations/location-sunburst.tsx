@@ -214,12 +214,12 @@ function Sunburst({ data }: SunburstProps) {
       className="relative h-[500px] w-full overflow-hidden border border-[var(--border)]"
     >
       <svg
-        role="img"
         aria-label={chartSummary}
         aria-describedby={summaryId}
         width={dimensions.width}
         height={dimensions.height}
       >
+        <title>{chartSummary}</title>
         <g
           transform={`translate(${dimensions.width / 2}, ${dimensions.height / 2})`}
         >
@@ -229,7 +229,6 @@ function Sunburst({ data }: SunburstProps) {
 
             return (
               <g key={node.data.id}>
-                {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 sunburst visualization hover interaction */}
                 <path
                   d={arc(node)}
                   fill={getNodeColor(node)}

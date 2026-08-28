@@ -54,7 +54,9 @@ describe("convertAmountToPrice", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.value).toBe(expectedValue);
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.unit).toBe("$");
     }
   });
@@ -84,6 +86,7 @@ describe("convertAmountToPrice", () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.error).toContain(errorContains);
     }
   });
@@ -99,8 +102,10 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     if (result.isOk()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value).toBeDefined();
     } else {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.error).toBeDefined();
     }
   });
@@ -113,8 +118,11 @@ describe("WASM Error Scenarios", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.value).toBeGreaterThan(29e9); // At least 29 billion
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.value).toBeLessThan(31e9); // At most 31 billion
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.unit).toBe("$");
     }
   });
@@ -127,7 +135,9 @@ describe("WASM Error Scenarios", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.value).toBeGreaterThanOrEqual(0);
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.unit).toBe("$");
     }
   });
@@ -144,8 +154,11 @@ describe("WASM Error Scenarios", () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.value).toBeGreaterThanOrEqual(0.94);
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.value).toBeLessThanOrEqual(0.96);
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.value.unit).toBe("$");
     }
   });
@@ -162,6 +175,7 @@ describe("WASM Error Scenarios", () => {
     // Should fail to convert to money since there's no path to money
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.error).toContain("Failed to convert");
     }
   });

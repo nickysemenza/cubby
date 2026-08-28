@@ -983,9 +983,8 @@ export function ExpenseAggregateExplorer({
       </Row>
 
       {query.isLoading ? (
-        <div
+        <output
           className="h-52 animate-pulse bg-muted"
-          role="status"
           aria-label="Loading analysis"
         />
       ) : query.isError ? (

@@ -185,7 +185,10 @@ export function CrossTabTable<R, C>({
           {renderGroupHeader && (
             <tr className="eyebrow">
               {/* Corner outranks both sticky axes where they cross. */}
-              <th className={cn(sticky, "z-20 px-2 py-1")} />
+              <th
+                aria-label="Row group"
+                className={cn(sticky, "z-20 px-2 py-1")}
+              />
               {runs.map((run) => (
                 <th
                   key={run.columns[0]?.key ?? run.groupKey}
@@ -198,7 +201,7 @@ export function CrossTabTable<R, C>({
                 </th>
               ))}
               {pinnedColumns.map((p) => (
-                <th key={p.key} />
+                <th key={p.key} aria-label={`Pinned ${p.key}`} />
               ))}
             </tr>
           )}

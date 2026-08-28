@@ -16,7 +16,7 @@ dashboardRoutes.get("/", async (c) => {
         <StatCard label="Products" value={stats.totalProducts} />
         <StatCard label="Images" value={stats.storageUsed.r2Objects} />
         {Object.entries(stats.bySource).map(([source, count]) => (
-          <StatCard label={source} value={count} />
+          <StatCard key={source} label={source} value={count} />
         ))}
       </div>
       <div class="mt-6 flex gap-3">
@@ -51,7 +51,7 @@ dashboardRoutes.get("/stats", async (c) => {
       </h2>
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {Object.entries(stats.bySource).map(([source, count]) => (
-          <StatCard label={source} value={count} />
+          <StatCard key={source} label={source} value={count} />
         ))}
       </div>
     </Layout>,

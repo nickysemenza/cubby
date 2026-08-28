@@ -159,6 +159,7 @@ export function useOptimisticDelete<
         }
       },
     };
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [commands.remove, deletable, queryClient, registeredDelete]);
 
   // Always call useMutation unconditionally (Rules of Hooks).
@@ -188,10 +189,10 @@ export function useOptimisticDelete<
     bulkResolveRef.current = null;
   }, []);
 
-  // Build delete bulk action. `onExecute` doesn't delete anything itself — it
+  // Build delete bulk action. `onExecute` performs no deletion itself — it
   // opens the same confirm dialog `requestDelete` does, over the whole
   // selection, and holds its returned promise open until the dialog resolves
-  // it (submit or cancel). That's what lets `BulkActionBar` skip its own
+  // the promise through submit or cancel. That's what lets `BulkActionBar` skip its own
   // generic "are you sure" dialog for this action (no `requiresConfirmation`)
   // without losing confirmation altogether.
   //
@@ -289,6 +290,7 @@ export function useOptimisticDelete<
     // Not `deleteMutation` wholesale — react-query hands back a new result
     // object every render, so depending on it made this memo a no-op.
     // `mutateAsync` is bound once by its observer; only `isPending` is read.
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [
       deletable,
       deleteTargets,

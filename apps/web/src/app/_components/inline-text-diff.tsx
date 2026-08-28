@@ -24,22 +24,26 @@ export function InlineTextDiff({
       className={cn("inline-block max-w-full truncate align-bottom", className)}
       title={`${before || "(none)"} → ${after || "(none)"}`}
     >
-      {segs.map((s, idx) =>
+      {segs.map((s, index) =>
         s.type === "common" ? (
-          // biome-ignore lint/suspicious/noArrayIndexKey: positional diff segments
-          <span key={idx}>{s.text}</span>
+          <span
+            // oxlint-disable-next-line react/no-array-index-key -- Diff runs are positional, can repeat identical text, and carry no stable id.
+            key={index}
+          >
+            {s.text}
+          </span>
         ) : s.type === "add" ? (
           <span
-            // biome-ignore lint/suspicious/noArrayIndexKey: positional diff segments
-            key={idx}
+            // oxlint-disable-next-line react/no-array-index-key -- Diff runs are positional, can repeat identical text, and carry no stable id.
+            key={index}
             className="rounded-xs bg-positive/15 px-0.5 text-positive" /* tight: inline word-diff highlight */
           >
             {s.text}
           </span>
         ) : (
           <span
-            // biome-ignore lint/suspicious/noArrayIndexKey: positional diff segments
-            key={idx}
+            // oxlint-disable-next-line react/no-array-index-key -- Diff runs are positional, can repeat identical text, and carry no stable id.
+            key={index}
             className="rounded-xs bg-destructive/15 px-0.5 text-destructive line-through" /* tight: inline word-diff highlight */
           >
             {s.text}

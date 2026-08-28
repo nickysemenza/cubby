@@ -179,7 +179,6 @@ export function IngredientList() {
 
   // Memoize columns to prevent recreating on every render
   // Note: updateIngredientMutation is NOT in dependencies because useMutation returns a new object every render
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateIngredientMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createImageColumn(columnHelper, {
@@ -247,6 +246,7 @@ export function IngredientList() {
         cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateIngredientMutation changes every render but is functionally stable
     [columnHelper],
   );
 

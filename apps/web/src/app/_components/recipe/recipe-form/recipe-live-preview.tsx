@@ -70,7 +70,7 @@ export const RecipeLivePreview: FC<{
 
       {sections.map((section, sectionIndex) => (
         <Stack
-          // biome-ignore lint/suspicious/noArrayIndexKey: preview of positional draft sections
+          // oxlint-disable-next-line react/no-array-index-key -- Draft sections are positional form values without stable ids; content changes while typing.
           key={sectionIndex}
           gap="sm"
         >
@@ -82,15 +82,15 @@ export const RecipeLivePreview: FC<{
 
           {(section?.ingredients?.length ?? 0) > 0 && (
             <ul className="my-0 ml-0 list-none divide-y divide-dashed divide-border">
-              {section?.ingredients?.map((ing, i) => {
+              {section?.ingredients?.map((ing, ingredientIndex) => {
                 const name =
                   (ing?.type === "recipe"
                     ? ing?.recipe?.name
                     : ing?.ingredient?.name) || "…";
                 return (
                   <li
-                    // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
-                    key={i}
+                    // oxlint-disable-next-line react/no-array-index-key -- Draft ingredient rows are positional form values without stable ids; content changes while typing.
+                    key={ingredientIndex}
                     className={cn(ingredientRowGridNarrow, "py-1")}
                   >
                     <IngredientQuantities
@@ -106,13 +106,13 @@ export const RecipeLivePreview: FC<{
 
           {(section?.instructions?.length ?? 0) > 0 && (
             <Stack as="ol" gap="sm" className="my-0 ml-0 list-none">
-              {section?.instructions?.map((inst, i) => {
+              {section?.instructions?.map((inst, instructionIndex) => {
                 stepNumber += 1;
                 return (
                   <Row
                     as="li"
-                    // biome-ignore lint/suspicious/noArrayIndexKey: positional draft rows
-                    key={i}
+                    // oxlint-disable-next-line react/no-array-index-key -- Draft instructions are positional form values without stable ids; duplicate text is valid.
+                    key={instructionIndex}
                     gap="sm"
                   >
                     <span className="w-5 shrink-0 text-right font-heading text-base leading-snug font-medium text-primary italic">

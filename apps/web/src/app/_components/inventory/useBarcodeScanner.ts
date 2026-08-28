@@ -174,7 +174,6 @@ export function useBarcodeScanner({
     setRetryCount((c) => c + 1);
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: retryCount forces camera restart on retry()
   useEffect(() => {
     if (!enabled) return;
 
@@ -453,10 +452,14 @@ export function useScanBeep(enabled = true): () => void {
 
     oscillator.connect(gain);
     gain.connect(context.destination);
-    oscillator.onended = () => {
-      oscillator.disconnect();
-      gain.disconnect();
-    };
+    oscillator.addEventListener(
+      "ended",
+      () => {
+        oscillator.disconnect();
+        gain.disconnect();
+      },
+      { once: true },
+    );
     oscillator.start(startedAt);
     oscillator.stop(startedAt + BEEP_DURATION_S + 0.01);
   }, []);

@@ -865,7 +865,7 @@ const findReferencedImageIds = async (
           isNotNull(edgeColumn),
           imageIds ? inArray(edgeColumn, imageIds) : undefined,
           disposition.effect === "hard-delete"
-            ? // biome-ignore lint/suspicious/noExplicitAny: Drizzle's table type is too narrow for notDeleted()
+            ? // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic table type is too narrow for notDeleted().
               notDeleted(edgeTable as any)
             : undefined,
         ),

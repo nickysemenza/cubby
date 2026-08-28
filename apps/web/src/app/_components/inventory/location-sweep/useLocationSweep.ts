@@ -201,7 +201,6 @@ export function useLocationSweep({
 
   // A sweep belongs to one shelf. Moving to the next one starts over — a stray
   // queued against the old location would otherwise commit against the new.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting ON locationId change is the point.
   useEffect(() => reset(), [locationId, reset]);
 
   const patchChip = useCallback(

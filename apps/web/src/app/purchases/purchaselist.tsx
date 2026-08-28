@@ -69,7 +69,6 @@ export function PurchaseList() {
     entity: "purchase",
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       // A purchase has no `name`, so this is its name column: the identity
@@ -271,6 +270,7 @@ export function PurchaseList() {
           ),
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [columnHelper],
   );
 

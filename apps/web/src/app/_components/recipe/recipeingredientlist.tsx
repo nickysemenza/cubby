@@ -251,8 +251,12 @@ export const RecipeIngredientList: React.FC<{
         return (
           <Stack gap="xs" className="text-sm">
             {amounts.map((amount, index) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: amounts are positional without stable IDs
-              <div key={index}>{tryFormatAmount(amount)}</div>
+              <div
+                // oxlint-disable-next-line react/no-array-index-key -- Ingredient amounts are a positional display list without stable ids, and equal amounts are valid.
+                key={index}
+              >
+                {tryFormatAmount(amount)}
+              </div>
             ))}
           </Stack>
         );

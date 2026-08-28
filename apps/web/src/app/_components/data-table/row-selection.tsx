@@ -38,7 +38,6 @@ export function buildSelectColumn<T extends RowData>(): CubbyColumnDef<T> {
     id: "select",
     header: ({ table }) => (
       // Wrapper stops propagation since Base UI Checkbox doesn't pass onClick to the DOM element
-      // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop event propagation
       <div role="presentation" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={table.getIsAllPageRowsSelected()}
@@ -57,7 +56,6 @@ export function buildSelectColumn<T extends RowData>(): CubbyColumnDef<T> {
       // predicate (a tree whose children belong to a different entity than the
       // bulk actions target — see `EntityListTreeConfig.rowIsEntity`).
       !row.getCanSelect() ? null : (
-        // biome-ignore lint/a11y/noStaticElementInteractions: wrapper exists only to stop event propagation
         <div role="presentation" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={row.getIsSelected()}

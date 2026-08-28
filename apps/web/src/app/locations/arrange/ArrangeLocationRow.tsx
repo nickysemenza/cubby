@@ -101,12 +101,13 @@ export function ArrangeLocationRow({
 
   return (
     <LocationTreeRow
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- The draggable tree row contains its own button, so a native grouping element would create invalid nested controls.
+      role="group"
       ref={(element) => {
         setNodeRef(element);
         setDropNodeRef(element);
       }}
       location={node}
-      role="group"
       aria-label={`${node.name} location drop target`}
       depth={depth}
       active={isOver}

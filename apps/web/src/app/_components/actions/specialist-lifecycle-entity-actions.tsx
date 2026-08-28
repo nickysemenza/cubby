@@ -144,6 +144,7 @@ export function useDeleteCookbookEntityAction(): EntityActionHandles {
       });
       void navigate({ to: "/cookbooks" });
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, navigate],
   );
   const action = useStagedSpecialistDelete({
@@ -185,6 +186,7 @@ export function useDeleteImageEntityAction(): EntityActionHandles {
       });
       void navigate({ to: "/images" });
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, navigate],
   );
 

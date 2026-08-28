@@ -31,6 +31,7 @@ describe("calendarFilterSpecs drift guards", () => {
     const allowed = new Set(Object.keys(calendarFilterFields));
     for (const spec of calendarFilterSpecs) {
       expect(allowed).toContain(spec.field ?? spec.columnId);
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       if (spec.nullable) expect(allowed).toContain(spec.nullable.field);
     }
   });

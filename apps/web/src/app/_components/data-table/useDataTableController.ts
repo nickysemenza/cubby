@@ -77,7 +77,6 @@ export function useDataTableController<TItem extends RowData>({
     [fetchNextPage, hasNextPage, isFetchingNextPage, isTransitioning],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tableContainerRef.current is read when the sentinel mounts; a ref mutation never re-renders, so listing it would be inert.
   const setDesktopInfiniteSentinel = useCallback(
     (sentinel: HTMLDivElement | null) => {
       desktopInfiniteObserverRef.current?.disconnect();
@@ -99,6 +98,7 @@ export function useDataTableController<TItem extends RowData>({
       observer.observe(sentinel);
       desktopInfiniteObserverRef.current = observer;
     },
+    // oxlint-disable-next-line react/exhaustive-deps -- tableContainerRef.current is read when the sentinel mounts; a ref mutation never re-renders, so listing it would be inert.
     [
       isMobile,
       hasInfiniteScroll,
@@ -208,10 +208,10 @@ export function useDataTableController<TItem extends RowData>({
     .getVisibleLeafColumns()
     .map((column) => `${column.id}:${column.getSize()}`)
     .join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scalar signature stands in for TanStack's fresh column array
   const columnSizeVars = useMemo(
     () =>
       columnWidthVariables(table.getVisibleLeafColumns(), tableContainerWidth),
+    // oxlint-disable-next-line react/exhaustive-deps -- scalar signature stands in for TanStack's fresh column array
     [columnSizesKey, tableContainerWidth],
   );
 

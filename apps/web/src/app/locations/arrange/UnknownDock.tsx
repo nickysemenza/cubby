@@ -35,8 +35,8 @@ export function UnknownDock({ unknownRoot, roots }: UnknownDockProps) {
   const count = children.length + items.length;
   return (
     <Stack
+      as="fieldset"
       ref={setNodeRef}
-      role="group"
       aria-label="Unknown staging drop target"
       gap="sm"
       className={cn(

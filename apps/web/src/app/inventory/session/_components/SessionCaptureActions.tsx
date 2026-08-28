@@ -50,6 +50,7 @@ import {
 } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
@@ -443,7 +444,7 @@ export function SessionCaptureActions({
               value={photoName}
               onChange={(event) => setPhotoName(event.target.value)}
               placeholder="e.g. blue tarp clamp"
-              autoFocus
+              ref={focusOnMount}
               disabled={photoIdentityPending}
             />
             <Button

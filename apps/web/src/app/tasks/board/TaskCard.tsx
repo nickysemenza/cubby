@@ -263,25 +263,22 @@ export function TaskCard({
             </Badge>
           )}
           {showTrade && <TradeBadge trade={task.trade} />}
-          {showProject &&
-            task.projectId && (
-              // biome-ignore lint/a11y/noStaticElementInteractions: bare stopPropagation guard so a card click doesn't fire when the inner link is used
-              <span
-                onClick={(e) => e.stopPropagation()}
-                className="max-w-40 min-w-0"
-                title={task.projectName ?? undefined}
-              >
-                <EntityInlineLink
-                  displayImage={undefined}
-                  entity="project"
-                  truncate
-                  data={{
-                    id: task.projectId,
-                    name: task.projectName ?? "",
-                  }}
-                />
-              </span>
-            )}
+          {showProject && task.projectId && (
+            <span
+              className="max-w-40 min-w-0"
+              title={task.projectName ?? undefined}
+            >
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="project"
+                truncate
+                data={{
+                  id: task.projectId,
+                  name: task.projectName ?? "",
+                }}
+              />
+            </span>
+          )}
           {task.blockedByIds.length > 0 && (
             <Tooltip>
               <TooltipTrigger

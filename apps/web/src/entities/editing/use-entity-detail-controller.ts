@@ -29,7 +29,6 @@ export function useEntityDetailController<TData, TResult = unknown>({
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string>();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a record identity change deliberately exits edit mode
   useEffect(() => {
     setIsEditing(false);
     setError(undefined);

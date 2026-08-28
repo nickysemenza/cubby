@@ -1698,6 +1698,7 @@ describe("task kernel — bulkUpdate", () => {
       ctx.actor,
     );
 
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(bulkUpdate([t.id], { name: "Renamed" })).rejects.toThrow();
   });
 });

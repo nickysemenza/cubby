@@ -100,7 +100,6 @@ export function BackgroundJobsPage({
     if (didBatchSettle(previousStatus, currentStatus)) void refetchJobs();
   }, [currentStatus, refetchJobs]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the selected id is the reset signal; the effect deliberately resets local child-query controls without reading the id.
   useEffect(() => {
     setPageIndex(0);
     previousStatusRef.current = undefined;

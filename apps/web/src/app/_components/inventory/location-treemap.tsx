@@ -119,7 +119,6 @@ function Treemap({ data }: TreemapProps) {
 
           return (
             <g key={node.data.id}>
-              {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 treemap visualization hover interaction */}
               <rect
                 x={node.x0}
                 y={node.y0}

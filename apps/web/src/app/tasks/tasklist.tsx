@@ -78,7 +78,6 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   // `~/app/projects/shared.tsx`, also used by the embedded `TaskList` on the
   // project detail page — so the two can't drift. This page passes its own
   // mobile projections; the project + name columns stay inline here.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateTaskMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       taskStatusColumn(
@@ -147,6 +146,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
         { mobile: { slot: "meta", priority: 50 } },
       ),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- The mutation wrapper changes identity while its operation contract remains stable.
     [columnHelper, parentOptions],
   );
 

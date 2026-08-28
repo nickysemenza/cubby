@@ -143,14 +143,13 @@ export function TodayAttention() {
 
       <div className="mt-2 border-y border-border">
         {briefing.isLoading ? (
-          <div
-            className="space-y-2 py-2"
-            role="status"
+          <output
+            className="block space-y-2 py-2"
             aria-label="Loading next tasks"
           >
             <Skeleton className="h-5 w-full" />
             <Skeleton className="h-5 w-4/5" />
-          </div>
+          </output>
         ) : briefing.isError ? (
           <div className="flex min-h-16 items-center justify-between gap-3 py-2">
             <p className="text-xs text-muted-foreground">

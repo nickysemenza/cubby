@@ -597,6 +597,7 @@ describe("product ⟷ product component links (kit composition)", () => {
           componentProductId: part.entityId,
           quantity: 0,
         }),
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     });
 
@@ -624,6 +625,7 @@ describe("product ⟷ product component links (kit composition)", () => {
           componentProductId: part.entityId,
           quantity: 2,
         }),
+        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     });
   });

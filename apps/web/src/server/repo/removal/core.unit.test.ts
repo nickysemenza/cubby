@@ -140,6 +140,7 @@ describe("cascadeRemoval — derived search and suggestion cleanup", () => {
 });
 
 describe("cascadeRemoval — the type-level lock", () => {
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses a hand-written delete entry", () => {
     // The mechanism this whole module exists for. Without the phantom witness
     // on `RemovalAuditEntry` this line compiles, and the invariant goes back to
@@ -153,6 +154,7 @@ describe("cascadeRemoval — the type-level lock", () => {
     void forged;
   });
 
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses ids branded for a different entity", () => {
     const { tx } = recordingTx();
     void cascadeRemoval(tx, {

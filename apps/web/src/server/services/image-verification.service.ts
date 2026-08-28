@@ -66,7 +66,7 @@ const verifyEntityImages = async (
       }
       await updateImageIntegrity(db, row.id, inspected);
       results.push({ imageId: row.id, storageStatus: "available" });
-    } catch (_error) {
+    } catch {
       await updateImageIntegrity(db, row.id, {
         renderStatus: "failed",
         storageStatus: "metadata_mismatch",

@@ -75,6 +75,7 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 
@@ -861,7 +862,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           rows={8}
           placeholder="Freeform markdown notes..."
           disabled={notesPending}
-          autoFocus
+          ref={focusOnMount}
         />
         <Row gap="xs">
           <Button

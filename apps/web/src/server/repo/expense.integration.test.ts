@@ -1002,12 +1002,15 @@ describe("expense repository — expenseList filters", () => {
     // bare `!== 0` refinement.
     await expect(
       mk({ name: "zero units on a free line", cost: 0, productQuantity: 0 }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
     await expect(
       mk({ name: "zero units on a buy", cost: 10, productQuantity: 0 }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
     await expect(
       mk({ name: "zero units, cost unknown", cost: null, productQuantity: 0 }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     // And the CHECK backstops the unclassified case specifically. This is the
@@ -1021,6 +1024,7 @@ describe("expense repository — expenseList filters", () => {
         .update(expenseTable)
         .set({ cost: null, productQuantity: 0 })
         .where(eq(expenseTable.shortcode, concession.id)),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     // ...and the DB CHECK is the backstop under it. This assertion is the one
@@ -1034,6 +1038,7 @@ describe("expense repository — expenseList filters", () => {
         .update(expenseTable)
         .set({ productQuantity: 0 })
         .where(eq(expenseTable.shortcode, discard.id)),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     // A positive cost is an acquisition, so a negative quantity there says
@@ -1041,6 +1046,7 @@ describe("expense repository — expenseList filters", () => {
     // the repo guard, not the constraint.
     await expect(
       mk({ name: "bought negative?", cost: 10, productQuantity: -2 }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -1663,6 +1669,7 @@ describe("expense kernel — bulkUpdate", () => {
       ctx.actor,
     );
 
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(bulkUpdate([e.id], { name: "Renamed" })).rejects.toThrow();
   });
 });
@@ -3566,6 +3573,7 @@ describe("expense repository — charge resolution on update", () => {
         { vendor: "Ghost Supply Co", orderId: "GSC-rollback-1" },
         ctx.actor,
       ),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
     expect((await vendorOptions(ctx.db)).map((v) => v.name)).not.toContain(

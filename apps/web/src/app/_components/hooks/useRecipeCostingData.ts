@@ -103,7 +103,6 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
   recipesRef.current = recipes;
   const signature = useMemo(() => recipeLinkSignature(recipes), [recipes]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: gated on signature; reads recipes via recipesRef
   useEffect(() => {
     let cancelled = false;
     const current = recipesRef.current;

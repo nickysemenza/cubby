@@ -69,6 +69,7 @@ function SettingsPage() {
             render={
               <button
                 type="button"
+                aria-label="Toggle developer tools"
                 className="flex min-h-11 w-full items-center justify-between border border-[var(--border)] bg-muted/40 px-2 py-2 text-left transition-colors hover:bg-muted md:px-4"
               />
             }

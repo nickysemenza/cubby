@@ -211,14 +211,13 @@ export function UnitMappingGraph({
       ) : (
         <svg aria-hidden="true" width={width} height={height}>
           <g>
-            {simLinks.map((link, i) => {
+            {simLinks.map((link) => {
               const s = link.source as UNode;
               const t = link.target as UNode;
               if (s.x == null || t.x == null) return null;
               return (
                 <line
-                  // biome-ignore lint/suspicious/noArrayIndexKey: sim links lack stable ids
-                  key={i}
+                  key={`${s.id}-${t.id}`}
                   x1={s.x}
                   y1={s.y}
                   x2={t.x}

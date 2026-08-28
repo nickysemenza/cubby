@@ -41,7 +41,6 @@ function BoardSkeleton() {
   return (
     <Row align="stretch" gap="sm" className="overflow-hidden">
       {Array.from({ length: 5 }, (_, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: placeholder columns have no stable identity
         <Stack key={i} gap="sm" className="w-64 shrink-0">
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-16 w-full" />
@@ -70,12 +69,12 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
 
   // navigate is a stable tanstack-router reference; including it would
   // re-run this on every render for no reason.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is intentionally excluded
   useEffect(() => {
     navigate({
       search: (prev) => ({ ...prev, q: debouncedSearch || undefined }),
       replace: true,
     });
+    // oxlint-disable-next-line react/exhaustive-deps -- navigate is intentionally excluded
   }, [debouncedSearch]);
 
   // Server-filtered by name (task.board's `search`) — a narrower match than

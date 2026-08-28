@@ -259,10 +259,10 @@ export async function lockAndValidateForDelete<TId extends string>(
   entityName: string,
 ): Promise<void> {
   const locked = await unwrapDb(tx)
-    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
     .select({ id: table.id as any })
     .from(table)
-    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
     .where(and(inArray(table.id as any, ids), notDeleted(table)))
     .for("update"); // 🔒 Acquires row-level lock
 

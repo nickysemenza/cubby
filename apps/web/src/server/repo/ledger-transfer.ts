@@ -326,11 +326,11 @@ export async function createLedgerTransfer(
       ...columns,
       ...parties,
     });
-    const evidence = data.evidenceTransactionIds
+    const evidence = evidenceTransactionIds
       ? await resolveAllOrThrow(
           tx,
           "financialTransaction",
-          data.evidenceTransactionIds,
+          evidenceTransactionIds,
         )
       : [];
     await replaceLedgerSourceClaims(

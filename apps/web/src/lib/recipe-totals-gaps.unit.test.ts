@@ -148,9 +148,12 @@ describe("deriveRecipeTotalsGaps — classification", () => {
     );
 
     if (expected === null) {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(gaps).toHaveLength(0);
     } else {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(gaps).toHaveLength(1);
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(gaps[0]).toMatchObject(expected);
     }
   });

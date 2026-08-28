@@ -254,10 +254,9 @@ function SidebarTreeNode({
 
   return (
     <div>
-      {/* Non-semantic role="button" wrapper on purpose: the row is clickable
-          but contains a nested <button> for expand/collapse, so it can't be a
-          real <button> (no nested interactive controls). */}
       <LocationTreeRow
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- This composite tree row contains a separate disclosure button, so a native button would create invalid nested controls.
+        role="button"
         ref={isActive ? activeItemRef : undefined}
         location={location}
         depth={level}
@@ -307,7 +306,6 @@ function SidebarTreeNode({
             </Badge>
           )
         }
-        role="button"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         className={cn(

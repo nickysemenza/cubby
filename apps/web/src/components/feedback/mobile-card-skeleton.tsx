@@ -36,7 +36,6 @@ function MobileCardSkeleton({
           {metaLines > 0 && (
             <div className={MOBILE_SPEC_GRID_CLASS}>
               {Array.from({ length: metaLines }, (_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
                 <Fragment key={i}>
                   <Skeleton className="h-2.5 w-full" />
                   <Skeleton className="h-3 w-2/3" />
@@ -64,12 +63,7 @@ export function MobileCardSkeletonList({
   return (
     <div>
       {Array.from({ length: count }, (_, i) => (
-        <MobileCardSkeleton
-          // biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
-          key={i}
-          metaLines={metaLines}
-          hasImage={hasImage}
-        />
+        <MobileCardSkeleton key={i} metaLines={metaLines} hasImage={hasImage} />
       ))}
     </div>
   );

@@ -61,7 +61,6 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
     entity: "task",
   });
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () =>
       helper.columns([
@@ -90,6 +89,7 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
           },
         }),
       ]),
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, nameEditable],
   );
   const ordered = useMemo(() => orderProductTasks(tasks), [tasks]);

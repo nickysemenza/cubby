@@ -161,7 +161,7 @@ const collectCascadingImageIds = async (
     const imageColumn = imageJoinColumnFor(child.table);
     if (!imageColumn) continue;
     const rows = (await tx
-      // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
       .select({ imageId: imageColumn as any })
       .from(child.table)
       .where(

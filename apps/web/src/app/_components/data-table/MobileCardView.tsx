@@ -318,12 +318,7 @@ export function MobileCardView<TItem extends RowData>({
     );
 
     return (
-      <VirtualRow
-        key={row.id}
-        vi={vi}
-        virtualizer={virtualizer}
-        role="listitem"
-      >
+      <VirtualRow key={row.id} vi={vi} virtualizer={virtualizer}>
         {card}
       </VirtualRow>
     );

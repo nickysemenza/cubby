@@ -71,6 +71,7 @@ describe("PROBLEM_SECTIONS", () => {
       );
       expect(section.coverage != null).toBe(isCoverageClassed);
       if (section.coverage) {
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect(sorted(section.coverage.keys)).toEqual(sorted(keys));
       }
     },

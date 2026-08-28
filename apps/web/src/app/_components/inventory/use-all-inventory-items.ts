@@ -47,6 +47,7 @@ export function useAllInventoryItems() {
     if (query.hasNextPage && !query.isFetchingNextPage) {
       void query.fetchNextPage({ cancelRefetch: false });
     }
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage]);
 
   const items = useMemo(

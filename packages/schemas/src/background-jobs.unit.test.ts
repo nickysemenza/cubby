@@ -52,11 +52,13 @@ describe("background job identifier parsing", () => {
       entity: "product",
       id: entityId,
     });
-    expect(() =>
-      backgroundJobPayloadSchema.parse({
-        kind: "location-ai.description.refresh",
-        payload: { locationId: "not-a-uuid" },
-      }),
+    expect(
+      () =>
+        backgroundJobPayloadSchema.parse({
+          kind: "location-ai.description.refresh",
+          payload: { locationId: "not-a-uuid" },
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 });

@@ -12,6 +12,7 @@ import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { collection } from "./collection.functions";
@@ -75,7 +76,7 @@ export function CollectionsIndexPage() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Painting"
-              autoFocus
+              ref={focusOnMount}
             />
           </label>
           <label className="space-y-1" htmlFor={subjectId}>

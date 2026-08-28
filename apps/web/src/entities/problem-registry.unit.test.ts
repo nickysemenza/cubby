@@ -70,8 +70,10 @@ describe("Problem Query registry", () => {
       expect(definition.actions).toEqual(problemActionsFor(definition.key));
       for (const action of definition.actions) {
         if (action.scope === "item") {
+          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
           expect(["item", "guided-flow"]).toContain(action.target);
         } else {
+          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
           expect(["canonical-query", "global-backfill"]).toContain(
             action.target,
           );
@@ -172,6 +174,7 @@ describe("Problem Query registry", () => {
         decodeFilters(specs, encoded).map((f) => [f.id, f.value]),
       );
 
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(
         buildFiltersFromManifest(specs, (columnId) => decoded.get(columnId)),
         definition.key,

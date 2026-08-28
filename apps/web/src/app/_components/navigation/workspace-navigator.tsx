@@ -8,6 +8,7 @@ import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { cn } from "~/lib/utils";
 
 import { domainWayfinding } from "./domain-wayfinding";
@@ -195,7 +196,7 @@ export function WorkspaceNavigator({
         <div className="relative">
           <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            autoFocus
+            ref={focusOnMount}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find a destination…"

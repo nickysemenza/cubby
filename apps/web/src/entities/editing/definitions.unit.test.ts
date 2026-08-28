@@ -44,6 +44,7 @@ describe("entity edit definitions", () => {
           [string, EntityEditIntentDefinition<EditableEntity, never>]
         >) {
           if (operation !== "delete") {
+            // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
             expect(
               capability.fields.length,
               `${entity} ${operation}/${intent}`,

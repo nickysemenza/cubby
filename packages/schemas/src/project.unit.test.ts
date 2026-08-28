@@ -353,6 +353,7 @@ describe("describeAttentionItem", () => {
 
   it("names its entity in every rule's sentence", () => {
     for (const [label, item] of cases) {
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(describeAttentionItem(item), label).toContain(`"${item.name}"`);
     }
   });

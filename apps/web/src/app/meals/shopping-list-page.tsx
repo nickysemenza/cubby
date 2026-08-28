@@ -166,6 +166,7 @@ export function ShoppingListPage({
                   render={
                     <button
                       type="button"
+                      aria-label={`Toggle ${m.name || format(parseISO(m.date), "EEE M/d")}`}
                       onClick={() => toggleExcluded(m.id)}
                     />
                   }

@@ -200,6 +200,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     presentationState.listBulkActions.onRowSelectionChange?.((current) =>
       reconcileRowSelection(current, availableRowIds),
     );
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
   // Boolean for the columns (does a selection column exist at all), predicate

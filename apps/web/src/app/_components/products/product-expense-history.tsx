@@ -215,7 +215,6 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
       }));
   }, [expenses]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       expenseDateColumn(helper, async (date, expense) => {
@@ -274,6 +273,7 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
         await update.mutateAsync({ id: expense.id, data: { future } });
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, quantityEditorExpenseId, rowProjectOptions, rowVendorOptions],
   );
 

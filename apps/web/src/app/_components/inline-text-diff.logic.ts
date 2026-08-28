@@ -15,7 +15,7 @@ export const diffWords = (before: string, after: string): DiffSeg[] => {
   const m = b.length;
   // LCS length table.
   const lcs: number[][] = Array.from({ length: n + 1 }, () =>
-    new Array<number>(m + 1).fill(0),
+    Array.from<number>({ length: m + 1 }).fill(0),
   );
   for (let i = n - 1; i >= 0; i--) {
     for (let j = m - 1; j >= 0; j--) {

@@ -137,6 +137,7 @@ describe("uniqueness spans soft-deleted rows", () => {
       getDb(ctx.db)
         .insert(location)
         .values({ name: "New Shelf", type: "shelf", shortcode: retired }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 });

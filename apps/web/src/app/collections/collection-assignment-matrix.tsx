@@ -32,6 +32,7 @@ import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
@@ -229,7 +230,7 @@ function NewCollectionDialog({
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="Painting"
-                autoFocus
+                ref={focusOnMount}
               />
             </Stack>
             <Stack gap="xs">

@@ -124,7 +124,6 @@ export function InventoryItemList() {
   // updateMutation is NOT in the dependency array because useMutation returns
   // a new object every render — the closure captures mutateAsync correctly,
   // and it's functionally stable across renders.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       columnHelper.accessor((row) => row.product.id, {
@@ -263,6 +262,7 @@ export function InventoryItemList() {
         mobile: { slot: "meta", priority: 60 },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
     [columnHelper],
   );
 

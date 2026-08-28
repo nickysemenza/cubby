@@ -26,7 +26,7 @@ export const ProductNotesMarkdown: FC<{
     <MarkdownText
       componentOverrides={{
         a: (props: ElementProps<"a">) => {
-          const { href, ...rest } = clean(props);
+          const { children, href, ...rest } = clean(props);
           const doc = href
             ? documents.find(
                 (d) => href === d.url || href.startsWith(`${d.url}#`),
@@ -45,7 +45,9 @@ export const ProductNotesMarkdown: FC<{
                   e.preventDefault();
                   onManualLink(doc.id, pageFromManualHref(href ?? ""));
                 }}
-              />
+              >
+                {children}
+              </a>
             );
           }
           return (
@@ -55,7 +57,9 @@ export const ProductNotesMarkdown: FC<{
               className={markdownAnchorClass}
               target="_blank"
               rel="noopener noreferrer"
-            />
+            >
+              {children}
+            </a>
           );
         },
       }}

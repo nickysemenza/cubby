@@ -53,9 +53,9 @@ export function LedgerFilters<TData extends RowData>({
     .filter((column) => column.columnDef.meta?.filterConfig)
     .map((column) => column.id)
     .join("|");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: filterColumnsKey is the late-materializing TanStack v9 signal described above
   const fields = useMemo(
     () => getLedgerFields(table, optionHints),
+    // oxlint-disable-next-line react/exhaustive-deps -- filterColumnsKey is the late-materializing TanStack v9 signal described above
     [table, table.options.columns, optionHints, filterColumnsKey],
   );
   const externalColumnFilters = table.state.columnFilters;

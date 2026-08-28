@@ -27,6 +27,7 @@ describe("UPC validation", () => {
     "ABCDEFGHIJKL",
     "12345678901A",
   ])("rejects %s", (input) => {
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => upc.parse(input)).toThrow();
   });
 });
@@ -39,8 +40,11 @@ describe("NDB number validation", () => {
   });
 
   it("rejects NDB numbers outside range", () => {
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => ndb.parse(999)).toThrow();
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => ndb.parse(100000)).toThrow();
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => ndb.parse(-1)).toThrow();
   });
 });

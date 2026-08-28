@@ -266,7 +266,10 @@ export const traceAllBounded = async <
   }
 
   const entries = Object.entries(tasks);
-  const results: Array<readonly [string, unknown]> = new Array(entries.length);
+  const results = Array.from(
+    { length: entries.length },
+    (): readonly [string, unknown] => ["", undefined],
+  );
   let nextIndex = 0;
 
   const worker = async () => {

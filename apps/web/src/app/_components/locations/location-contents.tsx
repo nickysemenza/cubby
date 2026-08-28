@@ -262,6 +262,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   // signal) — replaces the old Grouped/All toggle + per-type sub-headers.
   const sortedChildren = useMemo(
     () => sortBy(children, [groupRank, (c) => c.type, (c) => c.name]),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [children],
   );
   const childGroupLabel = locationChildGroupLabel(sortedChildren);
@@ -283,6 +284,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
     }
     const codes = eligible.map((c) => c.id).join(",");
     void navigate({ to: "/labels", search: { codes } });
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [children, navigate]);
 
   const handleChildCreated = useCallback(() => {

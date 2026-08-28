@@ -158,9 +158,12 @@ export function ManifestCard({
           ))}
         </div>
       )}
-      {body?.map((block, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: body blocks are a fixed positional list
-        <BodyBlockView key={i} block={block} />
+      {body?.map((block, index) => (
+        <BodyBlockView
+          // oxlint-disable-next-line react/no-array-index-key -- Manifest body blocks are a fixed positional presentation list without stable ids.
+          key={index}
+          block={block}
+        />
       ))}
     </div>
   );

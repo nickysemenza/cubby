@@ -258,10 +258,10 @@ export function ParentPicker({
               const sessionCount = flattenAuditableLocations(location).length;
               const expanded = expandedIds.has(location.id) || searching;
               return (
-                // biome-ignore lint/a11y/useSemanticElements: This row contains a separate expand button, so it cannot be a native button.
                 <div
-                  key={location.id}
+                  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- This composite tree row contains a separate disclosure button, so a native button would create invalid nested controls.
                   role="button"
+                  key={location.id}
                   tabIndex={0}
                   onClick={() => onSelect(location.id)}
                   onKeyDown={(event) => {

@@ -198,11 +198,12 @@ export function ShoppingMatrix({
                 )}
                 {blocked && (
                   <span
-                    role="img"
                     title={`Missing ingredients from ${blocked.join(", ")}`}
-                    aria-label={`Incomplete: ${blocked.join(", ")}`}
                   >
-                    <TriangleAlert className="size-3 shrink-0 text-warning" />
+                    <TriangleAlert
+                      aria-label={`Incomplete: ${blocked.join(", ")}`}
+                      className="size-3 shrink-0 text-warning"
+                    />
                   </span>
                 )}
               </Row>

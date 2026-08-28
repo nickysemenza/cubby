@@ -61,10 +61,10 @@ function ChipRow({
   children: ReactNode;
 }) {
   return (
-    <Row align="center" wrap gap="sm" role="group" aria-label={label}>
-      <span className="text-xs font-medium text-muted-foreground">
+    <Row as="fieldset" align="center" wrap gap="sm">
+      <legend className="text-xs font-medium text-muted-foreground">
         {label}:
-      </span>
+      </legend>
       {children}
       {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
     </Row>

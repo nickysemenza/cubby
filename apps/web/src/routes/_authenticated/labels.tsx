@@ -87,6 +87,7 @@ function LabelsPage() {
   const labelItems = useMemo(
     () =>
       exportItems.map((item) => ({ ...item, qrUrl: qrUrls[item.shortcode] })),
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [exportItems, qrUrls],
   );
 

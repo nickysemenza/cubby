@@ -101,7 +101,7 @@ function TidyTree({ data }: TidyTreeProps) {
   const links = useMemo(() => root.links(), [root]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: D3 visualization pan/zoom interaction
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- The D3 viewport supports pointer pan and wheel zoom while its textual tree remains available elsewhere.
     <div
       ref={containerRef}
       className="h-[600px] w-full cursor-grab overflow-hidden border border-[var(--border)] active:cursor-grabbing"
@@ -121,7 +121,7 @@ function TidyTree({ data }: TidyTreeProps) {
           transform={`translate(${offsetX + transform.x}, ${offsetY + transform.y}) scale(${transform.scale})`}
         >
           {/* Links - curved bezier paths */}
-          {links.map((link, i) => {
+          {links.map((link) => {
             // In d3 tree: x = vertical position, y = horizontal position
             // We swap them for horizontal layout
             const x1 = link.source.y; // horizontal start
@@ -132,8 +132,7 @@ function TidyTree({ data }: TidyTreeProps) {
 
             return (
               <path
-                // biome-ignore lint/suspicious/noArrayIndexKey: d3 links don't have stable IDs
-                key={i}
+                key={`${link.source.data.id}-${link.target.data.id}`}
                 d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
                 fill="none"
                 className="stroke-muted-foreground/50"

@@ -49,7 +49,6 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
     mutationFn: entityMutationOptionsFactory("purchase", "update"),
     entity: "purchase",
   });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       createPlainDateColumn(helper, "date", {
@@ -144,6 +143,7 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
         className: "w-28",
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper],
   );
   const list = useEntityList<PurchaseOut, PurchaseFilters>({

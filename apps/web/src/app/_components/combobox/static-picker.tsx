@@ -19,7 +19,7 @@ interface StaticPickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-  autoFocus?: boolean;
+  openOnMount?: boolean;
   compact?: boolean;
   clearable?: boolean;
 }
@@ -33,7 +33,7 @@ export function StaticPicker({
   placeholder,
   className,
   disabled,
-  autoFocus,
+  openOnMount,
   compact,
   clearable,
 }: StaticPickerProps) {
@@ -60,7 +60,7 @@ export function StaticPicker({
         setValue={(item) => onValueChange(item?.id ?? null)}
         placeholder={placeholder}
         disabled={disabled}
-        autoFocus={autoFocus}
+        openOnMount={openOnMount}
         compact={compact}
         clearable={clearable}
       />

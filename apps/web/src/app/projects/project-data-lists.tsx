@@ -78,7 +78,6 @@ export function ProjectDataTaskList({
   const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("task");
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       taskStatusColumn(helper, async (status, row) => {
@@ -103,6 +102,7 @@ export function ProjectDataTaskList({
         await update.mutateAsync({ id: row.id, data: { trade } });
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, parentOptions],
   );
 
@@ -163,7 +163,6 @@ export function ProjectDataExpenseList({
   const { onRowClick, onRowHover, onRowHoverEnd, PreviewSheet } =
     useEntityPreview("expense");
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       expenseCostColumn(helper, async (cost, row) => {
@@ -194,6 +193,7 @@ export function ProjectDataExpenseList({
         await update.mutateAsync({ id: row.id, data: { future } });
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper],
   );
 

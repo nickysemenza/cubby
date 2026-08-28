@@ -22,7 +22,7 @@ interface UseTableConfigOptions<TData extends RowData> {
   // Note: ColumnDef is invariant in TValue; columns often mix TValue types across accessors.
   // Using `any` here intentionally erases TValue to allow heterogeneous columns while keeping TData strict.
   // This mirrors TanStack's guidance for consumer-facing helpers that don't operate on TValue.
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
+  // oxlint-disable-next-line typescript/no-explicit-any -- intentional
   columns: CubbyColumnDef<TData, any>[];
   tableState: TableStateReturn;
   totalCount: number;

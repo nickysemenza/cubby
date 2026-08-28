@@ -715,6 +715,7 @@ function MatrixTable({
       <thead className="sticky top-[51px] z-30 bg-card">
         <tr className="border-b border-[var(--foreground)]">
           <th
+            aria-label="Tool"
             className={cn(
               STICKY,
               "z-40 w-64 max-w-64 min-w-64 bg-card px-2 pb-1 align-bottom",
@@ -727,6 +728,7 @@ function MatrixTable({
           {data.columns.map((column, columnIndex) => (
             <th
               key={column.projectId}
+              aria-label={column.projectName}
               title={`${column.projectName} · ${column.attachedCount} attached, ${column.suggestedCount} suggested`}
               className={cn(
                 "relative h-28 w-11 min-w-11 overflow-visible border-l border-[var(--border)] bg-card align-bottom",
@@ -777,6 +779,7 @@ function MatrixTable({
         {data.groups.flatMap((group) => [
           <tr key={`group-${group.key}`} className="bg-muted/40">
             <td
+              aria-label={group.label}
               colSpan={columnSpan}
               className={cn(
                 STICKY,
@@ -908,7 +911,10 @@ function MatrixTable({
       </tbody>
       <tfoot>
         <tr className="border-t border-[var(--foreground)]">
-          <td className={cn(STICKY, "bg-card px-2 py-1")}>
+          <td
+            aria-label="Tool totals"
+            className={cn(STICKY, "bg-card px-2 py-1")}
+          >
             <div className="w-64">
               <span className="eyebrow">{data.rows.length} tools</span>
             </div>
@@ -916,6 +922,7 @@ function MatrixTable({
           {data.columns.map((column, columnIndex) => (
             <td
               key={column.projectId}
+              aria-label={`${column.projectName} attached tools`}
               className={cn(
                 "bg-card text-center font-mono text-2xs tabular-nums",
                 columnIndex % 2 === 1 && "bg-muted/20",
@@ -926,10 +933,14 @@ function MatrixTable({
               )}
             </td>
           ))}
-          <td className={cn(NUMERIC, STICKY_USES, "border-l bg-card")}>
+          <td
+            aria-label="Attached uses total"
+            className={cn(NUMERIC, STICKY_USES, "border-l bg-card")}
+          >
             {data.totals.attachedCells}
           </td>
           <td
+            aria-label="Suggested tools total"
             className={cn(NUMERIC, STICKY_COST_PER_USE, "bg-card")}
             colSpan={2}
           >

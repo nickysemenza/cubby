@@ -21,21 +21,19 @@ function serveApps(): Plugin {
   return {
     name: "mcp-apps-harness",
     configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
+      server.middlewares.use((req, res, next) => {
         if (req.url !== "/app/usda-picker.html") return next();
-        try {
-          const html = await readFile(
-            resolve(__dirname, "..", "dist", "app.html"),
-            "utf-8",
-          );
-          res.setHeader("Content-Type", "text/html");
-          // Same substitution the MCP server does, from the same helper — a
-          // harness that rewrites differently would hide origin bugs.
-          res.end(withCubbyOrigin(html, "https://example.invalid"));
-        } catch {
-          res.statusCode = 404;
-          res.end("run `pnpm --filter @cubby/mcp-apps build` first");
-        }
+        void readFile(resolve(__dirname, "..", "dist", "app.html"), "utf-8")
+          .then((html) => {
+            res.setHeader("Content-Type", "text/html");
+            // Same substitution the MCP server does, from the same helper — a
+            // harness that rewrites differently would hide origin bugs.
+            res.end(withCubbyOrigin(html, "https://example.invalid"));
+          })
+          .catch(() => {
+            res.statusCode = 404;
+            res.end("run `pnpm --filter @cubby/mcp-apps build` first");
+          });
       });
     },
   };

@@ -94,6 +94,7 @@ export function useStagedBulkAction<
         ...values,
         ids: items.map((item) => item.id),
       } as VariablesOf<TFn>)) as DataOf<TFn>,
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, items],
   );
 

@@ -187,9 +187,9 @@ export function useTableState(
       (spec) => urlStateSource[spec.urlKey ?? spec.columnId] ?? null,
     ),
   );
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the serialized values above, not `search`'s reference, on purpose
   const urlOnlyFilters = useMemo(
     () => decodeFilters(urlOnlySpecs, urlStateSource),
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on the serialized values above, not `search`'s reference, on purpose
     [urlOnlySpecs, urlOnlyKey],
   );
   const allFilters = useMemo(
@@ -234,7 +234,6 @@ export function useTableState(
   // Interpret live managed params exactly as the lazy initializers do. This
   // gives Back/Forward and same-route links a canonical comparison target,
   // while absent/invalid values continue to fall back to the caller defaults.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on managed values above, not the router's fresh search-object reference
   const urlState = useMemo(() => {
     const urlFilters = decodeFilters(columnSpecs, urlStateSource);
     const page = syncPaginationToUrl
@@ -257,6 +256,7 @@ export function useTableState(
           Number.isFinite(size) && size > 0 ? size : initialPagination.pageSize,
       },
     };
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on managed values above, not the router's fresh search-object reference
   }, [
     managedSearchKey,
     columnSpecs,

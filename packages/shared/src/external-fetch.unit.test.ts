@@ -22,6 +22,7 @@ describe("external fetch policy", () => {
     "http://[fe90::1]/file",
     "http://[fd00::1]/file",
   ])("rejects %s", (url) => {
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     expect(() => validateExternalHttpUrl(url)).toThrow();
   });
 
@@ -49,6 +50,7 @@ describe("external fetch policy", () => {
     );
     await expect(
       fetchExternalResponse("https://example.com/start", { fetcher }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -76,6 +78,7 @@ describe("external fetch policy", () => {
     expect(assertResponseContentType(response, ["text/html"])).toBe(
       "text/html",
     );
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(readResponseWithLimit(response, 4)).rejects.toThrow();
   });
 });

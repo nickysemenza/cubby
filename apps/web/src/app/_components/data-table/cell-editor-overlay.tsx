@@ -134,7 +134,7 @@ export function CellEditorOverlay({
   if (typeof document === "undefined" || !style) return null;
 
   return createPortal(
-    // biome-ignore lint/a11y/noStaticElementInteractions: propagation guards for row click + table row-nav keys
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- The table-editor portal guards row events; its nested input controls provide interaction semantics.
     <div
       ref={overlayRef}
       data-slot="cell-editor-overlay"

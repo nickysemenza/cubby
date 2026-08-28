@@ -218,7 +218,7 @@ function EditableEntityEditor<TId extends string>({
               // Open + focus the search input on mount. Focus-only: the entity
               // search input is internal state, so a type-to-edit seed char isn't
               // threaded here.
-              autoFocus
+              openOnMount
               compact
               clearable={clearable}
             />

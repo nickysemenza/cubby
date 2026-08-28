@@ -46,15 +46,14 @@ export const buildLocationInventoryBreakdown = (
 
 function LocationInventoryBreakdownSkeleton() {
   return (
-    <div
+    <output
       aria-label="Loading contents breakdown"
-      className="border-y border-border bg-card px-2 py-2 sm:px-4"
-      role="status"
+      className="block border-y border-border bg-card px-2 py-2 sm:px-4"
     >
       <Skeleton className="h-3 w-36" />
       <Skeleton className="mt-2 h-11 w-full" />
       <Skeleton className="mt-px h-11 w-full" />
-    </div>
+    </output>
   );
 }
 

@@ -274,9 +274,12 @@ function RecipeImportCardImpl({
 
         <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
           <Stack gap="sm">
-            {recipe.sections.map((section, si) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-              <Stack key={si} gap="xs">
+            {recipe.sections.map((section, sectionIndex) => (
+              <Stack
+                // oxlint-disable-next-line react/no-array-index-key -- Imported recipe sections are a fixed positional preview without stable ids.
+                key={sectionIndex}
+                gap="xs"
+              >
                 {section.name && (
                   <div className="text-xs font-medium text-muted-foreground">
                     {section.name}
@@ -293,17 +296,24 @@ function RecipeImportCardImpl({
           <Stack gap="sm">
             {recipe.sections.map((section, si) =>
               section.instructions.length > 0 ? (
-                // biome-ignore lint/suspicious/noArrayIndexKey: fixed ordered list
-                <Stack key={si} gap="xs">
+                <Stack
+                  // oxlint-disable-next-line react/no-array-index-key -- Imported recipe sections are a fixed positional preview without stable ids.
+                  key={si}
+                  gap="xs"
+                >
                   {section.name && (
                     <div className="text-xs font-medium text-muted-foreground">
                       {section.name}
                     </div>
                   )}
                   <ol className="list-decimal space-y-1 pl-4 text-xs leading-snug text-muted-foreground">
-                    {richBySection[si]?.map((rich, ii) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: ordered by line
-                      <li key={ii}>{rich}</li>
+                    {richBySection[si]?.map((rich, instructionIndex) => (
+                      <li
+                        // oxlint-disable-next-line react/no-array-index-key -- Instructions are a fixed positional preview, and duplicate lines are valid.
+                        key={instructionIndex}
+                      >
+                        {rich}
+                      </li>
                     ))}
                   </ol>
                 </Stack>

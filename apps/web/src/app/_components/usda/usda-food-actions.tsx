@@ -153,7 +153,7 @@ function LinkFoodToIngredientButton({
                       isLoading={isLoading}
                       onCreateNew={onCreateNew}
                       onOpenChange={onOpenChange}
-                      autoFocus
+                      openOnMount
                       placeholder="Search ingredients…"
                     />
                   )}

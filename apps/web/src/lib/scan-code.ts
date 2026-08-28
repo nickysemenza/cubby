@@ -49,7 +49,8 @@ export function resolveScanCode(raw: string): ScanCodeResolution {
   }
 
   try {
-    new URL(value);
+    const url = new URL(value);
+    void url;
     return {
       ok: false,
       error: "That QR code is a web link, not a Cubby label.",

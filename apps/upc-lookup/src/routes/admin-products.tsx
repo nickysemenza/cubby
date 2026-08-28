@@ -85,7 +85,7 @@ admin.get("/products", async (c) => {
             All sources
           </option>
           {SOURCE_NAMES.map((s) => (
-            <option value={s} selected={source === s}>
+            <option key={s} value={s} selected={source === s}>
               {s}
             </option>
           ))}
@@ -147,10 +147,10 @@ admin.get("/products", async (c) => {
                   <td class="p-3 tabular-nums text-zinc-700">
                     {formatUSD(p.priceDollars)}
                   </td>
-                  <td class="p-3">
+                  <td class="p-3" aria-label="Source">
                     <SourceBadge source={p.source} />
                   </td>
-                  <td class="p-3">
+                  <td class="p-3" aria-label="Actions">
                     <div class="flex items-center justify-end gap-1">
                       <a
                         href={`/admin/products/${p.upc}/edit`}

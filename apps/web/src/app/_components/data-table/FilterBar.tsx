@@ -15,6 +15,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 
@@ -59,7 +60,7 @@ function FilterEditor({
   if (field.type === "text") {
     return (
       <Input
-        autoFocus
+        ref={focusOnMount}
         value={filter.values[0] ?? ""}
         onChange={(event) => update([event.target.value])}
         placeholder={field.placeholder}

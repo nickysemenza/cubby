@@ -207,6 +207,7 @@ describe("computeInventoryValuation", () => {
   it.each(CASES)("$name", ({ amount, mappings, expected }) => {
     const result = computeInventoryValuation(amount, mappings);
     expect(result).toBe(expected);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (result !== null) expect(Number.isFinite(result)).toBe(true);
   });
 

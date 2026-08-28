@@ -95,7 +95,6 @@ export const BulkDiscardInventoryDialog: FC<
   // so an unrelated invalidation hands back a new array for the same selection
   // and would otherwise wipe in-progress quantity edits.
   const selectionKey = items.map((item) => item.id).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on selectionKey, not the array identity
   useEffect(() => {
     if (!open) return;
     setError(null);
@@ -104,6 +103,7 @@ export const BulkDiscardInventoryDialog: FC<
       reason: form.getValues("reason"),
       quantities: defaultQuantities(items),
     });
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on selectionKey, not the array identity
   }, [selectionKey, open, form]);
 
   const quantities = form.watch("quantities");

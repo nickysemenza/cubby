@@ -88,7 +88,7 @@ afterEach(() => {
   mocks.commandRemove.mockReset();
 });
 
-// biome-ignore lint/suspicious/noExplicitAny: reading props off a memoized dialog element for assertions
+// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
 type AnyDialogElement = ReactElement<any>;
 
 describe("useOptimisticDelete", () => {

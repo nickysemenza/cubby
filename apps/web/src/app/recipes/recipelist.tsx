@@ -184,7 +184,6 @@ export function RecipeList({
 
   // Inline name editing on the hook-prepended name column. Stable reference
   // required (feeds the columns memo); the mutation's mutateAsync is stable.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
   const nameEditable = useMemo(
     () => ({
       onSave: async (newName: string, recipe: RecipeListItem) => {
@@ -194,13 +193,13 @@ export function RecipeList({
         });
       },
     }),
+    // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
     [],
   );
 
   // Memoize columns; updateRecipeMutation is NOT in dependencies because
   // useMutation returns a new object every render, but the closure captures
   // it correctly — see productlist.tsx for the same pattern.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateRecipeMutation changes every render but is functionally stable
   const columns = useMemo(() => {
     // Inline-editable, copy/pastable tags column. The cellData drives both the
     // range copy/paste engine (meta.cellData) and the focused-cell clipboard
@@ -478,6 +477,7 @@ export function RecipeList({
         },
       }),
     ];
+    // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
   }, [columnHelper]);
 
   const deletableConfig = useDeletableConfig({

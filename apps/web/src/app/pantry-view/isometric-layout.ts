@@ -351,7 +351,7 @@ export function buildRooms(
       }
 
       // Skip zones with no pieces, or zones where ALL pieces are empty ghosts
-      if (pieces.length === 0 || pieces.every((p) => p.isEmpty)) continue;
+      if (pieces.every((p) => p.isEmpty)) continue;
 
       let totalItems = 0;
       for (const p of pieces) totalItems += p.items.length;
@@ -601,8 +601,8 @@ function layoutRoomsGrid(rooms: RoomData[]) {
   const numRows = Math.ceil(rooms.length / cols);
 
   // Calculate max dimensions per row/col for alignment
-  const rowMaxD: number[] = new Array(numRows).fill(0);
-  const colMaxW: number[] = new Array(cols).fill(0);
+  const rowMaxD = Array.from<number>({ length: numRows }).fill(0);
+  const colMaxW = Array.from<number>({ length: cols }).fill(0);
 
   // r ∈ [0, numRows), c ∈ [0, cols); rowMaxD/colMaxW sized to exactly those
   for (let i = 0; i < rooms.length; i++) {

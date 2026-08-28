@@ -24,7 +24,7 @@ const setup = () =>
   renderHook(() =>
     useStagedBulkAction<Row, () => { mutationFn: () => Promise<unknown> }>({
       verb: "setTrade",
-      // biome-ignore lint/suspicious/noExplicitAny: the mutation is mocked wholesale
+      // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
       mutationFn: (() => ({})) as any,
     }),
   );

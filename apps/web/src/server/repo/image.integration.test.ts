@@ -75,6 +75,7 @@ describe("image repository", () => {
       updateImage(ctx.db, "00000000-0000-0000-0000-000000000000", {
         filename: "nope.jpg",
       }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
   });
 
@@ -215,6 +216,7 @@ describe("image repository", () => {
       size: 512,
     });
 
+    // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     await expect(markImageUploaded(ctx.db, uploaded.id)).rejects.toThrow();
   });
 

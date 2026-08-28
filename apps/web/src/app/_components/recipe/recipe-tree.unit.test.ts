@@ -335,6 +335,7 @@ describe("buildRecipeTree", () => {
     if (bRow?.kind !== "subrecipe") throw new Error("expected subrecipe");
     const aStub = firstRows(bRow.child)[0];
     expect(aStub?.kind).toBe("stub");
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (aStub?.kind === "stub") expect(aStub.reason).toBe("cycle");
   });
 
@@ -348,6 +349,7 @@ describe("buildRecipeTree", () => {
     );
     const row = firstRows(tree)[0];
     expect(row?.kind).toBe("stub");
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (row?.kind === "stub") expect(row.reason).toBe("missing");
   });
 });

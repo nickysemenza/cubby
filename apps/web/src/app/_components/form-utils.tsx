@@ -662,7 +662,7 @@ export function UnifiedTextField<
   placeholder,
   nullable = false,
   getIcon,
-  autoFocus = false,
+  focusOnMount = false,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -671,7 +671,7 @@ export function UnifiedTextField<
   nullable?: boolean;
   getIcon?: (value: string | null) => ReactNode;
   /** Focus this field on mount — e.g. a quick-add dialog's name field. */
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
 }) {
   return (
     <Controller
@@ -692,6 +692,7 @@ export function UnifiedTextField<
             error={fieldState.error}
           >
             <div className="relative">
+              {/* oxlint-disable jsx-a11y/no-autofocus -- Quick-add dialogs intentionally focus their primary field when requested. */}
               <Input
                 id={name}
                 placeholder={placeholder}
@@ -705,8 +706,9 @@ export function UnifiedTextField<
                   icon ? "pr-10" /* tight: clears absolute icon */ : undefined
                 }
                 aria-invalid={fieldState.invalid}
-                autoFocus={autoFocus}
+                autoFocus={focusOnMount}
               />
+              {/* oxlint-enable jsx-a11y/no-autofocus */}
               {icon && (
                 <span className="absolute inset-y-0 right-3 flex items-center">
                   {icon}

@@ -8,7 +8,6 @@ export function PrintStyles({
   const n = layout.labelsPerSheet;
   return (
     <style
-      // biome-ignore lint/security/noDangerouslySetInnerHtml: static print CSS
       dangerouslySetInnerHTML={{
         __html: `
           @media print {

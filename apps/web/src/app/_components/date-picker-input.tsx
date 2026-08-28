@@ -39,7 +39,7 @@ interface DatePickerInputProps {
   /** Show a clear (X) affordance when text is present. Default `false`. */
   clearable?: boolean;
   /** Focus the editable text input on mount. */
-  autoFocus?: boolean;
+  focusOnMount?: boolean;
   /** Seed text used by spreadsheet-style type-to-edit. */
   initialText?: string;
   id?: string;
@@ -70,7 +70,7 @@ export function DatePickerInput({
   onChange,
   placeholder = "Type or select date…",
   clearable = false,
-  autoFocus = false,
+  focusOnMount = false,
   initialText,
   id,
   name,
@@ -104,8 +104,8 @@ export function DatePickerInput({
   }, [value]);
 
   useEffect(() => {
-    if (autoFocus) inputRef.current?.focus();
-  }, [autoFocus]);
+    if (focusOnMount) inputRef.current?.focus();
+  }, [focusOnMount]);
 
   const draftDate = useMemo(() => {
     const parsed = parsePlainDateInput(draft);
@@ -200,7 +200,6 @@ export function DatePickerInput({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: composite focus boundary commits when focus leaves its input and action buttons */}
       <div
         ref={rootRef}
         className={cn("w-full min-w-0", className)}

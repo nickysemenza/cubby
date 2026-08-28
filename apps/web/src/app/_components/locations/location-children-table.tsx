@@ -170,9 +170,9 @@ export function LocationChildrenTable({
   // Reveal deep matches while filtering by name, then collapse back — the
   // projects WBS tree does the same.
   const searching = Boolean(table.getColumn("name")?.getFilterValue());
-  // biome-ignore lint/correctness/useExhaustiveDependencies: table identity churns every render; the toggle is keyed on `searching`
   useEffect(() => {
     table.toggleAllRowsExpanded(searching);
+    // oxlint-disable-next-line react/exhaustive-deps -- table identity churns every render; the toggle is keyed on `searching`
   }, [searching]);
 
   const allExpanded = table.getIsAllRowsExpanded();

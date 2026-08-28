@@ -254,20 +254,20 @@ export async function householdContributionLedger(
       row.costCents === null ? [] : [BigInt(row.costCents)],
     ),
   );
-  const consumedTotalCents = sum([
-    ...[...balances.values()].map((row) => row.consumed),
-  ]);
+  const consumedTotalCents = sum(
+    [...balances.values()].map((row) => row.consumed),
+  );
   const fundedTotalCents = sum(
     [...balances.values()].map((row) => row.initiallyOutlaid),
   );
   const transferNetCents = sum(
     [...balances.values()].map((row) => row.sent - row.received),
   );
-  const positionNetCents = sum([
-    ...[...balances.values()].map(
+  const positionNetCents = sum(
+    [...balances.values()].map(
       (row) => row.initiallyOutlaid + row.sent - row.received - row.consumed,
     ),
-  ]);
+  );
   const unpricedGaps: Gap[] = expenseFacts
     .filter((row) => row.costCents === null)
     .map((row) => ({

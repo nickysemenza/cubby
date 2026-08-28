@@ -59,6 +59,7 @@ describe("resolveScanCode", () => {
   ])("rejects unsupported input %j", (raw, message) => {
     expect(resolveScanCode(raw)).toMatchObject({ ok: false });
     const result = resolveScanCode(raw);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (!result.ok) expect(result.error).toContain(message);
   });
 });
@@ -125,6 +126,7 @@ describe("resolveProductScan", () => {
   it("no longer sends location labels to an imaginary bin scanner", () => {
     const result = resolveProductScan("LOC-4K7M");
     expect(result.ok).toBe(false);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (!result.ok) expect(result.error).not.toContain("bin scanner");
   });
 });

@@ -93,7 +93,6 @@ function PurchaseExpenseRows({
     entityLabel: "Expense",
     entity: "expense",
   });
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrappers are functionally stable
   const columns = useMemo(() => {
     const shared = [
       expenseCostColumn(
@@ -147,6 +146,7 @@ function PurchaseExpenseRows({
         });
       }),
     ];
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrappers are functionally stable
   }, [helper, kind]);
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",

@@ -278,12 +278,14 @@ describe("mutation side effects manifest", () => {
   });
 
   it("rejects mismatched entity ids", () => {
-    expect(() =>
-      mutationSideEffectEventSchema.parse({
-        action: "updated",
-        entity: { entityType: "product", entityId: "not-a-uuid" },
-        source: "test.product",
-      }),
+    expect(
+      () =>
+        mutationSideEffectEventSchema.parse({
+          action: "updated",
+          entity: { entityType: "product", entityId: "not-a-uuid" },
+          source: "test.product",
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });
 

@@ -14,6 +14,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
+import { focusOnMount } from "~/hooks/focus-on-mount";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { search } from "~/lib/search.functions";
@@ -136,7 +137,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                 );
             }}
             className="min-h-11 pl-6 md:min-h-0"
-            autoFocus
+            ref={focusOnMount}
           />
         </div>
         <SearchFilter
@@ -245,7 +246,11 @@ function SearchFilter({
           variant={option.value === value ? "default" : "outline"}
           className="min-h-11 min-w-11 shrink-0 cursor-pointer px-2 py-1 text-xs md:min-h-0 md:min-w-0"
           render={
-            <button type="button" onClick={() => onChange(option.value)} />
+            <button
+              type="button"
+              aria-label={`Filter by ${option.label}`}
+              onClick={() => onChange(option.value)}
+            />
           }
         >
           {option.label}

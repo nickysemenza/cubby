@@ -36,7 +36,7 @@ import { buildWishWhere } from "~/server/repo/wish";
  *
  * Arity is deliberately NOT normalized. Some builders are sync, some async,
  * some need `db` for id-set subqueries. `await` on a non-promise is free, and a
- * ceremonial unused `db` would be dead weight (biome's `noUnusedVariables` is
+ * ceremonial unused `db` would be dead weight (Oxlint's `no-unused-vars` is
  * an error). The contract that IS uniform: exported, returns the complete
  * clause for the filters given, takes no caller-supplied predicate fragment,
  * and `{}` means unfiltered. TypeScript checks each thunk against the real

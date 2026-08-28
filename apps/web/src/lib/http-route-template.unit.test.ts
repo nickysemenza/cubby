@@ -36,6 +36,7 @@ describe("httpRouteTemplate", () => {
     expect(routePatterns.length).toBeGreaterThan(0);
     for (const routePattern of new Set(routePatterns)) {
       if (!routePattern) continue;
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(
         httpRouteTemplate(makeConcretePath(routePattern)),
         routePattern,

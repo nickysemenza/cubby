@@ -94,6 +94,7 @@ describe("entity manifest", () => {
     expect(hard).toEqual(["image"]);
     for (const entity of allEntities) {
       if (entityManifest[entity].lifecycle.delete?.mode === "soft") {
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect(entityManifest[entity].softDelete).toBe(true);
       }
     }
@@ -102,6 +103,7 @@ describe("entity manifest", () => {
   it("every gallery-bearing entity references `image`", () => {
     for (const entity of allEntities) {
       if (entityManifest[entity].hasImages) {
+        // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
         expect(entityReferences(entity)).toContain("image");
       }
     }

@@ -108,13 +108,13 @@ export const ProductBulkAddToInventoryDialog: FC<
   // live list data, so an unrelated invalidation hands back a new array for
   // the same selection and would otherwise wipe in-progress quantity edits.
   const selectionKey = products.map((product) => product.id).join(",");
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on selectionKey, not the array identity
   useEffect(() => {
     if (!open) return;
     form.reset({
       location: form.getValues("location"),
       items: rowsFor(products),
     });
+    // oxlint-disable-next-line react/exhaustive-deps -- keyed on selectionKey, not the array identity
   }, [selectionKey, open, form]);
 
   const location = form.watch("location");

@@ -132,7 +132,6 @@ const Field: FC<{ label: string; children?: Child }> = ({
   label,
   children,
 }) => (
-  // biome-ignore lint/a11y/noLabelWithoutControl: the control is passed in as children
   <label class="block">
     <span class="mb-1 block text-sm font-medium text-zinc-700">{label}</span>
     {children}

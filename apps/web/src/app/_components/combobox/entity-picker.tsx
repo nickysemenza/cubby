@@ -61,7 +61,7 @@ export interface EntityPickerProps<TId extends string> {
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   wide?: boolean;
   compact?: boolean;
-  autoFocus?: boolean;
+  openOnMount?: boolean;
   placeholder?: string;
   clearable?: boolean;
   disabled?: boolean;
@@ -88,7 +88,7 @@ export function EntityPicker<TId extends string>({
   renderItem,
   wide,
   compact,
-  autoFocus,
+  openOnMount,
   placeholder,
   clearable,
   disabled,
@@ -178,8 +178,8 @@ export function EntityPicker<TId extends string>({
   );
 
   React.useEffect(() => {
-    if (autoFocus) changeOpen(true);
-  }, [autoFocus, changeOpen]);
+    if (openOnMount) changeOpen(true);
+  }, [openOnMount, changeOpen]);
 
   const emptyMessage = wrongPrefix
     ? `${normalizedQuery.toUpperCase()} is not a ${ENTITY_CODE[entity]} code.`

@@ -24,7 +24,7 @@ export function VizTooltip({
   onClick?: React.MouseEventHandler<HTMLDivElement>;
 }) {
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: optional click prevention for selected-item tooltips
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- This D3 tooltip wrapper only prevents canvas click-through; its child controls own keyboard behavior.
     <div
       className={cn(
         "pointer-events-none absolute top-4 left-4 z-50 bg-popover px-4 py-2 text-sm ring-1 ring-border",

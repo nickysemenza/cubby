@@ -31,7 +31,9 @@ describe("lookupUPCitemdb status mapping", () => {
 
     expect(result.status).toBe("found");
     if (result.status === "found") {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.data.name).toBe("Widget");
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.data.brand).toBe("Acme");
     }
   });
@@ -74,7 +76,9 @@ describe("lookupUPCitemdb status mapping", () => {
 
     expect(result.status).toBe("found");
     if (result.status === "found") {
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.data.name).toBe("Jackson Steel Wheelbarrow");
+      // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
       expect(result.data.priceDollars).toBeGreaterThan(0);
     }
   });

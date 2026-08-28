@@ -401,6 +401,7 @@ describe("removeEntity — the parent table is derived, not passed", () => {
 });
 
 describe("removeEntity — the type-level lock", () => {
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses an auditKey on a hard-delete child", () => {
     // The directive sits on the declaration because a union mismatch is
     // reported against the whole literal, not the offending property.
@@ -414,6 +415,7 @@ describe("removeEntity — the type-level lock", () => {
     void child;
   });
 
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses a soft-delete child whose table has no deletedAt", () => {
     // @ts-expect-error TaskDependency has no deletedAt, so it cannot be soft-deleted
     const child: ChildCascade = {
@@ -423,6 +425,7 @@ describe("removeEntity — the type-level lock", () => {
     void child;
   });
 
+  // oxlint-disable-next-line vitest/expect-expect -- This is a compile-time @ts-expect-error contract.
   it("refuses ids branded for a different entity", () => {
     const { tx } = recordingTx();
     void removeEntity(tx, {

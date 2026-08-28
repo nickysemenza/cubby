@@ -322,7 +322,10 @@ export const RecipeCompareGrid: React.FC<{
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
-            <th className={`${STICKY} z-20 w-32 px-2 pt-2 pb-2`} />
+            <th
+              aria-label="Recipe"
+              className={`${STICKY} z-20 w-32 px-2 pt-2 pb-2`}
+            />
             {compared.map((c) => {
               const subtitle = sourceLabel(c.recipe.source);
               const hero = c.recipe.images[0]?.url;

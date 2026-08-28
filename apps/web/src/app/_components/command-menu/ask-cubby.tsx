@@ -33,6 +33,7 @@ export function AskCubbyPanel({
   useEffect(() => {
     void agent.ask(query);
     return agent.reset;
+    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [agent.ask, agent.reset, query]);
 
   useEffect(() => {
@@ -90,10 +91,10 @@ function ToolCalls({ calls }: { calls: AgentResult["toolCalls"] }) {
   return (
     <CommandGroup heading="Tool calls">
       <Stack gap="xs" className="px-2 py-1">
-        {calls.map((call, i) => (
+        {calls.map((call, index) => (
           <Row
-            // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
-            key={i}
+            // oxlint-disable-next-line react/no-array-index-key -- Tool calls are an append-only ordered log with no stable id, and duplicate calls are valid.
+            key={index}
             align="center"
             gap="sm"
             className="font-mono text-xs text-muted-foreground"

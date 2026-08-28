@@ -25,6 +25,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     surface: "dialog",
   };
   const session = useEntityEditSession(sessionRequest);
+  const resetSession = session.reset;
   const presentation = getEntityEditorPresentation(
     request as {
       entity: string;
@@ -42,11 +43,11 @@ export function EntityEditDialogContent<E extends EditableEntity>({
     .map((issue) => issue.message);
 
   useEffect(() => {
-    if (open) session.reset();
-  }, [open, session.reset]);
+    if (open) resetSession();
+  }, [open, resetSession]);
 
   const close = () => {
-    session.reset();
+    resetSession();
     onOpenChange(false);
   };
 

@@ -50,6 +50,7 @@ export const Layout: FC<{
         <nav class="flex items-center gap-1 text-sm">
           {NAV.map((item) => (
             <a
+              key={item.key}
               href={item.href}
               class={
                 item.key === active

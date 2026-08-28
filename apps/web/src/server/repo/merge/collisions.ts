@@ -124,7 +124,7 @@ export const foldAssociation = async <
 >(
   tx: DrizzleTransaction,
   args: {
-    // biome-ignore lint/suspicious/noExplicitAny: one helper over several structurally-identical join tables.
+    // oxlint-disable-next-line typescript/no-explicit-any -- One helper serves several structurally-identical join tables.
     table: any;
     /** Property name of the FK being re-pointed, e.g. `"productId"`. */
     column: string;

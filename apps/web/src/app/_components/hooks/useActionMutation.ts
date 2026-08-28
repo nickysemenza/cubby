@@ -9,11 +9,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 
 /** A mutation-options factory supplied by either Start or a specialized transport. */
 export type MutationOptionsFn = (opts: never) => UseMutationOptions<
-  // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
+  // oxlint-disable-next-line typescript/no-explicit-any -- positions only used as inference anchors
   any,
-  // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
+  // oxlint-disable-next-line typescript/no-explicit-any -- positions only used as inference anchors
   any,
-  // biome-ignore lint/suspicious/noExplicitAny: positions only used as inference anchors
+  // oxlint-disable-next-line typescript/no-explicit-any -- positions only used as inference anchors
   any
 >;
 

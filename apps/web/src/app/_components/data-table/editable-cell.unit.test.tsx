@@ -189,7 +189,7 @@ describe("EditableCell component", () => {
   it("stops event propagation on click", () => {
     const parentClick = vi.fn();
     render(
-      // biome-ignore lint/a11y/noStaticElementInteractions: test only
+      // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- This fixture deliberately mirrors the interaction target for event propagation coverage.
       <div onClick={parentClick}>
         <EditableCell
           value="Test"
@@ -481,7 +481,7 @@ describe("overlay behavior", () => {
     const wrapperKeyDown = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
-      // biome-ignore lint/a11y/noStaticElementInteractions: test only
+      // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- This fixture deliberately mirrors the interaction target for event propagation coverage.
       <div onKeyDown={wrapperKeyDown}>
         <EditableCell
           value="Test Value"

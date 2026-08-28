@@ -59,6 +59,7 @@ describe("view manifest", () => {
       const specs = getEntityFilters(entity as never);
       for (const view of views ?? []) {
         const unexpanded = findUnexpandedRangeFilter(specs, view.filters);
+        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(
           unexpanded,
           `view "${entity}/${view.id}" pins range filter "${unexpanded?.id}" = ` +

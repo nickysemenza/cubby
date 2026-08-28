@@ -109,7 +109,6 @@ export function ExpenseList() {
   // real, not errors), so a credit must render distinctly from a charge, same
   // as product/vendor/purchase/project already do. The project + name + url
   // columns stay inline here.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: updateExpenseMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       createExpenseProductImageColumn(columnHelper),
@@ -261,6 +260,7 @@ export function ExpenseList() {
         },
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable
     [columnHelper],
   );
 

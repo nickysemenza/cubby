@@ -49,11 +49,11 @@ export function ArrangeLocationCard({
   return (
     <Row align="center" gap="tight" className="min-w-0">
       <Row
+        as="fieldset"
         ref={(element) => {
           setDragNodeRef(element);
           setDropNodeRef(element);
         }}
-        role="group"
         aria-label={`${node.name} location drop target`}
         align="center"
         gap="tight"

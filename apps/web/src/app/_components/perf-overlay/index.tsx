@@ -106,7 +106,6 @@ export function PerfOverlay() {
     // A third tier the shared helper doesn't have, and shouldn't: when both
     // clipboard paths are blocked, the report is still recoverable because
     // this surface has a console to dump it to.
-    // eslint-disable-next-line no-console
     console.log("[perf] report:\n", json);
     toast.message("Clipboard blocked — perf report logged to console");
   };

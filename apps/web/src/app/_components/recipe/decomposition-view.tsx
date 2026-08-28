@@ -27,20 +27,24 @@ export function DecompositionView({
 
   return (
     <span className={cn("font-mono", className)}>
-      {segments.map((seg, i) =>
+      {segments.map((seg, index) =>
         seg.field ? (
           <span
             className="border-b-2 box-decoration-clone pb-px"
             style={{ borderBottomColor: INGREDIENT_PART_COLOR[seg.field] }}
-            // biome-ignore lint/suspicious/noArrayIndexKey: segments have no stable IDs, order is stable
-            key={i}
+            // oxlint-disable-next-line react/no-array-index-key -- Parsed text segments are positional, may repeat, and carry no stable id.
+            key={index}
             title={seg.field}
           >
             {seg.text}
           </span>
         ) : (
-          // biome-ignore lint/suspicious/noArrayIndexKey: segments have no stable IDs, order is stable
-          <span key={i}>{seg.text}</span>
+          <span
+            // oxlint-disable-next-line react/no-array-index-key -- Parsed text segments are positional, may repeat, and carry no stable id.
+            key={index}
+          >
+            {seg.text}
+          </span>
         ),
       )}
     </span>

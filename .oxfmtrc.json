@@ -15,6 +15,12 @@
   },
   "overrides": [
     {
+      "files": ["**/wrangler.jsonc"],
+      "options": {
+        "trailingComma": "none"
+      }
+    },
+    {
       "files": ["apps/web/src/**/*.{js,jsx,ts,tsx}"],
       "excludeFiles": ["apps/web/src/**/*.gen.{js,jsx,ts,tsx}"],
       "options": {

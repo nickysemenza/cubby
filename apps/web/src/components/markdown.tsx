@@ -76,16 +76,19 @@ const components = {
       </a>
     );
   },
-  img: (props: ElementProps<"img">) => (
-    // Bounded thumbnail so a stray embed degrades gracefully instead of
-    // rendering full-bleed. Project images live in the gallery, not notes.
-    // biome-ignore lint/a11y/useAltText: alt comes through from the markdown source
-    <img
-      className="my-2 max-h-48 w-auto rounded-md"
-      loading="lazy"
-      {...clean(props)}
-    />
-  ),
+  img: (props: ElementProps<"img">) => {
+    const { alt = "", ...rest } = clean(props);
+    return (
+      // Bounded thumbnail so a stray embed degrades gracefully instead of
+      // rendering full-bleed. Project images live in the gallery, not notes.
+      <img
+        alt={alt}
+        className="my-2 max-h-48 w-auto rounded-md"
+        loading="lazy"
+        {...rest}
+      />
+    );
+  },
   code: (props: ElementProps<"code">) => (
     <code
       className="rounded bg-muted px-1 py-0.5 font-mono text-xs" /* tight */
@@ -98,21 +101,30 @@ const components = {
       {...clean(props)}
     />
   ),
-  h1: (props: ElementProps<"h1">) => (
-    <h1
-      className="mb-1 font-heading text-base font-semibold"
-      {...clean(props)}
-    />
-  ),
-  h2: (props: ElementProps<"h2">) => (
-    <h2
-      className="mb-1 font-heading text-base font-semibold"
-      {...clean(props)}
-    />
-  ),
-  h3: (props: ElementProps<"h3">) => (
-    <h3 className="mb-1 font-heading text-sm font-semibold" {...clean(props)} />
-  ),
+  h1: (props: ElementProps<"h1">) => {
+    const { children, ...rest } = clean(props);
+    return (
+      <h1 className="mb-1 font-heading text-base font-semibold" {...rest}>
+        {children}
+      </h1>
+    );
+  },
+  h2: (props: ElementProps<"h2">) => {
+    const { children, ...rest } = clean(props);
+    return (
+      <h2 className="mb-1 font-heading text-base font-semibold" {...rest}>
+        {children}
+      </h2>
+    );
+  },
+  h3: (props: ElementProps<"h3">) => {
+    const { children, ...rest } = clean(props);
+    return (
+      <h3 className="mb-1 font-heading text-sm font-semibold" {...rest}>
+        {children}
+      </h3>
+    );
+  },
   table: (props: ElementProps<"table">) => (
     <div className="mb-2 overflow-x-auto last:mb-0">
       <table className="w-full text-left text-xs" {...clean(props)} />

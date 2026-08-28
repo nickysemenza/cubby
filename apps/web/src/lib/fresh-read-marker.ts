@@ -36,7 +36,7 @@ export function markFreshReads(): void {
 
   const secure =
     typeof location !== "undefined" && location.protocol === "https:";
-  // biome-ignore lint/suspicious/noDocumentCookie: this is the browser transport seam for the short-lived consistency marker
+  // This browser transport seam intentionally writes the short-lived consistency marker.
   document.cookie = [
     `${FRESH_READ_COOKIE_NAME}=1`,
     `Max-Age=${HYPERDRIVE_CACHE_POLICY.freshReadSeconds}`,

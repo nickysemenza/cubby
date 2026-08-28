@@ -71,7 +71,6 @@ export function useIsometricPantry() {
   );
 
   // Auto-fit camera on first data load (uses real container dimensions)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: size triggers re-run on resize
   useEffect(() => {
     if (rooms.length > 0 && camera === null) {
       const container = containerRef.current;
@@ -99,7 +98,6 @@ export function useIsometricPantry() {
   }, []);
 
   // Canvas render — always use the canvas's actual CSS display size for the buffer
-  // biome-ignore lint/correctness/useExhaustiveDependencies: size triggers re-run on resize
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !camera) return;

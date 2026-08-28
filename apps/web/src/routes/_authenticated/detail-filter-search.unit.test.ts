@@ -262,6 +262,7 @@ describe("detail filter link route contracts", () => {
 
     for (const [schema, search, expected] of malformedKnownValues) {
       const result = schema.safeParse(search);
+      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.success, JSON.stringify(search)).toBe(true);
       if (!result.success) continue;
       const parsedSearch = result.data as Record<string, unknown>;

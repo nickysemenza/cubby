@@ -70,6 +70,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
       "weight",
     );
     expect(grams.isOk()).toBe(true);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (grams.isOk()) expect(grams.value.value).toBeCloseTo(22.15, 0);
   });
 
@@ -83,6 +84,7 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
       mappings,
     );
     expect(twoItems.isOk()).toBe(true);
+    // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (twoItems.isOk()) expect(twoItems.value.value).toBeCloseTo(79.98, 2);
   });
 

@@ -396,10 +396,10 @@ function PageHero({
         </div>
         {meta && meta.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
-            {meta.map((item, i) => (
+            {meta.map((item, index) => (
               <span
-                // biome-ignore lint/suspicious/noArrayIndexKey: meta items are positional and have no stable id
-                key={i}
+                // oxlint-disable-next-line react/no-array-index-key -- Hero metadata is a fixed positional display list without stable ids, and labels may repeat.
+                key={index}
                 className="inline-flex items-center gap-1.5" /* tight */
               >
                 {item.icon && <item.icon className="size-3 shrink-0" />}

@@ -171,7 +171,6 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
     [product],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mutation wrapper is functionally stable
   const columns = useMemo(
     () => [
       createSingleEntityInlineLinkColumn(helper, "location", "location", {
@@ -234,6 +233,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
           ),
       }),
     ],
+    // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, product.unitMappings],
   );
 
