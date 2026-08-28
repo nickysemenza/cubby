@@ -91,6 +91,69 @@ afterEach(() => {
 type AnyDialogElement = ReactElement<any>;
 
 describe("useOptimisticDelete", () => {
+  it("optimistically walks infinite pages, then restores totals and rows on failure", async () => {
+    let finishDelete!: (result: {
+      ok: false;
+      issues: { message: string }[];
+    }) => void;
+    mocks.commandRemove.mockReturnValue(
+      new Promise((resolve) => {
+        finishDelete = resolve;
+      }),
+    );
+    const wrapper = createWrapper();
+    const client = clients.at(-1)!;
+    const key = [["product"], { page: "all" }] as const;
+    const original = {
+      pages: [
+        {
+          items: [
+            { id: "PRD-2222", name: "Apples" },
+            { id: "PRD-3333", name: "Bananas" },
+          ],
+          count: 2,
+          meta: { totalCount: 2, cursor: "next" },
+        },
+      ],
+      pageParams: [0],
+    };
+    client.setQueryDefaults(key, { meta: { cacheTags: [["product"]] } });
+    client.setQueryData(key, original);
+    const { result } = renderHook(
+      () =>
+        useOptimisticDelete<TestRow>({
+          deletable: makeDeletable(vi.fn()),
+        }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.requestDelete({ id: "PRD-2222", name: "Apples" });
+    });
+    const dialog = result.current.deleteDialog as AnyDialogElement;
+    let submission!: Promise<void>;
+    act(() => {
+      submission = dialog.props.onSubmit();
+    });
+
+    await waitFor(() =>
+      expect(client.getQueryData(key)).toEqual({
+        pages: [
+          {
+            items: [{ id: "PRD-3333", name: "Bananas" }],
+            count: 1,
+            meta: { totalCount: 1, cursor: "next" },
+          },
+        ],
+        pageParams: [0],
+      }),
+    );
+
+    finishDelete({ ok: false, issues: [{ message: "Delete refused" }] });
+    await expect(submission).rejects.toThrow("Delete refused");
+    await waitFor(() => expect(client.getQueryData(key)).toEqual(original));
+  });
+
   it("publishes delete through the shared lifecycle action contract", () => {
     const mutationFn = vi.fn().mockResolvedValue({});
     const { result } = renderHook(

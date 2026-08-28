@@ -28,7 +28,7 @@ interface SchemaDatabase {
 const PGLITE_HOST = "127.0.0.1";
 const PGLITE_MAX_CONNECTIONS = 16;
 
-export function resolveE2EDatabaseKind(
+function resolveE2EDatabaseKind(
   env: NodeJS.ProcessEnv = process.env,
 ): E2EDatabaseKind {
   const configured = env.CUBBY_E2E_DATABASE;

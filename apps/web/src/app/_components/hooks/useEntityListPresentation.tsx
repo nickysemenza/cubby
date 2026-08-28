@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
@@ -23,6 +22,7 @@ import {
   useTableState,
 } from "../data-table/useTableState";
 import type { RuntimeFilterOptions } from "./filter-option-types";
+import type { DeletableConfig } from "./useDeletableConfig";
 import type { BaseListRow } from "./useEntityList";
 import { useListBulkActions } from "./useListBulkActions";
 import { useOptimisticDelete } from "./useOptimisticDelete";
@@ -36,15 +36,6 @@ import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 // biome-ignore lint/suspicious/noExplicitAny: column accessors intentionally vary.
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 const NO_FILTERS: FilterInput[] = [];
-
-type DeleteConfig = {
-  mutationOptions: (callbacks: {
-    onSuccess: () => void;
-    onError: (err: { message?: string }) => void;
-  }) => unknown;
-  entityLabel: string;
-  entity: Entity;
-};
 
 /** Shared state/action half: it must run before a server adapter fetches rows. */
 export function useEntityListPresentationState<TData extends BaseListRow>({
@@ -60,7 +51,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
 }: {
   entity: BrowserRoutedEntity;
   tableStateOptions?: Parameters<typeof useTableState>[0];
-  deletable?: DeleteConfig;
+  deletable?: DeletableConfig;
   extraActions?: (row: TData) => ReactNode;
   bulkActions?: BulkActionsConfig<TData>;
   onInspectRow?: (row: { id?: string; original: TData }) => void;

@@ -71,8 +71,8 @@ export function useListBulkActions<TData extends { id: string }>({
     includeCatalogActions ? undefined : NO_ENTITY_ACTION_DEFINITIONS,
     additionalActions,
   );
-  const registeredActions = registered.bulkActions.length
-    ? registered.bulkActions
+  const registeredActions = registered.selectionActions.length
+    ? registered.selectionActions
     : (NO_REGISTERED_ACTIONS as readonly BulkAction<TData>[]);
 
   const config = useMemo((): BulkActionsConfig<TData> | undefined => {

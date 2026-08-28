@@ -4,7 +4,6 @@ import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { uniq } from "es-toolkit";
-import { env } from "~/env";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -23,15 +22,12 @@ import {
   loadProductDetailQuantityLedgers,
 } from "~/server/repo/product/quantity-ledger";
 import type { ProductDeepDB } from "~/server/repo/product/types";
-import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { getProductWithFood } from "~/server/services/product.service";
 
 interface ProductDetailReadContext {
   db: Database;
   usdaClient: USDAClient;
 }
 
-export const PRODUCT_DETAIL_READER = env.PRODUCT_DETAIL_READER;
 const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
 
 /** Resolve the relation data needed by Product location rows without N+1 walks. */
@@ -85,22 +81,6 @@ const emptyRecipeUsages = {
   recipeUsages: [],
   appearsInRecipes: [],
 };
-
-export async function readLegacyProductDetail(
-  context: ProductDetailReadContext,
-  shortcode: string,
-): Promise<ProductWithFoodOut | null> {
-  const parsed = parseShortcode(shortcode);
-  if (parsed?.type !== "product") return null;
-  const entityId = await observeOperationPhase(
-    PRODUCT_DETAIL_OPERATION,
-    "resolve",
-    () => resolveLiveShortcode(context.db, shortcode, "product"),
-  );
-  return entityId
-    ? getProductWithFood(context.db, context.usdaClient, entityId)
-    : null;
-}
 
 /**
  * The Product detail read model. The shortcode lookup, local projections,

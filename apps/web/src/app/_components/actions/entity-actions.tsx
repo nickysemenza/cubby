@@ -44,26 +44,8 @@ import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 import { useDiscardInventoryAction } from "./use-discard-inventory-action";
 
 /**
- * The entity action registry: which verbs an entity offers, and what running
- * one does.
- *
- * ## Why this is not the rejected `run`-union sketch
- *
- * `action-verbs.ts` documents an earlier attempt to model the whole action as
- * data with a `run` union, which degenerated into "a handler id the call site
- * had to resolve anyway". This registry stores the *implementation* — a hook
- * that owns its own dialog state and mutation and hands back a ready
- * `BulkAction`, a row-menu node, and the dialog to render. The call site
- * resolves nothing; it renders `dialogs`.
- *
- * That contract is not new: `useOptimisticDelete` has satisfied it for one
- * hard-coded verb since bulk delete shipped, returning
- * `{ deleteBulkAction, combinedExtraActions, deleteDialog, requestDelete }`.
- * All this does is make the list of such hooks resolvable by entity, so a verb
- * declared once reaches every surface that renders that entity.
- *
- * `action-verbs.ts` stays presentation-only — label, icon and tone still come
- * from `verbDef`, and nothing here re-spells them.
+ * Entity action implementations own their dialog state and mutation;
+ * `action-verbs.ts` owns their label, icon, and tone.
  */
 
 /**
@@ -104,9 +86,6 @@ type EntityActionSurface =
   | "inspector"
   | "detail"
   | ActionSurface;
-
-/** `bar` is accepted only while existing declarations migrate to `selection`. */
-type EntityActionSurfaceInput = EntityActionSurface | "bar";
 
 type EntityActionArity = "single" | "multi" | "both";
 type EntityActionGroup = "primary" | "organize" | "lifecycle" | "destructive";
@@ -166,7 +145,7 @@ const compareEntityActions = <
   );
 };
 
-/** Adapt one normalized selection action to the existing table-bar contract. */
+/** Adapt a normalized selection action for `BulkActionBar`. */
 function entityActionBulkAction<TRow extends EntityActionRow>(
   action: ResolvedEntityAction<TRow>,
 ): BulkAction<TRow> {
@@ -183,10 +162,6 @@ function entityActionBulkAction<TRow extends EntityActionRow>(
       action.run(selectedRows.map((row) => row.original)),
   });
 }
-
-const normalizeSurface = (
-  surface: EntityActionSurfaceInput,
-): EntityActionSurface => (surface === "bar" ? "selection" : surface);
 
 const DEFAULT_PLACEMENT: Readonly<
   Record<EntityActionSurface, EntityActionPlacement>
@@ -255,7 +230,7 @@ export interface EntityActionDefinition {
   /** Optional ceiling beyond what `arity` implies. */
   maxSelection?: number;
   /** Defaults to row + selection + inspector + detail. */
-  surfaces?: readonly EntityActionSurfaceInput[];
+  surfaces?: readonly EntityActionSurface[];
   /** Stable cross-surface grouping. */
   group?: EntityActionGroup;
   /** Lower numbers lead within a group. Registry order breaks ties. */
@@ -330,16 +305,9 @@ const entityActions: readonly EntityActionDefinition[] = [
   {
     verb: "addToInventory",
     entities: ["product"],
-    // `both`, and that is the whole point: it was a row-only affordance
-    // repeated on three tables, so stocking an order meant opening the same
-    // dialog once per line and re-picking the same shelf every time.
+    // A selection shares its location while retaining per-row quantities.
     arity: "both",
-    // "detail" included: the action derives the kit over-accounting warning
-    // itself now, so the product page no longer has to keep a bespoke dialog
-    // to be the one caller that can show it.
-    // The dialog collects a location and per-row quantities, so the selection
-    // surface's job ends once the rows are staged — and a cancelled dialog
-    // should leave the operator's selection where they left it.
+    // Cancelling the staged location and quantities leaves selection intact.
     preserveSelection: true,
     group: "primary",
     priority: 100,
@@ -356,9 +324,7 @@ const entityActions: readonly EntityActionDefinition[] = [
     arity: "both",
     group: "lifecycle",
     priority: 100,
-    // The dialog collects a date, a reason and per-row quantities, so the bar's
-    // job ends once the rows are staged — and a cancelled dialog should leave
-    // the operator's selection where they left it.
+    // Cancelling staged discard details leaves selection intact.
     preserveSelection: true,
     use: useDiscardInventoryAction,
   },
@@ -441,7 +407,7 @@ export interface EntityActionCatalogDescriptor
 export const entityActionCatalogDescriptors: readonly EntityActionCatalogDescriptor[] =
   entityActions.map(({ use: _use, surfaces, ...definition }) => ({
     ...definition,
-    surfaces: (surfaces ?? DEFAULT_SURFACES).map(normalizeSurface),
+    surfaces: surfaces ?? DEFAULT_SURFACES,
   }));
 
 const appliesTo = (
@@ -450,14 +416,12 @@ const appliesTo = (
   surface: EntityActionSurface,
 ) =>
   definition.entities.includes(entity) &&
-  (definition.surfaces ?? DEFAULT_SURFACES)
-    .map(normalizeSurface)
-    .includes(surface);
+  (definition.surfaces ?? DEFAULT_SURFACES).includes(surface);
 
 const hasExplicitSurface = (
   definition: EntityActionDefinition,
   surface: EntityActionSurface,
-) => definition.surfaces?.map(normalizeSurface).includes(surface) ?? false;
+) => definition.surfaces?.includes(surface) ?? false;
 
 const selectionBounds = (definition: EntityActionDefinition) => {
   const minSelection = Math.max(
@@ -477,8 +441,6 @@ const selectionBounds = (definition: EntityActionDefinition) => {
 export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
   /** For the selection bar. `single` verbs must opt into the surface. */
   selectionActions: BulkAction<TRow>[];
-  /** Compatibility alias while list consumers migrate to `selectionActions`. */
-  bulkActions: BulkAction<TRow>[];
   /** Catalog-native selection actions, including placement and availability. */
   selectionActionItems: ResolvedEntityAction<TRow>[];
   /**
@@ -487,7 +449,7 @@ export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
    * Typed against the base row rather than `TRow`: definitions only ever see
    * `EntityActionRow`, and parameterizing it here made the value unassignable
    * to the context it is published through, which cost every consumer a cast.
-   * The generic stays on `bulkActions`, where the caller's row type is real.
+   * The generic stays on `selectionActions`, where the caller's row type is real.
    */
   rowMenuItems: (row: EntityActionRow) => ReactNode;
   /** Render once per surface, outside the table. */
@@ -586,8 +548,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
   const selectionActionItems = resolved
     .flatMap(({ definition, handles }) => {
       if (!appliesTo(definition, entity, "selection")) return [];
-      // Preserve the old selection-bar contract: single actions appear there only
-      // when the declaration explicitly opts in, and are then capped at one row.
+      // Single actions require explicit selection placement and cap at one row.
       if (
         definition.arity === "single" &&
         !hasExplicitSurface(definition, "selection")
@@ -677,7 +638,6 @@ export function useEntityActions<TRow extends EntityActionRow>(
 
   return {
     selectionActions,
-    bulkActions: selectionActions,
     selectionActionItems,
     rowMenuItems,
     dialogs,
@@ -791,16 +751,7 @@ export function EntityActionRowMenuItems({
 }
 
 /**
- * A record's declared actions as buttons — the detail-page counterpart to
- * `EntityActionRowMenuItems`.
- *
- * Deliberately not a retrofit of every detail page onto `heroActions`: the
- * twelve detail pages each hand-assemble their own actions today, and rewriting
- * that is a separate job. This slots wherever a page already renders an action
- * — a section `headerAction`, a hero slot — so a verb declared once stops
- * being unreachable from the record's own page.
- *
- * Mounts its own dialogs, so the caller renders nothing else.
+ * Renders a record's declared actions and their dialogs.
  */
 export function EntityActionButtons({
   entity,

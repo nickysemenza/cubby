@@ -30,8 +30,6 @@ export const env = createEnv({
     // suite, so Better Auth's production request limit would reject healthy
     // parallel browser traffic. Never enable this in a deployed Worker.
     E2E_AUTH_TEST_MODE: z.enum(["true", "false"]).default("false"),
-    // Product detail rollout switch; legacy remains the safe default.
-    PRODUCT_DETAIL_READER: z.enum(["legacy", "optimized"]).default("legacy"),
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),
     NOTION_API_KEY: z.string().min(1).optional(),
     PORT: z.coerce.number().int().positive().optional(),
@@ -60,7 +58,6 @@ export const env = createEnv({
     ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
     INSECURE_AUTH_COOKIES: process.env.INSECURE_AUTH_COOKIES,
     E2E_AUTH_TEST_MODE: process.env.E2E_AUTH_TEST_MODE,
-    PRODUCT_DETAIL_READER: process.env.PRODUCT_DETAIL_READER,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
     PORT: process.env.PORT,

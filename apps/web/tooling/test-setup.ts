@@ -6,14 +6,6 @@ import {
 } from "@cubby/schemas/context";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
-  type InventoryShortcode,
-  type LocationId,
-  type LocationShortcode,
-  type ProductId,
-  type ProductShortcode,
-  parseEntityId,
-} from "@cubby/schemas/identifiers";
-import {
   testEntityId,
   testShortcode,
   testUserId,
@@ -144,12 +136,6 @@ export const TEST_ACTOR: ActorContext = {
   userId: testUserId(TEST_USER_ID),
   source: "ui",
 };
-
-/**
- * A syntactically-valid UUID guaranteed absent from a fresh test DB — for
- * "operate on a non-existent entity" assertions.
- */
-export const NONEXISTENT_UUID = "00000000-0000-0000-0000-000000000000";
 
 /**
  * Generate a hash for IntegreSQL template identification.
@@ -478,118 +464,6 @@ const remapDBConfig = (
 
 // NOTE: We use dynamic imports for repo modules to avoid loading env.js
 // during vitest globalSetup phase (before test.env variables are applied)
-
-export interface SeedResult {
-  productIds: Map<string, ProductShortcode>;
-  locationIds: Map<string, LocationShortcode>;
-  inventoryIds: Map<string, InventoryShortcode>;
-}
-
-export interface SeedRow {
-  product_name: string;
-  manufacturer?: string;
-  location_name?: string;
-  quantity?: number;
-  unit?: string;
-  price?: number;
-  expected_qty?: number | null;
-  upc?: string;
-}
-
-/**
- * Seed inventory test data via direct repo calls.
- *
- * Creates products (deduped by name), auto-creates any referenced locations,
- * and places inventory. Returns lookup maps of the created entity IDs.
- *
- * @example
- * ```ts
- * const seed = await seedFromCSV(db, [
- *   { product_name: "Flour", manufacturer: "Brand", location_name: "Pantry", quantity: 5, unit: "lbs" },
- *   { product_name: "Blender", manufacturer: "KitchenAid" }, // product-only (no inventory)
- * ], actor);
- *
- * // Get IDs for assertions or further operations
- * const flourId = seed.productIds.get("Flour")!;
- * const pantryId = seed.locationIds.get("Pantry")!;
- * ```
- */
-export async function seedFromCSV(
-  db: Database,
-  rows: SeedRow[],
-  actor: ActorContext,
-): Promise<SeedResult> {
-  // Dynamic import to avoid loading env.js during globalSetup
-  const { createInventoryEntry } = await import("../src/server/repo/inventory");
-  const { quickCreateProduct } = await import("../src/server/repo/product");
-  const { findOrCreateLocationByName, getLocationById } = await import(
-    "../src/server/repo/location"
-  );
-  const { resolveLiveShortcode } = await import(
-    "../src/server/repo/shortcode-resolver"
-  );
-
-  const productIds = new Map<string, ProductShortcode>();
-  const productEntityIds = new Map<string, ProductId>();
-  const locationIds = new Map<string, LocationShortcode>();
-  const locationEntityIds = new Map<string, LocationId>();
-  const inventoryIds = new Map<string, InventoryShortcode>();
-
-  for (const row of rows) {
-    // Create each unique product once (keyed by name)
-    let productId = productEntityIds.get(row.product_name);
-    if (!productId) {
-      const created = await quickCreateProduct(
-        db,
-        {
-          name: row.product_name,
-          manufacturer: row.manufacturer ?? "(unspecified)",
-          upc: row.upc ?? null,
-          expectedQuantity: row.expected_qty ?? null,
-          price: row.price ?? null,
-        },
-        actor,
-      );
-      const resolved = await resolveLiveShortcode(db, created.id, "product");
-      if (!resolved) throw new Error("seedFromCSV: created product not found");
-      productId = parseEntityId("product", resolved);
-      productEntityIds.set(row.product_name, productId);
-      productIds.set(row.product_name, created.id);
-    }
-
-    // Place inventory only when a location is given (else it's a product-only row)
-    if (row.location_name) {
-      let locationId = locationEntityIds.get(row.location_name);
-      if (!locationId) {
-        const loc = await findOrCreateLocationByName(
-          db,
-          row.location_name,
-          TEST_HOME_ID,
-          "room", // type - default to room for test locations
-        );
-        locationId = loc.locationId;
-        locationEntityIds.set(row.location_name, locationId);
-        locationIds.set(
-          row.location_name,
-          (await getLocationById(db, locationId))!.id,
-        );
-      }
-
-      const created = await createInventoryEntry(
-        db,
-        {
-          productId,
-          locationId,
-          amount: { value: row.quantity ?? 1, unit: row.unit ?? "each" },
-        },
-        actor,
-      );
-      inventoryIds.set(`${row.product_name}@${row.location_name}`, created.id);
-    }
-  }
-
-  return { productIds, locationIds, inventoryIds };
-}
 
 export async function seedEntity<E extends ShortcodeEntity>(
   db: Database,

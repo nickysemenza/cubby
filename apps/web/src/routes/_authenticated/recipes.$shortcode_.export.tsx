@@ -45,7 +45,7 @@ import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { pageTitle } from "~/lib/page-title";
 import { recipeExportSearchSchema } from "./-recipe-export-search";
 
-export type ExportFormat = "prep" | "read" | "nested" | "matrix" | "flow";
+type ExportFormat = "prep" | "read" | "nested" | "matrix" | "flow";
 
 const FORMAT_OPTIONS: ViewSwitcherOption<ExportFormat>[] = [
   { value: "prep", label: "Prep sheet", icon: ListChecks },

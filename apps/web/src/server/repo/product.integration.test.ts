@@ -5,9 +5,10 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
+import type { FoodSummary } from "@cubby/usda-schemas";
 import { and, eq, sql } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   image,
   inventoryEntry,
@@ -15,6 +16,7 @@ import {
   locationImage,
   productExternalId,
   productImage,
+  product as productTable,
   productUnitMappings,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -38,7 +40,7 @@ import {
   setProductsStockTracked,
   updateProduct,
 } from "./product";
-import { readLegacyProductDetail, readProductDetail } from "./product/detail";
+import { readProductDetail } from "./product/detail";
 import { loadProductQuantityLedgers } from "./product/quantity-ledger";
 import { attachProductComponents } from "./product-components";
 import { createProject } from "./project";
@@ -52,9 +54,12 @@ import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
+  createRecipeFixture as createRecipe,
+  ingredientRef,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
+  makeRecipeInput,
 } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
 import { createTask, deleteTasks } from "./task";
@@ -68,11 +73,6 @@ describe("product repository", () => {
   // these as statement ceilings so an accidental N+1 fails deterministically.
   const PRODUCT_DETAIL_QUERY_BUDGET_LEAN = 11;
   const PRODUCT_DETAIL_QUERY_BUDGET_DATA_RICH = 16;
-  // Direct lookup + quantity consolidation remove two statements; the
-  // detail-only quality projection removes five more. Linked ingredients also
-  // avoid the legacy ingredient shortcode re-resolution.
-  const PRODUCT_DETAIL_OPTIMIZED_REDUCTION = 7;
-  const PRODUCT_DETAIL_LINKED_OPTIMIZED_REDUCTION = 8;
 
   const readProductDetailThroughKernel = async (shortcode: string) => {
     // The test context stubs USDA misses; these fixtures deliberately omit
@@ -112,47 +112,15 @@ describe("product repository", () => {
     );
   });
 
-  it("keeps the optimized detail output equal to the legacy reader", async () => {
-    const ingredient = await createIngredient(
-      ctx.db,
-      { name: "Differential Ingredient", aliases: ["diff"] },
-      ctx.actor,
-    );
+  it("returns null for invalid, wrong-entity, unknown, and deleted shortcodes", async () => {
     const product = await createProduct(
       ctx.db,
-      makeProductInput({
-        name: "Differential Product",
-        ingredientId: ingredient.id,
-      }),
+      makeProductInput({ name: "Detail Boundary Product" }),
       ctx.actor,
     );
-    const request = createTestRequestContext(ctx.db, {
-      auth: { userId: ctx.actor.userId },
-    });
-
-    const legacy = await countTestDbQueries(() =>
-      readLegacyProductDetail(
-        { db: ctx.db, usdaClient: request.usdaClient },
-        product.id,
-      ),
-    );
-    const optimized = await countTestDbQueries(() =>
-      readProductDetail(
-        { db: ctx.db, usdaClient: request.usdaClient },
-        product.id,
-      ),
-    );
-
-    expect(optimized.result).toEqual(legacy.result);
-    expect(optimized.queryCount).toBe(
-      legacy.queryCount - PRODUCT_DETAIL_LINKED_OPTIMIZED_REDUCTION,
-    );
-  });
-
-  it("keeps the complete optimized reduction for an unlinked product", async () => {
-    const product = await createProduct(
+    const location = await createLocation(
       ctx.db,
-      makeProductInput({ name: "Unlinked Differential Product" }),
+      makeLocationInput({ name: "Detail Boundary Location" }),
       ctx.actor,
     );
     const request = createTestRequestContext(ctx.db, {
@@ -160,17 +128,16 @@ describe("product repository", () => {
     });
     const context = { db: ctx.db, usdaClient: request.usdaClient };
 
-    const legacy = await countTestDbQueries(() =>
-      readLegacyProductDetail(context, product.id),
-    );
-    const optimized = await countTestDbQueries(() =>
-      readProductDetail(context, product.id),
-    );
+    await expect(readProductDetail(context, "not-a-code")).resolves.toBeNull();
+    await expect(readProductDetail(context, location.id)).resolves.toBeNull();
+    await expect(readProductDetail(context, "PRD-2222")).resolves.toBeNull();
 
-    expect(optimized.result).toEqual(legacy.result);
-    expect(optimized.queryCount).toBe(
-      legacy.queryCount - PRODUCT_DETAIL_OPTIMIZED_REDUCTION,
-    );
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(productTable.id, product.entityId));
+
+    await expect(readProductDetail(context, product.id)).resolves.toBeNull();
   });
 
   it("keeps a data-rich product detail within its query budget", async () => {
@@ -179,10 +146,25 @@ describe("product repository", () => {
       { name: "Query Budget Ingredient", aliases: ["qbi"] },
       ctx.actor,
     );
+    const recipe = await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Query Budget Recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [{ instruction: "Use it" }],
+            ingredients: [ingredientRef(ingredient.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
     const product = await createProduct(
       ctx.db,
       makeProductInput({
         name: "Query Budget Data-Rich Product",
+        manufacturer: "(unspecified)",
         ingredientId: ingredient.id,
         externalIds: [
           {
@@ -198,6 +180,16 @@ describe("product repository", () => {
             url: null,
           },
         ],
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Query Budget Purchase",
+        productId: product.id,
+        productQuantity: 2,
+        cost: 10,
       }),
       ctx.actor,
     );
@@ -232,23 +224,25 @@ describe("product repository", () => {
       },
       ctx.actor,
     );
-    const singleRowMeasured = await countTestDbQueries(() =>
-      readProductDetailThroughKernel(product.id),
-    );
     const request = createTestRequestContext(ctx.db, {
       auth: { userId: ctx.actor.userId },
     });
     const detailContext = { db: ctx.db, usdaClient: request.usdaClient };
-    const optimizedSingleRow = await countTestDbQueries(() =>
+    const singleRow = await countTestDbQueries(() =>
       readProductDetail(detailContext, product.id),
     );
 
+    const garage = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Query Budget Garage", type: "room" }),
+      ctx.actor,
+    );
     const secondShelf = await createLocation(
       ctx.db,
       makeLocationInput({
         name: "Query Budget Second Shelf",
         type: "shelf",
-        parentId: room.id,
+        parentId: garage.id,
       }),
       ctx.actor,
     );
@@ -261,6 +255,28 @@ describe("product repository", () => {
       },
       ctx.actor,
     );
+    const deletedShelf = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Query Budget Deleted Shelf",
+        type: "shelf",
+        parentId: room.id,
+      }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: product.id,
+        locationId: deletedShelf.id,
+        amount: { value: 99, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.id, deletedShelf.entityId));
 
     const measured = await countTestDbQueries(() =>
       readProductDetailThroughKernel(product.id),
@@ -272,14 +288,94 @@ describe("product repository", () => {
     expect(measured.result?.id).toBe(product.id);
     expect(measured.result?.inventoryEntry).toHaveLength(2);
     expect(measured.result?.externalIds).toHaveLength(2);
-    expect(optimized.result).toEqual(measured.result);
-    expect(optimized.queryCount).toBe(optimizedSingleRow.queryCount);
-    expect(measured.queryCount).toBeLessThanOrEqual(
-      singleRowMeasured.queryCount,
+    expect(measured.result?.pricing).toMatchObject({
+      effectivePrice: 5,
+      source: "derived",
+      knownExpenseCount: 1,
+      knownUnitCount: 2,
+    });
+    expect(measured.result?.quantityLedger).toMatchObject({
+      acquiredUnits: 2,
+      exitedUnits: 0,
+      expectedQuantity: 2,
+      locationCount: 0,
+    });
+    expect(measured.result?.onHandUnits).toBe(5);
+    expect(
+      measured.result?.inventoryEntry.map((entry) => [
+        entry.location.name,
+        entry.location.ancestors.at(-1)?.name,
+      ]),
+    ).toEqual([
+      ["Query Budget Shelf", "Query Budget Room"],
+      ["Query Budget Second Shelf", "Query Budget Garage"],
+    ]);
+    expect(measured.result?.dataQuality.gaps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ check: "product_manufacturer" }),
+      ]),
     );
+    expect(measured.result?.recipeUsages).toEqual([
+      expect.objectContaining({
+        recipe: expect.objectContaining({ id: recipe.id, name: recipe.name }),
+      }),
+    ]);
+    expect(optimized.result).toEqual(measured.result);
+    expect(optimized.queryCount).toBe(singleRow.queryCount);
     expect(measured.queryCount).toBeLessThanOrEqual(
       PRODUCT_DETAIL_QUERY_BUDGET_DATA_RICH,
     );
+  });
+
+  it("uses explicit food identifiers while retaining external IDs", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Direct Food Detail",
+        fdc_id: 123456,
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0DIRECTFOOD",
+            url: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const food = {
+      fdc_id: 123456,
+      foodInfo: {
+        data_type: "foundation_food",
+        description: "Direct Test Food",
+      },
+      brandedFoodInfo: null,
+      legacyFoodInfo: null,
+      nutritionInfo: { nutrientSummary: [], nutrientsPer100: {} },
+      portionInfoRaw: [],
+    } satisfies FoodSummary;
+    const request = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    });
+    const findFood = vi
+      .spyOn(request.usdaClient, "findFood")
+      .mockResolvedValue(food);
+
+    const detail = await readProductDetail(
+      { db: ctx.db, usdaClient: request.usdaClient },
+      product.id,
+    );
+
+    expect(findFood).toHaveBeenCalledWith({ kind: "fdc", fdc_id: 123456 });
+    expect(detail?.food).toEqual(food);
+    expect(detail?.externalIds).toEqual([
+      expect.objectContaining({
+        source: "amazon",
+        kind: "asin",
+        externalId: "B0DIRECTFOOD",
+      }),
+    ]);
   });
 
   it("should create a product and retrieve it by ID", async () => {
