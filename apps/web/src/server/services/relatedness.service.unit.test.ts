@@ -1,8 +1,9 @@
 import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 import { searchHitSchema } from "@cubby/schemas/search";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
+import { Database } from "~/server/db/database";
 
 import type { RelatednessDependencies } from "./relatedness.service";
 import {
@@ -16,6 +17,9 @@ const hiddenId = testShortcode("product", "hidden");
 const oneId = testShortcode("product", "one");
 const twoId = testShortcode("product", "two");
 const threeId = testShortcode("product", "three");
+const dependencyOnlyDatabase = new Database(() => {
+  throw new Error("Relatedness unit dependencies must not resolve a database");
+});
 
 const searchHit = (id: string, title: string) =>
   searchHitSchema.parse({
@@ -50,8 +54,6 @@ function dependenciesFor(
 }
 
 describe("getProductRelatedness", () => {
-  const ctx = withTestDb();
-
   it("suppresses dismissed candidates while retaining flat merged evidence", async () => {
     const dependencies = dependenciesFor({
       findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
@@ -72,7 +74,7 @@ describe("getProductRelatedness", () => {
     });
 
     await expect(
-      getProductRelatedness(ctx.db, sourceId, dependencies),
+      getProductRelatedness(dependencyOnlyDatabase, sourceId, dependencies),
     ).resolves.toMatchObject({
       status: "ready",
       items: [
@@ -87,8 +89,6 @@ describe("getProductRelatedness", () => {
 });
 
 describe("getProductTagPropagation", () => {
-  const ctx = withTestDb();
-
   it("proposes only non-collection tags with three semantic-neighbour votes", async () => {
     const dependencies = dependenciesFor({
       findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
@@ -111,7 +111,7 @@ describe("getProductTagPropagation", () => {
     });
 
     await expect(
-      getProductTagPropagation(ctx.db, sourceId, dependencies),
+      getProductTagPropagation(dependencyOnlyDatabase, sourceId, dependencies),
     ).resolves.toEqual({
       status: "ready",
       currentTags: ["already"],
