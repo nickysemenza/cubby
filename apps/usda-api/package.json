@@ -23,12 +23,7 @@
     "types:check": "pnpm types:generate --check",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "generate:openapi:check": "tsx scripts/generate-openapi.ts --check",
-    "lint": "biome lint",
-    "lint:fix": "biome lint --write",
     "typecheck": "tsc --noEmit",
-    "check": "biome check && pnpm typecheck",
-    "format:check": "biome check",
-    "format:write": "biome check --write",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

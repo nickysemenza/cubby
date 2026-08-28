@@ -108,7 +108,7 @@ const document = {
 
 const formatted = spawnSync(
   "pnpm",
-  ["exec", "biome", "format", "--stdin-file-path", outputPath],
+  ["exec", "oxfmt", "--stdin-filepath", outputPath],
   { input: `${JSON.stringify(document, null, 2)}\n`, encoding: "utf8" },
 );
 if (formatted.status !== 0 || !formatted.stdout) {

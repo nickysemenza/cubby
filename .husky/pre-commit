@@ -3,7 +3,7 @@ set -e
 
 # Validate staged files without rewriting the working tree. This preserves the
 # user's staged/unstaged split for partially staged files.
-pnpm exec biome check --staged --error-on-warnings --no-errors-on-unmatched
+pnpm check:staged
 
 # Native TypeScript is now cheap enough that selective orchestration costs more
 # maintenance than it saves.

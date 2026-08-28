@@ -8,9 +8,5 @@
   },
   "files": [
     "brand.css"
-  ],
-  "scripts": {
-    "format:check": "biome check",
-    "format:write": "biome check --write"
-  }
+  ]
 }

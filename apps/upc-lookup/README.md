@@ -27,22 +27,27 @@ the `source` type and the validation enum derive from that array automatically.
 ## Development
 
 ```sh
-pnpm --filter @cubby/upc-lookup run dev:local       # vite dev server
-pnpm --filter @cubby/upc-lookup run check           # biome + typecheck
+pnpm --filter @cubby/upc-lookup run dev             # vite dev server
+pnpm lint                                           # workspace Oxlint
+pnpm format:check                                   # workspace Oxfmt
+pnpm --filter @cubby/upc-lookup run typecheck      # package typecheck
 pnpm --filter @cubby/upc-lookup run test            # vitest run
 pnpm --filter @cubby/upc-lookup run test:watch      # vitest watch
 ```
 
-Root recursive script surfaces include this package and use non-watch commands:
-`pnpm -r check`, plus root `pnpm run typecheck`, `lint`, `format:check`,
-`format:write`, and `test`.
+Workspace quality commands are root-owned: use `pnpm lint`,
+`pnpm format:check`, `pnpm check`, and `pnpm check:all` from the repository
+root. Package-local scripts retain lifecycle, build, typecheck, test, and
+generation commands.
 
 For D1 schema changes:
 
 ```sh
 pnpm --filter @cubby/upc-lookup run db:generate        # after schema edits
 pnpm --filter @cubby/upc-lookup run db:migrate:local   # validate on local D1
-pnpm --filter @cubby/upc-lookup run check
+pnpm lint
+pnpm format:check
+pnpm --filter @cubby/upc-lookup run typecheck
 pnpm --filter @cubby/upc-lookup run test
 pnpm --filter @cubby/upc-lookup run db:migrate:remote  # apply production D1 migrations
 pnpm --filter @cubby/upc-lookup run deploy             # build + wrangler deploy

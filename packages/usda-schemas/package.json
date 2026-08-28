@@ -10,11 +10,6 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "biome lint",
-    "lint:fix": "biome lint --write",
-    "check": "biome check && pnpm typecheck",
-    "format:check": "biome check",
-    "format:write": "biome check --write",
     "test": "vitest run",
     "test:watch": "vitest"
   },

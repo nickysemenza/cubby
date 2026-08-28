@@ -35,7 +35,7 @@ command = "pnpm test:ui"
 [[actions]]
 name = "Integration"
 icon = "test"
-command = "pnpm test:integration"
+command = "pnpm test:integration:postgres"
 
 [[actions]]
 name = "E2E"

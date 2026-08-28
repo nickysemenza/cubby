@@ -1346,11 +1346,11 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
       source:
         generatedHeader +
-        "// biome-ignore format: generated shortcode registry stays one entity per line.\n" +
+        "// Generated shortcode registry stays one entity per line.\n// oxfmt-ignore\n" +
         `export const SHORTCODE_PREFIX = ${compactLiteral(shortcodePrefixes)} as const;\n` +
         "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n\n" +
         "/** Inbound-only aliases; canonical generation never emits these prefixes. */\n" +
-        "// biome-ignore format: generated legacy aliases stay compact.\n" +
+        "// Generated legacy aliases stay compact.\n// oxfmt-ignore\n" +
         `export const LEGACY_SHORTCODE_PREFIX = ${compactLiteral(legacyShortcodePrefixes)} as const satisfies Record<string, ShortcodeType>;\n`,
     },
     {
@@ -1359,7 +1359,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         generatedHeader +
         'import type { Entity } from "../entity";\n' +
         'import type { EntityDescriptor } from "../entity-manifest";\n\n' +
-        "// biome-ignore format: generated data stays one entity per line.\n" +
+        "// Generated data stays one entity per line.\n// oxfmt-ignore\n" +
         `export const generatedEntityManifest = ${compactLiteral(
           Object.fromEntries(entities.map(({ key, descriptor }) => [key, descriptor])),
         )} as const satisfies Record<Entity, EntityDescriptor>;\n`,
@@ -1386,7 +1386,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         " * artifact is two orders of magnitude larger.\n" +
         " */\n" +
         "export type EntityNames = { singular: string; plural: string | null };\n\n" +
-        "// biome-ignore format: generated names stay one entity per line.\n" +
+        "// Generated names stay one entity per line.\n// oxfmt-ignore\n" +
         `export const entityNames = ${compactLiteral(
           Object.fromEntries(
             entities.map(({ key, inspector }) => [
@@ -1436,7 +1436,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  lifecycle: { policy: EntityPortSourceRef | null; runtime: EntityPortSourceRef | null };\n" +
         "  relationMutation: { attach: EntityPortSourceRef | null; detach: EntityPortSourceRef | null };\n" +
         "};\n\n" +
-        "// biome-ignore format: generated inspector metadata stays one entity per line.\n" +
+        "// Generated inspector metadata stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityInspectorMetadata = ${compactLiteral(inspectorMetadata)} as const satisfies Record<Entity, EntityInspectorMetadata>;\n`,
     },
     {
@@ -1452,9 +1452,9 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export type EntityDetailInputByEntity = {\n" +
         `${detailInputTypes}\n` +
         "};\n\n" +
-        "// biome-ignore format: one generated detail schema per entity.\n" +
+        "// One generated detail schema per entity.\n// oxfmt-ignore\n" +
         `const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
-        "// biome-ignore format: one generated detail input variant per entity.\n" +
+        "// One generated detail input variant per entity.\n// oxfmt-ignore\n" +
         `export const entityDetailInputSchema = z.discriminatedUnion(\"entity\", [\n  ${detailInputVariants}\n]);\n\n` +
         "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: unknown): EntityDetailInputByEntity[E];\n" +
         "export function parseEntityDetailInput(entity: DetailEntity, value: unknown): unknown {\n" +
@@ -1475,7 +1475,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/entities/generated/entity-lists.gen.ts",
       source:
         generatedHeader +
-        "// biome-ignore assist/source/organizeImports: generated schema aliases are deterministic.\n" +
+        "// Generated schema aliases retain deterministic import order.\n" +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
         'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
         'import { z } from "zod";\n\n' +
@@ -1526,7 +1526,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "export type EntityMutationOutputByEntity = {\n" +
         `${mutationOutputTypes}\n` +
         "};\n\n" +
-        "// biome-ignore format: one generated mutation output schema per entity.\n" +
+        "// One generated mutation output schema per entity.\n// oxfmt-ignore\n" +
         `const ENTITY_MUTATION_OUTPUT_SCHEMAS = {\n${mutationOutputSchemas}\n} as const;\n\n` +
         "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: unknown): EntityMutationOutputByEntity[E];\n" +
         "export function parseEntityMutationOutput(entity: EntityMutationOutputEntity, value: unknown): unknown {\n" +
@@ -1539,7 +1539,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         `${filterFieldImportSource}\n\n` +
-        "// biome-ignore format: generated filter field assembly stays one entity per line.\n" +
+        "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityFilterFieldMaps: Partial<Record<Entity, Record<string, unknown>>> = {\n${filterFieldBindings}\n};\n`,
     },
     {
@@ -1561,14 +1561,14 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  entity: E,\n" +
         "  schemas: S,\n" +
         ") => ({ idSchema: shortcodeSchema(entity), ...schemas });\n\n" +
-        "// biome-ignore format: generated bindings stay one entity per line.\n" +
+        "// Generated bindings stay one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_BINDINGS = {\n${bindings}\n} satisfies Record<ShortcodeEntity, EntityBinding>;\n\n` +
-        "// biome-ignore format: one generated variant per entity.\n" +
+        "// One generated variant per entity.\n// oxfmt-ignore\n" +
         `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", "create")}\n]);\n\n` +
-        "// biome-ignore format: one generated variant per entity.\n" +
+        "// One generated variant per entity.\n// oxfmt-ignore\n" +
         `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update")}\n]);\n\n` +
         "/** The kernel owns the shared 1-500 unique-id bound, so it injects `ids`. */\n" +
-        "// biome-ignore format: one generated variant per bulk-updatable entity.\n" +
+        "// One generated variant per bulk-updatable entity.\n// oxfmt-ignore\n" +
         `export const generatedEntityBulkUpdateCommandSchema = ${bulkUpdateCommandFactory};\n` +
         "\n" +
         `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
@@ -1579,11 +1579,11 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-        "// biome-ignore format: generated routes stay one entity per line.\n" +
+        "// Generated routes stay one entity per line.\n// oxfmt-ignore\n" +
         `export const generatedBrowserRoutes = ${compactLiteral(
           Object.fromEntries(browserEntities.map((entity) => [entity.key, browserRoutes(entity)])),
         )} as const satisfies Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string } }>>;\n\n` +
-        "// biome-ignore format: generated entity roster stays one line.\n" +
+        "// Generated entity roster stays one line.\n// oxfmt-ignore\n" +
         `export const generatedBrowserCrudEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type GeneratedBrowserCrudEntity = (typeof generatedBrowserCrudEntities)[number];\n",
     },
@@ -1591,11 +1591,11 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/server/generated/entity-kernel-entities.gen.ts",
       source:
         generatedHeader +
-        "// biome-ignore format: generated entity roster stays one line.\n" +
+        "// Generated entity roster stays one line.\n// oxfmt-ignore\n" +
         `export const generatedEntityKernelEntities = ${compactLiteral(kernelEntityKeys)} as const;\n\n` +
-        "// biome-ignore format: generated capabilities stay compact and reviewable.\n" +
+        "// Generated capabilities stay compact and reviewable.\n// oxfmt-ignore\n" +
         `export const generatedEntityKernelContractCases = ${compactLiteral(kernelContractCases)} as const;\n\n` +
-        "// biome-ignore format: generated action rosters stay one line each.\n" +
+        "// Generated action rosters stay one line each.\n// oxfmt-ignore\n" +
         `export const generatedSearchEntityKernelEntities = ${compactLiteral(entitiesForAction("search"))} as const;\n` +
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
     },
@@ -1603,7 +1603,7 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
       relativePath: "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
       source:
         generatedHeader +
-        "// biome-ignore assist/source/organizeImports: generated port aliases are deterministic.\n" +
+        "// Generated port aliases retain deterministic import order.\n" +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
         `${portTypeImports}\n\n` +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
@@ -1614,16 +1614,16 @@ export const renderEntityArtifacts = (entities: readonly EntityLiteral[]): Entit
           )
           .join(", ")}];\n\n` +
         `${runtimeAdapterImportSource}\n\n` +
-        "// biome-ignore format: generated runtime assembly stays one entity per line.\n" +
+        "// Generated runtime assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown> & { readonly __portExportChecks?: EntityPortExportChecks };\n`,
     },
     {
       relativePath: "apps/web/src/server/repo/generated/shortcode-tables.gen.ts",
       source:
         generatedHeader +
-        "// biome-ignore format: generated table imports stay one entity per line.\n" +
+        "// Generated table imports stay one entity per line.\n// oxfmt-ignore\n" +
         `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/schema";\n\n` +
-        "// biome-ignore format: generated table bindings stay one entity per line.\n" +
+        "// Generated table bindings stay one entity per line.\n// oxfmt-ignore\n" +
         `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n`,
     },
   ];
@@ -1759,7 +1759,7 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
         "  rangeExpanders: readonly string[];\n" +
         "};\n\n" +
         "// Generated contract cases keep mechanical filter invariants reviewable.\n" +
-        "// biome-ignore format: generated filter contract cases stay compact.\n" +
+        "// Generated filter contract cases stay compact.\n// oxfmt-ignore\n" +
         `export const generatedEntityFilterContractCases = ${compactLiteral(filterContractCases)} as const satisfies Record<Entity, EntityFilterContractCase>;\n`,
     },
     {
@@ -1768,7 +1768,7 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         'import { urlStringParam } from "~/lib/search-params";\n\n' +
-        "// biome-ignore format: generated data stays one entity per line.\n" +
+        "// Generated data stays one entity per line.\n// oxfmt-ignore\n" +
         `const entityFilterUrlKeyRoster: Partial<Record<Entity, readonly string[]>> = ${compactLiteral(roster)};\n\n` +
         "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
         "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
@@ -1789,7 +1789,7 @@ export const renderFilterArtifacts = (entities: readonly EntityLiteral[]): Entit
         'import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
         `${runtimeImports}\n` +
         'import type { FilterSpec } from "../filter-manifest";\n\n' +
-        "// biome-ignore format: generated runtime filter assembly stays one entity per line.\n" +
+        "// Generated runtime filter assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const generatedEntityFilters = {\n${runtimeRoster}\n} satisfies Record<Entity, readonly FilterSpec[]>;\n`,
     },
   ];
@@ -1800,9 +1800,8 @@ const formatSource = (root: string, artifact: EntityArtifacts): string => {
     "pnpm",
     [
       "exec",
-      "biome",
-      "format",
-      "--stdin-file-path",
+      "oxfmt",
+      "--stdin-filepath",
       artifact.relativePath,
     ],
     { cwd: root, encoding: "utf8", input: artifact.source },

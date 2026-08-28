@@ -122,7 +122,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - **WASM:** `@cubby/recipebridge` wraps Rust [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
 - **Storage:** Cloudflare R2 (S3-compatible) for images
 - **Charts:** Nivo (bar, pie, treemap, sunburst, calendar, line) + d3-force, d3-hierarchy
-- **Tooling:** Biome (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PGlite (fast PostgreSQL contracts) · IntegreSQL (deployment-parity isolation)
+- **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PGlite (fast PostgreSQL contracts) · IntegreSQL (deployment-parity isolation)
 - **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry
 
 ## 📦 Monorepo Layout
@@ -363,13 +363,15 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 |---|---|
 | `pnpm run dev` | Start the web, UPC, and USDA local services |
 | `pnpm run build` | Build all three production Worker bundles |
-| `pnpm run check` | Fast changed-file Biome, TypeScript, entity freshness, and high-risk guards |
-| `pnpm run check:all` | Full-tree Biome/Knip plus Worker/OpenAPI, CI-scope, and security validation |
+| `pnpm run check` | Fast full-tree quality, TypeScript, entity freshness, Knip, and high-risk guards |
+| `pnpm run check:all` | `check` plus Worker/OpenAPI, script-test, and security validation |
 | `pnpm run dedupe:check` | Dependency deduplication; CI runs it only for manifest/workspace/patch/lockfile changes |
 | `pnpm run typecheck` | Recursive package typecheck with `tsc` (TypeScript 7, native) |
-| `pnpm run lint` | Recursive package Biome lint |
-| `pnpm run format:check` | Recursive package Biome format/lint check |
-| `pnpm run format:write` | Recursive package Biome auto-fix |
+| `pnpm run lint` | Full-tree Oxlint |
+| `pnpm run lint:fix` | Full-tree Oxlint auto-fix |
+| `pnpm run format:check` | Full-tree Oxfmt check |
+| `pnpm run format` | Full-tree Oxfmt write |
+| `pnpm run check:staged` | Oxlint/Oxfmt checks for staged files (used by Husky) |
 | `pnpm run test` | Docker-free Vitest unit/UI plus portable PGlite database tests |
 | `pnpm run test:pglite` | PGlite schema contract plus portable repository integration tests |
 | `pnpm run test:integration:postgres` | Full repository integration suite on PostgreSQL/IntegreSQL (requires Docker) |
