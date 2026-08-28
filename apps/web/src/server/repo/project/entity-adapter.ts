@@ -1,6 +1,9 @@
 import { projectSortableFields } from "@cubby/schemas/project";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 
 import {
   createProject,
@@ -22,6 +25,16 @@ export const projectEntityAdapter = defineEntityAdapter({
     create: (ctx, data) => createProject(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) =>
       updateProject(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) => deleteProjects(ctx.db, ids, ctx.actorContext),
+    delete: async (ctx, ids) => {
+      const { detachedImageKeys, deletedImageShortcodes } =
+        await deleteProjects(ctx.db, ids, ctx.actorContext);
+      return {
+        deletedReferences: [
+          ...entityMutationReferences("project", ids),
+          ...entityMutationReferences("image", deletedImageShortcodes),
+        ],
+        detachedImageKeys,
+      };
+    },
   },
 });

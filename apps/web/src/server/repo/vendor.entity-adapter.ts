@@ -5,7 +5,10 @@ import {
   vendorSortableFields,
 } from "@cubby/schemas/vendor";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -32,7 +35,20 @@ export const vendorEntityAdapter = defineEntityAdapter({
       vendorList(ctx.db, filters, sorts, pagination),
     create: (ctx, data) => createVendor(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) => updateVendor(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) => deleteVendors(ctx.db, ids, ctx.actorContext),
+    delete: async (ctx, ids) => {
+      const { detachedImageKeys, deletedImageShortcodes } = await deleteVendors(
+        ctx.db,
+        ids,
+        ctx.actorContext,
+      );
+      return {
+        deletedReferences: [
+          ...entityMutationReferences("vendor", ids),
+          ...entityMutationReferences("image", deletedImageShortcodes),
+        ],
+        detachedImageKeys,
+      };
+    },
   },
   merge: {
     input: mergeVendorsInput,

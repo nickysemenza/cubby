@@ -10,6 +10,7 @@ import { getAppErrorDetails } from "~/lib/error-utils";
 import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import type { StandardEntity } from "../entity-contracts";
+import { countPrimaryDeletedReferences } from "../mutation-results";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
@@ -132,9 +133,7 @@ const executeMutation = async <E extends EditableEntity>(
   if (result.action !== "delete") {
     throw new Error(`${command.entity} delete returned ${result.action}.`);
   }
-  const id = command.ids[0];
-  if (!id) throw new Error(`${command.entity} delete requires an id.`);
-  return { operation: command.operation, id, result };
+  return { operation: command.operation, result };
 };
 
 const executeBulkMutation = async <E extends EditableEntity>(
@@ -294,15 +293,27 @@ export function useEntityCommands<E extends EditableEntity>(
       setIssues([]);
       try {
         const execution = await executeCommand(command);
+        if (execution.operation === "delete") {
+          const deletedReference = execution.result.deletedReferences.find(
+            (reference) => reference.entity === entity,
+          );
+          if (!deletedReference) {
+            throw new Error(`${entity} delete returned no deleted reference.`);
+          }
+          return {
+            ok: true,
+            entity,
+            id: deletedReference.id,
+            changed: true,
+          };
+        }
         const success = {
           ok: true,
           entity,
           id: execution.id,
           changed: true,
         } satisfies Omit<Extract<EntityEditResult<E>, { ok: true }>, "result">;
-        return execution.operation === "delete"
-          ? success
-          : { ...success, result: execution.result };
+        return { ...success, result: execution.result };
       } catch (error) {
         const nextIssues = issuesFromRefusal(getAppErrorDetails(error));
         setIssues(nextIssues);
@@ -364,7 +375,7 @@ export function useEntityCommands<E extends EditableEntity>(
           throw new Error(`${entity} delete returned ${execution.operation}.`);
         }
         return {
-          deleted: execution.result.deleted,
+          deleted: countPrimaryDeletedReferences(execution.result),
           sideEffects: execution.result.sideEffects,
         };
       } catch (error) {
@@ -597,7 +608,7 @@ export function useEntityActionCommands<E extends StandardEntity>(
         throw new Error(result.issues[0]?.message ?? "Bulk update failed");
       }
       return {
-        updated: result.result.updated,
+        updated: result.result.updatedReferences.length,
         sideEffects: result.result.sideEffects,
       };
     },

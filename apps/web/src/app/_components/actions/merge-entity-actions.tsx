@@ -7,11 +7,8 @@ import { vendor } from "~/app/vendors/vendor.functions";
 import { useActionMutation } from "../hooks/useActionMutation";
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
 import { VerbMenuItem } from "./action-verb-ui";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-  EntityActionRow,
-} from "./entity-actions";
+import { defineEntityAction } from "./entity-action-definition";
+import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 type MergeEntity = "ingredient" | "purchase" | "vendor";
 type MergeRow = EntityActionRow & { name: string };
@@ -128,7 +125,7 @@ function useMergePurchasesEntityAction(): EntityActionHandles {
 }
 
 export const mergeEntityActionDefinitions = [
-  {
+  defineEntityAction({
     verb: "merge",
     entities: ["vendor"],
     arity: "both",
@@ -136,8 +133,8 @@ export const mergeEntityActionDefinitions = [
     group: "organize",
     priority: 100,
     use: useMergeVendorsEntityAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "merge",
     entities: ["purchase"],
     arity: "both",
@@ -145,5 +142,5 @@ export const mergeEntityActionDefinitions = [
     group: "organize",
     priority: 100,
     use: useMergePurchasesEntityAction,
-  },
-] as const satisfies readonly EntityActionDefinition[];
+  }),
+] as const;

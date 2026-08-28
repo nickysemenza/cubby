@@ -1,6 +1,9 @@
 import { ledgerTransferSortableFields } from "@cubby/schemas/ledger-transfer";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 
 import {
   createLedgerTransfer,
@@ -23,6 +26,16 @@ export const ledgerTransferEntityAdapter = defineEntityAdapter({
     create: (ctx, data) => createLedgerTransfer(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) =>
       updateLedgerTransfer(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) => deleteLedgerTransfers(ctx.db, ids, ctx.actorContext),
+    delete: async (ctx, ids) => {
+      const { detachedImageKeys } = await deleteLedgerTransfers(
+        ctx.db,
+        ids,
+        ctx.actorContext,
+      );
+      return {
+        deletedReferences: entityMutationReferences("ledgerTransfer", ids),
+        detachedImageKeys,
+      };
+    },
   },
 });

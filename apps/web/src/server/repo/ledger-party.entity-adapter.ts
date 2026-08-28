@@ -4,7 +4,10 @@ import {
 } from "@cubby/schemas/ledger-party";
 import { z } from "zod";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import {
@@ -47,7 +50,12 @@ export const ledgerPartyEntityAdapter = defineEntityAdapter({
     create: (ctx, data) => createLedgerParty(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) =>
       updateLedgerParty(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) => deleteLedgerParties(ctx.db, ids, ctx.actorContext),
+    delete: async (ctx, ids) => {
+      await deleteLedgerParties(ctx.db, ids, ctx.actorContext);
+      return {
+        deletedReferences: entityMutationReferences("ledgerParty", ids),
+      };
+    },
   },
   merge: {
     input: mergeInput,

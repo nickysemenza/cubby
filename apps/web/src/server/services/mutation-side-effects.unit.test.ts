@@ -1,6 +1,6 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import { testEntityId } from "@cubby/schemas/testing";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
@@ -8,6 +8,7 @@ import {
   mutationSideEffectEventSchema,
   mutationSideEffectManifest,
   type MutationSideEffectPorts,
+  runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "./mutation-side-effects";
 
@@ -33,6 +34,7 @@ class InMemoryMutationSideEffectPorts {
   readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
   readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
     [];
+  problemCountsError: Error | null = null;
 
   readonly ports = {
     dispatchBackgroundJobs: async (_db, input) => {
@@ -48,7 +50,10 @@ class InMemoryMutationSideEffectPorts {
       batchId: "valuation-1",
       jobIds: [],
     }),
-    dispatchProblemCountsRefresh: async () => null,
+    dispatchProblemCountsRefresh: async () => {
+      if (this.problemCountsError) throw this.problemCountsError;
+      return null;
+    },
     findInventoryEmbeddingRefsForProducts: async () => this.inventoryRefs,
     findInventoryEmbeddingRefsForLocations: async () => [],
     findRecipeEmbeddingRefsForIngredients: async () => [],
@@ -145,6 +150,40 @@ describe("runMutationSideEffectsForEntities batching", () => {
       ].sort(),
     );
   });
+
+  it("does not reject a committed mutation when Problem-count refresh enqueue fails", async () => {
+    const enqueueError = new Error("BackgroundJobKind is missing");
+    memory.problemCountsError = enqueueError;
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      runMutationSideEffects(
+        db,
+        {
+          action: "updated",
+          entity: {
+            entityType: "project",
+            entityId: testEntityId(
+              "project",
+              "00000000-0000-4000-8000-000000000006",
+            ),
+          },
+          source: "project.update",
+        },
+        memory.ports,
+      ),
+    ).resolves.toHaveLength(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      "problems.counts.refresh.enqueue.failed",
+      expect.objectContaining({
+        source: "project.update",
+        error: enqueueError,
+      }),
+    );
+    consoleError.mockRestore();
+  });
 });
 
 describe("mutation side effects manifest", () => {
@@ -161,7 +200,37 @@ describe("mutation side effects manifest", () => {
     ).toMatchObject({ entity: { entityType: "product" } });
   });
 
+  it("rejects mismatched entity ids", () => {
+    // A product-shaped event must carry a product UUID; accepting a malformed
+    // id would let a side-effect handler enqueue work for an unreachable row.
+    expect(() =>
+      mutationSideEffectEventSchema.parse({
+        action: "updated",
+        entity: { entityType: "product", entityId: "not-a-uuid" },
+        source: "test.product",
+      }),
+    ).toThrow(/Invalid UUID/);
+  });
+
   it("declares lifecycle hooks for every supported entity", () => {
+    expect(Object.keys(mutationSideEffectManifest).sort()).toEqual([
+      "cookbook",
+      "expense",
+      "financialAccount",
+      "financialTransaction",
+      "image",
+      "ingredient",
+      "inventory",
+      "location",
+      "meal",
+      "product",
+      "project",
+      "purchase",
+      "recipe",
+      "task",
+      "vendor",
+      "wish",
+    ]);
     for (const handlers of Object.values(mutationSideEffectManifest)) {
       expect(handlers).toHaveProperty("onCreate");
       expect(handlers).toHaveProperty("onUpdate");

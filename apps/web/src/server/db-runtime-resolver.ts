@@ -47,6 +47,9 @@ export class DatabaseRuntimeResolver {
         role === "strong"
           ? scope.connections.strong
           : scope.connections.boundedStale;
+      // Keep each request within the Worker connection ceiling: five strong
+      // sockets plus one bounded-stale socket, six total. Hyperdrive owns
+      // lifecycle and timeouts; do not add per-session overrides here.
       const runtime = this.#createRuntime(
         connectionString,
         role === "strong" ? 5 : 1,

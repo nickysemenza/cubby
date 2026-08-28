@@ -329,6 +329,8 @@ export type LinkExpensesToPurchaseInput = z.infer<
   typeof linkExpensesToPurchaseInput
 >;
 
+export const MAX_SPLIT_EXPENSE_PARTS = 100;
+
 export const splitExpenseInput = z.object({
   expenseId: expenseShortcode,
   /**
@@ -368,7 +370,8 @@ export const splitExpenseInput = z.object({
           ),
       }),
     )
-    .min(2),
+    .min(2)
+    .max(MAX_SPLIT_EXPENSE_PARTS),
 });
 export type SplitExpenseInput = z.infer<typeof splitExpenseInput>;
 

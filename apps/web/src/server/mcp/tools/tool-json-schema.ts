@@ -46,6 +46,10 @@ export function requireObjectInputSchema<TInput extends z.ZodObject>(
 }
 
 export function sdkOutputSchema(schema: z.core.$ZodType): z.ZodType {
+  // The SDK normalizer returns undefined for non-object outputs, then its
+  // validator crashes while parsing structured content. This guard prevents
+  // the regression that took out union-returning `list_problems` in #341;
+  // response validation still uses the real schema.
   return schema instanceof z.ZodObject ? schema : z.looseObject({});
 }
 

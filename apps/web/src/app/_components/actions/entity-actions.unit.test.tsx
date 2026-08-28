@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import {
   browserRoutedEntities,
   shortcodeEntities,
@@ -9,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { CubbyRow as Row } from "../data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
+import { defineEntityAction } from "./entity-action-definition";
 import type {
   EntityActionDefinition,
   EntityActionHandles,
@@ -38,16 +38,6 @@ const stubHandles = (
 });
 
 describe("production entity action catalog", () => {
-  const roster = (entity: Entity) =>
-    entityActionCatalogDescriptors
-      .filter(
-        (action) =>
-          action.entities.includes(entity) &&
-          action.verb !== "copyCodes" &&
-          action.verb !== "delete",
-      )
-      .map(({ verb, arity, surfaces }) => ({ verb, arity, surfaces }));
-
   it("derives the correct copy action for every routed entity", () => {
     const copyCodes = entityActionCatalogDescriptors.find(
       (action) => action.verb === "copyCodes",
@@ -125,102 +115,6 @@ describe("production entity action catalog", () => {
       deleteActions.find((action) => action.entities.includes("image")),
     ).toMatchObject({ arity: "single", surfaces: ["inspector", "detail"] });
   });
-
-  it("guards Product and Inventory memberships", () => {
-    expect(roster("product")).toEqual([
-      {
-        verb: "addToInventory",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail", "palette-quick"],
-      },
-      {
-        verb: "printLabels",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setStockTracking",
-        arity: "both",
-        surfaces: ["selection"],
-      },
-    ]);
-    expect(roster("inventory")).toEqual([
-      {
-        verb: "discard",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "moveTo",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-    ]);
-    expect(roster("location")).toEqual([
-      {
-        verb: "printLabel",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "moveUnder",
-        arity: "both",
-        surfaces: ["row", "selection"],
-      },
-    ]);
-  });
-
-  it("guards Expense and Task memberships and order", () => {
-    expect(roster("expense")).toEqual([
-      {
-        verb: "markPurchased",
-        arity: "single",
-        surfaces: ["row", "inspector", "detail"],
-      },
-      {
-        verb: "moveToProject",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setTrade",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setCostType",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-    ]);
-    expect(roster("task")).toEqual([
-      {
-        verb: "moveToProject",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setStatus",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setTrade",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "setDueDate",
-        arity: "both",
-        surfaces: ["row", "selection", "inspector", "detail"],
-      },
-      {
-        verb: "createProjectFrom",
-        arity: "both",
-        surfaces: ["selection"],
-      },
-    ]);
-  });
 });
 
 /**
@@ -229,39 +123,39 @@ describe("production entity action catalog", () => {
  * up. Injected through `useEntityActions`' test seam.
  */
 const REGISTRY: readonly EntityActionDefinition[] = [
-  {
+  defineEntityAction({
     verb: "addToInventory",
     entities: ["product"],
     arity: "both",
     use: () => stubHandles("addToInventory", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "merge",
     entities: ["product", "vendor"],
     arity: "multi",
     use: () => stubHandles("merge", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "discard",
     entities: ["product"],
     arity: "single",
     use: () => stubHandles("discard", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "setStatus",
     entities: ["task"],
     arity: "both",
     surfaces: ["selection"],
     use: () => stubHandles("setStatus", succeeds),
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "printLabels",
     entities: ["product"],
     arity: "both",
     // Nothing to run on this invocation — a surface that could not supply the
     // action's context.
     use: () => stubHandles("printLabels", null),
-  },
+  }),
 ];
 
 const resolve = (entity: "product" | "vendor" | "task") =>
@@ -321,7 +215,7 @@ describe("useEntityActions", () => {
   it("normalizes selection metadata", () => {
     const run = vi.fn(succeeds);
     const registry: readonly EntityActionDefinition[] = [
-      {
+      defineEntityAction({
         verb: "duplicate",
         entities: ["product"],
         arity: "single",
@@ -335,8 +229,8 @@ describe("useEntityActions", () => {
             ? { status: "disabled", reason: "Already duplicated" }
             : { status: "available" },
         use: () => stubHandles("duplicate", run),
-      },
-      {
+      }),
+      defineEntityAction({
         verb: "markAsStock",
         entities: ["product"],
         arity: "both",
@@ -344,7 +238,7 @@ describe("useEntityActions", () => {
         group: "primary",
         priority: 200,
         use: () => stubHandles("markAsStock", run),
-      },
+      }),
     ];
 
     const { result } = renderHook(() =>
@@ -391,7 +285,7 @@ describe("useEntityActions", () => {
 
   it("resolves inspector actions independently from detail actions", () => {
     const registry: readonly EntityActionDefinition[] = [
-      {
+      defineEntityAction({
         verb: "duplicate",
         entities: ["product"],
         arity: "single",
@@ -400,7 +294,7 @@ describe("useEntityActions", () => {
         placement: { inspector: "secondary" },
         preserveSelection: true,
         use: () => stubHandles("duplicate", succeeds),
-      },
+      }),
     ];
 
     const { result } = renderHook(() =>

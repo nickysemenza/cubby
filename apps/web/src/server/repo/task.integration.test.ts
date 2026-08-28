@@ -1635,8 +1635,7 @@ describe("task kernel — bulkUpdate", () => {
     );
 
     const result = await bulkUpdate([t.id], { projectId: projectB.id });
-    expect(result.updated).toBe(1);
-    expect(result.updatedIds).toEqual([t.id]);
+    expect(result.updatedReferences).toEqual([{ entity: "task", id: t.id }]);
     // The kernel does NOT run side effects for bulkUpdate; the repository does.
     expect(result.sideEffects).toBeDefined();
     expect((await getTaskByShortcode(ctx.db, t.id))?.projectId).toBe(
@@ -1651,7 +1650,9 @@ describe("task kernel — bulkUpdate", () => {
       ctx.actor,
     );
 
-    expect((await bulkUpdate([t.id], { status: "done" })).updated).toBe(1);
+    expect(
+      (await bulkUpdate([t.id], { status: "done" })).updatedReferences,
+    ).toEqual([{ entity: "task", id: t.id }]);
     expect((await getTaskByShortcode(ctx.db, t.id))?.status).toBe("done");
   });
 
@@ -1664,11 +1665,86 @@ describe("task kernel — bulkUpdate", () => {
 
     expect(
       (await bulkUpdate([t.id], { status: "in_progress", trade: "drywall" }))
-        .updated,
-    ).toBe(1);
+        .updatedReferences,
+    ).toEqual([{ entity: "task", id: t.id }]);
     const reread = await getTaskByShortcode(ctx.db, t.id);
     expect(reread?.status).toBe("in_progress");
     expect(reread?.trade).toBe("drywall");
+  });
+
+  it("rejects a partially missing selection before changing any task", async () => {
+    const { output: task } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "atomic task patch" }),
+      ctx.actor,
+    );
+
+    await expect(
+      bulkUpdate([task.id, testShortcode("task", "TSK-ZZZZ")], {
+        status: "done",
+      }),
+    ).rejects.toMatchObject({ reason: "TASK_NOT_FOUND" });
+    expect((await getTaskByShortcode(ctx.db, task.id))?.status).toBe(
+      "not_started",
+    );
+  });
+
+  it("reports a cascaded subtask as an exact deleted reference", async () => {
+    const { output: parent } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "delete parent" }),
+      ctx.actor,
+    );
+    const { output: subtask } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "delete child",
+        parentTaskId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await executeEntity(kernelContext(), {
+      action: "delete",
+      entity: "task",
+      ids: [parent.id],
+    });
+    if (result.action !== "delete") throw new Error("unreachable");
+    expect(result.deletedReferences).toEqual(
+      expect.arrayContaining([
+        { entity: "task", id: parent.id },
+        { entity: "task", id: subtask.id },
+      ]),
+    );
+  });
+
+  it("reports a child once when parent and child are both requested", async () => {
+    const { output: parent } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "delete both parent" }),
+      ctx.actor,
+    );
+    const { output: subtask } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "delete both child",
+        parentTaskId: parent.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await executeEntity(kernelContext(), {
+      action: "delete",
+      entity: "task",
+      ids: [parent.id, subtask.id],
+    });
+    if (result.action !== "delete") throw new Error("unreachable");
+    expect(result.deletedReferences).toEqual([
+      { entity: "task", id: parent.id },
+      { entity: "task", id: subtask.id },
+    ]);
   });
 
   it("refuses half a due-date window rather than nulling the other half", async () => {
@@ -1696,8 +1772,8 @@ describe("task kernel — bulkUpdate", () => {
           dueDate: "2024-04-01",
           dueEndDate: "2024-04-03",
         })
-      ).updated,
-    ).toBe(1);
+      ).updatedReferences,
+    ).toEqual([{ entity: "task", id: t.id }]);
   });
 
   it("refuses a field the entity never declared as bulk-updatable", async () => {

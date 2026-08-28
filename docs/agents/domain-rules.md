@@ -14,8 +14,9 @@ the read (see agent validation reference).
 
 ## Data, layers, and deletion
 
-`Database` is opaque: routers pass it onward, services orchestrate, repos alone
-call `getDb`; transactions use `withTransaction`. A service earns existence for
+`Database` is a request-scoped handle: routers pass it onward, services
+orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
+The repository helper is the sanctioned client-resolution boundary. A service earns existence for
 cross-cutting enrichment/compute/rollups, not pass-throughs. Cubby domain
 compute belongs in recipebridge/WASM; TypeScript assembles inputs and reshapes
 outputs instead of recreating it.

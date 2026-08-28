@@ -82,6 +82,8 @@ export function createMcpTokenVerifier({
       };
     } catch (error) {
       const parsedError = verifierErrorSchema.safeParse(error);
+      // Claims only—never the bearer token itself. This diagnostic reaches
+      // `wrangler tail`; verification above remains the authorization decision.
       reportRejection("[MCP auth] token rejected", {
         reason: getErrorMessage(error),
         code: parsedError.success ? parsedError.data.code : undefined,

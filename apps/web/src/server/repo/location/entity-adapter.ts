@@ -1,6 +1,9 @@
 import { locationSortableFields } from "@cubby/schemas/location";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
@@ -81,11 +84,8 @@ export const locationEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await locationShortcodes.all(ctx.db, shortcodes);
-      const { deleted, detachedImageKeys } = await deleteLocations(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
+      const { detachedImageKeys, deletedImageShortcodes } =
+        await deleteLocations(ctx.db, ids, ctx.actorContext);
       const backgroundBatches = await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
@@ -94,7 +94,14 @@ export const locationEntityAdapter = defineEntityAdapter({
           source: "location.delete",
         })),
       );
-      return { deleted, detachedImageKeys, backgroundBatches };
+      return {
+        deletedReferences: [
+          ...entityMutationReferences("location", shortcodes),
+          ...entityMutationReferences("image", deletedImageShortcodes),
+        ],
+        detachedImageKeys,
+        backgroundBatches,
+      };
     },
     /**
      * The field mask says `parentId`; the semantics behind it stay
@@ -112,12 +119,16 @@ export const locationEntityAdapter = defineEntityAdapter({
           "A bulk location patch must supply parentId (null moves to Home).",
         );
       }
-      return await reparentLocationsInBulk(
+      const { backgroundBatches } = await reparentLocationsInBulk(
         ctx.db,
         ctx.actorContext,
         shortcodes,
         data.parentId,
       );
+      return {
+        updatedReferences: entityMutationReferences("location", shortcodes),
+        backgroundBatches,
+      };
     },
   },
 });

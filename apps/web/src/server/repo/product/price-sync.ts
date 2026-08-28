@@ -17,7 +17,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { uniq } from "es-toolkit";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
+import { syncInventoryValuationsForProducts } from "~/server/repo/inventory/crud";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 
 export const pricingProductIds = (
@@ -42,8 +42,6 @@ export const syncChangedEffectivePrices = async (
   if (ids.length === 0) return [];
   const after = await loadEffectiveProductPricesById(tx, ids);
   const changed = ids.filter((id) => before.get(id) !== after.get(id));
-  for (const id of changed) {
-    await syncInventoryValuationsForProduct(tx, id);
-  }
+  await syncInventoryValuationsForProducts(tx, changed);
   return changed;
 };

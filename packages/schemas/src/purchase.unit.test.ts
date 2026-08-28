@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deleteEmptyPurchasesInput,
+  MAX_SPLIT_EXPENSE_PARTS,
   purchaseFilterFields,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
@@ -72,6 +73,27 @@ describe("purchase operation inputs", () => {
       "line evidence",
       null,
     ]);
+  });
+
+  it("bounds a split to 100 replacement expenses", () => {
+    const part = {
+      name: "part",
+      cost: 1,
+      costType: "materials" as const,
+      trade: "other" as const,
+    };
+    expect(
+      splitExpenseInput.safeParse({
+        expenseId: "EXP-6662",
+        parts: Array.from({ length: MAX_SPLIT_EXPENSE_PARTS }, () => part),
+      }).success,
+    ).toBe(true);
+    expect(
+      splitExpenseInput.safeParse({
+        expenseId: "EXP-6662",
+        parts: Array.from({ length: MAX_SPLIT_EXPENSE_PARTS + 1 }, () => part),
+      }).success,
+    ).toBe(false);
   });
 });
 

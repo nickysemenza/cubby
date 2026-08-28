@@ -64,6 +64,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
+import { cents } from "~/server/repo/money";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -72,9 +73,6 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-
-/** Money comparisons go through cents; `===` on doubles reports phantom drift. */
-const cents = (value: number) => Math.round(value * 100);
 
 /** "This transaction settles at least one Purchase" — allocation-aware. */
 const hasAnyAllocation = () => sql`EXISTS (

@@ -99,8 +99,11 @@ describe("kernel browser transport", () => {
       entityBrowserMutationResultSchema.parse({
         action: "delete",
         entity: "product",
-        deleted: 1,
-        deletedReferences: [],
+        deletedReferences: [
+          { entity: "product", id: "PRD-4K7M" },
+          { entity: "image", id: "IMG-2F9Q" },
+          { entity: "image", id: "IMG-8J3W" },
+        ],
         affectedEdges: [],
         sideEffects: { backgroundBatches: [] },
       }),
@@ -123,6 +126,21 @@ describe("kernel browser transport", () => {
         ids: ["PRD-4K7M"],
       },
     ]);
+  });
+
+  it("rejects duplicate exact delete references at the transport boundary", () => {
+    expect(
+      entityBrowserMutationResultSchema.safeParse({
+        action: "delete",
+        entity: "task",
+        deletedReferences: [
+          { entity: "task", id: "TSK-4K7M" },
+          { entity: "task", id: "TSK-4K7M" },
+        ],
+        affectedEdges: [],
+        sideEffects: { backgroundBatches: [] },
+      }).success,
+    ).toBe(false);
   });
 
   it("keeps the explicit Image update result in the strict mutation union", () => {

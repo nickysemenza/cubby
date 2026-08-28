@@ -15,7 +15,8 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import { FOOD_CATEGORY } from "@cubby/shared";
-import { and, eq } from "drizzle-orm";
+import { and, inArray } from "drizzle-orm";
+import { uniq } from "es-toolkit";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
@@ -271,16 +272,16 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
 };
 
 /**
- * The import-time triage default: a food line with no project belongs to
+ * The creation-time triage default: a food line with no project belongs to
  * Household.
  *
- * This is an IMPORT-TIME default and nothing more. `updateExpense` and
- * `moveExpenses` deliberately do NOT call it — an update is an explicit
- * statement about one row the operator is looking at, and `moveExpenses` is
- * the bulk move-to-inbox undo. Re-defaulting in either would make "clear the
- * project on this food line" impossible, bouncing every clear straight back to
- * Household with no error and no audit diff to explain it. Automation triages,
- * humans override, an override is never re-triaged.
+ * Imports and split replacement rows use it while creating expenses.
+ * `updateExpense` and `moveExpenses` deliberately do NOT — an update is an
+ * explicit statement about one row the operator is looking at, and
+ * `moveExpenses` is the bulk move-to-inbox undo. Re-defaulting in either would
+ * make "clear the project on this food line" impossible, bouncing every clear
+ * straight back to Household with no error and no audit diff to explain it.
+ * Automation triages, humans override, an override is never re-triaged.
  *
  * Returns `null` when no Household project exists, so a database that has not
  * been backfilled (every existing test, any fresh dev DB) behaves exactly as it
@@ -292,26 +293,53 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
  * grouped query on every create and would triage the third bottle of shampoo
  * while leaving the first two behind.
  */
-export const resolveDefaultProjectId = async (
+export const resolveDefaultProjectIds = async (
   tx: DrizzleTransaction,
-  args: { projectId: ProjectId | null; productId: ProductId | null },
-): Promise<ProjectId | null> => {
-  // An explicitly chosen project always wins. Note `expenseCreateShape.projectId`
-  // is `.nullable().default(null)`, so post-parse an omitted field and an
-  // explicit null are indistinguishable — there is no "caller was silent" case
-  // to honour, and pretending otherwise would buy a rule that never fires.
-  if (args.projectId !== null || args.productId === null) return args.projectId;
+  inputs: ReadonlyArray<{
+    projectId: ProjectId | null;
+    productId: ProductId | null;
+  }>,
+): Promise<Array<ProjectId | null>> => {
+  const candidates = uniq(
+    inputs.flatMap((input) =>
+      input.projectId === null && input.productId !== null
+        ? [input.productId]
+        : [],
+    ),
+  );
+  if (candidates.length === 0) return inputs.map((input) => input.projectId);
 
-  const linked = await tx.query.product.findFirst({
-    where: and(eq(product.id, args.productId), notDeleted(product)),
-    columns: { category: true },
-  });
-  if (linked?.category !== FOOD_CATEGORY) return null;
+  const foodProducts = new Set(
+    (
+      await tx.query.product.findMany({
+        where: and(inArray(product.id, candidates), notDeleted(product)),
+        columns: { id: true, category: true },
+      })
+    )
+      .filter((row) => row.category === FOOD_CATEGORY)
+      .map((row) => row.id),
+  );
+  if (foodProducts.size === 0) return inputs.map((input) => input.projectId);
 
   const householdId = await resolveLiveShortcode(
     tx,
     HOUSEHOLD_PROJECT_SHORTCODE,
     "project",
   );
-  return householdId ? parseEntityId("project", householdId) : null;
+  const parsedHouseholdId = householdId
+    ? parseEntityId("project", householdId)
+    : null;
+  return inputs.map((input) =>
+    input.projectId === null &&
+    input.productId !== null &&
+    foodProducts.has(input.productId)
+      ? parsedHouseholdId
+      : input.projectId,
+  );
 };
+
+export const resolveDefaultProjectId = async (
+  tx: DrizzleTransaction,
+  input: { projectId: ProjectId | null; productId: ProductId | null },
+): Promise<ProjectId | null> =>
+  (await resolveDefaultProjectIds(tx, [input]))[0] ?? null;

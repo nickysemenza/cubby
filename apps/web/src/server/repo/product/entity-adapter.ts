@@ -8,7 +8,10 @@ import {
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bindShortcodeResolver,
@@ -23,7 +26,6 @@ import { createProductWriteActions } from "~/server/services/product.service";
 
 import {
   deleteProducts,
-  getProductByID,
   getProductByShortcode,
   getProductsByShortcodes,
   productList,
@@ -34,7 +36,6 @@ import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
 import { mergeProducts, PRODUCT_MERGE_EDGE_POLICY } from "./merge";
 
 const productShortcodes = bindShortcodeResolver("product");
-const ingredientShortcodes = bindShortcodeResolver("ingredient");
 
 async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
   const products = await getProductsByShortcodes(db, shortcodes);
@@ -103,19 +104,8 @@ export const productEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await productShortcodes.all(ctx.db, shortcodes);
-      const ingredientIds = (
-        await Promise.all(ids.map((id) => getProductByID(ctx.db, id)))
-      ).flatMap((product) => product.ingredient?.id ?? []);
-      const resolvedIngredientIds = await Promise.all(
-        ingredientIds.map((shortcode) =>
-          ingredientShortcodes.one(ctx.db, shortcode),
-        ),
-      );
-      const { deleted, detachedImageKeys } = await deleteProducts(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
+      const { detachedImageKeys, deletedImageShortcodes, ingredientIds } =
+        await deleteProducts(ctx.db, ids, ctx.actorContext);
       const [backgroundBatches, recipeBatches] = await Promise.all([
         runMutationSideEffectsForEntities(
           ctx.db,
@@ -125,13 +115,15 @@ export const productEntityAdapter = defineEntityAdapter({
             source: "product.delete",
           })),
         ),
-        ctx.services.recipeCosting.recomputeForIngredients(
-          resolvedIngredientIds,
-          { source: "product.delete" },
-        ),
+        ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
+          source: "product.delete",
+        }),
       ]);
       return {
-        deleted,
+        deletedReferences: [
+          ...entityMutationReferences("product", shortcodes),
+          ...entityMutationReferences("image", deletedImageShortcodes),
+        ],
         detachedImageKeys,
         backgroundBatches: [...backgroundBatches, ...recipeBatches],
       };
@@ -156,7 +148,7 @@ export const productEntityAdapter = defineEntityAdapter({
         { ids: shortcodes, stockTracked: data.stockTracked },
         ctx.actorContext,
       );
-      const ids = await productShortcodes.present(
+      const ids = await productShortcodes.all(
         ctx.db,
         items.map((item) => item.id),
       );
@@ -168,7 +160,13 @@ export const productEntityAdapter = defineEntityAdapter({
           source: "product.bulkUpdate",
         })),
       );
-      return { updated: items.length, backgroundBatches };
+      return {
+        updatedReferences: entityMutationReferences(
+          "product",
+          items.map((item) => item.id),
+        ),
+        backgroundBatches,
+      };
     },
   },
   merge: {

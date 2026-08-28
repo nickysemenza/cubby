@@ -103,12 +103,25 @@ describe("verifyMcpToken", () => {
     expect(verifyAccessToken).not.toHaveBeenCalled();
   });
 
-  it("returns null when verification rejects (bad signature, wrong issuer/audience, expired)", async () => {
-    verifyAccessToken.mockRejectedValue(new Error("JWTClaimValidationFailed"));
+  it("returns null and reports allowlisted unverified claims when verification rejects", async () => {
+    const error = Object.assign(new Error("JWTClaimValidationFailed"), {
+      code: "ERR_JWT_EXPIRED",
+    });
+    verifyAccessToken.mockRejectedValue(error);
 
     await expect(
-      verifyMcpToken(request({ authorization: "Bearer t" })),
+      verifyMcpToken(
+        request({
+          authorization:
+            "Bearer eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJpc3N1ZXIiLCJhdWQiOiJhdWRpZW5jZSIsImV4cCI6MTIzfQ.signature",
+        }),
+      ),
     ).resolves.toBeNull();
+    expect(reportRejection).toHaveBeenCalledWith("[MCP auth] token rejected", {
+      reason: "JWTClaimValidationFailed",
+      code: "ERR_JWT_EXPIRED",
+      claims: { iss: "issuer", aud: "audience", exp: 123 },
+    });
   });
 
   it("returns null when the token carries no subject", async () => {

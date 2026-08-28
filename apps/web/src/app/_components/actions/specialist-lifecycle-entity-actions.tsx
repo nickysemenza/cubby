@@ -1,4 +1,3 @@
-import type { Entity } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
@@ -11,11 +10,8 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../hooks/useActionMutation";
 import { VerbMenuItem } from "./action-verb-ui";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-  EntityActionRow,
-} from "./entity-actions";
+import { defineEntityAction } from "./entity-action-definition";
+import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 type StagedDeleteRow = EntityActionRow & {
   recipeCount?: number;
@@ -137,8 +133,20 @@ function useStagedSpecialistDelete({
  * into meals. The staged promise keeps a list selection until confirmation.
  */
 export function useDeleteCookbookEntityAction(
-  operations: SpecialistLifecycleOperations = productionOperations,
+  operations?: SpecialistLifecycleOperations,
+): EntityActionHandles;
+export function useDeleteCookbookEntityAction(
+  entity: "cookbook",
+): EntityActionHandles;
+export function useDeleteCookbookEntityAction(
+  operationsOrEntity:
+    | SpecialistLifecycleOperations
+    | "cookbook" = productionOperations,
 ): EntityActionHandles {
+  const operations =
+    operationsOrEntity === "cookbook"
+      ? productionOperations
+      : operationsOrEntity;
   const navigate = useNavigate();
   const mutation = useActionMutation({
     mutationFn: operations.deleteCookbook.mutationOptions,
@@ -181,8 +189,18 @@ export function useDeleteCookbookEntityAction(
 
 /** Image deletion removes the database record and its R2 object together. */
 export function useDeleteImageEntityAction(
-  operations: SpecialistLifecycleOperations = productionOperations,
+  operations?: SpecialistLifecycleOperations,
+): EntityActionHandles;
+export function useDeleteImageEntityAction(
+  entity: "image",
+): EntityActionHandles;
+export function useDeleteImageEntityAction(
+  operationsOrEntity:
+    | SpecialistLifecycleOperations
+    | "image" = productionOperations,
 ): EntityActionHandles {
+  const operations =
+    operationsOrEntity === "image" ? productionOperations : operationsOrEntity;
   const navigate = useNavigate();
   const mutation = useActionMutation({
     mutationFn: operations.deleteImage.mutationOptions,
@@ -220,31 +238,23 @@ export function useDeleteImageEntityAction(
   });
 }
 
-function useCatalogCookbookDeleteAction(_entity: Entity): EntityActionHandles {
-  return useDeleteCookbookEntityAction();
-}
-
-function useCatalogImageDeleteAction(_entity: Entity): EntityActionHandles {
-  return useDeleteImageEntityAction();
-}
-
 export const specialistLifecycleEntityActionDefinitions = [
-  {
+  defineEntityAction({
     verb: "delete",
     entities: ["cookbook"],
     arity: "single",
     surfaces: ["row", "selection", "inspector", "detail"],
     group: "destructive",
     priority: 100,
-    use: useCatalogCookbookDeleteAction,
-  },
-  {
+    use: useDeleteCookbookEntityAction,
+  }),
+  defineEntityAction({
     verb: "delete",
     entities: ["image"],
     arity: "single",
     surfaces: ["inspector", "detail"],
     group: "destructive",
     priority: 100,
-    use: useCatalogImageDeleteAction,
-  },
-] as const satisfies readonly EntityActionDefinition[];
+    use: useDeleteImageEntityAction,
+  }),
+] as const;

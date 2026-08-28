@@ -542,6 +542,7 @@ describe("vendor repository — deletion guard", () => {
 
     expect(await deleteVendors(ctx.db, [first.output.id], ctx.actor)).toEqual({
       detachedImageKeys: [],
+      deletedImageShortcodes: [],
       deleted: 1,
     });
     expect(
@@ -553,6 +554,7 @@ describe("vendor repository — deletion guard", () => {
 
     expect(await deleteVendors(ctx.db, [second.output.id], ctx.actor)).toEqual({
       detachedImageKeys: [logo.key],
+      deletedImageShortcodes: [parseShortcodeFor("image", logo.shortcode)],
       deleted: 1,
     });
     expect(

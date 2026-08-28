@@ -212,9 +212,12 @@ es-toolkit / ts-pattern caveats (don't over-apply): `keyBy` is for `Object.fromE
 
 `noUncheckedIndexedAccess` is ON repo-wide: `arr[i]`, `record[strKey]`, and `Map`-via-bracket all type as `T | undefined`, so guard or assert before use. Exceptions that stay `T`: `Record<FiniteEnum, V>[enumKey]` (finite-key Records aren't index signatures) and access right after a `.length`/membership check (assert with `!`). Don't silence a genuinely-reachable undefined with `!` — guard it; that's the bug the flag exists to catch.
 
-## Opaque Database Type
+## Database Handle and Repository Boundary
 
-The `Database` type is opaque (branded) — you can't call methods on it outside repo files. This enforces the layered architecture:
+`Database` is a request-scoped handle with repository-only client resolution.
+The class does not expose query methods, and the repository helper is the
+sanctioned place to resolve its Drizzle client; this keeps the layered boundary
+local even though TypeScript cannot make the handle structurally opaque:
 
 - **Routers** accept `Database`, pass it to repos or services
 - **Services** accept `Database`, pass it to repos (can't query directly)

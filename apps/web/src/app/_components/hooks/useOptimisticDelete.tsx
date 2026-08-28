@@ -22,6 +22,7 @@ import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-
 import { removeCachedListItems } from "~/lib/optimistic-list";
 
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
+import { defineEntityAction } from "../actions/entity-action-definition";
 import type {
   EntityActionDefinition,
   EntityActionRow,
@@ -355,7 +356,7 @@ export function useOptimisticDelete<
   const deleteActionDefinition = useMemo<EntityActionDefinition | null>(
     () =>
       deletable
-        ? {
+        ? defineEntityAction({
             id: "delete",
             verb: "delete",
             entities: [deletable.entity],
@@ -381,7 +382,7 @@ export function useOptimisticDelete<
               // (Product shelf, Inventory shelf) share the same dialog state.
               dialog: null,
             }),
-          }
+          })
         : null,
     [deletable, requestActionRowDelete, requestBulkDelete],
   );

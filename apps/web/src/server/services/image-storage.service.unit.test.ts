@@ -76,6 +76,7 @@ class MemoryImageStorage {
   };
   createUploadError: Error | null = null;
   createAttachmentError: Error | null = null;
+  attachableEntityError: Error | null = null;
   existingAttachment: {
     shortcode: string;
     key: string;
@@ -88,7 +89,9 @@ class MemoryImageStorage {
 
   readonly ports: ImageStoragePorts<TestDatabase> = {
     repository: {
-      assertAttachableEntityExists: async () => undefined,
+      assertAttachableEntityExists: async () => {
+        if (this.attachableEntityError) throw this.attachableEntityError;
+      },
       createOrReuseAttachedImage: async (_database, params) => {
         if (this.createAttachmentError) throw this.createAttachmentError;
         const row = this.existingAttachment ?? {
@@ -371,6 +374,74 @@ describe("attachFileToEntity", () => {
     expect(storage.deletedKeys).toContain("cubby/images/staged.png");
   });
 
+  it("rejects a missing attachment target before writing an object", async () => {
+    // Target validation precedes R2 work, so a bad shortcode cannot orphan an
+    // object that has no database association.
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        entityId: "PRD-MISSING",
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("product PRD-MISSING not found");
+    expect(storage.uploaded).toEqual([]);
+  });
+
+  it("removes no object when the target disappears after resolution", async () => {
+    // The repository re-checks liveness under its transaction/row lock; this
+    // simulates that second check failing after shortcode resolution.
+    storage.attachableEntityError = new Error("target was deleted");
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow("target was deleted");
+    expect(storage.uploaded).toEqual([]);
+  });
+
+  it("rejects unsupported content types on the attach path before writing", async () => {
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        data: PNG_BASE64,
+        contentType: "text/plain",
+      }),
+    ).rejects.toThrow("Unsupported content type: text/plain");
+    expect(storage.uploaded).toEqual([]);
+  });
+
+  it("maps a row deleted after shortcode resolution to the staged-upload error", async () => {
+    // Resolution and the UUID row read are separate operations; the row may
+    // disappear between them and should look like an expired staged upload.
+    storage.stagedRow = new Error("Image not found", {
+      cause: { reason: "IMAGE_NOT_FOUND" },
+    });
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        uploadId: stagedUploadCode,
+      }),
+    ).rejects.toThrow("Call create_file_upload first");
+    expect(storage.uploaded).toEqual([]);
+  });
+
+  it("preserves non-not-found staged-row lookup failures", async () => {
+    storage.stagedRow = new Error("database unavailable");
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        uploadId: stagedUploadCode,
+      }),
+    ).rejects.toThrow("database unavailable");
+    expect(storage.uploaded).toEqual([]);
+  });
+
   it("refuses an attached or missing uploadId without writing a new object", async () => {
     storage.stagedRow = {
       key: "cubby/images/existing.png",
@@ -392,6 +463,24 @@ describe("attachFileToEntity", () => {
         uploadId: testShortcode("image", "IMG-4444"),
       }),
     ).rejects.toThrow(/Call create_file_upload first/);
+    expect(storage.uploaded).toEqual([]);
+  });
+
+  it("refuses a standalone uploaded row as a staged upload", async () => {
+    storage.stagedRow = {
+      key: "cubby/images/standalone.png",
+      filename: "standalone.png",
+      contentType: "image/png",
+      status: "UPLOADED",
+      entityType: null,
+    };
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        uploadId: stagedUploadCode,
+      }),
+    ).rejects.toThrow(/not a staged upload/);
     expect(storage.uploaded).toEqual([]);
   });
 

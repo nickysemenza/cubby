@@ -79,21 +79,6 @@ interface BrowserTestHarnessOptions {
   readonly clock?: { now: number | Date };
 }
 
-/**
- * Stateless binding of a real operation descriptor to a test transport.
- *
- * The descriptor still parses its input/output and owns cache invalidation;
- * this helper deliberately stores no test-global operation registry.
- */
-const browserOperationAdapter = {
-  bind<TTransport, TBound>(
-    descriptor: { withTransport: (transport: TTransport) => TBound },
-    transport: TTransport,
-  ): TBound {
-    return descriptor.withTransport(transport);
-  },
-};
-
 function installBrowserLayoutMetrics() {
   const originalOffsetWidth = Object.getOwnPropertyDescriptor(
     HTMLElement.prototype,
@@ -241,7 +226,6 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
   return {
     queryClient,
     router,
-    operationAdapter: browserOperationAdapter,
     clock: options?.clock
       ? {
           now: () => Date.now(),

@@ -608,7 +608,9 @@ describe("location kernel — bulkUpdate (the guards, through the kernel)", () =
       ctx.actor,
     );
 
-    expect((await bulkUpdate([child.id], null)).updated).toBe(1);
+    expect((await bulkUpdate([child.id], null)).updatedReferences).toEqual([
+      { entity: "location", id: child.id },
+    ]);
     expect(
       (await getLocationById(ctx.db, await idOf(child.id))).parent?.id,
     ).toBe(TEST_HOME_SHORTCODE);

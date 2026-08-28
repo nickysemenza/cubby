@@ -49,8 +49,20 @@ export const entityKernelContextSchema = z.custom<EntityKernelContext>(
   "expected an entity-kernel request context",
 );
 
+export interface EntityMutationReference<
+  E extends EntitySchemaBindingEntity = EntitySchemaBindingEntity,
+> {
+  entity: E;
+  id: string;
+}
+
+export const entityMutationReferences = <E extends EntitySchemaBindingEntity>(
+  entity: E,
+  ids: readonly string[],
+): EntityMutationReference<E>[] => ids.map((id) => ({ entity, id }));
+
 interface EntityKernelDeleteResult {
-  deleted: number;
+  deletedReferences: EntityMutationReference[];
   detachedImageKeys?: string[];
   backgroundBatches?: BackgroundBatchRef[];
   affectedEdges?: Array<{
@@ -65,8 +77,8 @@ interface EntityKernelDeleteResult {
  * owns the transaction and the per-entity side-effect fan-out, exactly as
  * `delete` does.
  */
-interface EntityKernelBulkUpdateResult {
-  updated: number;
+interface EntityKernelBulkUpdateResult<E extends EntitySchemaBindingEntity> {
+  updatedReferences: EntityMutationReference<E>[];
   detachedImageKeys?: string[];
   backgroundBatches?: BackgroundBatchRef[];
 }
@@ -154,7 +166,10 @@ type EntityUpdateRepository<
         ): Promise<EntityRepositoryWriteResult<E, S>>;
       };
 
-type EntityBulkUpdateRepository<S extends EntityBindingSchemas> =
+type EntityBulkUpdateRepository<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas,
+> =
   SchemaOutput<S["bulkUpdateInput"]> extends never
     ? { bulkUpdate?: never }
     : {
@@ -162,7 +177,7 @@ type EntityBulkUpdateRepository<S extends EntityBindingSchemas> =
           ctx: EntityKernelContext,
           ids: ZodOutput<S["id"]>[],
           data: PresentSchemaOutput<S["bulkUpdateInput"]>,
-        ): Promise<EntityKernelBulkUpdateResult>;
+        ): Promise<EntityKernelBulkUpdateResult<E>>;
       };
 
 export type EntityRepository<
@@ -190,7 +205,7 @@ export type EntityRepository<
   ): Promise<EntityKernelDeleteResult>;
 } & EntityCreateRepository<E, S> &
   EntityUpdateRepository<E, S> &
-  EntityBulkUpdateRepository<S>;
+  EntityBulkUpdateRepository<E, S>;
 
 export interface EntityMergePort<
   E extends EntitySchemaBindingEntity,

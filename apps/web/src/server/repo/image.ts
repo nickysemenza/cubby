@@ -927,11 +927,17 @@ const IMAGE_EDGE_OPERATIONS = {
 const fetchExistingImages = (
   dbc: DrizzleClient | DrizzleTransaction,
   imageIds: string[],
-): Promise<Array<{ id: string; key: string }>> =>
+): Promise<Array<{ id: string; shortcode: string; key: string }>> =>
   dbc.query.image.findMany({
     where: inArray(image.id, imageIds),
-    columns: { id: true, key: true },
+    columns: { id: true, shortcode: true, key: true },
   });
+
+type DeletedImages = {
+  deletedIds: string[];
+  deletedShortcodes: ImageShortcode[];
+  deletedKeys: string[];
+};
 
 /**
  * Hard-delete image rows and return their R2 keys so the caller can drop the
@@ -952,8 +958,9 @@ const fetchExistingImages = (
 export const deleteImages = async (
   db: Database,
   imageIds: ImageId[],
-): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
-  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
+): Promise<DeletedImages> => {
+  if (imageIds.length === 0)
+    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
   return await withTransaction(db, (tx) => deleteImagesTx(tx, imageIds));
 };
 
@@ -969,11 +976,13 @@ export const deleteImages = async (
 const deleteImagesTx = async (
   tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
-  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
+): Promise<DeletedImages> => {
+  if (imageIds.length === 0)
+    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
 
   const rows = await fetchExistingImages(tx, imageIds);
-  if (rows.length === 0) return { deletedIds: [], deletedKeys: [] };
+  if (rows.length === 0)
+    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
 
   const ids = rows.map((row) => row.id);
   const affectedPurchases = await tx
@@ -991,7 +1000,13 @@ const deleteImagesTx = async (
     purchaseIds: affectedPurchases.map((row) => row.purchaseId),
   });
 
-  return { deletedIds: ids, deletedKeys: rows.map((row) => row.key) };
+  return {
+    deletedIds: ids,
+    deletedShortcodes: rows.map((row) =>
+      parseShortcodeFor("image", row.shortcode),
+    ),
+    deletedKeys: rows.map((row) => row.key),
+  };
 };
 
 /** Referenced-image detection shares the image edge registry so delete and detach cannot drift. */
@@ -1091,8 +1106,9 @@ export const detachImagesFromEntity = async (
 export const reapUnreferencedImages = async (
   tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<{ deletedIds: string[]; deletedKeys: string[] }> => {
-  if (imageIds.length === 0) return { deletedIds: [], deletedKeys: [] };
+): Promise<DeletedImages> => {
+  if (imageIds.length === 0)
+    return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
   const referenced = await findReferencedImageIds(tx, imageIds);
   return await deleteImagesTx(
     tx,

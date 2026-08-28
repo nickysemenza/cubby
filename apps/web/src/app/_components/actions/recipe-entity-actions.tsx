@@ -3,11 +3,8 @@ import { useCallback } from "react";
 
 import { useDuplicateRecipe } from "../recipe/use-duplicate-recipe";
 import { VerbMenuItem } from "./action-verb-ui";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-  EntityActionRow,
-} from "./entity-actions";
+import { defineEntityAction } from "./entity-action-definition";
+import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
 /**
  * Recipe actions that do not need the list's filter or cookbook scope.
@@ -69,7 +66,7 @@ function useCompareRecipesEntityAction(): EntityActionHandles {
 }
 
 export const recipeEntityActionDefinitions = [
-  {
+  defineEntityAction({
     verb: "duplicate",
     entities: ["recipe"],
     arity: "single",
@@ -77,8 +74,8 @@ export const recipeEntityActionDefinitions = [
     group: "primary",
     priority: 100,
     use: useDuplicateRecipeEntityAction,
-  },
-  {
+  }),
+  defineEntityAction({
     verb: "compare",
     entities: ["recipe"],
     arity: "multi",
@@ -87,5 +84,5 @@ export const recipeEntityActionDefinitions = [
     priority: 100,
     preserveSelection: true,
     use: useCompareRecipesEntityAction,
-  },
-] as const satisfies readonly EntityActionDefinition[];
+  }),
+] as const;

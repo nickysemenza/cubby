@@ -25,7 +25,7 @@ import { type StartCallOptions, startOperation } from "./start-transport";
 
 type RawOperationValue = z.input<z.ZodUnknown>;
 
-export type OperationTransport<Input, Output> = (request: {
+type OperationTransport<Input, Output> = (request: {
   operation: StartOperationId;
   input: Input;
   signal?: AbortSignal;

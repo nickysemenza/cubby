@@ -1,6 +1,5 @@
-import type { AuditEntityType } from "@cubby/schemas/audit";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import { useCallback, useState } from "react";
 
@@ -37,9 +36,6 @@ const COMPACT_OVERVIEW_ENTITIES: ReadonlySet<Entity> = new Set(
 const supportsCompactOverview = (
   entity: Entity,
 ): entity is HoverPreviewEntity => COMPACT_OVERVIEW_ENTITIES.has(entity);
-
-const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
-  entityManifest[entity].auditable;
 
 function UnsupportedOverview({ entity, id }: { entity: Entity; id: string }) {
   const label = entityLabel(entity);

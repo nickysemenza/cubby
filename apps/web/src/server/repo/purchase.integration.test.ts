@@ -37,6 +37,7 @@ import {
   purchaseImage,
   vendor,
 } from "~/server/db/schema";
+import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
@@ -2593,6 +2594,24 @@ describe("purchase repository — documents", () => {
     expect(withoutDocuments.data.every((row) => row.documentCount === 0)).toBe(
       true,
     );
+  });
+
+  it("rejects a document aimed at an unknown charge before creating an image row", async () => {
+    // Target validation runs before R2 upload and row insertion; this protects
+    // the real database path from leaving an unattached image behind.
+    const before = await getDb(ctx.db).select({ id: image.id }).from(image);
+
+    await expect(
+      attachFileToEntity(ctx.db, {
+        entityType: "purchase",
+        entityId: testShortcode("purchase", "PUR-9999"),
+        data: Buffer.from("%PDF-1.4").toString("base64"),
+        contentType: "application/pdf",
+      }),
+    ).rejects.toMatchObject({ cause: { reason: "IMAGE_ATTACH_FAILED" } });
+
+    const after = await getDb(ctx.db).select({ id: image.id }).from(image);
+    expect(after).toHaveLength(before.length);
   });
 });
 

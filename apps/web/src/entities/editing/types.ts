@@ -327,7 +327,6 @@ export type EntityMutationExecution<E extends EditableEntity> =
     }
   | {
       operation: "delete";
-      id: string;
       result: Extract<EntityBrowserMutationResult, { action: "delete" }>;
     };
 

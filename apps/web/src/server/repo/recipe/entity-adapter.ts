@@ -1,6 +1,9 @@
 import { recipeSortableFields } from "@cubby/schemas/recipe";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 
@@ -64,7 +67,7 @@ export const recipeEntityAdapter = defineEntityAdapter({
             .filter((id) => !deletedSet.has(id)),
         ),
       ];
-      const { deleted, detachedImageKeys } = await deleteRecipes(
+      const { detachedImageKeys, deletedImageShortcodes } = await deleteRecipes(
         ctx.db,
         ids,
         ctx.actorContext,
@@ -85,7 +88,10 @@ export const recipeEntityAdapter = defineEntityAdapter({
           : Promise.resolve([]),
       ]);
       return {
-        deleted,
+        deletedReferences: [
+          ...entityMutationReferences("recipe", shortcodes),
+          ...entityMutationReferences("image", deletedImageShortcodes),
+        ],
         detachedImageKeys,
         backgroundBatches: [...backgroundBatches, ...recipeBatches],
       };

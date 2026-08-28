@@ -6,6 +6,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
+  type ImageShortcode,
   type LocationId,
   type ProductId,
   parseEntityId,
@@ -603,8 +604,13 @@ export const deleteLocations = async (
   db: Database,
   ids: LocationId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
-  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
+): Promise<{
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+  deleted: number;
+}> => {
+  if (ids.length === 0)
+    return { detachedImageKeys: [], deletedImageShortcodes: [], deleted: 0 };
 
   return await withTransaction(db, async (tx) => {
     // Lock locations and validate they exist and aren't already deleted

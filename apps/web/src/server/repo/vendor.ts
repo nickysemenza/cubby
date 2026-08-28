@@ -6,6 +6,7 @@ import type {
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
 import {
+  type ImageShortcode,
   type PurchaseId,
   parseEntityId,
   parseShortcodeFor,
@@ -775,8 +776,18 @@ export const deleteVendors = async (
   db: Database,
   shortcodes: VendorShortcode[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
-  if (shortcodes.length === 0) return { detachedImageKeys: [], deleted: 0 };
+): Promise<{
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+  deleted: number;
+}> => {
+  if (shortcodes.length === 0) {
+    return {
+      detachedImageKeys: [],
+      deletedImageShortcodes: [],
+      deleted: 0,
+    };
+  }
 
   const ids = await resolveAllOrThrow(db, "vendor", shortcodes);
 
@@ -817,7 +828,11 @@ export const deleteVendors = async (
       actor,
     });
     const reaped = await reapUnreferencedImages(tx, logoIds);
-    return { detachedImageKeys: reaped.deletedKeys, deleted };
+    return {
+      detachedImageKeys: reaped.deletedKeys,
+      deletedImageShortcodes: reaped.deletedShortcodes,
+      deleted,
+    };
   });
 };
 

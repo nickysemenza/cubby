@@ -18,6 +18,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 /**
@@ -44,8 +45,6 @@ type AllocationRow = {
 
 /** Allocations per transaction, for the audit diff and the quality-target union. */
 export type AllocationSnapshot = Map<FinancialTransactionId, AllocationRow[]>;
-
-const cents = (value: number) => Math.round(value * 100);
 
 /** Stable, readable audit payload: `["PUR-9QXK:-8.96", "PUR-9ZMQ:-7.80"]`. */
 const allocationAuditRows = (rows: readonly AllocationRow[]) =>

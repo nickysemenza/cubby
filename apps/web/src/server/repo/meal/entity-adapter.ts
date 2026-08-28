@@ -1,6 +1,9 @@
 import { mealSortableFields } from "@cubby/schemas/meal";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -31,11 +34,13 @@ export const mealEntityAdapter = defineEntityAdapter({
         entityId,
       };
     },
-    delete: async (ctx, ids) =>
-      deleteMeals(
+    delete: async (ctx, ids) => {
+      await deleteMeals(
         ctx.db,
         await mealShortcodes.all(ctx.db, ids),
         ctx.actorContext,
-      ),
+      );
+      return { deletedReferences: entityMutationReferences("meal", ids) };
+    },
   },
 });

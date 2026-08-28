@@ -7,7 +7,10 @@ import {
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
@@ -66,11 +69,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
-      const { deleted } = await deleteIngredients(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
+      await deleteIngredients(ctx.db, ids, ctx.actorContext);
       const backgroundBatches = await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
@@ -79,7 +78,10 @@ export const ingredientEntityAdapter = defineEntityAdapter({
           source: "ingredient.delete",
         })),
       );
-      return { deleted, backgroundBatches };
+      return {
+        deletedReferences: entityMutationReferences("ingredient", shortcodes),
+        backgroundBatches,
+      };
     },
   },
   merge: {

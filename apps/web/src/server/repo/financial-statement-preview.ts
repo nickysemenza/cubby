@@ -15,6 +15,7 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 
 /**
@@ -25,9 +26,6 @@ import { statementRowExternalId } from "~/server/repo/statement-row-identity";
  */
 const canonical = (value: string) =>
   value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
-
-/** Compare money as integers, so 10.1 and 10.10 are the same amount. */
-const cents = (value: number) => Math.round(value * 100);
 
 const networkFromDescriptor = (descriptor: string) => {
   const normalized = canonical(descriptor);
