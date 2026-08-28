@@ -28,13 +28,7 @@ import type {
   EntityKernelContext,
   EntityPublicOutput,
 } from "../src/server/entity-kernel/adapter";
-import { generatedEntityMutationCreateResultSchema } from "../src/server/generated/entity-bindings.gen";
-import { ENTITY_KERNEL_BINDINGS } from "../src/server/generated/entity-kernel-bindings.gen";
-import { ENTITY_KERNEL_OPERATIONS } from "../src/server/generated/entity-kernel-bindings.gen";
-import {
-  ENTITY_KERNEL_ENTITIES,
-  type EntityKernelEntity,
-} from "../src/server/entity-kernel/contracts";
+import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
 import { ensureDbExtensions } from "./db-extensions";
 import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 import { z } from "zod";
@@ -519,20 +513,28 @@ const remapDBConfig = (
 type SeedOverrides<E extends EntityKernelEntity> = Partial<
   EntityCreateInput<E>
 >;
-const entityKernelEntitySchema = z.enum(ENTITY_KERNEL_ENTITIES);
-
 export async function seedEntity<E extends (typeof shortcodeEntities)[number]>(
   db: Database,
   entity: E,
   overrides?: SeedOverrides<Extract<E, EntityKernelEntity>>,
 ): Promise<EntityPublicOutput<Extract<E, EntityKernelEntity>>> {
-  const [{ mock }, { createTestRequestContext }, { requireActor }] =
-    await Promise.all([
-      import("../src/lib/test/mock-schema"),
-      import("../src/server/testing/request-context"),
-      import("../src/server/request-context"),
-    ]);
+  const [
+    { mock },
+    { createTestRequestContext },
+    { requireActor },
+    { generatedEntityMutationCreateResultSchema },
+    { ENTITY_KERNEL_BINDINGS, ENTITY_KERNEL_OPERATIONS },
+    { ENTITY_KERNEL_ENTITIES },
+  ] = await Promise.all([
+    import("../src/lib/test/mock-schema"),
+    import("../src/server/testing/request-context"),
+    import("../src/server/request-context"),
+    import("../src/server/generated/entity-bindings.gen"),
+    import("../src/server/generated/entity-kernel-bindings.gen"),
+    import("../src/server/entity-kernel/contracts"),
+  ]);
 
+  const entityKernelEntitySchema = z.enum(ENTITY_KERNEL_ENTITIES);
   const kernelEntity = entityKernelEntitySchema.parse(entity);
   const binding = ENTITY_KERNEL_BINDINGS[kernelEntity];
   if (!binding.schemas.createInput || !binding.repository.create) {
