@@ -1381,6 +1381,164 @@ export const renameChargeOrderId = async (
   return true;
 };
 
+const carryMissing = <T>(
+  current: T | null | undefined,
+  incoming: T | null | undefined,
+) => (current == null && incoming != null ? incoming : undefined);
+
+const discardedStatedTotalOf = (
+  survivor: number | null | undefined,
+  dead: number | null | undefined,
+) => (survivor != null && dead != null && survivor !== dead ? dead : undefined);
+
+const carryChargeMetadata = async (
+  tx: DrizzleTransaction,
+  deadId: PurchaseId,
+  survivorId: PurchaseId,
+) => {
+  const selection = {
+    statedTotal: purchase.statedTotal,
+    displayLabel: purchase.displayLabel,
+    notes: purchase.notes,
+    date: purchase.date,
+  };
+  const [dead] = await tx
+    .select(selection)
+    .from(purchase)
+    .where(eq(purchase.id, deadId))
+    .limit(1);
+  const [survivor] = await tx
+    .select(selection)
+    .from(purchase)
+    .where(eq(purchase.id, survivorId))
+    .limit(1);
+  const carried = buildPartialUpdateValues({
+    statedTotal: carryMissing(survivor?.statedTotal, dead?.statedTotal),
+    displayLabel: carryMissing(survivor?.displayLabel, dead?.displayLabel),
+    notes: carryMissing(survivor?.notes, dead?.notes),
+    date: carryMissing(survivor?.date, dead?.date),
+  });
+  if (Object.keys(carried).length > 0) {
+    await tx.update(purchase).set(carried).where(eq(purchase.id, survivorId));
+  }
+  return {
+    carried,
+    discardedStatedTotal: discardedStatedTotalOf(
+      survivor?.statedTotal,
+      dead?.statedTotal,
+    ),
+    survivorStatedTotal: survivor?.statedTotal,
+  };
+};
+
+const moveChargeAllocations = async (
+  tx: DrizzleTransaction,
+  deadId: PurchaseId,
+  survivorId: PurchaseId,
+  actor: ActorContext,
+) => {
+  const movingAllocations =
+    await tx.query.financialTransactionAllocation.findMany({
+      where: and(
+        eq(financialTransactionAllocation.purchaseId, deadId),
+        notDeleted(financialTransactionAllocation),
+      ),
+      columns: { id: true, transactionId: true, amount: true },
+    });
+  const survivorAllocations =
+    await tx.query.financialTransactionAllocation.findMany({
+      where: and(
+        eq(financialTransactionAllocation.purchaseId, survivorId),
+        notDeleted(financialTransactionAllocation),
+      ),
+      columns: { id: true, transactionId: true, amount: true },
+    });
+  const survivorByTransaction = new Map(
+    survivorAllocations.map((row) => [row.transactionId, row]),
+  );
+  const transactionIds = uniq(
+    movingAllocations.map((row) => row.transactionId),
+  );
+  const before = await readAllocations(tx, transactionIds);
+  for (const moving of movingAllocations) {
+    const collision = survivorByTransaction.get(moving.transactionId);
+    if (collision) {
+      await tx
+        .update(financialTransactionAllocation)
+        .set({
+          amount: Number(collision.amount) + Number(moving.amount),
+          updatedAt: new Date(),
+        })
+        .where(eq(financialTransactionAllocation.id, collision.id));
+      await tx
+        .update(financialTransactionAllocation)
+        .set({ deletedAt: new Date() })
+        .where(eq(financialTransactionAllocation.id, moving.id));
+    } else {
+      await tx
+        .update(financialTransactionAllocation)
+        .set({ purchaseId: survivorId, updatedAt: new Date() })
+        .where(eq(financialTransactionAllocation.id, moving.id));
+    }
+  }
+  await applyAllocationChanges(tx, { transactionIds, before, actor });
+};
+
+const moveChargeImages = async (
+  tx: DrizzleTransaction,
+  deadId: PurchaseId,
+  survivorId: PurchaseId,
+) => {
+  const rows = await tx.query.purchaseImage.findMany({
+    where: and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
+    columns: { imageId: true, sortOrder: true },
+  });
+  if (rows.length === 0) return;
+  await tx
+    .insert(purchaseImage)
+    .values(
+      rows.map((row) => ({
+        purchaseId: survivorId,
+        imageId: row.imageId,
+        sortOrder: row.sortOrder,
+      })),
+    )
+    .onConflictDoNothing();
+  await tx
+    .update(purchaseImage)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
+    );
+};
+
+const moveChargeProducts = async (
+  tx: DrizzleTransaction,
+  deadId: PurchaseId,
+  survivorId: PurchaseId,
+) => {
+  const rows = await tx.query.purchaseProduct.findMany({
+    where: and(
+      eq(purchaseProduct.purchaseId, deadId),
+      notDeleted(purchaseProduct),
+    ),
+    columns: { productId: true },
+  });
+  if (rows.length === 0) return;
+  await tx
+    .insert(purchaseProduct)
+    .values(
+      rows.map(({ productId }) => ({ purchaseId: survivorId, productId })),
+    )
+    .onConflictDoNothing();
+  await tx
+    .update(purchaseProduct)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(eq(purchaseProduct.purchaseId, deadId), notDeleted(purchaseProduct)),
+    );
+};
+
 /** Fold charge contents with audited expense re-pointing; callers own index ordering. */
 export const foldChargeInto = async (
   tx: DrizzleTransaction,
@@ -1399,50 +1557,8 @@ export const foldChargeInto = async (
   // discarded one is named in the audit row rather than vanishing: two different
   // stated totals is a real conflict and picking silently would be the worse
   // failure.
-  const [dead] = await tx
-    .select({
-      statedTotal: purchase.statedTotal,
-      displayLabel: purchase.displayLabel,
-      notes: purchase.notes,
-      date: purchase.date,
-    })
-    .from(purchase)
-    .where(eq(purchase.id, deadId))
-    .limit(1);
-  const [survivor] = await tx
-    .select({
-      statedTotal: purchase.statedTotal,
-      displayLabel: purchase.displayLabel,
-      notes: purchase.notes,
-      date: purchase.date,
-    })
-    .from(purchase)
-    .where(eq(purchase.id, survivorId))
-    .limit(1);
-
-  const carried = buildPartialUpdateValues({
-    statedTotal:
-      survivor?.statedTotal == null && dead?.statedTotal != null
-        ? dead.statedTotal
-        : undefined,
-    displayLabel:
-      survivor?.displayLabel == null && dead?.displayLabel != null
-        ? dead.displayLabel
-        : undefined,
-    notes:
-      survivor?.notes == null && dead?.notes != null ? dead.notes : undefined,
-    date: survivor?.date == null && dead?.date != null ? dead.date : undefined,
-  });
-  if (Object.keys(carried).length > 0) {
-    await tx.update(purchase).set(carried).where(eq(purchase.id, survivorId));
-  }
-
-  const discardedStatedTotal =
-    survivor?.statedTotal != null &&
-    dead?.statedTotal != null &&
-    survivor.statedTotal !== dead.statedTotal
-      ? dead.statedTotal
-      : undefined;
+  const { carried, discardedStatedTotal, survivorStatedTotal } =
+    await carryChargeMetadata(tx, deadId, survivorId);
 
   const moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
     from: [deadId],
@@ -1474,112 +1590,11 @@ export const foldChargeInto = async (
   // surviving allocations instead, because a transaction holding a slice of both
   // purchases collapses to a single slice on the survivor and becomes singly
   // linked again — a null→non-null move `repointEdge` could never produce.
-  const movingAllocations =
-    await tx.query.financialTransactionAllocation.findMany({
-      where: and(
-        eq(financialTransactionAllocation.purchaseId, deadId),
-        notDeleted(financialTransactionAllocation),
-      ),
-      columns: { id: true, transactionId: true, amount: true },
-    });
-  const survivorAllocations =
-    await tx.query.financialTransactionAllocation.findMany({
-      where: and(
-        eq(financialTransactionAllocation.purchaseId, survivorId),
-        notDeleted(financialTransactionAllocation),
-      ),
-      columns: { id: true, transactionId: true, amount: true },
-    });
-  const survivorByTransaction = new Map(
-    survivorAllocations.map((row) => [row.transactionId, row]),
-  );
-  const allocationTransactionIds = uniq(
-    movingAllocations.map((row) => row.transactionId),
-  );
-  const allocationsBefore = await readAllocations(tx, allocationTransactionIds);
-
-  for (const moving of movingAllocations) {
-    const collision = survivorByTransaction.get(moving.transactionId);
-    if (collision) {
-      // Sum, then retire the absorbed row. Order matters: the partial unique
-      // index on (transactionId, purchaseId) would abort the merge if the
-      // repoint below ran while both rows were still live.
-      await tx
-        .update(financialTransactionAllocation)
-        .set({
-          amount: Number(collision.amount) + Number(moving.amount),
-          updatedAt: new Date(),
-        })
-        .where(eq(financialTransactionAllocation.id, collision.id));
-      await tx
-        .update(financialTransactionAllocation)
-        .set({ deletedAt: new Date() })
-        .where(eq(financialTransactionAllocation.id, moving.id));
-      continue;
-    }
-    await tx
-      .update(financialTransactionAllocation)
-      .set({ purchaseId: survivorId, updatedAt: new Date() })
-      .where(eq(financialTransactionAllocation.id, moving.id));
-  }
-
-  await applyAllocationChanges(tx, {
-    transactionIds: allocationTransactionIds,
-    before: allocationsBefore,
-    actor,
-  });
+  await moveChargeAllocations(tx, deadId, survivorId, actor);
 
   // Duplicate document/product links collapse instead of aborting the merge.
-  const movingImages = await tx.query.purchaseImage.findMany({
-    where: and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
-    columns: { imageId: true, sortOrder: true },
-  });
-  if (movingImages.length > 0) {
-    await tx
-      .insert(purchaseImage)
-      .values(
-        movingImages.map((img) => ({
-          purchaseId: survivorId,
-          imageId: img.imageId,
-          sortOrder: img.sortOrder,
-        })),
-      )
-      .onConflictDoNothing();
-    await tx
-      .update(purchaseImage)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(eq(purchaseImage.purchaseId, deadId), notDeleted(purchaseImage)),
-      );
-  }
-
-  const movingProducts = await tx.query.purchaseProduct.findMany({
-    where: and(
-      eq(purchaseProduct.purchaseId, deadId),
-      notDeleted(purchaseProduct),
-    ),
-    columns: { productId: true },
-  });
-  if (movingProducts.length > 0) {
-    await tx
-      .insert(purchaseProduct)
-      .values(
-        movingProducts.map((row) => ({
-          purchaseId: survivorId,
-          productId: row.productId,
-        })),
-      )
-      .onConflictDoNothing();
-    await tx
-      .update(purchaseProduct)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(purchaseProduct.purchaseId, deadId),
-          notDeleted(purchaseProduct),
-        ),
-      );
-  }
+  await moveChargeImages(tx, deadId, survivorId);
+  await moveChargeProducts(tx, deadId, survivorId);
 
   // Evidence-changing invariant: this fold just re-pointed Expenses,
   // FinancialTransactions, and documents onto the survivor — the exact class
@@ -1630,7 +1645,7 @@ export const foldChargeInto = async (
   if (discardedStatedTotal !== undefined) {
     survivorChanges.discardedStatedTotal = {
       from: discardedStatedTotal,
-      to: survivor?.statedTotal ?? null,
+      to: survivorStatedTotal ?? null,
     };
   }
 

@@ -1,12 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
-import {
-  Check,
-  ClipboardCopy,
-  type LucideIcon,
-  MoreHorizontal,
-} from "lucide-react";
+import { Check, ClipboardCopy, MoreHorizontal } from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import { z } from "zod";
 
@@ -57,11 +52,6 @@ const titleVariants = cva("font-heading tracking-tight break-words", {
   },
   defaultVariants: { variant: "list" },
 });
-
-interface PageHeroMetaItem {
-  icon?: LucideIcon;
-  label: ReactNode;
-}
 
 /** Inline ledger stat on the detail spec-plate hero (on hand, value, ...). */
 export interface DetailHeroStat {
@@ -254,7 +244,6 @@ function CopyableHeroNo({ heroNo }: { heroNo: string }) {
 interface PageHeroProps extends VariantProps<typeof heroVariants> {
   title: ReactNode;
   eyebrow?: ReactNode;
-  meta?: PageHeroMetaItem[];
   actions?: ReactNode;
   entity?: Entity;
   decoration?: "accent" | "none";
@@ -320,10 +309,37 @@ function ListWorkbench({
  * an entity-inked accent bar. The canonical renderer for every non-detail page
  * heading. The unified {@link PageHeader} delegates list rendering here.
  */
+function HeroEyebrow({
+  eyebrow,
+  segments,
+  countLabel,
+}: {
+  eyebrow: ReactNode | undefined;
+  segments: ReturnType<typeof deriveEyebrowSegments>;
+  countLabel: string | false;
+}) {
+  const hasPath = eyebrow !== undefined || segments.length > 0;
+  if (!hasPath && !countLabel) return null;
+  return (
+    <Eyebrow className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-medium tracking-[0.18em]">
+      {eyebrow ?? <EyebrowPath segments={segments} />}
+      {countLabel && (
+        <span className="inline-flex items-center gap-x-2">
+          {hasPath && (
+            <span aria-hidden className="text-border">
+              ·
+            </span>
+          )}
+          {countLabel}
+        </span>
+      )}
+    </Eyebrow>
+  );
+}
+
 function PageHero({
   title,
   eyebrow,
-  meta,
   actions,
   entity,
   variant = "list",
@@ -338,7 +354,6 @@ function PageHero({
   // segments from the entity so the leading group can link out.
   const segments =
     eyebrow === undefined && entity ? deriveEyebrowSegments(entity, title) : [];
-  const hasPath = eyebrow !== undefined || segments.length > 0;
   const hasCount = count !== undefined;
   // Only a plain-string title reads sensibly appended after the number
   // ("1,240 Expenses"); non-string titles (rare utility pages) just show
@@ -375,21 +390,11 @@ function PageHero({
           !mobileTitleVisible && "max-md:sr-only",
         )}
       >
-        {(hasPath || hasCount) && (
-          <Eyebrow className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-medium tracking-[0.18em]">
-            {eyebrow ?? <EyebrowPath segments={segments} />}
-            {countLabel && (
-              <span className="inline-flex items-center gap-x-2">
-                {hasPath && (
-                  <span aria-hidden className="text-border">
-                    ·
-                  </span>
-                )}
-                {countLabel}
-              </span>
-            )}
-          </Eyebrow>
-        )}
+        <HeroEyebrow
+          eyebrow={eyebrow}
+          segments={segments}
+          countLabel={countLabel}
+        />
         <div
           className={cn(
             "flex items-center gap-2",
@@ -405,20 +410,6 @@ function PageHero({
             {title}
           </h1>
         </div>
-        {meta && meta.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs text-muted-foreground">
-            {meta.map((item, index) => (
-              <span
-                // oxlint-disable-next-line react/no-array-index-key -- Hero metadata is a fixed positional display list without stable ids, and labels may repeat.
-                key={index}
-                className="inline-flex items-center gap-1.5" /* tight */
-              >
-                {item.icon && <item.icon className="size-3 shrink-0" />}
-                <span>{item.label}</span>
-              </span>
-            ))}
-          </div>
-        )}
       </div>
       {actions && (
         <div className="flex w-full flex-wrap gap-2 sm:w-auto print:hidden">

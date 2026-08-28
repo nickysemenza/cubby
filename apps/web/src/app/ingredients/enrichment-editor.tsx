@@ -291,6 +291,58 @@ export interface EnrichmentEditorHandle {
 
 type EnrichmentEditorLayout = "side" | "compact";
 
+const conversionHintForGaps = (gaps: ReturnType<typeof analyzeGaps>) => {
+  if (gaps.priceIslanded) {
+    return {
+      title: "Connect the price",
+      detail: `— links “${gaps.islandedUnit}” to grams so your price is reachable`,
+    };
+  }
+  if (gaps.conversionNeeded) {
+    return {
+      title: "Add conversions",
+      detail: `— covers ${gaps.conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`,
+    };
+  }
+  return {
+    title: "Add conversions",
+    detail: "— optional, e.g. 1 cup = 240 g",
+  };
+};
+
+function EnrichmentEditorBody({
+  layout,
+  editorFields,
+  livePanels,
+  footer,
+}: {
+  layout: EnrichmentEditorLayout;
+  editorFields: ReactNode;
+  livePanels: ReactNode;
+  footer: ReactNode;
+}) {
+  if (layout === "compact") {
+    return (
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+        <Stack className="min-w-0">
+          {editorFields}
+          {footer}
+        </Stack>
+        <div className="min-w-0">{livePanels}</div>
+      </div>
+    );
+  }
+  return (
+    <Stack>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <Stack className="min-w-0 flex-1">{editorFields}</Stack>
+        {livePanels}
+      </div>
+      {footer}
+    </Stack>
+  );
+}
+
 /** Slot API: the surface supplies chrome; the editor owns the editing body. */
 interface EnrichmentEditorSlots {
   /** Above the body (Browse: nothing; Queue: AI confidence + position). */
@@ -459,17 +511,7 @@ export function EnrichmentEditor({
 
   const isPending = createProduct.isPending || updateProduct.isPending;
 
-  const convHint = gaps.priceIslanded
-    ? {
-        title: "Connect the price",
-        detail: `— links “${gaps.islandedUnit}” to grams so your price is reachable`,
-      }
-    : gaps.conversionNeeded
-      ? {
-          title: "Add conversions",
-          detail: `— covers ${gaps.conversionGaps.join(", ")} (e.g. 1 cup = 240 g)`,
-        }
-      : { title: "Add conversions", detail: "— optional, e.g. 1 cup = 240 g" };
+  const convHint = conversionHintForGaps(gaps);
 
   const editorFields = (
     <>
@@ -558,27 +600,12 @@ export function EnrichmentEditor({
     />
   );
 
-  if (layout === "compact") {
-    return (
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
-        <Stack className="min-w-0">
-          {editorFields}
-          {slots.footer}
-        </Stack>
-        <div className="min-w-0">{livePanels}</div>
-      </div>
-    );
-  }
-
   return (
-    <Stack>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <Stack className="min-w-0 flex-1">{editorFields}</Stack>
-
-        {livePanels}
-      </div>
-
-      {slots.footer}
-    </Stack>
+    <EnrichmentEditorBody
+      layout={layout}
+      editorFields={editorFields}
+      livePanels={livePanels}
+      footer={slots.footer}
+    />
   );
 }

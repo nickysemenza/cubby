@@ -106,12 +106,48 @@ type SearchDocumentRepairMetadata = z.output<
 type SearchDocumentRepairMetadataInput = z.input<
   typeof searchDocumentRepairCoordinatorPayloadSchema
 >;
+type SearchDocumentRepairWorkflow = SearchDocumentRepairMetadata["workflow"];
+type SearchDocumentRepairBatch = Awaited<
+  ReturnType<typeof findLatestBackgroundWorkflow>
+>;
 
 const readSearchDocumentRepairMetadata = <Payload>(
   value: Payload,
 ): SearchDocumentRepairMetadata | null => {
   const parsed = searchDocumentRepairCoordinatorPayloadSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
+};
+
+type SearchDocumentHealthState =
+  | "never-run"
+  | "running"
+  | "completed"
+  | "failed";
+type SearchDocumentHealth = {
+  state: SearchDocumentHealthState;
+  completedAt: Date | null;
+};
+
+const searchDocumentHealth = (
+  batch: SearchDocumentRepairBatch,
+): SearchDocumentHealth => {
+  if (!batch) return { state: "never-run", completedAt: null };
+  if (batch.status === "queued" || batch.status === "running") {
+    return { state: "running", completedAt: null };
+  }
+  return {
+    state: batch.status === "succeeded" ? "completed" : "failed",
+    completedAt: batch.lastJobFinishedAt,
+  };
+};
+
+const searchDocumentFindings = (
+  workflow: SearchDocumentRepairWorkflow | undefined,
+) => {
+  const missing = workflow?.missing ?? 0;
+  const stale = workflow?.stale ?? 0;
+  const orphaned = workflow?.orphaned ?? 0;
+  return { missing, stale, orphaned, total: missing + stale + orphaned };
 };
 
 /** Process one bounded document-repair audit page. */
@@ -248,35 +284,17 @@ export async function inspectSearchDocumentHealth(db: Database) {
     ? readSearchDocumentRepairMetadata(batch.metadata)
     : null;
   const workflow = metadata?.workflow;
-  const state = !batch
-    ? "never-run"
-    : batch.status === "queued" || batch.status === "running"
-      ? "running"
-      : batch.status === "succeeded"
-        ? "completed"
-        : "failed";
-  const findings = {
-    missing: workflow?.missing ?? 0,
-    stale: workflow?.stale ?? 0,
-    orphaned: workflow?.orphaned ?? 0,
-    total:
-      (workflow?.missing ?? 0) +
-      (workflow?.stale ?? 0) +
-      (workflow?.orphaned ?? 0),
-  };
+  const { state, completedAt } = searchDocumentHealth(batch);
   return {
     state,
     batchId: batch?.id ?? null,
-    findings,
+    findings: searchDocumentFindings(workflow),
     repaired: {
       queued: workflow?.queued ?? 0,
       retired: workflow?.retired ?? 0,
     },
     reused: metadata?.reused ?? false,
-    completedAt:
-      state === "completed" || state === "failed"
-        ? (batch?.lastJobFinishedAt ?? null)
-        : null,
+    completedAt,
   } as const;
 }
 

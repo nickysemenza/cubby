@@ -166,7 +166,7 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
     filters.subjectProductId ? [filters.subjectProductId].flat() : [],
     "product",
   );
-  const subjectProductCondition =
+  const subjectProductCondition = () =>
     filters.subjectProductId &&
     [filters.subjectProductId].flat().length > 0 &&
     subjectProductIds.length === 0 &&
@@ -177,7 +177,7 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
           subjectProductIds,
           filters.subjectProductPresenceFilter,
         );
-  const parentTaskCondition =
+  const parentTaskCondition = () =>
     parentTaskCodes.length > 0 &&
     parentTaskIds.length === 0 &&
     !filters.parentTaskPresenceFilter
@@ -187,25 +187,50 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
           parentTaskIds,
           filters.parentTaskPresenceFilter,
         );
-  const subjectProductNameMatches = filters.search
-    ? dbClient
-        .select({ id: product.id })
-        .from(product)
-        .where(
-          and(
-            notDeleted(product),
-            formatSearchTerm(product.name, filters.search),
-          ),
-        )
-    : undefined;
-  const searchCondition = filters.search
-    ? or(
-        formatSearchTerm(task.name, filters.search),
-        subjectProductNameMatches
-          ? inArray(task.subjectProductId, subjectProductNameMatches)
-          : undefined,
-      )
-    : undefined;
+  const searchCondition = () => {
+    if (!filters.search) return undefined;
+    const subjectProductNameMatches = dbClient
+      .select({ id: product.id })
+      .from(product)
+      .where(
+        and(
+          notDeleted(product),
+          formatSearchTerm(product.name, filters.search),
+        ),
+      );
+    return or(
+      formatSearchTerm(task.name, filters.search),
+      inArray(task.subjectProductId, subjectProductNameMatches),
+    );
+  };
+  const scopeCondition = () =>
+    scopedProjectIds
+      ? scopedProjectIds.length > 0
+        ? inArray(task.projectId, scopedProjectIds)
+        : sql`false`
+      : undefined;
+  const dueConditions = () => [
+    filters.dueFrom
+      ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
+      : undefined,
+    filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
+    filters.dueRelative === "beforeToday"
+      ? lt(effectiveTaskDueDateSql(), householdLocalDate())
+      : filters.dueRelative === "onOrBeforeToday"
+        ? lte(effectiveTaskDueDateSql(), householdLocalDate())
+        : undefined,
+    presenceCondition(
+      task.dueDate,
+      filters.duePresenceFilter,
+      and(isNull(task.dueDate), isNull(task.dueEndDate)),
+    ),
+  ];
+  const completionCondition = () =>
+    filters.completion === "open"
+      ? ne(task.status, "done")
+      : filters.completion === "done"
+        ? eq(task.status, "done")
+        : undefined;
 
   return buildSearchConditions(
     task,
@@ -213,21 +238,17 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
     [
       ...auditDateWhereConditions(task, filters),
       ...relatedWhereConditions("task", filters, task.id),
-      searchCondition,
+      searchCondition(),
       eqAny(task.status, filters.status),
       // Carries `projectPresenceFilter` too — it ORs with the id selection, so
       // it can't be a sibling condition here (that AND is what made
       // "project A or unassigned" inexpressible).
       projectCondition,
-      subjectProductCondition,
+      subjectProductCondition(),
       eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
-      parentTaskCondition,
-      scopedProjectIds
-        ? scopedProjectIds.length > 0
-          ? inArray(task.projectId, scopedProjectIds)
-          : sql`false`
-        : undefined,
+      parentTaskCondition(),
+      scopeCondition(),
       // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
       // ranged task still inside its window isn't treated as overdue, matching
       // the "overdue" semantics used on the board/stat tiles.
@@ -238,27 +259,10 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
       // documented for `expense.date` in `expense/lookup.ts`'s
       // `buildExpenseWhereClause`). The dashboard surfaces the count of rows
       // hidden this way as `hiddenByDate.tasks`.
-      filters.dueFrom
-        ? gte(effectiveTaskDueDateSql(), filters.dueFrom)
-        : undefined,
-      filters.dueTo ? lte(effectiveTaskDueDateSql(), filters.dueTo) : undefined,
-      filters.dueRelative === "beforeToday"
-        ? lt(effectiveTaskDueDateSql(), householdLocalDate())
-        : filters.dueRelative === "onOrBeforeToday"
-          ? lte(effectiveTaskDueDateSql(), householdLocalDate())
-          : undefined,
-      presenceCondition(
-        task.dueDate,
-        filters.duePresenceFilter,
-        and(isNull(task.dueDate), isNull(task.dueEndDate)),
-      ),
+      ...dueConditions(),
       // Completion scope: undefined/"all" adds no condition (today's default,
       // unchanged) — see taskCompletionSchema.
-      filters.completion === "open"
-        ? ne(task.status, "done")
-        : filters.completion === "done"
-          ? eq(task.status, "done")
-          : undefined,
+      completionCondition(),
     ],
   );
 };

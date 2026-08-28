@@ -76,6 +76,80 @@ const FACET_COLUMN_IDS = {
   orderIdPresence: "orderId",
 } as const;
 
+function useExpenseScopeChips() {
+  const search = expensesRoute.useSearch();
+  const navigate = expensesRoute.useNavigate();
+  const clearScope = useCallback(
+    (key: "productId" | "order" | "purchaseId" | "subprojects") => {
+      void navigate({
+        search: (previous) => ({ ...previous, [key]: undefined }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const productId = search.productId;
+  const invalidProduct = productId === UNRESOLVABLE_ENTITY_FILTER;
+  const productQuery = useQuery({
+    ...entityDetailFor("product").queryOptions(productId ?? ""),
+    enabled: Boolean(productId) && !invalidProduct,
+  });
+  const productChip =
+    productId && (invalidProduct || productQuery.data) ? (
+      <ScopeChip
+        name="Product"
+        value={productQuery.data?.name ?? productId}
+        onClear={() => clearScope("productId")}
+      />
+    ) : undefined;
+
+  const orderChip = search.order ? (
+    <ScopeChip
+      name="Order"
+      value={search.order}
+      onClear={() => clearScope("order")}
+    />
+  ) : undefined;
+
+  const purchaseId = search.purchaseId;
+  const invalidPurchase = purchaseId === UNRESOLVABLE_ENTITY_FILTER;
+  const purchaseQuery = useQuery({
+    ...entityDetailFor("purchase").queryOptions(purchaseId ?? ""),
+    enabled: Boolean(purchaseId) && !invalidPurchase,
+  });
+  const purchaseChip =
+    purchaseId && (invalidPurchase || purchaseQuery.data) ? (
+      <ScopeChip
+        name="Purchase"
+        value={
+          purchaseQuery.data ? purchaseLabel(purchaseQuery.data) : purchaseId
+        }
+        onClear={() => clearScope("purchaseId")}
+      />
+    ) : undefined;
+
+  const subProjectsChip =
+    search.subprojects === "true" ? (
+      <ScopeChip
+        name="Project scope"
+        value="Entire subtree"
+        onClear={() => clearScope("subprojects")}
+      />
+    ) : undefined;
+  if (!productChip && !orderChip && !purchaseChip && !subProjectsChip) {
+    return undefined;
+  }
+  return (
+    <Row align="center" gap="xs">
+      {productChip}
+      {orderChip}
+      {purchaseChip}
+      {subProjectsChip}
+    </Row>
+  );
+}
+
 export function ExpenseList() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
@@ -307,111 +381,7 @@ export function ExpenseList() {
   // name (never the raw id). `getByID` is the same query every other
   // id→product-name lookup in the app uses (e.g. `ProductPreviewContent`),
   // reused rather than duplicated.
-  const expensesSearch = expensesRoute.useSearch();
-  const expensesNavigate = expensesRoute.useNavigate();
-  const scopedProductId = expensesSearch.productId;
-  const hasInvalidProductScope = scopedProductId === UNRESOLVABLE_ENTITY_FILTER;
-  const scopedProductQuery = useQuery({
-    ...entityDetailFor("product").queryOptions(scopedProductId ?? ""),
-    enabled: Boolean(scopedProductId) && !hasInvalidProductScope,
-  });
-  const clearProductScope = useCallback(() => {
-    void expensesNavigate({
-      search: (prev) => ({ ...prev, productId: undefined }),
-      replace: true,
-    });
-  }, [expensesNavigate]);
-  const productScopeChip =
-    scopedProductId && (hasInvalidProductScope || scopedProductQuery.data) ? (
-      <ScopeChip
-        name="Product"
-        value={scopedProductQuery.data?.name ?? scopedProductId}
-        onClear={clearProductScope}
-      />
-    ) : undefined;
-
-  // `?order=` (the ledger's Order # cell) is the same invisible-filter
-  // situation as `?productId=` above — `orderIdExact` has no column, so it needs
-  // its own visible surface. No lookup query: the order id IS the display value.
-  // It no longer arrives paired with a `vendor` (an order id resolves through
-  // the Purchase, where `(vendorId, orderId)` is partial-unique), so clearing it
-  // drops `order` and nothing else; a Vendor selection is a real column filter
-  // with its own chip.
-  const scopedOrderId = expensesSearch.order;
-  const clearOrderScope = useCallback(() => {
-    void expensesNavigate({
-      search: (prev) => ({ ...prev, order: undefined }),
-      replace: true,
-    });
-  }, [expensesNavigate]);
-  const orderScopeChip = scopedOrderId ? (
-    <ScopeChip name="Order" value={scopedOrderId} onClear={clearOrderScope} />
-  ) : undefined;
-
-  // `?purchaseId=` (a deep link from the Purchase detail page) is the same
-  // invisible-filter situation as `?productId=` above — the manifest's
-  // `purchaseId` spec has no column, so it needs its own visible surface. Like
-  // `productScopeChip`, this resolves a display label via a lookup query rather
-  // than showing the raw id — `purchaseLabel` over the fetched `PurchaseOut`,
-  // the same helper `link-expenses-dialog.tsx` uses for a Purchase's identity.
-  const scopedPurchaseId = expensesSearch.purchaseId;
-  const hasInvalidPurchaseScope =
-    scopedPurchaseId === UNRESOLVABLE_ENTITY_FILTER;
-  const scopedPurchaseQuery = useQuery({
-    ...entityDetailFor("purchase").queryOptions(scopedPurchaseId ?? ""),
-    enabled: Boolean(scopedPurchaseId) && !hasInvalidPurchaseScope,
-  });
-  const clearPurchaseScope = useCallback(() => {
-    void expensesNavigate({
-      search: (prev) => ({ ...prev, purchaseId: undefined }),
-      replace: true,
-    });
-  }, [expensesNavigate]);
-  const purchaseScopeChip =
-    scopedPurchaseId &&
-    (hasInvalidPurchaseScope || scopedPurchaseQuery.data) ? (
-      <ScopeChip
-        name="Purchase"
-        value={
-          scopedPurchaseQuery.data
-            ? purchaseLabel(scopedPurchaseQuery.data)
-            : scopedPurchaseId
-        }
-        onClear={clearPurchaseScope}
-      />
-    ) : undefined;
-
-  // Project relationship summaries aggregate descendants. Their deep links
-  // carry `?subprojects=true` so the ledger and summary reconcile; expose that
-  // otherwise-invisible URL-only scope and let the user narrow back to the
-  // selected project without clearing the project itself.
-  const includesSubProjects = expensesSearch.subprojects === "true";
-  const clearSubProjectsScope = useCallback(() => {
-    void expensesNavigate({
-      search: (prev) => ({ ...prev, subprojects: undefined }),
-      replace: true,
-    });
-  }, [expensesNavigate]);
-  const subProjectsScopeChip = includesSubProjects ? (
-    <ScopeChip
-      name="Project scope"
-      value="Entire subtree"
-      onClear={clearSubProjectsScope}
-    />
-  ) : undefined;
-
-  const scopeChips =
-    productScopeChip ||
-    orderScopeChip ||
-    purchaseScopeChip ||
-    subProjectsScopeChip ? (
-      <Row align="center" gap="xs">
-        {productScopeChip}
-        {orderScopeChip}
-        {purchaseScopeChip}
-        {subProjectsScopeChip}
-      </Row>
-    ) : undefined;
+  const scopeChips = useExpenseScopeChips();
 
   const {
     onRowClick,

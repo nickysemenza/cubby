@@ -76,6 +76,48 @@ interface ProductDetailProps {
   product: ProductWithFoodOut;
 }
 
+function productOnHandStat({
+  presence,
+  quantityVariance,
+}: {
+  presence: ReturnType<typeof heroPresence>;
+  quantityVariance: ProductWithFoodOut["quantityVariance"];
+}): DetailHeroStat {
+  return presence.onHand.kind === "amount"
+    ? {
+        label: presence.onHand.label,
+        value: (
+          <OptionalStatusText tone={quantityVariance ? "warning" : undefined}>
+            {tryFormatAmount(presence.onHand.amount)}
+          </OptionalStatusText>
+        ),
+      }
+    : { label: presence.onHand.label, value: presence.onHand.count };
+}
+
+function productExpectedStat(
+  quantityLedger: ProductWithFoodOut["quantityLedger"],
+): DetailHeroStat {
+  return {
+    label: "Expected",
+    value: (
+      <span className="tabular-nums">
+        <OptionalStatusText
+          tone={quantityLedger.expectedQuantity < 0 ? "destructive" : undefined}
+        >
+          {quantityLedger.expectedQuantity}
+        </OptionalStatusText>
+        {quantityLedger.unknownAcquisitionLines > 0 ? (
+          <StatusText tone="warning">{` +${quantityLedger.unknownAcquisitionLines}?`}</StatusText>
+        ) : null}
+        {quantityLedger.unknownExitLines > 0 ? (
+          <StatusText tone="warning">{` −${quantityLedger.unknownExitLines}?`}</StatusText>
+        ) : null}
+      </span>
+    ),
+  };
+}
+
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const relationshipRouteQuery = useProductRelationshipRoute(product.id);
   const { commonSections, editMode, mappings } = useEntityDetail<
@@ -443,46 +485,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     componentCount: product.componentCount,
   });
 
-  const onHandStat: DetailHeroStat =
-    presence.onHand.kind === "amount"
-      ? {
-          label: presence.onHand.label,
-          value: (
-            <OptionalStatusText tone={quantityVariance ? "warning" : undefined}>
-              {tryFormatAmount(presence.onHand.amount)}
-            </OptionalStatusText>
-          ),
-        }
-      : { label: presence.onHand.label, value: presence.onHand.count };
+  const onHandStat = productOnHandStat({ presence, quantityVariance });
   // Bought minus gone, from the Expense ledger below. Sits beside On hand
   // because the comparison is the whole point — the two disagreeing is the
   // signal, so the shelf figure takes the warning tone rather than adding a
   // third number stat nobody scans.
-  const expectedStat: DetailHeroStat = {
-    label: "Expected",
-    value: (
-      <span className="tabular-nums">
-        <OptionalStatusText
-          tone={quantityLedger.expectedQuantity < 0 ? "destructive" : undefined}
-        >
-          {quantityLedger.expectedQuantity}
-        </OptionalStatusText>
-        {/* Same honesty cue as the products table: an expense line with no
-            recorded quantity contributes nothing, so without this a product
-            with six unquantified receipts reads as a confident number. */}
-        {quantityLedger.unknownAcquisitionLines > 0 ? (
-          <StatusText tone="warning">
-            {` +${quantityLedger.unknownAcquisitionLines}?`}
-          </StatusText>
-        ) : null}
-        {quantityLedger.unknownExitLines > 0 ? (
-          <StatusText tone="warning">
-            {` −${quantityLedger.unknownExitLines}?`}
-          </StatusText>
-        ) : null}
-      </span>
-    ),
-  };
+  const expectedStat = productExpectedStat(quantityLedger);
   // No Price stat here — the editable price field in Basic Information is
   // the source of truth and sits right in the aside rail.
   const heroStats: DetailHeroStat[] = [

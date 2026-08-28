@@ -345,23 +345,8 @@ export function normalizeTableLayout(
     ...lockedEnd,
   ];
 
-  const columnVisibility: ColumnVisibilityState = {};
-  for (const id of columnIds) {
-    const requested = candidate?.columnVisibility?.[id];
-    columnVisibility[id] = isLockedColumnId(id)
-      ? true
-      : (requested ?? defaults.columnVisibility[id] !== false);
-  }
-
-  const columnSizing: ColumnSizingState = {};
-  for (const [id, width] of Object.entries(candidate?.columnSizing ?? {})) {
-    if (!known.has(id) || !Number.isFinite(width)) continue;
-    const bounds = sizeBounds[id];
-    columnSizing[id] = Math.min(
-      bounds?.max ?? MAX_COLUMN_WIDTH,
-      Math.max(bounds?.min ?? MIN_COLUMN_WIDTH, Math.round(width)),
-    );
-  }
+  const columnVisibility = normalizedVisibility(candidate, defaults);
+  const columnSizing = normalizedSizing(candidate, known, sizeBounds);
 
   return {
     version: 1,
@@ -370,6 +355,37 @@ export function normalizeTableLayout(
     columnVisibility,
     columnSizing,
   };
+}
+
+function normalizedVisibility(
+  candidate: Partial<CubbyTableLayoutV1> | undefined,
+  defaults: CubbyTableLayoutV1,
+): ColumnVisibilityState {
+  const result: ColumnVisibilityState = {};
+  for (const id of defaults.columnOrder) {
+    const requested = candidate?.columnVisibility?.[id];
+    result[id] =
+      isLockedColumnId(id) ||
+      (requested ?? defaults.columnVisibility[id] !== false);
+  }
+  return result;
+}
+
+function normalizedSizing(
+  candidate: Partial<CubbyTableLayoutV1> | undefined,
+  known: ReadonlySet<string>,
+  sizeBounds: ColumnSizeBounds,
+): ColumnSizingState {
+  const result: ColumnSizingState = {};
+  for (const [id, width] of Object.entries(candidate?.columnSizing ?? {})) {
+    if (!known.has(id) || !Number.isFinite(width)) continue;
+    const bounds = sizeBounds[id];
+    result[id] = Math.min(
+      bounds?.max ?? MAX_COLUMN_WIDTH,
+      Math.max(bounds?.min ?? MIN_COLUMN_WIDTH, Math.round(width)),
+    );
+  }
+  return result;
 }
 
 function columnIdsFromDefs<TData extends RowData>(
@@ -432,6 +448,31 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
   return scale ? Number(scale) * 4 : undefined;
 }
 
+function normalizedColumnSize<TData extends RowData>(
+  definition: MaterializedColumnDef<TData>,
+  id: string | undefined,
+  className: string,
+) {
+  const size = definition.size ?? tailwindWidth(className, "w");
+  const fixedImageSize = id === "image" ? (size ?? 64) : undefined;
+  const normalizedSize = fixedImageSize ?? size;
+  const minSize =
+    fixedImageSize ??
+    definition.minSize ??
+    tailwindWidth(className, "min-w") ??
+    (normalizedSize != null
+      ? Math.min(normalizedSize, MIN_COLUMN_WIDTH)
+      : undefined);
+  const maxSize =
+    fixedImageSize ??
+    definition.maxSize ??
+    tailwindWidth(className, "max-w") ??
+    (normalizedSize != null
+      ? Math.max(normalizedSize * 2, minSize ?? MIN_COLUMN_WIDTH)
+      : undefined);
+  return { size: normalizedSize, minSize, maxSize };
+}
+
 /**
  * Imports the old Tailwind width vocabulary once at the deep-module boundary.
  * v9 numeric sizes then own rendering, sticky offsets, resizing, and storage.
@@ -448,26 +489,15 @@ function normalizeColumnDefinitions<TData extends RowData>(
     }
     const className = definition.meta?.className ?? "";
     const id = columnIdsFromDefs([definition])[0];
-    const size = definition.size ?? tailwindWidth(className, "w");
     // Image is a structural identity strip, not a data column. Keep it exactly
     // as wide as its declared thumbnail cell so a stale persisted resize cannot
     // leave an empty gutter between the dedicated image and the record name.
-    const fixedImageSize = id === "image" ? (size ?? 64) : undefined;
-    const normalizedSize = fixedImageSize ?? size;
-    const minSize =
-      fixedImageSize ??
-      definition.minSize ??
-      tailwindWidth(className, "min-w") ??
-      (normalizedSize != null
-        ? Math.min(normalizedSize, MIN_COLUMN_WIDTH)
-        : undefined);
-    const maxSize =
-      fixedImageSize ??
-      definition.maxSize ??
-      tailwindWidth(className, "max-w") ??
-      (normalizedSize != null
-        ? Math.max(normalizedSize * 2, minSize ?? MIN_COLUMN_WIDTH)
-        : undefined);
+    const {
+      size: normalizedSize,
+      minSize,
+      maxSize,
+    } = normalizedColumnSize(definition, id, className);
+    const fixedImageSize = id === "image" ? normalizedSize : undefined;
     const locked = id != null && isLockedColumnId(id);
     const normalized = {
       ...definition,

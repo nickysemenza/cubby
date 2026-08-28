@@ -20,6 +20,57 @@ type DraftSection = {
   instructions: string[];
 };
 
+type RecipeBlockAccumulator = {
+  sections: DraftSection[];
+  current: DraftSection;
+  headnote: string[];
+  tips: string[];
+  seenHeading: boolean;
+};
+
+const emptySection = (name: string | null = null): DraftSection => ({
+  name,
+  ingredients: [],
+  instructions: [],
+});
+
+const flushSection = (draft: RecipeBlockAccumulator): void => {
+  if (
+    draft.current.ingredients.length > 0 ||
+    draft.current.instructions.length > 0
+  ) {
+    draft.sections.push(draft.current);
+  }
+};
+
+const consumeRecipeBlock = (
+  draft: RecipeBlockAccumulator,
+  block: NotionBlock,
+): void => {
+  const text = block.text?.trim() ?? "";
+  if (HEADING_TYPES.has(block.type)) {
+    flushSection(draft);
+    draft.current = emptySection(text.length >= 2 ? text : null);
+    draft.seenHeading = true;
+    return;
+  }
+
+  switch (block.type) {
+    case "bulleted_list_item":
+      if (text) draft.current.ingredients.push(text);
+      return;
+    case "numbered_list_item":
+      if (text) draft.current.instructions.push(text);
+      return;
+    case "quote":
+    case "callout":
+      if (text) (draft.seenHeading ? draft.tips : draft.headnote).push(text);
+      return;
+    case "paragraph":
+      if (text && !draft.seenHeading) draft.headnote.push(text);
+  }
+};
+
 // `getPageContent` wraps Notion column layouts as a single `columns` block with
 // children; flatten so recipe content inside columns is still seen.
 function flattenColumns(blocks: NotionBlock[]): NotionBlock[] {
@@ -36,63 +87,24 @@ export function notionPageToImportRecipe(
   rawBlocks: NotionBlock[],
 ): ImportRecipe {
   const blocks = flattenColumns(rawBlocks);
-
-  const sections: DraftSection[] = [];
-  let current: DraftSection = { name: null, ingredients: [], instructions: [] };
-  const headnote: string[] = [];
-  const tips: string[] = [];
-  let seenHeading = false;
-
+  const draft: RecipeBlockAccumulator = {
+    sections: [],
+    current: emptySection(),
+    headnote: [],
+    tips: [],
+    seenHeading: false,
+  };
+  for (const block of blocks) consumeRecipeBlock(draft, block);
   // Drop sections with neither ingredients nor steps (e.g. a leading `# Title`
   // H1 that only carries the page name).
-  const flushSection = () => {
-    if (current.ingredients.length > 0 || current.instructions.length > 0) {
-      sections.push(current);
-    }
-  };
-
-  for (const block of blocks) {
-    const text = block.text?.trim() ?? "";
-
-    if (HEADING_TYPES.has(block.type)) {
-      flushSection();
-      current = {
-        name: text.length >= 2 ? text : null,
-        ingredients: [],
-        instructions: [],
-      };
-      seenHeading = true;
-      continue;
-    }
-
-    switch (block.type) {
-      case "bulleted_list_item":
-        if (text) current.ingredients.push(text);
-        break;
-      case "numbered_list_item":
-        if (text) current.instructions.push(text);
-        break;
-      case "quote":
-      case "callout":
-        // Quotes/callouts are headnote before the first heading, tips after.
-        if (text) (seenHeading ? tips : headnote).push(text);
-        break;
-      case "paragraph":
-        // Only leading paragraphs are the headnote; mid-recipe prose is ignored.
-        if (text && !seenHeading) headnote.push(text);
-        break;
-      default:
-        break;
-    }
-  }
-  flushSection();
+  flushSection(draft);
 
   // Carry the original source link (the Notion `Source` column) into the notes,
   // since a Notion recipe's provenance slot is taken by the page id.
   const sourceLine = row.source ? `Source: ${row.source}` : null;
   const descriptionParts = [
-    ...headnote,
-    ...tips,
+    ...draft.headnote,
+    ...draft.tips,
     ...(sourceLine ? [sourceLine] : []),
   ];
   const description =
@@ -106,7 +118,7 @@ export function notionPageToImportRecipe(
       // WASM (and a `Servings` column overrides via the top-level field below).
       recipe_yield: row.yieldText ?? undefined,
     },
-    sections: sections.map((s) => ({
+    sections: draft.sections.map((s) => ({
       name: s.name ?? undefined,
       ingredients: s.ingredients,
       instructions: s.instructions,

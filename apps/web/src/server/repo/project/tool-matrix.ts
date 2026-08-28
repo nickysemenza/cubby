@@ -377,6 +377,113 @@ export async function projectToolMatrix(
 
   const empty = rowIds.length === 0 || columnIds.length === 0;
 
+  // Every cell projection is batched across the visible matrix. Purchase cost
+  // uses the shared suggestion predicate; installed inventory still counts as
+  // owned; trade candidates stay bounded by the row cap rather than another
+  // signal-dependent query wave.
+  const loadMatrixInputs = () =>
+    Promise.all([
+      deriveToolTrades(dbc, rowIds),
+      empty
+        ? []
+        : dbc
+            .select({
+              projectId: projectToolUsage.projectId,
+              productId: projectToolUsage.productId,
+            })
+            .from(projectToolUsage)
+            .where(
+              and(
+                inArray(projectToolUsage.projectId, columnIds),
+                inArray(projectToolUsage.productId, rowIds),
+                notDeleted(projectToolUsage),
+              ),
+            ),
+      empty ? new Map() : loadProjectToolPurchaseCosts(dbc, columnIds, rowIds),
+      empty || !wantsLane("trade_match")
+        ? []
+        : dbc
+            .select({
+              projectId: task.projectId,
+              trade: task.trade,
+              taskCount: count(),
+            })
+            .from(task)
+            .where(
+              and(
+                inArray(task.projectId, columnIds),
+                ne(task.trade, "planning"),
+                ne(task.trade, "other"),
+                notDeleted(task),
+              ),
+            )
+            .groupBy(task.projectId, task.trade),
+      empty || !wantsLane("trade_match")
+        ? []
+        : dbc
+            .select({
+              projectId: expense.projectId,
+              trade: expense.trade,
+              expenseCount: count(),
+              grossSpend:
+                sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+            })
+            .from(expense)
+            .where(
+              and(
+                inArray(expense.projectId, columnIds),
+                eq(expense.lineKind, "principal"),
+                eq(expense.future, false),
+                gt(expense.cost, 0),
+                ne(expense.trade, "planning"),
+                ne(expense.trade, "other"),
+                notDeleted(expense),
+              ),
+            )
+            .groupBy(expense.projectId, expense.trade),
+      rowIds.length === 0
+        ? []
+        : dbc
+            .selectDistinct({ productId: inventoryEntry.productId })
+            .from(inventoryEntry)
+            .innerJoin(
+              product,
+              and(
+                eq(product.id, inventoryEntry.productId),
+                notDeleted(product),
+              ),
+            )
+            .where(
+              and(
+                inArray(inventoryEntry.productId, rowIds),
+                eq(product.category, "tools"),
+                notDeleted(inventoryEntry),
+              ),
+            ),
+      empty || !wantsLane("trade_match")
+        ? []
+        : dbc
+            .select({
+              productId: expense.productId,
+              trade: expense.trade,
+              matchingExpenseCount: count(),
+            })
+            .from(expense)
+            .where(
+              and(
+                inArray(expense.productId, rowIds),
+                eq(expense.lineKind, "principal"),
+                eq(expense.future, false),
+                eq(expense.costType, "tools"),
+                gt(expense.cost, 0),
+                notDeleted(expense),
+              ),
+            )
+            .groupBy(expense.productId, expense.trade),
+      loadResourceMetrics(dbc, rowIds),
+      loadProductOwnershipTimelines(dbc, rowIds, { today }),
+    ]);
+
   const [
     tradeByProduct,
     attachedRows,
@@ -387,118 +494,7 @@ export async function projectToolMatrix(
     candidateRows,
     metrics,
     ownership,
-  ] = await Promise.all([
-    deriveToolTrades(dbc, rowIds),
-    empty
-      ? []
-      : dbc
-          .select({
-            projectId: projectToolUsage.projectId,
-            productId: projectToolUsage.productId,
-          })
-          .from(projectToolUsage)
-          .where(
-            and(
-              inArray(projectToolUsage.projectId, columnIds),
-              inArray(projectToolUsage.productId, rowIds),
-              notDeleted(projectToolUsage),
-            ),
-          ),
-    // `purchased_here` for every column at once, from the SHARED predicate in
-    // `./tools` — the same one the direct suggestion lane and the ownership
-    // guard read, so the grid can never offer a purchase cell the write path
-    // refuses. No HAVING: a pair below the suggestion floor still earns a
-    // "$45 bought here" note on an ATTACHED cell, so one query serves both
-    // readings and the threshold is applied in TS where only the suggestion
-    // needs it.
-    empty ? new Map() : loadProjectToolPurchaseCosts(dbc, columnIds, rowIds),
-    empty || !wantsLane("trade_match")
-      ? []
-      : dbc
-          .select({
-            projectId: task.projectId,
-            trade: task.trade,
-            taskCount: count(),
-          })
-          .from(task)
-          .where(
-            and(
-              inArray(task.projectId, columnIds),
-              ne(task.trade, "planning"),
-              ne(task.trade, "other"),
-              notDeleted(task),
-            ),
-          )
-          .groupBy(task.projectId, task.trade),
-    empty || !wantsLane("trade_match")
-      ? []
-      : dbc
-          .select({
-            projectId: expense.projectId,
-            trade: expense.trade,
-            expenseCount: count(),
-            grossSpend: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
-              Number,
-            ),
-          })
-          .from(expense)
-          .where(
-            and(
-              inArray(expense.projectId, columnIds),
-              eq(expense.lineKind, "principal"),
-              eq(expense.future, false),
-              gt(expense.cost, 0),
-              ne(expense.trade, "planning"),
-              ne(expense.trade, "other"),
-              notDeleted(expense),
-            ),
-          )
-          .groupBy(expense.projectId, expense.trade),
-    // includes-installed: same reasoning as project/tools.ts — an installed
-    // tool (e.g. a bench-mounted vise) is still owned and still available.
-    rowIds.length === 0
-      ? []
-      : dbc
-          .selectDistinct({ productId: inventoryEntry.productId })
-          .from(inventoryEntry)
-          .innerJoin(
-            product,
-            and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-          )
-          .where(
-            and(
-              inArray(inventoryEntry.productId, rowIds),
-              eq(product.category, "tools"),
-              notDeleted(inventoryEntry),
-            ),
-          ),
-    // Trade candidates, scoped to the row set. Deliberately NOT filtered to the
-    // union of signal trades (as the single-project version is): that filter
-    // would force a fourth wave for at most 19 groups per product, and the row
-    // cap already bounds this far harder than the trade filter would.
-    empty || !wantsLane("trade_match")
-      ? []
-      : dbc
-          .select({
-            productId: expense.productId,
-            trade: expense.trade,
-            matchingExpenseCount: count(),
-          })
-          .from(expense)
-          .where(
-            and(
-              inArray(expense.productId, rowIds),
-              eq(expense.lineKind, "principal"),
-              eq(expense.future, false),
-              eq(expense.costType, "tools"),
-              gt(expense.cost, 0),
-              notDeleted(expense),
-            ),
-          )
-          .groupBy(expense.productId, expense.trade),
-    loadResourceMetrics(dbc, rowIds),
-    loadProductOwnershipTimelines(dbc, rowIds, { today }),
-  ]);
+  ] = await loadMatrixInputs();
 
   // The ownership gate. `buildTimelineGates` folds the same windows
   // `suggestProjectTools` reads, and `toolTimelineConflict` is the same pure
@@ -578,10 +574,12 @@ export async function projectToolMatrix(
   const bump = <K>(map: Map<K, number>, key: K) =>
     map.set(key, (map.get(key) ?? 0) + 1);
 
-  for (const column of columnRecords) {
-    const projectCode = parseShortcodeFor("project", column.shortcode);
+  type MatrixColumn = (typeof columnRecords)[number];
+  const appendAttachedCells = (
+    column: MatrixColumn,
+    projectCode: ProjectToolMatrixCellOut["projectId"],
+  ) => {
     const attachedHere = new Set<ProductId>();
-
     for (const row of rowRecords) {
       const key = cellKey(column.id, row.productId);
       if (!attachedKeys.has(key)) continue;
@@ -597,39 +595,47 @@ export async function projectToolMatrix(
       bump(attachedByProject, column.id);
       bump(visibleUseByProduct, row.productId);
     }
+    return attachedHere;
+  };
 
-    // Lane A — purchased here. Exact, and the same $100 floor the single-project
-    // engine applies.
+  const appendDirectSuggestions = (
+    column: MatrixColumn,
+    projectCode: ProjectToolMatrixCellOut["projectId"],
+    attachedHere: Set<ProductId>,
+  ) => {
     const expensiveDirectIds = new Set<ProductId>();
-    const directSuggestions: ProjectToolMatrixCellOut[] = [];
-    if (wantsLane("purchased_here")) {
-      for (const row of rowRecords) {
-        const cost = purchaseCostByKey.get(cellKey(column.id, row.productId));
-        if (cost === undefined || cost < EXPENSIVE_TOOL_THRESHOLD) continue;
-        expensiveDirectIds.add(row.productId);
-        if (attachedHere.has(row.productId)) continue;
-        directSuggestions.push({
-          projectId: projectCode,
-          productId: parseShortcodeFor("product", row.shortcode),
-          state: "suggested",
-          lane: "purchased_here",
-          matchedTrade: null,
-          projectPurchaseCost: cost,
-        });
-      }
-      directSuggestions.sort(
-        (a, b) =>
-          b.projectPurchaseCost - a.projectPurchaseCost ||
-          a.productId.localeCompare(b.productId),
-      );
-      cells.push(...directSuggestions);
-      for (const _ of directSuggestions) bump(suggestedByProject, column.id);
-    }
+    if (!wantsLane("purchased_here")) return expensiveDirectIds;
+    const direct = rowRecords.flatMap((row): ProjectToolMatrixCellOut[] => {
+      const cost = purchaseCostByKey.get(cellKey(column.id, row.productId));
+      if (cost === undefined || cost < EXPENSIVE_TOOL_THRESHOLD) return [];
+      expensiveDirectIds.add(row.productId);
+      return attachedHere.has(row.productId)
+        ? []
+        : [
+            {
+              projectId: projectCode,
+              productId: parseShortcodeFor("product", row.shortcode),
+              state: "suggested",
+              lane: "purchased_here",
+              matchedTrade: null,
+              projectPurchaseCost: cost,
+            },
+          ];
+    });
+    direct.sort(
+      (a, b) =>
+        b.projectPurchaseCost - a.projectPurchaseCost ||
+        a.productId.localeCompare(b.productId),
+    );
+    cells.push(...direct);
+    for (const _ of direct) bump(suggestedByProject, column.id);
+    return expensiveDirectIds;
+  };
 
-    // Sub-floor purchase evidence, and the conflict tally. Both walk the same
-    // rows: a pair with ANY tool spend on this project is proof of ownership,
-    // so it is emitted (the client must not lock it), and everything else with
-    // no attachment and no evidence is locked if the gate says so.
+  const appendPurchaseEvidence = (
+    column: MatrixColumn,
+    projectCode: ProjectToolMatrixCellOut["projectId"],
+  ) => {
     for (const row of rowRecords) {
       const key = cellKey(column.id, row.productId);
       if (attachedKeys.has(key)) continue;
@@ -645,17 +651,57 @@ export async function projectToolMatrix(
             projectPurchaseCost: cost,
           });
         }
-        continue;
-      }
-      if (conflictFor(column.id, row.productId) !== null)
+      } else if (conflictFor(column.id, row.productId) !== null) {
         timelineConflictCells += 1;
+      }
     }
+  };
 
-    if (!wantsLane("trade_match")) continue;
+  const rankedTradeCandidates = (
+    column: MatrixColumn,
+    signal: TradeSignal,
+    attachedHere: Set<ProductId>,
+    expensiveDirectIds: Set<ProductId>,
+    chosen: Set<ProductId>,
+  ) =>
+    (candidatesByTrade.get(signal.trade) ?? [])
+      .filter((candidate) => {
+        const toolMetrics = metricsFor(candidate.productId);
+        const economicallyRelevant =
+          toolMetrics.grossLifetimeAcquisitionCost >=
+            EXPENSIVE_TOOL_THRESHOLD ||
+          toolMetrics.projectUseCount >= REUSED_CHEAP_TOOL_PROJECTS;
+        return (
+          inventoried.has(candidate.productId) &&
+          !attachedHere.has(candidate.productId) &&
+          !expensiveDirectIds.has(candidate.productId) &&
+          !chosen.has(candidate.productId) &&
+          economicallyRelevant &&
+          conflictFor(column.id, candidate.productId) === null
+        );
+      })
+      .sort((a, b) => {
+        const aMetrics = metricsFor(a.productId);
+        const bMetrics = metricsFor(b.productId);
+        return (
+          bMetrics.projectUseCount - aMetrics.projectUseCount ||
+          b.matchingExpenseCount - a.matchingExpenseCount ||
+          bMetrics.grossLifetimeAcquisitionCost -
+            aMetrics.grossLifetimeAcquisitionCost ||
+          (nameByProduct.get(a.productId) ?? "").localeCompare(
+            nameByProduct.get(b.productId) ?? "",
+          )
+        );
+      })
+      .slice(0, MAX_SUGGESTIONS_PER_TRADE);
 
-    // Lane B — trade match. Same gate, same ranking, same caps as
-    // `suggestProjectTools`; only the candidate pool is narrower (this grid's
-    // rows rather than every tool), which is why the parity test intersects.
+  const appendTradeSuggestions = (
+    column: MatrixColumn,
+    projectCode: ProjectToolMatrixCellOut["projectId"],
+    attachedHere: Set<ProductId>,
+    expensiveDirectIds: Set<ProductId>,
+  ) => {
+    if (!wantsLane("trade_match")) return;
     const signals = [...(signalsByProject.get(column.id)?.values() ?? [])].sort(
       (a, b) =>
         b.taskCount - a.taskCount ||
@@ -667,46 +713,21 @@ export async function projectToolMatrix(
     let tradeCount = 0;
     for (const signal of signals) {
       if (tradeCount >= MAX_TRADE_SUGGESTIONS) break;
-      const ranked = (candidatesByTrade.get(signal.trade) ?? [])
-        .filter((candidate) => {
-          const toolMetrics = metricsFor(candidate.productId);
-          return (
-            inventoried.has(candidate.productId) &&
-            !attachedHere.has(candidate.productId) &&
-            !expensiveDirectIds.has(candidate.productId) &&
-            !chosen.has(candidate.productId) &&
-            (toolMetrics.grossLifetimeAcquisitionCost >=
-              EXPENSIVE_TOOL_THRESHOLD ||
-              toolMetrics.projectUseCount >= REUSED_CHEAP_TOOL_PROJECTS) &&
-            // We have to have owned it while the project ran. Lane A above is
-            // deliberately exempt: its evidence is the tool's own purchase
-            // Expense charged to this project.
-            conflictFor(column.id, candidate.productId) === null
-          );
-        })
-        .sort((a, b) => {
-          const aMetrics = metricsFor(a.productId);
-          const bMetrics = metricsFor(b.productId);
-          return (
-            bMetrics.projectUseCount - aMetrics.projectUseCount ||
-            b.matchingExpenseCount - a.matchingExpenseCount ||
-            bMetrics.grossLifetimeAcquisitionCost -
-              aMetrics.grossLifetimeAcquisitionCost ||
-            (nameByProduct.get(a.productId) ?? "").localeCompare(
-              nameByProduct.get(b.productId) ?? "",
-            )
-          );
-        })
-        .slice(0, MAX_SUGGESTIONS_PER_TRADE);
-
+      const ranked = rankedTradeCandidates(
+        column,
+        signal,
+        attachedHere,
+        expensiveDirectIds,
+        chosen,
+      );
       for (const candidate of ranked) {
         if (tradeCount >= MAX_TRADE_SUGGESTIONS) break;
-        chosen.add(candidate.productId);
-        tradeCount += 1;
         const record = rowRecords.find(
           (row) => row.productId === candidate.productId,
         );
         if (!record) continue;
+        chosen.add(candidate.productId);
+        tradeCount += 1;
         cells.push({
           projectId: projectCode,
           productId: parseShortcodeFor("product", record.shortcode),
@@ -718,6 +739,23 @@ export async function projectToolMatrix(
         bump(suggestedByProject, column.id);
       }
     }
+  };
+
+  for (const column of columnRecords) {
+    const projectCode = parseShortcodeFor("project", column.shortcode);
+    const attachedHere = appendAttachedCells(column, projectCode);
+    const expensiveDirectIds = appendDirectSuggestions(
+      column,
+      projectCode,
+      attachedHere,
+    );
+    appendPurchaseEvidence(column, projectCode);
+    appendTradeSuggestions(
+      column,
+      projectCode,
+      attachedHere,
+      expensiveDirectIds,
+    );
   }
 
   // Rows, grouped and ordered. Group membership is decided here, not in React.

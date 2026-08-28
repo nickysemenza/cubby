@@ -13,7 +13,7 @@ import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
-import { useLongPress } from "~/hooks/useLongPress";
+import { type LongPressHandlers, useLongPress } from "~/hooks/useLongPress";
 import { cn } from "~/lib/utils";
 
 interface MobileCardProps {
@@ -224,6 +224,155 @@ export function MobileRowShell({
 export const MOBILE_SPEC_GRID_CLASS =
   "grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1";
 
+type MobileRowProps = Omit<MobileCardProps, "variant"> & {
+  longPress: LongPressHandlers;
+};
+
+function CompactMobileRow({
+  selectable,
+  actions,
+  children,
+  className,
+  detailsHref,
+  title,
+  titleIcon,
+  subtitle,
+  imageSlot,
+  reserveImageSlot = false,
+  onClick,
+  onTouchStart,
+  rightValues,
+  rightValueInteractive,
+  metaValues,
+  onLongPress,
+  longPress,
+}: MobileRowProps) {
+  const specValues = metaValues ?? [];
+  const hasIdentityLine = Boolean(subtitle || rightValues?.length);
+  const hasSpec = specValues.length > 0;
+  const content =
+    hasIdentityLine || hasSpec ? (
+      <Stack gap="tight" className="min-w-0">
+        {hasIdentityLine && (
+          <Row align="center" gap="sm" className="min-w-0">
+            {subtitle && (
+              <Description
+                as="span"
+                size="xs"
+                className={cn(
+                  "block min-w-0 flex-1 truncate",
+                  TOUCH_TRIGGER_CLASS,
+                )}
+              >
+                {subtitle}
+              </Description>
+            )}
+            <Row
+              align="center"
+              justify="end"
+              gap="sm"
+              className="ml-auto shrink-0"
+            >
+              {Children.map(rightValues, (node, index) => (
+                <RightValueSlot
+                  node={node}
+                  interactive={rightValueInteractive?.[index]}
+                />
+              ))}
+            </Row>
+          </Row>
+        )}
+        {hasSpec && (
+          <dl className={MOBILE_SPEC_GRID_CLASS}>
+            {specValues.map((item) => (
+              <Fragment key={item.id}>
+                <Eyebrow as="dt" className="break-words">
+                  {item.label}
+                </Eyebrow>
+                <dd
+                  className={cn(
+                    "min-w-0 text-xs",
+                    item.interactive
+                      ? cn(
+                          "-my-1 flex min-h-11 items-center [&>*]:w-full",
+                          TOUCH_TRIGGER_CLASS,
+                        )
+                      : "line-clamp-2 text-muted-foreground",
+                  )}
+                >
+                  {item.value}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+        )}
+      </Stack>
+    ) : undefined;
+
+  return (
+    <MobileRowShell
+      className={cn(
+        onClick && "cursor-pointer transition-colors active:bg-muted/50",
+        (onLongPress || selectable) &&
+          "select-none [-webkit-touch-callout:none]",
+        className,
+      )}
+      tall={hasSpec}
+      leading={[
+        selectable ? (
+          <div
+            key="select"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center"
+            onClickCapture={(event) => event.stopPropagation()}
+          >
+            <Checkbox
+              checked={selectable.isSelected}
+              onCheckedChange={(checked) =>
+                selectable.onSelectionChange(!!checked)
+              }
+              className="shrink-0"
+              aria-label="Select item"
+            />
+          </div>
+        ) : null,
+        imageSlot || reserveImageSlot ? (
+          <div key="image" className="size-11 overflow-hidden">
+            {imageSlot}
+          </div>
+        ) : null,
+      ].filter(Boolean)}
+      title={
+        <PrimaryTitle
+          title={title}
+          detailsHref={detailsHref}
+          onClick={onClick}
+          titleIcon={titleIcon}
+        />
+      }
+      content={content}
+      actions={actions}
+      footer={children}
+      onClick={(event) => {
+        if (longPress.consumeClick()) {
+          event.preventDefault();
+          return;
+        }
+        handleBodyClick(event, onClick);
+      }}
+      onTouchStart={() => {
+        onTouchStart?.();
+        longPress.start();
+      }}
+      onTouchEnd={longPress.cancel}
+      onTouchMove={longPress.cancel}
+      onContextMenu={
+        onLongPress ? (event) => event.preventDefault() : undefined
+      }
+      role={onClick || detailsHref ? "group" : undefined}
+    />
+  );
+}
+
 export function MobileCard({
   selectable,
   actions,
@@ -244,162 +393,28 @@ export function MobileCard({
   onLongPress,
 }: MobileCardProps) {
   const longPress = useLongPress(onLongPress);
-  const isRow = variant === "row";
-  const specValues = metaValues ?? [];
-  const hasIdentityLine = Boolean(subtitle || rightValues?.length);
-  const hasSpec = specValues.length > 0;
-
-  if (isRow) {
-    const content =
-      hasIdentityLine || hasSpec ? (
-        <Stack gap="tight" className="min-w-0">
-          {hasIdentityLine && (
-            <Row align="center" gap="sm" className="min-w-0">
-              {subtitle && (
-                <Description
-                  as="span"
-                  size="xs"
-                  // The subtitle slot carries an editable cell on several
-                  // lists (a product's category chip), so it needs the same
-                  // phone touch floor as the value and spec slots.
-                  className={cn(
-                    "block min-w-0 flex-1 truncate",
-                    TOUCH_TRIGGER_CLASS,
-                  )}
-                >
-                  {subtitle}
-                </Description>
-              )}
-              <Row
-                align="center"
-                justify="end"
-                gap="sm"
-                className="ml-auto shrink-0"
-              >
-                {Children.map(rightValues, (node, index) => (
-                  <RightValueSlot
-                    node={node}
-                    interactive={rightValueInteractive?.[index]}
-                  />
-                ))}
-              </Row>
-            </Row>
-          )}
-          {hasSpec && (
-            <dl className={MOBILE_SPEC_GRID_CLASS}>
-              {specValues.map((item) => (
-                <Fragment key={item.id}>
-                  {/* No `truncate`: a clipped label leaves a number with
-                      nothing naming it. Wrapping costs a line at most, and
-                      only for the longest headers. */}
-                  <Eyebrow as="dt" className="break-words">
-                    {item.label}
-                  </Eyebrow>
-                  <dd
-                    className={cn(
-                      "min-w-0 text-xs",
-                      item.interactive
-                        ? // Stretch the cell WRAPPER, not the edit trigger.
-                          // Widening the trigger itself made it take the
-                          // wrapper's whole width, starving the sibling
-                          // `min-w-0 truncate` value span to 0px — the value
-                          // was in the DOM and invisible on screen.
-                          //
-                          // `-my-1` pays for most of the 32→44px growth out of
-                          // the grid's own row gap, so the 44pt target costs
-                          // the card ~4px rather than 12px.
-                          cn(
-                            "-my-1 flex min-h-11 items-center [&>*]:w-full",
-                            TOUCH_TRIGGER_CLASS,
-                          )
-                        : // Room to wrap now, and hiding data is the bug being
-                          // fixed — so clamp rather than truncate.
-                          "line-clamp-2 text-muted-foreground",
-                    )}
-                  >
-                    {item.value}
-                  </dd>
-                </Fragment>
-              ))}
-            </dl>
-          )}
-        </Stack>
-      ) : undefined;
-
+  if (variant === "row") {
     return (
-      <MobileRowShell
-        className={cn(
-          // Touch devices have no :hover — give a pressed state so taps register.
-          onClick && "cursor-pointer transition-colors active:bg-muted/50",
-          // A row involved in long-press selection must opt out of iOS's own
-          // long-press: Safari otherwise starts a text selection and raises the
-          // Copy/Look Up callout on top of the selection we just made.
-          //
-          // `selectable` matters as much as `onLongPress` here — once selection
-          // mode is on, rows stop taking a long press (they toggle on tap), so
-          // gating on `onLongPress` alone would drop the opt-out for the rest
-          // of the session and let the callout reappear the moment a thumb
-          // lingers while adding another row.
-          (onLongPress || selectable) &&
-            "select-none [-webkit-touch-callout:none]",
-          className,
-        )}
-        // The side cells centre against a short row, but a tall spec block
-        // would leave them floating mid-row — pin them to the title line.
-        tall={hasSpec}
-        leading={[
-          selectable ? (
-            <div
-              key="select"
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center"
-              onClickCapture={(e) => e.stopPropagation()}
-            >
-              <Checkbox
-                checked={selectable.isSelected}
-                onCheckedChange={(checked) =>
-                  selectable.onSelectionChange(!!checked)
-                }
-                className="shrink-0"
-                aria-label="Select item"
-              />
-            </div>
-          ) : null,
-          imageSlot || reserveImageSlot ? (
-            // Reserved-but-empty stays empty (no border, no glyph): the slot
-            // exists to hold the left scan line, not to announce a missing
-            // photo.
-            <div key="image" className="size-11 overflow-hidden">
-              {imageSlot}
-            </div>
-          ) : null,
-        ].filter(Boolean)}
-        title={
-          <PrimaryTitle
-            title={title}
-            detailsHref={detailsHref}
-            onClick={onClick}
-            titleIcon={TitleIcon}
-          />
-        }
-        content={content}
+      <CompactMobileRow
+        selectable={selectable}
         actions={actions}
-        footer={children}
-        onClick={(event) => {
-          if (longPress.consumeClick()) {
-            event.preventDefault();
-            return;
-          }
-          handleBodyClick(event, onClick);
-        }}
-        onTouchStart={() => {
-          onTouchStart?.();
-          longPress.start();
-        }}
-        onTouchEnd={longPress.cancel}
-        onTouchMove={longPress.cancel}
-        onContextMenu={onLongPress ? (e) => e.preventDefault() : undefined}
-        role={onClick || detailsHref ? "group" : undefined}
-      />
+        className={className}
+        detailsHref={detailsHref}
+        title={title}
+        titleIcon={TitleIcon}
+        subtitle={subtitle}
+        imageSlot={imageSlot}
+        reserveImageSlot={reserveImageSlot}
+        onClick={onClick}
+        onTouchStart={onTouchStart}
+        rightValues={rightValues}
+        rightValueInteractive={rightValueInteractive}
+        metaValues={metaValues}
+        onLongPress={onLongPress}
+        longPress={longPress}
+      >
+        {children}
+      </CompactMobileRow>
     );
   }
 

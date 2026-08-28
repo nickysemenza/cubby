@@ -292,6 +292,62 @@ function NewCollectionDialog({
   );
 }
 
+function buildMatrixViewModel(
+  data:
+    | {
+        collections: CollectionSlug[];
+        rows: MatrixRow[];
+        totalCount: number;
+      }
+    | undefined,
+  options: {
+    subject: CollectionAssignmentSubject;
+    page: number;
+    pageSize: number;
+    mobilePage: number;
+    mobileCollection?: CollectionSlug;
+    collection?: CollectionSlug;
+  },
+) {
+  const collections = data?.collections ?? EMPTY_COLLECTIONS;
+  const matrixRows = data?.rows ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const rangeStart =
+    totalCount === 0 ? 0 : (options.page - 1) * options.pageSize + 1;
+  const selectedMobileCollection = collections.includes(
+    options.mobileCollection ?? options.collection ?? "",
+  )
+    ? (options.mobileCollection ?? options.collection)
+    : collections[0];
+  const mobileBatchOffset =
+    (options.mobilePage - 1) * MOBILE_PAGE_SIZE -
+    (options.page - 1) * options.pageSize;
+  return {
+    collections,
+    matrixRows,
+    totalCount,
+    columns: collections.map((collection) => ({
+      key: collection,
+      data: collection,
+    })),
+    rows: matrixRows.map((row) => ({ key: row.id, data: row })),
+    pageCount: Math.max(1, Math.ceil(totalCount / options.pageSize)),
+    rangeStart,
+    rangeEnd: Math.min(options.page * options.pageSize, totalCount),
+    subjectLabel: options.subject === "product" ? "Products" : "Locations",
+    secondaryLabel: options.subject === "product" ? "Manufacturer" : "Path",
+    selectedMobileCollection,
+    mobilePageCount: Math.max(1, Math.ceil(totalCount / MOBILE_PAGE_SIZE)),
+    mobileRangeStart:
+      totalCount === 0 ? 0 : (options.mobilePage - 1) * MOBILE_PAGE_SIZE + 1,
+    mobileRangeEnd: Math.min(options.mobilePage * MOBILE_PAGE_SIZE, totalCount),
+    mobileRows: matrixRows.slice(
+      mobileBatchOffset,
+      mobileBatchOffset + MOBILE_PAGE_SIZE,
+    ),
+  };
+}
+
 export function CollectionAssignmentMatrix({
   subject,
   search,
@@ -399,40 +455,30 @@ export function CollectionAssignmentMatrix({
     );
   };
 
-  const columns = (matrix.data?.collections ?? []).map((collection) => ({
-    key: collection,
-    data: collection,
-  }));
-  const rows = (matrix.data?.rows ?? []).map((row) => ({
-    key: row.id,
-    data: row,
-  }));
-  const pageCount = Math.max(
-    1,
-    Math.ceil((matrix.data?.totalCount ?? 0) / pageSize),
-  );
-  const totalCount = matrix.data?.totalCount ?? 0;
-  const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
-  const rangeEnd = Math.min(page * pageSize, totalCount);
-  const matrixRows = matrix.data?.rows ?? [];
-  const subjectLabel = subject === "product" ? "Products" : "Locations";
-  const secondaryLabel = subject === "product" ? "Manufacturer" : "Path";
-  const availableCollections = matrix.data?.collections ?? EMPTY_COLLECTIONS;
-  const selectedMobileCollection = availableCollections.includes(
-    mobileCollection ?? collection ?? "",
-  )
-    ? (mobileCollection ?? collection)
-    : availableCollections[0];
-  const mobilePageCount = Math.max(1, Math.ceil(totalCount / MOBILE_PAGE_SIZE));
-  const mobileRangeStart =
-    totalCount === 0 ? 0 : (mobilePage - 1) * MOBILE_PAGE_SIZE + 1;
-  const mobileRangeEnd = Math.min(mobilePage * MOBILE_PAGE_SIZE, totalCount);
-  const mobileBatchOffset =
-    (mobilePage - 1) * MOBILE_PAGE_SIZE - (page - 1) * pageSize;
-  const mobileRows = matrixRows.slice(
-    mobileBatchOffset,
-    mobileBatchOffset + MOBILE_PAGE_SIZE,
-  );
+  const {
+    columns,
+    rows,
+    pageCount,
+    totalCount,
+    rangeStart,
+    rangeEnd,
+    matrixRows,
+    subjectLabel,
+    secondaryLabel,
+    collections: availableCollections,
+    selectedMobileCollection,
+    mobilePageCount,
+    mobileRangeStart,
+    mobileRangeEnd,
+    mobileRows,
+  } = buildMatrixViewModel(matrix.data, {
+    subject,
+    page,
+    pageSize,
+    mobilePage,
+    mobileCollection,
+    collection,
+  });
 
   useEffect(() => {
     if (mobileCollection && availableCollections.includes(mobileCollection)) {

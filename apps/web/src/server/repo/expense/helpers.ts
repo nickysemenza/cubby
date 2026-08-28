@@ -167,6 +167,50 @@ export type ExpenseRow = {
   }>;
 };
 
+const purchaseVendorLogo = (
+  purchaseRow: ExpenseRow["purchase"],
+): ExpenseOut["vendorLogo"] => {
+  const vendor = purchaseRow?.vendor;
+  const logo = vendor?.logo;
+  if (vendor?.deletedAt !== null || logo?.deletedAt !== null) return null;
+  if (!logo || !isDisplayableImageFile(logo)) return null;
+  return { url: getR2PublicUrl(logo.key) };
+};
+
+const expenseAttributions = (
+  row: ExpenseRow,
+  role: "beneficiary" | "funder",
+): ExpenseOut["beneficiaries"] =>
+  row.attributions
+    .filter((value) => value.deletedAt === null && value.role === role)
+    .map((value) => ({
+      partyId:
+        value.ledgerParty?.deletedAt === null
+          ? parseShortcodeFor("ledgerParty", value.ledgerParty.shortcode)
+          : null,
+      weight: value.weight,
+    }));
+
+const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
+  row.sourceClaims
+    .filter((value) => value.deletedAt === null)
+    .map((value) => ({
+      source: value.source,
+      normalizedEvidence: value.normalizedEvidence,
+      reconciliation:
+        value.reconciliationDecision === "amounts_match"
+          ? { decision: "amounts_match" as const }
+          : {
+              decision: "accept_target_amount" as const,
+              note: value.reconciliationNote ?? "Reconciliation note missing",
+            },
+      sourceKey: value.sourceKey,
+      sourceKeyVersion: value.sourceKeyVersion,
+      targetAmountAtClaim: value.targetAmountAtClaim,
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+    }));
+
 export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
   // A soft-deleted Purchase reads as no Purchase at all — the same rule
   // `resolveLiveJoinName` applies to project/product below, so a deleted parent
@@ -211,12 +255,7 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
         ? parseShortcodeFor("vendor", purchaseRow.vendor.shortcode)
         : null,
     vendor: purchaseRow ? resolveLiveJoinName(purchaseRow.vendor) : null,
-    vendorLogo:
-      purchaseRow?.vendor?.deletedAt === null &&
-      purchaseRow.vendor.logo?.deletedAt === null &&
-      isDisplayableImageFile(purchaseRow.vendor.logo)
-        ? { url: getR2PublicUrl(purchaseRow.vendor.logo.key) }
-        : null,
+    vendorLogo: purchaseVendorLogo(purchaseRow),
     orderId: purchaseRow?.orderId ?? null,
     // Derived, never stored: the vendor's own order page for this order. Gated
     // on the vendor's liveness like `vendor` above — a soft-deleted vendor's
@@ -228,44 +267,9 @@ export const dbExpenseToAPI = (row: ExpenseRow): ExpenseOut => {
             orderId: purchaseRow.orderId,
           })
         : null,
-    beneficiaries: row.attributions
-      .filter(
-        (value) => value.deletedAt === null && value.role === "beneficiary",
-      )
-      .map((value) => ({
-        partyId:
-          value.ledgerParty?.deletedAt === null
-            ? parseShortcodeFor("ledgerParty", value.ledgerParty.shortcode)
-            : null,
-        weight: value.weight,
-      })),
-    funders: row.attributions
-      .filter((value) => value.deletedAt === null && value.role === "funder")
-      .map((value) => ({
-        partyId:
-          value.ledgerParty?.deletedAt === null
-            ? parseShortcodeFor("ledgerParty", value.ledgerParty.shortcode)
-            : null,
-        weight: value.weight,
-      })),
-    sourceClaims: row.sourceClaims
-      .filter((value) => value.deletedAt === null)
-      .map((value) => ({
-        source: value.source,
-        normalizedEvidence: value.normalizedEvidence,
-        reconciliation:
-          value.reconciliationDecision === "amounts_match"
-            ? { decision: "amounts_match" as const }
-            : {
-                decision: "accept_target_amount" as const,
-                note: value.reconciliationNote ?? "Reconciliation note missing",
-              },
-        sourceKey: value.sourceKey,
-        sourceKeyVersion: value.sourceKeyVersion,
-        targetAmountAtClaim: value.targetAmountAtClaim,
-        createdAt: value.createdAt,
-        updatedAt: value.updatedAt,
-      })),
+    beneficiaries: expenseAttributions(row, "beneficiary"),
+    funders: expenseAttributions(row, "funder"),
+    sourceClaims: expenseSourceClaims(row),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

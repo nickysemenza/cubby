@@ -43,24 +43,27 @@ export const importRecipeUrl = (url: string | undefined): string | null =>
 const normalizeImportMeta = (
   recipe: ImportRecipe,
 ): RecipeCreateInput["meta"] => {
-  const times = recipe.meta.times;
   const equipment = recipe.meta.equipment?.filter((line) => line.trim() !== "");
   return {
     url: importRecipeUrl(recipe.url),
-    times: {
-      active: times?.active ?? null,
-      total: times?.total ?? null,
-      prep: times?.prep ?? null,
-      cook: times?.cook ?? null,
-      activeMinutes: times?.active_minutes ?? null,
-      totalMinutes: times?.total_minutes ?? null,
-      prepMinutes: times?.prep_minutes ?? null,
-      cookMinutes: times?.cook_minutes ?? null,
-    },
+    times: normalizeImportTimes(recipe.meta.times),
     equipment: equipment && equipment.length > 0 ? equipment : null,
     page: recipe.meta.page ?? null,
   };
 };
+
+const normalizeImportTimes = (
+  times: ImportRecipe["meta"]["times"],
+): NonNullable<RecipeCreateInput["meta"]>["times"] => ({
+  active: times?.active ?? null,
+  total: times?.total ?? null,
+  prep: times?.prep ?? null,
+  cook: times?.cook ?? null,
+  activeMinutes: times?.active_minutes ?? null,
+  totalMinutes: times?.total_minutes ?? null,
+  prepMinutes: times?.prep_minutes ?? null,
+  cookMinutes: times?.cook_minutes ?? null,
+});
 
 const normalizeImportYield = (
   recipeYield: ImportRecipe["meta"]["recipe_yield"],

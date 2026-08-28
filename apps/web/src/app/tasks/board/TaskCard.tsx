@@ -69,6 +69,19 @@ function formatDue(value: string): string {
   return format(new Date(y ?? 0, (m ?? 1) - 1, d ?? 1), "MMM d");
 }
 
+function blockedByLabel(task: TaskOut, taskById: Record<string, TaskOut>) {
+  const names = task.blockedByIds
+    .map((id) => taskById[id]?.name)
+    .filter((name): name is string => name != null);
+  const unresolvedCount = task.blockedByIds.length - names.length;
+  if (names.length === 0) {
+    const noun = task.blockedByIds.length === 1 ? "task" : "tasks";
+    return `Blocked by ${task.blockedByIds.length} ${noun}`;
+  }
+  const unresolved = unresolvedCount > 0 ? ` and ${unresolvedCount} more` : "";
+  return `Blocked by ${names.join(", ")}${unresolved}`;
+}
+
 /**
  * A task as a board card: draggable whole-card (the browser suppresses the
  * click after a native drag, so no separate handle), clickable to open the
@@ -139,15 +152,7 @@ export function TaskCard({
   // blocker that's a subtask or outside the current scope stays unnamed, so
   // the badge keys off blockedByIds (never disappears) and the tooltip
   // reports the unresolved remainder.
-  const blockedByNames = task.blockedByIds
-    .map((id) => taskById[id]?.name)
-    .filter((name): name is string => name != null);
-  const unresolvedBlockerCount =
-    task.blockedByIds.length - blockedByNames.length;
-  const blockedByLabel =
-    blockedByNames.length === 0
-      ? `Blocked by ${task.blockedByIds.length} ${task.blockedByIds.length === 1 ? "task" : "tasks"}`
-      : `Blocked by ${blockedByNames.join(", ")}${unresolvedBlockerCount > 0 ? ` and ${unresolvedBlockerCount} more` : ""}`;
+  const blockerLabel = blockedByLabel(task, taskById);
 
   return (
     <div
@@ -291,7 +296,7 @@ export function TaskCard({
                   </span>
                 }
               />
-              <TooltipContent>{blockedByLabel}</TooltipContent>
+              <TooltipContent>{blockerLabel}</TooltipContent>
             </Tooltip>
           )}
         </Row>

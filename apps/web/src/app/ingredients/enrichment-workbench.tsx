@@ -64,6 +64,96 @@ const WORKBENCH_VIEW_OPTIONS: ViewSwitcherOption<WorkbenchView>[] = [
   { value: "browse", label: "Browse" },
   { value: "review", label: "Review" },
 ];
+const WORKBENCH_FILTER_OPTIONS = [
+  ["all", "All"],
+  ["no-product", "No product"],
+  ["partial", "Partial"],
+  ["no-usda", "No USDA"],
+] as const;
+
+function WorkbenchScopeBanner({
+  recipeId,
+  recipeName,
+}: {
+  recipeId: string | undefined;
+  recipeName: string | undefined;
+}) {
+  if (!recipeId) return null;
+  return (
+    <Row
+      align="center"
+      wrap
+      gap="sm"
+      className="border border-[var(--border)] bg-muted/40 px-4 py-2 text-sm"
+    >
+      <Badge variant="secondary">Scoped</Badge>
+      <span className="text-muted-foreground">
+        {recipeName ?? "this recipe"} + sub-recipes
+      </span>
+      <Link
+        to="/ingredients/workbench"
+        className="ml-auto text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        Clear
+      </Link>
+    </Row>
+  );
+}
+
+function WorkbenchFilterToolbar({
+  filter,
+  counts,
+  cookbookOnlyCount,
+  hideCookbookOnly,
+  view,
+  onFilterChange,
+  onToggleCookbookOnly,
+  onViewChange,
+}: {
+  filter: FilterKey;
+  counts: Record<FilterKey, number>;
+  cookbookOnlyCount: number;
+  hideCookbookOnly: boolean;
+  view: WorkbenchView;
+  onFilterChange: (filter: FilterKey) => void;
+  onToggleCookbookOnly: () => void;
+  onViewChange: (view: WorkbenchView) => void;
+}) {
+  return (
+    <Row align="center" wrap gap="sm">
+      {WORKBENCH_FILTER_OPTIONS.map(([key, label]) => (
+        <Button
+          type="button"
+          key={key}
+          onClick={() => onFilterChange(key)}
+          variant={filter === key ? "secondary" : "outline"}
+          size="sm"
+          aria-pressed={filter === key}
+        >
+          {label} {counts[key]}
+        </Button>
+      ))}
+      {cookbookOnlyCount > 0 && (
+        <Button
+          type="button"
+          onClick={onToggleCookbookOnly}
+          aria-pressed={hideCookbookOnly}
+          variant={hideCookbookOnly ? "secondary" : "outline"}
+          size="sm"
+        >
+          Hide cookbook-only ({cookbookOnlyCount})
+        </Button>
+      )}
+      <ViewSwitcher
+        className="ml-auto"
+        ariaLabel="Workbench view"
+        options={WORKBENCH_VIEW_OPTIONS}
+        value={view}
+        onValueChange={onViewChange}
+      />
+    </Row>
+  );
+}
 
 /** Keep query recovery and the successful empty state mutually exclusive. */
 export function shouldShowEnrichmentEmptyState({
@@ -421,64 +511,20 @@ export function EnrichmentWorkbench({
 
   return (
     <Stack>
-      {recipeId && (
-        <Row
-          align="center"
-          wrap
-          gap="sm"
-          className="border border-[var(--border)] bg-muted/40 px-4 py-2 text-sm"
-        >
-          <Badge variant="secondary">Scoped</Badge>
-          <span className="text-muted-foreground">
-            {scopeRecipe?.name ?? "this recipe"} + sub-recipes
-          </span>
-          <Link
-            to="/ingredients/workbench"
-            className="ml-auto text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          >
-            Clear
-          </Link>
-        </Row>
-      )}
-      <Row align="center" wrap gap="sm">
-        {(
-          [
-            ["all", "All"],
-            ["no-product", "No product"],
-            ["partial", "Partial"],
-            ["no-usda", "No USDA"],
-          ] as const
-        ).map(([key, label]) => (
-          <Button
-            type="button"
-            key={key}
-            onClick={() => setFilter(key)}
-            variant={filter === key ? "secondary" : "outline"}
-            size="sm"
-            aria-pressed={filter === key}
-          >
-            {label} {counts[key]}
-          </Button>
-        ))}
-        {cookbookOnlyCount > 0 && (
-          <Button
-            type="button"
-            onClick={() => setHideCookbookOnly((v) => !v)}
-            aria-pressed={hideCookbookOnly}
-            variant={hideCookbookOnly ? "secondary" : "outline"}
-            size="sm"
-          >
-            Hide cookbook-only ({cookbookOnlyCount})
-          </Button>
-        )}
-        <ViewSwitcher
-          className="ml-auto"
-          ariaLabel="Workbench view"
-          options={WORKBENCH_VIEW_OPTIONS}
-          value={view}
-          onValueChange={setView}
-        />
-      </Row>
+      <WorkbenchScopeBanner
+        recipeId={recipeId}
+        recipeName={scopeRecipe?.name}
+      />
+      <WorkbenchFilterToolbar
+        filter={filter}
+        counts={counts}
+        cookbookOnlyCount={cookbookOnlyCount}
+        hideCookbookOnly={hideCookbookOnly}
+        view={view}
+        onFilterChange={setFilter}
+        onToggleCookbookOnly={() => setHideCookbookOnly((value) => !value)}
+        onViewChange={setView}
+      />
 
       {view === "review" && (
         <ReviewQueue rows={visible} onExit={() => setView("browse")} />

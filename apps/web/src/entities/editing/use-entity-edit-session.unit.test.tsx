@@ -2,6 +2,7 @@ import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { EntityMutationTransport } from "~/entities/entity-contracts";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -32,7 +33,11 @@ function financialAccountMutationPort() {
     }),
   );
   const mutation = entityMutation.mutate.withTransport(transport);
-  return { mutationPort: createEntityMutationPort({ mutation }), transport };
+  const entityTransport: EntityMutationTransport = {
+    execute: async (command) =>
+      await mutation.forEntity(command.entity).call(command),
+  };
+  return { mutationPort: createEntityMutationPort(entityTransport), transport };
 }
 
 const request = (name = "saved") => ({

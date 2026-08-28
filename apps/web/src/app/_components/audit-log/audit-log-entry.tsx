@@ -255,6 +255,80 @@ interface AuditLogEntryProps {
   variant?: "default" | "ledger";
 }
 
+function LedgerAuditEntry({
+  entry,
+  showEntityLink,
+  step,
+}: Omit<AuditLogEntryProps, "variant">) {
+  const fallbackEntityLabel = entityLabel(entry.entityType);
+  const action = getStatusBadgeProps("audit", entry.action);
+  const summary =
+    entry.action === "update" ? summarizeChanges(entry.changes) : null;
+  return (
+    <AuditTimelineItem step={step} className="not-last:pb-2">
+      <AuditTimelineIndicator className="size-2 border-0 bg-primary ring-2 ring-background" />
+      <AuditTimelineSeparator className="left-[-1.5rem] h-[calc(100%-0.5rem)] translate-y-2 bg-border" />
+      <AuditTimelineContent>
+        <Row
+          align="center"
+          justify="between"
+          gap="sm"
+          className="min-h-11 sm:min-h-7"
+        >
+          <Row align="center" gap="sm" className="min-w-0">
+            {showEntityLink && entry.entityId ? (
+              <AuditEntityLink
+                entityType={entry.entityType}
+                entityId={entry.entityId}
+                name={entry.entityName}
+                displayImage={entry.displayImage}
+                compact
+              />
+            ) : (
+              <>
+                <EntityIcon
+                  entity={entry.entityType}
+                  colored
+                  className="size-4 flex-shrink-0"
+                />
+                <span className="truncate text-sm font-medium">
+                  {entry.entityName ?? fallbackEntityLabel}
+                </span>
+              </>
+            )}
+            {summary ? (
+              <LedgerChangeSummary
+                shown={summary.shown}
+                omitted={summary.omitted}
+              />
+            ) : (
+              <Badge
+                variant="secondary"
+                className={cn("text-2xs", action.className)}
+              >
+                {action.label}
+              </Badge>
+            )}
+          </Row>
+          <span className="shrink-0 text-muted-foreground">
+            <HoverableTimestamp timestamp={entry.createdAt} />
+          </span>
+        </Row>
+      </AuditTimelineContent>
+    </AuditTimelineItem>
+  );
+}
+
+const auditUserInitials = (user: AuditLogEntry["user"]): string => {
+  if (!user?.name) return "SY";
+  return user.name
+    .split(" ")
+    .map((name) => name[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
 export function AuditLogEntryComponent({
   entry,
   showEntityLink = true,
@@ -269,76 +343,16 @@ export function AuditLogEntryComponent({
   const action = getStatusBadgeProps("audit", entry.action);
 
   if (variant === "ledger") {
-    // A create or delete has no interesting "from" side, so its verb IS the
-    // news; an update's verb is the one thing the reader can already assume.
-    const summary =
-      entry.action === "update" ? summarizeChanges(changes) : null;
-
     return (
-      <AuditTimelineItem step={step} className="not-last:pb-2">
-        <AuditTimelineIndicator className="size-2 border-0 bg-primary ring-2 ring-background" />
-        <AuditTimelineSeparator className="left-[-1.5rem] h-[calc(100%-0.5rem)] translate-y-2 bg-border" />
-        <AuditTimelineContent>
-          {/* Desktop keeps the dense 28px ledger row; phones raise it to the
-              44px floor, since each row is a link to the entity it names. */}
-          <Row
-            align="center"
-            justify="between"
-            gap="sm"
-            className="min-h-11 sm:min-h-7"
-          >
-            <Row align="center" gap="sm" className="min-w-0">
-              {showEntityLink && entry.entityId ? (
-                <AuditEntityLink
-                  entityType={entry.entityType}
-                  entityId={entry.entityId}
-                  name={entry.entityName}
-                  displayImage={entry.displayImage}
-                  compact
-                />
-              ) : (
-                <>
-                  <EntityIcon
-                    entity={entry.entityType}
-                    colored
-                    className="size-4 flex-shrink-0"
-                  />
-                  <span className="truncate text-sm font-medium">
-                    {entry.entityName ?? fallbackEntityLabel}
-                  </span>
-                </>
-              )}
-              {summary ? (
-                <LedgerChangeSummary
-                  shown={summary.shown}
-                  omitted={summary.omitted}
-                />
-              ) : (
-                <Badge
-                  variant="secondary"
-                  className={cn("text-2xs", action.className)}
-                >
-                  {action.label}
-                </Badge>
-              )}
-            </Row>
-            <span className="shrink-0 text-muted-foreground">
-              <HoverableTimestamp timestamp={entry.createdAt} />
-            </span>
-          </Row>
-        </AuditTimelineContent>
-      </AuditTimelineItem>
+      <LedgerAuditEntry
+        entry={entry}
+        showEntityLink={showEntityLink}
+        step={step}
+      />
     );
   }
 
-  const userInitials = entry.user?.name
-    ? entry.user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : "SY";
+  const userInitials = auditUserInitials(entry.user);
 
   return (
     <AuditTimelineItem step={step}>

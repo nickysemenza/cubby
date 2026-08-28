@@ -22,6 +22,109 @@ type RichInstruction = Parameters<typeof formatRichText>[0];
 
 type OpenTool = "scrape" | "text" | "html" | null;
 
+function ImportToolToolbar({
+  mode,
+  openTool,
+  onToggleTool,
+}: {
+  mode: "create" | "edit";
+  openTool: OpenTool;
+  onToggleTool: (tool: "scrape" | "text" | "html") => void;
+}) {
+  const tools = [
+    { id: "scrape" as const, label: "Scrape URL", icon: Link2 },
+    { id: "text" as const, label: "Paste text", icon: ClipboardList },
+    { id: "html" as const, label: "Paste HTML", icon: Code },
+  ];
+  return (
+    <Row wrap align="center" justify="between" gap="sm">
+      <span className="eyebrow">
+        {mode === "edit" ? "Editing recipe" : "New recipe"}
+      </span>
+      <Row gap="sm">
+        {tools.map((tool) => (
+          <Button
+            key={tool.id}
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={openTool === tool.id}
+            className={cn(openTool === tool.id && "bg-muted")}
+            onClick={() => onToggleTool(tool.id)}
+          >
+            <tool.icon className="mr-2 size-3.5" />
+            {tool.label}
+          </Button>
+        ))}
+      </Row>
+    </Row>
+  );
+}
+
+function ScrapeImportPanel({
+  control,
+  open,
+  urlValue,
+  scrapePending,
+  isResolving,
+  progress,
+  onScrape,
+}: {
+  control: Control<RecipeFormValues>;
+  open: boolean;
+  urlValue: string | null | undefined;
+  scrapePending: boolean;
+  isResolving: boolean;
+  progress: { done: number; total: number };
+  onScrape: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "border border-[var(--border)] bg-card p-4",
+        !open && "hidden",
+      )}
+    >
+      <FormFieldGroup label="URL (Optional)">
+        <Row gap="sm">
+          <Controller
+            control={control}
+            name="meta.url"
+            render={({ field }) => (
+              <Input
+                placeholder="Enter recipe URL"
+                value={field.value ?? ""}
+                onChange={(event) => field.onChange(event.target.value || null)}
+                className="flex-1"
+              />
+            )}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onScrape}
+            disabled={!urlValue || scrapePending || isResolving}
+            className="shrink-0"
+          >
+            {scrapePending || isResolving ? (
+              <Spinner className="mr-1" />
+            ) : (
+              <Import className="mr-1 size-4" />
+            )}
+            Scrape
+          </Button>
+        </Row>
+        {isResolving && progress.total > 0 ? (
+          <Description size="xs">
+            Resolving ingredients {progress.done}/{progress.total}…
+          </Description>
+        ) : null}
+      </FormFieldGroup>
+    </div>
+  );
+}
+
 /**
  * The one-time import tooling for the recipe form: a toolbar that toggles
  * between three collapsible panels — URL scrape, paste-text (with live parsed
@@ -77,92 +180,21 @@ export function ImportToolsPanel({
 }) {
   return (
     <>
-      {/* Import toolbar — one-time tools, tucked out of the recipe's way */}
-      <Row wrap align="center" justify="between" gap="sm">
-        <span className="eyebrow">
-          {mode === "edit" ? "Editing recipe" : "New recipe"}
-        </span>
-        <Row gap="sm">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-expanded={openTool === "scrape"}
-            className={cn(openTool === "scrape" && "bg-muted")}
-            onClick={() => onToggleTool("scrape")}
-          >
-            <Link2 className="mr-2 size-3.5" />
-            Scrape URL
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-expanded={openTool === "text"}
-            className={cn(openTool === "text" && "bg-muted")}
-            onClick={() => onToggleTool("text")}
-          >
-            <ClipboardList className="mr-2 size-3.5" />
-            Paste text
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-expanded={openTool === "html"}
-            className={cn(openTool === "html" && "bg-muted")}
-            onClick={() => onToggleTool("html")}
-          >
-            <Code className="mr-2 size-3.5" />
-            Paste HTML
-          </Button>
-        </Row>
-      </Row>
+      <ImportToolToolbar
+        mode={mode}
+        openTool={openTool}
+        onToggleTool={onToggleTool}
+      />
 
-      {/* Scrape panel (kept mounted so in-flight scrapes aren't lost) */}
-      <div
-        className={cn(
-          "border border-[var(--border)] bg-card p-4",
-          openTool !== "scrape" && "hidden",
-        )}
-      >
-        <FormFieldGroup label="URL (Optional)">
-          <Row gap="sm">
-            <Controller
-              control={control}
-              name="meta.url"
-              render={({ field }) => (
-                <Input
-                  placeholder="Enter recipe URL"
-                  value={field.value ?? ""}
-                  onChange={(e) => field.onChange(e.target.value || null)}
-                  className="flex-1"
-                />
-              )}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onScrape}
-              disabled={!urlValue || scrapePending || isResolving}
-              className="shrink-0"
-            >
-              {scrapePending || isResolving ? (
-                <Spinner className="mr-1" />
-              ) : (
-                <Import className="mr-1 size-4" />
-              )}
-              Scrape
-            </Button>
-          </Row>
-          {isResolving && progress.total > 0 && (
-            <Description size="xs">
-              Resolving ingredients {progress.done}/{progress.total}…
-            </Description>
-          )}
-        </FormFieldGroup>
-      </div>
+      <ScrapeImportPanel
+        control={control}
+        open={openTool === "scrape"}
+        urlValue={urlValue}
+        scrapePending={scrapePending}
+        isResolving={isResolving}
+        progress={progress}
+        onScrape={onScrape}
+      />
 
       {/* Paste-text panel */}
       <Stack

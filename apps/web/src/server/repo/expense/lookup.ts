@@ -123,28 +123,24 @@ const orderIdPresence = (
       );
 };
 
-// Shared by list and analytics so identical filter sets produce identical totals.
-export const buildExpenseWhereClause = async (
+const projectFilterCondition = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: { extraConditions?: Array<SQL | undefined> },
 ): Promise<SQL | undefined> => {
-  const selectedProjectCodes = filters.projectId
-    ? [filters.projectId].flat()
-    : [];
-  const selectedProjectIds = await toUuids(db, selectedProjectCodes, "project");
-  let projectValues =
-    selectedProjectIds.length > 0
-      ? eqAny(expense.projectId, selectedProjectIds)
-      : selectedProjectCodes.length > 0
+  const codes = filters.projectId ? [filters.projectId].flat() : [];
+  const ids = await toUuids(db, codes, "project");
+  let selected =
+    ids.length > 0
+      ? eqAny(expense.projectId, ids)
+      : codes.length > 0
         ? sql`false`
         : undefined;
-  if (selectedProjectIds.length > 0 && filters.includeSubProjects) {
+  if (ids.length > 0 && filters.includeSubProjects) {
     const { childrenByParent } = await loadProjectTree(db);
-    projectValues = inArray(
+    selected = inArray(
       expense.projectId,
       uniq(
-        selectedProjectIds.flatMap((id) => {
+        ids.flatMap((id) => {
           const projectId = parseEntityId("project", id);
           return [
             projectId,
@@ -154,16 +150,101 @@ export const buildExpenseWhereClause = async (
       ),
     );
   }
+  // The presence sentinel ORs with the selected projects, so "Kitchen or
+  // unassigned" remains one filter rather than an impossible conjunction.
+  return or(
+    selected,
+    presenceCondition(expense.projectId, filters.projectPresenceFilter),
+  );
+};
+
+const requestedReferenceCondition = (
+  column: typeof expense.productId | typeof expense.purchaseId,
+  requested: boolean,
+  ids: string[],
+): SQL | undefined => {
+  if (ids.length > 0) return eqAny(column, ids);
+  return requested ? sql`false` : undefined;
+};
+
+const vendorFilterCondition = (
+  db: Database,
+  filters: ExpenseFilters,
+  vendorIds: string[],
+): SQL | undefined =>
+  or(
+    filters.vendorId
+      ? vendorIds.length > 0
+        ? chargeCondition(db, eqAny(purchase.vendorId, vendorIds))
+        : sql`false`
+      : undefined,
+    presenceCondition(expense.purchaseId, filters.vendorPresenceFilter),
+  );
+
+const relativeDateCondition = (
+  relative: ExpenseFilters["dateRelative"],
+): SQL | undefined => {
+  if (relative === "beforeToday") {
+    return lt(expense.date, householdLocalDate());
+  }
+  if (relative === "onOrBeforeToday") {
+    return lte(expense.date, householdLocalDate());
+  }
+  return undefined;
+};
+
+const disposalPurchaseCondition = (
+  db: Database,
+  presence: ExpenseFilters["disposalPurchasePresenceFilter"],
+): SQL | undefined => {
+  if (presence === "has") {
+    return inArray(expense.purchaseId, disposalPurchaseIds(getDb(db)));
+  }
+  if (presence === "none") {
+    return or(
+      isNull(expense.purchaseId),
+      notInArray(expense.purchaseId, disposalPurchaseIds(getDb(db))),
+    );
+  }
+  return undefined;
+};
+
+const loadExpenseFilterReferences = async (
+  db: Database,
+  filters: ExpenseFilters,
+) => {
+  // Keep these sequential: callers may supply a transaction-backed Database.
+  const vendorIds = await toUuids(
+    db,
+    filters.vendorId ? [filters.vendorId].flat() : [],
+    "vendor",
+  );
+  const purchaseIds = await toUuids(
+    db,
+    filters.purchaseId ? [filters.purchaseId].flat() : [],
+    "purchase",
+  );
+  const productIds = await toUuids(
+    db,
+    filters.productId ? [filters.productId] : [],
+    "product",
+  );
+  return { vendorIds, purchaseIds, productIds };
+};
+
+// Shared by list and analytics so identical filter sets produce identical totals.
+export const buildExpenseWhereClause = async (
+  db: Database,
+  filters: ExpenseFilters,
+  options?: { extraConditions?: Array<SQL | undefined> },
+): Promise<SQL | undefined> => {
+  const projectCondition = await projectFilterCondition(db, filters);
   // The `(none)` / `Has project` sentinels OR with that selection instead of
   // ANDing against it, so "Kitchen or unassigned" is one filter. The
   // unassigned-spend worklist is just `projectPresenceFilter: "none"` with no
   // `projectId`. (This replaced a `noProject` boolean that AND-ed, which is
   // why the Unassigned view had to clobber `projectId` to avoid matching
   // nothing at all.)
-  const projectCondition = or(
-    projectValues,
-    presenceCondition(expense.projectId, filters.projectPresenceFilter),
-  );
   const scopedProjectIds = filters.projectScope
     ? await matchingEmbeddedProjectIds(db, filters.projectScope)
     : null;
@@ -184,21 +265,8 @@ export const buildExpenseWhereClause = async (
       .map((term) => formatSearchTerm(expense.name, term)),
   );
 
-  const vendorUuids = await toUuids(
-    db,
-    filters.vendorId ? [filters.vendorId].flat() : [],
-    "vendor",
-  );
-  const purchaseUuids = await toUuids(
-    db,
-    filters.purchaseId ? [filters.purchaseId].flat() : [],
-    "purchase",
-  );
-  const productUuids = await toUuids(
-    db,
-    filters.productId ? [filters.productId] : [],
-    "product",
-  );
+  const { vendorIds, purchaseIds, productIds } =
+    await loadExpenseFilterReferences(db, filters);
 
   // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
   // filters and ANDing them with each other and with the name search is the
@@ -226,18 +294,18 @@ export const buildExpenseWhereClause = async (
           ? inArray(expense.projectId, scopedProjectIds)
           : sql`false`
         : undefined,
-      // `productUuids.length === 0` is ambiguous by itself — it means either
+      // `productIds.length === 0` is ambiguous by itself — it means either
       // "no productId filter was supplied" (no constraint) or "a productId WAS
       // supplied but didn't resolve to a live product" (must match nothing).
       // `eqAny([])` can't tell those apart (it always drops the condition, by
       // design — see its doc in database-helpers/query.ts), so the requested-
       // but-unresolved case is handled explicitly here, same as
-      // `selectedProjectIds`/`scopedProjectIds` above.
-      productUuids.length > 0
-        ? eqAny(expense.productId, productUuids)
-        : filters.productId
-          ? sql`false`
-          : undefined,
+      // the project/reference conditions above.
+      requestedReferenceCondition(
+        expense.productId,
+        filters.productId !== undefined,
+        productIds,
+      ),
       // "linked" means productId IS NOT NULL — this deliberately includes
       // expenses whose product was later soft-deleted (those read back with
       // productId still set and productName null; see dbExpenseToAPI). The
@@ -254,24 +322,13 @@ export const buildExpenseWhereClause = async (
       // to the OR (not `undefined`, which would drop the vendor half entirely
       // and let the presence filter alone decide — or, with no presence filter
       // either, let the whole condition vanish and match every row).
-      or(
-        filters.vendorId
-          ? vendorUuids.length > 0
-            ? chargeCondition(db, eqAny(purchase.vendorId, vendorUuids))
-            : sql`false`
-          : undefined,
-        presenceCondition(expense.purchaseId, filters.vendorPresenceFilter),
-      ),
+      vendorFilterCondition(db, filters, vendorIds),
       filters.future !== undefined
         ? eq(expense.future, filters.future)
         : undefined,
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
-      filters.dateRelative === "beforeToday"
-        ? lt(expense.date, householdLocalDate())
-        : filters.dateRelative === "onOrBeforeToday"
-          ? lte(expense.date, householdLocalDate())
-          : undefined,
+      relativeDateCondition(filters.dateRelative),
       // `!== undefined`, NOT the truthiness guard the two date lines above use.
       // `costMin: 0` is a meaningful bound ("actuals and credits, no free
       // items") and `costMax: 0` is the credits-only worklist — a truthiness
@@ -285,14 +342,7 @@ export const buildExpenseWhereClause = async (
       presenceCondition(expense.cost, filters.costPresenceFilter),
       filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
       filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
-      filters.disposalPurchasePresenceFilter === "has"
-        ? inArray(expense.purchaseId, disposalPurchaseIds(getDb(db)))
-        : filters.disposalPurchasePresenceFilter === "none"
-          ? or(
-              isNull(expense.purchaseId),
-              notInArray(expense.purchaseId, disposalPurchaseIds(getDb(db))),
-            )
-          : undefined,
+      disposalPurchaseCondition(db, filters.disposalPurchasePresenceFilter),
       // Quantity is nullable evidence, never an inferred one-unit default.
       // Bounds naturally exclude unknown rows; the presence filter is the
       // explicit worklist for those receipts.
@@ -314,11 +364,11 @@ export const buildExpenseWhereClause = async (
       // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
       // `expense` — no `chargeCondition` sub-select hop needed. Same
       // requested-but-unresolved handling as `productId`/`vendorId` above.
-      purchaseUuids.length > 0
-        ? eqAny(expense.purchaseId, purchaseUuids)
-        : filters.purchaseId
-          ? sql`false`
-          : undefined,
+      requestedReferenceCondition(
+        expense.purchaseId,
+        filters.purchaseId !== undefined,
+        purchaseIds,
+      ),
     ],
   );
 };

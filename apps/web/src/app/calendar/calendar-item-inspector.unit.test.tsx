@@ -4,10 +4,8 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  createEntityMutationPort,
-  type EntityMutationOperations,
-} from "~/entities/editing/use-entity-commands";
+import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
+import type { EntityMutationTransport } from "~/entities/entity-contracts";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
@@ -95,9 +93,12 @@ function createCalendarOperations() {
     }
     throw new Error("Calendar inspector only issues expense updates.");
   });
-  const operations: EntityMutationOperations = { mutation };
+  const transport: EntityMutationTransport = {
+    execute: async (command) =>
+      await mutation.forEntity(command.entity).call(command),
+  };
   const inspectorOperations: CalendarItemInspectorOperations = {
-    mutationPort: createEntityMutationPort(operations),
+    mutationPort: createEntityMutationPort(transport),
   };
   return {
     inspectorOperations,

@@ -528,6 +528,132 @@ const readStagedUpload = async <TDatabase>(
   };
 };
 
+type AttachmentSource = {
+  bytes: Buffer;
+  contentType: string | undefined;
+  sourceFilename?: string;
+  stagedImageId?: ImageId;
+};
+
+const readUrlAttachmentSource = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  input: McpAttachFileInput,
+): Promise<AttachmentSource> => {
+  try {
+    const url = ports.externalFetch.validateUrl(input.url ?? "");
+    const response = await ports.externalFetch.fetchResponse(url);
+    if (!response.ok) {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        `Failed to fetch ${ports.externalFetch.sanitizeUrl(url)}: ${response.status}`,
+      );
+    }
+    const bytes = Buffer.from(
+      await ports.externalFetch.readResponseWithLimit(
+        response,
+        MAX_IMAGE_UPLOAD_BYTES,
+      ),
+    );
+    const header = response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      ?.trim();
+    const responseContentType =
+      header?.toLowerCase() === "application/octet-stream" ? undefined : header;
+    if (
+      input.contentType &&
+      responseContentType &&
+      input.contentType.toLowerCase() !== responseContentType.toLowerCase()
+    ) {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        "contentType conflicts with the URL response Content-Type",
+      );
+    }
+    return {
+      bytes,
+      contentType: responseContentType ?? input.contentType,
+      sourceFilename: new URL(url).pathname.split("/").pop() || undefined,
+    };
+  } catch (error) {
+    if (error instanceof ExternalFetchError) {
+      throw createAppError("IMAGE_ATTACH_FAILED", error.message, error);
+    }
+    throw error;
+  }
+};
+
+const readAttachmentSource = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
+  input: McpAttachFileInput,
+): Promise<AttachmentSource> => {
+  if (input.uploadId) {
+    const staged = await readStagedUpload(ports, db, input.uploadId);
+    return { ...staged, sourceFilename: staged.filename };
+  }
+  if (input.data) {
+    const decoded = decodeBase64File(input.data, input.contentType);
+    return { ...decoded };
+  }
+  if (input.url) return readUrlAttachmentSource(ports, input);
+  throw createAppError(
+    "IMAGE_ATTACH_FAILED",
+    "Provide exactly one of `url`, `data`, or `uploadId`",
+  );
+};
+
+const validateAttachmentSource = async (source: AttachmentSource) => {
+  if (!source.contentType) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "contentType is required for base64 data (or use a data: URI)",
+    );
+  }
+  const contentType = source.contentType.toLowerCase();
+  const isDocument = contentType === PDF_CONTENT_TYPE;
+  if (
+    !isDocument &&
+    !ALLOWED_IMAGE_TYPES.some((allowedType) => allowedType === contentType)
+  ) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `Unsupported content type: ${contentType}`,
+    );
+  }
+  if (source.bytes.length === 0) {
+    throw createAppError("IMAGE_ATTACH_FAILED", "File is empty");
+  }
+  if (source.bytes.length > MAX_IMAGE_UPLOAD_BYTES) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `File exceeds ${MAX_IMAGE_UPLOAD_BYTES} bytes`,
+    );
+  }
+  return {
+    contentType,
+    isDocument,
+    inspected: await inspectImageFile(source.bytes, contentType),
+  };
+};
+
+const attachmentResponse = <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  row: AttachedImageRecord,
+  input: McpAttachFileInput,
+  reused: boolean,
+): AttachFileResponse => ({
+  imageId: parseShortcodeFor("image", row.shortcode),
+  url: ports.objectStorage.getPublicUrl(row.key),
+  filename: row.filename,
+  contentType: row.contentType,
+  kind: row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
+  entityType: input.entityType,
+  entityId: input.entityId,
+  idempotencyKey: row.idempotencyKey,
+  reused,
+});
+
 /**
  * Store a file in R2 and associate it with a product / recipe / location /
  * project / purchase. Three input modes — base64 bytes, a URL the server
@@ -567,114 +693,13 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       input.idempotencyKey,
     );
     if (existing) {
-      return {
-        imageId: parseShortcodeFor("image", existing.shortcode),
-        url: ports.objectStorage.getPublicUrl(existing.key),
-        filename: existing.filename,
-        contentType: existing.contentType,
-        kind: existing.contentType === PDF_CONTENT_TYPE ? "document" : "image",
-        entityType: input.entityType,
-        entityId: input.entityId,
-        idempotencyKey: existing.idempotencyKey,
-        reused: true,
-      };
+      return attachmentResponse(ports, existing, input, true);
     }
   }
 
-  let bytes: Buffer;
-  let contentType: string | undefined;
-  let sourceFilename: string | undefined;
-  let stagedImageId: ImageId | undefined;
-
-  if (input.uploadId) {
-    ({
-      bytes,
-      contentType,
-      filename: sourceFilename,
-      stagedImageId,
-    } = await readStagedUpload(ports, db, input.uploadId));
-  } else if (input.data) {
-    ({ bytes, contentType } = decodeBase64File(input.data, input.contentType));
-  } else if (input.url) {
-    try {
-      const url = ports.externalFetch.validateUrl(input.url);
-      const response = await ports.externalFetch.fetchResponse(url);
-      if (!response.ok) {
-        throw createAppError(
-          "IMAGE_ATTACH_FAILED",
-          `Failed to fetch ${ports.externalFetch.sanitizeUrl(url)}: ${response.status}`,
-        );
-      }
-      bytes = Buffer.from(
-        await ports.externalFetch.readResponseWithLimit(
-          response,
-          MAX_IMAGE_UPLOAD_BYTES,
-        ),
-      );
-      const responseContentTypeHeader = response.headers
-        .get("content-type")
-        ?.split(";", 1)[0]
-        ?.trim();
-      const responseContentType =
-        responseContentTypeHeader?.toLowerCase() === "application/octet-stream"
-          ? undefined
-          : responseContentTypeHeader;
-      if (
-        input.contentType &&
-        responseContentType &&
-        input.contentType.toLowerCase() !== responseContentType.toLowerCase()
-      ) {
-        throw createAppError(
-          "IMAGE_ATTACH_FAILED",
-          "contentType conflicts with the URL response Content-Type",
-        );
-      }
-      contentType = responseContentType ?? input.contentType;
-      sourceFilename = new URL(url).pathname.split("/").pop() || undefined;
-    } catch (error) {
-      // Bad/SSRF-blocked URL, redirect limit, oversized body — a caller error,
-      // so surface it as a 4xx instead of letting the router rewrap it as a 500.
-      if (error instanceof ExternalFetchError) {
-        throw createAppError("IMAGE_ATTACH_FAILED", error.message, error);
-      }
-      throw error;
-    }
-  } else {
-    throw createAppError(
-      "IMAGE_ATTACH_FAILED",
-      "Provide exactly one of `url`, `data`, or `uploadId`",
-    );
-  }
-
-  if (!contentType) {
-    throw createAppError(
-      "IMAGE_ATTACH_FAILED",
-      "contentType is required for base64 data (or use a data: URI)",
-    );
-  }
-  contentType = contentType.toLowerCase();
-
-  const isDocument = contentType === PDF_CONTENT_TYPE;
-  const isAllowed =
-    isDocument ||
-    ALLOWED_IMAGE_TYPES.some((allowedType) => allowedType === contentType);
-  if (!isAllowed) {
-    throw createAppError(
-      "IMAGE_ATTACH_FAILED",
-      `Unsupported content type: ${contentType}`,
-    );
-  }
-  if (bytes.length === 0) {
-    throw createAppError("IMAGE_ATTACH_FAILED", "File is empty");
-  }
-  if (bytes.length > MAX_IMAGE_UPLOAD_BYTES) {
-    throw createAppError(
-      "IMAGE_ATTACH_FAILED",
-      `File exceeds ${MAX_IMAGE_UPLOAD_BYTES} bytes`,
-    );
-  }
-
-  const inspected = await inspectImageFile(bytes, contentType);
+  const source = await readAttachmentSource(ports, db, input);
+  const { contentType, isDocument, inspected } =
+    await validateAttachmentSource(source);
 
   // 3. Store in R2, then record the row — rolling back the object if the DB
   // insert fails (mirrors importImageFromUrl).
@@ -682,14 +707,14 @@ const attachFileToEntityWithPorts = async <TDatabase>(
     ? "pdf"
     : ports.objectStorage.contentTypeToExtension(contentType);
   const filename = filenameForContentType(
-    input.filename ?? sourceFilename ?? `attachment.${extension}`,
+    input.filename ?? source.sourceFilename ?? `attachment.${extension}`,
     contentType,
   );
   const key = isDocument
     ? await allocateAttachmentDocumentKey(ports, db, filename, input.entityId)
     : ports.objectStorage.generateImageKey(filename);
 
-  await ports.objectStorage.upload({ key, body: bytes, contentType });
+  await ports.objectStorage.upload({ key, body: source.bytes, contentType });
   // 4. Insert the row + associate in one transaction (owned by the repo), so a
   // failure in either step (e.g. the target was deleted since step 0) rolls back
   // the DB write; the catch then removes the now-orphaned R2 object.
@@ -700,7 +725,7 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       {
         key,
         filename,
-        size: bytes.length,
+        size: source.bytes.length,
         ...inspected,
         idempotencyKey: input.idempotencyKey,
         expectedImageCount: input.expectedImageCount,
@@ -728,13 +753,13 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   // owns its own copy. Best-effort: `findCullablePendingImages` sweeps an
   // unassociated PENDING row anyway, so a failure here strands bytes for a day
   // rather than leaking them, and must not fail an attachment that succeeded.
-  if (stagedImageId) {
+  if (source.stagedImageId) {
     try {
       // The uuid `readStagedUpload` already resolved from the `IMG-` code —
       // `deleteImages` writes against the uuid PK, and a shortcode here would
       // silently delete nothing and strand the staged object.
       const { deletedKeys } = await ports.repository.deleteImages(db, [
-        stagedImageId,
+        source.stagedImageId,
       ]);
       await deleteStoredObjectsWithPorts(ports, deletedKeys);
     } catch (cleanupError) {
@@ -742,17 +767,7 @@ const attachFileToEntityWithPorts = async <TDatabase>(
     }
   }
 
-  return {
-    imageId: parseShortcodeFor("image", created.row.shortcode),
-    url: ports.objectStorage.getPublicUrl(created.row.key),
-    filename: created.row.filename,
-    contentType: created.row.contentType,
-    kind: created.row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
-    entityType: input.entityType,
-    entityId: input.entityId,
-    idempotencyKey: created.row.idempotencyKey,
-    reused: created.reused,
-  };
+  return attachmentResponse(ports, created.row, input, created.reused);
 };
 
 /**

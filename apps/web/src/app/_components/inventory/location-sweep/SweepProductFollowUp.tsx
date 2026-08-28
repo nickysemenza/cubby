@@ -40,6 +40,37 @@ export interface SweepFollowUp {
   needsPrice: boolean;
 }
 
+const followUpPatch = (
+  followUp: SweepFollowUp | null,
+  name: string | null,
+  price: string,
+  ingredient: ComboboxItem | null,
+) => {
+  const seededName = name ?? followUp?.name ?? "";
+  const priceValue = Number.parseFloat(price);
+  const namePatch =
+    followUp?.needsName &&
+    seededName.trim() &&
+    seededName.trim() !== followUp.name
+      ? seededName.trim()
+      : undefined;
+  const pricePatch =
+    followUp?.needsPrice && Number.isFinite(priceValue) && priceValue > 0
+      ? priceValue
+      : undefined;
+  const ingredientPatch = getOptionalIngredientId(ingredient);
+  return {
+    seededName,
+    namePatch,
+    pricePatch,
+    ingredientPatch,
+    hasChanges:
+      namePatch !== undefined ||
+      pricePatch !== undefined ||
+      ingredientPatch !== undefined,
+  };
+};
+
 export function SweepProductFollowUp({
   followUp,
   locationName,
@@ -86,24 +117,8 @@ export function SweepProductFollowUp({
     setIngredient(null);
   }, [followUp?.id]);
 
-  const seededName = name ?? followUp?.name ?? "";
-
-  const priceValue = Number.parseFloat(price);
-  const namePatch =
-    followUp?.needsName &&
-    seededName.trim() &&
-    seededName.trim() !== followUp.name
-      ? seededName.trim()
-      : undefined;
-  const pricePatch =
-    followUp?.needsPrice && Number.isFinite(priceValue) && priceValue > 0
-      ? priceValue
-      : undefined;
-  const ingredientPatch = getOptionalIngredientId(ingredient);
-  const hasChanges =
-    namePatch !== undefined ||
-    pricePatch !== undefined ||
-    ingredientPatch !== undefined;
+  const { seededName, namePatch, pricePatch, ingredientPatch, hasChanges } =
+    followUpPatch(followUp, name, price, ingredient);
 
   return (
     <Sheet

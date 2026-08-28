@@ -107,6 +107,69 @@ const writeUnavailable = async (
     .onConflictDoNothing({ target: upcLookupCache.upc });
 };
 
+const readyCacheRow = (
+  upc: string,
+  hit: UPCLookupResponse | undefined,
+  fetchedAt: Date,
+): CachedUpcLookup => ({
+  upc,
+  manufacturer: hit?.manufacturer ?? null,
+  brand: hit?.brand ?? null,
+  priceDollars: hit?.priceDollars ?? null,
+  imageUrl: hit?.imageUrl ?? null,
+  status: "ready",
+  fetchedAt,
+});
+
+const applyReadyCacheRows = (
+  cached: Map<string, CachedUpcLookup>,
+  upcs: readonly string[],
+  hits: ReadonlyMap<string, UPCLookupResponse>,
+  fetchedAt: Date,
+) => {
+  for (const upc of upcs)
+    cached.set(upc, readyCacheRow(upc, hits.get(upc), fetchedAt));
+};
+
+const refreshUpcCache = async (
+  db: Database,
+  refresh: string[],
+  cached: Map<string, CachedUpcLookup>,
+  checkedAt: Date,
+  lookupBatch: (upcs: string[]) => Promise<Map<string, UPCLookupResponse>>,
+): Promise<boolean> => {
+  if (refresh.length === 0) return false;
+  try {
+    const hits = await lookupBatch(refresh);
+    await writeLookups(db, refresh, hits, checkedAt);
+    applyReadyCacheRows(cached, refresh, hits, checkedAt);
+    return false;
+  } catch (error) {
+    console.error("[readCachedUpcLookups] UPC provider refresh failed:", error);
+    const partial = error instanceof PartialUpcBatchLookupError ? error : null;
+    const failed = new Set(partial?.failedUpcs ?? refresh);
+    const completed = refresh.filter((upc) => !failed.has(upc));
+    if (partial) {
+      await writeLookups(db, completed, partial.results, checkedAt);
+      applyReadyCacheRows(cached, completed, partial.results, checkedAt);
+    }
+    const firstFailures = [...failed].filter((upc) => !cached.has(upc));
+    await writeUnavailable(db, firstFailures, checkedAt);
+    for (const upc of firstFailures) {
+      cached.set(upc, {
+        upc,
+        manufacturer: null,
+        brand: null,
+        priceDollars: null,
+        imageUrl: null,
+        status: "unavailable",
+        fetchedAt: checkedAt,
+      });
+    }
+    return true;
+  }
+};
+
 /**
  * Load cached UPC answers, refreshing only absent/stale rows. If refresh
  * fails, preserve stale cached answers and explicitly report unavailable UPCs.
@@ -143,71 +206,13 @@ export const readCachedUpcLookups = async (
     return !row || !isFresh(row, checkedAt);
   });
 
-  let providerFailed = false;
-  if (refresh.length > 0) {
-    try {
-      const hits = await lookupBatch(refresh);
-      await writeLookups(db, refresh, hits, checkedAt);
-      for (const upc of refresh) {
-        const hit = hits.get(upc);
-        cached.set(upc, {
-          upc,
-          manufacturer: hit?.manufacturer ?? null,
-          brand: hit?.brand ?? null,
-          priceDollars: hit?.priceDollars ?? null,
-          imageUrl: hit?.imageUrl ?? null,
-          status: "ready",
-          fetchedAt: checkedAt,
-        });
-      }
-    } catch (error) {
-      providerFailed = true;
-      console.error(
-        "[readCachedUpcLookups] UPC provider refresh failed:",
-        error,
-      );
-      const failed =
-        error instanceof PartialUpcBatchLookupError
-          ? new Set(error.failedUpcs)
-          : new Set(refresh);
-      const completed = refresh.filter((upc) => !failed.has(upc));
-      if (error instanceof PartialUpcBatchLookupError) {
-        await writeLookups(db, completed, error.results, checkedAt);
-        for (const upc of completed) {
-          const hit = error.results.get(upc);
-          cached.set(upc, {
-            upc,
-            manufacturer: hit?.manufacturer ?? null,
-            brand: hit?.brand ?? null,
-            priceDollars: hit?.priceDollars ?? null,
-            imageUrl: hit?.imageUrl ?? null,
-            status: "ready",
-            fetchedAt: checkedAt,
-          });
-        }
-      }
-      // Preserve an earlier ready row (the stale proposal), but materialize a
-      // first-time outage. A later successful refresh overwrites this state.
-      await writeUnavailable(
-        db,
-        [...failed].filter((upc) => !cached.has(upc)),
-        checkedAt,
-      );
-      for (const upc of failed) {
-        if (!cached.has(upc)) {
-          cached.set(upc, {
-            upc,
-            manufacturer: null,
-            brand: null,
-            priceDollars: null,
-            imageUrl: null,
-            status: "unavailable",
-            fetchedAt: checkedAt,
-          });
-        }
-      }
-    }
-  }
+  const providerFailed = await refreshUpcCache(
+    db,
+    refresh,
+    cached,
+    checkedAt,
+    lookupBatch,
+  );
 
   const lookups = new Map<string, UPCLookupResponse>();
   const usedRows = requested

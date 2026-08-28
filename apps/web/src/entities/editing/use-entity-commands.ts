@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
+import type { EntityMutationTransport } from "~/entities/entity-contracts";
 import {
   entityMutation,
   parseEntityMutationResultFor,
@@ -82,17 +83,14 @@ function issuesFromRefusal(
   return issues;
 }
 
-export interface EntityMutationOperations {
-  readonly mutation: typeof entityMutation.mutate;
-}
-
-const productionEntityMutationOperations: EntityMutationOperations = {
-  mutation: entityMutation.mutate,
+const browserEntityMutationTransport: EntityMutationTransport = {
+  execute: async (command) =>
+    await entityMutation.mutate.forEntity(command.entity).call(command),
 };
 
 const executeMutation = async <E extends EditableEntity>(
   command: EntityEditCommand<E>,
-  operations: EntityMutationOperations,
+  transport: EntityMutationTransport,
 ): Promise<EntityMutationExecution<E>> => {
   const data = entityBrowserMutationCommandSchema.parse(
     command.operation === "create"
@@ -114,7 +112,7 @@ const executeMutation = async <E extends EditableEntity>(
             ids: [...command.ids],
           },
   );
-  const result = await operations.mutation.forEntity(data.entity).call(data);
+  const result = await transport.execute(data);
   if (command.operation === "create" || command.operation === "update") {
     if (result.action !== command.operation || !("item" in result)) {
       throw new Error(
@@ -138,7 +136,7 @@ const executeMutation = async <E extends EditableEntity>(
 
 const executeBulkMutation = async <E extends EditableEntity>(
   command: EntityBulkUpdateCommand<E>,
-  operations: EntityMutationOperations,
+  transport: EntityMutationTransport,
 ) => {
   const data = entityBrowserMutationCommandSchema.parse({
     action: command.operation,
@@ -146,7 +144,7 @@ const executeBulkMutation = async <E extends EditableEntity>(
     ids: [...command.ids],
     data: command.data,
   });
-  const result = await operations.mutation.forEntity(data.entity).call(data);
+  const result = await transport.execute(data);
   if (result.action !== "bulkUpdate") {
     throw new Error(`${command.entity} bulk update returned ${result.action}.`);
   }
@@ -155,14 +153,14 @@ const executeBulkMutation = async <E extends EditableEntity>(
 
 /** Start adapter for the schema-correlated editing command interface. */
 export function createEntityMutationPort(
-  operations: EntityMutationOperations = productionEntityMutationOperations,
+  transport: EntityMutationTransport = browserEntityMutationTransport,
 ): EntityMutationPort {
   return {
     execute: async <E extends EditableEntity>(command: EntityEditCommand<E>) =>
-      await executeMutation(command, operations),
+      await executeMutation(command, transport),
     executeBulk: async <E extends EditableEntity>(
       command: EntityBulkUpdateCommand<E>,
-    ) => await executeBulkMutation(command, operations),
+    ) => await executeBulkMutation(command, transport),
   };
 }
 

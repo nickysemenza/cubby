@@ -12,59 +12,61 @@ export type RecipeFlowValidationResult =
 const instructionRefKey = (ref: RecipeFlowInstructionRef): string =>
   `${ref.sectionId}:${ref.instructionIndex}`;
 
-export function validateRecipeFlowPlan(
-  recipe: RecipeOut,
-  plan: RecipeFlowPlan,
-): RecipeFlowValidationResult {
-  const issues: string[] = [];
-  const warnings: RecipeFlowWarning[] = [];
-  const sections = new Map(
-    recipe.sections.map((section) => [section.id, section]),
-  );
-  const usages = new Map(
-    recipe.sections.flatMap((section) =>
-      section.ingredients.map((usage) => [usage.id, usage] as const),
-    ),
-  );
+type RecipeSections = Map<string, RecipeOut["sections"][number]>;
 
-  const validateInstructionRef = (
-    ref: RecipeFlowInstructionRef,
-    owner: string,
-  ) => {
-    const section = sections.get(ref.sectionId);
-    if (!section) {
-      issues.push(`${owner} references unknown section ${ref.sectionId}`);
-      return;
-    }
-    if (ref.instructionIndex >= section.instructions.length) {
-      issues.push(
-        `${owner} references missing instruction ${ref.sectionId}[${ref.instructionIndex}]`,
-      );
-    }
-  };
+const validateInstructionRef = (
+  ref: RecipeFlowInstructionRef,
+  owner: string,
+  sections: RecipeSections,
+  issues: string[],
+) => {
+  const section = sections.get(ref.sectionId);
+  if (!section) {
+    issues.push(`${owner} references unknown section ${ref.sectionId}`);
+  } else if (ref.instructionIndex >= section.instructions.length) {
+    issues.push(
+      `${owner} references missing instruction ${ref.sectionId}[${ref.instructionIndex}]`,
+    );
+  }
+};
 
+const validateNodeIds = (plan: RecipeFlowPlan, issues: string[]) => {
   const allIds = new Set<string>();
   for (const node of [...plan.setup, ...plan.sources, ...plan.operations]) {
     if (allIds.has(node.id)) issues.push(`duplicate node id ${node.id}`);
     allIds.add(node.id);
   }
+};
 
-  const sourceIds = new Set(plan.sources.map((source) => source.id));
-  const operationIds = new Set(
-    plan.operations.map((operation) => operation.id),
-  );
-  const sourcesByUsage = new Map<string, string[]>();
-
+const validateSetup = (
+  plan: RecipeFlowPlan,
+  sections: RecipeSections,
+  issues: string[],
+) => {
   for (const setup of plan.setup) {
     for (const ref of setup.instructionRefs) {
-      validateInstructionRef(ref, `setup ${setup.id}`);
+      validateInstructionRef(ref, `setup ${setup.id}`, sections, issues);
     }
   }
+};
 
+const validateSources = (
+  recipe: RecipeOut,
+  plan: RecipeFlowPlan,
+  sections: RecipeSections,
+  issues: string[],
+  warnings: RecipeFlowWarning[],
+) => {
+  const usages = new Map(
+    recipe.sections.flatMap((section) =>
+      section.ingredients.map((usage) => [usage.id, usage] as const),
+    ),
+  );
+  const sourcesByUsage = new Map<string, string[]>();
   for (const source of plan.sources) {
     if (source.kind === "unlisted") {
       for (const ref of source.instructionRefs) {
-        validateInstructionRef(ref, `source ${source.id}`);
+        validateInstructionRef(ref, `source ${source.id}`, sections, issues);
       }
       warnings.push({
         code: "unlisted-input",
@@ -73,7 +75,6 @@ export function validateRecipeFlowPlan(
       });
       continue;
     }
-
     if (!usages.has(source.usageId)) {
       issues.push(
         `source ${source.id} references unknown ingredient usage ${source.usageId}`,
@@ -84,7 +85,6 @@ export function validateRecipeFlowPlan(
     existing.push(source.id);
     sourcesByUsage.set(source.usageId, existing);
   }
-
   for (const [usageId] of usages) {
     if (!sourcesByUsage.has(usageId)) {
       issues.push(`ingredient usage ${usageId} is missing from the flow`);
@@ -111,7 +111,17 @@ export function validateRecipeFlowPlan(
       nodeIds: ids,
     });
   }
+};
 
+const validateOperations = (
+  plan: RecipeFlowPlan,
+  sections: RecipeSections,
+  issues: string[],
+): Map<string, Set<string>> => {
+  const sourceIds = new Set(plan.sources.map((source) => source.id));
+  const operationIds = new Set(
+    plan.operations.map((operation) => operation.id),
+  );
   const outgoing = new Map<string, Set<string>>();
   const addOutgoing = (from: string, to: string) => {
     const targets = outgoing.get(from) ?? new Set<string>();
@@ -121,7 +131,12 @@ export function validateRecipeFlowPlan(
 
   for (const operation of plan.operations) {
     for (const ref of operation.instructionRefs) {
-      validateInstructionRef(ref, `operation ${operation.id}`);
+      validateInstructionRef(
+        ref,
+        `operation ${operation.id}`,
+        sections,
+        issues,
+      );
     }
     const seenInputs = new Set<string>();
     for (const input of operation.inputs) {
@@ -141,7 +156,17 @@ export function validateRecipeFlowPlan(
       addOutgoing(input.id, operation.id);
     }
   }
+  return outgoing;
+};
 
+const validateOutputs = (
+  plan: RecipeFlowPlan,
+  outgoing: Map<string, Set<string>>,
+  issues: string[],
+): Set<string> => {
+  const operationIds = new Set(
+    plan.operations.map((operation) => operation.id),
+  );
   const outputIds = new Set<string>();
   for (const outputId of plan.outputOperationIds) {
     if (outputIds.has(outputId)) {
@@ -154,7 +179,10 @@ export function validateRecipeFlowPlan(
       issues.push(`output operation ${outputId} is not terminal`);
     }
   }
+  return outputIds;
+};
 
+const validateOperationCycles = (plan: RecipeFlowPlan, issues: string[]) => {
   const visitState = new Map<string, "visiting" | "visited">();
   const visitOperation = (id: string) => {
     const state = visitState.get(id);
@@ -171,30 +199,48 @@ export function validateRecipeFlowPlan(
     visitState.set(id, "visited");
   };
   for (const operation of plan.operations) visitOperation(operation.id);
+};
 
-  const reachesOutput = (start: string): boolean => {
-    const pending = [start];
-    const seen = new Set<string>();
-    while (pending.length > 0) {
-      const id = pending.pop();
-      if (!id || seen.has(id)) continue;
-      if (outputIds.has(id)) return true;
-      seen.add(id);
-      pending.push(...(outgoing.get(id) ?? []));
-    }
-    return false;
-  };
+const reachesOutput = (
+  start: string,
+  outputIds: Set<string>,
+  outgoing: Map<string, Set<string>>,
+): boolean => {
+  const pending = [start];
+  const seen = new Set<string>();
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (!id || seen.has(id)) continue;
+    if (outputIds.has(id)) return true;
+    seen.add(id);
+    pending.push(...(outgoing.get(id) ?? []));
+  }
+  return false;
+};
+
+const validateReachability = (
+  plan: RecipeFlowPlan,
+  outputIds: Set<string>,
+  outgoing: Map<string, Set<string>>,
+  issues: string[],
+) => {
   for (const source of plan.sources) {
-    if (!reachesOutput(source.id)) {
+    if (!reachesOutput(source.id, outputIds, outgoing)) {
       issues.push(`source ${source.id} does not reach an output`);
     }
   }
   for (const operation of plan.operations) {
-    if (!reachesOutput(operation.id)) {
+    if (!reachesOutput(operation.id, outputIds, outgoing)) {
       issues.push(`operation ${operation.id} does not reach an output`);
     }
   }
+};
 
+const appendCoverageWarnings = (
+  recipe: RecipeOut,
+  plan: RecipeFlowPlan,
+  warnings: RecipeFlowWarning[],
+) => {
   const coveredInstructions = new Set<string>();
   for (const node of [...plan.setup, ...plan.operations]) {
     for (const ref of node.instructionRefs) {
@@ -218,7 +264,26 @@ export function validateRecipeFlowPlan(
       });
     });
   }
+};
 
+export function validateRecipeFlowPlan(
+  recipe: RecipeOut,
+  plan: RecipeFlowPlan,
+): RecipeFlowValidationResult {
+  const issues: string[] = [];
+  const warnings: RecipeFlowWarning[] = [];
+  const sections = new Map(
+    recipe.sections.map((section) => [section.id, section]),
+  );
+
+  validateNodeIds(plan, issues);
+  validateSetup(plan, sections, issues);
+  validateSources(recipe, plan, sections, issues, warnings);
+  const outgoing = validateOperations(plan, sections, issues);
+  const outputIds = validateOutputs(plan, outgoing, issues);
+  validateOperationCycles(plan, issues);
+  validateReachability(plan, outputIds, outgoing, issues);
+  appendCoverageWarnings(recipe, plan, warnings);
   if (plan.outputOperationIds.length > 1) {
     warnings.push({
       code: "multiple-outputs",

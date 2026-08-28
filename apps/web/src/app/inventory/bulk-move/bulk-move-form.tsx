@@ -57,6 +57,98 @@ interface BulkMoveFormProps {
   initialSourceLocationId?: string;
 }
 
+function BulkMoveInventoryList({
+  locationName,
+  items,
+  onToggleItem,
+  onToggleAll,
+  onUpdateQuantity,
+}: {
+  locationName: string;
+  items: MoveItem[];
+  onToggleItem: (index: number) => void;
+  onToggleAll: () => void;
+  onUpdateQuantity: (index: number, quantity: number) => void;
+}) {
+  const allSelected = items.every((item) => item.selected);
+  return (
+    <>
+      <Row align="center" justify="between" className="mb-4">
+        <h3 className="text-lg font-medium">Items at {locationName}</h3>
+        {items.length > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onToggleAll}
+          >
+            {allSelected ? "Deselect All" : "Select All"}
+          </Button>
+        )}
+      </Row>
+      {items.length === 0 ? (
+        <div className="py-6 text-center text-muted-foreground">
+          No inventory items at this location.
+        </div>
+      ) : (
+        <Stack gap="sm">
+          <Row
+            align="center"
+            gap="md"
+            className="border-b pb-2 text-sm font-medium text-muted-foreground"
+          >
+            <div className="w-8"></div>
+            <div className="flex-1">Product</div>
+            <div className="w-32 text-right">Available</div>
+            <div className="w-40">Move Quantity</div>
+          </Row>
+
+          {items.map((item, index) => (
+            <Row
+              key={item.inventoryEntryId}
+              align="center"
+              gap="md"
+              className={`rounded border p-4 ${
+                item.selected ? "border-primary bg-primary/5" : ""
+              }`}
+            >
+              <Checkbox
+                checked={item.selected}
+                onCheckedChange={() => onToggleItem(index)}
+              />
+              <Row align="center" gap="sm" className="flex-1">
+                <EntityIcon
+                  entity="inventory"
+                  className="size-4 text-muted-foreground"
+                />
+                <span className="font-medium">{item.productName}</span>
+              </Row>
+              <div className="w-32 text-right text-muted-foreground">
+                {item.currentQuantity} {item.unit}
+              </div>
+              <Row align="center" gap="sm" className="w-40">
+                <Input
+                  type="number"
+                  min={0.01}
+                  max={item.currentQuantity}
+                  step="any"
+                  value={item.moveQuantity}
+                  onChange={(event) =>
+                    onUpdateQuantity(index, parseFloat(event.target.value) || 0)
+                  }
+                  className="w-20"
+                  disabled={!item.selected}
+                />
+                <Description as="span">{item.unit}</Description>
+              </Row>
+            </Row>
+          ))}
+        </Stack>
+      )}
+    </>
+  );
+}
+
 export default function BulkMoveForm({
   initialSourceLocationId,
 }: BulkMoveFormProps) {
@@ -308,86 +400,13 @@ export default function BulkMoveForm({
 
       {sourceLocation && (
         <div>
-          <Row align="center" justify="between" className="mb-4">
-            <h3 className="text-lg font-medium">
-              Items at {sourceLocation.name}
-            </h3>
-            {moveItems.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={toggleSelectAll}
-              >
-                {moveItems.every((item) => item.selected)
-                  ? "Deselect All"
-                  : "Select All"}
-              </Button>
-            )}
-          </Row>
-
-          {moveItems.length > 0 ? (
-            <Stack gap="sm">
-              <Row
-                align="center"
-                gap="md"
-                className="border-b pb-2 text-sm font-medium text-muted-foreground"
-              >
-                <div className="w-8"></div>
-                <div className="flex-1">Product</div>
-                <div className="w-32 text-right">Available</div>
-                <div className="w-40">Move Quantity</div>
-              </Row>
-
-              {moveItems.map((item, index) => (
-                <Row
-                  key={item.inventoryEntryId}
-                  align="center"
-                  gap="md"
-                  className={`rounded border p-4 ${
-                    item.selected ? "border-primary bg-primary/5" : ""
-                  }`}
-                >
-                  <Checkbox
-                    checked={item.selected}
-                    onCheckedChange={() => toggleItemSelection(index)}
-                  />
-                  <Row align="center" gap="sm" className="flex-1">
-                    <EntityIcon
-                      entity="inventory"
-                      className="size-4 text-muted-foreground"
-                    />
-                    <span className="font-medium">{item.productName}</span>
-                  </Row>
-                  <div className="w-32 text-right text-muted-foreground">
-                    {item.currentQuantity} {item.unit}
-                  </div>
-                  <Row align="center" gap="sm" className="w-40">
-                    <Input
-                      type="number"
-                      min={0.01}
-                      max={item.currentQuantity}
-                      step="any"
-                      value={item.moveQuantity}
-                      onChange={(e) =>
-                        updateMoveQuantity(
-                          index,
-                          parseFloat(e.target.value) || 0,
-                        )
-                      }
-                      className="w-20"
-                      disabled={!item.selected}
-                    />
-                    <Description as="span">{item.unit}</Description>
-                  </Row>
-                </Row>
-              ))}
-            </Stack>
-          ) : (
-            <div className="py-6 text-center text-muted-foreground">
-              No inventory items at this location.
-            </div>
-          )}
+          <BulkMoveInventoryList
+            locationName={sourceLocation.name}
+            items={moveItems}
+            onToggleItem={toggleItemSelection}
+            onToggleAll={toggleSelectAll}
+            onUpdateQuantity={updateMoveQuantity}
+          />
 
           {selectedItems.length > 0 && (
             <MutedBox className="mt-4 rounded-lg">

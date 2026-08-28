@@ -1,7 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import type {
+  LocationShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
 import type { InventorySessionResolution } from "@cubby/schemas/inventory";
 import type { InfLocation } from "@cubby/schemas/location";
+import type { ProductQuantitySummariesOut } from "@cubby/schemas/product";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
@@ -52,12 +56,76 @@ import {
   findParentLocation,
   flattenAuditableLocations,
   getUnknownChildLocations,
+  type SessionLocation,
 } from "./session-utils";
 import { useSessionMutations } from "./useSessionMutations";
 import { useSessionProgress } from "./useSessionProgress";
 
 interface InventorySessionWorkbenchProps {
   initialParentShortcode?: LocationShortcode;
+}
+
+type SessionProgressState = ReturnType<typeof useSessionProgress>;
+type SessionSummary = SessionProgressState["summary"];
+type ResumeCandidate = SessionProgressState["resumeCandidate"];
+
+interface InventorySessionContentProps {
+  treeLoading: boolean;
+  treeFailed: boolean;
+  treeError: unknown;
+  onRetryTree: () => void;
+  treeLocations: InfLocation[];
+  parent: InfLocation | null;
+  locations: SessionLocation[];
+  initialParentShortcode?: LocationShortcode;
+  inventoryError: unknown;
+  inventoryFailed: boolean;
+  inventoryLoading: boolean;
+  onRetryInventory: () => void;
+  resumeCandidate: ResumeCandidate;
+  startedAt: number | null;
+  passComplete: boolean;
+  skippedCount: number;
+  summary: SessionSummary;
+  onResume: () => void;
+  onStartNew: () => void;
+  onRevisitSkipped: () => void;
+  onSelectLocation: (shortcode: LocationShortcode) => void;
+  passLocations: SessionLocation[];
+  currentIndex: number;
+  currentLocation: SessionLocation | null;
+  inventoryByLocation: Map<string, InventoryItem[]>;
+  itemResolutions: Map<string, ItemResolution>;
+  completedLocationIds: ReadonlySet<string>;
+  skippedLocationIds: ReadonlySet<string>;
+  duplicateProductIds: Set<ProductShortcode>;
+  quantitySummaries: ProductQuantitySummariesOut | undefined;
+  unknownItems: InventoryItem[];
+  unknownLocations: InfLocation[];
+  atUnknownLocation: boolean;
+  unknownReady: boolean;
+  onJumpToLocation: (id: string) => boolean;
+  onScanJump: (id: string) => void;
+  onAdoptLocation: (location: Pick<InfLocation, "id" | "name">) => void;
+  onAdjust: (item: InventoryItem, amount: Amount) => void;
+  onRemove: (item: InventoryItem) => void;
+  onRelocate: (item: InventoryItem) => void;
+  onMoveTo: (item: InventoryItem) => void;
+  onClearStaged: (item: InventoryItem) => void;
+  onPullUnknown: (item: InventoryItem) => void;
+  onMoveUnknownTo: (item: InventoryItem) => void;
+  onPullUnknownLocation: (location: InfLocation) => void;
+  onDone: () => void;
+  onToggleSkip: () => void;
+  unresolvedCount: number;
+  donePending: boolean;
+  onCloseMoveTarget: () => void;
+  moveTarget: {
+    item: InventoryItem;
+    sourceLocationId: LocationShortcode;
+    commit: "done" | "now";
+  } | null;
+  onConfirmMoveTo: (targetLocationId: LocationShortcode) => Promise<void>;
 }
 
 export function InventorySessionWorkbench({
@@ -474,6 +542,96 @@ export function InventorySessionWorkbench({
   // Resolved by the pass, against the queue the cursor actually indexes.
   const jumpToLocation = jumpToId;
 
+  return (
+    <InventorySessionContent
+      treeLoading={treeLoading}
+      treeFailed={treeQuery.isError}
+      treeError={treeQuery.isError ? treeQuery.error : null}
+      onRetryTree={() => void treeQuery.refetch()}
+      treeLocations={tree ?? []}
+      parent={parent}
+      locations={sessionLocations}
+      initialParentShortcode={initialParentShortcode}
+      inventoryError={inventoryQuery.isError ? inventoryQuery.error : null}
+      inventoryFailed={inventoryQuery.isError}
+      inventoryLoading={inventoryQuery.isLoading}
+      onRetryInventory={() => void inventoryQuery.refetch()}
+      resumeCandidate={resumeCandidate}
+      startedAt={startedAt}
+      passComplete={passComplete}
+      skippedCount={counts.skipped}
+      summary={summary}
+      onResume={resumePass}
+      onStartNew={startNewPass}
+      onRevisitSkipped={revisitSkipped}
+      onSelectLocation={selectParent}
+      passLocations={passLocations}
+      currentIndex={currentIndex}
+      currentLocation={currentLocation}
+      inventoryByLocation={inventoryByLocation}
+      itemResolutions={itemResolutions}
+      completedLocationIds={completedLocationIds}
+      skippedLocationIds={skippedLocationIds}
+      duplicateProductIds={duplicateProductIds}
+      quantitySummaries={quantitySummariesQuery.data}
+      unknownItems={unknownItems}
+      unknownLocations={unknownChildLocations}
+      atUnknownLocation={atUnknownLocation}
+      unknownReady={!!unknownLocation}
+      onJumpToLocation={jumpToLocation}
+      onScanJump={(id) => {
+        if (!jumpToLocation(id)) {
+          toast.error("That location is not in this session.");
+        }
+      }}
+      onAdoptLocation={adoptLocation}
+      onAdjust={stageAdjust}
+      onRemove={stageRemove}
+      onRelocate={stageMoveToUnknown}
+      onMoveTo={(item) => {
+        if (currentLocation) openMoveTo(item, currentLocation.id, "done");
+      }}
+      onClearStaged={(item) => setItemResolution(item.id, null)}
+      onPullUnknown={pullFromUnknown}
+      onMoveUnknownTo={(item) => {
+        if (unknownLocation) openMoveTo(item, unknownLocation.id, "now");
+      }}
+      onPullUnknownLocation={adoptLocation}
+      onDone={handleDone}
+      onToggleSkip={handleToggleSkip}
+      unresolvedCount={unresolvedCount}
+      donePending={reconcile.isPending}
+      onCloseMoveTarget={() => setMoveTarget(null)}
+      moveTarget={moveTarget}
+      onConfirmMoveTo={confirmMoveTo}
+    />
+  );
+}
+
+function InventorySessionContent(props: InventorySessionContentProps) {
+  const {
+    treeLoading,
+    treeFailed,
+    treeError,
+    onRetryTree,
+    treeLocations,
+    parent,
+    locations,
+    initialParentShortcode,
+    inventoryError,
+    inventoryFailed,
+    inventoryLoading,
+    onRetryInventory,
+    resumeCandidate,
+    startedAt,
+    passComplete,
+    skippedCount,
+    summary,
+    onResume,
+    onStartNew,
+    onRevisitSkipped,
+    onSelectLocation,
+  } = props;
   if (treeLoading) {
     return (
       <Row align="center" justify="center" className="min-h-80">
@@ -485,12 +643,12 @@ export function InventorySessionWorkbench({
   // The location tree names the frozen session scope. Do not turn a failed
   // tree into an empty picker, because choosing or resuming then would present
   // a recount against an unknown set of physical locations.
-  if (treeQuery.isError) {
+  if (treeFailed) {
     return (
       <InventorySessionLoadError
         title="Couldn't load locations for a recount"
-        detail={getErrorMessage(treeQuery.error)}
-        onRetry={() => void treeQuery.refetch()}
+        detail={getErrorMessage(treeError)}
+        onRetry={onRetryTree}
       />
     );
   }
@@ -498,14 +656,14 @@ export function InventorySessionWorkbench({
   if (!parent) {
     return (
       <ParentPicker
-        locations={tree ?? []}
+        locations={treeLocations}
         initialParentShortcode={initialParentShortcode}
-        onSelect={selectParent}
+        onSelect={onSelectLocation}
       />
     );
   }
 
-  if (sessionLocations.length === 0) {
+  if (locations.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -523,12 +681,12 @@ export function InventorySessionWorkbench({
 
   // Expected inventory is the recount snapshot. A missing response must not
   // read as an empty bin: saving that state would falsely confirm a location.
-  if (inventoryQuery.isError) {
+  if (inventoryFailed) {
     return (
       <InventorySessionLoadError
         title={`Couldn't load inventory for ${parent.name}`}
-        detail={getErrorMessage(inventoryQuery.error)}
-        onRetry={() => void inventoryQuery.refetch()}
+        detail={getErrorMessage(inventoryError)}
+        onRetry={onRetryInventory}
       />
     );
   }
@@ -540,20 +698,20 @@ export function InventorySessionWorkbench({
           ...resumeCandidate,
           // A pass stored before totalCount was persisted reports 0; the live
           // tree is the better answer in that case.
-          totalCount: resumeCandidate.totalCount || sessionLocations.length,
+          totalCount: resumeCandidate.totalCount || locations.length,
         }}
         title={`Resume ${parent.name} recount?`}
         itemNoun="locations"
         detail="Staged choices are still waiting on this device."
         resumeLabel="Resume recount"
         startOverLabel="Start new recount"
-        onResume={resumePass}
-        onStartNew={startNewPass}
+        onResume={onResume}
+        onStartNew={onStartNew}
       />
     );
   }
 
-  if (startedAt === null || inventoryQuery.isLoading) {
+  if (startedAt === null || inventoryLoading) {
     return (
       <Row align="center" justify="center" className="min-h-80">
         <Spinner />
@@ -561,24 +719,57 @@ export function InventorySessionWorkbench({
     );
   }
 
-  // A skipped location settles the pass too — otherwise one unreachable bin
-  // keeps the summary out of reach forever. Both counts come from the pass, so
-  // they are measured against the same queue the cursor walks.
-  const skippedInCurrentTree = counts.skipped;
   if (passComplete) {
     return (
       <SessionComplete
         parent={parent}
         startedAt={startedAt}
         summary={summary}
-        skippedCount={skippedInCurrentTree}
-        onStartNew={startNewPass}
-        onRevisitSkipped={revisitSkipped}
-        onSelectLocation={selectParent}
+        skippedCount={skippedCount}
+        onStartNew={onStartNew}
+        onRevisitSkipped={onRevisitSkipped}
+        onSelectLocation={onSelectLocation}
       />
     );
   }
 
+  return <InventorySessionActive {...props} parent={parent} />;
+}
+
+function InventorySessionActive({
+  parent,
+  passLocations,
+  currentIndex,
+  currentLocation,
+  inventoryByLocation,
+  itemResolutions,
+  completedLocationIds,
+  skippedLocationIds,
+  duplicateProductIds,
+  quantitySummaries,
+  unknownItems,
+  unknownLocations,
+  atUnknownLocation,
+  unknownReady,
+  onJumpToLocation,
+  onScanJump,
+  onAdoptLocation,
+  onAdjust,
+  onRemove,
+  onRelocate,
+  onMoveTo,
+  onClearStaged,
+  onPullUnknown,
+  onMoveUnknownTo,
+  onPullUnknownLocation,
+  onDone,
+  onToggleSkip,
+  unresolvedCount,
+  donePending,
+  onCloseMoveTarget,
+  moveTarget,
+  onConfirmMoveTo,
+}: InventorySessionContentProps & { parent: InfLocation }) {
   return (
     <Stack
       gap="md"
@@ -593,15 +784,11 @@ export function InventorySessionWorkbench({
         itemResolutions={itemResolutions}
         completedLocationIds={completedLocationIds}
         skippedLocationIds={skippedLocationIds}
-        onSelect={(id) => jumpToLocation(id)}
-        onScanJump={(id) => {
-          if (!jumpToLocation(id)) {
-            toast.error("That location is not in this session.");
-          }
-        }}
+        onSelect={onJumpToLocation}
+        onScanJump={onScanJump}
         parentLocation={parent}
         currentLocation={currentLocation?.location ?? null}
-        onAdoptLocation={adoptLocation}
+        onAdoptLocation={onAdoptLocation}
       />
 
       <div className="grid min-h-[calc(100dvh-10rem)] min-w-0 gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
@@ -613,46 +800,40 @@ export function InventorySessionWorkbench({
           itemResolutions={itemResolutions}
           completedLocationIds={completedLocationIds}
           skippedLocationIds={skippedLocationIds}
-          onSelect={(id) => jumpToLocation(id)}
-          onScanJump={(id) => {
-            if (!jumpToLocation(id)) {
-              toast.error("That location is not in this session.");
-            }
-          }}
+          onSelect={onJumpToLocation}
+          onScanJump={onScanJump}
           parentLocation={parent}
           currentLocation={currentLocation?.location ?? null}
-          onAdoptLocation={adoptLocation}
+          onAdoptLocation={onAdoptLocation}
         />
 
         {currentLocation && (
           <LocationReviewPane
             parent={parent}
             location={currentLocation}
-            items={currentItems}
-            quantitySummaries={quantitySummariesQuery.data}
+            items={inventoryByLocation.get(currentLocation.id) ?? []}
+            quantitySummaries={quantitySummaries}
             unknownItems={unknownItems}
-            unknownLocations={unknownChildLocations}
+            unknownLocations={unknownLocations}
             inventoryByLocation={inventoryByLocation}
             itemResolutions={itemResolutions}
             duplicateProductIds={duplicateProductIds}
-            onAdjust={stageAdjust}
-            onRemove={stageRemove}
-            onRelocate={stageMoveToUnknown}
-            onMoveTo={(item) => openMoveTo(item, currentLocation.id, "done")}
-            onClearStaged={(item) => setItemResolution(item.id, null)}
-            onPullUnknown={pullFromUnknown}
-            onMoveUnknownTo={(item) => {
-              if (unknownLocation) openMoveTo(item, unknownLocation.id, "now");
-            }}
-            onPullUnknownLocation={adoptLocation}
-            onDone={handleDone}
-            onToggleSkip={handleToggleSkip}
+            onAdjust={onAdjust}
+            onRemove={onRemove}
+            onRelocate={onRelocate}
+            onMoveTo={onMoveTo}
+            onClearStaged={onClearStaged}
+            onPullUnknown={onPullUnknown}
+            onMoveUnknownTo={onMoveUnknownTo}
+            onPullUnknownLocation={onPullUnknownLocation}
+            onDone={onDone}
+            onToggleSkip={onToggleSkip}
             unresolvedCount={unresolvedCount}
-            donePending={reconcile.isPending}
+            donePending={donePending}
             locationCompleted={completedLocationIds.has(currentLocation.id)}
             locationSkipped={skippedLocationIds.has(currentLocation.id)}
             isUnknownLocation={atUnknownLocation}
-            unknownReady={!!unknownLocation}
+            unknownReady={unknownReady}
           />
         )}
       </div>
@@ -661,12 +842,12 @@ export function InventorySessionWorkbench({
         <MoveToDialog
           open
           onOpenChange={(next) => {
-            if (!next) setMoveTarget(null);
+            if (!next) onCloseMoveTarget();
           }}
           title={moveTarget.item.product.name}
           sourceLocationId={moveTarget.sourceLocationId}
           commit={moveTarget.commit}
-          onConfirm={confirmMoveTo}
+          onConfirm={onConfirmMoveTo}
         />
       )}
     </Stack>

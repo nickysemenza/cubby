@@ -2,6 +2,7 @@ import type {
   ExpenseAnalyzeAggregate,
   ExpenseAnalyzeColumnDimension,
   ExpenseAnalyzeComparison,
+  ExpenseAnalyzeOut,
   ExpenseAnalyzeReadyOut,
   ExpenseAnalyzeRowDimension,
   ExpenseFilters,
@@ -93,6 +94,89 @@ const EMPTY_AGGREGATE: ExpenseAnalyzeAggregate = {
   net: 0,
   count: 0,
 };
+
+function ExpenseAnalysisResult({
+  isLoading,
+  isError,
+  data,
+  filters,
+  metric,
+  projection,
+  onRetry,
+  onOpenLedger,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  data: ExpenseAnalyzeOut | undefined;
+  filters: ExpenseFilters;
+  metric: ExpenseAnalyzeMetric;
+  projection: ExpenseAnalyzeProjection;
+  onRetry: () => void;
+  onOpenLedger: (filter: Record<string, string>) => void;
+}) {
+  if (isLoading) {
+    return (
+      <output
+        className="h-52 animate-pulse bg-muted"
+        aria-label="Loading analysis"
+      />
+    );
+  }
+  if (isError) {
+    return (
+      <Row
+        align="center"
+        gap="sm"
+        className="border border-destructive/30 p-4 text-sm"
+      >
+        Couldn&apos;t load this analysis.
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          Retry
+        </Button>
+      </Row>
+    );
+  }
+  if (data?.status === "too_large") {
+    return (
+      <div className="border border-border p-4 text-sm">
+        This analysis has at least {formatCount(data.observedAtLeast)} buckets,
+        beyond its {formatCount(data.limit)} bucket limit. Narrow the Ledger
+        filters and try again.
+      </div>
+    );
+  }
+  if (!data) return null;
+  if (data.rows.length === 0) {
+    return (
+      <div className="border border-border p-4 text-sm">
+        No aggregate buckets match the current Ledger filters.
+      </div>
+    );
+  }
+  if (data.columnDimension) {
+    return (
+      <ExpenseAnalyzeCrossTab
+        data={data}
+        filters={filters}
+        metric={metric}
+        projection={
+          data.comparison.mode === "previousPeriod" ? projection : "current"
+        }
+        onOpenLedger={onOpenLedger}
+      />
+    );
+  }
+  return (
+    <ExpenseAnalyzeOneDimension
+      key={data.comparison.mode}
+      data={data}
+      filters={filters}
+      comparison={data.comparison.mode}
+      metric={metric}
+      onOpenLedger={onOpenLedger}
+    />
+  );
+}
 
 function selectedOptionValue<TValue extends string>(
   value: string,
@@ -1047,60 +1131,16 @@ export function ExpenseAggregateExplorer({
         </Button>
       </Row>
 
-      {query.isLoading ? (
-        <output
-          className="h-52 animate-pulse bg-muted"
-          aria-label="Loading analysis"
-        />
-      ) : query.isError ? (
-        <Row
-          align="center"
-          gap="sm"
-          className="border border-destructive/30 p-4 text-sm"
-        >
-          Couldn&apos;t load this analysis.
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void query.refetch()}
-          >
-            Retry
-          </Button>
-        </Row>
-      ) : query.data?.status === "too_large" ? (
-        <div className="border border-border p-4 text-sm">
-          This analysis has at least {formatCount(query.data.observedAtLeast)}{" "}
-          buckets, beyond its {formatCount(query.data.limit)} bucket limit.
-          Narrow the Ledger filters and try again.
-        </div>
-      ) : query.data && query.data.rows.length === 0 ? (
-        <div className="border border-border p-4 text-sm">
-          No aggregate buckets match the current Ledger filters.
-        </div>
-      ) : query.data ? (
-        query.data.columnDimension ? (
-          <ExpenseAnalyzeCrossTab
-            data={query.data}
-            filters={filters}
-            metric={metric}
-            projection={
-              query.data.comparison.mode === "previousPeriod"
-                ? projection
-                : "current"
-            }
-            onOpenLedger={onOpenLedger}
-          />
-        ) : (
-          <ExpenseAnalyzeOneDimension
-            key={query.data.comparison.mode}
-            data={query.data}
-            filters={filters}
-            comparison={query.data.comparison.mode}
-            metric={metric}
-            onOpenLedger={onOpenLedger}
-          />
-        )
-      ) : null}
+      <ExpenseAnalysisResult
+        isLoading={query.isLoading}
+        isError={query.isError}
+        data={query.data}
+        filters={filters}
+        metric={metric}
+        projection={projection}
+        onRetry={() => void query.refetch()}
+        onOpenLedger={onOpenLedger}
+      />
     </Stack>
   );
 }

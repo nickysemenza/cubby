@@ -103,6 +103,28 @@ export interface PastePlan {
   cellTotal: number;
 }
 
+const pasteBounds = (
+  grid: CopiedGrid,
+  selection: CellRect,
+  columns: PasteColumnTarget[],
+  rowCount: number,
+) => {
+  const rowCountInGrid = grid.length;
+  const columnCountInGrid = rowCountInGrid > 0 ? (grid[0]?.length ?? 0) : 0;
+  const fill = rowCountInGrid === 1 && columnCountInGrid === 1;
+  return {
+    fill,
+    top: selection.top,
+    left: selection.left,
+    bottom: fill
+      ? selection.bottom
+      : Math.min(selection.top + rowCountInGrid - 1, rowCount - 1),
+    right: fill
+      ? selection.right
+      : Math.min(selection.left + columnCountInGrid - 1, columns.length - 1),
+  };
+};
+
 export function buildPastePlan(args: {
   grid: CopiedGrid;
   selection: CellRect;
@@ -111,18 +133,13 @@ export function buildPastePlan(args: {
 }): PastePlan {
   const { grid, selection, columns, rowCount } = args;
 
-  const gridRowCount = grid.length;
-  const gridColCount = gridRowCount > 0 ? (grid[0]?.length ?? 0) : 0;
-  const isFillMode = gridRowCount === 1 && gridColCount === 1;
-
-  const targetTop = selection.top;
-  const targetLeft = selection.left;
-  const targetBottom = isFillMode
-    ? selection.bottom
-    : Math.min(selection.top + gridRowCount - 1, rowCount - 1);
-  const targetRight = isFillMode
-    ? selection.right
-    : Math.min(selection.left + gridColCount - 1, columns.length - 1);
+  const {
+    fill: isFillMode,
+    top: targetTop,
+    left: targetLeft,
+    bottom: targetBottom,
+    right: targetRight,
+  } = pasteBounds(grid, selection, columns, rowCount);
 
   const ops: PasteOp[] = [];
   let cellTotal = 0;

@@ -716,6 +716,183 @@ const exactProblemPresentationRowSchema = z.object({
 });
 
 type FastProblemCard = ProblemsFast[FastEntityProblemKey][number];
+type ExactProblemPresentationRow = z.infer<
+  typeof exactProblemPresentationRowSchema
+>;
+type FastProblemHydration = {
+  vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
+  soldTotals?: Map<
+    string,
+    {
+      soldQuantity: number;
+      proceeds: number;
+      servingLocations: { id: string; name: string }[];
+    }
+  >;
+  allocationDefects?: Map<
+    string,
+    ProblemsFast["financialTransactionAllocationDefects"][number]
+  >;
+};
+
+const inventoryLocations = (row: ExactProblemPresentationRow) =>
+  (row.inventoryEntry ?? []).flatMap((entry) =>
+    entry.location?.id && entry.location.name
+      ? [{ id: entry.location.id, name: entry.location.name }]
+      : [],
+  );
+
+type FastExactPresenter = (
+  row: ExactProblemPresentationRow,
+  hydration: FastProblemHydration | undefined,
+) => FastProblemCard;
+
+const fastExactPresenters = {
+  duplicateInventory: (row) =>
+    allProblemsSchema.shape.duplicateInventory.element.parse({
+      id: row.id,
+      name: String(row.name),
+      manufacturer: String(row.manufacturer ?? ""),
+      expectedQuantity: row.expectedQuantity ?? null,
+      locations: inventoryLocations(row),
+    }),
+  soldButStillStocked: (row, hydration) => {
+    const totals = hydration?.soldTotals?.get(row.id);
+    if (!totals) {
+      throw new Error(
+        `Canonical sold-but-stocked Problem selected ${row.id}, but bounded presentation hydration found no row`,
+      );
+    }
+    return allProblemsSchema.shape.soldButStillStocked.element.parse({
+      id: row.id,
+      name: String(row.name),
+      manufacturer: String(row.manufacturer ?? ""),
+      soldQuantity: totals.soldQuantity,
+      liveQuantity: Number(row.onHandUnits ?? 0),
+      proceeds: totals.proceeds,
+      locations: uniqBy(
+        [...inventoryLocations(row), ...totals.servingLocations],
+        (location) => location.id,
+      ),
+    });
+  },
+  unlinkedExitExpenses: (row) =>
+    allProblemsSchema.shape.unlinkedExitExpenses.element.parse({
+      id: row.id,
+      name: String(row.name),
+      cost: Number(row.cost),
+      date: row.date ?? null,
+      purchaseId: String(row.purchaseId),
+      vendorName: row.vendor ?? null,
+    }),
+  purchaselessExitExpenses: (row) =>
+    allProblemsSchema.shape.purchaselessExitExpenses.element.parse({
+      id: row.id,
+      name: String(row.name),
+      cost: Number(row.cost),
+      date: row.date ?? null,
+      projectName: row.projectName ?? null,
+    }),
+  productsWithNoImages: (row) =>
+    allProblemsSchema.shape.productsWithNoImages.element.parse({
+      id: row.id,
+      name: String(row.name),
+      manufacturer: String(row.manufacturer ?? ""),
+      primaryGtin: row.primaryGtin ?? null,
+    }),
+  kitsCountedTwice: (row) =>
+    allProblemsSchema.shape.kitsCountedTwice.element.parse({
+      id: row.id,
+      name: String(row.name),
+      manufacturer: String(row.manufacturer ?? ""),
+      ownUnits: Number(row.onHandUnits ?? 0),
+      expectedUnits: Number(row.quantityLedger?.expectedQuantity ?? 0),
+    }),
+  unreferencedImages: (row) =>
+    allProblemsSchema.shape.unreferencedImages.element.parse({
+      id: row.id,
+      key: String(row.key),
+      filename: String(row.filename),
+      contentType: String(row.contentType),
+      size: Number(row.size),
+      createdAt: row.createdAt,
+      targetType: row.entityType ?? null,
+      targetId: row.entityId ?? null,
+    }),
+  understatedCostMeals: (row) =>
+    allProblemsSchema.shape.understatedCostMeals.element.parse({
+      id: row.id,
+      name: row.name ?? null,
+      date: row.date,
+      recipeCount: (row.recipes ?? []).filter(
+        (entry) =>
+          (entry.recipe?.totals?.costCovered ?? 0) <
+          (entry.recipe?.totals?.ingredientCount ?? 0),
+      ).length,
+    }),
+  unknownParkedItems: (row) =>
+    allProblemsSchema.shape.unknownParkedItems.element.parse({
+      id: row.id,
+      amount: row.amount,
+      createdAt: row.createdAt,
+      product: row.product,
+      location: row.location,
+    }),
+  inventoryWithoutPricePath: (row) =>
+    allProblemsSchema.shape.inventoryWithoutPricePath.element.parse({
+      id: row.id,
+      amount: row.amount,
+      effectivePrice: Number(row.product?.effectivePrice ?? 0),
+      product: row.product,
+      location: row.location,
+    }),
+  vendorsWithoutLogos: (row, hydration) => {
+    const counts = hydration?.vendorExpenseCounts?.get(row.id);
+    if (!counts) {
+      throw new Error(
+        `Canonical vendor-logo Problem selected ${row.id}, but bounded presentation hydration found no row`,
+      );
+    }
+    return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
+      id: row.id,
+      name: String(row.name),
+      website: row.website ?? null,
+      purchaseCount: Number(row.purchaseCount ?? 0),
+      expenseRowCount: counts.expenseRowCount,
+    });
+  },
+  purchasesNotReconciling: (row) =>
+    allProblemsSchema.shape.purchasesNotReconciling.element.parse({
+      id: row.id,
+      vendorName: row.vendorName ?? null,
+      orderId: row.orderId ?? null,
+      orderUrl: row.orderUrl ?? null,
+      date: row.date ?? null,
+      statedTotal: Number(row.statedTotal),
+      expenseTotal: Number(row.expenseTotal),
+      expenseCount: Number(row.expenseCount),
+      unpricedExpenseCount: Number(row.unpricedExpenseCount),
+      postedRefundTotal: Number(
+        row.financialReconciliation?.postedRefundTotal ?? 0,
+      ),
+    }),
+  purchaseFinancialSettlementMismatches: (row) =>
+    allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
+      {
+        id: row.id,
+        vendorName: row.vendorName ?? null,
+        expenseTotal: Number(row.expenseTotal),
+        financialReconciliation: row.financialReconciliation,
+      },
+    ),
+  financialTransactionAllocationDefects: (row, hydration) => {
+    const hydrated = hydration?.allocationDefects?.get(row.id);
+    if (hydrated) return hydrated;
+    throw new Error(
+      `Canonical allocation Problem selected ${row.id}, but bounded presentation hydration found no row`,
+    );
+  },
+} satisfies Record<FastEntityProblemKey, FastExactPresenter>;
 
 /**
  * Card-only projections for exact fast Problems.
@@ -728,189 +905,13 @@ type FastProblemCard = ProblemsFast[FastEntityProblemKey][number];
 const presentFastExactRows = (
   key: FastEntityProblemKey,
   page: ExactProblemPage,
-  hydration?: {
-    vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
-    soldTotals?: Map<
-      string,
-      {
-        soldQuantity: number;
-        proceeds: number;
-        servingLocations: { id: string; name: string }[];
-      }
-    >;
-    allocationDefects?: Map<
-      string,
-      ProblemsFast["financialTransactionAllocationDefects"][number]
-    >;
-  },
-): FastProblemCard[] =>
-  page.data.map((row) => {
-    const r = exactProblemPresentationRowSchema.parse(row);
-    const id = r.id;
-    const inventory = r.inventoryEntry ?? [];
-    const locations = inventory.flatMap((entry) =>
-      entry.location?.id && entry.location.name
-        ? [{ id: entry.location.id, name: entry.location.name }]
-        : [],
-    );
-    switch (key) {
-      case "duplicateInventory":
-        return allProblemsSchema.shape.duplicateInventory.element.parse({
-          id,
-          name: String(r.name),
-          manufacturer: String(r.manufacturer ?? ""),
-          expectedQuantity: r.expectedQuantity ?? null,
-          locations,
-        });
-      case "soldButStillStocked": {
-        const totals = hydration?.soldTotals?.get(id);
-        if (!totals)
-          throw new Error(
-            `Canonical sold-but-stocked Problem selected ${id}, but bounded presentation hydration found no row`,
-          );
-        return allProblemsSchema.shape.soldButStillStocked.element.parse({
-          id,
-          name: String(r.name),
-          manufacturer: String(r.manufacturer ?? ""),
-          soldQuantity: totals.soldQuantity,
-          liveQuantity: Number(r.onHandUnits ?? 0),
-          proceeds: totals.proceeds,
-          locations: uniqBy(
-            [...locations, ...totals.servingLocations],
-            (location) => location.id,
-          ),
-        });
-      }
-      case "unlinkedExitExpenses":
-        return allProblemsSchema.shape.unlinkedExitExpenses.element.parse({
-          id,
-          name: String(r.name),
-          cost: Number(r.cost),
-          date: r.date ?? null,
-          purchaseId: String(r.purchaseId),
-          vendorName: r.vendor ?? null,
-        });
-      case "purchaselessExitExpenses":
-        return allProblemsSchema.shape.purchaselessExitExpenses.element.parse({
-          id,
-          name: String(r.name),
-          cost: Number(r.cost),
-          date: r.date ?? null,
-          projectName: r.projectName ?? null,
-        });
-      case "productsWithNoImages":
-        return allProblemsSchema.shape.productsWithNoImages.element.parse({
-          id,
-          name: String(r.name),
-          manufacturer: String(r.manufacturer ?? ""),
-          primaryGtin: r.primaryGtin ?? null,
-        });
-      // Only the parent is reported. The units it double-counts are named by
-      // its own components table, and repeating them here would make one
-      // physical mistake look like several rows.
-      case "kitsCountedTwice": {
-        // `r.expectedQuantity` is the MANUAL Product column and is null on
-        // every kit; the acquired-units number lives on the derived ledger.
-        const ledger = r.quantityLedger;
-        return allProblemsSchema.shape.kitsCountedTwice.element.parse({
-          id,
-          name: String(r.name),
-          manufacturer: String(r.manufacturer ?? ""),
-          ownUnits: Number(r.onHandUnits ?? 0),
-          expectedUnits: Number(ledger?.expectedQuantity ?? 0),
-        });
-      }
-      case "unreferencedImages":
-        return allProblemsSchema.shape.unreferencedImages.element.parse({
-          id,
-          key: String(r.key),
-          filename: String(r.filename),
-          contentType: String(r.contentType),
-          size: Number(r.size),
-          createdAt: r.createdAt,
-          targetType: r.entityType ?? null,
-          targetId: r.entityId ?? null,
-        });
-      case "understatedCostMeals": {
-        const recipes = r.recipes ?? [];
-        return allProblemsSchema.shape.understatedCostMeals.element.parse({
-          id,
-          name: r.name ?? null,
-          date: r.date,
-          recipeCount: recipes.filter(
-            (entry) =>
-              (entry.recipe?.totals?.costCovered ?? 0) <
-              (entry.recipe?.totals?.ingredientCount ?? 0),
-          ).length,
-        });
-      }
-      case "unknownParkedItems":
-        return allProblemsSchema.shape.unknownParkedItems.element.parse({
-          id,
-          amount: r.amount,
-          createdAt: r.createdAt,
-          product: r.product,
-          location: r.location,
-        });
-      case "inventoryWithoutPricePath":
-        return allProblemsSchema.shape.inventoryWithoutPricePath.element.parse({
-          id,
-          amount: r.amount,
-          effectivePrice: Number(r.product?.effectivePrice ?? 0),
-          product: r.product,
-          location: r.location,
-        });
-      case "vendorsWithoutLogos": {
-        const counts = hydration?.vendorExpenseCounts?.get(id);
-        if (!counts)
-          throw new Error(
-            `Canonical vendor-logo Problem selected ${id}, but bounded presentation hydration found no row`,
-          );
-        return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
-          id,
-          name: String(r.name),
-          website: r.website ?? null,
-          purchaseCount: Number(r.purchaseCount ?? 0),
-          expenseRowCount: counts.expenseRowCount,
-        });
-      }
-      case "purchasesNotReconciling":
-        return allProblemsSchema.shape.purchasesNotReconciling.element.parse({
-          id,
-          vendorName: r.vendorName ?? null,
-          orderId: r.orderId ?? null,
-          orderUrl: r.orderUrl ?? null,
-          date: r.date ?? null,
-          statedTotal: Number(r.statedTotal),
-          expenseTotal: Number(r.expenseTotal),
-          expenseCount: Number(r.expenseCount),
-          unpricedExpenseCount: Number(r.unpricedExpenseCount),
-          postedRefundTotal: Number(
-            r.financialReconciliation?.postedRefundTotal ?? 0,
-          ),
-        });
-      case "purchaseFinancialSettlementMismatches":
-        return allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
-          {
-            id,
-            vendorName: r.vendorName ?? null,
-            expenseTotal: Number(r.expenseTotal),
-            financialReconciliation: r.financialReconciliation,
-          },
-        );
-      case "financialTransactionAllocationDefects": {
-        const hydrated = hydration?.allocationDefects?.get(id);
-        if (hydrated) return hydrated;
-        throw new Error(
-          `Canonical allocation Problem selected ${id}, but bounded presentation hydration found no row`,
-        );
-      }
-      default:
-        throw new Error(
-          `No exact card presenter declared for Problem "${key}"`,
-        );
-    }
-  });
+  hydration?: FastProblemHydration,
+): FastProblemCard[] => {
+  const present = fastExactPresenters[key];
+  return page.data.map((row) =>
+    present(exactProblemPresentationRowSchema.parse(row), hydration),
+  );
+};
 
 /**
  * Exact Problem pages are generic list rows, so their card projections cross a
@@ -922,21 +923,7 @@ const presentFastExactProblem = <T>(
   key: FastEntityProblemKey,
   page: ExactProblemPage,
   itemsSchema: z.ZodType<T>,
-  hydration?: {
-    vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
-    soldTotals?: Map<
-      string,
-      {
-        soldQuantity: number;
-        proceeds: number;
-        servingLocations: { id: string; name: string }[];
-      }
-    >;
-    allocationDefects?: Map<
-      string,
-      ProblemsFast["financialTransactionAllocationDefects"][number]
-    >;
-  },
+  hydration?: FastProblemHydration,
 ): T => itemsSchema.parse(presentFastExactRows(key, page, hydration));
 
 const presentSingleFastProblem = async (

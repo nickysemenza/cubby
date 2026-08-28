@@ -15,7 +15,7 @@ import type {
 import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -33,6 +33,7 @@ import {
   buildPartialUpdateValues,
   countWhere,
   executeListQueryWithCount,
+  formatSearchTerm,
   getDb,
   notDeleted,
   unwrapDb,
@@ -161,9 +162,7 @@ export async function listLedgerParties(
   const where = and(
     notDeleted(ledgerParty),
     ...auditDateWhereConditions(ledgerParty, filters),
-    filters.search
-      ? ilike(ledgerParty.name, `%${filters.search.trim()}%`)
-      : undefined,
+    formatSearchTerm(ledgerParty.name, filters.search?.trim()),
     filters.kind ? inArray(ledgerParty.kind, [filters.kind].flat()) : undefined,
   );
   const order = sorts[0] ?? { orderBy: "name", direction: "asc" as const };

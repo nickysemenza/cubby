@@ -170,6 +170,72 @@ function DashboardErrorState({
  * Data's three lists issue their own paginated server reads. The dashboard
  * summary is never used as a browser-side membership oracle for them.
  */
+const dashboardSavedViewFilters = (filters: Filters) => [
+  ...(filters.statuses.size > 0
+    ? [{ id: "status", value: [...filters.statuses] }]
+    : []),
+  ...(filters.kinds.size > 0
+    ? [{ id: "kind", value: [...filters.kinds] }]
+    : []),
+  ...(filters.locations.size > 0
+    ? [{ id: "locations", value: [...filters.locations] }]
+    : []),
+  ...(filters.dateRange ? [{ id: "dateRange", value: filters.dateRange }] : []),
+  ...(filters.completionYear
+    ? [{ id: "completionYear", value: filters.completionYear }]
+    : []),
+];
+
+function DashboardContent({
+  view,
+  data,
+  coverImages,
+  analyticsData,
+  analyticsLoading,
+  projectScope,
+  rowsRenderer,
+  onRowsRendererChange,
+  onClearDate,
+}: {
+  view: DashboardView;
+  data: ProjectDashboardSummaryOut;
+  coverImages: CoverImages | undefined;
+  analyticsData: ProjectPortfolioAnalyticsViewProps["data"] | undefined;
+  analyticsLoading: boolean;
+  projectScope: EmbeddedProjectScope;
+  rowsRenderer: ProjectRowsRenderer;
+  onRowsRendererChange: (rows: ProjectRowsRenderer) => void;
+  onClearDate: () => void;
+}) {
+  if (view === "overview") {
+    return <OverviewView data={data} coverImages={coverImages} />;
+  }
+  if (view === "analytics") {
+    return <AnalyticsView data={analyticsData} isLoading={analyticsLoading} />;
+  }
+  if (view === "data") {
+    return (
+      <DataViewContent
+        projectScope={projectScope}
+        locations={data.filterOptions.locations}
+        completionYears={data.filterOptions.completionYears}
+        hiddenByDate={data.hiddenByDate}
+        onClearDate={onClearDate}
+        rowsRenderer={rowsRenderer}
+        onRowsRendererChange={onRowsRendererChange}
+      />
+    );
+  }
+  return (
+    <div className="pt-4">
+      <ServerProjectGallery
+        locations={data.filterOptions.locations}
+        completionYears={data.filterOptions.completionYears}
+      />
+    </div>
+  );
+}
+
 function MainDashboard({ view }: { view: DashboardView }) {
   const search = route.useSearch();
   const navigate = route.useNavigate();
@@ -199,23 +265,7 @@ function MainDashboard({ view }: { view: DashboardView }) {
   };
 
   const savedViewFilters = useMemo(
-    () => [
-      ...(filters.statuses.size > 0
-        ? [{ id: "status", value: [...filters.statuses] }]
-        : []),
-      ...(filters.kinds.size > 0
-        ? [{ id: "kind", value: [...filters.kinds] }]
-        : []),
-      ...(filters.locations.size > 0
-        ? [{ id: "locations", value: [...filters.locations] }]
-        : []),
-      ...(filters.dateRange
-        ? [{ id: "dateRange", value: filters.dateRange }]
-        : []),
-      ...(filters.completionYear
-        ? [{ id: "completionYear", value: filters.completionYear }]
-        : []),
-    ],
+    () => dashboardSavedViewFilters(filters),
     [filters],
   );
   const savedViews = (
@@ -319,46 +369,24 @@ function MainDashboard({ view }: { view: DashboardView }) {
       {dashboardQuery.isLoading || !data ? (
         <DashboardSkeleton />
       ) : (
-        <>
-          {view === "overview" && (
-            <OverviewView data={data} coverImages={coverImages} />
-          )}
-
-          {view === "analytics" && (
-            <AnalyticsView
-              data={analyticsQuery.data}
-              isLoading={analyticsQuery.isLoading}
-            />
-          )}
-
-          {view === "data" && (
-            <DataViewContent
-              projectScope={projectScope}
-              locations={data.filterOptions.locations}
-              completionYears={data.filterOptions.completionYears}
-              hiddenByDate={data.hiddenByDate}
-              onClearDate={() =>
-                handleFiltersChange({ ...filters, dateRange: null })
-              }
-              rowsRenderer={search.rows ?? "flat"}
-              onRowsRendererChange={(rows) =>
-                navigate({
-                  search: (prev) => ({ ...prev, rows }),
-                  replace: true,
-                })
-              }
-            />
-          )}
-
-          {view === "gallery" && (
-            <div className="pt-4">
-              <ServerProjectGallery
-                locations={data.filterOptions.locations}
-                completionYears={data.filterOptions.completionYears}
-              />
-            </div>
-          )}
-        </>
+        <DashboardContent
+          view={view}
+          data={data}
+          coverImages={coverImages}
+          analyticsData={analyticsQuery.data}
+          analyticsLoading={analyticsQuery.isLoading}
+          projectScope={projectScope}
+          rowsRenderer={search.rows ?? "flat"}
+          onRowsRendererChange={(rows) =>
+            navigate({
+              search: (prev) => ({ ...prev, rows }),
+              replace: true,
+            })
+          }
+          onClearDate={() =>
+            handleFiltersChange({ ...filters, dateRange: null })
+          }
+        />
       )}
     </Stack>
   );

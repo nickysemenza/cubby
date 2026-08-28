@@ -45,6 +45,134 @@ import {
   type entityQueryResultSchema,
 } from "./contracts";
 
+const executeSearch = async (
+  ctx: EntityKernelContext,
+  command: Extract<EntityQueryCommand, { action: "search" }>,
+) => {
+  const entity = searchableEntitySchema.parse(command.entity);
+  const input = {
+    query: command.query,
+    entityTypes: [entity],
+    limit: command.limit,
+  };
+  const [lexical, semantic] = await Promise.all([
+    findSearchHits(ctx.readDb, input),
+    command.semantic
+      ? findRelatedSearchHits(ctx.readDb, input)
+      : Promise.resolve({ status: "unavailable" as const, results: [] }),
+  ]);
+  return { action: command.action, entity, lexical, semantic } as const;
+};
+
+const executeMerge = async (
+  ctx: EntityKernelContext,
+  command: Extract<EntityMutationCommand, { action: "merge" }>,
+) => {
+  const binding = ENTITY_KERNEL_BINDINGS[command.entity];
+  const mergeOperation = binding.mergeOperation;
+  if (!mergeOperation || !binding.lifecycle.merge) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `${ENTITY_LABEL[binding.entity]} does not support merge`,
+    );
+  }
+  const result = await mergeOperation.execute(ctx, command.data);
+  await deleteStoredObjects(result.detachedImageKeys);
+  const backgroundBatches = [
+    ...(result.backgroundBatches ?? []),
+    ...(result.entityId && binding.sideEffects
+      ? await runMutationSideEffects(
+          ctx.db,
+          mutationSideEffectEventSchema.parse({
+            action: "updated",
+            entity: {
+              entityType: binding.entity,
+              entityId: result.entityId,
+            },
+            source: `${binding.entity}.merge`,
+          }),
+        )
+      : []),
+  ];
+  return entityMutationResultSchema.parse({
+    action: command.action,
+    entity: command.entity,
+    item: result.item,
+    mergeSummary: result.mergeSummary,
+    sideEffects: { backgroundBatches },
+  });
+};
+
+const executeRelationMutation = async (
+  ctx: EntityKernelContext,
+  command: Extract<EntityMutationCommand, { action: "attach" | "detach" }>,
+) => {
+  const ids = command.items.map((item) => item.id);
+  const products = () => resolveAllOrThrow(ctx.db, "product", ids);
+  let result: RelationMutationOut;
+  if (command.entity === "product") {
+    const parentId = await resolveOrThrow(ctx.db, "product", command.id);
+    const productIds = await products();
+    result =
+      command.action === "attach"
+        ? await attachProductComponents(
+            ctx.db,
+            parentId,
+            productIds.map((productId, index) => ({
+              productId,
+              quantity: command.items[index]?.quantity ?? 1,
+            })),
+            ctx.actorContext,
+          )
+        : await detachProductComponents(
+            ctx.db,
+            parentId,
+            productIds,
+            ctx.actorContext,
+          );
+  } else if (command.entity === "project") {
+    const projectId = await resolveOrThrow(ctx.db, "project", command.id);
+    const productIds = await products();
+    result =
+      command.action === "attach"
+        ? await attachProjectResources(
+            ctx.db,
+            projectId,
+            productIds,
+            ctx.actorContext,
+          )
+        : await detachProjectResources(
+            ctx.db,
+            projectId,
+            productIds,
+            ctx.actorContext,
+          );
+  } else {
+    const purchaseId = await resolveOrThrow(ctx.db, "purchase", command.id);
+    const productIds = await products();
+    result =
+      command.action === "attach"
+        ? await attachPurchaseProducts(
+            ctx.db,
+            purchaseId,
+            productIds,
+            ctx.actorContext,
+          )
+        : await detachPurchaseProducts(
+            ctx.db,
+            purchaseId,
+            productIds,
+            ctx.actorContext,
+          );
+  }
+  return {
+    action: command.action,
+    entity: command.entity,
+    relation: command.relation,
+    result,
+  } as const;
+};
+
 /**
  * The one application-level entity interface.
  *
@@ -90,24 +218,7 @@ export async function executeEntity(
     }
 
     case "search": {
-      const entity = searchableEntitySchema.parse(command.entity);
-      const input = {
-        query: command.query,
-        entityTypes: [entity],
-        limit: command.limit,
-      };
-      const [lexical, semantic] = await Promise.all([
-        findSearchHits(ctx.readDb, input),
-        command.semantic
-          ? findRelatedSearchHits(ctx.readDb, input)
-          : Promise.resolve({ status: "unavailable" as const, results: [] }),
-      ]);
-      return {
-        action: command.action,
-        entity,
-        lexical,
-        semantic,
-      } as const;
+      return executeSearch(ctx, command);
     }
 
     case "create": {
@@ -135,107 +246,12 @@ export async function executeEntity(
     }
 
     case "merge": {
-      const binding = ENTITY_KERNEL_BINDINGS[command.entity];
-      const mergeOperation = binding.mergeOperation;
-      if (!mergeOperation || !binding.lifecycle.merge) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `${ENTITY_LABEL[binding.entity]} does not support merge`,
-        );
-      }
-      const result = await mergeOperation.execute(ctx, command.data);
-      await deleteStoredObjects(result.detachedImageKeys);
-      const backgroundBatches = [
-        ...(result.backgroundBatches ?? []),
-        ...(result.entityId && binding.sideEffects
-          ? await runMutationSideEffects(
-              ctx.db,
-              mutationSideEffectEventSchema.parse({
-                action: "updated",
-                entity: {
-                  entityType: binding.entity,
-                  entityId: result.entityId,
-                },
-                source: `${binding.entity}.merge`,
-              }),
-            )
-          : []),
-      ];
-      return entityMutationResultSchema.parse({
-        action: command.action,
-        entity: command.entity,
-        item: result.item,
-        mergeSummary: result.mergeSummary,
-        sideEffects: { backgroundBatches },
-      });
+      return executeMerge(ctx, command);
     }
 
     case "attach":
     case "detach": {
-      const ids = command.items.map((item) => item.id);
-      const products = () => resolveAllOrThrow(ctx.db, "product", ids);
-      let result: RelationMutationOut;
-      if (command.entity === "product") {
-        const parentId = await resolveOrThrow(ctx.db, "product", command.id);
-        const productIds = await products();
-        result =
-          command.action === "attach"
-            ? await attachProductComponents(
-                ctx.db,
-                parentId,
-                productIds.map((productId, index) => ({
-                  productId,
-                  quantity: command.items[index]?.quantity ?? 1,
-                })),
-                ctx.actorContext,
-              )
-            : await detachProductComponents(
-                ctx.db,
-                parentId,
-                productIds,
-                ctx.actorContext,
-              );
-      } else if (command.entity === "project") {
-        const projectId = await resolveOrThrow(ctx.db, "project", command.id);
-        const productIds = await products();
-        result =
-          command.action === "attach"
-            ? await attachProjectResources(
-                ctx.db,
-                projectId,
-                productIds,
-                ctx.actorContext,
-              )
-            : await detachProjectResources(
-                ctx.db,
-                projectId,
-                productIds,
-                ctx.actorContext,
-              );
-      } else {
-        const purchaseId = await resolveOrThrow(ctx.db, "purchase", command.id);
-        const productIds = await products();
-        result =
-          command.action === "attach"
-            ? await attachPurchaseProducts(
-                ctx.db,
-                purchaseId,
-                productIds,
-                ctx.actorContext,
-              )
-            : await detachPurchaseProducts(
-                ctx.db,
-                purchaseId,
-                productIds,
-                ctx.actorContext,
-              );
-      }
-      return {
-        action: command.action,
-        entity: command.entity,
-        relation: command.relation,
-        result,
-      } as const;
+      return executeRelationMutation(ctx, command);
     }
   }
 }

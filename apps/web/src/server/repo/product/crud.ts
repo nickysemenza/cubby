@@ -678,6 +678,226 @@ export const buildProductWhere = async (
 
   const NO_TAGS = sql`(cardinality(${product.tags}) = 0)`;
 
+  const classificationConditions = () => [
+    ...auditDateWhereConditions(product, filters),
+    ...relatedWhereConditions("product", filters, product.id),
+    eqAnyOrPresence(
+      product.category,
+      filters.categoryFilter,
+      filters.categoryPresenceFilter,
+    ),
+    requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
+      ? sql`false`
+      : or(
+          selectedIngredientIds.length > 0
+            ? inArray(product.ingredientId, selectedIngredientIds)
+            : undefined,
+          presenceCondition(
+            product.ingredientId,
+            filters.ingredientPresenceFilter,
+          ),
+        ),
+    requestedLocationCodes.length > 0 && selectedLocationIds.length === 0
+      ? sql`false`
+      : or(
+          selectedLocationIds.length > 0
+            ? inArray(product.id, productIdsAtSelectedLocations)
+            : undefined,
+          idSetPresence(
+            product.id,
+            filters.inventoryPresenceFilter,
+            productIdsWithLiveInventory,
+          ),
+        ),
+    idSetPresence(
+      product.id,
+      filters.servingAsLocationPresenceFilter,
+      productIdsServingAsLocations,
+    ),
+    filters.inventoryMultiplicity === "duplicate_within_placement"
+      ? and(
+          eq(product.expectedQuantity, 1),
+          inArray(product.id, productIdsWithDuplicatePlacement),
+        )
+      : undefined,
+  ];
+
+  const inventoryConditions = () => [
+    filters.kitAccounting === "double_counted"
+      ? and(
+          sql`${onHandUnitsFilterSql(product.id)} > 0`,
+          sql`${partsAccountedKitsSql(product.id)} > 0`,
+          sql`${onHandUnitsFilterSql(product.id)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
+        )
+      : undefined,
+    filters.ownershipReconciliation === "disposed_still_on_hand"
+      ? and(
+          inArray(product.id, productIdsWithRecordedDisposal),
+          sql`${onHandUnitsFilterSql(product.id)} > 0`,
+          sql`${expectedQuantityFilterSql(product.id)} <= 0`,
+          sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
+        )
+      : undefined,
+    filters.conversionCoverage === "partial"
+      ? inArray(
+          product.id,
+          dbClient
+            .select({ id: productConversionCoverage.productId })
+            .from(productConversionCoverage)
+            .where(
+              and(
+                currentProductConversionCoverageCondition(),
+                eq(productConversionCoverage.coverageTier, "partial"),
+              ),
+            ),
+        )
+      : undefined,
+    filters.conversionTopology === "islanded"
+      ? inArray(
+          product.id,
+          dbClient
+            .select({ id: productConversionCoverage.productId })
+            .from(productConversionCoverage)
+            .where(
+              and(
+                currentProductConversionCoverageCondition(),
+                sql`${productConversionCoverage.islandCount} >= 2`,
+              ),
+            ),
+        )
+      : undefined,
+    ...rangeConditions(
+      productExpenseCountFilterSql(product.id),
+      filters,
+      "expenseCount",
+    ),
+    ...rangeConditions(
+      productExpenseTotalFilterSql(product.id),
+      filters,
+      "expenseTotal",
+    ),
+    ...rangeConditions(
+      expectedQuantityFilterSql(product.id),
+      filters,
+      "expectedQuantity",
+    ),
+    // Variance only means reconciliation when both physical stock and ledger
+    // evidence exist. Locations count as on-hand here because the compared SQL
+    // projection counts them too.
+    filters.quantityVarianceFilter !== undefined
+      ? and(
+          or(
+            inArray(product.id, productIdsWithLiveInventory),
+            inArray(product.id, productIdsServingAsLocations),
+          ),
+          inArray(product.id, productIdsWithExpenses),
+          filters.quantityVarianceFilter === "mismatched"
+            ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
+            : sql`${onHandUnitsFilterSql(product.id)} = ${expectedQuantityFilterSql(product.id)}`,
+        )
+      : undefined,
+  ];
+
+  const ledgerConditions = () => [
+    filters.unknownQuantityLinesFilter === "has"
+      ? hasUnknownQuantityLinesSql(product.id)
+      : filters.unknownQuantityLinesFilter === "none"
+        ? sql`NOT ${hasUnknownQuantityLinesSql(product.id)}`
+        : undefined,
+    idSetPresence(
+      product.id,
+      filters.expensePresenceFilter,
+      productIdsWithExpenses,
+    ),
+    // The cell renders acquisition date, not generic Purchase presence; keep
+    // this predicate on the exact same derived projection.
+    filters.purchaseDatePresenceFilter === "has"
+      ? isNotNull(productAcquisitionDateFilterSql(product.id))
+      : filters.purchaseDatePresenceFilter === "none"
+        ? isNull(productAcquisitionDateFilterSql(product.id))
+        : undefined,
+    taskFilterActive
+      ? inArray(product.id, productIdsWithFilteredTasks)
+      : undefined,
+    filters.purchaseDateFrom
+      ? sql`${productAcquisitionDateFilterSql(product.id)} >= ${filters.purchaseDateFrom}`
+      : undefined,
+    filters.purchaseDateTo
+      ? sql`${productAcquisitionDateFilterSql(product.id)} <= ${filters.purchaseDateTo}`
+      : undefined,
+  ];
+
+  const associationConditions = () => [
+    idSetPresence(
+      product.id,
+      filters.imagePresenceFilter,
+      productIdsWithImages,
+    ),
+    idSetPresence(
+      product.id,
+      filters.unitMappingPresenceFilter,
+      productIdsWithUnitMappings,
+    ),
+    idSetPresence(
+      product.id,
+      filters.componentPresenceFilter,
+      productIdsWithComponents,
+    ),
+    filters.miscBucketFilter === "has"
+      ? sql`lower(${product.name}) LIKE 'misc:%'`
+      : filters.miscBucketFilter === "none"
+        ? sql`lower(${product.name}) NOT LIKE 'misc:%'`
+        : undefined,
+    idSetPresence(
+      product.id,
+      filters.externalIdPresenceFilter ??
+        (externalSources && externalSources.length > 0 ? "has" : undefined),
+      productIdsWithExternalIds,
+    ),
+    presenceCondition(product.model, filters.modelPresenceFilter),
+    idSetPresence(product.id, filters.upcPresenceFilter, productIdsWithGtin),
+    filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
+    presenceCondition(product.notes, filters.notesPresenceFilter),
+    presenceCondition(product.stockTracked, filters.stockTrackedPresenceFilter),
+    filters.manufacturerExact
+      ? inArray(product.manufacturer, [filters.manufacturerExact].flat())
+      : undefined,
+  ];
+
+  const qualityConditions = () => [
+    filters.dataStatus === "needs_data"
+      ? needsData
+      : filters.dataStatus === "defect"
+        ? productDefectCondition()
+        : filters.dataStatus === "complete"
+          ? sql`NOT ${productAnyDataGapCondition()}`
+          : undefined,
+    selectedDataGaps.length > 0
+      ? or(...selectedDataGaps.map(productDataGapCondition))
+      : undefined,
+    presenceCondition(product.fdc_id, filters.usdaPresenceFilter, NO_USDA_KEY),
+    filters.pricePresenceFilter === "none"
+      ? and(
+          isNull(product.price),
+          sql`${derivedPriceFilterSql(product.id)} IS NULL`,
+        )
+      : filters.pricePresenceFilter === "has"
+        ? or(
+            isNotNull(product.price),
+            sql`${derivedPriceFilterSql(product.id)} IS NOT NULL`,
+          )
+        : undefined,
+    // Tags are not-null arrays, so the empty sentinel is cardinality zero.
+    // `arrayOverlaps` is required because interpolating a JS array emits a row
+    // constructor rather than a Postgres text array.
+    or(
+      filters.tagFilters && filters.tagFilters.length > 0
+        ? arrayOverlaps(product.tags, filters.tagFilters)
+        : undefined,
+      presenceCondition(product.tags, filters.tagsPresenceFilter, NO_TAGS),
+    ),
+  ];
+
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
@@ -688,241 +908,11 @@ export const buildProductWhere = async (
       { column: product.notes, term: filters.notesFilter },
     ],
     [
-      ...auditDateWhereConditions(product, filters),
-      ...relatedWhereConditions("product", filters, product.id),
-      eqAnyOrPresence(
-        product.category,
-        filters.categoryFilter,
-        filters.categoryPresenceFilter,
-      ),
-      requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
-        ? sql`false`
-        : or(
-            selectedIngredientIds.length > 0
-              ? inArray(product.ingredientId, selectedIngredientIds)
-              : undefined,
-            presenceCondition(
-              product.ingredientId,
-              filters.ingredientPresenceFilter,
-            ),
-          ),
-      requestedLocationCodes.length > 0 && selectedLocationIds.length === 0
-        ? sql`false`
-        : or(
-            selectedLocationIds.length > 0
-              ? inArray(product.id, productIdsAtSelectedLocations)
-              : undefined,
-            idSetPresence(
-              product.id,
-              filters.inventoryPresenceFilter,
-              productIdsWithLiveInventory,
-            ),
-          ),
-      idSetPresence(
-        product.id,
-        filters.servingAsLocationPresenceFilter,
-        productIdsServingAsLocations,
-      ),
-      filters.inventoryMultiplicity === "duplicate_within_placement"
-        ? and(
-            eq(product.expectedQuantity, 1),
-            inArray(product.id, productIdsWithDuplicatePlacement),
-          )
-        : undefined,
-      filters.kitAccounting === "double_counted"
-        ? and(
-            sql`${onHandUnitsFilterSql(product.id)} > 0`,
-            sql`${partsAccountedKitsSql(product.id)} > 0`,
-            sql`${onHandUnitsFilterSql(product.id)} + ${partsAccountedKitsSql(product.id)} > ${expectedQuantityFilterSql(product.id)}`,
-          )
-        : undefined,
-      filters.ownershipReconciliation === "disposed_still_on_hand"
-        ? and(
-            inArray(product.id, productIdsWithRecordedDisposal),
-            sql`${onHandUnitsFilterSql(product.id)} > 0`,
-            sql`${expectedQuantityFilterSql(product.id)} <= 0`,
-            sql`NOT ${hasUnknownAcquisitionLinesSql(product.id)}`,
-          )
-        : undefined,
-      filters.conversionCoverage === "partial"
-        ? inArray(
-            product.id,
-            dbClient
-              .select({ id: productConversionCoverage.productId })
-              .from(productConversionCoverage)
-              .where(
-                and(
-                  currentProductConversionCoverageCondition(),
-                  eq(productConversionCoverage.coverageTier, "partial"),
-                ),
-              ),
-          )
-        : undefined,
-      filters.conversionTopology === "islanded"
-        ? inArray(
-            product.id,
-            dbClient
-              .select({ id: productConversionCoverage.productId })
-              .from(productConversionCoverage)
-              .where(
-                and(
-                  currentProductConversionCoverageCondition(),
-                  sql`${productConversionCoverage.islandCount} >= 2`,
-                ),
-              ),
-          )
-        : undefined,
-      ...rangeConditions(
-        productExpenseCountFilterSql(product.id),
-        filters,
-        "expenseCount",
-      ),
-      ...rangeConditions(
-        productExpenseTotalFilterSql(product.id),
-        filters,
-        "expenseTotal",
-      ),
-      ...rangeConditions(
-        expectedQuantityFilterSql(product.id),
-        filters,
-        "expectedQuantity",
-      ),
-      // Scoped to products that are BOTH stocked and in the ledger. Neither
-      // half is optional, and both were measured against production:
-      //
-      //  - Without "stocked", an unstocked product has a variance of 0 - 0, so
-      //    "matched" would claim every untouched product is reconciled and
-      //    "mismatched" would be dominated by things correctly sold off.
-      //  - Without "in the ledger", 126 of the 218 hits are stocked products
-      //    with no product-linked Expense at all. Those read as a variance of
-      //    the full shelf count, but the disagreement is really "no purchase
-      //    history" — a provenance gap `findOrphanedProducts` and the
-      //    data-quality checks already own — and they swamp the 92 rows where
-      //    a real ledger and a real shelf genuinely disagree.
-      filters.quantityVarianceFilter !== undefined
-        ? and(
-            // Present ANYWHERE — on a shelf or in service as a bin. The gate
-            // used to be shelf-only while the comparison it guards
-            // (`onHandUnitsFilterSql`) already counted locations, so the two
-            // halves of one predicate disagreed about what "stocked" means and
-            // this view could not see a product held entirely as containers.
-            or(
-              inArray(product.id, productIdsWithLiveInventory),
-              inArray(product.id, productIdsServingAsLocations),
-            ),
-            inArray(product.id, productIdsWithExpenses),
-            filters.quantityVarianceFilter === "mismatched"
-              ? sql`${onHandUnitsFilterSql(product.id)} <> ${expectedQuantityFilterSql(product.id)}`
-              : sql`${onHandUnitsFilterSql(product.id)} = ${expectedQuantityFilterSql(product.id)}`,
-          )
-        : undefined,
-      filters.unknownQuantityLinesFilter === "has"
-        ? hasUnknownQuantityLinesSql(product.id)
-        : filters.unknownQuantityLinesFilter === "none"
-          ? sql`NOT ${hasUnknownQuantityLinesSql(product.id)}`
-          : undefined,
-      idSetPresence(
-        product.id,
-        filters.expensePresenceFilter,
-        productIdsWithExpenses,
-      ),
-      // "Has a purchase date" now means "has an acquisition date", matching
-      // the cell. Keyed off the same fragment rather than "has any linked live
-      // Purchase" — otherwise `(none)` would keep listing products whose cell
-      // shows a date, and `has` would list disposal-only ones whose cell is
-      // blank.
-      filters.purchaseDatePresenceFilter === "has"
-        ? isNotNull(productAcquisitionDateFilterSql(product.id))
-        : filters.purchaseDatePresenceFilter === "none"
-          ? isNull(productAcquisitionDateFilterSql(product.id))
-          : undefined,
-      taskFilterActive
-        ? inArray(product.id, productIdsWithFilteredTasks)
-        : undefined,
-      filters.purchaseDateFrom
-        ? sql`${productAcquisitionDateFilterSql(product.id)} >= ${filters.purchaseDateFrom}`
-        : undefined,
-      filters.purchaseDateTo
-        ? sql`${productAcquisitionDateFilterSql(product.id)} <= ${filters.purchaseDateTo}`
-        : undefined,
-      idSetPresence(
-        product.id,
-        filters.imagePresenceFilter,
-        productIdsWithImages,
-      ),
-      idSetPresence(
-        product.id,
-        filters.unitMappingPresenceFilter,
-        productIdsWithUnitMappings,
-      ),
-      idSetPresence(
-        product.id,
-        filters.componentPresenceFilter,
-        productIdsWithComponents,
-      ),
-      filters.miscBucketFilter === "has"
-        ? sql`lower(${product.name}) LIKE 'misc:%'`
-        : filters.miscBucketFilter === "none"
-          ? sql`lower(${product.name}) NOT LIKE 'misc:%'`
-          : undefined,
-      idSetPresence(
-        product.id,
-        filters.externalIdPresenceFilter ??
-          (externalSources && externalSources.length > 0 ? "has" : undefined),
-        productIdsWithExternalIds,
-      ),
-      presenceCondition(product.model, filters.modelPresenceFilter),
-      idSetPresence(product.id, filters.upcPresenceFilter, productIdsWithGtin),
-      filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
-      presenceCondition(product.notes, filters.notesPresenceFilter),
-      presenceCondition(
-        product.stockTracked,
-        filters.stockTrackedPresenceFilter,
-      ),
-      filters.manufacturerExact
-        ? inArray(product.manufacturer, [filters.manufacturerExact].flat())
-        : undefined,
-      filters.dataStatus === "needs_data"
-        ? needsData
-        : filters.dataStatus === "defect"
-          ? productDefectCondition()
-          : filters.dataStatus === "complete"
-            ? sql`NOT ${productAnyDataGapCondition()}`
-            : undefined,
-      selectedDataGaps.length > 0
-        ? or(...selectedDataGaps.map(productDataGapCondition))
-        : undefined,
-      presenceCondition(
-        product.fdc_id,
-        filters.usdaPresenceFilter,
-        NO_USDA_KEY,
-      ),
-      // Effective price is `explicit ?? derived`, so both directions read the
-      // derived half through `derivedPriceFilterSql` — the same projection the
-      // price column renders and the list sorts by, kit share included.
-      filters.pricePresenceFilter === "none"
-        ? and(
-            isNull(product.price),
-            sql`${derivedPriceFilterSql(product.id)} IS NULL`,
-          )
-        : filters.pricePresenceFilter === "has"
-          ? or(
-              isNotNull(product.price),
-              sql`${derivedPriceFilterSql(product.id)} IS NOT NULL`,
-            )
-          : undefined,
-      // OR-ed with the tag column's presence sentinel so "M18 or untagged" is
-      // one filter, same shape as recipe/crud.ts. `product.tags` is notNull
-      // with a `'{}'` default, so untagged is only ever zero-length — no
-      // `IS NULL` half to check, unlike `recipe.tags`.
-      // `arrayOverlaps`, NOT sql`${col} && ${arr}`: interpolating a JS array
-      // emits a row constructor `($1,$2)` rather than `text[]`.
-      or(
-        filters.tagFilters && filters.tagFilters.length > 0
-          ? arrayOverlaps(product.tags, filters.tagFilters)
-          : undefined,
-        presenceCondition(product.tags, filters.tagsPresenceFilter, NO_TAGS),
-      ),
+      ...classificationConditions(),
+      ...inventoryConditions(),
+      ...ledgerConditions(),
+      ...associationConditions(),
+      ...qualityConditions(),
     ],
   );
   return whereClause;
@@ -1489,6 +1479,99 @@ export const updateProduct = async (
     upc?: string | null;
   } | null = null;
 
+  const prepareUpdate = (
+    beforeProduct: typeof product.$inferSelect,
+    beforeExternalIds: Array<typeof productExternalId.$inferSelect>,
+  ) => {
+    if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
+    const { upc, isbn, ...columnData } = productData;
+    const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
+    const desiredExternalIds =
+      externalIds === undefined
+        ? undefined
+        : incomingGtin === undefined
+          ? externalIds
+          : foldGtinIntoExternalIds(externalIds, incomingGtin);
+    effectiveIdentity = {
+      name: columnData.name ?? beforeProduct.name,
+      manufacturer: columnData.manufacturer ?? beforeProduct.manufacturer,
+      upc: incomingGtin ?? undefined,
+    };
+    const updateData: Partial<typeof product.$inferInsert> = { ...columnData };
+    if (ingredientId !== undefined) updateData.ingredientId = ingredientId;
+    const resultingExternalIds =
+      desiredExternalIds ??
+      (incomingGtin === undefined
+        ? beforeExternalIds
+        : incomingGtin === null
+          ? beforeExternalIds.filter((entry) => !entry.isPrimary)
+          : [
+              ...beforeExternalIds.filter(
+                (entry) => entry.externalId !== incomingGtin,
+              ),
+              { source: GTIN_SOURCE, externalId: incomingGtin },
+            ]);
+    if (
+      hasFoodIndicators({
+        fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
+        ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
+      })
+    ) {
+      updateData.category = "food";
+    } else if (externalIdsContainIsbn(resultingExternalIds)) {
+      updateData.category = "books";
+    }
+    return { desiredExternalIds, incomingGtin, updateData };
+  };
+
+  const assertWishlistCategory = async (
+    tx: DrizzleTransaction,
+    updateData: Partial<typeof product.$inferInsert>,
+  ) => {
+    if (updateData.category === undefined || updateData.category === "tools") {
+      return;
+    }
+    const candidate = await tx.query.wishCandidate.findFirst({
+      where: and(eq(wishCandidate.productId, id), notDeleted(wishCandidate)),
+      columns: { id: true },
+    });
+    if (candidate) {
+      throw createAppError(
+        "PRODUCT_HAS_WISH_CANDIDATES",
+        "Remove this Product from the Wishlist before changing it out of the Tools category.",
+      );
+    }
+  };
+
+  const syncProductUpdateDependents = async (
+    tx: DrizzleTransaction,
+    incomingGtin: string | null | undefined,
+    desiredExternalIds: ReturnType<typeof prepareUpdate>["desiredExternalIds"],
+  ) => {
+    if (unitMappings !== undefined) {
+      await syncProductUnitMappings(tx, id, unitMappings);
+    }
+    if (
+      unitMappings !== undefined ||
+      data.price !== undefined ||
+      ingredientId !== undefined ||
+      data.fdc_id !== undefined ||
+      incomingGtin !== undefined
+    ) {
+      await markProductConversionCoverageInputStale(tx, [id]);
+    }
+    if (data.price !== undefined || unitMappings !== undefined) {
+      await syncInventoryValuationsForProduct(tx, id);
+    }
+    if (externalIds !== undefined) {
+      const desired = desiredExternalIds ?? [];
+      await assertExternalIdsAvailable(tx, desired, id);
+      await syncProductExternalIds(tx, id, desired);
+    } else if (incomingGtin !== undefined) {
+      await syncPrimaryGtin(tx, id, incomingGtin);
+    }
+  };
+
   try {
     const updatedProduct = await withTransaction(db, async (tx) => {
       const beforeProduct = await tx.query.product.findFirst({
@@ -1506,109 +1589,21 @@ export const updateProduct = async (
         ),
       });
 
-      // A canonical "1 each = $X" mapping duplicates the price column; reject it.
-      if (unitMappings !== undefined)
-        assertNoCanonicalPriceMapping(unitMappings);
-
-      const { upc, isbn, ...columnData } = productData;
-      const incomingGtin = resolvePrimaryProductCodeInput({ upc, isbn });
-      const desiredExternalIds =
-        externalIds === undefined
-          ? undefined
-          : incomingGtin === undefined
-            ? externalIds
-            : foldGtinIntoExternalIds(externalIds, incomingGtin);
-      effectiveIdentity = {
-        name: columnData.name ?? beforeProduct.name,
-        manufacturer: columnData.manufacturer ?? beforeProduct.manufacturer,
-        upc: incomingGtin ?? undefined,
-      };
-      const updateData: Partial<typeof product.$inferInsert> = {
-        ...columnData,
-      };
-
-      if (ingredientId !== undefined) {
-        updateData.ingredientId = ingredientId;
-      }
-
-      const resultingProduct = {
-        fdc_id: updateData.fdc_id ?? beforeProduct.fdc_id,
-        ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
-      };
-      const resultingExternalIds =
-        desiredExternalIds ??
-        (incomingGtin === undefined
-          ? beforeExternalIds
-          : incomingGtin === null
-            ? beforeExternalIds.filter((entry) => !entry.isPrimary)
-            : [
-                ...beforeExternalIds.filter(
-                  (entry) => entry.externalId !== incomingGtin,
-                ),
-                { source: GTIN_SOURCE, externalId: incomingGtin },
-              ]);
-      if (hasFoodIndicators(resultingProduct)) {
-        updateData.category = "food";
-      } else if (externalIdsContainIsbn(resultingExternalIds)) {
-        updateData.category = "books";
-      }
+      const { desiredExternalIds, incomingGtin, updateData } = prepareUpdate(
+        beforeProduct,
+        beforeExternalIds,
+      );
 
       // Wishlist candidates are tools by domain definition. Check the final
       // category after the food-indicator correction too, so a linked ingredient
       // cannot silently reclassify a live candidate out of Tools.
-      if (
-        updateData.category !== undefined &&
-        updateData.category !== "tools"
-      ) {
-        const candidate = await tx.query.wishCandidate.findFirst({
-          where: and(
-            eq(wishCandidate.productId, id),
-            notDeleted(wishCandidate),
-          ),
-          columns: { id: true },
-        });
-        if (candidate) {
-          throw createAppError(
-            "PRODUCT_HAS_WISH_CANDIDATES",
-            "Remove this Product from the Wishlist before changing it out of the Tools category.",
-          );
-        }
-      }
+      await assertWishlistCategory(tx, updateData);
 
       const updated = await updateLiveAndReturn(tx, product, updateData, id);
 
-      if (unitMappings !== undefined) {
-        await syncProductUnitMappings(tx, id, unitMappings);
-      }
-
-      // Price, food identity, ingredient coverage opt-outs and stored mappings
-      // all participate in the effective conversion graph. Keep an old graph
-      // from being presented as a current list/filter result until its rebuild.
-      if (
-        unitMappings !== undefined ||
-        data.price !== undefined ||
-        ingredientId !== undefined ||
-        data.fdc_id !== undefined ||
-        incomingGtin !== undefined
-      ) {
-        await markProductConversionCoverageInputStale(tx, [id]);
-      }
-
-      // AFTER the mapping sync, and gated on either input: valuation routes the
-      // entry's amount to money through the mapping graph, so editing the
-      // mappings alone can change every valuation, and syncing first would
-      // re-derive them from the graph this write is about to replace.
-      // (`merge.ts` already orders these correctly.)
-      if (data.price !== undefined || unitMappings !== undefined) {
-        await syncInventoryValuationsForProduct(tx, id);
-      }
-      if (externalIds !== undefined) {
-        const desired = desiredExternalIds!;
-        await assertExternalIdsAvailable(tx, desired, id);
-        await syncProductExternalIds(tx, id, desired);
-      } else if (incomingGtin !== undefined) {
-        await syncPrimaryGtin(tx, id, incomingGtin);
-      }
+      // Conversion coverage and inventory valuation are invalidated only after
+      // mappings land; both are projections of the resulting conversion graph.
+      await syncProductUpdateDependents(tx, incomingGtin, desiredExternalIds);
       detachedImageKeys = await syncProductImages(
         tx,
         id,

@@ -1,3 +1,8 @@
+import {
+  GTIN_KIND,
+  GTIN_SOURCE,
+  normalizeGtin,
+} from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type {
   ProductListInventoryEntryOut,
@@ -5,7 +10,7 @@ import type {
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
-import { and, eq, ilike, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -22,15 +27,44 @@ import {
 } from "./mappers";
 import { enrichProductRowsWithPricing } from "./pricing";
 
-export const findProductsByFoodIdentifier = async (
+const productMatchesFoodLookup = (
+  linkedProduct: ProductTopLevelOut,
+  lookup: FoodLookupParam,
+): boolean =>
+  match(lookup)
+    .with({ kind: "fdc" }, ({ fdc_id }) => linkedProduct.fdc_id === fdc_id)
+    .with({ kind: "ndb" }, () => false)
+    .with({ kind: "upc" }, ({ gtin_upc }) => {
+      const normalized = normalizeGtin(gtin_upc);
+      return (
+        normalized !== null &&
+        linkedProduct.externalIds.some(
+          (externalId) =>
+            externalId.source === GTIN_SOURCE &&
+            externalId.kind === GTIN_KIND &&
+            externalId.externalId === normalized,
+        )
+      );
+    })
+    .exhaustive();
+
+/**
+ * Resolve every USDA identifier with one product projection.
+ *
+ * Pricing and data-quality enrichment are themselves batch reads, so the query
+ * count is bounded by the projection depth rather than the USDA page size.
+ * Results preserve input order (including duplicates) for direct correlation
+ * by service callers.
+ */
+export const findProductsByFoodIdentifiers = async (
   db: Database,
-  rawLookup?: FoodLookupParam,
-) => {
-  if (!rawLookup) {
+  rawLookups: readonly FoodLookupParam[],
+): Promise<ProductTopLevelOut[][]> => {
+  if (rawLookups.length === 0) {
     return [];
   }
 
-  const lookup = foodLookupParam.parse(rawLookup);
+  const lookups = rawLookups.map((lookup) => foodLookupParam.parse(lookup));
 
   // Find all matching products (exclude soft-deleted). A product links to a food
   // by its explicit fdc_id or by any of its barcodes. Products no longer store
@@ -40,11 +74,15 @@ export const findProductsByFoodIdentifier = async (
   // `productHasGtin` normalizes, which is a recall FIX as well as a port: USDA
   // hands us a 12-digit `gtin_upc`, and a product holding the 13- or 14-digit
   // form of that same barcode never matched the old `eq(product.upc, ...)`.
-  const linkCondition = match(lookup)
-    .with({ kind: "upc" }, (l) => productHasGtin(l.gtin_upc))
-    .with({ kind: "fdc" }, (l) => eq(product.fdc_id, l.fdc_id))
-    .with({ kind: "ndb" }, () => sql`false`)
-    .exhaustive();
+  const linkCondition = or(
+    ...lookups.map((lookup) =>
+      match(lookup)
+        .with({ kind: "upc" }, (value) => productHasGtin(value.gtin_upc))
+        .with({ kind: "fdc" }, (value) => eq(product.fdc_id, value.fdc_id))
+        .with({ kind: "ndb" }, () => sql`false`)
+        .exhaustive(),
+    ),
+  );
 
   const res = await getDb(db).query.product.findMany({
     where: and(linkCondition, notDeleted(product)),
@@ -61,7 +99,20 @@ export const findProductsByFoodIdentifier = async (
 
   const priced = await enrichProductRowsWithPricing(db, res);
   const qualified = await enrichProductRowsWithDataQuality(db, priced);
-  return qualified.map(dbProductToTopLevelAPI);
+  const linkedProducts = qualified.map(dbProductToTopLevelAPI);
+  return lookups.map((lookup) =>
+    linkedProducts.filter((linkedProduct) =>
+      productMatchesFoodLookup(linkedProduct, lookup),
+    ),
+  );
+};
+
+export const findProductsByFoodIdentifier = async (
+  db: Database,
+  rawLookup?: FoodLookupParam,
+): Promise<ProductTopLevelOut[]> => {
+  if (!rawLookup) return [];
+  return (await findProductsByFoodIdentifiers(db, [rawLookup]))[0] ?? [];
 };
 
 export const getFoodLookupsForLinkedProducts = async (

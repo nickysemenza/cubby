@@ -260,6 +260,105 @@ function ComparisonMatrix({
   );
 }
 
+function physicalCompatibility(entity: Entity) {
+  if (printsLabels(entity)) {
+    return "Permanent inbound rewrite; Cubby never emits the legacy form.";
+  }
+  if (entity === "recipe") {
+    return "Canonical RCP- only. The removed R- form is intentionally rejected.";
+  }
+  return "Canonical prefix only.";
+}
+
+function physicalPermanence(entity: Entity) {
+  return printsLabels(entity)
+    ? "permanent — printed labels"
+    : "canonical contract only";
+}
+
+function schemaOwnershipRows(entity: Entity) {
+  const sourceRefs = entityInspectorMetadata[entity].sourceRefs;
+  if (!sourceRefs) {
+    return [
+      contractRow(
+        "Schema ownership",
+        "Workflow extension; no generic CRUD schema contract",
+      ),
+    ];
+  }
+  return Object.entries(sourceRefs).map(([name, ref]) =>
+    contractRow(
+      name,
+      <span key={name} className={mono}>
+        {ref} · generated binding
+      </span>,
+    ),
+  );
+}
+
+function searchPortLabel(
+  searchable: boolean,
+  port: Parameters<typeof sourceRef>[0],
+  suffix: string,
+) {
+  return searchable ? `${sourceRef(port)}${suffix}` : "not exposed";
+}
+
+function inspectorRoute(entity: Entity) {
+  return isBrowserRoutedEntity(entity)
+    ? browserEntityDefinition(entity).routes
+    : null;
+}
+
+function mcpFieldLabel(entity: Entity) {
+  return entityInspectorMetadata[entity].mcpOperations.length
+    ? "generated kernel command schema"
+    : "not exposed";
+}
+
+function dependentRefreshLabel(entity: Entity) {
+  const metadata = entityInspectorMetadata[entity];
+  return metadata.searchable
+    ? sourceRef(metadata.ports.search.dependentRefresh)
+    : "none";
+}
+
+function startTransportLabel(entity: Entity) {
+  const metadata = entityInspectorMetadata[entity];
+  if (entity === "usda-food" || entity === "cookbook") {
+    return "specialized list · detail";
+  }
+  if (entity === "image") return "dedicated list · detail · writes";
+  if (metadata.kernelActions.length === 0) return "—";
+  return [
+    metadata.kernelActions.includes("get") && "detail",
+    metadata.kernelActions.includes("list") && "list/filter",
+    metadata.kernelActions.some((action) =>
+      ["create", "update", "delete", "merge"].includes(action),
+    ) && "generic writes",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function RelationshipContract({ entity }: { entity: Entity }) {
+  const { relationships } = entityManifest[entity];
+  if (relationships.length === 0) return dash;
+  return relationships.map((relation) => (
+    <div
+      key={relation.key}
+      className="grid gap-1 border-b border-border/60 pb-2 text-xs sm:grid-cols-[9rem_1fr]"
+    >
+      <code>{relation.key}</code>
+      <span>
+        → {relation.target} · {relation.deletionPolicy} ·{" "}
+        {relation.provenance.kind} · inverse{" "}
+        {"inverse" in relation ? "declared" : "external/unconstrained"}
+      </span>
+    </div>
+  ));
+}
+
 export function EntityInspector({
   entity,
   count,
@@ -272,9 +371,7 @@ export function EntityInspector({
   const descriptor = entityManifest[entity];
   const metadata = entityInspectorMetadata[entity];
   const headingId = useId();
-  const route = isBrowserRoutedEntity(entity)
-    ? browserEntityDefinition(entity).routes
-    : null;
+  const route = inspectorRoute(entity);
   const json = JSON.stringify(
     {
       entity,
@@ -340,24 +437,12 @@ export function EntityInspector({
               "Accepted inbound",
               <Chips key="accept" items={acceptedCodes(entity)} />,
             ],
-            [
-              "Compatibility",
-              printsLabels(entity)
-                ? "Permanent inbound rewrite; Cubby never emits the legacy form."
-                : entity === "recipe"
-                  ? "Canonical RCP- only. The removed R- form is intentionally rejected."
-                  : "Canonical prefix only.",
-            ],
+            ["Compatibility", physicalCompatibility(entity)],
             [
               "Alias direction",
               metadata.legacyShortcodePrefix ? "inbound only" : "none",
             ],
-            [
-              "Permanence",
-              printsLabels(entity)
-                ? "permanent — printed labels"
-                : "canonical contract only",
-            ],
+            ["Permanence", physicalPermanence(entity)],
           ]}
         />
       </Section>
@@ -365,21 +450,7 @@ export function EntityInspector({
       <Section title="Schemas and ports">
         <ContractRows
           rows={[
-            ...(metadata.sourceRefs
-              ? Object.entries(metadata.sourceRefs).map(([name, ref]) =>
-                  contractRow(
-                    name,
-                    <span key={name} className={mono}>
-                      {ref} · generated binding
-                    </span>,
-                  ),
-                )
-              : [
-                  contractRow(
-                    "Schema ownership",
-                    "Workflow extension; no generic CRUD schema contract",
-                  ),
-                ]),
+            ...schemaOwnershipRows(entity),
             ["Repository adapter", sourceRef(metadata.ports.repository)],
             ["Reference label", sourceRef(metadata.ports.references.label)],
             [
@@ -421,12 +492,7 @@ export function EntityInspector({
             ["Controls and codecs", sourceRef(metadata.ports.filters)],
             ["SQL predicates", "explicit repository predicates"],
             ["Option loaders", "generated static/deferred bindings"],
-            [
-              "MCP fields",
-              metadata.mcpOperations.length
-                ? "generated kernel command schema"
-                : "not exposed",
-            ],
+            ["MCP fields", mcpFieldLabel(entity)],
           ]}
         />
       </Section>
@@ -436,45 +502,28 @@ export function EntityInspector({
           rows={[
             [
               "Lexical projection",
-              metadata.searchable
-                ? sourceRef(metadata.ports.search.projection)
-                : "not exposed",
+              searchPortLabel(
+                metadata.searchable,
+                metadata.ports.search.projection,
+                "",
+              ),
             ],
             [
               "Semantic text",
-              metadata.searchable
-                ? `${sourceRef(metadata.ports.search.semanticText)} · pgvector`
-                : "not exposed",
+              searchPortLabel(
+                metadata.searchable,
+                metadata.ports.search.semanticText,
+                " · pgvector",
+              ),
             ],
-            [
-              "Dependent refresh",
-              metadata.searchable
-                ? sourceRef(metadata.ports.search.dependentRefresh)
-                : "none",
-            ],
+            ["Dependent refresh", dependentRefreshLabel(entity)],
           ]}
         />
       </Section>
 
       <Section title="Relations and lifecycle">
         <div className="space-y-2">
-          {descriptor.relationships.length === 0
-            ? dash
-            : descriptor.relationships.map((relation) => (
-                <div
-                  key={relation.key}
-                  className="grid gap-1 border-b border-border/60 pb-2 text-xs sm:grid-cols-[9rem_1fr]"
-                >
-                  <code>{relation.key}</code>
-                  <span>
-                    → {relation.target} · {relation.deletionPolicy} ·{" "}
-                    {relation.provenance.kind} · inverse{" "}
-                    {"inverse" in relation
-                      ? "declared"
-                      : "external/unconstrained"}
-                  </span>
-                </div>
-              ))}
+          <RelationshipContract entity={entity} />
         </div>
         <div className="mt-4">
           <Chips
@@ -503,28 +552,8 @@ export function EntityInspector({
       <Section title="Transports, UI, and coverage">
         <ContractRows
           rows={[
-            [
-              "Start",
-              entity === "usda-food" || entity === "cookbook"
-                ? "specialized list · detail"
-                : entity === "image"
-                  ? "dedicated list · detail · writes"
-                  : metadata.kernelActions.length
-                    ? [
-                        metadata.kernelActions.includes("get") && "detail",
-                        metadata.kernelActions.includes("list") &&
-                          "list/filter",
-                        metadata.kernelActions.some((action) =>
-                          ["create", "update", "delete", "merge"].includes(
-                            action,
-                          ),
-                        ) && "generic writes",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : "—",
-            ],
-            ["Start", "explicit workflow extensions only"],
+            ["Start", startTransportLabel(entity)],
+            ["Extensions", "explicit workflow extensions only"],
             [
               "MCP",
               metadata.mcpOperations.length

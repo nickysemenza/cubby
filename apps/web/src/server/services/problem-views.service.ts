@@ -689,6 +689,28 @@ const toIngredientWithoutProduct = (row: ListRow): IngredientWithoutProduct => {
   };
 };
 
+type ViewProblemResults = Record<
+  string,
+  { data: ListRow[]; count: number } | undefined
+>;
+
+const projectViewProblemRows = <T>(
+  results: ViewProblemResults,
+  key: string,
+  presenter: (row: ListRow) => T,
+): T[] => (results[key]?.data ?? []).map(presenter);
+
+const viewProblemSectionTotals = (
+  declarations: ViewProblemDeclaration[],
+  results: ViewProblemResults,
+): SectionTotals => {
+  const totals: SectionTotals = {};
+  for (const { problem } of declarations) {
+    totals[problem.key] = results[problem.key]?.count ?? 0;
+  }
+  return totals;
+};
+
 export const findViewProblems = async (
   db: Database,
 ): Promise<ProblemsViewsOut> => {
@@ -721,47 +743,74 @@ export const findViewProblems = async (
     4,
   );
 
-  const sectionTotals: SectionTotals = {};
-  for (const { problem } of declarations) {
-    sectionTotals[problem.key] = results[problem.key]?.count ?? 0;
-  }
+  const sectionTotals = viewProblemSectionTotals(declarations, results);
 
   return {
-    neverVerifiedInventory: (results.neverVerifiedInventory?.data ?? []).map(
+    neverVerifiedInventory: projectViewProblemRows(
+      results,
+      "neverVerifiedInventory",
       toNeverVerified,
     ),
-    unusedIngredientsWithProduct: (
-      results.unusedIngredientsWithProduct?.data ?? []
-    ).map(toUnusedIngredient),
-    unusedIngredientsWithoutProduct: (
-      results.unusedIngredientsWithoutProduct?.data ?? []
-    ).map(toUnusedIngredient),
-    locationsWithoutAiDescription: (
-      results.locationsWithoutAiDescription?.data ?? []
-    ).map(toLocationWithoutAiDescription),
-    emptyLocations: (results.emptyLocations?.data ?? []).map(toEmptyLocation),
-    negativeExpectedQuantity: (
-      results.negativeExpectedQuantity?.data ?? []
-    ).map(toNegativeExpectedQuantity),
-    emptyCookedMeals: (results.emptyCookedMeals?.data ?? []).map(
+    unusedIngredientsWithProduct: projectViewProblemRows(
+      results,
+      "unusedIngredientsWithProduct",
+      toUnusedIngredient,
+    ),
+    unusedIngredientsWithoutProduct: projectViewProblemRows(
+      results,
+      "unusedIngredientsWithoutProduct",
+      toUnusedIngredient,
+    ),
+    locationsWithoutAiDescription: projectViewProblemRows(
+      results,
+      "locationsWithoutAiDescription",
+      toLocationWithoutAiDescription,
+    ),
+    emptyLocations: projectViewProblemRows(
+      results,
+      "emptyLocations",
+      toEmptyLocation,
+    ),
+    negativeExpectedQuantity: projectViewProblemRows(
+      results,
+      "negativeExpectedQuantity",
+      toNegativeExpectedQuantity,
+    ),
+    emptyCookedMeals: projectViewProblemRows(
+      results,
+      "emptyCookedMeals",
       toEmptyCookedMeal,
     ),
-    productsMissingPrice: (results.productsMissingPrice?.data ?? []).map(
+    productsMissingPrice: projectViewProblemRows(
+      results,
+      "productsMissingPrice",
       toProductMissingPrice,
     ),
-    unvaluedBucketProducts: (results.unvaluedBucketProducts?.data ?? []).map(
+    unvaluedBucketProducts: projectViewProblemRows(
+      results,
+      "unvaluedBucketProducts",
       toProductMissingPrice,
     ),
-    productsWithoutMappings: (results.productsWithoutMappings?.data ?? []).map(
+    productsWithoutMappings: projectViewProblemRows(
+      results,
+      "productsWithoutMappings",
       toProductWithoutMappings,
     ),
-    staleLocations: (results.staleLocations?.data ?? []).map(toStaleLocation),
-    recipesWithoutInstructions: (
-      results.recipesWithoutInstructions?.data ?? []
-    ).map(toRecipeWithoutInstructions),
-    ingredientsWithoutProduct: (
-      results.ingredientsWithoutProduct?.data ?? []
-    ).map(toIngredientWithoutProduct),
+    staleLocations: projectViewProblemRows(
+      results,
+      "staleLocations",
+      toStaleLocation,
+    ),
+    recipesWithoutInstructions: projectViewProblemRows(
+      results,
+      "recipesWithoutInstructions",
+      toRecipeWithoutInstructions,
+    ),
+    ingredientsWithoutProduct: projectViewProblemRows(
+      results,
+      "ingredientsWithoutProduct",
+      toIngredientWithoutProduct,
+    ),
     sectionTotals,
   };
 };

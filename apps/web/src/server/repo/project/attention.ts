@@ -238,26 +238,29 @@ export async function computeAttentionItems(
   // 1. overdue_task — one item per open top-level task past its effective
   // due date (`dueEndDate ?? dueDate`), matching needs-attention.tsx's
   // per-task granularity (not aggregated per project).
-  for (const row of overdueTaskRows) {
-    const effectiveDue = effectiveTaskDueDate(row);
-    if (!effectiveDue || effectiveDue >= today) continue;
-    items.push(
-      attentionItem({
-        type: "overdue_task",
-        severity: "critical",
-        name: row.name,
-        entityType: "task",
-        entityId: row.shortcode,
-        date: effectiveDue,
-        amount: null,
-        href: `/tasks/${row.shortcode}`,
-        facts: {
-          due: effectiveDue,
-          daysOverdue: plainDateDaysBetween(effectiveDue, today),
-        },
-      }),
-    );
-  }
+  const appendOverdueTasks = () => {
+    for (const row of overdueTaskRows) {
+      const effectiveDue = effectiveTaskDueDate(row);
+      if (!effectiveDue || effectiveDue >= today) continue;
+      items.push(
+        attentionItem({
+          type: "overdue_task",
+          severity: "critical",
+          name: row.name,
+          entityType: "task",
+          entityId: row.shortcode,
+          date: effectiveDue,
+          amount: null,
+          href: `/tasks/${row.shortcode}`,
+          facts: {
+            due: effectiveDue,
+            daysOverdue: plainDateDaysBetween(effectiveDue, today),
+          },
+        }),
+      );
+    }
+  };
+  appendOverdueTasks();
 
   // 2. stalled_project — in_progress project with no project/task/expense
   // activity in the last 30 days. (Note/image activity isn't included — no
@@ -279,72 +282,72 @@ export async function computeAttentionItems(
   // project whose tasks are all undated simply gets no task-activity signal —
   // it neither widens (falsely "recent") nor collapses (falsely "ancient")
   // the window; `project.updatedAt` and expense activity still apply.
-  const inProgressIds = inProgressProjectRows.map((r) => r.id);
-  const [taskActivityRows, expenseActivityRows] = await Promise.all([
-    inProgressIds.length > 0
-      ? getDb(db)
-          .select({
-            projectId: task.projectId,
-            lastActivity: sql<
-              string | null
-            >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
-          })
-          .from(task)
-          .where(and(inArray(task.projectId, inProgressIds), notDeleted(task)))
-          .groupBy(task.projectId)
-      : Promise.resolve([]),
-    inProgressIds.length > 0
-      ? getDb(db)
-          .select({
-            projectId: expense.projectId,
-            lastActivity: sql<string>`max(${expense.date})`,
-          })
-          .from(expense)
-          .where(
-            and(inArray(expense.projectId, inProgressIds), notDeleted(expense)),
-          )
-          .groupBy(expense.projectId)
-      : Promise.resolve([]),
-  ]);
-  const taskActivityByProject = new Map<ProjectId, string>();
-  for (const row of taskActivityRows) {
-    if (row.projectId && row.lastActivity)
-      taskActivityByProject.set(row.projectId, row.lastActivity);
-  }
-  const expenseActivityByProject = new Map<ProjectId, string>();
-  for (const row of expenseActivityRows) {
-    if (row.projectId)
-      expenseActivityByProject.set(row.projectId, row.lastActivity);
-  }
-
-  for (const row of inProgressProjectRows) {
-    const candidates = [
-      householdLocalDate(row.updatedAt),
-      taskActivityByProject.get(row.id),
-      expenseActivityByProject.get(row.id),
-    ].filter((d): d is string => d != null);
-    const lastActivityDate = candidates.reduce((latest, d) =>
-      d > latest ? d : latest,
-    );
-    if (lastActivityDate >= activityCutoff) continue;
-    items.push(
-      attentionItem({
-        type: "stalled_project",
-        severity: "warning",
-        name: row.name,
-        entityType: "project",
-        entityId: row.shortcode,
-        date: lastActivityDate,
-        amount: null,
-        href: `/projects/${row.shortcode}`,
-        facts: {
-          lastActivity: lastActivityDate,
-          daysSinceActivity: plainDateDaysBetween(lastActivityDate, today),
-          thresholdDays: STALE_ACTIVITY_DAYS,
-        },
-      }),
-    );
-  }
+  const appendStalledProjects = async () => {
+    const inProgressIds = inProgressProjectRows.map((row) => row.id);
+    if (inProgressIds.length === 0) return;
+    const [taskActivityRows, expenseActivityRows] = await Promise.all([
+      getDb(db)
+        .select({
+          projectId: task.projectId,
+          lastActivity: sql<
+            string | null
+          >`max(coalesce(${task.dueEndDate}, ${task.dueDate}))`,
+        })
+        .from(task)
+        .where(and(inArray(task.projectId, inProgressIds), notDeleted(task)))
+        .groupBy(task.projectId),
+      getDb(db)
+        .select({
+          projectId: expense.projectId,
+          lastActivity: sql<string>`max(${expense.date})`,
+        })
+        .from(expense)
+        .where(
+          and(inArray(expense.projectId, inProgressIds), notDeleted(expense)),
+        )
+        .groupBy(expense.projectId),
+    ]);
+    const taskActivityByProject = new Map<ProjectId, string>();
+    for (const row of taskActivityRows) {
+      if (row.projectId && row.lastActivity) {
+        taskActivityByProject.set(row.projectId, row.lastActivity);
+      }
+    }
+    const expenseActivityByProject = new Map<ProjectId, string>();
+    for (const row of expenseActivityRows) {
+      if (row.projectId)
+        expenseActivityByProject.set(row.projectId, row.lastActivity);
+    }
+    for (const row of inProgressProjectRows) {
+      const candidates = [
+        householdLocalDate(row.updatedAt),
+        taskActivityByProject.get(row.id),
+        expenseActivityByProject.get(row.id),
+      ].filter((date): date is string => date != null);
+      const lastActivityDate = candidates.reduce((latest, date) =>
+        date > latest ? date : latest,
+      );
+      if (lastActivityDate >= activityCutoff) continue;
+      items.push(
+        attentionItem({
+          type: "stalled_project",
+          severity: "warning",
+          name: row.name,
+          entityType: "project",
+          entityId: row.shortcode,
+          date: lastActivityDate,
+          amount: null,
+          href: `/projects/${row.shortcode}`,
+          facts: {
+            lastActivity: lastActivityDate,
+            daysSinceActivity: plainDateDaysBetween(lastActivityDate, today),
+            thresholdDays: STALE_ACTIVITY_DAYS,
+          },
+        }),
+      );
+    }
+  };
+  await appendStalledProjects();
 
   // 3. missing_budget — subtree actual+committed spend > 0, subtree
   // costEstimate still null. Reuses the same batched rollup/aggregation the
@@ -355,13 +358,13 @@ export async function computeAttentionItems(
   // can never be "wrong" — and it dominated the count (29 of 32 flagged rows
   // were finished projects like a completed wedding and a replaced furnace).
   // Rule 2 above already scopes itself this way; this rule simply didn't.
-  for (const row of allProjectRows) {
-    if (!projectInScope(row.id)) continue;
-    if (!isLiveProjectStatus(row.status)) continue;
-    const subtree = subtreeRollups.get(row.id);
-    if (!subtree) continue;
-    const spend = subtree.actualSpent + subtree.committedSpent;
-    if (spend > 0 && subtree.costEstimate === null) {
+  const appendMissingBudgets = () => {
+    for (const row of allProjectRows) {
+      if (!projectInScope(row.id) || !isLiveProjectStatus(row.status)) continue;
+      const subtree = subtreeRollups.get(row.id);
+      if (!subtree) continue;
+      const spend = subtree.actualSpent + subtree.committedSpent;
+      if (spend <= 0 || subtree.costEstimate !== null) continue;
       items.push(
         attentionItem({
           type: "missing_budget",
@@ -380,38 +383,42 @@ export async function computeAttentionItems(
         }),
       );
     }
-  }
+  };
+  appendMissingBudgets();
 
   // 4. past_due_planned_expense
-  for (const row of pastDueExpenseRows) {
-    if (row.date === null) {
-      throw new Error("Past-due expense query returned a null date");
+  const appendPastDueExpenses = () => {
+    for (const row of pastDueExpenseRows) {
+      if (row.date === null) {
+        throw new Error("Past-due expense query returned a null date");
+      }
+      const plannedFor = row.date;
+      items.push(
+        attentionItem({
+          type: "past_due_planned_expense",
+          severity: "warning",
+          name: row.name,
+          entityType: "expense",
+          entityId: row.shortcode,
+          date: plannedFor,
+          amount: row.cost,
+          href: `/expenses/${row.shortcode}`,
+          facts: {
+            plannedFor,
+            daysPastDue: plainDateDaysBetween(plannedFor, today),
+            cost: row.cost,
+          },
+        }),
+      );
     }
-    const plannedFor = row.date;
-    items.push(
-      attentionItem({
-        type: "past_due_planned_expense",
-        severity: "warning",
-        name: row.name,
-        entityType: "expense",
-        entityId: row.shortcode,
-        date: plannedFor,
-        amount: row.cost,
-        href: `/expenses/${row.shortcode}`,
-        facts: {
-          plannedFor,
-          daysPastDue: plainDateDaysBetween(plannedFor, today),
-          cost: row.cost,
-        },
-      }),
-    );
-  }
+  };
+  appendPastDueExpenses();
 
   // 5. unclassified_expense — trade left at the catch-all "other" AND no
   // cost logged (costType itself stays a clean 3-value enum — no
   // "uncategorized" value added there).
-  for (const row of unclassifiedExpenseRows) {
-    items.push(
+  items.push(
+    ...unclassifiedExpenseRows.map((row) =>
       attentionItem({
         type: "unclassified_expense",
         severity: "info",
@@ -423,8 +430,8 @@ export async function computeAttentionItems(
         href: `/expenses/${row.shortcode}`,
         facts: { date: row.date },
       }),
-    );
-  }
+    ),
+  );
 
   // 6. blocked_work — in_progress project with >=1 blocked task and zero
   // unblocked `next` tasks (no available next action).
@@ -432,40 +439,42 @@ export async function computeAttentionItems(
   // `actionable`'s tasks carry the public `projectId` (a shortcode); resolve
   // the ones in play back to the uuid this file's Sets/`inProjectScope` key
   // on, in ONE batched lookup rather than per-task.
-  const actionableProjectCodes = uniq(
-    [
-      ...actionable.next.map((t) => t.projectId),
-      ...actionable.blocked.map((b) => b.task.projectId),
-    ].filter((code): code is NonNullable<typeof code> => code != null),
-  );
-  const actionableProjectRefs = await resolveShortcodes(
-    db,
-    actionableProjectCodes,
-  );
-  const toProjectUuid = (code: string): ProjectId | null => {
-    const ref = actionableProjectRefs.get(code);
-    return ref?.entity === "project" ? ref.id : null;
-  };
-
-  const projectsWithNext = new Set<ProjectId>();
-  for (const t of actionable.next) {
-    const projectId = t.projectId ? toProjectUuid(t.projectId) : null;
-    if (projectId && inProjectScope(projectId)) projectsWithNext.add(projectId);
-  }
-  // A count, not a Set: the card states how many tasks are blocked, and the
-  // tally is free here — we are already walking every blocked task.
-  const blockedTaskCounts = new Map<ProjectId, number>();
-  for (const b of actionable.blocked) {
-    const projectId = b.task.projectId ? toProjectUuid(b.task.projectId) : null;
-    if (projectId && inProjectScope(projectId))
-      blockedTaskCounts.set(
-        projectId,
-        (blockedTaskCounts.get(projectId) ?? 0) + 1,
-      );
-  }
-  for (const row of inProgressProjectRows) {
-    const blockedTasks = blockedTaskCounts.get(row.id) ?? 0;
-    if (blockedTasks > 0 && !projectsWithNext.has(row.id)) {
+  const appendBlockedProjects = async () => {
+    const actionableProjectCodes = uniq(
+      [
+        ...actionable.next.map((row) => row.projectId),
+        ...actionable.blocked.map((row) => row.task.projectId),
+      ].filter((code): code is NonNullable<typeof code> => code != null),
+    );
+    const actionableProjectRefs = await resolveShortcodes(
+      db,
+      actionableProjectCodes,
+    );
+    const toProjectUuid = (code: string): ProjectId | null => {
+      const ref = actionableProjectRefs.get(code);
+      return ref?.entity === "project" ? ref.id : null;
+    };
+    const projectsWithNext = new Set<ProjectId>();
+    for (const row of actionable.next) {
+      const projectId = row.projectId ? toProjectUuid(row.projectId) : null;
+      if (projectId && inProjectScope(projectId))
+        projectsWithNext.add(projectId);
+    }
+    const blockedTaskCounts = new Map<ProjectId, number>();
+    for (const row of actionable.blocked) {
+      const projectId = row.task.projectId
+        ? toProjectUuid(row.task.projectId)
+        : null;
+      if (projectId && inProjectScope(projectId)) {
+        blockedTaskCounts.set(
+          projectId,
+          (blockedTaskCounts.get(projectId) ?? 0) + 1,
+        );
+      }
+    }
+    for (const row of inProgressProjectRows) {
+      const blockedTasks = blockedTaskCounts.get(row.id) ?? 0;
+      if (blockedTasks <= 0 || projectsWithNext.has(row.id)) continue;
       items.push(
         attentionItem({
           type: "blocked_work",
@@ -480,7 +489,8 @@ export async function computeAttentionItems(
         }),
       );
     }
-  }
+  };
+  await appendBlockedProjects();
 
   // 7. date_window_drift — a manual startDate/endDate override that now hides
   // real derived work (own tasks/expenses, folded up through live
@@ -491,64 +501,67 @@ export async function computeAttentionItems(
   // out there yet) is intent, not drift, so only a too-narrow override
   // fires — and an override that exactly equals the derived bound doesn't
   // either.
-  for (const row of allProjectRows) {
-    if (!projectInScope(row.id)) continue;
-    const window = dateWindows.get(row.id);
-    if (!window) continue;
-    if (
-      row.startDate != null &&
-      window.derivedStart != null &&
-      row.startDate > window.derivedStart
-    ) {
-      items.push(
-        attentionItem({
-          type: "date_window_drift",
-          severity: "info",
-          name: row.name,
-          entityType: "project",
-          entityId: row.shortcode,
-          date: window.derivedStart,
-          amount: null,
-          href: `/projects/${row.shortcode}`,
-          discriminator: "start",
-          facts: {
-            side: "start",
-            override: row.startDate,
-            derived: window.derivedStart,
-            daysHidden: plainDateDaysBetween(
-              window.derivedStart,
-              row.startDate,
-            ),
-          },
-        }),
-      );
+  const appendDateWindowDrift = () => {
+    for (const row of allProjectRows) {
+      if (!projectInScope(row.id)) continue;
+      const window = dateWindows.get(row.id);
+      if (!window) continue;
+      if (
+        row.startDate != null &&
+        window.derivedStart != null &&
+        row.startDate > window.derivedStart
+      ) {
+        items.push(
+          attentionItem({
+            type: "date_window_drift",
+            severity: "info",
+            name: row.name,
+            entityType: "project",
+            entityId: row.shortcode,
+            date: window.derivedStart,
+            amount: null,
+            href: `/projects/${row.shortcode}`,
+            discriminator: "start",
+            facts: {
+              side: "start",
+              override: row.startDate,
+              derived: window.derivedStart,
+              daysHidden: plainDateDaysBetween(
+                window.derivedStart,
+                row.startDate,
+              ),
+            },
+          }),
+        );
+      }
+      if (
+        row.endDate != null &&
+        window.derivedEnd != null &&
+        row.endDate < window.derivedEnd
+      ) {
+        items.push(
+          attentionItem({
+            type: "date_window_drift",
+            severity: "info",
+            name: row.name,
+            entityType: "project",
+            entityId: row.shortcode,
+            date: window.derivedEnd,
+            amount: null,
+            href: `/projects/${row.shortcode}`,
+            discriminator: "end",
+            facts: {
+              side: "end",
+              override: row.endDate,
+              derived: window.derivedEnd,
+              daysHidden: plainDateDaysBetween(row.endDate, window.derivedEnd),
+            },
+          }),
+        );
+      }
     }
-    if (
-      row.endDate != null &&
-      window.derivedEnd != null &&
-      row.endDate < window.derivedEnd
-    ) {
-      items.push(
-        attentionItem({
-          type: "date_window_drift",
-          severity: "info",
-          name: row.name,
-          entityType: "project",
-          entityId: row.shortcode,
-          date: window.derivedEnd,
-          amount: null,
-          href: `/projects/${row.shortcode}`,
-          discriminator: "end",
-          facts: {
-            side: "end",
-            override: row.endDate,
-            derived: window.derivedEnd,
-            daysHidden: plainDateDaysBetween(row.endDate, window.derivedEnd),
-          },
-        }),
-      );
-    }
-  }
+  };
+  appendDateWindowDrift();
 
   return items;
 }

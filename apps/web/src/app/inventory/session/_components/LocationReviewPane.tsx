@@ -345,6 +345,25 @@ function LocationContextStrip({ location }: { location: SessionLocation }) {
   );
 }
 
+function expectedItemStateLabel(
+  completed: boolean,
+  resolution: ItemResolution | undefined,
+) {
+  if (completed) return "saved this pass";
+  switch (resolution?.kind) {
+    case "verify":
+      return "present";
+    case "adjust":
+      return "quantity adjusted";
+    case "remove":
+      return "will be removed";
+    case "relocate":
+      return `moving to ${resolution.targetLocationName}`;
+    default:
+      return "assumed present";
+  }
+}
+
 function ExpectedItemReviewRow({
   item,
   quantitySummary,
@@ -400,17 +419,7 @@ function ExpectedItemReviewRow({
   };
 
   const present = completed || staged === "verify" || staged === "adjust";
-  const stateLabel = completed
-    ? "saved this pass"
-    : staged === "verify"
-      ? "present"
-      : staged === "adjust"
-        ? "quantity adjusted"
-        : staged === "remove"
-          ? "will be removed"
-          : resolution?.kind === "relocate"
-            ? `moving to ${resolution.targetLocationName}`
-            : "assumed present";
+  const stateLabel = expectedItemStateLabel(completed, resolution);
 
   return (
     <div

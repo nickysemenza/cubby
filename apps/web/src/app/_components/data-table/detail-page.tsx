@@ -439,6 +439,118 @@ interface DetailSectionsProps {
   showEntityActions?: boolean;
 }
 
+function resolveRelationshipDetail(
+  pageDetail: ReturnType<typeof usePageDetailContext>,
+  record: DetailRecord | undefined,
+  sourceId: string | undefined,
+  sections: DetailSection[],
+) {
+  const ownSection = sections.find(
+    (section) => section.id === RELATIONS_SECTION_ID,
+  );
+  const hasSourceViews = relatedViewRegistry.some(
+    (view) => view.source === pageDetail?.entity,
+  );
+  if (ownSection || !pageDetail || !sourceId || !hasSourceViews) {
+    return { ownSection, preview: null, section: ownSection };
+  }
+  const source = record
+    ? relationshipRouteSourceFromRecord(pageDetail.entity, record, sourceId)
+    : null;
+  const preview = (
+    <RelationshipRoutePreview
+      entity={pageDetail.entity}
+      sourceId={sourceId}
+      source={source}
+    />
+  );
+  const genericSection: DetailSection = {
+    id: RELATIONS_SECTION_ID,
+    title: "Relationships",
+    icon: relationshipsSectionIcon,
+    placement: "full",
+    content: (
+      <RelationshipExplorer entity={pageDetail.entity} sourceId={sourceId} />
+    ),
+  };
+  return {
+    ownSection,
+    preview,
+    section: ownSection ?? genericSection,
+  };
+}
+
+function resolveActivityDetail(
+  pageDetail: ReturnType<typeof usePageDetailContext>,
+  sourceId: string | undefined,
+  sections: DetailSection[],
+) {
+  const ownSection = sections.find(
+    (section) => section.id === ACTIVITY_SECTION_ID,
+  );
+  if (
+    ownSection ||
+    !pageDetail ||
+    !sourceId ||
+    !isAuditableEntity(pageDetail.entity)
+  ) {
+    return { ownSection, section: ownSection };
+  }
+  const section: DetailSection = {
+    id: ACTIVITY_SECTION_ID,
+    title: "History",
+    icon: Clock,
+    placement: "supporting",
+    content: (
+      <AuditLogList
+        entityType={pageDetail.entity}
+        entityId={sourceId}
+        showEntityLink={false}
+      />
+    ),
+  };
+  return { ownSection, section };
+}
+
+function validateDetailSectionIds(
+  visibleSections: DetailSection[],
+  relationship: ReturnType<typeof resolveRelationshipDetail>,
+  activity: ReturnType<typeof resolveActivityDetail>,
+) {
+  const allSections = [...visibleSections];
+  if (!relationship.ownSection && relationship.section) {
+    allSections.push(relationship.section);
+  }
+  if (!activity.ownSection && activity.section) {
+    allSections.push(activity.section);
+  }
+  const ids = allSections.map((section) => section.id);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Detail section ids must be unique within a record page");
+  }
+}
+
+function hashForDetailMode(mode: DetailMode) {
+  if (mode === "relations") return RELATIONS_SECTION_ID;
+  if (mode === "activity") return ACTIVITY_SECTION_ID;
+  return undefined;
+}
+
+function contextSourceId(
+  pageDetail: ReturnType<typeof usePageDetailContext>,
+  record: DetailRecord | undefined,
+) {
+  return pageDetail ? detailSourceId(pageDetail.entity, record) : undefined;
+}
+
+function contextActionRecord(
+  pageDetail: ReturnType<typeof usePageDetailContext>,
+  record: DetailRecord | undefined,
+  sourceId: string | undefined,
+) {
+  return pageDetail ? detailActionRecord(record, sourceId) : undefined;
+}
+
 export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
   rawData,
@@ -457,12 +569,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     : undefined;
   const locationHash = useLocation({ select: (location) => location.hash });
   const navigate = useNavigate();
-  const sourceId = pageDetail
-    ? detailSourceId(pageDetail.entity, detailRecord)
-    : undefined;
-  const hasSourceViews = relatedViewRegistry.some(
-    (view) => view.source === pageDetail?.entity,
-  );
+  const sourceId = contextSourceId(pageDetail, detailRecord);
   const visibleSections = useMemo(
     () =>
       sections.filter(
@@ -474,70 +581,24 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   // the generic explorer. The explicit section wins just as an explicit
   // History section does below; appending both would duplicate the anchor and
   // let the generic graph contradict the page-owned relationship contract.
-  const ownRelationshipSection = visibleSections.find(
-    (section) => section.id === RELATIONS_SECTION_ID,
+  const relationshipDetail = resolveRelationshipDetail(
+    pageDetail,
+    detailRecord,
+    sourceId,
+    visibleSections,
   );
-  const relationshipSource =
-    pageDetail && detailRecord
-      ? relationshipRouteSourceFromRecord(
-          pageDetail.entity,
-          detailRecord,
-          sourceId,
-        )
-      : null;
-  const genericRelationshipPreview =
-    pageDetail && sourceId && hasSourceViews && !ownRelationshipSection ? (
-      <RelationshipRoutePreview
-        entity={pageDetail.entity}
-        sourceId={sourceId}
-        source={relationshipSource}
-      />
-    ) : null;
-  const genericRelationshipSection: DetailSection | undefined =
-    pageDetail && sourceId && hasSourceViews && !ownRelationshipSection
-      ? {
-          id: RELATIONS_SECTION_ID,
-          title: "Relationships",
-          icon: relationshipsSectionIcon,
-          placement: "full",
-          content: (
-            <RelationshipExplorer
-              entity={pageDetail.entity}
-              sourceId={sourceId}
-            />
-          ),
-        }
-      : undefined;
-  const relationshipSection =
-    ownRelationshipSection ?? genericRelationshipSection;
+  const relationshipSection = relationshipDetail.section;
   // Every auditable entity gets its audit trail for free — callers used to
   // hand-wire an identical `AuditLogList` card themselves (five detail pages did,
   // byte-for-byte). The id check is the opt-out: a page that already places its
   // own `id: "history"` section (e.g. via `useEntityDetail`'s commonSections, or
   // a custom placement) keeps that one instead of getting a second.
-  const ownActivitySection = visibleSections.find(
-    (section) => section.id === ACTIVITY_SECTION_ID,
+  const activityDetail = resolveActivityDetail(
+    pageDetail,
+    sourceId,
+    visibleSections,
   );
-  const activitySection: DetailSection | undefined =
-    pageDetail &&
-    sourceId &&
-    !ownActivitySection &&
-    isAuditableEntity(pageDetail.entity)
-      ? {
-          id: ACTIVITY_SECTION_ID,
-          title: "History",
-          icon: Clock,
-          placement: "supporting",
-          content: (
-            <AuditLogList
-              entityType={pageDetail.entity}
-              entityId={sourceId}
-              showEntityLink={false}
-            />
-          ),
-        }
-      : undefined;
-  const resolvedActivitySection = ownActivitySection ?? activitySection;
+  const resolvedActivitySection = activityDetail.section;
   const overviewSections = useMemo(
     () =>
       visibleSections.filter(
@@ -551,19 +612,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   // Validate the authored ledger and shared extensions together before
   // partitioning them into modes. A duplicate relationship/history id is still
   // an invalid record page even though only one mode is visible at a time.
-  const allSections = [
-    ...visibleSections,
-    ...(!ownRelationshipSection && relationshipSection
-      ? [relationshipSection]
-      : []),
-    ...(!ownActivitySection && resolvedActivitySection
-      ? [resolvedActivitySection]
-      : []),
-  ];
-  const ids = allSections.map((section) => section.id);
-  if (new Set(ids).size !== ids.length) {
-    throw new Error("Detail section ids must be unique within a record page");
-  }
+  validateDetailSectionIds(visibleSections, relationshipDetail, activityDetail);
 
   const overviewIdKey = overviewSections
     .map((section) => section.id)
@@ -624,14 +673,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       return;
     }
     setActiveMode(mode);
-    setHash(
-      mode === "relations"
-        ? RELATIONS_SECTION_ID
-        : mode === "activity"
-          ? ACTIVITY_SECTION_ID
-          : undefined,
-      false,
-    );
+    setHash(hashForDetailMode(mode), false);
   };
 
   const selectOverviewSection = (sectionId: string) => {
@@ -640,10 +682,8 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   };
 
   const compactRelationshipPreview =
-    authoredRelationshipPreview ?? genericRelationshipPreview;
-  const actionRecord = pageDetail
-    ? detailActionRecord(detailRecord, sourceId)
-    : undefined;
+    authoredRelationshipPreview ?? relationshipDetail.preview;
+  const actionRecord = contextActionRecord(pageDetail, detailRecord, sourceId);
   const visual = heroVisual({
     heroImages,
     heroMedia: heroMedia ?? pageDetail?.heroMedia,

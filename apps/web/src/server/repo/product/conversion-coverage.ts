@@ -1,6 +1,6 @@
 /** Persistence seam for the catalog-wide conversion projection. */
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -9,7 +9,7 @@ import {
   productComponent,
   productConversionCoverage,
 } from "~/server/db/schema";
-import { getDb, unwrapDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
 const PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION = "conversion-coverage-v1";
 const productConversionCoverageStatusSchema = z.enum(["ready", "unavailable"]);
@@ -82,7 +82,7 @@ export const getProductConversionCoverageFreshness = async (
       productConversionCoverage,
       eq(productConversionCoverage.productId, product.id),
     )
-    .where(isNull(product.deletedAt));
+    .where(notDeleted(product));
 
   const readyCount = row?.readyCount ?? 0;
   const staleCount = row?.staleCount ?? 0;
@@ -196,7 +196,7 @@ export const markProductConversionCoverageInputStale = async (
       .where(
         and(
           inArray(productComponent.componentProductId, frontier),
-          isNull(productComponent.deletedAt),
+          notDeleted(productComponent),
         ),
       );
     frontier = parents

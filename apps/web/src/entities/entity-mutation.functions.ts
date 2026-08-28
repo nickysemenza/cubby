@@ -15,7 +15,6 @@ import type {
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
 import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
-import { countPrimaryDeletedReferences } from "./mutation-results";
 
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<
@@ -89,25 +88,6 @@ export async function executeEntityMutation(options: {
   // Open the fresh-read window before any invalidation this mutation triggers
   // can re-read a stale replica.
   return result;
-}
-
-/** Restore the entity-shaped result existing form and editing callers consume. */
-export function flattenEntityMutationResult(
-  result: EntityBrowserMutationResult,
-) {
-  if ("item" in result)
-    return { ...result.item, sideEffects: result.sideEffects };
-  if (result.action === "delete")
-    return {
-      deleted: countPrimaryDeletedReferences(result),
-      sideEffects: result.sideEffects,
-    };
-  if (result.action === "bulkUpdate")
-    return {
-      updated: result.updatedReferences.length,
-      sideEffects: result.sideEffects,
-    };
-  return result.result;
 }
 
 /** Recover the entity-specific output through the same schema that backs the kernel. */

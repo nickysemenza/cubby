@@ -20,53 +20,43 @@ const dimensionMimeType = (dimensionType: string): string | undefined => {
   }
 };
 
-const signatureContentType = (bytes: Uint8Array): string | undefined => {
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47
-  )
-    return "image/png";
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff
-  )
-    return "image/jpeg";
-  if (
-    bytes.length >= 6 &&
-    new TextDecoder().decode(bytes.slice(0, 6)) === "GIF87a"
-  )
-    return "image/gif";
-  if (
-    bytes.length >= 6 &&
-    new TextDecoder().decode(bytes.slice(0, 6)) === "GIF89a"
-  )
-    return "image/gif";
-  if (
-    bytes.length >= 12 &&
-    new TextDecoder().decode(bytes.slice(0, 4)) === "RIFF" &&
-    new TextDecoder().decode(bytes.slice(8, 12)) === "WEBP"
-  )
-    return "image/webp";
-  if (
-    bytes.length >= 5 &&
-    new TextDecoder().decode(bytes.slice(0, 5)) === "%PDF-"
-  )
-    return PDF_CONTENT_TYPE;
-  if (
-    bytes.length >= 12 &&
-    new TextDecoder().decode(bytes.slice(4, 8)) === "ftyp"
-  ) {
-    const brand = new TextDecoder().decode(bytes.slice(8, 12)).toLowerCase();
-    if (["heic", "heix", "hevc", "heim", "heis"].includes(brand))
-      return "image/heic";
-    if (["mif1", "msf1"].includes(brand)) return "image/heif";
+const hasBytes = (bytes: Uint8Array, signature: readonly number[]): boolean =>
+  signature.every((value, index) => bytes[index] === value);
+
+const asciiAt = (bytes: Uint8Array, start: number, length: number): string =>
+  new TextDecoder().decode(bytes.slice(start, start + length));
+
+const isoBaseMediaContentType = (bytes: Uint8Array): string | undefined => {
+  if (bytes.length < 12 || asciiAt(bytes, 4, 4) !== "ftyp") return undefined;
+  const brand = asciiAt(bytes, 8, 4).toLowerCase();
+  if (["heic", "heix", "hevc", "heim", "heis"].includes(brand)) {
+    return "image/heic";
   }
-  return undefined;
+  return ["mif1", "msf1"].includes(brand) ? "image/heif" : undefined;
+};
+
+const signatureContentType = (bytes: Uint8Array): string | undefined => {
+  if (bytes.length >= 8 && hasBytes(bytes, [0x89, 0x50, 0x4e, 0x47])) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && hasBytes(bytes, [0xff, 0xd8, 0xff])) {
+    return "image/jpeg";
+  }
+  const header = asciiAt(bytes, 0, 6);
+  if (bytes.length >= 6 && (header === "GIF87a" || header === "GIF89a")) {
+    return "image/gif";
+  }
+  if (
+    bytes.length >= 12 &&
+    asciiAt(bytes, 0, 4) === "RIFF" &&
+    asciiAt(bytes, 8, 4) === "WEBP"
+  ) {
+    return "image/webp";
+  }
+  if (bytes.length >= 5 && asciiAt(bytes, 0, 5) === "%PDF-") {
+    return PDF_CONTENT_TYPE;
+  }
+  return isoBaseMediaContentType(bytes);
 };
 
 export type InspectedImageFile = {

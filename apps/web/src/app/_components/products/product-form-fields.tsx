@@ -203,6 +203,434 @@ interface ProductFormFieldsProps<TFieldValues extends ProductFormFieldValues> {
   compact?: boolean;
 }
 
+type ProductFormSectionProps<TFieldValues extends ProductFormFieldValues> =
+  Pick<ProductFormFieldsProps<TFieldValues>, "form" | "paths" | "compact">;
+
+function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
+  form,
+  paths,
+  compact,
+  hideNameField,
+  nameValue,
+  manufacturerValue,
+  isMisc,
+  isFoodForced,
+  isBookForced,
+}: ProductFormSectionProps<TFieldValues> & {
+  hideNameField: boolean;
+  nameValue: string;
+  manufacturerValue: string;
+  isMisc: boolean;
+  isFoodForced: boolean;
+  isBookForced: boolean;
+}) {
+  return (
+    <FormSection title="Product details" compact={compact} plate>
+      {!hideNameField && (
+        <SideBySideFields>
+          <UnifiedTextField
+            form={form}
+            name={paths.model}
+            label="Model Number"
+            placeholder="Enter model number"
+            nullable={true}
+          />
+          <UnifiedTextField
+            form={form}
+            name={paths.name}
+            label="Product Name"
+            placeholder="Enter product name"
+            nullable={false}
+          />
+        </SideBySideFields>
+      )}
+
+      <NullableTextareaField
+        form={form}
+        name={paths.notes}
+        label="Notes"
+        placeholder="Notes, URLs, etc. — Markdown supported"
+      />
+
+      {!isMisc && (
+        <SideBySideFields>
+          <UnifiedTextField
+            form={form}
+            name={paths.manufacturer}
+            label="Manufacturer"
+            placeholder="Enter manufacturer"
+            nullable={false}
+          />
+          <CategoryFieldWithAI
+            form={form}
+            name={paths.category}
+            productName={nameValue}
+            manufacturer={manufacturerValue}
+            disabled={isFoodForced || isBookForced}
+            description={
+              isFoodForced
+                ? "Forced to 'food' (has USDA link or ingredient)"
+                : isBookForced
+                  ? "Forced to 'books' (has a valid ISBN)"
+                  : undefined
+            }
+          />
+        </SideBySideFields>
+      )}
+    </FormSection>
+  );
+}
+
+function ProductTagFields<TFieldValues extends ProductFormFieldValues>({
+  form,
+  compact,
+}: Pick<ProductFormSectionProps<TFieldValues>, "form" | "compact">) {
+  if (compact) return null;
+  return (
+    <>
+      <AliasesField<TFieldValues> form={form} />
+      <AliasesField<TFieldValues>
+        form={form}
+        name="collections"
+        title="Collections"
+        addButtonText="Add Collection"
+        placeholder="e.g. painting"
+      />
+      <AliasesField<TFieldValues>
+        form={form}
+        name="tags"
+        title="Compatibility tags"
+        addButtonText="Add Tag"
+        placeholder="e.g. grinder-4.5in, M18"
+      />
+    </>
+  );
+}
+
+function ProductUpcField<TFieldValues extends ProductFormFieldValues>({
+  form,
+  paths,
+  upcValue,
+  lookupImageUrl,
+  isLookingUp,
+  onLookup,
+}: Pick<ProductFormSectionProps<TFieldValues>, "form" | "paths"> & {
+  upcValue: string | null;
+  lookupImageUrl: string | null;
+  isLookingUp: boolean;
+  onLookup: () => void;
+}) {
+  return (
+    <Stack gap="sm">
+      <Row align="end" gap="sm">
+        <div className="flex-1">
+          <UnifiedTextField
+            form={form}
+            name={paths.upc}
+            label="UPC (Optional)"
+            placeholder="12-digit UPC code"
+            nullable={true}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onLookup}
+          disabled={isLookingUp || !upcValue}
+        >
+          {isLookingUp ? <Spinner /> : <Search className="size-4" />}
+          <span className="ml-1">Lookup</span>
+        </Button>
+      </Row>
+      {lookupImageUrl && (
+        <Row align="center" gap="sm" className="text-sm text-muted-foreground">
+          <Image
+            src={lookupImageUrl}
+            alt="Product from UPC lookup"
+            width={64}
+            height={64}
+            displayWidth={64}
+            className="rounded border object-contain"
+          />
+          <span>Image will be imported on save</span>
+        </Row>
+      )}
+    </Stack>
+  );
+}
+
+function ProductCommerceFields<TFieldValues extends ProductFormFieldValues>({
+  form,
+  paths,
+  compact,
+  hidePrice,
+  nameValue,
+  upcValue,
+  fdcValue,
+  onUsdaSelect,
+  lookupImageUrl,
+  isLookingUp,
+  onUpcLookup,
+}: ProductFormSectionProps<TFieldValues> & {
+  hidePrice: boolean;
+  nameValue: string;
+  upcValue: string | null;
+  fdcValue: number | null;
+  onUsdaSelect: (food: FoodSummaryWithLinkedProducts) => void;
+  lookupImageUrl: string | null;
+  isLookingUp: boolean;
+  onUpcLookup: () => void;
+}) {
+  return (
+    <>
+      <FormSection title="Quantity & price" compact={compact}>
+        <SideBySideFields>
+          <NullableNumericField
+            form={form}
+            step="1"
+            name={paths.expectedQuantity}
+            label={
+              hidePrice
+                ? compact
+                  ? "Expected Qty"
+                  : "Expected Quantity (1 for unique items)"
+                : "Expected Quantity (1 for unique items)"
+            }
+            placeholder={
+              hidePrice
+                ? compact
+                  ? "Unlimited"
+                  : "Leave empty for unlimited"
+                : "Leave empty for unlimited"
+            }
+          />
+          <NullableNumericField
+            form={form}
+            step={hidePrice ? "1" : "0.01"}
+            name={hidePrice ? paths.fdcId : paths.price}
+            label={
+              hidePrice
+                ? compact
+                  ? "FDC ID"
+                  : "USDA FDC ID (Optional)"
+                : "Price Override per Item"
+            }
+            placeholder={
+              hidePrice
+                ? compact
+                  ? "FDC id"
+                  : "set via USDA search above"
+                : "Leave empty to derive from expenses"
+            }
+            {...(!hidePrice && { prefix: "$" })}
+          />
+        </SideBySideFields>
+      </FormSection>
+
+      <FormSection title="Identifiers" compact={compact}>
+        <SideBySideFields>
+          <UnifiedTextField
+            form={form}
+            name={paths.isbn}
+            label="ISBN (Optional)"
+            placeholder="ISBN-10 or ISBN-13"
+            nullable={true}
+          />
+          <ProductUpcField
+            form={form}
+            paths={paths}
+            upcValue={upcValue}
+            lookupImageUrl={lookupImageUrl}
+            isLookingUp={isLookingUp}
+            onLookup={onUpcLookup}
+          />
+        </SideBySideFields>
+      </FormSection>
+
+      <FormSection title="USDA & nutrition" compact={compact}>
+        {!compact && (
+          <UsdaFoodSearchField
+            initialQuery={nameValue}
+            onSelect={onUsdaSelect}
+          />
+        )}
+        {!hidePrice && (
+          <NullableNumericField
+            form={form}
+            step="1"
+            name={paths.fdcId}
+            label="USDA FDC ID (Optional)"
+            placeholder="set via USDA search above"
+          />
+        )}
+        {/* An explicit FDC id takes precedence over UPC auto-resolution, so
+            surface which product-to-food link is active. */}
+        {(upcValue || fdcValue) && (
+          <Description size="xs">
+            USDA link: {fdcValue ? "via FDC id (explicit)" : "via UPC (auto)"}
+          </Description>
+        )}
+      </FormSection>
+
+      <FormSection title="Ingredient" compact={compact}>
+        <ComboboxFieldWithSearch
+          form={form}
+          name={paths.ingredient}
+          label="Linked ingredient"
+          searchType="ingredient"
+        />
+      </FormSection>
+    </>
+  );
+}
+
+function ProductMediaFields<TFieldValues extends ProductFormFieldValues>({
+  imageHandlers,
+  existingImages,
+  existingDocuments,
+  documentFolder,
+  pendingImages,
+  identityForm,
+  compact,
+}: Pick<
+  ProductFormFieldsProps<TFieldValues>,
+  | "imageHandlers"
+  | "existingImages"
+  | "existingDocuments"
+  | "documentFolder"
+  | "compact"
+> & {
+  pendingImages: PendingImage[];
+  identityForm: Parameters<typeof IdentifyProductButton>[0]["form"];
+}) {
+  return (
+    <Stack gap="sm">
+      <PendingImageUpload
+        entityType="PRODUCT"
+        onImagesChange={imageHandlers.handlePendingImagesChange}
+        existingImages={existingImages}
+        onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
+        onExistingImagesReorder={imageHandlers.handleExistingImagesReorder}
+      />
+      {pendingImages.length > 0 && (
+        <IdentifyProductButton
+          form={identityForm}
+          pendingImages={pendingImages}
+        />
+      )}
+      {!compact && (
+        <PendingDocumentUpload
+          entityType="PRODUCT"
+          folder={documentFolder}
+          onDocumentsChange={imageHandlers.handlePendingDocumentsChange}
+          existingDocuments={existingDocuments}
+          onExistingDocumentsRemove={imageHandlers.handleRemovedDocumentsChange}
+        />
+      )}
+    </Stack>
+  );
+}
+
+function ProductUnitMappings<TFieldValues extends ProductFormFieldValues>({
+  form,
+  paths,
+}: Pick<ProductFormSectionProps<TFieldValues>, "form" | "paths">) {
+  return (
+    <ArrayFieldManager<UnitMappingInput, TFieldValues>
+      form={form}
+      name={paths.unitMappings}
+      title="Unit conversions"
+      addButtonText="Add conversion"
+      emptyValue={{
+        a: { value: 1, unit: "" },
+        b: { value: 1, unit: "" },
+        source: null,
+      }}
+    >
+      {(_, index) => {
+        const mappingPaths = paths.unitMapping(index);
+        return (
+          <UnitMappingPairField
+            form={form}
+            valueAPath={mappingPaths.valueA}
+            unitAPath={mappingPaths.unitA}
+            valueBPath={mappingPaths.valueB}
+            unitBPath={mappingPaths.unitB}
+            sourcePath={mappingPaths.source}
+            showSource
+          />
+        );
+      }}
+    </ArrayFieldManager>
+  );
+}
+
+function ProductExternalIds<TFieldValues extends ProductFormFieldValues>({
+  form,
+  paths,
+}: Pick<ProductFormSectionProps<TFieldValues>, "form" | "paths">) {
+  if (!paths.externalIds || !paths.externalId) return null;
+  return (
+    <ArrayFieldManager<ExternalIdInput, TFieldValues>
+      form={form}
+      name={paths.externalIds}
+      title="External IDs"
+      addButtonText="Add External ID"
+      emptyValue={{
+        source: "",
+        kind: "legacy_unspecified",
+        externalId: "",
+        url: undefined,
+      }}
+    >
+      {(_, index) => {
+        const externalIdPaths = paths.externalId?.(index);
+        if (!externalIdPaths) return null;
+        return (
+          <>
+            <div className="min-w-[8rem] flex-1">
+              <SelectField
+                form={form}
+                name={externalIdPaths.kind}
+                label="Kind"
+                options={externalIdKind.options.map((kind) => ({
+                  value: kind,
+                  label: kind.replaceAll("_", " "),
+                }))}
+              />
+            </div>
+            <div className="min-w-[8rem] flex-1">
+              <UnifiedTextField
+                form={form}
+                name={externalIdPaths.source}
+                label="Source"
+                placeholder="e.g. amazon, mcmaster"
+              />
+            </div>
+            <div className="min-w-[8rem] flex-1">
+              <UnifiedTextField
+                form={form}
+                name={externalIdPaths.externalId}
+                label="Identifier"
+                placeholder="e.g. B08N5WRWNW"
+              />
+            </div>
+            <div className="min-w-[10rem] flex-1">
+              <UnifiedTextField
+                form={form}
+                name={externalIdPaths.url}
+                label="URL"
+                placeholder="https://..."
+                nullable={true}
+              />
+            </div>
+          </>
+        );
+      }}
+    </ArrayFieldManager>
+  );
+}
+
 /**
  * Standalone product form fields component.
  * Renders all product-related fields (name, model, notes, manufacturer, category,
@@ -318,346 +746,51 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
     }
   };
 
-  const upcBlock = (
-    <Stack gap="sm">
-      <Row align="end" gap="sm">
-        <div className="flex-1">
-          <UnifiedTextField
-            form={form}
-            name={paths.upc}
-            label="UPC (Optional)"
-            placeholder="12-digit UPC code"
-            nullable={true}
-          />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleUpcLookup}
-          disabled={isLookingUp || !upcValue}
-        >
-          {isLookingUp ? <Spinner /> : <Search className="size-4" />}
-          <span className="ml-1">Lookup</span>
-        </Button>
-      </Row>
-      {lookupImageUrl && (
-        <Row align="center" gap="sm" className="text-sm text-muted-foreground">
-          <Image
-            src={lookupImageUrl}
-            alt="Product from UPC lookup"
-            width={64}
-            height={64}
-            displayWidth={64}
-            className="rounded border object-contain"
-          />
-          <span>Image will be imported on save</span>
-        </Row>
-      )}
-    </Stack>
-  );
-
   const content = (
     <>
-      <FormSection title="Product details" compact={compact} plate>
-        {!hideNameField && (
-          <SideBySideFields>
-            <UnifiedTextField
-              form={form}
-              name={paths.model}
-              label="Model Number"
-              placeholder="Enter model number"
-              nullable={true}
-            />
-            <UnifiedTextField
-              form={form}
-              name={paths.name}
-              label="Product Name"
-              placeholder="Enter product name"
-              nullable={false}
-            />
-          </SideBySideFields>
-        )}
+      <ProductDetailsFields
+        form={form}
+        paths={paths}
+        compact={compact}
+        hideNameField={hideNameField}
+        nameValue={nameValue}
+        manufacturerValue={manufacturerValue}
+        isMisc={isMisc}
+        isFoodForced={isFoodForced}
+        isBookForced={isBookForced}
+      />
 
-        <NullableTextareaField
-          form={form}
-          name={paths.notes}
-          label="Notes"
-          placeholder="Notes, URLs, etc. — Markdown supported"
-        />
-
-        {!isMisc && (
-          <SideBySideFields>
-            <UnifiedTextField
-              form={form}
-              name={paths.manufacturer}
-              label="Manufacturer"
-              placeholder="Enter manufacturer"
-              nullable={false}
-            />
-            <CategoryFieldWithAI
-              form={form}
-              name={paths.category}
-              productName={nameValue}
-              manufacturer={manufacturerValue}
-              disabled={isFoodForced || isBookForced}
-              description={
-                isFoodForced
-                  ? "Forced to 'food' (has USDA link or ingredient)"
-                  : isBookForced
-                    ? "Forced to 'books' (has a valid ISBN)"
-                    : undefined
-              }
-            />
-          </SideBySideFields>
-        )}
-      </FormSection>
-
-      {/* Alternate names — searched (product.search) and embedded alongside the
-          product name. Full form only; the compact quick-add stays minimal. */}
-      {!compact && <AliasesField<TFieldValues> form={form} />}
-
-      {/* Compatibility/grouping tags. The same tag goes on the tool AND on the
-          consumables that fit it ("grinder-4.5in"); `category` says which side
-          each product is, so the tag carries no direction of its own. */}
-      {!compact && (
-        <>
-          <AliasesField<TFieldValues>
-            form={form}
-            name="collections"
-            title="Collections"
-            addButtonText="Add Collection"
-            placeholder="e.g. painting"
-          />
-          <AliasesField<TFieldValues>
-            form={form}
-            name="tags"
-            title="Compatibility tags"
-            addButtonText="Add Tag"
-            placeholder="e.g. grinder-4.5in, M18"
-          />
-        </>
-      )}
+      <ProductTagFields form={form} compact={compact} />
 
       {!isMisc && (
-        <>
-          <FormSection title="Quantity & price" compact={compact}>
-            {hidePrice ? (
-              <SideBySideFields>
-                <NullableNumericField
-                  form={form}
-                  step="1"
-                  name={paths.expectedQuantity}
-                  label={
-                    compact
-                      ? "Expected Qty"
-                      : "Expected Quantity (1 for unique items)"
-                  }
-                  placeholder={
-                    compact ? "Unlimited" : "Leave empty for unlimited"
-                  }
-                />
-                <NullableNumericField
-                  form={form}
-                  step="1"
-                  name={paths.fdcId}
-                  label={compact ? "FDC ID" : "USDA FDC ID (Optional)"}
-                  placeholder={compact ? "FDC id" : "set via USDA search above"}
-                />
-              </SideBySideFields>
-            ) : (
-              <SideBySideFields>
-                <NullableNumericField
-                  form={form}
-                  step="1"
-                  name={paths.expectedQuantity}
-                  label="Expected Quantity (1 for unique items)"
-                  placeholder="Leave empty for unlimited"
-                />
-                <NullableNumericField
-                  form={form}
-                  step="0.01"
-                  name={paths.price}
-                  label="Price Override per Item"
-                  placeholder="Leave empty to derive from expenses"
-                  prefix="$"
-                />
-              </SideBySideFields>
-            )}
-          </FormSection>
-
-          <FormSection title="Identifiers" compact={compact}>
-            <SideBySideFields>
-              <UnifiedTextField
-                form={form}
-                name={paths.isbn}
-                label="ISBN (Optional)"
-                placeholder="ISBN-10 or ISBN-13"
-                nullable={true}
-              />
-              {upcBlock}
-            </SideBySideFields>
-          </FormSection>
-
-          <FormSection title="USDA & nutrition" compact={compact}>
-            {!compact && (
-              <UsdaFoodSearchField
-                initialQuery={nameValue}
-                onSelect={handleUsdaSelect}
-              />
-            )}
-
-            {!hidePrice && (
-              <NullableNumericField
-                form={form}
-                step="1"
-                name={paths.fdcId}
-                label="USDA FDC ID (Optional)"
-                placeholder="set via USDA search above"
-              />
-            )}
-
-            {/* Which control is the active USDA link. An explicit FDC id wins
-                over UPC auto-resolution (foodLookupParamFromProduct), so surface
-                that precedence instead of leaving it implicit. */}
-            {(upcValue || fdcValue) && (
-              <Description size="xs">
-                USDA link:{" "}
-                {fdcValue ? "via FDC id (explicit)" : "via UPC (auto)"}
-              </Description>
-            )}
-          </FormSection>
-
-          <FormSection title="Ingredient" compact={compact}>
-            <ComboboxFieldWithSearch
-              form={form}
-              name={paths.ingredient}
-              label="Linked ingredient"
-              searchType="ingredient"
-            />
-          </FormSection>
-        </>
-      )}
-
-      {/* PendingImageUpload carries its own "Upload images" label, so no
-          FormSection header — avoids an IMAGES/UPLOAD IMAGES double. */}
-      <Stack gap="sm">
-        <PendingImageUpload
-          entityType="PRODUCT"
-          onImagesChange={imageHandlers.handlePendingImagesChange}
-          existingImages={existingImages}
-          onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
-          onExistingImagesReorder={imageHandlers.handleExistingImagesReorder}
+        <ProductCommerceFields
+          form={form}
+          paths={paths}
+          compact={compact}
+          hidePrice={hidePrice}
+          nameValue={nameValue}
+          upcValue={upcValue}
+          fdcValue={fdcValue}
+          onUsdaSelect={handleUsdaSelect}
+          lookupImageUrl={lookupImageUrl}
+          isLookingUp={isLookingUp}
+          onUpcLookup={handleUpcLookup}
         />
-
-        {pendingImages.length > 0 && (
-          <IdentifyProductButton
-            form={identityForm}
-            pendingImages={pendingImages}
-          />
-        )}
-
-        {/* PDF manuals — hidden in compact mode (QuickInventoryAdd). */}
-        {!compact && (
-          <PendingDocumentUpload
-            entityType="PRODUCT"
-            folder={documentFolder}
-            onDocumentsChange={imageHandlers.handlePendingDocumentsChange}
-            existingDocuments={existingDocuments}
-            onExistingDocumentsRemove={
-              imageHandlers.handleRemovedDocumentsChange
-            }
-          />
-        )}
-      </Stack>
-
-      {!isMisc && (
-        <ArrayFieldManager<UnitMappingInput, TFieldValues>
-          form={form}
-          name={paths.unitMappings}
-          title="Unit conversions"
-          addButtonText="Add conversion"
-          emptyValue={{
-            a: { value: 1, unit: "" },
-            b: { value: 1, unit: "" },
-            source: null,
-          }}
-        >
-          {(_, index) => {
-            const mappingPaths = paths.unitMapping(index);
-            return (
-              <UnitMappingPairField
-                form={form}
-                valueAPath={mappingPaths.valueA}
-                unitAPath={mappingPaths.unitA}
-                valueBPath={mappingPaths.valueB}
-                unitBPath={mappingPaths.unitB}
-                sourcePath={mappingPaths.source}
-                showSource
-              />
-            );
-          }}
-        </ArrayFieldManager>
       )}
 
-      {paths.externalIds && paths.externalId && (
-        <ArrayFieldManager<ExternalIdInput, TFieldValues>
-          form={form}
-          name={paths.externalIds}
-          title="External IDs"
-          addButtonText="Add External ID"
-          emptyValue={{
-            source: "",
-            kind: "legacy_unspecified",
-            externalId: "",
-            url: undefined,
-          }}
-        >
-          {(_, index) => {
-            const externalIdPaths = paths.externalId?.(index);
-            if (!externalIdPaths) return null;
-            return (
-              <>
-                <div className="min-w-[8rem] flex-1">
-                  <SelectField
-                    form={form}
-                    name={externalIdPaths.kind}
-                    label="Kind"
-                    options={externalIdKind.options.map((kind) => ({
-                      value: kind,
-                      label: kind.replaceAll("_", " "),
-                    }))}
-                  />
-                </div>
-                <div className="min-w-[8rem] flex-1">
-                  <UnifiedTextField
-                    form={form}
-                    name={externalIdPaths.source}
-                    label="Source"
-                    placeholder="e.g. amazon, mcmaster"
-                  />
-                </div>
-                <div className="min-w-[8rem] flex-1">
-                  <UnifiedTextField
-                    form={form}
-                    name={externalIdPaths.externalId}
-                    label="Identifier"
-                    placeholder="e.g. B08N5WRWNW"
-                  />
-                </div>
-                <div className="min-w-[10rem] flex-1">
-                  <UnifiedTextField
-                    form={form}
-                    name={externalIdPaths.url}
-                    label="URL"
-                    placeholder="https://..."
-                    nullable={true}
-                  />
-                </div>
-              </>
-            );
-          }}
-        </ArrayFieldManager>
-      )}
+      <ProductMediaFields
+        imageHandlers={imageHandlers}
+        existingImages={existingImages}
+        existingDocuments={existingDocuments}
+        documentFolder={documentFolder}
+        pendingImages={pendingImages}
+        identityForm={identityForm}
+        compact={compact}
+      />
+
+      {!isMisc && <ProductUnitMappings form={form} paths={paths} />}
+
+      <ProductExternalIds form={form} paths={paths} />
     </>
   );
 

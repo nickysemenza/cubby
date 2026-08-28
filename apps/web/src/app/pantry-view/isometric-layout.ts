@@ -278,96 +278,112 @@ function calculateZoneWidth(pieces: FurniturePiece[]): number {
   return Math.max(4, Math.ceil(backWallWidth) + 1, floorCols * 3 + 2);
 }
 
+type ColorResolver = (color: string) => string;
+
+function inventoryByLocation(
+  inventory: InventoryData[],
+  resolveColor: ColorResolver,
+) {
+  const result = new Map<string, FurnitureItem[]>();
+  for (const item of inventory) {
+    const locationItems = result.get(item.location.id) ?? [];
+    locationItems.push({
+      productName: item.product.name,
+      category: item.product.category,
+      amount: `${item.amount.value} ${item.amount.unit}`,
+      color: resolveColor(getCategoryColor(item.product.category)),
+      inventoryId: item.id,
+      valuation: item.valuation,
+    });
+    result.set(item.location.id, locationItems);
+  }
+  return result;
+}
+
+function partitionRoomChildren(root: InfLocation) {
+  const zoneContainers: InfLocation[] = [];
+  const directFurniture: InfLocation[] = [];
+  for (const child of root.children ?? []) {
+    (isContainerType(child.type) ? zoneContainers : directFurniture).push(
+      child,
+    );
+  }
+  return { zoneContainers, directFurniture };
+}
+
+function containerZone(
+  container: InfLocation,
+  index: number,
+  rootName: string,
+  itemsByLocation: Map<string, FurnitureItem[]>,
+  resolveColor: ColorResolver,
+): ZoneData[] {
+  const zonePath = [rootName, container.name];
+  const pieces = collectPiecesFromSubtree(
+    container,
+    itemsByLocation,
+    zonePath,
+    resolveColor,
+  );
+  const containerItems = itemsByLocation.get(container.id) ?? [];
+  if (containerItems.length > 0) {
+    const spec = getFurnitureSpec("table");
+    pieces.push({
+      gx: 0,
+      gy: 0,
+      gz: 0,
+      w: spec.w,
+      d: spec.d,
+      h: spec.h,
+      color: resolveColor(getLocationTypeColor(container.type)),
+      name: `${container.name} (items)`,
+      locationType: "table",
+      locationId: container.id,
+      locationShortcode: container.id,
+      items: containerItems,
+      shelfLevels: spec.shelfLevels,
+      path: zonePath,
+      parentGroupId: container.id,
+      parentGroupName: container.name,
+      isEmpty: false,
+      totalValuation: sumBy(containerItems, (item) => item.valuation ?? 0),
+    });
+  }
+  if (pieces.every((piece) => piece.isEmpty)) return [];
+  return [
+    {
+      name: container.name,
+      locationId: container.id,
+      color: ZONE_OVERLAY_COLORS[index % ZONE_OVERLAY_COLORS.length]!,
+      labelColor: ZONE_LABEL_COLORS[index % ZONE_LABEL_COLORS.length]!,
+      startGx: 0,
+      endGx: 0,
+      pieces,
+      totalItemCount: sumBy(pieces, (piece) => piece.items.length),
+    },
+  ];
+}
+
 export function buildRooms(
   tree: InfLocation[],
   inventory: InventoryData[],
   resolveColor: (color: string) => string = (color) => color,
 ): RoomData[] {
-  const itemsByLocation = new Map<string, FurnitureItem[]>();
-  for (const inv of inventory) {
-    const locId = inv.location.id;
-    if (!itemsByLocation.has(locId)) itemsByLocation.set(locId, []);
-    itemsByLocation.get(locId)!.push({
-      productName: inv.product.name,
-      category: inv.product.category,
-      amount: `${inv.amount.value} ${inv.amount.unit}`,
-      color: resolveColor(getCategoryColor(inv.product.category)),
-      inventoryId: inv.id,
-      valuation: inv.valuation,
-    });
-  }
+  const itemsByLocation = inventoryByLocation(inventory, resolveColor);
 
   const rooms: RoomData[] = [];
 
   for (const rootNode of tree) {
-    const zones: ZoneData[] = [];
-
-    // Separate immediate children into container types (zones) vs furniture
-    const zoneContainers: InfLocation[] = [];
-    const directFurniture: InfLocation[] = [];
-    for (const child of rootNode.children ?? []) {
-      if (isContainerType(child.type)) {
-        zoneContainers.push(child);
-      } else {
-        directFurniture.push(child);
-      }
-    }
-
-    // Create a zone for each container child (area/room)
-    for (const [zi, container] of zoneContainers.entries()) {
-      const zonePath = [rootNode.name, container.name];
-      const pieces = collectPiecesFromSubtree(
+    const { zoneContainers, directFurniture } = partitionRoomChildren(rootNode);
+    const zones = zoneContainers.flatMap((container, index) =>
+      containerZone(
         container,
+        index,
+        rootNode.name,
         itemsByLocation,
-        zonePath,
         resolveColor,
-      );
-
-      // Items directly at the container level
-      const containerItems = itemsByLocation.get(container.id) ?? [];
-      if (containerItems.length > 0) {
-        const spec = getFurnitureSpec("table");
-        const totalValuation = sumBy(containerItems, (it) => it.valuation ?? 0);
-        pieces.push({
-          gx: 0,
-          gy: 0,
-          gz: 0,
-          w: spec.w,
-          d: spec.d,
-          h: spec.h,
-          color: resolveColor(getLocationTypeColor(container.type)),
-          name: `${container.name} (items)`,
-          locationType: "table",
-          locationId: container.id,
-          locationShortcode: container.id,
-          items: containerItems,
-          shelfLevels: spec.shelfLevels,
-          path: zonePath,
-          parentGroupId: container.id,
-          parentGroupName: container.name,
-          isEmpty: false,
-          totalValuation,
-        });
-      }
-
-      // Skip zones with no pieces, or zones where ALL pieces are empty ghosts
-      if (pieces.every((p) => p.isEmpty)) continue;
-
-      let totalItems = 0;
-      for (const p of pieces) totalItems += p.items.length;
-
-      zones.push({
-        name: container.name,
-        locationId: container.id,
-        // modulo into a non-empty const array is always in-bounds
-        color: ZONE_OVERLAY_COLORS[zi % ZONE_OVERLAY_COLORS.length]!,
-        labelColor: ZONE_LABEL_COLORS[zi % ZONE_LABEL_COLORS.length]!,
-        startGx: 0,
-        endGx: 0,
-        pieces,
-        totalItemCount: totalItems,
-      });
-    }
+      ),
+    );
 
     // Default zone: direct furniture children + room-level items
     const defaultPieces: FurniturePiece[] = [];

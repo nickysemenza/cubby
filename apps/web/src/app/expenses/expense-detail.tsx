@@ -1,4 +1,4 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import type { ExpenseOut, ExpenseUpdateInput } from "@cubby/schemas/project";
 import { Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
 
@@ -53,6 +53,194 @@ import { SplitExpenseDialog } from "./split-expense-dialog";
 
 interface ExpenseDetailProps {
   expense: ExpenseOut;
+}
+
+const expenseHeroStats = (expense: ExpenseOut): DetailHeroStat[] => [
+  {
+    label: "Cost",
+    value: expense.cost != null ? formatCurrency(expense.cost, 0) : "—",
+  },
+  { label: "Date", value: expense.date ?? "—" },
+  {
+    label: "Line kind",
+    value: (
+      <Badge variant={expenseLineKindBadgeVariant[expense.lineKind]}>
+        {expenseLineKindLabels[expense.lineKind]}
+      </Badge>
+    ),
+  },
+];
+
+function ExpenseHeroActions({
+  purchaseId,
+  onSplit,
+}: {
+  purchaseId: ExpenseOut["purchaseId"];
+  onSplit: () => void;
+}) {
+  return (
+    <span
+      title={
+        purchaseId
+          ? undefined
+          : "Record this expense's vendor first — a split files its parts under the same purchase."
+      }
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!purchaseId}
+        onClick={onSplit}
+      >
+        <Split />
+        Split
+      </Button>
+    </span>
+  );
+}
+
+function ExpenseDetailDialogs({
+  expense,
+  splitOpen,
+  receiveOpen,
+  onSplitOpenChange,
+  onReceiveOpenChange,
+}: {
+  expense: ExpenseOut;
+  splitOpen: boolean;
+  receiveOpen: boolean;
+  onSplitOpenChange: (open: boolean) => void;
+  onReceiveOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <>
+      {expense.purchaseId && (
+        <SplitExpenseDialog
+          open={splitOpen}
+          onOpenChange={onSplitOpenChange}
+          expense={expense}
+          purchaseShortcode={expense.purchaseId}
+        />
+      )}
+      {expense.productId && (
+        <ReceiveExpenseDialog
+          open={receiveOpen}
+          onOpenChange={onReceiveOpenChange}
+          productId={expense.productId}
+          expenseName={expense.name}
+        />
+      )}
+    </>
+  );
+}
+
+function expenseProductFields(
+  expense: ExpenseOut,
+  updateExpense: (input: ExpenseUpdateInput) => Promise<void>,
+): BasicInfoField[] {
+  if (expense.lineKind !== "principal") return [];
+  const linkedProduct =
+    expense.productId && expense.productName
+      ? { id: expense.productId, name: expense.productName }
+      : null;
+  const fields: BasicInfoField[] = [
+    {
+      label: "Product",
+      value: (
+        <EditableEntityCell
+          value={linkedProduct}
+          label="product"
+          clearable
+          trigger="pencil"
+          onSave={async (productId) => {
+            await updateExpense({
+              id: expense.id,
+              data: { productId },
+            });
+          }}
+          clipboard={entityCellClipboard(
+            "product",
+            linkedProduct,
+            async (productId) => {
+              await updateExpense({
+                id: expense.id,
+                data: { productId },
+              });
+            },
+          )}
+          SearchProvider={WithProductSearch}
+          renderValue={(value) =>
+            value && expense.productId && value.id === expense.productId ? (
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="product"
+                data={{ id: expense.productId, name: value.name }}
+              />
+            ) : value ? (
+              <span>{value.name}</span>
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+      filterAction: expense.productId ? (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ productId: expense.productId }}
+          label={`Show all expenses for ${expense.productName ?? "this product"}`}
+        />
+      ) : undefined,
+    },
+    {
+      label: "Itemization",
+      value: (
+        <EditableCell
+          value={expense.lineBasis}
+          config={{ type: "select", options: expenseLineBasisOptions }}
+          onSave={async (lineBasis) => {
+            if (!lineBasis) return;
+            await updateExpense({ id: expense.id, data: { lineBasis } });
+          }}
+          renderValue={(lineBasis) =>
+            lineBasis ? (
+              <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
+                {expenseLineBasisLabels[lineBasis]}
+              </Badge>
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+      filterAction: (
+        <EntityFilterLink
+          to="/expenses"
+          search={{ lineBasis: expense.lineBasis }}
+          label={`Show all ${expenseLineBasisLabels[expense.lineBasis].toLowerCase()} expenses`}
+        />
+      ),
+    },
+  ];
+  if (expense.productId) {
+    fields.push({
+      label: "Product quantity",
+      value: (
+        <EditableCell
+          value={expense.productQuantity}
+          config={{ type: "number", step: "any", placeholder: "Unknown" }}
+          onSave={async (productQuantity) => {
+            await updateExpense({
+              id: expense.id,
+              data: { productQuantity },
+            });
+          }}
+          renderValue={(value) => value ?? <NoneValue />}
+        />
+      ),
+    });
+  }
+  return fields;
 }
 
 export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
@@ -416,126 +604,9 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
         />
       ) : undefined,
     },
-    ...(expense.lineKind === "principal"
-      ? [
-          {
-            label: "Product",
-            value: (
-              <EditableEntityCell
-                value={
-                  expense.productId && expense.productName
-                    ? { id: expense.productId, name: expense.productName }
-                    : null
-                }
-                label="product"
-                clearable
-                trigger="pencil"
-                onSave={async (newProductId) => {
-                  await updateMutation.mutateAsync({
-                    id: expense.id,
-                    data: { productId: newProductId },
-                  });
-                }}
-                clipboard={entityCellClipboard(
-                  "product",
-                  expense.productId && expense.productName
-                    ? { id: expense.productId, name: expense.productName }
-                    : null,
-                  async (newProductId) => {
-                    await updateMutation.mutateAsync({
-                      id: expense.id,
-                      data: { productId: newProductId },
-                    });
-                  },
-                )}
-                SearchProvider={WithProductSearch}
-                renderValue={(v) =>
-                  v && expense.productId && v.id === expense.productId ? (
-                    <EntityInlineLink
-                      displayImage={undefined}
-                      entity="product"
-                      data={{
-                        id: expense.productId,
-                        name: v.name,
-                      }}
-                    />
-                  ) : v ? (
-                    <span>{v.name}</span>
-                  ) : (
-                    <NoneValue />
-                  )
-                }
-              />
-            ),
-            filterAction: expense.productId ? (
-              <EntityFilterLink
-                to="/expenses"
-                search={{ productId: expense.productId }}
-                label={`Show all expenses for ${expense.productName ?? "this product"}`}
-              />
-            ) : undefined,
-          },
-          {
-            // Sits beside Product, deliberately not beside Line kind: its whole
-            // job is answering "why is there no product here?", and next to an
-            // empty Product field "Share of a lump sum" reads as the answer.
-            label: "Itemization",
-            value: (
-              <EditableCell
-                value={expense.lineBasis}
-                config={{ type: "select", options: expenseLineBasisOptions }}
-                onSave={async (lineBasis) => {
-                  if (!lineBasis) return;
-                  await updateMutation.mutateAsync({
-                    id: expense.id,
-                    data: { lineBasis },
-                  });
-                }}
-                renderValue={(lineBasis) =>
-                  lineBasis ? (
-                    <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
-                      {expenseLineBasisLabels[lineBasis]}
-                    </Badge>
-                  ) : (
-                    <NoneValue />
-                  )
-                }
-              />
-            ),
-            filterAction: (
-              <EntityFilterLink
-                to="/expenses"
-                search={{ lineBasis: expense.lineBasis }}
-                label={`Show all ${expenseLineBasisLabels[expense.lineBasis].toLowerCase()} expenses`}
-              />
-            ),
-          },
-          ...(expense.productId
-            ? [
-                {
-                  label: "Product quantity",
-                  value: (
-                    <EditableCell
-                      value={expense.productQuantity}
-                      config={{
-                        type: "number",
-                        step: "any",
-                        placeholder: "Unknown",
-                      }}
-                      onSave={async (productQuantity) => {
-                        await updateMutation.mutateAsync({
-                          id: expense.id,
-                          data: { productQuantity },
-                        });
-                      }}
-                      renderValue={(value) => value ?? <NoneValue />}
-                    />
-                  ),
-                },
-              ]
-            : []),
-        ]
-      : []),
+    ...expenseProductFields(expense, async (input) => {
+      await updateMutation.mutateAsync(input);
+    }),
   ];
 
   const sections: DetailSection[] = [
@@ -594,23 +665,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     ...commonSections,
   ];
 
-  const heroStats: DetailHeroStat[] = [
-    {
-      label: "Cost",
-      value: expense.cost != null ? formatCurrency(expense.cost, 0) : "—",
-    },
-    { label: "Date", value: expense.date ?? "—" },
-    {
-      label: "Line kind",
-      value: expense.lineKind ? (
-        <Badge variant={expenseLineKindBadgeVariant[expense.lineKind]}>
-          {expenseLineKindLabels[expense.lineKind]}
-        </Badge>
-      ) : (
-        "—"
-      ),
-    },
-  ];
+  const heroStats = expenseHeroStats(expense);
 
   return (
     <Page
@@ -625,49 +680,21 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       heroStats={heroStats}
       heroActions={{
         primary: (
-          <>
-            {/* A split files its parts under this line's PURCHASE, so a line with no
-              purchase has nothing to file them under — `splitExpense` refuses with
-              "record its vendor first". Disabled with that explanation rather
-              than surfaced as an error toast: the fix is a field on this page. */}
-            <span
-              title={
-                expense.purchaseId
-                  ? undefined
-                  : "Record this expense's vendor first — a split files its parts under the same purchase."
-              }
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!expense.purchaseId}
-                onClick={() => setSplitOpen(true)}
-              >
-                <Split />
-                Split
-              </Button>
-            </span>
-          </>
+          <ExpenseHeroActions
+            purchaseId={expense.purchaseId}
+            onSplit={() => setSplitOpen(true)}
+          />
         ),
       }}
     >
       <DetailSections sections={sections} rawData={expense} />
-      {expense.purchaseId ? (
-        <SplitExpenseDialog
-          open={splitOpen}
-          onOpenChange={setSplitOpen}
-          expense={expense}
-          purchaseShortcode={expense.purchaseId}
-        />
-      ) : null}
-      {expense.productId ? (
-        <ReceiveExpenseDialog
-          open={receiveOpen}
-          onOpenChange={setReceiveOpen}
-          productId={expense.productId}
-          expenseName={expense.name}
-        />
-      ) : null}
+      <ExpenseDetailDialogs
+        expense={expense}
+        splitOpen={splitOpen}
+        receiveOpen={receiveOpen}
+        onSplitOpenChange={setSplitOpen}
+        onReceiveOpenChange={setReceiveOpen}
+      />
     </Page>
   );
 };

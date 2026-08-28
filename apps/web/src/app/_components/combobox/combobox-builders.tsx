@@ -145,32 +145,51 @@ export const buildProductComboboxItem = (
   intent: ProductPickerIntent = "reference",
 ): ComboboxItem<ProductShortcode> => {
   const ledger = product.quantityLedger;
-  const inventoryUnits = new Set(
-    product.inventoryEntry?.map((entry) => entry.amount.unit) ?? [],
-  );
-  const derivedOnHand =
-    product.onHandUnits != null
-      ? ({ state: "counted", units: product.onHandUnits } as const)
-      : product.inventoryEntry == null || ledger == null
-        ? undefined
-        : inventoryUnits.size > 1
-          ? ({ state: "mixed" } as const)
-          : product.inventoryEntry.length === 0 && ledger.locationCount === 0
-            ? ({ state: "none" } as const)
-            : ({
-                state: "counted",
-                units:
-                  product.inventoryEntry.reduce(
-                    (sum, entry) => sum + entry.amount.value,
-                    0,
-                  ) + ledger.locationCount,
-              } as const);
-  const onHand = product.onHand ?? derivedOnHand;
+  const onHand = product.onHand ?? deriveProductOnHand(product, ledger);
   const coverImageUrl =
     product.coverImageUrl ??
     product.images?.find(isDisplayableImageFile)?.url ??
     null;
-  const base: ComboboxItem<ProductShortcode> = {
+  const base = productPickerBase(product, coverImageUrl);
+  return !ledger || !onHand
+    ? base
+    : withProductInventoryPresentation(base, ledger, onHand, intent);
+};
+
+type ProductPickerInput = Parameters<typeof buildProductComboboxItem>[0];
+type DerivedOnHand =
+  | { state: "none" }
+  | { state: "counted"; units: number }
+  | { state: "mixed" };
+
+function deriveProductOnHand(
+  product: ProductPickerInput,
+  ledger: NonNullable<ProductPickerInput["quantityLedger"]> | undefined,
+): DerivedOnHand | undefined {
+  const inventoryUnits = new Set(
+    product.inventoryEntry?.map((entry) => entry.amount.unit) ?? [],
+  );
+  if (product.onHandUnits != null)
+    return { state: "counted", units: product.onHandUnits };
+  if (product.inventoryEntry == null || ledger == null) return undefined;
+  if (inventoryUnits.size > 1) return { state: "mixed" };
+  if (product.inventoryEntry.length === 0 && ledger.locationCount === 0)
+    return { state: "none" };
+  return {
+    state: "counted",
+    units:
+      product.inventoryEntry.reduce(
+        (sum, entry) => sum + entry.amount.value,
+        0,
+      ) + ledger.locationCount,
+  };
+}
+
+function productPickerBase(
+  product: ProductPickerInput,
+  coverImageUrl: string | null,
+): ComboboxItem<ProductShortcode> {
+  return {
     id: product.id,
     shortcode: product.id,
     name: product.name,
@@ -185,8 +204,14 @@ export const buildProductComboboxItem = (
       />
     ),
   };
-  if (!ledger || !onHand) return base;
+}
 
+function withProductInventoryPresentation(
+  base: ComboboxItem<ProductShortcode>,
+  ledger: NonNullable<ProductPickerInput["quantityLedger"]>,
+  onHand: DerivedOnHand,
+  intent: ProductPickerIntent,
+): ComboboxItem<ProductShortcode> {
   const unknownLines = ledger.unknownAcquisitionLines + ledger.unknownExitLines;
   const expected = ledger.expectedQuantity;
   const knownOnHand =
@@ -206,36 +231,25 @@ export const buildProductComboboxItem = (
     );
   }
 
-  if (intent === "reference") {
-    return { ...base, presentation: { facts } };
-  }
+  if (intent === "reference") return { ...base, presentation: { facts } };
 
   const uncertain = unknownLines > 0 || knownOnHand === null || expected < 0;
-  if (uncertain) {
-    return {
-      ...base,
-      presentation: {
-        group: { id: "check", label: "Check quantity", order: 1 },
-        status: { label: "Check quantity", tone: "warning" },
-        facts,
-      },
-    };
-  }
+  if (uncertain)
+    return productPickerInventoryGroup(
+      base,
+      { id: "check", label: "Check quantity", order: 1 },
+      { label: "Check quantity", tone: "warning" },
+      facts,
+    );
 
   const need = expected - knownOnHand;
-  if (need > 0) {
-    return {
-      ...base,
-      presentation: {
-        group: { id: "needs-stock", label: "Needs stocking", order: 0 },
-        status: {
-          label: `Need ${formatPickerQuantity(need)}`,
-          tone: "positive",
-        },
-        facts,
-      },
-    };
-  }
+  if (need > 0)
+    return productPickerInventoryGroup(
+      base,
+      { id: "needs-stock", label: "Needs stocking", order: 0 },
+      { label: `Need ${formatPickerQuantity(need)}`, tone: "positive" },
+      facts,
+    );
 
   const returned =
     expected === 0 && knownOnHand === 0 && ledger.exitedUnits > 0;
@@ -253,7 +267,16 @@ export const buildProductComboboxItem = (
       facts,
     },
   };
-};
+}
+
+function productPickerInventoryGroup(
+  base: ComboboxItem<ProductShortcode>,
+  group: { id: string; label: string; order: number },
+  status: { label: string; tone: "warning" | "positive" },
+  facts: string[],
+): ComboboxItem<ProductShortcode> {
+  return { ...base, presentation: { group, status, facts } };
+}
 
 /**
  * `ancestors` and `coverImage` are optional because three shapes feed this

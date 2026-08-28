@@ -87,6 +87,56 @@ const mapPurchaseLinkAttachedAt = (
   return mapped;
 };
 
+const firstNumber = <Row, Key extends keyof Row>(
+  rows: Row[],
+  key: Key,
+): number => Number(rows[0]?.[key] ?? 0);
+
+type RelatedProjectRow = {
+  projectId: string | null;
+  projectName: string | null;
+  projectStatus: (typeof project.status.enumValues)[number] | null;
+};
+
+const relatedProject = (row: RelatedProjectRow) => {
+  if (!row.projectId || !row.projectName || !row.projectStatus) return null;
+  return {
+    id: parseShortcodeFor("project", row.projectId),
+    name: row.projectName,
+    status: row.projectStatus,
+  };
+};
+
+const projectPreview = (rows: ProjectPreviewRelationRow[]) =>
+  rows.map((row) => ({
+    id: parseShortcodeFor("project", row.id),
+    name: row.name,
+    status: row.status,
+  }));
+
+const purchasePreview = (rows: PurchaseRelationRow[]) =>
+  rows.map((row) => ({
+    id: parseShortcodeFor("purchase", row.purchaseCode),
+    displayLabel: row.displayLabel,
+    orderId: row.orderId,
+    date: row.date,
+    vendor:
+      row.vendorCode && row.vendorName
+        ? {
+            id: parseShortcodeFor("vendor", row.vendorCode),
+            name: row.vendorName,
+          }
+        : null,
+    source: row.source,
+    linkAttachedAt: mapPurchaseLinkAttachedAt(row.linkAttachedAt),
+  }));
+
+const vendorPreview = (rows: VendorRelationRow[]) =>
+  rows.map((row) => ({
+    id: parseShortcodeFor("vendor", row.id),
+    name: row.name,
+  }));
+
 export async function getProductRelationshipRoute(
   db: Database,
   productId: ProductId,
@@ -404,99 +454,60 @@ export async function getProductRelationshipRoute(
     name: row.name,
     cost: row.cost,
     date: row.date,
-    project:
-      row.projectId && row.projectName && row.projectStatus
-        ? {
-            id: parseShortcodeFor("project", row.projectId),
-            name: row.projectName,
-            status: row.projectStatus,
-          }
-        : null,
+    project: relatedProject(row),
   }));
   const tasks = taskRows.map((row) => ({
     id: parseShortcodeFor("task", row.id),
     name: row.name,
     status: row.status,
     dueDate: row.dueDate,
-    project:
-      row.projectId && row.projectName && row.projectStatus
-        ? {
-            id: parseShortcodeFor("project", row.projectId),
-            name: row.projectName,
-            status: row.projectStatus,
-          }
-        : null,
+    project: relatedProject(row),
   }));
 
   return {
     productId: parseShortcodeFor("product", productRow.shortcode),
     direct: {
       inventory: {
-        count: inventoryRows[0]?.totalCount ?? 0,
-        stockCount: inventoryRows[0]?.stockCount ?? 0,
-        installedCount: inventoryRows[0]?.installedCount ?? 0,
+        count: firstNumber(inventoryRows, "totalCount"),
+        stockCount: firstNumber(inventoryRows, "stockCount"),
+        installedCount: firstNumber(inventoryRows, "installedCount"),
         preview: inventory,
       },
       identityLocations: {
-        count: identityLocationRows[0]?.totalCount ?? 0,
+        count: firstNumber(identityLocationRows, "totalCount"),
         preview: identityLocationRows.map((row) => ({
           id: parseShortcodeFor("location", row.id),
           name: row.name,
         })),
       },
       expenses: {
-        count: expenseRows[0]?.totalCount ?? 0,
-        netCost: expenseRows[0]?.netCost ?? 0,
+        count: firstNumber(expenseRows, "totalCount"),
+        netCost: firstNumber(expenseRows, "netCost"),
         preview: expenses,
       },
       purchases: {
-        count: purchaseRows[0]?.totalCount ?? 0,
-        preview: purchaseRows.map((row) => ({
-          id: parseShortcodeFor("purchase", row.purchaseCode),
-          displayLabel: row.displayLabel,
-          orderId: row.orderId,
-          date: row.date,
-          vendor:
-            row.vendorCode && row.vendorName
-              ? {
-                  id: parseShortcodeFor("vendor", row.vendorCode),
-                  name: row.vendorName,
-                }
-              : null,
-          source: row.source,
-          linkAttachedAt: mapPurchaseLinkAttachedAt(row.linkAttachedAt),
-        })),
+        count: firstNumber(purchaseRows, "totalCount"),
+        preview: purchasePreview(purchaseRows),
       },
       usedOnProjects: {
-        count: usedProjectRows[0]?.totalCount ?? 0,
-        preview: usedProjectRows.map((row) => ({
-          id: parseShortcodeFor("project", row.id),
-          name: row.name,
-          status: row.status,
-        })),
+        count: firstNumber(usedProjectRows, "totalCount"),
+        preview: projectPreview(usedProjectRows),
       },
       tasks: {
-        count: taskRows[0]?.totalCount ?? 0,
-        openCount: taskRows[0]?.openCount ?? 0,
+        count: firstNumber(taskRows, "totalCount"),
+        openCount: firstNumber(taskRows, "openCount"),
         preview: tasks,
       },
     },
     derived: {
       purchasedForProjects: {
-        count: purchasedProjectRows[0]?.totalCount ?? 0,
+        count: firstNumber(purchasedProjectRows, "totalCount"),
         unassignedExpenseCount: projectMeta?.unassignedExpenseCount ?? 0,
-        preview: purchasedProjectRows.map((row) => ({
-          id: parseShortcodeFor("project", row.id),
-          name: row.name,
-          status: row.status,
-        })),
+        preview: projectPreview(purchasedProjectRows),
       },
       vendors: {
-        count: vendorRows[0]?.totalCount ?? 0,
-        preview: vendorRows.map((row) => ({
-          id: parseShortcodeFor("vendor", row.id),
-          name: row.name,
-        })),
+        count: firstNumber(vendorRows, "totalCount"),
+        preview: vendorPreview(vendorRows),
       },
     },
   };

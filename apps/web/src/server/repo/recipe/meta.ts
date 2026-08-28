@@ -1,6 +1,7 @@
 import type {
   RecipeMeta,
   RecipeStoredMeta,
+  RecipeTimes,
 } from "@cubby/schemas/recipe-shared";
 
 /**
@@ -29,6 +30,28 @@ export type RecipeMetaColumns = {
 const isBlank = (value: string | null | undefined): boolean =>
   value == null || value.trim() === "";
 
+const storedTimesFromMeta = (
+  times: RecipeTimes | null | undefined,
+): NonNullable<RecipeStoredMeta["times"]> => ({
+  active: times?.active ?? null,
+  total: times?.total ?? null,
+  prep: times?.prep ?? null,
+  cook: times?.cook ?? null,
+  prepMinutes: times?.prepMinutes ?? null,
+  cookMinutes: times?.cookMinutes ?? null,
+});
+
+const publicTimesFromColumns = (row: RecipeMetaColumns): RecipeTimes => ({
+  active: row.meta?.times?.active ?? null,
+  total: row.meta?.times?.total ?? null,
+  prep: row.meta?.times?.prep ?? null,
+  cook: row.meta?.times?.cook ?? null,
+  activeMinutes: row.activeMinutes,
+  totalMinutes: row.totalMinutes,
+  prepMinutes: row.meta?.times?.prepMinutes ?? null,
+  cookMinutes: row.meta?.times?.cookMinutes ?? null,
+});
+
 /**
  * API `meta` → the row columns. `undefined` in, all-null out, so a caller that
  * doesn't carry times clears nothing by accident — the caller decides whether to
@@ -40,14 +63,7 @@ export const recipeMetaToColumns = (
   const times = meta?.times;
   const equipment = meta?.equipment?.filter((line) => !isBlank(line)) ?? [];
   const stored: RecipeStoredMeta = {
-    times: {
-      active: times?.active ?? null,
-      total: times?.total ?? null,
-      prep: times?.prep ?? null,
-      cook: times?.cook ?? null,
-      prepMinutes: times?.prepMinutes ?? null,
-      cookMinutes: times?.cookMinutes ?? null,
-    },
+    times: storedTimesFromMeta(times),
     equipment: equipment.length > 0 ? equipment : null,
     page: isBlank(meta?.page) ? null : (meta?.page ?? null),
   };
@@ -74,16 +90,7 @@ export const recipeMetaFromColumns = (
   url: string | null,
 ): RecipeMeta => ({
   url,
-  times: {
-    active: row.meta?.times?.active ?? null,
-    total: row.meta?.times?.total ?? null,
-    prep: row.meta?.times?.prep ?? null,
-    cook: row.meta?.times?.cook ?? null,
-    activeMinutes: row.activeMinutes,
-    totalMinutes: row.totalMinutes,
-    prepMinutes: row.meta?.times?.prepMinutes ?? null,
-    cookMinutes: row.meta?.times?.cookMinutes ?? null,
-  },
+  times: publicTimesFromColumns(row),
   equipment: row.meta?.equipment ?? null,
   page: row.meta?.page ?? null,
 });

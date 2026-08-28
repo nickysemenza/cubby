@@ -348,61 +348,101 @@ export const updateLocation = async (
   options?: { resolvedParentId?: LocationId | null },
 ) => {
   let detachedImageKeys: string[] = [];
+  const resolveUpdatedParentId = async (tx: DrizzleTransaction) => {
+    if (data.parentId === undefined) return undefined;
+    const home = await getHomeLocation(tx);
+    if (id === home.id) {
+      throw createAppError("CONSTRAINT_VIOLATION", "Home cannot be reparented");
+    }
+    let parentId: LocationId | null;
+    if (options && "resolvedParentId" in options) {
+      parentId = options.resolvedParentId ?? home.id;
+    } else if (data.parentId === null) {
+      parentId = home.id;
+    } else {
+      const resolved = await resolveLiveShortcode(
+        tx,
+        data.parentId,
+        "location",
+      );
+      if (!resolved) {
+        throw createAppError(
+          "REFERENCED_RECORD_MISSING",
+          "Cannot set parent: the specified parent location does not exist",
+        );
+      }
+      parentId = parseEntityId("location", resolved);
+    }
+    if (parentId && (await wouldCreateParentCycle(tx, id, parentId))) {
+      throw createAppError(
+        "LOCATION_CYCLE_DETECTED",
+        "Cannot set parent: would create a circular reference",
+      );
+    }
+    return parentId;
+  };
+
+  const resolveUpdatedProductId = async (tx: DrizzleTransaction) => {
+    if (data.productId === undefined) return undefined;
+    if (data.productId === null) return null;
+    const resolved =
+      (await resolveLiveShortcode(tx, data.productId, "product")) ??
+      raiseMissingProduct();
+    return parseEntityId("product", resolved);
+  };
+
+  const syncLocationImages = async (
+    tx: DrizzleTransaction,
+    locationId: LocationId,
+  ) => {
+    if (data.imageOrder?.length) {
+      const orderedIds = await resolveAllPresent(tx, "image", data.imageOrder);
+      await applyImageOrder(
+        tx,
+        imageJoinBindings.location,
+        locationId,
+        orderedIds,
+      );
+    }
+    if (data.removeImageIds?.length) {
+      const idsToRemove = await resolveAllPresent(
+        tx,
+        "image",
+        data.removeImageIds,
+      );
+      ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+        tx,
+        { entity: "location", id: locationId },
+        idsToRemove,
+      ));
+    }
+    if (data.pendingImageIds?.length) {
+      const pendingIds = await resolveAllPresent(
+        tx,
+        "image",
+        data.pendingImageIds,
+      );
+      const startSortOrder = await nextImageSortOrder(
+        tx,
+        imageJoinBindings.location,
+        locationId,
+      );
+      await associatePendingImages(
+        tx,
+        imageJoinBindings.location,
+        locationId,
+        pendingIds,
+        startSortOrder,
+      );
+    }
+  };
+
   const runUpdate = async (tx: DrizzleTransaction) => {
     const before = await tx.query.location.findFirst({
       where: and(eq(location.id, id), notDeleted(location)),
     });
-    let parentId: LocationId | null | undefined;
-    if (data.parentId !== undefined) {
-      const home = await getHomeLocation(tx);
-      if (id === home.id) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Home cannot be reparented",
-        );
-      }
-      if (options && "resolvedParentId" in options) {
-        parentId = options.resolvedParentId ?? home.id;
-        if (parentId && (await wouldCreateParentCycle(tx, id, parentId))) {
-          throw createAppError(
-            "LOCATION_CYCLE_DETECTED",
-            "Cannot set parent: would create a circular reference",
-          );
-        }
-      } else if (data.parentId === null) {
-        parentId = home.id;
-      } else {
-        const resolved = await resolveLiveShortcode(
-          tx,
-          data.parentId,
-          "location",
-        );
-        if (!resolved) {
-          throw createAppError(
-            "REFERENCED_RECORD_MISSING",
-            "Cannot set parent: the specified parent location does not exist",
-          );
-        }
-        parentId = parseEntityId("location", resolved);
-        if (await wouldCreateParentCycle(tx, id, parentId)) {
-          throw createAppError(
-            "LOCATION_CYCLE_DETECTED",
-            "Cannot set parent: would create a circular reference",
-          );
-        }
-      }
-    }
-    let productId: ProductId | null | undefined;
-    if (data.productId !== undefined) {
-      productId =
-        data.productId === null
-          ? null
-          : parseEntityId(
-              "product",
-              (await resolveLiveShortcode(tx, data.productId, "product")) ??
-                raiseMissingProduct(),
-            );
-    }
+    const parentId = await resolveUpdatedParentId(tx);
+    const productId = await resolveUpdatedProductId(tx);
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,
@@ -424,48 +464,7 @@ export const updateLocation = async (
     // before the two helpers below that still take uuids. A code that doesn't
     // resolve is dropped rather than thrown on, matching today's silent
     // no-op for a uuid naming no live row.
-    if (data.imageOrder && data.imageOrder.length > 0) {
-      const orderedIds = await resolveAllPresent(tx, "image", data.imageOrder);
-      await applyImageOrder(
-        tx,
-        imageJoinBindings.location,
-        updated.id,
-        orderedIds,
-      );
-    }
-
-    if (data.removeImageIds && data.removeImageIds.length > 0) {
-      const idsToRemove = await resolveAllPresent(
-        tx,
-        "image",
-        data.removeImageIds,
-      );
-      ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
-        tx,
-        { entity: "location", id: updated.id },
-        idsToRemove,
-      ));
-    }
-
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      const resolvedPendingImageIds = await resolveAllPresent(
-        tx,
-        "image",
-        data.pendingImageIds,
-      );
-      const startSortOrder = await nextImageSortOrder(
-        tx,
-        imageJoinBindings.location,
-        updated.id,
-      );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.location,
-        updated.id,
-        resolvedPendingImageIds,
-        startSortOrder,
-      );
-    }
+    await syncLocationImages(tx, updated.id);
 
     if (before) {
       const changes = computeChanges(before, updated, [

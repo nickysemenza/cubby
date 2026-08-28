@@ -136,6 +136,71 @@ function buildProjectRollup(expenses: ExpenseOut[]): ProjectRollupEntry[] {
     });
 }
 
+const useQuantityEditorScroll = (expenseId: string | null): void => {
+  useEffect(() => {
+    if (!expenseId) return;
+    document
+      .getElementById(`${QUANTITY_TARGET_PREFIX}${expenseId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [expenseId]);
+};
+
+const ExpenseHistorySummary = ({
+  product,
+  split,
+  netCost,
+  firstMissingAcquisition,
+  openQuantityEditor,
+}: {
+  product: ProductWithFoodOut;
+  split: ReturnType<typeof splitExpenseSpend>;
+  netCost: number;
+  firstMissingAcquisition: ExpenseOut | undefined;
+  openQuantityEditor: (id: string) => void;
+}) => (
+  <>
+    <p className="text-sm text-muted-foreground">
+      Net cost: <span className="font-mono">{formatCurrency(netCost)}</span>
+      {split.contributions > 0 && (
+        <>
+          {" "}
+          ({formatCurrency(split.actual)} spent −{" "}
+          {formatCurrency(split.contributions)} recouped)
+        </>
+      )}
+    </p>
+    {product.pricing.derivedPrice !== null && (
+      <p className="text-sm text-muted-foreground">
+        Historical unit cost: {formatCurrency(product.pricing.derivedPrice)}
+        {product.pricing.partial
+          ? ` from ${product.pricing.knownExpenseCount} quantified expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}`
+          : ` across ${product.pricing.knownUnitCount} unit${product.pricing.knownUnitCount === 1 ? "" : "s"}`}
+      </p>
+    )}
+    {product.pricing.unknownExpenseCount > 0 && (
+      <button
+        type="button"
+        className="w-fit text-left text-sm text-warning-ink hover:underline"
+        onClick={() =>
+          firstMissingAcquisition &&
+          openQuantityEditor(firstMissingAcquisition.id)
+        }
+      >
+        Add quantities to {product.pricing.unknownExpenseCount} acquisition
+        {product.pricing.unknownExpenseCount === 1 ? "" : "s"} to derive a unit
+        cost.
+      </button>
+    )}
+    <Link
+      to="/expenses"
+      search={{ productId: product.id }}
+      className="text-xs text-primary hover:underline"
+    >
+      See all in ledger →
+    </Link>
+  </>
+);
+
 /** Expense history for a product, with direct Expense fields editable in place. */
 export const ProductExpenseHistory: FC<{
   product: ProductWithFoodOut;
@@ -175,12 +240,7 @@ export const ProductExpenseHistory: FC<{
       expense.productQuantity == null,
   );
 
-  useEffect(() => {
-    if (!quantityEditorExpenseId) return;
-    document
-      .getElementById(`${QUANTITY_TARGET_PREFIX}${quantityEditorExpenseId}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [quantityEditorExpenseId]);
+  useQuantityEditorScroll(quantityEditorExpenseId);
 
   // The Project and Vendor picklists are tallied off the rows this table was
   // handed, not the ledger-wide rosters: on one product's page the useful
@@ -462,45 +522,13 @@ export const ProductExpenseHistory: FC<{
           ))}
         </Row>
       )}
-      <p className="text-sm text-muted-foreground">
-        Net cost: <span className="font-mono">{formatCurrency(netCost)}</span>
-        {split.contributions > 0 && (
-          <>
-            {" "}
-            ({formatCurrency(split.actual)} spent −{" "}
-            {formatCurrency(split.contributions)} recouped)
-          </>
-        )}
-      </p>
-      {product.pricing.derivedPrice !== null && (
-        <p className="text-sm text-muted-foreground">
-          Historical unit cost: {formatCurrency(product.pricing.derivedPrice)}
-          {product.pricing.partial
-            ? ` from ${product.pricing.knownExpenseCount} quantified expense${product.pricing.knownExpenseCount === 1 ? "" : "s"}`
-            : ` across ${product.pricing.knownUnitCount} unit${product.pricing.knownUnitCount === 1 ? "" : "s"}`}
-        </p>
-      )}
-      {product.pricing.unknownExpenseCount > 0 && (
-        <button
-          type="button"
-          className="w-fit text-left text-sm text-warning-ink hover:underline"
-          onClick={() =>
-            firstMissingAcquisition &&
-            openQuantityEditor(firstMissingAcquisition.id)
-          }
-        >
-          Add quantities to {product.pricing.unknownExpenseCount} acquisition
-          {product.pricing.unknownExpenseCount === 1 ? "" : "s"} to derive a
-          unit cost.
-        </button>
-      )}
-      <Link
-        to="/expenses"
-        search={{ productId: product.id }}
-        className="text-xs text-primary hover:underline"
-      >
-        See all in ledger →
-      </Link>
+      <ExpenseHistorySummary
+        product={product}
+        split={split}
+        netCost={netCost}
+        firstMissingAcquisition={firstMissingAcquisition}
+        openQuantityEditor={openQuantityEditor}
+      />
     </Stack>
   );
 };

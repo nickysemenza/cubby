@@ -89,6 +89,8 @@ const breakdownLocationRowSchema = z.object({
  * what a subtree table on a detail page wants to render.
  */
 export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
+  const baseCondition = () =>
+    rootId ? sql`l."id" = ${rootId}` : sql`l."parentId" IS NULL`;
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
   // Excludes soft-deleted locations
@@ -99,7 +101,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
         l.*,
         0 as depth
       FROM ${location} l
-      WHERE ${rootId ? sql`l."id" = ${rootId}` : sql`l."parentId" IS NULL`} AND l."deletedAt" IS NULL
+      WHERE ${baseCondition()} AND l."deletedAt" IS NULL
 
       UNION ALL
 
@@ -128,9 +130,9 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       locationRows.flatMap((loc) => (loc.productId ? [loc.productId] : [])),
     ),
   ];
-  const identityProducts =
+  const loadIdentityProducts = () =>
     productIds.length > 0
-      ? await getDb(db).query.product.findMany({
+      ? getDb(db).query.product.findMany({
           where: and(inArray(product.id, productIds), notDeleted(product)),
           with: {
             images: {
@@ -140,7 +142,8 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
             },
           },
         })
-      : [];
+      : Promise.resolve([]);
+  const identityProducts = await loadIdentityProducts();
   const productsById = new Map(
     identityProducts.map((identityProduct) => [
       identityProduct.id,
@@ -158,13 +161,14 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
 
   // Batch fetch all images for all locations in one query to avoid N+1
   const locationIds = locationRows.map((loc) => loc.id);
-  const allLocationImages =
+  const loadLocationImages = () =>
     locationIds.length > 0
-      ? await getDb(db).query.locationImage.findMany({
+      ? getDb(db).query.locationImage.findMany({
           where: inArray(locationImage.locationId, locationIds),
           ...relations.location.withImages.with.images,
         })
-      : [];
+      : Promise.resolve([]);
+  const allLocationImages = await loadLocationImages();
 
   const imagesByLocationId = new Map<
     LocationId,
@@ -177,9 +181,9 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   }
 
   // Batch fetch inventory entries with product names for all locations (excludes soft-deleted)
-  const allInventoryEntries =
+  const loadInventoryEntries = () =>
     locationIds.length > 0
-      ? await getDb(db)
+      ? getDb(db)
           .select({
             id: inventoryEntry.id,
             shortcode: inventoryEntry.shortcode,
@@ -202,7 +206,8 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
             ),
           )
           .orderBy(product.name)
-      : [];
+      : Promise.resolve([]);
+  const allInventoryEntries = await loadInventoryEntries();
 
   const inventoryByLocationId = new Map<LocationId, InventoryItemForTree[]>();
   const countsByLocationId = new Map<LocationId, number>();

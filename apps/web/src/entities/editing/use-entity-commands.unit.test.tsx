@@ -5,6 +5,7 @@ import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
+import type { EntityMutationTransport } from "~/entities/entity-contracts";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -13,7 +14,6 @@ import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contra
 
 import {
   createEntityMutationPort,
-  type EntityMutationOperations,
   useEntityCommands,
 } from "./use-entity-commands";
 
@@ -21,8 +21,11 @@ function refusalPort(error: StartOperationError) {
   const mutation = entityMutation.mutate.withTransport(async () => {
     throw error;
   });
-  const operations: EntityMutationOperations = { mutation };
-  return createEntityMutationPort(operations);
+  const transport: EntityMutationTransport = {
+    execute: async (command) =>
+      await mutation.forEntity(command.entity).call(command),
+  };
+  return createEntityMutationPort(transport);
 }
 
 async function removeAndReadIssues(error: StartOperationError) {
@@ -59,7 +62,11 @@ describe("useEntityCommands structured refusals", () => {
         sideEffects,
       }),
     );
-    const port = createEntityMutationPort({ mutation });
+    const transport: EntityMutationTransport = {
+      execute: async (command) =>
+        await mutation.forEntity(command.entity).call(command),
+    };
+    const port = createEntityMutationPort(transport);
 
     const execution = await port.execute({
       entity: "product",

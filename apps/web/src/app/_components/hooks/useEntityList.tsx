@@ -195,6 +195,46 @@ type TreeEntityListOptions<
   tree: EntityListTreeConfig<TData, TRow>;
 };
 
+function entityListDocumentTitle(
+  entity: BrowserRoutedEntity,
+  routeSearch: z.infer<typeof routeSearchSchema>,
+  syncsUrl: boolean,
+) {
+  if (!syncsUrl) return undefined;
+  return [
+    entities[entity].pluralLabel,
+    summarizeListState(getEntityFilters(entity), routeSearch),
+  ]
+    .filter(Boolean)
+    .join(": ");
+}
+
+function worklistColumnPresentation(
+  worklist: ReturnType<typeof problemWorklistState>,
+) {
+  if (!worklist?.exact || worklist.query.source.kind !== "entity") {
+    return {};
+  }
+  return {
+    transientColumnVisibility: worklist.query.source.columnVisibility,
+    revealColumns: {
+      key: worklist.query.key,
+      visibility: worklist.query.source.columnVisibility ?? {},
+    },
+  };
+}
+
+function buildMappingsMap<TRow extends BaseListRow>(
+  data: TRow[],
+  getMappings: ((item: TRow) => UnitMapping[]) | undefined,
+  hasUnitMappings: boolean,
+) {
+  if (!getMappings || !hasUnitMappings) return {};
+  return Object.fromEntries(
+    data.map((item) => [item.id, getMappings(item)] as const),
+  );
+}
+
 export function useEntityList<
   TData extends BaseListRow,
   TFilters extends object,
@@ -254,7 +294,7 @@ export function useEntityList<
 
   const effectiveDeletable = useContractDeletable(entity, deletable);
 
-  const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
+  const groupByField = grouped ? groupConfig?.field : undefined;
 
   const hasUnitMappings =
     browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
@@ -313,14 +353,7 @@ export function useEntityList<
     tableState.sorting,
   );
   useDocumentTitle(
-    presentationState.urlSync
-      ? [
-          entities[entity].pluralLabel,
-          summarizeListState(getEntityFilters(entity), routeSearch),
-        ]
-          .filter(Boolean)
-          .join(": ")
-      : undefined,
+    entityListDocumentTitle(entity, routeSearch, presentationState.urlSync),
   );
 
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
@@ -338,18 +371,16 @@ export function useEntityList<
     [totalCount, sums],
   );
 
-  const mappingsMap = useMemo(() => {
-    if (!getMappings || !hasUnitMappings) return {};
-
-    return Object.fromEntries(
-      data.map((item) => [item.id, getMappings(item)] as const),
-    );
-  }, [data, getMappings, hasUnitMappings]);
+  const mappingsMap = useMemo(
+    () => buildMappingsMap(data, getMappings, hasUnitMappings),
+    [data, getMappings, hasUnitMappings],
+  );
 
   const shouldUseMappings = hasUnitMappings && getMappings;
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 
   const rowActionsGuard = tree?.rowIsEntity;
+  const worklistColumns = worklistColumnPresentation(worklist);
   const presentation = useEntityListPresentation<TData>({
     entity,
     data,
@@ -357,17 +388,7 @@ export function useEntityList<
     filters,
     filterOptions,
     initialColumnVisibility,
-    transientColumnVisibility:
-      worklist?.exact && worklist.query.source.kind === "entity"
-        ? worklist.query.source.columnVisibility
-        : undefined,
-    revealColumns:
-      worklist?.exact && worklist.query.source.kind === "entity"
-        ? {
-            key: worklist.query.key,
-            visibility: worklist.query.source.columnVisibility ?? {},
-          }
-        : undefined,
+    ...worklistColumns,
     layoutKey,
     legacyLayoutVisibilityKey,
     legacyLayoutSizingKey,

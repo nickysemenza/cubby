@@ -120,6 +120,73 @@ type EvaluatedNeeds = {
   pricedMappings: Map<IngredientShortcode, UnitMapping[]>;
 };
 
+const estimateIngredientShortfallCost = (
+  pricedMappings: ReadonlyMap<IngredientShortcode, UnitMapping[]>,
+  ingredientId: IngredientShortcode | null,
+  basisUnit: string | null,
+  shortfall: number | null,
+): number | null => {
+  if (ingredientId == null || basisUnit == null) return null;
+  if (shortfall == null || shortfall <= 0) return null;
+  const mappings = pricedMappings.get(ingredientId);
+  if (!mappings) return null;
+  const priced = convertAmountToPrice(
+    { value: shortfall, unit: basisUnit },
+    mappings,
+  );
+  return priced.isOk() ? priced.value.value : null;
+};
+
+const aggregatedNeedSources = (group: NeedGroup): AggregatedNeed["sources"] =>
+  (group.result?.sources ?? []).flatMap((source, index) => {
+    const contribution = group.contributions[index];
+    return contribution
+      ? [
+          {
+            lineIndex: source.line_index,
+            needValue: source.need_value,
+            via: contribution.via,
+          },
+        ]
+      : [];
+  });
+
+const aggregatedNeedForGroup = (
+  group: NeedGroup,
+  pricedMappings: ReadonlyMap<IngredientShortcode, UnitMapping[]>,
+): AggregatedNeed[] => {
+  // An ingredient mentioned only without an amount contributes no need to a
+  // shopping list — there's nothing to buy a quantity of.
+  if (group.contributions.length === 0) return [];
+  const first = group.contributions[0];
+  const basisUnit = group.result?.basis_unit ?? first?.amount.unit ?? null;
+  return [
+    {
+      ingredientId: group.ingredientId,
+      name: group.name,
+      basisUnit,
+      needValue: group.result?.need_value ?? 0,
+      haveValue: group.result?.have_value ?? null,
+      status: group.result?.status ?? "missing",
+      shortfall: group.result?.shortfall ?? null,
+      // No unit path from the basis unit to money is unknown, not zero;
+      // zero would silently understate the trip total.
+      estimatedCost: estimateIngredientShortfallCost(
+        pricedMappings,
+        group.ingredientId,
+        basisUnit,
+        group.result?.shortfall ?? null,
+      ),
+      // `evaluate_group` builds `sources` positionally 1:1 with the needs it
+      // was handed (including under an incoherent basis, which zeroes the
+      // values but keeps the vector), so zip by index. `lineIndex` is no longer
+      // unique within a group: one line can reach the same ingredient directly
+      // and through a sub-recipe.
+      sources: aggregatedNeedSources(group),
+    },
+  ];
+};
+
 const toWNeedsRecipe = (recipe: RecipeGraphOut): WNeedsRecipe => ({
   id: recipe.id,
   name: recipe.name,
@@ -451,65 +518,9 @@ export class AvailabilityService {
      * Returns null rather than 0 whenever any step is unknown: a zero would sum
      * into the trip total and understate it.
      */
-    const estimateCost = (
-      ingredientId: IngredientShortcode | null,
-      basisUnit: string | null,
-      shortfall: number | null,
-    ): number | null => {
-      if (ingredientId == null || basisUnit == null) return null;
-      if (shortfall == null || shortfall <= 0) return null;
-
-      const mappings = pricedMappings.get(ingredientId);
-      if (!mappings) return null;
-
-      const priced = convertAmountToPrice(
-        { value: shortfall, unit: basisUnit },
-        mappings,
-      );
-      // No unit path from the basis unit to money — a real "unknown", not a
-      // zero. Reporting 0 here would understate the trip total.
-      return priced.isOk() ? priced.value.value : null;
-    };
-
-    const needs = groups.flatMap((g): AggregatedNeed[] => {
-      // An ingredient mentioned only without an amount contributes no need to
-      // a shopping list — there's nothing to buy a quantity of.
-      if (g.contributions.length === 0) return [];
-      const first = g.contributions[0];
-      return [
-        {
-          ingredientId: g.ingredientId,
-          name: g.name,
-          basisUnit: g.result?.basis_unit ?? first?.amount.unit ?? null,
-          needValue: g.result?.need_value ?? 0,
-          haveValue: g.result?.have_value ?? null,
-          status: g.result?.status ?? "missing",
-          shortfall: g.result?.shortfall ?? null,
-          estimatedCost: estimateCost(
-            g.ingredientId,
-            g.result?.basis_unit ?? first?.amount.unit ?? null,
-            g.result?.shortfall ?? null,
-          ),
-          // `evaluate_group` builds `sources` positionally 1:1 with the needs
-          // it was handed (including under an incoherent basis, which zeroes
-          // the values but keeps the vector), so zip by INDEX. lineIndex is no
-          // longer unique within a group — one line can reach the same
-          // ingredient both directly and through a sub-recipe.
-          sources: (g.result?.sources ?? []).flatMap((s, i) => {
-            const c = g.contributions[i];
-            return c
-              ? [
-                  {
-                    lineIndex: s.line_index,
-                    needValue: s.need_value,
-                    via: c.via,
-                  },
-                ]
-              : [];
-          }),
-        },
-      ];
-    });
+    const needs = groups.flatMap((group) =>
+      aggregatedNeedForGroup(group, pricedMappings),
+    );
 
     return { needs, unexpanded: blocked };
   }

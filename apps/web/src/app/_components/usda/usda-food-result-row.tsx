@@ -22,6 +22,25 @@ function MetaChip({ children }: { children: React.ReactNode }) {
   );
 }
 
+const foodBrand = (
+  brandedFoodInfo: FoodSummaryWithLinkedProducts["brandedFoodInfo"],
+) => {
+  if (!brandedFoodInfo) return null;
+  const brand = brandedFoodInfo.brand_name ?? brandedFoodInfo.brand_owner;
+  return isUnspecifiedManufacturer(brand) ? null : brand;
+};
+
+const foodServingText = (
+  brandedFoodInfo: FoodSummaryWithLinkedProducts["brandedFoodInfo"],
+) => {
+  const serving = brandedFoodInfo?.serving;
+  if (serving?.household_serving_fulltext) {
+    return serving.household_serving_fulltext;
+  }
+  if (!serving?.serving_size || !serving.serving_size_unit) return null;
+  return `${serving.serving_size} ${serving.serving_size_unit}`;
+};
+
 /**
  * Rich dropdown row for a USDA food search result. Renders the full metadata the
  * USDA list projection already returns — food type, brand, category, serving, UPC/NDB,
@@ -41,20 +60,8 @@ export function UsdaFoodResultRow({
   const { foodInfo, brandedFoodInfo, legacyFoodInfo, nutritionInfo } = food;
   const totalNutrients = nutrientCount(nutritionInfo.nutrientsPer100);
 
-  const brand =
-    brandedFoodInfo &&
-    !isUnspecifiedManufacturer(
-      brandedFoodInfo.brand_name ?? brandedFoodInfo.brand_owner,
-    )
-      ? (brandedFoodInfo.brand_name ?? brandedFoodInfo.brand_owner)
-      : null;
-
-  const serving = brandedFoodInfo?.serving;
-  const servingText =
-    serving?.household_serving_fulltext ||
-    (serving?.serving_size && serving.serving_size_unit
-      ? `${serving.serving_size} ${serving.serving_size_unit}`
-      : null);
+  const brand = foodBrand(brandedFoodInfo);
+  const servingText = foodServingText(brandedFoodInfo);
 
   const linkedCount = food.linkedProducts.length;
 

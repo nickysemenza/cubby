@@ -364,26 +364,11 @@ function genNumber(def: RuntimeDefinition): number {
     : faker.number.float({ min, max, fractionDigits: 2 });
 }
 
-function gen(
-  schema: z.ZodType,
-  depth: number,
-  fillOptionals: boolean,
-): MockValue | undefined {
-  // An explicit literal wins over everything — it exists precisely because the
-  // type-driven path cannot satisfy the schema's own constraints.
-  const literal = mockValueHint(schema);
-  if (literal !== undefined) return literal;
+const UNHANDLED_MOCK_TYPE = Symbol("unhandled mock type");
+type MockGeneration = MockValue | undefined | typeof UNHANDLED_MOCK_TYPE;
+type MockRecurse = (schema: z.ZodType, depth?: number) => MockValue | undefined;
 
-  // An explicit faker hint wins over type-driven generation.
-  const hint = mockHint(schema);
-  if (hint) {
-    const v = callFakerPath(hint);
-    if (v !== undefined) return v;
-  }
-
-  const def = defOf(schema);
-  const recurse = (s: z.ZodType, d = depth) => gen(s, d, fillOptionals);
-
+const genScalar = (def: RuntimeDefinition): MockGeneration => {
   switch (def.type) {
     case "string":
       return genString(def);
@@ -417,52 +402,35 @@ function gen(
       return {};
     case "nan":
       return Number.NaN;
+    default:
+      return UNHANDLED_MOCK_TYPE;
+  }
+};
+
+const genCollection = (
+  def: RuntimeDefinition,
+  recurse: MockRecurse,
+): MockGeneration => {
+  switch (def.type) {
     case "object": {
       const entries: Array<readonly [string, MockValue]> = [];
       for (const [key, child] of Object.entries(def.shape ?? {})) {
-        const v = recurse(child);
-        if (v !== undefined) entries.push([key, v]); // omit optionals (undefined)
+        const value = recurse(child);
+        if (value !== undefined) entries.push([key, value]);
       }
       return Object.fromEntries(entries);
     }
     case "array": {
       const { minLen } = readChecks(def.checks);
-      const n = Math.max(minLen ?? 1, 1);
+      const length = Math.max(minLen ?? 1, 1);
       const element = def.element;
-      return element ? Array.from({ length: n }, () => recurse(element)) : [];
+      return element ? Array.from({ length }, () => recurse(element)) : [];
     }
     case "tuple":
-      return (def.items ?? []).map((it) => recurse(it));
-    case "optional":
-      return fillOptionals && def.innerType
-        ? recurse(def.innerType)
-        : undefined;
-    case "nullable":
-    case "nullish":
-      return null;
-    case "default":
-    case "prefault": {
-      const dv = def.defaultValue;
-      return isDefaultFactory(dv) ? dv() : dv;
-    }
-    case "catch":
-      return def.innerType ? recurse(def.innerType) : undefined;
-    case "readonly":
-      return def.innerType ? recurse(def.innerType) : undefined;
-    case "lazy":
-      return depth >= MAX_DEPTH || def.getter === undefined
-        ? undefined
-        : recurse(def.getter(), depth + 1);
-    case "union": // discriminated unions report type "union"; first option is deterministic
-      return def.options?.[0] ? recurse(def.options[0]) : undefined;
-    case "intersection": {
-      const a = def.left ? recurse(def.left) : undefined;
-      const b = def.right ? recurse(def.right) : undefined;
-      return isPlain(a) && isPlain(b) ? { ...a, ...b } : (b ?? a);
-    }
+      return (def.items ?? []).map((item) => recurse(item));
     case "record": {
-      const k = String(def.keyType ? recurse(def.keyType) : "key");
-      return { [k]: def.valueType ? recurse(def.valueType) : undefined };
+      const key = String(def.keyType ? recurse(def.keyType) : "key");
+      return { [key]: def.valueType ? recurse(def.valueType) : undefined };
     }
     case "map":
       return new Map([
@@ -473,9 +441,58 @@ function gen(
       ]);
     case "set":
       return new Set([def.valueType ? recurse(def.valueType) : undefined]);
+    default:
+      return UNHANDLED_MOCK_TYPE;
+  }
+};
+
+const genSimpleWrapper = (
+  def: RuntimeDefinition,
+  depth: number,
+  fillOptionals: boolean,
+  recurse: MockRecurse,
+): MockGeneration => {
+  switch (def.type) {
+    case "optional":
+      return fillOptionals && def.innerType
+        ? recurse(def.innerType)
+        : undefined;
+    case "nullable":
+    case "nullish":
+      return null;
+    case "default":
+    case "prefault": {
+      const value = def.defaultValue;
+      return isDefaultFactory(value) ? value() : value;
+    }
+    case "catch":
+    case "readonly":
+      return def.innerType ? recurse(def.innerType) : undefined;
+    case "lazy":
+      return depth >= MAX_DEPTH || def.getter === undefined
+        ? undefined
+        : recurse(def.getter(), depth + 1);
+    case "union":
+      return def.options?.[0] ? recurse(def.options[0]) : undefined;
+    default:
+      return UNHANDLED_MOCK_TYPE;
+  }
+};
+
+const genCompositeWrapper = (
+  schema: z.ZodType,
+  def: RuntimeDefinition,
+  recurse: MockRecurse,
+): MockGeneration => {
+  switch (def.type) {
+    case "intersection": {
+      const left = def.left ? recurse(def.left) : undefined;
+      const right = def.right ? recurse(def.right) : undefined;
+      return isPlain(left) && isPlain(right)
+        ? { ...left, ...right }
+        : (right ?? left);
+    }
     case "pipe": {
-      // Coercions / transforms: generate the input side, then run the whole
-      // schema to apply the transform. Fall back to the raw input on failure.
       const input = def.in ? recurse(def.in) : undefined;
       try {
         const parsed = schema.safeParse(input);
@@ -485,10 +502,40 @@ function gen(
       }
     }
     default:
-      throw new Error(
-        `mock(): unhandled Zod type "${def.type}". Add a handler in mock-schema.ts or supply an override.`,
-      );
+      return UNHANDLED_MOCK_TYPE;
   }
+};
+
+function gen(
+  schema: z.ZodType,
+  depth: number,
+  fillOptionals: boolean,
+): MockValue | undefined {
+  // An explicit literal wins over everything — it exists precisely because the
+  // type-driven path cannot satisfy the schema's own constraints.
+  const literal = mockValueHint(schema);
+  if (literal !== undefined) return literal;
+
+  // An explicit faker hint wins over type-driven generation.
+  const hint = mockHint(schema);
+  if (hint) {
+    const v = callFakerPath(hint);
+    if (v !== undefined) return v;
+  }
+
+  const def = defOf(schema);
+  const recurse = (s: z.ZodType, d = depth) => gen(s, d, fillOptionals);
+  const scalar = genScalar(def);
+  if (scalar !== UNHANDLED_MOCK_TYPE) return scalar;
+  const collection = genCollection(def, recurse);
+  if (collection !== UNHANDLED_MOCK_TYPE) return collection;
+  const simpleWrapper = genSimpleWrapper(def, depth, fillOptionals, recurse);
+  if (simpleWrapper !== UNHANDLED_MOCK_TYPE) return simpleWrapper;
+  const compositeWrapper = genCompositeWrapper(schema, def, recurse);
+  if (compositeWrapper !== UNHANDLED_MOCK_TYPE) return compositeWrapper;
+  throw new Error(
+    `mock(): unhandled Zod type "${def.type}". Add a handler in mock-schema.ts or supply an override.`,
+  );
 }
 
 const isPlain = <TValue>(value: TValue): value is TValue & object =>

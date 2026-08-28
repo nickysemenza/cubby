@@ -67,328 +67,301 @@ const mealSlotDelta = (a: CalendarItem, b: CalendarItem): number =>
     ? mealTypeRank(a.mealType) - mealTypeRank(b.mealType)
     : 0;
 
-/**
- * One bounded read for the unified planning calendar. Date-only comparisons
- * stay as YYYY-MM-DD strings; ReUI Date conversion is a client boundary.
- */
-export async function getCalendarRange(
+const loadCalendarProjectScope = async (
   db: Database,
   input: CalendarRangeInput,
-): Promise<CalendarRangeOut> {
-  const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
-  // Omitted `kinds` means all four, so the in-app calendar is unchanged. A
-  // narrowed request skips whole reads rather than filtering after the fact —
-  // the ICS feed asks for meals + tasks, and the project branch it drops is a
-  // whole-tree date fold it would otherwise pay for on every poll.
-  const wants = (kind: CalendarItemKind) =>
-    !input.kinds || input.kinds.includes(kind);
-
-  // ── Project scope ───────────────────────────────────────────────────────
-  // Resolved once, ahead of the reads, because three branches share it.
+  wantsProjects: boolean,
+) => {
   const projectCodes = input.projectId ? [input.projectId].flat() : [];
   const projectRequested = projectCodes.length > 0;
   const selectedProjectIds = projectRequested
     ? await resolveAllPresent(db, "project", projectCodes)
     : [];
-  // The tree is needed by the scope expansion AND by the date fold below, so
-  // load it once and hand it to both — this branch used to scan every project
-  // row twice.
   const tree =
-    projectRequested || wants("project")
-      ? await loadProjectTree(db)
-      : undefined;
+    projectRequested || wantsProjects ? await loadProjectTree(db) : undefined;
   const scopeIds =
     tree && selectedProjectIds.length
       ? uniq(
           selectedProjectIds.flatMap((id) => [
             id,
-            // A project bar is already the SUBTREE-folded window, so scoping
-            // to a parent without its descendants would draw a span covering
-            // dates whose tasks and expenses are hidden — a contradiction on
-            // the same pixels. Hence the expansion, always.
             ...(input.includeSubProjects
               ? collectDescendantIds(tree.childrenByParent, id)
               : []),
           ]),
         )
       : selectedProjectIds;
+  return { projectRequested, scopeIds, tree };
+};
 
-  /**
-   * The project predicate for a table with a nullable `projectId`.
-   *
-   * A requested-but-unresolved code must match NOTHING rather than widening to
-   * an unfiltered query, hence the explicit `false` arm. The presence sentinel
-   * ORs with the id selection rather than ANDing, so "Kitchen or unassigned" is
-   * one filter — the repo-wide `eqAnyOrPresence` semantics.
-   */
-  const projectScopeOn = (column: AnyColumn): SQL | undefined =>
-    or(
-      scopeIds.length
-        ? inArray(column, scopeIds)
-        : projectRequested
-          ? sql`false`
-          : undefined,
-      presenceCondition(column, input.projectPresenceFilter),
-    );
+type CalendarProjectScope = Awaited<
+  ReturnType<typeof loadCalendarProjectScope>
+>;
 
-  /**
-   * Meals have no project relation, so they are treated as permanently
-   * unassigned rows rather than being dropped outright.
-   *
-   * Dropping them would break `(none)` — the unassigned-work worklist, which is
-   * exactly where a meal belongs — and passing them through would make
-   * `?project=X` render a month still dominated by unrelated dinners, with
-   * "Has project" and "(none)" returning identical meal sets. Reading them as
-   * NULL-valued is the only interpretation under which the sentinels mean what
-   * they mean everywhere else.
-   */
+const projectScopeOn = (
+  column: AnyColumn,
+  input: CalendarRangeInput,
+  scope: CalendarProjectScope,
+): SQL | undefined =>
+  or(
+    scope.scopeIds.length
+      ? inArray(column, scope.scopeIds)
+      : scope.projectRequested
+        ? sql`false`
+        : undefined,
+    presenceCondition(column, input.projectPresenceFilter),
+  );
+
+const loadCalendarMeals = (
+  db: Database,
+  input: CalendarRangeInput,
+  endInclusive: string,
+) => {
   const mealsInProjectScope =
     input.projectPresenceFilter === "none" ||
-    (!projectRequested && input.projectPresenceFilter === undefined);
+    (!input.projectId && input.projectPresenceFilter === undefined);
+  return !input.kinds?.includes("meal") && input.kinds
+    ? Promise.resolve([])
+    : mealsInProjectScope
+      ? getMealsByDateRange(db, input.startDate, endInclusive)
+      : Promise.resolve([]);
+};
 
-  const vendorIds = input.expenseVendorId
-    ? await resolveAllPresent(db, "vendor", [input.expenseVendorId].flat())
-    : [];
-
-  const [meals, taskRows, expenseRows, projectRows, projectDates] =
-    await Promise.all([
-      wants("meal") && mealsInProjectScope
-        ? getMealsByDateRange(db, input.startDate, endInclusive)
-        : [],
-      wants("task")
-        ? getDb(db).query.task.findMany({
-            where: and(
-              notDeleted(task),
-              or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
-              lte(
-                sql`coalesce(${task.dueDate}, ${task.dueEndDate})`,
-                endInclusive,
-              ),
-              gte(
-                sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
-                input.startDate,
-              ),
-              // Task-scoped filters live HERE and nowhere else — that is the
-              // cross-kind rule (see calendarFilterFields): narrowing tasks by
-              // status must leave every meal, expense, and project span alone.
-              eqAny(task.status, input.taskStatus),
-              eqAny(task.trade, input.taskTrade),
-              projectScopeOn(task.projectId),
-            ),
-            orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
-            ...relations.task.withProject,
-          })
-        : [],
-      wants("expense")
-        ? getDb(db).query.expense.findMany({
-            where: and(
-              notDeleted(expense),
-              isNotNull(expense.date),
-              gte(expense.date, input.startDate),
-              lte(expense.date, endInclusive),
-              input.expenseFuture !== undefined
-                ? eq(expense.future, input.expenseFuture)
-                : undefined,
-              projectScopeOn(expense.projectId),
-              // Vendor rides on the charge, so it goes through
-              // `chargeCondition` rather than a hand-written subquery: that
-              // helper carries the uncorrelated-IN shape the relational query
-              // builder requires AND the mandatory `notDeleted(purchase)`,
-              // which the soft-delete guard cannot see here.
-              or(
-                input.expenseVendorId
-                  ? vendorIds.length
-                    ? chargeCondition(db, eqAny(purchase.vendorId, vendorIds))
-                    : sql`false`
-                  : undefined,
-                presenceCondition(
-                  expense.purchaseId,
-                  input.expenseVendorPresenceFilter,
-                ),
-              ),
-            ),
-            orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
-            ...relations.expense.withProject,
-          })
-        : [],
-      wants("project")
-        ? getDb(db)
-            .select({
-              id: project.id,
-              shortcode: project.shortcode,
-              name: project.name,
-              status: project.status,
-              kind: project.kind,
-            })
-            .from(project)
-            .where(
-              and(
-                notDeleted(project),
-                eqAny(project.status, input.projectStatus),
-                or(
-                  eqAny(project.kind, input.projectKind),
-                  presenceCondition(
-                    project.kind,
-                    input.projectKindPresenceFilter,
-                  ),
-                ),
-                // A span always HAS a project — itself — so `has` is vacuously
-                // true and `none` vacuously false, each OR-ing with the id
-                // selection the same way the nullable columns above do.
-                or(
-                  scopeIds.length
-                    ? inArray(project.id, scopeIds)
-                    : projectRequested
-                      ? sql`false`
-                      : undefined,
-                  input.projectPresenceFilter === "has"
-                    ? sql`true`
-                    : input.projectPresenceFilter === "none"
-                      ? sql`false`
-                      : undefined,
-                ),
-              ),
-            )
-        : [],
-      // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
-      // folds a parent's window up from its descendants, so scoping the fold to
-      // the filtered set would make a filtered-in parent lose the window its
-      // filtered-out children contribute. Only the emitted rows narrow.
-      //
-      // `loadProjectDateWindows`, not `loadProjectSubtreeRollups`: the calendar
-      // reads `.dateWindows` and nothing else, and the rollup variant
-      // additionally runs two spend/task aggregates whose results are discarded.
-      wants("project") ? loadProjectDateWindows(db, tree) : null,
-    ]);
-
-  const recipeIds = uniq(
-    meals.flatMap((meal) => meal.recipes.map((value) => value.recipeId)),
-  );
-  const productIds = uniq([
-    ...taskRows.flatMap((row) =>
-      row.subjectProductId ? [row.subjectProductId] : [],
+const loadCalendarTasks = (
+  db: Database,
+  input: CalendarRangeInput,
+  endInclusive: string,
+  scope: CalendarProjectScope,
+) => {
+  if (input.kinds && !input.kinds.includes("task")) return Promise.resolve([]);
+  return getDb(db).query.task.findMany({
+    where: and(
+      notDeleted(task),
+      or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
+      lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
+      gte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, input.startDate),
+      eqAny(task.status, input.taskStatus),
+      eqAny(task.trade, input.taskTrade),
+      projectScopeOn(task.projectId, input, scope),
     ),
-    ...expenseRows.flatMap((row) => (row.productId ? [row.productId] : [])),
-  ]);
-  const [recipeCoverImageUrls, productCoverImageUrls] = await Promise.all([
-    getRecipeCoverImageUrlsByShortcodes(db, recipeIds),
-    getProductCoverImageUrlsByProductIds(db, productIds),
-  ]);
+    orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
+    ...relations.task.withProject,
+  });
+};
 
-  const items: CalendarItem[] = [];
-
-  for (const meal of meals) {
-    items.push({
-      kind: "meal",
-      id: meal.id,
-      // An unnamed meal now identifies itself by its slot ("Dinner") instead
-      // of the bare literal "Meal" — this title is what the calendar chip and
-      // the iCalendar SUMMARY both render.
-      title: meal.name || mealTypeTitle(meal.mealType),
-      name: meal.name,
-      startDate: meal.date,
-      endDateExclusive: shiftPlainDate(meal.date, 1),
-      interaction: "move",
-      sortOrder: meal.sortOrder,
-      mealType: meal.mealType,
-      mealKind: meal.mealKind,
-      recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
-      coverImageUrl:
-        meal.recipes
-          .map((recipe) => recipeCoverImageUrls.get(recipe.recipeId))
-          .find((url) => url !== undefined) ?? null,
-      cost: meal.totals.costTotal,
-      calories: meal.totals.caloriesTotal,
-      nutritionPending: meal.totals.pending,
-    });
+const loadCalendarExpenses = (
+  db: Database,
+  input: CalendarRangeInput,
+  endInclusive: string,
+  scope: CalendarProjectScope,
+  vendorIds: Awaited<ReturnType<typeof resolveAllPresent>>,
+) => {
+  if (input.kinds && !input.kinds.includes("expense")) {
+    return Promise.resolve([]);
   }
+  const vendorCondition = input.expenseVendorId
+    ? vendorIds.length
+      ? chargeCondition(db, eqAny(purchase.vendorId, vendorIds))
+      : sql`false`
+    : undefined;
+  return getDb(db).query.expense.findMany({
+    where: and(
+      notDeleted(expense),
+      isNotNull(expense.date),
+      gte(expense.date, input.startDate),
+      lte(expense.date, endInclusive),
+      input.expenseFuture !== undefined
+        ? eq(expense.future, input.expenseFuture)
+        : undefined,
+      projectScopeOn(expense.projectId, input, scope),
+      or(
+        vendorCondition,
+        presenceCondition(
+          expense.purchaseId,
+          input.expenseVendorPresenceFilter,
+        ),
+      ),
+    ),
+    orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
+    ...relations.expense.withProject,
+  });
+};
 
-  for (const row of taskRows) {
+const loadCalendarProjects = (
+  db: Database,
+  input: CalendarRangeInput,
+  scope: CalendarProjectScope,
+) => {
+  if (input.kinds && !input.kinds.includes("project")) {
+    return Promise.resolve([]);
+  }
+  const presence =
+    input.projectPresenceFilter === "has"
+      ? sql`true`
+      : input.projectPresenceFilter === "none"
+        ? sql`false`
+        : undefined;
+  return getDb(db)
+    .select({
+      id: project.id,
+      shortcode: project.shortcode,
+      name: project.name,
+      status: project.status,
+      kind: project.kind,
+    })
+    .from(project)
+    .where(
+      and(
+        notDeleted(project),
+        eqAny(project.status, input.projectStatus),
+        or(
+          eqAny(project.kind, input.projectKind),
+          presenceCondition(project.kind, input.projectKindPresenceFilter),
+        ),
+        or(
+          scope.scopeIds.length
+            ? inArray(project.id, scope.scopeIds)
+            : scope.projectRequested
+              ? sql`false`
+              : undefined,
+          presence,
+        ),
+      ),
+    );
+};
+
+const mapMealItems = (
+  meals: Awaited<ReturnType<typeof loadCalendarMeals>>,
+  recipeCoverImageUrls: Map<string, string>,
+): CalendarItem[] =>
+  meals.map((meal) => ({
+    kind: "meal",
+    id: meal.id,
+    title: meal.name || mealTypeTitle(meal.mealType),
+    name: meal.name,
+    startDate: meal.date,
+    endDateExclusive: shiftPlainDate(meal.date, 1),
+    interaction: "move",
+    sortOrder: meal.sortOrder,
+    mealType: meal.mealType,
+    mealKind: meal.mealKind,
+    recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
+    coverImageUrl:
+      meal.recipes
+        .map((recipe) => recipeCoverImageUrls.get(recipe.recipeId))
+        .find((url) => url !== undefined) ?? null,
+    cost: meal.totals.costTotal,
+    calories: meal.totals.caloriesTotal,
+    nutritionPending: meal.totals.pending,
+  }));
+
+const mapTaskItems = (
+  rows: Awaited<ReturnType<typeof loadCalendarTasks>>,
+  productCoverImageUrls: Map<string, string>,
+): CalendarItem[] =>
+  rows.flatMap((row) => {
     const value = dbTaskToAPI(row, [], []);
     const startDate = value.dueDate ?? value.dueEndDate;
     const endDate = value.dueEndDate ?? value.dueDate;
-    if (!startDate || !endDate) continue;
-    items.push({
-      kind: "task",
-      id: parseShortcodeFor("task", row.shortcode),
-      title: value.name,
-      startDate,
-      endDateExclusive: shiftPlainDate(endDate, 1),
-      interaction: "move",
-      dueDate: value.dueDate,
-      dueEndDate: value.dueEndDate,
-      status: value.status,
-      trade: value.trade,
-      projectName: value.projectName,
-      subjectProductName: value.subjectProductName,
-      coverImageUrl: row.subjectProductId
-        ? (productCoverImageUrls.get(row.subjectProductId) ?? null)
-        : null,
-    });
-  }
+    return startDate && endDate
+      ? [
+          {
+            kind: "task" as const,
+            id: parseShortcodeFor("task", row.shortcode),
+            title: value.name,
+            startDate,
+            endDateExclusive: shiftPlainDate(endDate, 1),
+            interaction: "move" as const,
+            dueDate: value.dueDate,
+            dueEndDate: value.dueEndDate,
+            status: value.status,
+            trade: value.trade,
+            projectName: value.projectName,
+            subjectProductName: value.subjectProductName,
+            coverImageUrl: row.subjectProductId
+              ? (productCoverImageUrls.get(row.subjectProductId) ?? null)
+              : null,
+          },
+        ]
+      : [];
+  });
 
-  for (const row of expenseRows) {
+const mapExpenseItems = (
+  rows: Awaited<ReturnType<typeof loadCalendarExpenses>>,
+  productCoverImageUrls: Map<string, string>,
+): CalendarItem[] =>
+  rows.flatMap((row) => {
     const value = dbExpenseToAPI(row);
-    if (!value.date) continue;
-    items.push({
-      kind: "expense",
-      id: parseShortcodeFor("expense", row.shortcode),
-      title: value.name,
-      startDate: value.date,
-      endDateExclusive: shiftPlainDate(value.date, 1),
-      interaction: value.future ? "move" : "read-only",
-      future: value.future,
-      cost: value.cost,
-      vendor: value.vendor,
-      trade: value.trade,
-      projectName: value.projectName,
-      productName: value.productName,
-      coverImageUrl: row.productId
-        ? (productCoverImageUrls.get(row.productId) ?? null)
-        : null,
-    });
-  }
+    return value.date
+      ? [
+          {
+            kind: "expense" as const,
+            id: parseShortcodeFor("expense", row.shortcode),
+            title: value.name,
+            startDate: value.date,
+            endDateExclusive: shiftPlainDate(value.date, 1),
+            interaction: value.future
+              ? ("move" as const)
+              : ("read-only" as const),
+            future: value.future,
+            cost: value.cost,
+            vendor: value.vendor,
+            trade: value.trade,
+            projectName: value.projectName,
+            productName: value.productName,
+            coverImageUrl: row.productId
+              ? (productCoverImageUrls.get(row.productId) ?? null)
+              : null,
+          },
+        ]
+      : [];
+  });
 
-  for (const row of projectRows) {
+const mapProjectItems = (
+  rows: Awaited<ReturnType<typeof loadCalendarProjects>>,
+  projectDates: Awaited<ReturnType<typeof loadProjectDateWindows>> | null,
+  input: CalendarRangeInput,
+): CalendarItem[] =>
+  rows.flatMap((row) => {
     const window = projectDates?.dateWindows.get(row.id);
     const firstDate = window?.effectiveStart ?? window?.effectiveEnd;
     const lastDate = window?.effectiveEnd ?? window?.effectiveStart;
-    const startDate =
-      firstDate && lastDate && firstDate > lastDate ? lastDate : firstDate;
-    const endDate =
-      firstDate && lastDate && firstDate > lastDate ? firstDate : lastDate;
-    if (
+    const inverted = firstDate && lastDate && firstDate > lastDate;
+    const startDate = inverted ? lastDate : firstDate;
+    const endDate = inverted ? firstDate : lastDate;
+    const outsideRange =
       !startDate ||
       !endDate ||
       startDate >= input.endDateExclusive ||
-      endDate < input.startDate
-    ) {
-      continue;
-    }
-    items.push({
-      kind: "project",
-      id: parseShortcodeFor("project", row.shortcode),
-      title: row.name,
-      startDate,
-      endDateExclusive: shiftPlainDate(endDate, 1),
-      interaction: "read-only",
-      status: row.status,
-      projectKind: row.kind,
-    });
-  }
+      endDate < input.startDate;
+    return outsideRange
+      ? []
+      : [
+          {
+            kind: "project" as const,
+            id: parseShortcodeFor("project", row.shortcode),
+            title: row.name,
+            startDate,
+            endDateExclusive: shiftPlainDate(endDate, 1),
+            interaction: "read-only" as const,
+            status: row.status,
+            projectKind: row.kind,
+          },
+        ];
+  });
 
+const sortCalendarItems = (items: CalendarItem[]) =>
   items.sort(
     (a, b) =>
       a.startDate.localeCompare(b.startDate) ||
       itemOrder[a.kind] - itemOrder[b.kind] ||
-      // Within a day, meals run in slot order — breakfast before dinner
-      // regardless of what they're called. Before this, a breakfast named
-      // "Oatmeal" sorted after a dinner named "Chili". Unslotted meals rank
-      // last and keep their alphabetical order among themselves.
       mealSlotDelta(a, b) ||
       a.title.localeCompare(b.title),
   );
 
+const summarizeCalendarDays = (
+  input: CalendarRangeInput,
+  items: CalendarItem[],
+) => {
   const days: Record<string, CalendarDaySummary> = {};
   for (
     let day = input.startDate;
@@ -397,7 +370,6 @@ export async function getCalendarRange(
   ) {
     days[day] = emptyDaySummary();
   }
-
   for (const item of items) {
     const firstDay =
       item.startDate < input.startDate ? input.startDate : item.startDate;
@@ -416,17 +388,75 @@ export async function getCalendarRange(
         summary.mealCount += 1;
         summary.calories += item.calories;
         summary.nutritionPending ||= item.nutritionPending;
-      } else if (item.kind === "task") {
-        summary.taskCount += 1;
-      } else if (item.kind === "expense") {
+      } else if (item.kind === "task") summary.taskCount += 1;
+      else if (item.kind === "expense") {
         summary.expenseCount += 1;
         if (item.future) summary.plannedSpend += item.cost ?? 0;
         else summary.actualSpend += item.cost ?? 0;
-      } else {
-        summary.projectCount += 1;
-      }
+      } else summary.projectCount += 1;
     }
   }
+  return days;
+};
 
-  return { items, days };
+/**
+ * One bounded read for the unified planning calendar. Date-only comparisons
+ * stay as YYYY-MM-DD strings; ReUI Date conversion is a client boundary.
+ */
+export async function getCalendarRange(
+  db: Database,
+  input: CalendarRangeInput,
+): Promise<CalendarRangeOut> {
+  const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
+  // Omitted `kinds` means all four, so the in-app calendar is unchanged. A
+  // narrowed request skips whole reads rather than filtering after the fact —
+  // the ICS feed asks for meals + tasks, and the project branch it drops is a
+  // whole-tree date fold it would otherwise pay for on every poll.
+  const wants = (kind: CalendarItemKind) =>
+    !input.kinds || input.kinds.includes(kind);
+
+  // The tree is shared by scope expansion and the project date fold. Loading
+  // it here prevents either branch from scanning the project table twice.
+  const scope = await loadCalendarProjectScope(db, input, wants("project"));
+  const vendorIds = input.expenseVendorId
+    ? await resolveAllPresent(db, "vendor", [input.expenseVendorId].flat())
+    : [];
+  const [meals, taskRows, expenseRows, projectRows, projectDates] =
+    await Promise.all([
+      loadCalendarMeals(db, input, endInclusive),
+      loadCalendarTasks(db, input, endInclusive, scope),
+      loadCalendarExpenses(db, input, endInclusive, scope, vendorIds),
+      loadCalendarProjects(db, input, scope),
+      // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
+      // folds a parent's window up from its descendants, so scoping the fold to
+      // the filtered set would make a filtered-in parent lose the window its
+      // filtered-out children contribute. Only the emitted rows narrow.
+      //
+      // `loadProjectDateWindows`, not `loadProjectSubtreeRollups`: the calendar
+      // reads `.dateWindows` and nothing else, and the rollup variant
+      // additionally runs two spend/task aggregates whose results are discarded.
+      wants("project") ? loadProjectDateWindows(db, scope.tree) : null,
+    ]);
+
+  const recipeIds = uniq(
+    meals.flatMap((meal) => meal.recipes.map((value) => value.recipeId)),
+  );
+  const productIds = uniq([
+    ...taskRows.flatMap((row) =>
+      row.subjectProductId ? [row.subjectProductId] : [],
+    ),
+    ...expenseRows.flatMap((row) => (row.productId ? [row.productId] : [])),
+  ]);
+  const [recipeCoverImageUrls, productCoverImageUrls] = await Promise.all([
+    getRecipeCoverImageUrlsByShortcodes(db, recipeIds),
+    getProductCoverImageUrlsByProductIds(db, productIds),
+  ]);
+
+  const items = sortCalendarItems([
+    ...mapMealItems(meals, recipeCoverImageUrls),
+    ...mapTaskItems(taskRows, productCoverImageUrls),
+    ...mapExpenseItems(expenseRows, productCoverImageUrls),
+    ...mapProjectItems(projectRows, projectDates, input),
+  ]);
+  return { items, days: summarizeCalendarDays(input, items) };
 }

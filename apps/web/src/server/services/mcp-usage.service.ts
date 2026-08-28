@@ -22,15 +22,54 @@ const productionMcpUsageDashboardPort: McpUsageDashboardPort = {
   loadAggregate: getMcpUsageAggregateData,
 };
 
-export async function getMcpUsageDashboard(
-  db: Database,
-  window: McpUsageWindow,
-  port: McpUsageDashboardPort = productionMcpUsageDashboardPort,
-): Promise<McpUsageDashboardOut> {
-  const [catalog, usage] = await Promise.all([
-    port.listCatalog(),
-    port.loadAggregate(db, window),
-  ]);
+type McpToolCatalog = Awaited<ReturnType<typeof listMcpToolCatalog>>;
+type McpUsageAggregate = Awaited<ReturnType<typeof getMcpUsageAggregateData>>;
+type McpCatalogTool = McpToolCatalog["tools"][number];
+type McpLifetimeUsage = McpUsageAggregate["lifetimeTools"][number];
+type McpPeriodUsage = McpUsageAggregate["periodTools"][number];
+
+const toolUsageStatus = (
+  registered: boolean,
+  hasLifetimeUsage: boolean,
+  periodCalls: number,
+): McpToolUsageStatus => {
+  if (!registered) return "retired";
+  if (!hasLifetimeUsage) return "never";
+  return periodCalls > 0 ? "active" : "inactive";
+};
+
+const catalogFields = (definition: McpCatalogTool | undefined) => ({
+  title: definition?.title ?? null,
+  description: definition?.description ?? null,
+  inputSchema: definition?.inputSchema ?? null,
+  outputSchema: definition?.outputSchema ?? null,
+  annotations: definition?.annotations
+    ? {
+        readOnlyHint: definition.annotations.readOnlyHint,
+        destructiveHint: definition.annotations.destructiveHint,
+        idempotentHint: definition.annotations.idempotentHint,
+        openWorldHint: definition.annotations.openWorldHint,
+      }
+    : null,
+});
+
+const usageFields = (
+  lifetime: McpLifetimeUsage | undefined,
+  period: McpPeriodUsage | undefined,
+) => ({
+  lifetimeCalls: lifetime?.calls ?? 0,
+  periodCalls: period?.calls ?? 0,
+  periodSuccesses: period?.successes ?? 0,
+  periodErrors: period?.errors ?? 0,
+  firstUsedAt: lifetime?.firstUsedAt ?? null,
+  lastUsedAt: lifetime?.lastUsedAt ?? null,
+  lastRelease: lifetime?.lastRelease ?? null,
+});
+
+function buildToolUsageRows(
+  catalog: McpToolCatalog,
+  usage: McpUsageAggregate,
+): McpUsageDashboardOut["tools"] {
   const registeredNames = new Set(catalog.tools.map((tool) => tool.name));
   const catalogByTool = new Map(catalog.tools.map((tool) => [tool.name, tool]));
   const lifetimeByTool = new Map(
@@ -44,42 +83,23 @@ export async function getMcpUsageDashboard(
   const dailyByTool = groupBy(usage.daily, (row) => row.toolName);
   const allNames = new Set([...registeredNames, ...lifetimeByTool.keys()]);
 
-  const tools = [...allNames]
+  return [...allNames]
     .map((toolName) => {
       const registered = registeredNames.has(toolName);
       const definition = catalogByTool.get(toolName);
       const lifetime = lifetimeByTool.get(toolName);
       const period = periodByTool.get(toolName);
-      const status: McpToolUsageStatus = !registered
-        ? "retired"
-        : !lifetime
-          ? "never"
-          : period && period.calls > 0
-            ? "active"
-            : "inactive";
+      const metrics = usageFields(lifetime, period);
       return {
         toolName,
-        title: definition?.title ?? null,
-        description: definition?.description ?? null,
-        inputSchema: definition?.inputSchema ?? null,
-        outputSchema: definition?.outputSchema ?? null,
-        annotations: definition?.annotations
-          ? {
-              readOnlyHint: definition.annotations.readOnlyHint,
-              destructiveHint: definition.annotations.destructiveHint,
-              idempotentHint: definition.annotations.idempotentHint,
-              openWorldHint: definition.annotations.openWorldHint,
-            }
-          : null,
-        status,
+        ...catalogFields(definition),
+        ...metrics,
+        status: toolUsageStatus(
+          registered,
+          lifetime !== undefined,
+          metrics.periodCalls,
+        ),
         registered,
-        lifetimeCalls: lifetime?.calls ?? 0,
-        periodCalls: period?.calls ?? 0,
-        periodSuccesses: period?.successes ?? 0,
-        periodErrors: period?.errors ?? 0,
-        firstUsedAt: lifetime?.firstUsedAt ?? null,
-        lastUsedAt: lifetime?.lastUsedAt ?? null,
-        lastRelease: lifetime?.lastRelease ?? null,
         daily: (dailyByTool[toolName] ?? []).map(
           ({ day, success, error, total }) => ({ day, success, error, total }),
         ),
@@ -98,6 +118,19 @@ export async function getMcpUsageDashboard(
       (a, b) =>
         b.periodCalls - a.periodCalls || a.toolName.localeCompare(b.toolName),
     );
+}
+
+export async function getMcpUsageDashboard(
+  db: Database,
+  window: McpUsageWindow,
+  port: McpUsageDashboardPort = productionMcpUsageDashboardPort,
+): Promise<McpUsageDashboardOut> {
+  const [catalog, usage] = await Promise.all([
+    port.listCatalog(),
+    port.loadAggregate(db, window),
+  ]);
+  const registeredNames = new Set(catalog.tools.map((tool) => tool.name));
+  const tools = buildToolUsageRows(catalog, usage);
 
   const totals = {
     registered: registeredNames.size,

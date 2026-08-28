@@ -640,6 +640,104 @@ function drawValuationOverlay(
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
+function drawRoom(
+  ctx: CanvasRenderingContext2D,
+  room: RoomData,
+  hoveredItemId: string | null,
+) {
+  const roomCx = (room.originX - room.originY) * (TILE_W / 2);
+  const roomCy = (room.originX + room.originY) * (TILE_H / 2);
+  drawFloor(ctx, roomCx, roomCy, room.roomW, room.roomD);
+  drawWalls(ctx, roomCx, roomCy, room.roomW, room.roomD);
+
+  const hasNamedZones =
+    room.zones.length > 1 ||
+    (room.zones.length === 1 && Boolean(room.zones[0]?.name));
+  if (hasNamedZones) {
+    for (const zone of room.zones) {
+      drawZoneOverlay(ctx, zone, roomCx, roomCy, room.roomD);
+    }
+    for (let index = 1; index < room.zones.length; index++) {
+      const dividerX =
+        (room.zones[index - 1]!.endGx + room.zones[index]!.startGx) / 2;
+      drawZoneDivider(ctx, dividerX, roomCx, roomCy, room.roomD);
+    }
+  }
+
+  const sortedPieces = [...room.pieces].sort((left, right) => {
+    const depthDifference = left.gx + left.gy - (right.gx + right.gy);
+    return depthDifference !== 0 ? depthDifference : left.gz - right.gz;
+  });
+  drawGroupLabels(ctx, sortedPieces, roomCx, roomCy);
+  const maxValuation = Math.max(
+    0,
+    ...sortedPieces.map((piece) => piece.totalValuation),
+  );
+  for (const piece of sortedPieces) {
+    if (piece.isEmpty) ctx.globalAlpha = 0.25;
+    drawFloorShadow(ctx, piece, roomCx, roomCy);
+    getDrawFunction(piece.locationType ?? null)(
+      ctx,
+      piece,
+      roomCx,
+      roomCy,
+      hoveredItemId,
+    );
+    const tint = getValuationTint(piece.totalValuation, maxValuation);
+    if (tint) drawValuationOverlay(ctx, piece, roomCx, roomCy, tint);
+    if (piece.isEmpty) ctx.globalAlpha = 1;
+  }
+}
+
+function drawRoomLabels(
+  ctx: CanvasRenderingContext2D,
+  room: RoomData,
+  camera: Camera,
+) {
+  const titleWorld = toScreen(
+    room.originX + room.roomW / 2,
+    room.originY,
+    ROOM_H + 0.8,
+    0,
+    0,
+  );
+  const sx = titleWorld.x * camera.zoom + camera.x;
+  const sy = titleWorld.y * camera.zoom + camera.y;
+  ctx.font = '600 13px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.fillStyle = "rgba(23, 26, 33, 0.92)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(room.name, sx, sy);
+  ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
+  ctx.fillStyle = "rgba(102, 112, 133, 0.82)";
+  const itemNoun = room.totalItemCount !== 1 ? "items" : "item";
+  ctx.fillText(`${room.totalItemCount} ${itemNoun}`, sx, sy + 14);
+
+  if (room.zones.length === 1 && !room.zones[0]?.name) return;
+  for (const zone of room.zones) {
+    if (!zone.name) continue;
+    const midX = (zone.startGx + zone.endGx) / 2;
+    const labelWorld = toScreen(
+      room.originX + midX,
+      room.originY + room.roomD + 0.5,
+      0,
+      0,
+      0,
+    );
+    const lx = labelWorld.x * camera.zoom + camera.x;
+    const ly = labelWorld.y * camera.zoom + camera.y;
+    ctx.font = '10px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.fillStyle = zone.labelColor;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(zone.name, lx, ly);
+    ctx.font = '9px "Inter Variable", Inter, system-ui, sans-serif';
+    ctx.fillStyle = zone.labelColor.replace("0.75", "0.45");
+    const zoneItemNoun = zone.totalItemCount !== 1 ? "items" : "item";
+    ctx.fillText(`${zone.totalItemCount} ${zoneItemNoun}`, lx, ly + 12);
+  }
+}
+
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   canvasW: number,
@@ -660,124 +758,12 @@ export function renderScene(
     (a, b) => a.originX + a.originY - (b.originX + b.originY),
   );
 
-  for (const room of sortedRooms) {
-    const roomCx = (room.originX - room.originY) * (TILE_W / 2);
-    const roomCy = (room.originX + room.originY) * (TILE_H / 2);
-
-    drawFloor(ctx, roomCx, roomCy, room.roomW, room.roomD);
-    drawWalls(ctx, roomCx, roomCy, room.roomW, room.roomD);
-
-    // Zone overlays and dividers (after floor, before furniture)
-    if (
-      room.zones.length > 1 ||
-      (room.zones.length === 1 && room.zones[0]!.name)
-    ) {
-      for (const zone of room.zones) {
-        drawZoneOverlay(ctx, zone, roomCx, roomCy, room.roomD);
-      }
-      // Draw dividers between zones
-      for (let i = 1; i < room.zones.length; i++) {
-        const dividerX =
-          (room.zones[i - 1]!.endGx + room.zones[i]!.startGx) / 2;
-        drawZoneDivider(ctx, dividerX, roomCx, roomCy, room.roomD);
-      }
-    }
-
-    // Sort furniture by depth within room
-    const sortedPieces = [...room.pieces].sort((a, b) => {
-      const dA = a.gx + a.gy;
-      const dB = b.gx + b.gy;
-      return dA !== dB ? dA - dB : a.gz - b.gz;
-    });
-
-    // Draw group labels on back wall (subtle, above furniture groups)
-    drawGroupLabels(ctx, sortedPieces, roomCx, roomCy);
-
-    // Compute max valuation for heat tinting across all pieces in the scene
-    let maxValuation = 0;
-    for (const piece of sortedPieces) {
-      if (piece.totalValuation > maxValuation)
-        maxValuation = piece.totalValuation;
-    }
-
-    for (const piece of sortedPieces) {
-      // Ghost pieces rendered translucently
-      if (piece.isEmpty) ctx.globalAlpha = 0.25;
-
-      drawFloorShadow(ctx, piece, roomCx, roomCy);
-      const drawFn = getDrawFunction(piece.locationType ?? null);
-      drawFn(ctx, piece, roomCx, roomCy, hoveredItemId);
-
-      // Valuation heat overlay on furniture top face
-      const tint = getValuationTint(piece.totalValuation, maxValuation);
-      if (tint) drawValuationOverlay(ctx, piece, roomCx, roomCy, tint);
-
-      if (piece.isEmpty) ctx.globalAlpha = 1.0;
-    }
-  }
+  for (const room of sortedRooms) drawRoom(ctx, room, hoveredItemId);
 
   ctx.restore();
 
   // Room titles in screen space (always readable)
-  for (const room of sortedRooms) {
-    const titleWorld = toScreen(
-      room.originX + room.roomW / 2,
-      room.originY,
-      ROOM_H + 0.8,
-      0,
-      0,
-    );
-    const sx = titleWorld.x * camera.zoom + camera.x;
-    const sy = titleWorld.y * camera.zoom + camera.y;
-
-    ctx.font = '600 13px "Inter Variable", Inter, system-ui, sans-serif';
-    ctx.fillStyle = "rgba(23, 26, 33, 0.92)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.fillText(room.name, sx, sy);
-
-    ctx.font = '11px "Inter Variable", Inter, system-ui, sans-serif';
-    ctx.fillStyle = "rgba(102, 112, 133, 0.82)";
-    ctx.fillText(
-      `${room.totalItemCount} item${room.totalItemCount !== 1 ? "s" : ""}`,
-      sx,
-      sy + 14,
-    );
-
-    // Zone labels at the front edge of each zone
-    if (
-      room.zones.length > 1 ||
-      (room.zones.length === 1 && room.zones[0]!.name)
-    ) {
-      for (const zone of room.zones) {
-        if (!zone.name) continue;
-        const midX = (zone.startGx + zone.endGx) / 2;
-        const labelWorld = toScreen(
-          room.originX + midX,
-          room.originY + room.roomD + 0.5,
-          0,
-          0,
-          0,
-        );
-        const lx = labelWorld.x * camera.zoom + camera.x;
-        const ly = labelWorld.y * camera.zoom + camera.y;
-
-        ctx.font = '10px "Inter Variable", Inter, system-ui, sans-serif';
-        ctx.fillStyle = zone.labelColor;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillText(zone.name, lx, ly);
-
-        ctx.font = '9px "Inter Variable", Inter, system-ui, sans-serif';
-        ctx.fillStyle = zone.labelColor.replace("0.75", "0.45");
-        ctx.fillText(
-          `${zone.totalItemCount} item${zone.totalItemCount !== 1 ? "s" : ""}`,
-          lx,
-          ly + 12,
-        );
-      }
-    }
-  }
+  for (const room of sortedRooms) drawRoomLabels(ctx, room, camera);
 }
 
 export function drawTooltip(

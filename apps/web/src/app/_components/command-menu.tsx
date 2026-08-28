@@ -45,9 +45,11 @@ import { recordCommandMenuOpened } from "./command-menu-loader";
 import {
   EntityPaletteActionGroup,
   EntityPaletteActionsHost,
+  type PaletteAction,
 } from "./command-menu/entity-palette-actions";
 import { parsePastedShortcode } from "./command-menu/pasted-shortcode";
 import { quickActions } from "./command-menu/quick-actions";
+import type { QuickAction } from "./command-menu/quick-actions";
 import { getRecents, pushRecent } from "./command-menu/recents";
 import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
@@ -91,11 +93,64 @@ interface GlobalCommandMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
+type NavigationSearch = NonNullable<NavItem["search"]>;
+type GoToPage = (
+  path: string,
+  searchParams?: NavigationSearch | { create: true },
+) => void;
+type CommandMenuNavigate = ReturnType<typeof useNavigate>;
+
 /** Narrow a shortcode's entity to the searchable subset `recents` stores. */
 const isSearchableEntity = (
   entity: ShortcodeType,
 ): entity is ShortcodeType & SearchableEntity =>
   searchableEntities.some((candidate) => candidate === entity);
+
+/**
+ * The preview is deliberately limited to the legacy shortcode routes. A
+ * scoped query is literal search text, while an exact pasted shortcode still
+ * takes the direct navigation path below.
+ */
+function useShortcodePreview(
+  search: string,
+  searchScope: SearchableEntity | null,
+) {
+  const parsedShortcode = searchScope ? null : parseShortcode(search);
+  const locationQuery = useQuery({
+    ...entityDetailFor("location").queryOptions(
+      parsedShortcode?.type === "location"
+        ? parsedShortcode.shortcode
+        : "LOC-2222",
+    ),
+    enabled: parsedShortcode?.type === "location",
+  });
+  const productQuery = useQuery({
+    ...entityDetailFor("product").queryOptions(
+      parsedShortcode?.type === "product"
+        ? parsedShortcode.shortcode
+        : "PRD-2222",
+    ),
+    enabled: parsedShortcode?.type === "product",
+  });
+  const recipeQuery = useQuery({
+    ...entityDetailFor("recipe").queryOptions(
+      parsedShortcode?.type === "recipe"
+        ? parsedShortcode.shortcode
+        : "RCP-2222",
+    ),
+    enabled: parsedShortcode?.type === "recipe",
+  });
+  const shortcodeName =
+    parsedShortcode?.type === "location"
+      ? locationQuery.data?.name
+      : parsedShortcode?.type === "product"
+        ? productQuery.data?.name
+        : parsedShortcode?.type === "recipe"
+          ? recipeQuery.data?.name
+          : undefined;
+
+  return { parsedShortcode, shortcodeName };
+}
 
 export function GlobalCommandMenu({
   open: externalOpen,
@@ -139,54 +194,10 @@ export function GlobalCommandMenu({
   const exitAnswerMode = () => {
     setAnswerMode(false);
   };
-  // Shortcode detection and lookup. The queries exist only to PREVIEW the name
-  // in the menu — navigation needs no lookup at all, since the prefix already
-  // names the entity and the code is the URL. They key on the canonical form so
-  // a typed legacy code (`P-4K7M`) previews as well as a current one.
-  //
-  // Suppressed under a scope: `search` there is a query string being typed
-  // INTO that entity's list, not a candidate shortcode, so a partial match
-  // (e.g. scoped to product, typing "PRD-4K7") must stay literal search text
-  // rather than race toward a preview/navigation. `handleSearchPaste` below
-  // deliberately does NOT apply this suppression — a paste is only recognized
-  // when it resolves to a complete, exact shortcode (see
-  // `parsePastedShortcode`'s doc comment), which is a high-confidence,
-  // one-shot user action distinct from incremental typing, so it jumps
-  // regardless of scope.
-  const parsedShortcode = searchScope ? null : parseShortcode(search);
-  const locationQuery = useQuery({
-    ...entityDetailFor("location").queryOptions(
-      parsedShortcode?.type === "location"
-        ? parsedShortcode.shortcode
-        : "LOC-2222",
-    ),
-    enabled: parsedShortcode?.type === "location",
-  });
-  const productQuery = useQuery({
-    ...entityDetailFor("product").queryOptions(
-      parsedShortcode?.type === "product"
-        ? parsedShortcode.shortcode
-        : "PRD-2222",
-    ),
-    enabled: parsedShortcode?.type === "product",
-  });
-  const recipeQuery = useQuery({
-    ...entityDetailFor("recipe").queryOptions(
-      parsedShortcode?.type === "recipe"
-        ? parsedShortcode.shortcode
-        : "RCP-2222",
-    ),
-    enabled: parsedShortcode?.type === "recipe",
-  });
-
-  const shortcodeResult =
-    parsedShortcode?.type === "location"
-      ? locationQuery.data
-      : parsedShortcode?.type === "product"
-        ? productQuery.data
-        : parsedShortcode?.type === "recipe"
-          ? recipeQuery.data
-          : null;
+  const { parsedShortcode, shortcodeName } = useShortcodePreview(
+    search,
+    searchScope,
+  );
 
   const navigateToShortcode = (target: ParsedShortcode, name?: string) => {
     if (!isBrowserRoutedEntity(target.type)) return;
@@ -210,7 +221,7 @@ export function GlobalCommandMenu({
 
   const goToShortcode = () => {
     if (!parsedShortcode) return;
-    navigateToShortcode(parsedShortcode, shortcodeResult?.name);
+    navigateToShortcode(parsedShortcode, shortcodeName);
   };
 
   // The ⌘K hotkey is owned by the app shell (__root.tsx) so the shortcut works
@@ -272,7 +283,6 @@ export function GlobalCommandMenu({
   // `search` carries an action's deep-link params (e.g. the tracker quick
   // captures' `{ create: true }`) — a query string on `path` would be treated
   // as part of the pathname.
-  type NavigationSearch = NonNullable<NavItem["search"]>;
   const goToPage = (
     path: string,
     searchParams?: NavigationSearch | { create: true },
@@ -286,7 +296,7 @@ export function GlobalCommandMenu({
 
   // Determine what to show based on search state
   const hasSearch = search.length > 0;
-  const hasResults = results && results.length > 0;
+  const hasResults = (results?.length ?? 0) > 0;
   const scopeLabel = searchScope
     ? entities[entityTypeMap[searchScope]].pluralLabel
     : null;
@@ -336,43 +346,14 @@ export function GlobalCommandMenu({
           shouldFilter={false}
           className="sm:max-w-2xl"
         >
-          <CommandInput
-            ref={searchInputRef}
-            placeholder={
-              scopeLabel
-                ? `Search ${scopeLabel}…`
-                : "Search, jump to a page, or ask Cubby…"
-            }
-            value={search}
-            onValueChange={handleSearchChange}
+          <CommandMenuInput
+            clearSearchScope={clearSearchScope}
             onPaste={handleSearchPaste}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Backspace" &&
-                search.length === 0 &&
-                searchScope
-              ) {
-                event.preventDefault();
-                clearSearchScope();
-              }
-            }}
-            startAdornment={
-              searchScope && scopeLabel ? (
-                <Badge
-                  variant="secondary"
-                  render={
-                    <button
-                      type="button"
-                      aria-label={`Clear ${scopeLabel} scope`}
-                      onClick={clearSearchScope}
-                    />
-                  }
-                >
-                  {scopeLabel}
-                  <X data-icon="inline-end" />
-                </Badge>
-              ) : undefined
-            }
+            onSearchChange={handleSearchChange}
+            search={search}
+            searchInputRef={searchInputRef}
+            searchScope={searchScope}
+            scopeLabel={scopeLabel}
           />
           <CommandList className="max-h-96">
             {answerMode ? (
@@ -437,129 +418,34 @@ export function GlobalCommandMenu({
                   </output>
                 )}
 
-                {/* A structurally valid shortcode can always navigate directly: the
-                prefix identifies its route, whose loader owns the live-row 404. */}
-                {parsedShortcode &&
-                  isBrowserRoutedEntity(parsedShortcode.type) && (
-                    <CommandGroup heading="Go to">
-                      <CommandItem
-                        onSelect={goToShortcode}
-                        className="flex items-center gap-2"
-                      >
-                        <EntityIcon
-                          entity={parsedShortcode.type}
-                          className="size-4"
-                        />
-                        <span>
-                          Go to{" "}
-                          {shortcodeResult?.name ??
-                            entities[parsedShortcode.type].label}
-                        </span>
-                        <span className="ml-auto font-mono text-xs text-muted-foreground">
-                          {parsedShortcode.shortcode}
-                        </span>
-                      </CommandItem>
-                    </CommandGroup>
-                  )}
+                <ShortcodeCommandItems
+                  actions={entityActions}
+                  name={shortcodeName}
+                  onClose={() => setOpen(false)}
+                  onGoToShortcode={goToShortcode}
+                  parsedShortcode={parsedShortcode}
+                />
 
-                {/* The palette's first "do X to this record" group — until now it
-                could only navigate. The shortcode already resolved above, so
-                the entity's declared actions come along for free. */}
-                {parsedShortcode &&
-                  isBrowserRoutedEntity(parsedShortcode.type) && (
-                    <EntityPaletteActionGroup
-                      actions={entityActions}
-                      shortcode={parsedShortcode.shortcode}
-                      name={shortcodeResult?.name}
-                      onRun={() => setOpen(false)}
-                    />
-                  )}
+                <SearchResults
+                  hasResults={hasResults}
+                  isDevtoolsVisible={isDevtoolsVisible}
+                  isLoading={isLoading}
+                  navigate={navigate}
+                  onClose={() => setOpen(false)}
+                  onSelectResult={goToSearchResult}
+                  results={results}
+                  search={search}
+                  searchScope={searchScope}
+                  scopeLabel={scopeLabel}
+                />
 
-                {/* Search results are lexical and stable: Cmd-K is a jump surface. */}
-                {hasResults && !isLoading && (
-                  <div>
-                    <CommandGroup
-                      heading={
-                        scopeLabel ? `${scopeLabel} matches` : "Best matches"
-                      }
-                    >
-                      {results.map((item) => {
-                        const matchText = getSearchMatchText(item);
-
-                        return (
-                          <CommandItem
-                            key={`${item.entityType}-${item.id}`}
-                            onSelect={() => goToSearchResult(item)}
-                            className="flex items-center gap-2"
-                          >
-                            <SearchResultMedia item={item} />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm">
-                                {item.title}
-                              </div>
-                              {item.subtitle && (
-                                <div className="truncate text-xs text-muted-foreground">
-                                  {item.subtitle}
-                                </div>
-                              )}
-                              {isDevtoolsVisible && matchText && (
-                                <div
-                                  className="truncate text-2xs text-muted-foreground"
-                                  title={item.matchReason}
-                                >
-                                  {matchText}
-                                </div>
-                              )}
-                            </div>
-                            <div className="max-w-28 shrink-0 self-start pt-1 text-right">
-                              <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
-                                {entities[entityTypeMap[item.entityType]].label}
-                              </span>
-                              <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
-                                {item.id}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                    <CommandGroup>
-                      <CommandItem
-                        onSelect={() => {
-                          navigate({
-                            to: "/search",
-                            search: {
-                              q: search,
-                              type: searchScope ?? undefined,
-                            },
-                          });
-                          setOpen(false);
-                        }}
-                        className="justify-center text-muted-foreground"
-                      >
-                        <Search className="mr-2 size-4" />
-                        See all results for "{search}"
-                      </CommandItem>
-                    </CommandGroup>
-                  </div>
-                )}
-
-                {hasSearch && filteredActions.length > 0 && !isLoading && (
-                  <>
-                    {hasResults && <CommandSeparator />}
-                    <CommandGroup heading="Quick Actions">
-                      {filteredActions.map((action) => (
-                        <CommandItem
-                          key={action.id}
-                          onSelect={() => goToPage(action.path, action.search)}
-                        >
-                          <action.icon className="size-4" />
-                          <span>{action.name}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </>
-                )}
+                <MatchingQuickActions
+                  actions={filteredActions}
+                  hasResults={hasResults}
+                  hasSearch={hasSearch}
+                  isLoading={isLoading}
+                  onGoToPage={goToPage}
+                />
 
                 {/* Agent is available after direct navigation results and actions. */}
                 {hasSearch && !isLoading && (
@@ -580,107 +466,20 @@ export function GlobalCommandMenu({
                   </CommandGroup>
                 )}
 
-                {/* Default view when not searching */}
-                {!hasSearch && !searchScope && !isLoading && (
-                  <>
-                    {recents.length > 0 && (
-                      <CommandGroup heading="Jump back">
-                        {recents.map((recent) => (
-                          <CommandItem
-                            key={`recent-${recent.entityType}-${recent.id}`}
-                            value={`recent-${recent.id}`}
-                            onSelect={() =>
-                              goToEntity(
-                                recent.entityType,
-                                recent.id,
-                                recent.name,
-                              )
-                            }
-                            className="flex items-center gap-2"
-                          >
-                            <IconTile
-                              size="sm"
-                              className={cn(
-                                "size-6 rounded",
-                                entities[entityTypeMap[recent.entityType]]
-                                  ?.color.bg ?? "bg-muted/50",
-                                entities[entityTypeMap[recent.entityType]]
-                                  ?.color.text,
-                              )}
-                            >
-                              <EntityIcon
-                                entity={entityTypeMap[recent.entityType]}
-                                className="size-3.5"
-                              />
-                            </IconTile>
-                            <span className="truncate">{recent.name}</span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                    <CommandGroup heading="Quick Actions">
-                      {filteredActions.map((action) => (
-                        <CommandItem
-                          key={action.id}
-                          onSelect={() => goToPage(action.path, action.search)}
-                        >
-                          <action.icon className="size-4" />
-                          <span>{action.name}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                    <CommandSeparator />
-                    <CommandGroup heading="Go to">
-                      {goToLeaves.map((leaf) => (
-                        <CommandItem
-                          key={leaf.to}
-                          onSelect={() => goToPage(leaf.to)}
-                        >
-                          <leaf.icon className="size-4" />
-                          <span>{leaf.label}</span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                    <CommandSeparator />
-                    <CommandGroup heading="Settings">
-                      <CommandItem
-                        onSelect={() => {
-                          navigate({ to: "/settings" });
-                          setOpen(false);
-                        }}
-                      >
-                        <Settings className="size-4" />
-                        <span>Settings</span>
-                      </CommandItem>
-                      <CommandItem
-                        onSelect={() => {
-                          setFlag("perfOverlay", !perfOverlayOn);
-                          setOpen(false);
-                        }}
-                      >
-                        <Activity className="size-4" />
-                        <span>
-                          {perfOverlayOn ? "Hide" : "Show"} performance overlay
-                        </span>
-                      </CommandItem>
-                      <CommandItem
-                        onSelect={() => {
-                          toggleDevtools();
-                          setOpen(false);
-                        }}
-                      >
-                        <Wrench className="size-4" />
-                        <span>
-                          {isDevtoolsVisible ? "Hide" : "Show"} Devtools
-                        </span>
-                      </CommandItem>
-                    </CommandGroup>
-                    <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
-                      Tip: paste a shortcode (PRD-, LOC-, RCP-…) to jump
-                      instantly.
-                    </div>
-                  </>
-                )}
+                <DefaultCommandMenu
+                  filteredActions={filteredActions}
+                  hasSearch={hasSearch}
+                  isDevtoolsVisible={isDevtoolsVisible}
+                  isLoading={isLoading}
+                  navigate={navigate}
+                  onClose={() => setOpen(false)}
+                  onGoToEntity={goToEntity}
+                  onGoToPage={goToPage}
+                  perfOverlayOn={perfOverlayOn}
+                  recents={recents}
+                  searchScope={searchScope}
+                  toggleDevtools={toggleDevtools}
+                />
               </>
             )}
           </CommandList>
@@ -695,5 +494,381 @@ function CommandSearchSpinner() {
     <Row align="center" justify="center" className="py-6">
       <Spinner className="text-muted-foreground" />
     </Row>
+  );
+}
+
+function CommandMenuInput({
+  clearSearchScope,
+  onPaste,
+  onSearchChange,
+  search,
+  searchInputRef,
+  searchScope,
+  scopeLabel,
+}: {
+  clearSearchScope: () => void;
+  onPaste: (event: React.ClipboardEvent<HTMLInputElement>) => void;
+  onSearchChange: (value: string) => void;
+  search: string;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  searchScope: SearchableEntity | null;
+  scopeLabel: string | null;
+}) {
+  const hasScope = searchScope !== null && scopeLabel !== null;
+
+  return (
+    <CommandInput
+      ref={searchInputRef}
+      placeholder={
+        scopeLabel
+          ? `Search ${scopeLabel}…`
+          : "Search, jump to a page, or ask Cubby…"
+      }
+      value={search}
+      onValueChange={onSearchChange}
+      onPaste={onPaste}
+      onKeyDown={(event) => {
+        if (event.key !== "Backspace" || search.length > 0 || !searchScope) {
+          return;
+        }
+        event.preventDefault();
+        clearSearchScope();
+      }}
+      startAdornment={
+        hasScope ? (
+          <Badge
+            variant="secondary"
+            render={
+              <button
+                type="button"
+                aria-label={`Clear ${scopeLabel} scope`}
+                onClick={clearSearchScope}
+              />
+            }
+          >
+            {scopeLabel}
+            <X data-icon="inline-end" />
+          </Badge>
+        ) : undefined
+      }
+    />
+  );
+}
+
+function ShortcodeCommandItems({
+  actions,
+  name,
+  onClose,
+  onGoToShortcode,
+  parsedShortcode,
+}: {
+  actions: PaletteAction[];
+  name?: string | null;
+  onClose: () => void;
+  onGoToShortcode: () => void;
+  parsedShortcode: ParsedShortcode | null;
+}) {
+  if (!parsedShortcode || !isBrowserRoutedEntity(parsedShortcode.type)) {
+    return null;
+  }
+
+  return (
+    <>
+      <CommandGroup heading="Go to">
+        <CommandItem
+          onSelect={onGoToShortcode}
+          className="flex items-center gap-2"
+        >
+          <EntityIcon entity={parsedShortcode.type} className="size-4" />
+          <span>Go to {name ?? entities[parsedShortcode.type].label}</span>
+          <span className="ml-auto font-mono text-xs text-muted-foreground">
+            {parsedShortcode.shortcode}
+          </span>
+        </CommandItem>
+      </CommandGroup>
+      <EntityPaletteActionGroup
+        actions={actions}
+        shortcode={parsedShortcode.shortcode}
+        name={name}
+        onRun={onClose}
+      />
+    </>
+  );
+}
+
+function MatchingQuickActions({
+  actions,
+  hasResults,
+  hasSearch,
+  isLoading,
+  onGoToPage,
+}: {
+  actions: QuickAction[];
+  hasResults: boolean;
+  hasSearch: boolean;
+  isLoading: boolean;
+  onGoToPage: GoToPage;
+}) {
+  if (!hasSearch || actions.length === 0 || isLoading) return null;
+
+  return (
+    <>
+      {hasResults && <CommandSeparator />}
+      <QuickActionItems actions={actions} onGoToPage={onGoToPage} />
+    </>
+  );
+}
+
+function SearchResults({
+  hasResults,
+  isDevtoolsVisible,
+  isLoading,
+  navigate,
+  onClose,
+  onSelectResult,
+  results,
+  search,
+  searchScope,
+  scopeLabel,
+}: {
+  hasResults: boolean;
+  isDevtoolsVisible: boolean;
+  isLoading: boolean;
+  navigate: CommandMenuNavigate;
+  onClose: () => void;
+  onSelectResult: (item: SearchHit) => void;
+  results: SearchHit[] | undefined;
+  search: string;
+  searchScope: SearchableEntity | null;
+  scopeLabel: string | null;
+}) {
+  if (!hasResults || isLoading || !results) return null;
+
+  return (
+    <div>
+      <CommandGroup
+        heading={scopeLabel ? `${scopeLabel} matches` : "Best matches"}
+      >
+        {results.map((item) => (
+          <SearchResultItem
+            key={`${item.entityType}-${item.id}`}
+            isDevtoolsVisible={isDevtoolsVisible}
+            item={item}
+            onSelect={onSelectResult}
+          />
+        ))}
+      </CommandGroup>
+      <CommandGroup>
+        <CommandItem
+          onSelect={() => {
+            navigate({
+              to: "/search",
+              search: { q: search, type: searchScope ?? undefined },
+            });
+            onClose();
+          }}
+          className="justify-center text-muted-foreground"
+        >
+          <Search className="mr-2 size-4" />
+          See all results for "{search}"
+        </CommandItem>
+      </CommandGroup>
+    </div>
+  );
+}
+
+function SearchResultItem({
+  isDevtoolsVisible,
+  item,
+  onSelect,
+}: {
+  isDevtoolsVisible: boolean;
+  item: SearchHit;
+  onSelect: (item: SearchHit) => void;
+}) {
+  const matchText = getSearchMatchText(item);
+
+  return (
+    <CommandItem
+      value={`${item.entityType}-${item.id}`}
+      onSelect={() => onSelect(item)}
+      className="flex items-center gap-2"
+    >
+      <SearchResultMedia item={item} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm">{item.title}</div>
+        {item.subtitle && (
+          <div className="truncate text-xs text-muted-foreground">
+            {item.subtitle}
+          </div>
+        )}
+        {isDevtoolsVisible && matchText && (
+          <div
+            className="truncate text-2xs text-muted-foreground"
+            title={item.matchReason}
+          >
+            {matchText}
+          </div>
+        )}
+      </div>
+      <div className="max-w-28 shrink-0 self-start pt-1 text-right">
+        <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
+          {entities[entityTypeMap[item.entityType]].label}
+        </span>
+        <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
+          {item.id}
+        </span>
+      </div>
+    </CommandItem>
+  );
+}
+
+function DefaultCommandMenu({
+  filteredActions,
+  hasSearch,
+  isDevtoolsVisible,
+  isLoading,
+  navigate,
+  onClose,
+  onGoToEntity,
+  onGoToPage,
+  perfOverlayOn,
+  recents,
+  searchScope,
+  toggleDevtools,
+}: {
+  filteredActions: QuickAction[];
+  hasSearch: boolean;
+  isDevtoolsVisible: boolean;
+  isLoading: boolean;
+  navigate: CommandMenuNavigate;
+  onClose: () => void;
+  onGoToEntity: (
+    entityType: SearchableEntity,
+    shortcode: string,
+    name?: string,
+  ) => void;
+  onGoToPage: GoToPage;
+  perfOverlayOn: boolean;
+  recents: ReturnType<typeof getRecents>;
+  searchScope: SearchableEntity | null;
+  toggleDevtools: () => void;
+}) {
+  if (hasSearch || searchScope || isLoading) return null;
+
+  return (
+    <>
+      <RecentCommandItems recents={recents} onGoToEntity={onGoToEntity} />
+      <QuickActionItems actions={filteredActions} onGoToPage={onGoToPage} />
+      <CommandSeparator />
+      <CommandGroup heading="Go to">
+        {goToLeaves.map((leaf) => (
+          <CommandItem key={leaf.to} onSelect={() => onGoToPage(leaf.to)}>
+            <leaf.icon className="size-4" />
+            <span>{leaf.label}</span>
+          </CommandItem>
+        ))}
+      </CommandGroup>
+      <CommandSeparator />
+      <CommandGroup heading="Settings">
+        <CommandItem
+          onSelect={() => {
+            navigate({ to: "/settings" });
+            onClose();
+          }}
+        >
+          <Settings className="size-4" />
+          <span>Settings</span>
+        </CommandItem>
+        <CommandItem
+          onSelect={() => {
+            setFlag("perfOverlay", !perfOverlayOn);
+            onClose();
+          }}
+        >
+          <Activity className="size-4" />
+          <span>{perfOverlayOn ? "Hide" : "Show"} performance overlay</span>
+        </CommandItem>
+        <CommandItem
+          onSelect={() => {
+            toggleDevtools();
+            onClose();
+          }}
+        >
+          <Wrench className="size-4" />
+          <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
+        </CommandItem>
+      </CommandGroup>
+      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
+        Tip: paste a shortcode (PRD-, LOC-, RCP-…) to jump instantly.
+      </div>
+    </>
+  );
+}
+
+function RecentCommandItems({
+  onGoToEntity,
+  recents,
+}: {
+  onGoToEntity: (
+    entityType: SearchableEntity,
+    shortcode: string,
+    name?: string,
+  ) => void;
+  recents: ReturnType<typeof getRecents>;
+}) {
+  if (recents.length === 0) return null;
+
+  return (
+    <CommandGroup heading="Jump back">
+      {recents.map((recent) => (
+        <CommandItem
+          key={`recent-${recent.entityType}-${recent.id}`}
+          value={`recent-${recent.id}`}
+          onSelect={() =>
+            onGoToEntity(recent.entityType, recent.id, recent.name)
+          }
+          className="flex items-center gap-2"
+        >
+          <IconTile
+            size="sm"
+            className={cn(
+              "size-6 rounded",
+              entities[entityTypeMap[recent.entityType]]?.color.bg ??
+                "bg-muted/50",
+              entities[entityTypeMap[recent.entityType]]?.color.text,
+            )}
+          >
+            <EntityIcon
+              entity={entityTypeMap[recent.entityType]}
+              className="size-3.5"
+            />
+          </IconTile>
+          <span className="truncate">{recent.name}</span>
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  );
+}
+
+function QuickActionItems({
+  actions,
+  onGoToPage,
+}: {
+  actions: QuickAction[];
+  onGoToPage: GoToPage;
+}) {
+  return (
+    <CommandGroup heading="Quick Actions">
+      {actions.map((action) => (
+        <CommandItem
+          key={action.id}
+          onSelect={() => onGoToPage(action.path, action.search)}
+        >
+          <action.icon className="size-4" />
+          <span>{action.name}</span>
+        </CommandItem>
+      ))}
+    </CommandGroup>
   );
 }

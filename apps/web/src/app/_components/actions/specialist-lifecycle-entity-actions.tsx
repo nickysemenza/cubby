@@ -133,20 +133,8 @@ function useStagedSpecialistDelete({
  * into meals. The staged promise keeps a list selection until confirmation.
  */
 export function useDeleteCookbookEntityAction(
-  operations?: SpecialistLifecycleOperations,
-): EntityActionHandles;
-export function useDeleteCookbookEntityAction(
-  entity: "cookbook",
-): EntityActionHandles;
-export function useDeleteCookbookEntityAction(
-  operationsOrEntity:
-    | SpecialistLifecycleOperations
-    | "cookbook" = productionOperations,
+  operations: SpecialistLifecycleOperations = productionOperations,
 ): EntityActionHandles {
-  const operations =
-    operationsOrEntity === "cookbook"
-      ? productionOperations
-      : operationsOrEntity;
   const navigate = useNavigate();
   const mutation = useActionMutation({
     mutationFn: operations.deleteCookbook.mutationOptions,
@@ -189,18 +177,8 @@ export function useDeleteCookbookEntityAction(
 
 /** Image deletion removes the database record and its R2 object together. */
 export function useDeleteImageEntityAction(
-  operations?: SpecialistLifecycleOperations,
-): EntityActionHandles;
-export function useDeleteImageEntityAction(
-  entity: "image",
-): EntityActionHandles;
-export function useDeleteImageEntityAction(
-  operationsOrEntity:
-    | SpecialistLifecycleOperations
-    | "image" = productionOperations,
+  operations: SpecialistLifecycleOperations = productionOperations,
 ): EntityActionHandles {
-  const operations =
-    operationsOrEntity === "image" ? productionOperations : operationsOrEntity;
   const navigate = useNavigate();
   const mutation = useActionMutation({
     mutationFn: operations.deleteImage.mutationOptions,
@@ -246,7 +224,7 @@ export const specialistLifecycleEntityActionDefinitions = [
     surfaces: ["row", "selection", "inspector", "detail"],
     group: "destructive",
     priority: 100,
-    use: useDeleteCookbookEntityAction,
+    use: () => useDeleteCookbookEntityAction(),
   }),
   defineEntityAction({
     verb: "delete",
@@ -255,6 +233,6 @@ export const specialistLifecycleEntityActionDefinitions = [
     surfaces: ["inspector", "detail"],
     group: "destructive",
     priority: 100,
-    use: useDeleteImageEntityAction,
+    use: () => useDeleteImageEntityAction(),
   }),
 ] as const;

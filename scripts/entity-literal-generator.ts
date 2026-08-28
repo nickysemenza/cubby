@@ -560,6 +560,36 @@ const normalizedEntitySource = (
     ["countFilter", "relatednessSignals", "mcpNames", "ports"],
     `${context}.extensions`,
   );
+  validateLegacyCapabilities(raw, capabilities, context);
+  const relations = normalizedLegacyRelations(raw, context);
+  const route = normalizedLegacyRoute(raw, context);
+  const descriptor = legacyDescriptor(
+    raw,
+    identifiers,
+    capabilities,
+    search,
+    relations,
+    route,
+    extensions,
+    context,
+  );
+  return normalizedLegacyEntity(
+    raw,
+    names,
+    presentation,
+    descriptor,
+    route,
+    capabilities,
+    extensions,
+    context,
+  );
+};
+
+const validateLegacyCapabilities = (
+  raw: LiteralObject,
+  capabilities: LiteralObject,
+  context: string,
+): void => {
   const deleteCapability = required(
     capabilities,
     "delete",
@@ -637,6 +667,12 @@ const normalizedEntitySource = (
         `${context}.capabilities.mcp[${index}] is unsupported.`,
       );
   }
+};
+
+const normalizedLegacyRelations = (
+  raw: LiteralObject,
+  context: string,
+): LiteralValue[] => {
   const relations = required(raw, "relations", context);
   if (!Array.isArray(relations))
     throw new LiteralSpecError(`${context}.relations must be an array.`);
@@ -668,6 +704,13 @@ const normalizedEntitySource = (
         `${context}.relations[${index}] local-path requires inverse.`,
       );
   }
+  return relations;
+};
+
+const normalizedLegacyRoute = (
+  raw: LiteralObject,
+  context: string,
+): LiteralValue => {
   const route = required(raw, "route", context);
   if (route !== null) {
     exactKeys(
@@ -676,6 +719,19 @@ const normalizedEntitySource = (
       `${context}.route`,
     );
   }
+  return route;
+};
+
+const legacyDescriptor = (
+  raw: LiteralObject,
+  identifiers: LiteralObject,
+  capabilities: LiteralObject,
+  search: LiteralObject,
+  relations: LiteralValue[],
+  route: LiteralValue,
+  extensions: LiteralObject,
+  context: string,
+): LiteralObject => {
   const descriptor: LiteralObject = {
     dbTable: required(raw, "table", context),
     idBrand: required(identifiers, "brand", `${context}.identifiers`),
@@ -727,6 +783,19 @@ const normalizedEntitySource = (
     descriptor.relatednessSignals = extensions.relatednessSignals;
   }
 
+  return descriptor;
+};
+
+const normalizedLegacyEntity = (
+  raw: LiteralObject,
+  names: LiteralObject,
+  presentation: LiteralObject,
+  descriptor: LiteralObject,
+  route: LiteralValue,
+  capabilities: LiteralObject,
+  extensions: LiteralObject,
+  context: string,
+): LiteralObject => {
   const normalized: LiteralObject = {
     key: required(raw, "key", context),
     route,
@@ -742,12 +811,78 @@ const normalizedEntitySource = (
     descriptor,
     contract: required(raw, "fields", context),
     filters: required(raw, "filters", context),
-    bulkUpdate: bulkUpdateCapability,
+    bulkUpdate: required(capabilities, "bulkUpdate", `${context}.capabilities`),
   };
   if (extensions.ports !== undefined) {
     normalized.ports = extensions.ports;
   }
   return normalized;
+};
+
+const compiledInspector = (object: LiteralObject, context: string) => {
+  const inspectorObject = objectValue(
+    required(object, "inspector", context),
+    `${context}.inspector`,
+  );
+  exactKeys(
+    inspectorObject,
+    ["singular", "plural", "titleField"],
+    `${context}.inspector`,
+  );
+  return {
+    singular: stringValue(
+      required(inspectorObject, "singular", `${context}.inspector`),
+      `${context}.inspector.singular`,
+    ),
+    plural:
+      inspectorObject.plural === null
+        ? null
+        : stringValue(
+            required(inspectorObject, "plural", `${context}.inspector`),
+            `${context}.inspector.plural`,
+          ),
+    titleField: stringValue(
+      required(inspectorObject, "titleField", `${context}.inspector`),
+      `${context}.inspector.titleField`,
+    ),
+  };
+};
+
+const compiledRoute = (
+  value: LiteralValue | undefined,
+  context: string,
+): ParsedEntityRoute | null => {
+  if (value === undefined || value === null) return null;
+  const route = objectValue(value, `${context}.route`);
+  const parsed: ParsedEntityRoute = {
+    basePath: stringValue(
+      required(route, "basePath", `${context}.route`),
+      `${context}.route.basePath`,
+    ),
+  };
+  if (route.detailParam !== undefined)
+    parsed.detailParam = stringValue(
+      route.detailParam,
+      `${context}.route.detailParam`,
+    );
+  return parsed;
+};
+
+const compiledShortcode = (
+  descriptor: LiteralObject,
+  key: "shortcodePrefix" | "legacyShortcodePrefix",
+  expression: RegExp,
+  label: string,
+  context: string,
+): string | null => {
+  const value = descriptor[key];
+  if (value === undefined) return null;
+  const shortcode = stringValue(value, `${context}.descriptor.${key}`);
+  if (!expression.test(shortcode))
+    throw new LiteralSpecError(
+      `${context}.descriptor.${key} must be an ${label} prefix.`,
+    );
+  return shortcode;
 };
 
 const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
@@ -779,32 +914,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     required(object, "descriptor", context),
     `${context}.descriptor`,
   );
-  const inspectorObject = objectValue(
-    required(object, "inspector", context),
-    `${context}.inspector`,
-  );
-  exactKeys(
-    inspectorObject,
-    ["singular", "plural", "titleField"],
-    `${context}.inspector`,
-  );
-  const inspector = {
-    singular: stringValue(
-      required(inspectorObject, "singular", `${context}.inspector`),
-      `${context}.inspector.singular`,
-    ),
-    plural:
-      inspectorObject.plural === null
-        ? null
-        : stringValue(
-            required(inspectorObject, "plural", `${context}.inspector`),
-            `${context}.inspector.plural`,
-          ),
-    titleField: stringValue(
-      required(inspectorObject, "titleField", `${context}.inspector`),
-      `${context}.inspector.titleField`,
-    ),
-  };
+  const inspector = compiledInspector(object, context);
   const filters = objectValue(
     required(object, "filters", context),
     `${context}.filters`,
@@ -915,49 +1025,21 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
       `${context}.filters.descriptors contains duplicate URL keys.`,
     );
   }
-  const routeValue = object.route;
-  const route =
-    routeValue === undefined || routeValue === null
-      ? null
-      : (() => {
-          const value = objectValue(routeValue, `${context}.route`);
-          const parsedRoute: ParsedEntityRoute = {
-            basePath: stringValue(
-              required(value, "basePath", `${context}.route`),
-              `${context}.route.basePath`,
-            ),
-          };
-          if (value.detailParam !== undefined) {
-            parsedRoute.detailParam = stringValue(
-              value.detailParam,
-              `${context}.route.detailParam`,
-            );
-          }
-          return parsedRoute;
-        })();
-  const shortcodeValue = descriptor.shortcodePrefix;
-  const shortcode =
-    shortcodeValue === undefined
-      ? null
-      : stringValue(shortcodeValue, `${context}.descriptor.shortcodePrefix`);
-  if (shortcode !== null && !/^[A-Z]{3}-$/.test(shortcode)) {
-    throw new LiteralSpecError(
-      `${context}.descriptor.shortcodePrefix must be an XXX- prefix.`,
-    );
-  }
-  const legacyShortcodeValue = descriptor.legacyShortcodePrefix;
-  const legacyShortcode =
-    legacyShortcodeValue === undefined
-      ? null
-      : stringValue(
-          legacyShortcodeValue,
-          `${context}.descriptor.legacyShortcodePrefix`,
-        );
-  if (legacyShortcode !== null && !/^[A-Z]-$/.test(legacyShortcode)) {
-    throw new LiteralSpecError(
-      `${context}.descriptor.legacyShortcodePrefix must be an X- prefix.`,
-    );
-  }
+  const route = compiledRoute(object.route, context);
+  const shortcode = compiledShortcode(
+    descriptor,
+    "shortcodePrefix",
+    /^[A-Z]{3}-$/,
+    "XXX-",
+    context,
+  );
+  const legacyShortcode = compiledShortcode(
+    descriptor,
+    "legacyShortcodePrefix",
+    /^[A-Z]-$/,
+    "X-",
+    context,
+  );
   booleanValue(
     required(descriptor, "auditable", `${context}.descriptor`),
     `${context}.descriptor.auditable`,
