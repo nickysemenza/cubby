@@ -13,7 +13,7 @@ import {
   RectangleHorizontal,
   Refrigerator,
   Ruler,
-  Shapes,
+  Shapes as OtherTradeIcon,
   Square,
   Trash2,
   Trees,
@@ -45,7 +45,7 @@ import { TRADE_LABELS } from "./project-formatting";
  * dropped in the Notion migration; these `currentColor` glyphs sit cleanly on
  * Porcelain surfaces without a glossy clash.
  */
-const TRADE_ICONS: Record<Trade, LucideIcon> = {
+const TRADE_ICONS = {
   planning: ClipboardList,
   demolition: Trash2,
   building: Hammer,
@@ -64,8 +64,8 @@ const TRADE_ICONS: Record<Trade, LucideIcon> = {
   metalworking: Wrench,
   crafts: Palette,
   auto: Car,
-  other: Shapes,
-};
+  other: OtherTradeIcon,
+} satisfies Record<Trade, LucideIcon>;
 
 /** Outline badge with the trade's leading glyph + label — the canonical trade chip. */
 export function TradeBadge({ trade }: { trade: Trade }) {

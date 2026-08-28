@@ -35,6 +35,7 @@ export const TIER1_NUTRIENTS = {
 export type NutrientKey = keyof typeof TIER1_NUTRIENTS;
 
 export type NutrientInfo = (typeof TIER1_NUTRIENTS)[NutrientKey];
+export type NutrientCode = NutrientInfo["code"];
 
 export const TIER1_CODES: readonly string[] = Object.values(
   TIER1_NUTRIENTS,
@@ -79,6 +80,8 @@ export function getNutrientUnit(code: string): string {
   return CODE_TO_NUTRIENT[code]?.unit ?? "G";
 }
 
+export function getNutrientKey(code: NutrientCode): NutrientKey;
+export function getNutrientKey(code: string): string;
 export function getNutrientKey(code: string): string {
   return CODE_TO_KEY[code] ?? code;
 }
@@ -91,7 +94,7 @@ export function getNutrientInfo(code: string): NutrientInfo | undefined {
   return CODE_TO_NUTRIENT[code];
 }
 
-export function isTier1Nutrient(code: string): boolean {
+export function isTier1Nutrient(code: string): code is NutrientCode {
   return code in CODE_TO_NUTRIENT;
 }
 
@@ -135,8 +138,12 @@ export function buildNutrients(
   return out;
 }
 
-const isNutrientKey = (key: string): key is NutrientKey =>
+export const isNutrientKey = (key: string): key is NutrientKey =>
   Object.hasOwn(TIER1_NUTRIENTS, key);
+
+/** Every tier-1 nutrient key, derived from the authoritative catalog. */
+export const TIER1_NUTRIENT_KEYS =
+  Object.keys(TIER1_NUTRIENTS).filter(isNutrientKey);
 
 /**
  * Get the canonical unit string for a nutrient (e.g., "g protein", "kcal").

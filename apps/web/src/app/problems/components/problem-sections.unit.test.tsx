@@ -13,6 +13,8 @@ type Section = (typeof PROBLEM_SECTIONS)[number];
 const ALL_PROBLEM_KEYS = Object.keys(PROBLEM_CLASS).filter(
   (key): key is ProblemKey => key in PROBLEM_CLASS,
 );
+const isStringProperty = (property: PropertyKey): property is string =>
+  typeof property === "string";
 
 /**
  * The detector keys a section actually renders, taken from the section itself
@@ -30,7 +32,7 @@ function keysReadBy(section: Section): ProblemKey[] {
   };
   const proxied = new Proxy(probe, {
     get: (_target, property) => {
-      if (typeof property === "string" && property !== "sectionTotals") {
+      if (isStringProperty(property) && property !== "sectionTotals") {
         read.add(property);
       }
       return [];

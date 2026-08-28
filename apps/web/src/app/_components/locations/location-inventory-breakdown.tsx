@@ -27,22 +27,23 @@ export const hasDescendantInventory = (
  */
 export const buildLocationInventoryBreakdown = (
   location: LocationInventoryBreakdownOut,
-): HierarchyDrilldownNode => ({
-  id: location.id,
-  label: location.name,
-  metricLabel: formatItems(location.totalItemCount),
-  metricValue: location.totalItemCount,
-  ...(location.directItemCount > 0
-    ? {
-        directMetricLabel: formatItems(location.directItemCount),
-        directMetricValue: location.directItemCount,
-      }
-    : {}),
-  locationShortcode: location.id,
-  ...(location.children.length > 0
-    ? { children: location.children.map(buildLocationInventoryBreakdown) }
-    : {}),
-});
+): HierarchyDrilldownNode => {
+  const node: HierarchyDrilldownNode = {
+    id: location.id,
+    label: location.name,
+    metricLabel: formatItems(location.totalItemCount),
+    metricValue: location.totalItemCount,
+    locationShortcode: location.id,
+  };
+  if (location.directItemCount > 0) {
+    node.directMetricLabel = formatItems(location.directItemCount);
+    node.directMetricValue = location.directItemCount;
+  }
+  if (location.children.length > 0) {
+    node.children = location.children.map(buildLocationInventoryBreakdown);
+  }
+  return node;
+};
 
 function LocationInventoryBreakdownSkeleton() {
   return (
@@ -75,16 +76,22 @@ function LocationInventoryBreakdownError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+export interface LocationInventoryBreakdownOperations {
+  readonly inventoryBreakdown: typeof location.inventoryBreakdown;
+}
+
 /** A read-only descendant-stock map, kept separate from the editable contents. */
 export function LocationInventoryBreakdown({
   shortcode,
   hasChildren,
+  operations = location,
 }: {
   shortcode: LocationInventoryBreakdownOut["id"];
   hasChildren: boolean;
+  operations?: LocationInventoryBreakdownOperations;
 }) {
   const breakdown = useQuery({
-    ...location.inventoryBreakdown.queryOptions({ shortcode }),
+    ...operations.inventoryBreakdown.queryOptions({ shortcode }),
     enabled: hasChildren,
   });
 

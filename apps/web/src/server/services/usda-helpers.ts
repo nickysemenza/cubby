@@ -2,10 +2,12 @@ import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
 
 import type { USDAClient } from "../clients/usda";
 
+export type UsdaFoodBatchPort = Pick<USDAClient, "findFoodsBatch">;
+
 export async function batchEnrichWithFood<T extends object>(
   items: T[],
   getLookupParam: (item: T) => FoodLookupParam | null,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<Array<T & { food: FoodSummary | null }>> {
   if (items.length === 0) {
     return [];

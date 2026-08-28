@@ -1,4 +1,7 @@
-import { calendarItemKind } from "@cubby/schemas/calendar";
+import {
+  calendarItemKind,
+  type CalendarItemKind,
+} from "@cubby/schemas/calendar";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createElement } from "react";
 
@@ -36,12 +39,12 @@ import { KIND_ICONS } from "./calendar-icons";
  * See `calendarFilterFields` for the cross-kind rule this is the UI half of.
  */
 
-const KIND_LABELS: Record<string, string> = {
+const KIND_LABELS = {
   meal: "Meals",
   task: "Tasks",
   expense: "Expenses",
   project: "Projects",
-};
+} satisfies Record<CalendarItemKind, string>;
 
 const itemKindOptions: FilterableComboboxItem[] = calendarItemKind.options.map(
   (value) => ({

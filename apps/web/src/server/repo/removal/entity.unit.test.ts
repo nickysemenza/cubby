@@ -1,4 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  auditableEntities,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import { testEntityId, testUserId } from "@cubby/schemas/testing";
 import { getTableName, type SQL } from "drizzle-orm";
 import { PgDialect, type PgTable } from "drizzle-orm/pg-core";
@@ -37,9 +41,20 @@ type WriteStatement = {
   table: string;
   where?: SQL;
 };
+type AuditInsertRow = typeof auditLog.$inferInsert;
+type CascadingImageRow = Pick<typeof productImage.$inferSelect, "imageId">;
 type Statement =
   | WriteStatement
-  | { op: "insert"; table: string; rows: Array<Record<string, unknown>> };
+  | { op: "insert"; table: string; rows: AuditInsertRow[] };
+
+const transactionRecorder = <Recorder extends object>(
+  recorder: Recorder,
+): DrizzleTransaction => {
+  // SAFETY: recordingTx supplies every Drizzle method and chaining path that
+  // removeEntity and its cascade collaborators exercise; this named interop
+  // seam is test-only and exposes no other transaction capability to callers.
+  return recorder as DrizzleTransaction;
+};
 
 /** The predicate a recorded statement ran with, rendered as parameterized SQL. */
 const renderedWhere = (statement: Statement | undefined) => {
@@ -83,7 +98,7 @@ const recordingTx = (
           // the right files is a real-DB question, asserted in
           // repo/image.integration.test.ts. This file only pins ORDER.
           where: () =>
-            Object.assign(Promise.resolve([] as unknown[]), {
+            Object.assign(Promise.resolve<CascadingImageRow[]>([]), {
               groupBy: async () => counts[name] ?? [],
             }),
         };
@@ -116,12 +131,12 @@ const recordingTx = (
       };
     },
     insert: (table: PgTable) => ({
-      values: async (rows: Array<Record<string, unknown>>) => {
+      values: async (rows: AuditInsertRow[]) => {
         log.push({ op: "insert", table: getTableName(table), rows });
       },
     }),
   };
-  return { log, tx: tx as unknown as DrizzleTransaction };
+  return { log, tx: transactionRecorder(tx) };
 };
 
 const ids = <E extends RemovableEntity>(entity: E, ...v: string[]) =>
@@ -165,7 +180,8 @@ describe("removeEntity — statement order", () => {
   it("counts every audited child before issuing any removal", async () => {
     // A count taken after a sibling edge had already been cleared would report
     // the wrong number, so the ordering here is behavioral, not incidental.
-    const productId = ids("product", "p1")[0]!;
+    const [productId] = ids("product", "p1");
+    if (!productId) throw new Error("Expected a product id fixture");
     const { log, tx } = recordingTx({
       [getTableName(productImage)]: [{ key: productId, n: 2 }],
     });
@@ -208,7 +224,8 @@ describe("removeEntity — statement order", () => {
     // The real multi-child shape (`deleteProjects`: two counted soft edges plus
     // an uncounted hard one). Order is declared, not sorted by mode, and the
     // hard edge contributes no SELECT and no `changes` key.
-    const productId = ids("product", "p1")[0]!;
+    const [productId] = ids("product", "p1");
+    if (!productId) throw new Error("Expected a product id fixture");
     const { log, tx } = recordingTx({
       [getTableName(productImage)]: [{ key: productId, n: 2 }],
       [getTableName(productUnitMappings)]: [{ key: productId, n: 5 }],
@@ -380,7 +397,11 @@ describe("removeEntity — the parent table is derived, not passed", () => {
   // Table-driven over the whole roster: deriving the table from `entity` is
   // what makes `{entity: "vendor"}` against the `product` table unwritable, and
   // only enumerating every entity proves the lookup is right for each one.
-  it.each(Object.keys(SHORTCODE_TABLE) as RemovableEntity[])(
+  const shortcodeEntitySet = new Set<string>(shortcodeEntities);
+  const removableEntities = auditableEntities.filter(
+    (entity): entity is RemovableEntity => shortcodeEntitySet.has(entity),
+  );
+  it.each(removableEntities)(
     "removes %s rows from its own SHORTCODE_TABLE entry",
     async (entity) => {
       const { log, tx } = recordingTx();

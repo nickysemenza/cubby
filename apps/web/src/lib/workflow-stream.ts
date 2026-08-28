@@ -1,5 +1,5 @@
-import superjson from "superjson";
-import type { z } from "zod";
+import superjson, { type SuperJSONResult } from "superjson";
+import { z } from "zod";
 
 import {
   beginObservedOperation,
@@ -9,38 +9,40 @@ import {
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { markFreshReads } from "~/lib/fresh-read-marker";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import type { PublicStartOperationError } from "~/server/start-operation.contract";
+import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
-type EventFrame = {
-  kind: "event";
-  payload: Parameters<typeof superjson.deserialize>[0];
-};
-type ErrorFrame = { kind: "error"; error: PublicStartOperationError };
-type StreamFrame = EventFrame | ErrorFrame;
+const superJsonStructureSchema = z.object({
+  json: z.json(),
+  meta: z.object({}).loose().optional(),
+});
+
+const superJsonResultSchema = z.custom<SuperJSONResult>(
+  (value): value is SuperJSONResult =>
+    superJsonStructureSchema.safeParse(value).success,
+);
+
+const streamFrameSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("event"), payload: superJsonResultSchema }),
+  z.object({
+    kind: z.literal("error"),
+    error: publicStartOperationErrorSchema,
+  }),
+]);
+
+type StreamFrame = z.infer<typeof streamFrameSchema>;
 
 const parseFrame = (line: string): StreamFrame => {
-  const value: unknown = JSON.parse(line);
-  if (!value || typeof value !== "object" || !("kind" in value)) {
-    throw new Error("Workflow stream returned an invalid frame");
-  }
-  const frame = value as Record<string, unknown>;
-  if (frame.kind === "event" && "payload" in frame) {
-    return frame as EventFrame;
-  }
-  if (
-    frame.kind === "error" &&
-    frame.error &&
-    typeof frame.error === "object"
-  ) {
-    return frame as ErrorFrame;
-  }
-  throw new Error("Workflow stream returned an invalid frame");
+  const parsed = streamFrameSchema.safeParse(JSON.parse(line));
+  if (parsed.success) return parsed.data;
+  throw new Error("Workflow stream returned an invalid frame", {
+    cause: parsed.error,
+  });
 };
 
-async function* readFrames<Event>(options: {
+async function* readFrames<EventSchema extends z.ZodTypeAny>(options: {
   response: Response;
-  eventSchema: z.ZodType<Event>;
-}): AsyncGenerator<Event> {
+  eventSchema: EventSchema;
+}): AsyncGenerator<z.output<EventSchema>> {
   if (!options.response.body) {
     throw new Error("Workflow stream returned no body");
   }
@@ -75,14 +77,17 @@ async function* readFrames<Event>(options: {
   }
 }
 
-export async function openWorkflowStream<Input, Event>(options: {
+export async function openWorkflowStream<
+  Input,
+  EventSchema extends z.ZodTypeAny,
+>(options: {
   operation: StartOperationIdOfKind<"subscription">;
   kind: "query" | "mutation";
   url: string;
   input: Input;
-  eventSchema: z.ZodType<Event>;
+  eventSchema: EventSchema;
   signal?: AbortSignal;
-}): Promise<AsyncIterable<Event>> {
+}): Promise<AsyncIterable<z.output<EventSchema>>> {
   const observed = beginObservedOperation({
     kind: options.kind,
     transport: "start",

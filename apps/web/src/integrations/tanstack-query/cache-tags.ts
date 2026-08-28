@@ -351,15 +351,16 @@ export const ripple = {
  * config — the contract `invalidatesFor` documented. */
 const fallbackRipples = new Map<string, readonly OperationCacheTag[]>();
 
+const isDeclaredRipple = (entity: string): entity is keyof typeof ripple =>
+  entity in ripple;
+
 /**
  * The tags one write on `entity` invalidates. Total by construction: an entity
  * with no row degrades to its own root plus the dashboard counts rather than
  * silently invalidating nothing.
  */
 export const entityRipple = (entity: string): readonly OperationCacheTag[] => {
-  const declared = ripple[entity as keyof typeof ripple] as
-    | readonly OperationCacheTag[]
-    | undefined;
+  const declared = isDeclaredRipple(entity) ? ripple[entity] : undefined;
   if (declared) return declared;
   const cached = fallbackRipples.get(entity);
   if (cached) return cached;

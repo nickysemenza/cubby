@@ -1,3 +1,4 @@
+import type { ProblemsViewsOut } from "@cubby/schemas/problems";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,6 +17,7 @@ import { findFastProblems } from "./problems.service";
 
 describe("findViewProblems", () => {
   const ctx = withTestDb();
+  type ViewProblemKey = Exclude<keyof ProblemsViewsOut, "sectionTotals">;
 
   it("runs every declared view — no entity without a list function", async () => {
     // `LIST_FN` maps entity → list function by hand, so a view declared for an
@@ -31,10 +33,14 @@ describe("findViewProblems", () => {
       ).toBe(true);
       expect(result.sectionTotals[problem.key]).toBeTypeOf("number");
       const focused = await executeProblem(ctx.db, problem.key);
+      const isViewProblemKey = (
+        key: typeof problem.key,
+      ): key is ViewProblemKey => Object.hasOwn(result, key);
+      if (!isViewProblemKey(problem.key)) {
+        throw new Error(`Unexpected non-view Problem key: ${problem.key}`);
+      }
       // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
-      expect(focused.items, problem.key).toEqual(
-        (result as unknown as Record<string, unknown>)[problem.key],
-      );
+      expect(focused.items, problem.key).toEqual(result[problem.key]);
       // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(focused.count, problem.key).toBe(
         result.sectionTotals[problem.key],

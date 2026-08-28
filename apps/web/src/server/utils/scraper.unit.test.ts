@@ -10,7 +10,17 @@ import { scrapedToImportRecipe } from "./scraper";
 // transform, which is exactly the layer that breaks when the upstream
 // ingredient-parser recipe schema changes shape.
 
-const recipeHtml = (jsonLd: object) =>
+interface RecipeJsonLd {
+  "@context": string;
+  "@type": "Recipe";
+  name: string;
+  image?: string;
+  recipeYield?: string;
+  recipeIngredient: string[];
+  recipeInstructions: Array<{ "@type": "HowToStep"; text: string }>;
+}
+
+const recipeHtml = (jsonLd: RecipeJsonLd) =>
   `<!DOCTYPE html><html><head><script type="application/ld+json">${JSON.stringify(
     jsonLd,
   )}</script></head><body></body></html>`;
@@ -97,10 +107,10 @@ describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
         recipeInstructions: [{ "@type": "HowToStep", text: "Cook it." }],
       }),
       "https://example.com/x",
-    ) as unknown as Record<string, unknown>;
+    );
 
     expect(raw.sections).toBeDefined();
-    expect(raw.ingredients).toBeUndefined();
-    expect(raw.instructions).toBeUndefined();
+    expect("ingredients" in raw).toBe(false);
+    expect("instructions" in raw).toBe(false);
   });
 });

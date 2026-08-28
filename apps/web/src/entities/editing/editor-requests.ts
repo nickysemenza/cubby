@@ -8,12 +8,16 @@ import type {
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
 
+import type { EntityEditDraft } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";
 
 type DialogRequest<E extends EditableEntity> = Omit<
   EntityEditRequest<E, "create">,
   "surface"
 > & { intent: "capture" };
+type MutableDraft<E extends EditableEntity> = {
+  -readonly [K in keyof EntityEditDraft<E>]?: EntityEditDraft<E>[K];
+};
 
 export const mealCaptureRequest = (input?: {
   date?: string;
@@ -31,21 +35,23 @@ export const taskCaptureRequest = (input?: {
   date?: string;
   name?: string;
   subjectProductId?: ProductShortcode | null;
-}): DialogRequest<"task"> => ({
-  entity: "task",
-  operation: "create",
-  intent: "capture",
-  seed: {
-    ...(input?.status ? { status: input.status } : {}),
-    ...(input?.projectId !== undefined ? { projectId: input.projectId } : {}),
-    ...(input?.trade ? { trade: input.trade } : {}),
-    ...(input?.date ? { dueDate: input.date } : {}),
-    ...(input?.name ? { name: input.name } : {}),
-    ...(input?.subjectProductId !== undefined
-      ? { subjectProductId: input.subjectProductId }
-      : {}),
-  },
-});
+}): DialogRequest<"task"> => {
+  const seed: MutableDraft<"task"> = {};
+  if (input?.status) seed.status = input.status;
+  if (input?.projectId !== undefined) seed.projectId = input.projectId;
+  if (input?.trade) seed.trade = input.trade;
+  if (input?.date) seed.dueDate = input.date;
+  if (input?.name) seed.name = input.name;
+  if (input?.subjectProductId !== undefined) {
+    seed.subjectProductId = input.subjectProductId;
+  }
+  return {
+    entity: "task",
+    operation: "create",
+    intent: "capture",
+    seed,
+  };
+};
 
 export const expenseCaptureRequest = (input?: {
   projectId?: ProjectShortcode | null;
@@ -53,35 +59,40 @@ export const expenseCaptureRequest = (input?: {
   date?: string;
   future?: boolean;
   disposition?: boolean;
-}): DialogRequest<"expense"> => ({
-  entity: "expense",
-  operation: "create",
-  intent: "capture",
-  context: { disposition: input?.disposition === true },
-  seed: {
-    ...(input?.projectId !== undefined ? { projectId: input.projectId } : {}),
-    ...(input?.productId !== undefined ? { productId: input.productId } : {}),
-    ...(input?.date ? { date: input.date } : {}),
-    ...(input?.future !== undefined ? { future: input.future } : {}),
-    ...(input?.disposition ? { projectId: null, costType: "tools" } : {}),
-  },
-});
+}): DialogRequest<"expense"> => {
+  const seed: MutableDraft<"expense"> = {};
+  if (input?.projectId !== undefined) seed.projectId = input.projectId;
+  if (input?.productId !== undefined) seed.productId = input.productId;
+  if (input?.date) seed.date = input.date;
+  if (input?.future !== undefined) seed.future = input.future;
+  if (input?.disposition) {
+    seed.projectId = null;
+    seed.costType = "tools";
+  }
+  return {
+    entity: "expense",
+    operation: "create",
+    intent: "capture",
+    context: { disposition: input?.disposition === true },
+    seed,
+  };
+};
 
 export const projectCaptureRequest = (input?: {
   parentProjectId?: ProjectShortcode | null;
   date?: string;
-}): DialogRequest<"project"> => ({
-  entity: "project",
-  operation: "create",
-  intent: "capture",
-  context: { parentProjectId: input?.parentProjectId ?? null },
-  seed: {
-    ...(input?.parentProjectId
-      ? { parentProjectId: input.parentProjectId }
-      : {}),
-    ...(input?.date ? { startDate: input.date } : {}),
-  },
-});
+}): DialogRequest<"project"> => {
+  const seed: MutableDraft<"project"> = {};
+  if (input?.parentProjectId) seed.parentProjectId = input.parentProjectId;
+  if (input?.date) seed.startDate = input.date;
+  return {
+    entity: "project",
+    operation: "create",
+    intent: "capture",
+    context: { parentProjectId: input?.parentProjectId ?? null },
+    seed,
+  };
+};
 
 export const vendorCaptureRequest = (): DialogRequest<"vendor"> => ({
   entity: "vendor",

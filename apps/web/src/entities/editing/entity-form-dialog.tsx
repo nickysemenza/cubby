@@ -1,6 +1,7 @@
 import { type LocationOut, locationOut } from "@cubby/schemas/location";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
 import { LocationForm } from "~/app/_components/locations/location-form";
@@ -8,8 +9,8 @@ import { ProductForm } from "~/app/_components/products/product-form";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import { parseEntityMutationResultFor } from "../entity-mutation.functions";
 import type { EntityEditResultFor } from "./intent-types";
+import type { EntityEditMutationData } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 
 type FormDialogEntity = "product" | "ingredient" | "location";
@@ -52,7 +53,7 @@ export function EntityFormDialog<E extends FormDialogEntity>({
   useEffect(() => {
     if (open) setError(undefined);
   }, [open]);
-  const submit = async (data: object) => {
+  const submit = async (data: EntityEditMutationData<E>) => {
     setError(undefined);
     try {
       const execution = await commands.submit({
@@ -60,11 +61,16 @@ export function EntityFormDialog<E extends FormDialogEntity>({
         intent: "full",
         data,
       });
-      const result = parseEntityMutationResultFor(entity, execution.result);
-      const name =
-        result && typeof result === "object" && "name" in result
-          ? String(result.name)
-          : entity;
+      if (execution.operation !== "create") {
+        throw new Error(`${entity} create returned ${execution.operation}.`);
+      }
+      const result = execution.result;
+      const namedResult = z
+        .object({ name: z.string().nullable().optional() })
+        .safeParse(result);
+      const name = namedResult.success
+        ? namedResult.data.name || entity
+        : entity;
       toast.success(`Created "${name}"`);
       onOpenChange(false);
       onSuccess?.(result);

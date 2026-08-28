@@ -4,6 +4,7 @@ export const PRELOAD_RECOVERY_DELAY_MS = 250;
 
 type ReloadStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type TimerHandle = number;
+type ReloadAttempt = { marker: string; timer?: TimerHandle };
 
 export interface PreloadRecoveryRuntime {
   isOnline: () => boolean;
@@ -32,12 +33,7 @@ export function createPreloadRecovery(
 ): PreloadRecovery {
   let attemptSequence = 0;
   let documentLeaving = false;
-  let pending:
-    | {
-        marker: string;
-        timer?: TimerHandle;
-      }
-    | undefined;
+  let pending: ReloadAttempt | undefined;
 
   const removeOwnedMarker = (marker: string) => {
     try {
@@ -83,9 +79,8 @@ export function createPreloadRecovery(
         return false;
       }
 
-      const attempt = {
+      const attempt: ReloadAttempt = {
         marker,
-        timer: undefined as TimerHandle | undefined,
       };
       try {
         attempt.timer = runtime.schedule(() => {

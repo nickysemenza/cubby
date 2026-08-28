@@ -1,4 +1,6 @@
+import type { FoodLookupParam } from "@cubby/usda-schemas";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type JSONType, z } from "zod";
 
 import { USDAClient } from "./usda";
 
@@ -128,14 +130,14 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
   });
 
   // A FoodSummary-shaped body keyed so we can assert the right record comes back.
-  const batchBody = (results: unknown[]) =>
+  const batchBody = (results: JSONType[]) =>
     new Response(JSON.stringify({ results }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
 
   it("reuses earlier results and only POSTs the lookups it hasn't seen", async () => {
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>();
     // First call: one upc → one result. Second call mixes the same upc (memoed)
     // with a new fdc — only the fdc should be sent on the wire.
     fetchMock
@@ -158,9 +160,11 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
 
     // Two POSTs total; the second carried only the unseen fdc lookup.
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const secondBody = JSON.parse(
-      (fetchMock.mock.calls[1]![1] as { body: string }).body,
-    );
+    const secondCall = fetchMock.mock.calls[1];
+    if (!secondCall) throw new Error("Expected the second USDA batch request.");
+    const secondBody = z
+      .object({ lookups: z.array(z.json()) })
+      .parse(JSON.parse(z.string().parse(secondCall[1]?.body)));
     expect(secondBody.lookups).toEqual([{ kind: "fdc", fdc_id: 2 }]);
   });
 
@@ -169,7 +173,10 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new USDAClient("http://localhost:8787");
-    const lookup = { kind: "ndb", ndb_number: 999 } as const;
+    const lookup = {
+      kind: "ndb",
+      ndb_number: 999,
+    } satisfies FoodLookupParam;
     expect(await client.findFoodsBatch([lookup])).toEqual([null]);
     expect(await client.findFoodsBatch([lookup])).toEqual([null]);
     // The null is memoed as a known miss, so the second call sends nothing.
@@ -192,7 +199,10 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new USDAClient("http://localhost:8787");
-    const lookup = { kind: "upc", gtin_upc: "012345678905" } as const;
+    const lookup = {
+      kind: "upc",
+      gtin_upc: "012345678905",
+    } satisfies FoodLookupParam;
 
     const [a, b] = await Promise.all([
       client.findFoodsBatch([lookup]),

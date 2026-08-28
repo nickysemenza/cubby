@@ -33,11 +33,76 @@ const FLOW_FEATURES = [
   RECIPE_FLOW_PRIMARY_FEATURE,
   RECIPE_FLOW_FALLBACK_FEATURE,
 ] as const;
-const FLOW_MODELS = new Set<SupportedChatModel>(
+const FLOW_MODELS: ReadonlySet<string> = new Set<SupportedChatModel>(
   FLOW_FEATURES.map((feature) => feature.model),
 );
 
 type FlowCandidate = StoredAiAnalysis<RecipeFlowArtifact>;
+type PersistFlowArtifactInput = {
+  feature: (typeof FLOW_FEATURES)[number];
+  fingerprint: string;
+  guidance: string | null;
+  plan: RecipeFlowArtifact["plan"];
+  warnings: RecipeFlowArtifact["warnings"];
+};
+
+export interface RecipeFlowPorts {
+  readonly getRecipe: (
+    db: Database,
+    recipeId: RecipeId,
+  ) => Promise<RecipeOut | null>;
+  readonly listCandidates: (
+    db: Database,
+    recipeId: RecipeId,
+  ) => Promise<FlowCandidate[]>;
+  readonly persistArtifact: (
+    db: Database,
+    recipeId: RecipeId,
+    input: PersistFlowArtifactInput,
+  ) => Promise<RecipeFlowArtifact>;
+  readonly recordAiUsage: typeof recordAiUsage;
+  readonly generateRecipeFlow: ReturnType<
+    typeof getAnthropicClient
+  >["generateRecipeFlow"];
+}
+
+const productionRecipeFlowPorts: RecipeFlowPorts = {
+  getRecipe: getRecipeByID,
+  listCandidates: async (db, recipeId) =>
+    (
+      await listAiAnalysesForEntityFeature(db, {
+        entityType: "recipe",
+        entityId: recipeId,
+        feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
+        promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
+        schema: recipeFlowArtifactSchema,
+      })
+    ).filter(isAllowedCandidate),
+  persistArtifact: async (db, recipeId, input) => {
+    const artifact = recipeFlowArtifactSchema.parse({
+      plan: input.plan,
+      guidance: input.guidance,
+      warnings: input.warnings,
+      contentFingerprint: input.fingerprint,
+      model: input.feature.model,
+      promptVersion: input.feature.promptVersion,
+      generatedAt: new Date(),
+    });
+    return await upsertAiAnalysis(
+      db,
+      {
+        entityType: "recipe",
+        entityId: recipeId,
+        feature: input.feature,
+        inputFingerprint: input.fingerprint,
+      },
+      artifact,
+    );
+  },
+  recordAiUsage,
+  generateRecipeFlow: (...args) =>
+    getAnthropicClient().generateRecipeFlow(...args),
+};
 
 // The public router accepts a recipe shortcode, then resolves it at its
 // boundary. Flow persistence and AI-usage records intentionally keep the UUID.
@@ -148,31 +213,18 @@ async function contentFingerprint(
 
 function isAllowedCandidate(candidate: FlowCandidate): boolean {
   return (
-    FLOW_MODELS.has(candidate.model as SupportedChatModel) &&
+    FLOW_MODELS.has(candidate.model) &&
     candidate.result.model === candidate.model &&
     candidate.result.promptVersion === candidate.promptVersion
   );
 }
 
-async function flowCandidates(
-  db: Database,
-  recipeId: RecipeId,
-): Promise<FlowCandidate[]> {
-  const candidates = await listAiAnalysesForEntityFeature(db, {
-    entityType: "recipe",
-    entityId: recipeId,
-    feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
-    promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
-    schema: recipeFlowArtifactSchema,
-  });
-  return candidates.filter(isAllowedCandidate);
-}
-
 async function recipeOrThrow(
   db: Database,
   recipeId: RecipeId,
+  ports: RecipeFlowPorts,
 ): Promise<RecipeOut> {
-  const recipe = await getRecipeByID(db, recipeId);
+  const recipe = await ports.getRecipe(db, recipeId);
   if (!recipe) throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
   return recipe;
 }
@@ -180,10 +232,11 @@ async function recipeOrThrow(
 export async function getRecipeFlowState(
   db: Database,
   recipeId: RecipeId,
+  ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowState> {
   const [recipe, candidates] = await Promise.all([
-    recipeOrThrow(db, recipeId),
-    flowCandidates(db, recipeId),
+    recipeOrThrow(db, recipeId, ports),
+    ports.listCandidates(db, recipeId),
   ]);
   const latest = candidates[0];
   const guidance = latest?.result.guidance ?? null;
@@ -218,12 +271,13 @@ async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
   candidate: FlowCandidate,
+  ports: RecipeFlowPorts,
 ): Promise<void> {
   const feature = FLOW_FEATURES.find(
     (candidateFeature) => candidateFeature.model === candidate.model,
   );
   if (!feature) return;
-  await recordAiUsage(db, {
+  await ports.recordAiUsage(db, {
     feature: feature.feature,
     provider: "anthropic",
     model: feature.model,
@@ -237,42 +291,20 @@ async function recordFlowCacheHit(
 async function persistFlowArtifact(
   db: Database,
   recipeId: RecipeId,
-  input: {
-    feature: (typeof FLOW_FEATURES)[number];
-    fingerprint: string;
-    guidance: string | null;
-    plan: RecipeFlowArtifact["plan"];
-    warnings: RecipeFlowArtifact["warnings"];
-  },
+  input: PersistFlowArtifactInput,
+  ports: RecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
-  const artifact = recipeFlowArtifactSchema.parse({
-    plan: input.plan,
-    guidance: input.guidance,
-    warnings: input.warnings,
-    contentFingerprint: input.fingerprint,
-    model: input.feature.model,
-    promptVersion: input.feature.promptVersion,
-    generatedAt: new Date(),
-  });
-  return await upsertAiAnalysis(
-    db,
-    {
-      entityType: "recipe",
-      entityId: recipeId,
-      feature: input.feature,
-      inputFingerprint: input.fingerprint,
-    },
-    artifact,
-  );
+  return await ports.persistArtifact(db, recipeId, input);
 }
 
 export async function generateRecipeFlow(
   db: Database,
   input: RecipeFlowGenerateRequest,
+  ports: RecipeFlowPorts = productionRecipeFlowPorts,
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
-    recipeOrThrow(db, input.id),
-    flowCandidates(db, input.id),
+    recipeOrThrow(db, input.id, ports),
+    ports.listCandidates(db, input.id),
   ]);
   const latest = candidates[0];
   const guidance =
@@ -287,12 +319,11 @@ export async function generateRecipeFlow(
       candidate.result.contentFingerprint === fingerprint,
   );
   if (current && !input.force) {
-    await recordFlowCacheHit(db, input.id, current);
+    await recordFlowCacheHit(db, input.id, current, ports);
     return current.result;
   }
 
-  const client = getAnthropicClient();
-  const primaryCandidate = await client.generateRecipeFlow(
+  const primaryCandidate = await ports.generateRecipeFlow(
     JSON.stringify(promptInput, null, 2),
     guidance,
     undefined,
@@ -307,16 +338,21 @@ export async function generateRecipeFlow(
   );
   const primaryAssessment = assessRecipeFlowCandidate(recipe, primaryCandidate);
   if (primaryAssessment.ok) {
-    return await persistFlowArtifact(db, input.id, {
-      feature: RECIPE_FLOW_PRIMARY_FEATURE,
-      fingerprint,
-      guidance,
-      plan: primaryAssessment.plan,
-      warnings: primaryAssessment.warnings,
-    });
+    return await persistFlowArtifact(
+      db,
+      input.id,
+      {
+        feature: RECIPE_FLOW_PRIMARY_FEATURE,
+        fingerprint,
+        guidance,
+        plan: primaryAssessment.plan,
+        warnings: primaryAssessment.warnings,
+      },
+      ports,
+    );
   }
 
-  const fallbackCandidate = await client.generateRecipeFlow(
+  const fallbackCandidate = await ports.generateRecipeFlow(
     JSON.stringify(promptInput, null, 2),
     guidance,
     { candidate: primaryCandidate, issues: primaryAssessment.issues },
@@ -338,11 +374,16 @@ export async function generateRecipeFlow(
       `Recipe flow remained invalid after repair: ${fallbackAssessment.issues.join("; ")}`,
     );
   }
-  return await persistFlowArtifact(db, input.id, {
-    feature: RECIPE_FLOW_FALLBACK_FEATURE,
-    fingerprint,
-    guidance,
-    plan: fallbackAssessment.plan,
-    warnings: fallbackAssessment.warnings,
-  });
+  return await persistFlowArtifact(
+    db,
+    input.id,
+    {
+      feature: RECIPE_FLOW_FALLBACK_FEATURE,
+      fingerprint,
+      guidance,
+      plan: fallbackAssessment.plan,
+      warnings: fallbackAssessment.warnings,
+    },
+    ports,
+  );
 }

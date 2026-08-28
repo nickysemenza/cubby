@@ -9,7 +9,6 @@ import {
   getNutrientKey,
   getNutrientUnitString,
   isTier1Nutrient,
-  type NutrientKey,
 } from "@cubby/usda-schemas";
 import type { ReadonlyDeep } from "type-fest";
 
@@ -35,12 +34,18 @@ export const toWFoodInput = (food: FoodSummary): WFoodInput => ({
     gram_weight: p.gram_weight,
   })),
   serving: food.brandedFoodInfo?.serving ?? null,
-  nutrients_per_100: Object.entries(food.nutritionInfo?.nutrientsPer100 ?? {})
-    .filter(([code, amount]) => amount > 0 && isTier1Nutrient(code))
-    .map(([code, amount]) => ({
-      unit: getNutrientUnitString(getNutrientKey(code) as NutrientKey),
-      amount,
-    })),
+  nutrients_per_100: Object.entries(
+    food.nutritionInfo?.nutrientsPer100 ?? {},
+  ).flatMap(([code, amount]) =>
+    amount > 0 && isTier1Nutrient(code)
+      ? [
+          {
+            unit: getNutrientUnitString(getNutrientKey(code)),
+            amount,
+          },
+        ]
+      : [],
+  ),
 });
 
 /**

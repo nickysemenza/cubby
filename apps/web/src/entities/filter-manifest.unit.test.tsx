@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema } from "@cubby/schemas/entity";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
@@ -206,7 +206,9 @@ describe("generated filter contracts", () => {
     for (const [entity, contract] of Object.entries(
       generatedEntityFilterContractCases,
     )) {
-      const specs = getEntityFilters(entity as Entity);
+      const parsedEntity = entitySchema.safeParse(entity);
+      if (!parsedEntity.success) throw new Error(`Unknown entity: ${entity}`);
+      const specs = getEntityFilters(parsedEntity.data);
       expect(specs.map((spec) => spec.columnId)).toEqual(
         contract.descriptorColumns,
       );
@@ -237,7 +239,8 @@ describe("generated filter contracts", () => {
 });
 
 describe("expense order-id filters", () => {
-  const build = (search: Record<string, unknown>) => {
+  type SearchInput = Record<string, string | string[] | undefined>;
+  const build = (search: SearchInput) => {
     const specs = getEntityFilters("expense");
     return buildFiltersFromManifest(
       specs,
@@ -280,7 +283,8 @@ describe("expense order-id filters", () => {
 });
 
 describe("expense vendor filter", () => {
-  const build = (search: Record<string, unknown>) => {
+  type SearchInput = Record<string, string | string[] | undefined>;
+  const build = (search: SearchInput) => {
     const specs = getEntityFilters("expense");
     return buildFiltersFromManifest(
       specs,
@@ -319,7 +323,8 @@ describe("expense vendor filter", () => {
 });
 
 describe("purchase filters", () => {
-  const build = (search: Record<string, unknown>) => {
+  type SearchInput = Record<string, string | string[] | undefined>;
+  const build = (search: SearchInput) => {
     const specs = getEntityFilters("purchase");
     return buildFiltersFromManifest(
       specs,

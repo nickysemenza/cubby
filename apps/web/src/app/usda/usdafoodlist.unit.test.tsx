@@ -1,98 +1,65 @@
+import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { USDAFoodList, withUSDAListIdentity } from "./usdafoodlist";
+import { usdaFood } from "~/entities/usda.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-const mocks = vi.hoisted(() => ({
-  listWorkbench: vi.fn(),
-  useEntityList: vi.fn(),
-  useEntityPreview: vi.fn(),
-}));
+import {
+  type USDAFoodListOperations,
+  USDAFoodList,
+  withUSDAListIdentity,
+} from "./usdafoodlist";
 
-vi.mock("../_components/hooks/useEntityPreview", () => ({
-  useEntityPreview: (...args: unknown[]) => {
-    mocks.useEntityPreview(...args);
-    return {
-      onRowClick: vi.fn(),
-      onRowHover: vi.fn(),
-      onRowHoverEnd: vi.fn(),
-      PreviewSheet: () => <div>Intermediate USDA preview</div>,
-      preview: {
-        entityType: "usda-food",
-        id: "12345",
-        rowKey: "usda-food:12345",
-      },
-      dockedInspector: <aside>USDA inspector</aside>,
-    };
-  },
-}));
+const food = foodSummaryWithLinkedProducts.parse({
+  fdc_id: 12345,
+  foodInfo: { data_type: "branded_food", description: "Example food" },
+  legacyFoodInfo: null,
+  brandedFoodInfo: null,
+  nutritionInfo: { nutrientSummary: [], nutrientsPer100: {} },
+  portionInfoRaw: [],
+  inferredUnitMappings: [],
+  linkedProducts: [],
+});
 
-vi.mock("../_components/hooks/useEntityList", () => ({
-  useEntityList: (...args: unknown[]) => {
-    mocks.useEntityList(...args);
-    return { workbench: { entity: "usda-food", table: {} } };
-  },
-}));
+const operations: USDAFoodListOperations = {
+  list: usdaFood.list.withTransport(async () => ({
+    items: [food],
+    meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+  })),
+};
 
-vi.mock("../_components/data-table/ListWorkbench", () => ({
-  ListWorkbench: (props: Record<string, unknown>) => {
-    mocks.listWorkbench(props);
-    return <>{props.desktopInspector as ReactNode}</>;
-  },
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 describe("USDAFoodList", () => {
   it("adapts the external FDC identity to the shared list contract", () => {
-    const row = withUSDAListIdentity({
-      fdc_id: 12345,
-      foodInfo: { description: "Example food" },
+    expect(withUSDAListIdentity(food)).toMatchObject({
+      id: "12345",
+      name: "Example food",
     });
-
-    expect(row).toMatchObject({ id: "12345", name: "Example food" });
   });
 
-  it("keeps FDC identity in the responsive inspector and projects scan-ready mobile facts", () => {
-    render(<USDAFoodList />);
+  it("renders USDA identity and scan-ready classification through the real list", async () => {
+    render(<USDAFoodList operations={operations} />, {
+      wrapper: harness.wrapper,
+    });
 
-    const props = mocks.listWorkbench.mock.lastCall?.[0] as Record<
-      string,
-      unknown
-    >;
-    expect(mocks.useEntityPreview).toHaveBeenCalledWith("usda-food", {
-      idField: "fdc_id",
-      responsiveInspector: true,
-    });
-    expect(props.currentRowId).toBe("usda-food:12345");
-    expect(props.defaultDensity).toBe("dense");
-    expect(screen.getByText("USDA inspector")).toBeInTheDocument();
-    expect(screen.getByText("Intermediate USDA preview")).toBeInTheDocument();
-
-    const listOptions = mocks.useEntityList.mock.lastCall?.[0];
-    expect(listOptions).toBeDefined();
-    const { columns } = listOptions as {
-      columns: Array<{
-        id?: string;
-        accessorKey?: string;
-        meta?: { mobile?: unknown };
-      }>;
-    };
-    const column = (id: string) =>
-      columns.find(
-        (candidate) => candidate.id === id || candidate.accessorKey === id,
-      );
-    expect(column("foodInfo-data_type")?.meta?.mobile).toMatchObject({
-      slot: "subtitle",
-    });
-    expect(column("brandedFoodInfo")?.meta?.mobile).toMatchObject({
-      slot: "meta",
-    });
-    expect(column("nutritionInfo")?.meta?.mobile).toMatchObject({
-      slot: "meta",
-    });
-    expect(column("linkedProducts")?.meta?.mobile).toMatchObject({
-      slot: "meta",
-      interactive: true,
-    });
+    expect(await screen.findByText("Example food")).toBeVisible();
+    expect(
+      screen.getByRole("table", { name: "USDA Foods Table" }),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "12345" })).toHaveAttribute(
+      "href",
+      "/usda/12345",
+    );
+    expect(screen.getByText("Type")).toBeVisible();
   });
 });

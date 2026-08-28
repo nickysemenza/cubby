@@ -1,38 +1,43 @@
-import { render } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { detailPage } from "./entity-routes";
 
-const queryState = vi.hoisted(() => ({ data: null as unknown }));
+let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 
-vi.mock("@tanstack/react-query", () => ({
-  useSuspenseQuery: () => ({ data: queryState.data }),
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: React.ReactNode }) => (
-    <a href="/records">{children}</a>
-  ),
-  notFound: () => new Error("record not found"),
-  useParams: () => ({ shortcode: "PRD-TEST" }),
-}));
-
-vi.mock("~/hooks/useDocumentTitle", () => ({
-  useDetailTitle: vi.fn(),
-}));
+afterEach(() => {
+  harness?.dispose();
+  harness = undefined;
+});
 
 describe("detailPage", () => {
-  beforeEach(() => {
-    queryState.data = null;
-  });
-
-  it("transitions a refetched missing record into route not-found", () => {
+  it("transitions a refetched missing record into route not-found", async () => {
     const Detail = detailPage({
-      query: () => ({ queryKey: ["record"] }),
+      query: () => ({
+        queryKey: ["record"] as const,
+        queryFn: async () => null,
+      }),
       render: () => <div>record</div>,
       title: () => "Record",
     });
+    const browserHarness = createBrowserTestHarness({
+      initialPath: "/products/PRD-TEST",
+      route: {
+        path: "/products/$shortcode",
+        component: Detail,
+        notFoundComponent: () => <div>Record not found</div>,
+      },
+    });
+    harness = browserHarness;
+    browserHarness.queryClient.setQueryData(["record"], null);
+    await act(async () => {
+      await browserHarness.loadRouter();
+    });
 
-    expect(() => render(<Detail />)).toThrow("record not found");
+    render(<div />, { wrapper: browserHarness.routerWrapper });
+
+    expect(screen.getByText("Record not found")).toBeVisible();
   });
 });

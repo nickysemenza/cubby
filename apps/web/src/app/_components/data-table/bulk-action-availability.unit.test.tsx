@@ -5,6 +5,7 @@ import {
   renderHook,
   screen,
 } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import type { BulkAction } from "./bulk-actions.types";
@@ -17,7 +18,7 @@ interface TestRow {
 }
 
 const rows = (...ids: string[]) =>
-  ids.map((id) => ({ original: { id } })) as Row<TestRow>[];
+  ids.map((id) => fromPartial<Row<TestRow>>({ original: { id } }));
 
 const available = { status: "available" } as const;
 

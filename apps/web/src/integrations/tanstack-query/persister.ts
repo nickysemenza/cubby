@@ -8,7 +8,7 @@ import superjson from "superjson";
 // Reuses superjson so persisted data round-trips the same Date/Set/Map shapes
 // the app already serializes over the wire.
 export const persister =
-  typeof window === "undefined"
+  globalThis.window === undefined
     ? undefined
     : createAsyncStoragePersister({
         key: "cubby-query-cache",

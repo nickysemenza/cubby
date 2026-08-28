@@ -1,5 +1,5 @@
 import type { TaskShortcode } from "@cubby/schemas/identifiers";
-import { taskFiltersSchema, taskSortableFields } from "@cubby/schemas/project";
+import { taskSortableFields } from "@cubby/schemas/project";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -21,7 +21,6 @@ import { taskList } from "./lookup";
 
 export const taskEntityAdapter = defineEntityAdapter({
   entity: "task",
-  filters: taskFiltersSchema,
   sort: {
     fields: taskSortableFields,
     default: "createdAt",

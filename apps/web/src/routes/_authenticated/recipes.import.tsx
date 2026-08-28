@@ -9,9 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
 import { pageTitle } from "~/lib/page-title";
 
+const tabSchema = z.enum(["cookbook", "notion"]);
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("cookbook") is omitted from the URL.
-  tab: z.enum(["cookbook", "notion"]).optional().catch(undefined),
+  tab: tabSchema.optional().catch(undefined),
   // `?from=<cookbookId>` re-opens that cookbook's stored extraction for
   // selective re-import (the "Add from source" path); absent for the normal
   // drag-EPUB flow. When present it forces the cookbook tab.
@@ -41,7 +42,7 @@ function ImportPage() {
     activeTab === "notion",
   );
 
-  const tabs = useTabParam(activeTab, "cookbook", (next) => {
+  const tabs = useTabParam(activeTab, "cookbook", tabSchema, (next) => {
     if (next === "notion") setNotionActivated(true);
     navigate({
       to: ".",

@@ -4,6 +4,8 @@ import {
   type OperationDisposition,
   type OperationEffect,
 } from "@cubby/schemas/entity-integrity";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn, SQL, SQLWrapper } from "drizzle-orm";
@@ -11,6 +13,7 @@ import {
   and,
   asc,
   eq,
+  getTableColumns,
   ilike,
   inArray,
   isNotNull,
@@ -100,8 +103,9 @@ export function rangeConditions<P extends string>(
   filters: Partial<Record<`${P}Min` | `${P}Max`, number | undefined>>,
   prefix: P,
 ): Array<SQL | undefined> {
-  const min = filters[`${prefix}Min` as `${P}Min`];
-  const max = filters[`${prefix}Max` as `${P}Max`];
+  const valuesByField = new Map(Object.entries(filters));
+  const min = valuesByField.get(`${prefix}Min`);
+  const max = valuesByField.get(`${prefix}Max`);
   return [
     min !== undefined ? sql`${expr} >= ${min}` : undefined,
     max !== undefined ? sql`${expr} <= ${max}` : undefined,
@@ -167,6 +171,9 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
 ): SQL[] => {
   const clauses: SQL[] = [];
   const { groupBy, resolve, tieBreaker } = opts ?? {};
+  const columnsByName = new Map<string, AnyColumn>(
+    Object.entries(getTableColumns(table)),
+  );
 
   // Prepend group-by column as primary sort (if provided, valid, and not
   // already the user's own sort)
@@ -175,7 +182,7 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
     allowedFields.includes(groupBy) &&
     !sorts.some((s) => s.orderBy === groupBy)
   ) {
-    const groupColumn = table[groupBy as keyof T] as AnyColumn | undefined;
+    const groupColumn = columnsByName.get(groupBy);
     if (groupColumn) {
       clauses.push(sql`${groupColumn} asc nulls last`);
     }
@@ -188,7 +195,7 @@ export const buildOrderBy = <T extends PgTable & { id: AnyColumn }>(
       continue;
     }
     if (!allowedFields.includes(s.orderBy)) continue;
-    const column = table[s.orderBy as keyof T] as AnyColumn | undefined;
+    const column = columnsByName.get(s.orderBy);
     if (!column) continue;
     // ASC: nulls at end by default in Postgres
     // DESC: use NULLS LAST to put nulls at the bottom instead of the top
@@ -252,25 +259,43 @@ export async function executeListQueryWithCount<T>(
   });
 }
 
+const LOCK_ENTITY_BY_NAME = {
+  Expense: "expense",
+  FinancialAccount: "financialAccount",
+  FinancialTransaction: "financialTransaction",
+  Ingredient: "ingredient",
+  Inventory: "inventory",
+  LedgerTransfer: "ledgerTransfer",
+  Location: "location",
+  Meal: "meal",
+  Product: "product",
+  Project: "project",
+  Purchase: "purchase",
+  Recipe: "recipe",
+  Task: "task",
+  Vendor: "vendor",
+  Wish: "wish",
+} as const satisfies Record<string, ShortcodeEntity>;
+
+type LockEntityName = keyof typeof LOCK_ENTITY_BY_NAME;
+
 export async function lockAndValidateForDelete<TId extends string>(
   tx: DrizzleTransaction,
   table: PgTable & { id: AnyColumn; deletedAt: AnyColumn },
   ids: TId[],
-  entityName: string,
+  entityName: LockEntityName,
 ): Promise<void> {
   const locked = await unwrapDb(tx)
-    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
-    .select({ id: table.id as any })
+    .select({ id: sql<string>`${table.id}` })
     .from(table)
-    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
-    .where(and(inArray(table.id as any, ids), notDeleted(table)))
+    .where(and(inArray(table.id, ids), notDeleted(table)))
     .for("update"); // 🔒 Acquires row-level lock
 
   if (locked.length !== ids.length) {
     const foundIds = locked.map((entry) => String(entry.id));
     const missingIds = ids.filter((id) => !foundIds.includes(id));
     throw createAppError(
-      `${entityName.toUpperCase()}_NOT_FOUND` as "PRODUCT_NOT_FOUND",
+      ENTITY_NOT_FOUND_REASON[LOCK_ENTITY_BY_NAME[entityName]],
       `${entityName}s not found or already deleted: ${missingIds.join(", ")}`,
     );
   }
@@ -311,17 +336,18 @@ function dependentBlockers<TId extends string>(opts: {
   const byTargetId: Record<string, number> = {};
   for (const id of present) byTargetId[id] = (byTargetId[id] ?? 0) + 1;
 
-  return [
-    internalImpactItemSchema.parse({
-      code: opts.disposition.code,
-      effect: opts.disposition.effect,
-      ...(opts.edgeKey ? { edgeKey: opts.edgeKey } : {}),
-      label: opts.label,
-      description: opts.disposition.description,
-      total: present.length,
-      byTargetId,
-    }),
-  ];
+  const itemWithoutEdge = {
+    code: opts.disposition.code,
+    effect: opts.disposition.effect,
+    label: opts.label,
+    description: opts.disposition.description,
+    total: present.length,
+    byTargetId,
+  };
+  const item = opts.edgeKey
+    ? { ...itemWithoutEdge, edgeKey: opts.edgeKey }
+    : itemWithoutEdge;
+  return [internalImpactItemSchema.parse(item)];
 }
 
 /**
@@ -430,9 +456,9 @@ export const correlated = <T>(fragment: string): SQL<T> =>
 export const uuidArrayParam = (ids: readonly string[]): SQL =>
   sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
 
-export const eqAny = <TColumn extends AnyColumn>(
+export const eqAny = <TColumn extends AnyColumn, TValue>(
   column: TColumn,
-  value: unknown,
+  value: TValue | readonly TValue[] | null | undefined,
 ): SQL | undefined => {
   if (value === undefined || value === null) return undefined;
   if (!Array.isArray(value)) return eq(column, value);
@@ -451,9 +477,9 @@ export const eqAny = <TColumn extends AnyColumn>(
  * requested" and the resolved ids — empty array included — otherwise. Pairs
  * with `resolveFilterIds`, which produces exactly that shape.
  */
-export const eqAnyRequested = <TColumn extends AnyColumn>(
+export const eqAnyRequested = <TColumn extends AnyColumn, TValue>(
   column: TColumn,
-  ids: readonly unknown[] | undefined,
+  ids: readonly TValue[] | undefined,
 ): SQL | undefined =>
   ids === undefined
     ? undefined
@@ -556,9 +582,9 @@ export const idSetPresence = <TColumn extends AnyColumn>(
  * Call `presenceCondition` directly only when the value half isn't an `eqAny`
  * — a subtree `inArray`, or `arrayOverlaps` on a tag column.
  */
-export const eqAnyOrPresence = <TColumn extends AnyColumn>(
+export const eqAnyOrPresence = <TColumn extends AnyColumn, TValue>(
   column: TColumn,
-  value: unknown,
+  value: TValue | readonly TValue[] | null | undefined,
   presence: PresenceFilter,
 ): SQL | undefined =>
   or(eqAny(column, value), presenceCondition(column, presence));

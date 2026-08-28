@@ -22,11 +22,12 @@ describe("integrity catalog", () => {
       expect(entry.incomingEdges.map((edge) => edge.edgeKey).sort()).toEqual(
         Object.keys(INCOMING_EDGES[entry.entity]).sort(),
       );
+      expect(
+        Object.fromEntries(
+          entry.incomingEdges.map((edge) => [edge.edgeKey, edge.semantics]),
+        ),
+      ).toEqual(ENTITY_EDGE_SEMANTICS[entry.entity]);
       for (const edge of entry.incomingEdges) {
-        const declared = (
-          ENTITY_EDGE_SEMANTICS[entry.entity] as Record<string, unknown>
-        )[edge.edgeKey];
-        expect(edge.semantics).toEqual(declared);
         expect(`${edge.sourceTable}.${edge.sourceColumn}`).toBe(edge.edgeKey);
       }
     }

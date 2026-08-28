@@ -30,12 +30,9 @@ describe("Problem diagnostic adapters", () => {
     expect(Object.keys(diagnosticAdapters).sort()).toEqual(
       [...expected].sort(),
     );
-    expect(
-      Object.values(diagnosticAdapters).every(
-        (adapter) =>
-          typeof adapter.sample === "function" &&
-          typeof adapter.count === "function",
-      ),
-    ).toBe(true);
+    for (const adapter of Object.values(diagnosticAdapters)) {
+      expect(adapter.sample).toBeTypeOf("function");
+      expect(adapter.count).toBeTypeOf("function");
+    }
   });
 });

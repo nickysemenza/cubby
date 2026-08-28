@@ -1,4 +1,4 @@
-import type { SearchHit } from "@cubby/schemas/search";
+import { searchHitSchema, type SearchHit } from "@cubby/schemas/search";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -14,8 +14,8 @@ import { SearchResultMedia } from "./search-utils";
  * "quarter"). These pin the fallback rather than the specific icon.
  */
 function hit(overrides: Partial<SearchHit>): SearchHit {
-  return {
-    id: "LOC-1111",
+  return searchHitSchema.parse({
+    id: "LOC-2222",
     entityType: "location",
     title: "<location>",
     subtitle: null,
@@ -26,7 +26,7 @@ function hit(overrides: Partial<SearchHit>): SearchHit {
     matchReason: "",
     matchTerms: [],
     ...overrides,
-  } as SearchHit;
+  });
 }
 
 describe("SearchResultMedia", () => {

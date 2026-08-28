@@ -1,26 +1,19 @@
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    params,
-    ...props
-  }: {
-    children?: ReactNode;
-    to: string;
-    params?: { id?: string; shortcode?: string };
-    [key: string]: unknown;
-  }) => (
-    <a {...props} href={to.replace("$shortcode", params?.shortcode ?? "")}>
-      {children}
-    </a>
-  ),
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ManifestCard } from "./manifest-card";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 describe("ManifestCard", () => {
   it("keeps its Open action for hover cards but yields it to an inspector header", () => {
@@ -31,7 +24,9 @@ describe("ManifestCard", () => {
       name: "Example vendor",
       tag: "vendor",
     };
-    const { rerender } = render(<ManifestCard {...props} />);
+    const { rerender } = render(<ManifestCard {...props} />, {
+      wrapper: harness.wrapper,
+    });
 
     expect(screen.getByLabelText("Open")).toHaveAttribute(
       "href",

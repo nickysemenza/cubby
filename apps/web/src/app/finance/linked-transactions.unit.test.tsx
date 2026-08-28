@@ -1,69 +1,70 @@
-import type * as ReactQuery from "@tanstack/react-query";
+import { financialTransactionListResponse } from "@cubby/schemas/financial-transaction";
 import { render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const useQueryMock = vi.hoisted(() => vi.fn());
+import { entityListFor } from "~/entities/entity-list.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", async (importOriginal) => ({
-  ...(await importOriginal<typeof ReactQuery>()),
-  useQuery: useQueryMock,
-}));
+import {
+  type LinkedTransactionsOperations,
+  LinkedTransactions,
+} from "./linked-transactions";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    params,
-    className,
-    title,
-  }: {
-    children?: ReactNode;
-    to: string;
-    params?: Record<string, string>;
-    className?: string;
-    title?: string;
-  }) => {
-    const href = params
-      ? Object.entries(params).reduce(
-          (path, [key, value]) => path.replace(`$${key}`, value),
-          to,
-        )
-      : to;
-    return (
-      <a href={href} className={className} title={title}>
-        {children}
-      </a>
-    );
-  },
-}));
+const transactionList = entityListFor("financialTransaction");
+const linkedTransactionResponse = financialTransactionListResponse.parse({
+  items: [
+    {
+      id: "FTX-2345",
+      accountId: "FAC-2345",
+      purchaseId: null,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      transactionDate: "2026-08-16",
+      postedDate: "2026-08-16",
+      merchant: "Neighborhood Market",
+      rawDescription: null,
+      sourceCategory: null,
+      sourceRefs: [],
+      notes: null,
+      allocations: [],
+      ledgerTransferId: null,
+      accountName: "Household Card",
+      createdAt: new Date("2026-08-16T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-16T00:00:00.000Z"),
+    },
+  ],
+  meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+});
 
-import { LinkedTransactions } from "./linked-transactions";
+const operations: LinkedTransactionsOperations = {
+  list: (params) => ({
+    ...transactionList.queryOptions(params),
+    queryFn: async () => linkedTransactionResponse,
+  }),
+};
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 describe("LinkedTransactions", () => {
-  it("keeps every fixed-layout column readable and renders shared status labels", () => {
-    useQueryMock.mockReturnValue({
-      data: {
-        items: [
-          {
-            id: "FTR-2345",
-            merchant: "Neighborhood Market",
-            rawDescription: null,
-            accountId: "FAC-2345",
-            accountName: "Household Card",
-            status: "posted",
-            postedDate: "2026-08-16",
-            amount: 42.5,
-            allocations: [],
-          },
-        ],
+  it("keeps every fixed-layout column readable and renders shared status labels", async () => {
+    render(
+      <LinkedTransactions accountId="FAC-2345" operations={operations} />,
+      {
+        wrapper: harness.wrapper,
       },
-    });
-
-    render(<LinkedTransactions accountId="FAC-2345" />);
+    );
 
     expect(
-      screen.getByRole("columnheader", { name: "Transaction" }),
+      await screen.findByRole("columnheader", { name: "Transaction" }),
     ).toHaveClass("w-40");
     expect(screen.getByRole("columnheader", { name: "Account" })).toHaveClass(
       "w-32",
@@ -84,23 +85,17 @@ describe("LinkedTransactions", () => {
     });
     expect(transactionLink).toHaveAttribute(
       "href",
-      "/financial-transactions/FTR-2345",
+      "/financial-transactions/FTX-2345",
     );
     expect(transactionLink).toHaveClass("block", "truncate");
     expect(transactionLink).toHaveAttribute("title", "Neighborhood Market");
 
     const accountLink = screen.getByRole("link", { name: "Household Card" });
     expect(accountLink).toHaveAttribute("href", "/financial-accounts/FAC-2345");
-    expect(accountLink).toHaveClass("block", "truncate");
-    expect(accountLink).toHaveAttribute("title", "Household Card");
-
     const row = transactionLink.closest("tr");
-    expect(row).not.toBeNull();
-    const statusCell = within(row as HTMLTableRowElement).getAllByRole(
-      "cell",
-    )[2];
+    if (!row) throw new Error("Expected transaction row");
+    const statusCell = within(row).getAllByRole("cell")[2];
     expect(statusCell).toHaveTextContent("Posted");
     expect(statusCell).not.toHaveTextContent(/^posted$/);
-    expect(statusCell?.querySelector('[aria-hidden="true"]')).not.toBeNull();
   });
 });

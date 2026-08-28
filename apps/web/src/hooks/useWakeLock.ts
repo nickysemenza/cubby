@@ -2,23 +2,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Minimal Screen Wake Lock API surface (iOS Safari 16.4+ / most modern
- * browsers). Typed locally so the hook compiles without lib.dom's optional
- * `navigator.wakeLock` (not present in every TS lib target we build against).
+ * browsers). The DOM library supplies the sentinel and manager contracts;
+ * this predicate keeps the runtime feature detection at the browser seam.
  */
-interface WakeLockSentinelLike {
-  released: boolean;
-  release: () => Promise<void>;
-}
-interface WakeLockNavigator {
-  wakeLock?: {
-    request: (type: "screen") => Promise<WakeLockSentinelLike>;
-  };
+function hasWakeLock(
+  value: Navigator | undefined,
+): value is Navigator & { wakeLock: Navigator["wakeLock"] } {
+  return (
+    value !== undefined &&
+    value.wakeLock !== undefined &&
+    typeof value.wakeLock.request === "function"
+  );
 }
 
-const wakeLockSupported = (): boolean =>
-  typeof navigator !== "undefined" &&
-  typeof (navigator as unknown as WakeLockNavigator).wakeLock?.request ===
-    "function";
+const getWakeLock = (): Navigator["wakeLock"] | undefined => {
+  const navigatorValue = globalThis.navigator;
+  if (!navigatorValue || !hasWakeLock(navigatorValue)) return undefined;
+  return navigatorValue.wakeLock;
+};
+
+const wakeLockSupported = (): boolean => getWakeLock() !== undefined;
 
 /**
  * Keep the screen awake while `enabled` is true — for the recipe-detail
@@ -33,17 +36,19 @@ const wakeLockSupported = (): boolean =>
  * Returns `{ enabled, supported, toggle, setEnabled }`. State starts `false` so
  * the default is off and there's no SSR/first-render surprise.
  */
-export function useWakeLock(): {
+export interface WakeLockState {
   enabled: boolean;
   active: boolean;
   supported: boolean;
   toggle: () => void;
   setEnabled: (on: boolean) => void;
-} {
+}
+
+export function useWakeLock(): WakeLockState {
   const [enabled, setEnabled] = useState(false);
   const [active, setActive] = useState(false);
   const [supported, setSupported] = useState(false);
-  const sentinelRef = useRef<WakeLockSentinelLike | null>(null);
+  const sentinelRef = useRef<WakeLockSentinel | null>(null);
 
   // Feature-detect after mount (navigator isn't available during SSR).
   useEffect(() => {
@@ -67,9 +72,9 @@ export function useWakeLock(): {
   const acquire = useCallback(async () => {
     if (!wakeLockSupported() || sentinelRef.current) return;
     try {
-      const sentinel = await (
-        navigator as unknown as WakeLockNavigator
-      ).wakeLock!.request("screen");
+      const wakeLock = getWakeLock();
+      if (!wakeLock) return;
+      const sentinel = await wakeLock.request("screen");
       sentinelRef.current = sentinel;
       setActive(true);
     } catch {

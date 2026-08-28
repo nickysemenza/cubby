@@ -40,6 +40,10 @@ interface FilterDef {
 /** Simple filter definition - string expands to text filter with placeholder */
 export type FilterInput = string | FilterDef;
 
+function isFilterId(value: FilterInput): value is string {
+  return typeof value === "string";
+}
+
 // oxlint-disable-next-line typescript/no-explicit-any -- intentional
 type AnyColumnDef<TData extends BaseListRow> = ColumnDef<TData, any>;
 
@@ -124,6 +128,16 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   hiddenFilterColumns?: string[];
 }
 
+function columnIdentifier<TData extends BaseListRow>(
+  column: AnyColumnDef<TData>,
+): string | null {
+  if (column.id) return column.id;
+  if ("accessorKey" in column && column.accessorKey != null) {
+    return String(column.accessorKey);
+  }
+  return null;
+}
+
 /**
  * Hook for building standard columns array for entity list tables.
  *
@@ -197,11 +211,11 @@ export function useStandardColumns<TData extends BaseListRow>({
       );
       if (fromManifest) return fromManifest;
 
-      const filterDef = stableFilters.find((f) =>
-        typeof f === "string" ? f === columnId : f.id === columnId,
+      const filterDef = stableFilters.find((filter) =>
+        isFilterId(filter) ? filter === columnId : filter.id === columnId,
       );
       if (!filterDef) return undefined;
-      if (typeof filterDef === "string") {
+      if (isFilterId(filterDef)) {
         return { placeholder: `Filter by ${filterDef}...` };
       }
       return {
@@ -225,17 +239,17 @@ export function useStandardColumns<TData extends BaseListRow>({
     ): AnyColumnDef<TData> => {
       const manifestConfig = getFilterConfig(colId);
       if (!manifestConfig) return col;
-      const meta = (col.meta ?? {}) as Record<string, unknown>;
-      return {
+      const nextColumn = {
         ...col,
         // Client-side tables would otherwise resolve a filterFn from the ROW
         // value's type and silently match nothing against an array. Harmless
         // on server-filtered tables, which never run it.
-        ...(manifestConfig.filterType === "multiselect"
-          ? { filterFn: multiSelectFilterFn }
-          : {}),
-        meta: { ...meta, filterConfig: manifestConfig },
+        meta: { ...col.meta, filterConfig: manifestConfig },
       };
+      if (manifestConfig.filterType === "multiselect") {
+        nextColumn.filterFn = multiSelectFilterFn;
+      }
+      return nextColumn;
     };
 
     const cols: AnyColumnDef<TData>[] = [];
@@ -257,6 +271,8 @@ export function useStandardColumns<TData extends BaseListRow>({
             // and `recipe` declare `standardColumns: ["image"]`, and both carry
             // a required `images` on their list row. Any new entity opting in
             // must add one too — or pass its own cascade resolver.
+            // SAFETY: the manifest allows the standard image column only for
+            // Product and Recipe list rows, which require their own images.
             getImages: rowImages as (
               row: TData,
             ) => ReturnType<typeof rowImages>,
@@ -267,16 +283,17 @@ export function useStandardColumns<TData extends BaseListRow>({
     }
     if (standardColumns.includes("name")) {
       const nameFilterConfig = getFilterConfig("name");
+      const nameColumnOptions = {
+        filterConfig: nameFilterConfig,
+        className: nameClassName,
+        editable: nameEditable,
+        nameSuffix,
+        namePrefix,
+        expandable,
+        rowLink,
+      };
       cols.push(
-        createNameColumn(columnHelper, entity, "name" as keyof TData, {
-          ...(nameFilterConfig ? { filterConfig: nameFilterConfig } : {}),
-          className: nameClassName,
-          editable: nameEditable,
-          nameSuffix,
-          namePrefix,
-          expandable,
-          rowLink,
-        }),
+        createNameColumn(columnHelper, entity, "name", nameColumnOptions),
       );
     }
 
@@ -289,14 +306,11 @@ export function useStandardColumns<TData extends BaseListRow>({
       // supplied Created in the middle; drop that copy before appending the
       // shared pair below.
       .filter((col) => {
-        const accessorCol = col as { accessorKey?: string };
-        const colId = col.id ?? accessorCol.accessorKey ?? null;
+        const colId = columnIdentifier(col);
         return colId !== "createdAt" && colId !== "updatedAt";
       })
       .map((col) => {
-        // Get column id from id or accessorKey (need to cast for accessorKey access)
-        const accessorCol = col as { accessorKey?: string };
-        const colId = col.id ?? accessorCol.accessorKey ?? null;
+        const colId = columnIdentifier(col);
 
         // Auto-disable sorting for columns not in sortableFields; an explicit
         // enableSorting on the column def still wins.

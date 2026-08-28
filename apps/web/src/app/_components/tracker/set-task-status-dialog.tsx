@@ -1,4 +1,4 @@
-import type { TaskStatus } from "@cubby/schemas/project";
+import { taskStatusSchema, type TaskStatus } from "@cubby/schemas/project";
 import { useState } from "react";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
@@ -48,7 +48,7 @@ export function SetTaskStatusDialog<T extends SetTaskStatusItem>({
 
   const handleSubmit = async () => {
     if (status === null) return;
-    await onConfirm(status as TaskStatus);
+    await onConfirm(taskStatusSchema.parse(status));
     setStatus(null);
   };
 

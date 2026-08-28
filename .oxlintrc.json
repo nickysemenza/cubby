@@ -24,18 +24,6 @@
     "reportUnusedDisableDirectives": "error"
   },
   "ignorePatterns": [
-    ".agent/**",
-    ".agents/**",
-    ".claude/**",
-    ".codex/**",
-    ".continue/**",
-    ".cursor/**",
-    ".gemini/**",
-    ".impeccable/**",
-    ".opencode/**",
-    ".pi/**",
-    ".roo/**",
-    ".windsurf/**",
     "**/.output/**",
     "**/.vinxi/**",
     "**/build/**",
@@ -49,7 +37,6 @@
     "apps/web/src/components/ui/**",
     "apps/web/src/routeTree.gen.ts",
     "apps/web/wasm/**",
-    "tools/oxlint/anti-slop/**",
     "**/worker-configuration.d.ts"
   ],
   "rules": {

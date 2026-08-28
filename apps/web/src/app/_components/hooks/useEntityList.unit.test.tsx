@@ -1,245 +1,121 @@
-import type * as RelatedView from "@cubby/schemas/related-view";
-import { renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { queryOptions } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type * as EntityFilters from "~/entities/filters";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import type {
-  CubbyColumnDef as ColumnDef,
-  CubbyTable as Table,
-} from "../data-table/table-features";
+import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import { useEntityList } from "./useEntityList";
 
 interface TestRow {
   id: string;
 }
 
-interface CapturedTableOptions {
-  getRowId?: (row: TestRow) => string;
-  [key: string]: unknown;
-}
-
-const mocks = vi.hoisted(() => ({
-  useTableConfig: vi.fn(
-    (_options: CapturedTableOptions) => ({}) as Table<TestRow>,
-  ),
-  clearSelection: vi.fn(),
-  previewsQueryOptions: vi.fn((input: unknown) => ({
-    queryKey: ["related-previews", input],
-  })),
-}));
-
-vi.mock("@cubby/schemas/related-view", async (importOriginal) => ({
-  ...(await importOriginal<typeof RelatedView>()),
-  relatedViewRegistry: [],
-  relatedViewsFor: () => [],
-}));
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: [], isLoading: false }),
-}));
-// The hook reads search params directly (for the tab-title summary) rather than
-// only through the mocked `useTableState`, so the router needs a stub here too —
-// the real `useSearch` reaches into `router.stores` and there's no Router above
-// this renderHook.
-vi.mock("@tanstack/react-router", () => ({
-  useSearch: () => ({}),
-}));
-// Title wiring is a side effect on `document`, covered by tests/e2e/tab-title;
-// stubbing it keeps this file about the table contract.
-vi.mock("~/hooks/useDocumentTitle", () => ({
-  useDocumentTitle: () => {},
-}));
-vi.mock("~/entities/entities", () => ({
-  entities: {
-    product: {
-      pluralLabel: "Products",
-      list: { hasUnitMappings: false, defaultSort: "name" },
+const TEST_ROWS: TestRow[] = [{ id: "PRD-ONE" }, { id: "PRD-TWO" }];
+const SELECTABLE_ROWS: BulkActionsConfig<TestRow> = {
+  actions: [
+    {
+      id: "inspect",
+      label: "Inspect",
+      onExecute: async () => ({ success: true }),
     },
-  },
-  browserEntityDefinition: () => ({
-    pluralLabel: "Products",
-    list: { hasUnitMappings: false, defaultSort: "name" },
-  }),
-  entityDialogLabel: () => "Product",
-  entityLabel: () => "Product",
-}));
-// The hooks resolve their delete affordance through the generated CRUD roster.
-// That wiring is covered where it lives; this file is about the table contract.
-vi.mock("~/entities/entity-contracts", () => ({
-  isGeneratedBrowserCrudEntity: () => true,
-  entityMutationOptionsFactory: () => () => ({}),
-}));
-vi.mock("~/entities/filter-manifest", () => ({
-  getEntityFilters: () => [],
-}));
-vi.mock("~/entities/filters", async (importOriginal) => ({
-  ...(await importOriginal<typeof EntityFilters>()),
-  buildFiltersFromManifest: () => ({}),
-  filterGetterFromColumnFilters: () => () => undefined,
-  summarizeListState: () => undefined,
-}));
-vi.mock("~/lib/related-data.functions", () => ({
-  relatedData: {
-    previews: { queryOptions: mocks.previewsQueryOptions },
-  },
-}));
-vi.mock("../data-table/useTableConfig", () => ({
-  useTableConfig: mocks.useTableConfig,
-}));
-vi.mock("../data-table/useTableState", () => ({
-  useTableState: () => ({
-    sorting: [],
-    setSorting: vi.fn(),
-    columnFilters: [],
-    allFilters: [],
-    setColumnFilters: vi.fn(),
-    pagination: { pageIndex: 0, pageSize: 25 },
-    setPagination: vi.fn(),
-    getColumnFilter: vi.fn(),
-    getColumnFilterValues: vi.fn(),
-    getSortParams: vi.fn(),
-    getSorts: vi.fn(),
-  }),
-}));
-vi.mock("./useInfiniteTableList", () => ({
-  useInfiniteTableList: () => ({
-    data: Array.from({ length: 200 }, (_, index) => ({ id: `row-${index}` })),
-    totalCount: 500,
-    sums: undefined,
-    isLoading: false,
-    error: null,
-    timing: { durationMs: null, isFresh: false },
-    infiniteScroll: {
-      fetchNextPage: vi.fn(),
-      hasNextPage: true,
-      isFetchingNextPage: false,
-      isTransitioning: false,
-      loadAllPages: vi.fn(),
-    },
-    refreshControls: { onRefresh: vi.fn(), isRefreshing: false },
-  }),
-}));
-vi.mock("./useListBulkActions", () => ({
-  ListBulkActionBar: () => null,
-  useListBulkActions: () => ({
-    config: undefined,
-    state: { clearSelection: mocks.clearSelection },
-    enableRowSelection: false,
-    rowSelection: {},
-    onRowSelectionChange: undefined,
-  }),
-}));
-vi.mock("./useOptimisticDelete", () => ({
-  useOptimisticDelete: () => ({
-    deleteBulkAction: undefined,
-    combinedExtraActions: undefined,
-    deleteDialog: null,
-    requestDelete: vi.fn(),
-  }),
-}));
-vi.mock("./useStandardColumns", () => ({
-  useStandardColumns: () => [] as ColumnDef<TestRow>[],
-}));
-
-import { useClientEntityList } from "./useClientEntityList";
-import { useEntityList } from "./useEntityList";
-
-/**
- * `useClientEntityList` is a second entry point into the SAME table contract —
- * it differs only in where the rows come from (a prop, versus the server list
- * query). Anything both hooks must hand `useTableConfig` belongs here, run over
- * both, so a fix applied to one can't quietly skip the other.
- */
-describe.each([
-  [
-    "useEntityList",
-    () =>
-      useEntityList<TestRow, Record<string, never>>({
-        entity: "product",
-        queryOptions: vi.fn(),
-        buildFilters: () => ({}),
-        columns: [],
-      }),
   ],
-  [
-    "useClientEntityList",
-    () =>
-      useClientEntityList<TestRow>({
-        entity: "product",
-        data: [{ id: "PRD-TEST" }],
-        columns: [],
-      }),
-  ],
-] as const)("%s — shared table contract", (_name, render) => {
-  beforeEach(() => mocks.useTableConfig.mockClear());
+};
 
-  it("passes a related-preview render version into the table contract", () => {
-    renderHook(render);
+const listQueryOptions = () =>
+  queryOptions({
+    queryKey: ["test", "entity-list"],
+    queryFn: async () => ({
+      items: TEST_ROWS,
+      // The returned page intentionally has more rows than its page size. The
+      // server list hook owns accumulation, while the table must render every
+      // accumulated row rather than applying client pagination a second time.
+      meta: { pageIndex: 0, pageSize: 1, totalCount: 500 },
+    }),
+  });
 
-    expect(mocks.useTableConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        rowContentVersion: expect.objectContaining({ loading: false }),
-      }),
-    );
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(async () => {
+  harness = createBrowserTestHarness();
+  await act(async () => {
+    await harness.loadRouter();
   });
 });
 
+afterEach(() => {
+  harness.dispose();
+});
+
 describe("useEntityList", () => {
-  beforeEach(() => {
-    mocks.useTableConfig.mockClear();
-    mocks.clearSelection.mockClear();
-  });
-
-  it("does not re-paginate accumulated infinite-query rows", () => {
-    renderHook(() =>
-      useEntityList<TestRow, Record<string, never>>({
-        entity: "product",
-        queryOptions: vi.fn(),
-        buildFilters: () => ({}),
-        columns: [],
-      }),
-    );
-
-    expect(mocks.useTableConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.arrayContaining([{ id: "row-199" }]),
-        totalCount: 200,
-        manualPagination: true,
-        initialColumnVisibility: {
-          createdAt: false,
-          updatedAt: false,
-        },
-      }),
-    );
-  });
-
-  it("uses entity ids even when bulk selection is disabled", () => {
-    renderHook(() =>
-      useEntityList<TestRow, Record<string, never>>({
-        entity: "product",
-        queryOptions: vi.fn(),
-        buildFilters: () => ({}),
-        columns: [],
-      }),
-    );
-
-    const options = mocks.useTableConfig.mock.calls[0]?.[0];
-    expect(options?.getRowId?.({ id: "EXP-TEST" })).toBe("EXP-TEST");
-  });
-
-  it("clears bulk selection when the filter scope changes, but not initially", () => {
-    const { rerender } = renderHook(
-      ({ scope }) =>
-        useEntityList<TestRow, { scope: string }>({
+  it("renders every accumulated server row while retaining the server total", async () => {
+    const { result } = renderHook(
+      () =>
+        useEntityList<TestRow, Record<string, never>>({
           entity: "product",
-          queryOptions: vi.fn(),
-          buildFilters: () => ({ scope }),
+          queryOptions: listQueryOptions,
+          buildFilters: () => ({}),
           columns: [],
         }),
-      { initialProps: { scope: "first" } },
+      { wrapper: harness.routerWrapper },
     );
 
-    expect(mocks.clearSelection).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+
+    expect(result.current.totalCount).toBe(500);
+    expect(
+      result.current.workbench.table.getRowModel().rows.map((row) => row.id),
+    ).toEqual(["PRD-ONE", "PRD-TWO"]);
+  });
+
+  it("keeps entity ids as table row ids when selection is unavailable", async () => {
+    const { result } = renderHook(
+      () =>
+        useEntityList<TestRow, Record<string, never>>({
+          entity: "product",
+          queryOptions: listQueryOptions,
+          buildFilters: () => ({}),
+          columns: [],
+        }),
+      { wrapper: harness.routerWrapper },
+    );
+
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+
+    expect(result.current.workbench.table.getRow("PRD-TWO").original).toEqual({
+      id: "PRD-TWO",
+    });
+  });
+
+  it("clears a bulk selection when its query scope changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: string }) =>
+        useEntityList<TestRow, { scope: string }>({
+          entity: "product",
+          queryOptions: listQueryOptions,
+          buildFilters: () => ({ scope }),
+          bulkActions: SELECTABLE_ROWS,
+          columns: [],
+        }),
+      { initialProps: { scope: "first" }, wrapper: harness.routerWrapper },
+    );
+
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    act(() => {
+      result.current.workbench.table.getRow("PRD-ONE").toggleSelected(true);
+    });
+    await waitFor(() =>
+      expect(result.current.workbench.table.atoms.rowSelection?.get()).toEqual({
+        "PRD-ONE": true,
+      }),
+    );
+
     rerender({ scope: "second" });
-    expect(mocks.clearSelection).toHaveBeenCalledTimes(1);
+
+    await waitFor(() =>
+      expect(result.current.workbench.table.atoms.rowSelection?.get()).toEqual(
+        {},
+      ),
+    );
   });
 });

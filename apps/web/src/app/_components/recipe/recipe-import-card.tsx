@@ -35,6 +35,9 @@ export type RecipeImportStatus =
   | "will-update"
   | "needs-formatting";
 
+const isRecipeYieldText = (value: unknown): value is string =>
+  typeof value === "string";
+
 /** Cross-recipe reference linking — cookbook-only; Notion v1 has no references. */
 type ReferenceLinking = {
   linkableTitles: ReadonlySet<string>;
@@ -70,18 +73,18 @@ function recipeMemoKey(r: ImportRecipe): string {
   return `${r.meta.title}|${r.sections.length}|${ings}|${ins}|${r.references.length}|${r.meta.recipe_yield ?? ""}|${r.meta.description?.length ?? 0}|${r.meta.notes?.length ?? 0}`;
 }
 
-const STATUS_BADGE: Record<
+const STATUS_BADGE = {
+  new: { label: "new", variant: "positive" },
+  unchanged: { label: "imported · no changes", variant: "secondary" },
+  "will-update": { label: "imported · will update", variant: "warning" },
+  "needs-formatting": { label: "needs formatting", variant: "destructive" },
+} satisfies Record<
   RecipeImportStatus,
   {
     label: string;
     variant: "positive" | "secondary" | "warning" | "destructive";
   }
-> = {
-  new: { label: "new", variant: "positive" },
-  unchanged: { label: "imported · no changes", variant: "secondary" },
-  "will-update": { label: "imported · will update", variant: "warning" },
-  "needs-formatting": { label: "needs formatting", variant: "destructive" },
-};
+>;
 
 export const RecipeImportCard = memo(
   RecipeImportCardImpl,
@@ -141,7 +144,7 @@ function RecipeImportCardImpl({
           try {
             return formatRichText(wasm.parse_rich_text(line, ingredientNames));
           } catch {
-            return [line] as ReturnType<typeof formatRichText>;
+            return formatRichText([{ kind: "Text", value: line }]);
           }
         }),
       ),
@@ -167,7 +170,7 @@ function RecipeImportCardImpl({
             </span>
             {recipe.meta.recipe_yield && (
               <Description as="span" size="xs">
-                {typeof recipe.meta.recipe_yield === "string"
+                {isRecipeYieldText(recipe.meta.recipe_yield)
                   ? recipe.meta.recipe_yield
                   : `${recipe.meta.recipe_yield.value} ${recipe.meta.recipe_yield.unit}`}
               </Description>

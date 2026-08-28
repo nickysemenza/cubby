@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { expectedProblemKeys } from "~/entities/problem-registry";
 import type { ProblemCountsCacheAdapter } from "~/server/cf-env";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { Database } from "~/server/db";
+import { UPCLookupClient } from "~/server/clients/upc-lookup";
+import { Database } from "~/server/db";
 
-const findProblemCountsMock = vi.hoisted(() => vi.fn());
-vi.mock("~/server/services/problems.service", () => ({
-  findProblemCounts: findProblemCountsMock,
-}));
+import {
+  getCachedProblemCounts,
+  type ProblemCountsPort,
+  refreshCachedProblemCounts,
+} from "./problem-counts-cache";
+
+const countProblems = vi.fn<ProblemCountsPort["countProblems"]>();
+const port: ProblemCountsPort = { countProblems };
 
 const counts = (total: number) =>
   problemsCountSchema.parse({
@@ -31,8 +35,12 @@ function memoryCache(initial?: string) {
 }
 
 describe("problem-counts KV snapshot", () => {
-  const db = {} as Database;
-  const upc = {} as UPCLookupClient;
+  const db = new Database(() => {
+    throw new Error(
+      "The injected problem count port must not access the database",
+    );
+  });
+  const upc = new UPCLookupClient("https://upc.example");
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -41,7 +49,7 @@ describe("problem-counts KV snapshot", () => {
 
   afterEach(() => {
     vi.useRealTimers();
-    findProblemCountsMock.mockReset();
+    countProblems.mockReset();
   });
 
   it("returns a valid KV hit without running detectors", async () => {
@@ -54,12 +62,10 @@ describe("problem-counts KV snapshot", () => {
         coveredThrough: "2026-08-20T16:59:00.000Z",
       }),
     );
-    const { getCachedProblemCounts } = await import("./problem-counts-cache");
-
-    await expect(getCachedProblemCounts(db, upc, adapter)).resolves.toEqual(
-      cached,
-    );
-    expect(findProblemCountsMock).not.toHaveBeenCalled();
+    await expect(
+      getCachedProblemCounts(db, upc, adapter, port),
+    ).resolves.toEqual(cached);
+    expect(countProblems).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -75,14 +81,12 @@ describe("problem-counts KV snapshot", () => {
     ],
   ])("computes once and seeds KV on %s", async (_label, initial) => {
     const fresh = counts(9);
-    findProblemCountsMock.mockResolvedValue(fresh);
+    countProblems.mockResolvedValue(fresh);
     const { adapter, values } = memoryCache(initial);
-    const { getCachedProblemCounts } = await import("./problem-counts-cache");
-
-    await expect(getCachedProblemCounts(db, upc, adapter)).resolves.toEqual(
-      fresh,
-    );
-    expect(findProblemCountsMock).toHaveBeenCalledTimes(1);
+    await expect(
+      getCachedProblemCounts(db, upc, adapter, port),
+    ).resolves.toEqual(fresh);
+    expect(countProblems).toHaveBeenCalledTimes(1);
     expect(JSON.parse(values.get("problem-counts:v1") ?? "null")).toMatchObject(
       {
         version: 1,
@@ -101,18 +105,21 @@ describe("problem-counts KV snapshot", () => {
         coveredThrough: "2026-08-20T17:29:00.000Z",
       }),
     );
-    const { refreshCachedProblemCounts } =
-      await import("./problem-counts-cache");
-
     await expect(
-      refreshCachedProblemCounts(db, upc, adapter, "2026-08-20T17:00:00.000Z"),
+      refreshCachedProblemCounts(
+        db,
+        upc,
+        adapter,
+        "2026-08-20T17:00:00.000Z",
+        port,
+      ),
     ).resolves.toBe("skipped");
-    expect(findProblemCountsMock).not.toHaveBeenCalled();
+    expect(countProblems).not.toHaveBeenCalled();
   });
 
   it("runs a later queued refresh and advances coveredThrough", async () => {
     const fresh = counts(8);
-    findProblemCountsMock.mockResolvedValue(fresh);
+    countProblems.mockResolvedValue(fresh);
     const { adapter, values } = memoryCache(
       JSON.stringify({
         version: 1,
@@ -121,13 +128,16 @@ describe("problem-counts KV snapshot", () => {
         coveredThrough: "2026-08-20T17:29:00.000Z",
       }),
     );
-    const { refreshCachedProblemCounts } =
-      await import("./problem-counts-cache");
-
     await expect(
-      refreshCachedProblemCounts(db, upc, adapter, "2026-08-20T18:00:00.000Z"),
+      refreshCachedProblemCounts(
+        db,
+        upc,
+        adapter,
+        "2026-08-20T18:00:00.000Z",
+        port,
+      ),
     ).resolves.toBe("succeeded");
-    expect(findProblemCountsMock).toHaveBeenCalledTimes(1);
+    expect(countProblems).toHaveBeenCalledTimes(1);
     expect(JSON.parse(values.get("problem-counts:v1") ?? "null")).toMatchObject(
       {
         counts: fresh,
@@ -138,14 +148,12 @@ describe("problem-counts KV snapshot", () => {
 
   it("returns a cold live result when seeding KV fails", async () => {
     const fresh = counts(11);
-    findProblemCountsMock.mockResolvedValue(fresh);
+    countProblems.mockResolvedValue(fresh);
     const { adapter } = memoryCache();
     vi.mocked(adapter.put).mockRejectedValue(new Error("KV unavailable"));
-    const { getCachedProblemCounts } = await import("./problem-counts-cache");
-
-    await expect(getCachedProblemCounts(db, upc, adapter)).resolves.toEqual(
-      fresh,
-    );
+    await expect(
+      getCachedProblemCounts(db, upc, adapter, port),
+    ).resolves.toEqual(fresh);
   });
 
   it("preserves the last valid snapshot when a refresh fails", async () => {
@@ -156,12 +164,16 @@ describe("problem-counts KV snapshot", () => {
       coveredThrough: "2026-08-20T17:29:00.000Z",
     });
     const { adapter, values } = memoryCache(previous);
-    findProblemCountsMock.mockRejectedValue(new Error("detector failed"));
-    const { refreshCachedProblemCounts } =
-      await import("./problem-counts-cache");
+    countProblems.mockRejectedValue(new Error("detector failed"));
 
     await expect(
-      refreshCachedProblemCounts(db, upc, adapter, "2026-08-20T18:00:00.000Z"),
+      refreshCachedProblemCounts(
+        db,
+        upc,
+        adapter,
+        "2026-08-20T18:00:00.000Z",
+        port,
+      ),
     ).rejects.toThrow("detector failed");
     expect(values.get("problem-counts:v1")).toBe(previous);
     expect(adapter.put).not.toHaveBeenCalled();

@@ -186,7 +186,7 @@ export function useTableVirtualizer({
   // Buffer ~one viewport of rows above/below so a fast fling doesn't outrun the
   // rendered range and flash blank. Rows are cheap to render (profiled), so the
   // extra DOM is affordable; clamped to keep tiny/huge viewports sane.
-  const viewportH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const viewportH = globalThis.window?.innerHeight ?? 800;
   const overscan = Math.min(40, Math.max(12, Math.ceil(viewportH / rowHeight)));
   const getItemKey = useCallback(
     (index: number) =>

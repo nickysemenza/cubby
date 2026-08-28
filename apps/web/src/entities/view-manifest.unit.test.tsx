@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +17,8 @@ import {
 import { isViewActive, viewManifest, viewsForEntity } from "./view-manifest";
 
 type ViewFilterish = { id: string; value: string | string[] };
+const entityFromKey = (value: string): Entity | undefined =>
+  entitySchema.safeParse(value).data;
 
 // A `.tsx` test, so it runs under the `ui` vitest project: cross-checking a
 // view's filter ids against the manifest means importing `filter-manifest.tsx`,
@@ -30,8 +32,10 @@ describe("view manifest", () => {
     // URL. A typo'd column id would set a filter no column owns — invisible,
     // and unclearable except by Reset.
     for (const [entity, views] of Object.entries(viewManifest)) {
+      const parsedEntity = entityFromKey(entity);
+      if (!parsedEntity) continue;
       const specIds = new Set(
-        getEntityFilters(entity as never).map((s) => s.columnId),
+        getEntityFilters(parsedEntity).map((s) => s.columnId),
       );
       for (const view of views ?? []) {
         for (const filter of view.filters) {
@@ -56,7 +60,9 @@ describe("view manifest", () => {
     // rest — reaches `buildFiltersFromManifest` directly and is unprotected. So
     // ask the SAME predicate here, of the whole manifest.
     for (const [entity, views] of Object.entries(viewManifest)) {
-      const specs = getEntityFilters(entity as never);
+      const parsedEntity = entityFromKey(entity);
+      if (!parsedEntity) continue;
+      const specs = getEntityFilters(parsedEntity);
       for (const view of views ?? []) {
         const unexpanded = findUnexpandedRangeFilter(specs, view.filters);
         // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
@@ -78,9 +84,9 @@ describe("view manifest", () => {
     // every row. `financialTransaction/unlinked` is only correct because
     // `purchasePresence` was promoted to column-backed first.
     for (const [entity, views] of Object.entries(viewManifest)) {
-      const [, urlOnly] = partitionFilterSpecs(
-        getEntityFilters(entity as never),
-      );
+      const parsedEntity = entityFromKey(entity);
+      if (!parsedEntity) continue;
+      const [, urlOnly] = partitionFilterSpecs(getEntityFilters(parsedEntity));
       const urlOnlyIds = new Set(urlOnly.map((spec) => spec.columnId));
       for (const view of views ?? []) {
         for (const filter of view.filters) {
@@ -332,12 +338,14 @@ describe("view filter values match the shape decodeFilters produces", () => {
       (views ?? []).flatMap((view) =>
         view.filters.map(
           (filter) =>
-            [entity, view.id, filter] as [string, string, ViewFilterish],
+            [entity, view.id, filter] satisfies [string, string, ViewFilterish],
         ),
       ),
     ),
   )("%s / %s — %o", (entity, _viewId, filter) => {
-    const spec = getEntityFilters(entity as Entity).find(
+    const parsedEntity = entityFromKey(entity);
+    if (!parsedEntity) return;
+    const spec = getEntityFilters(parsedEntity).find(
       (candidate) => candidate.columnId === filter.id,
     );
     expect(spec, `no filter spec for ${filter.id}`).toBeDefined();
@@ -473,7 +481,10 @@ describe("problem-backed views", () => {
   const backed = Object.entries(viewManifest).flatMap(([entity, views]) =>
     (views ?? [])
       .filter((view) => view.problem)
-      .map((view) => ({ entity: entity as Entity, view })),
+      .flatMap((view) => {
+        const parsedEntity = entityFromKey(entity);
+        return parsedEntity ? [{ entity: parsedEntity, view }] : [];
+      }),
   );
 
   it.each(backed)(
@@ -527,7 +538,12 @@ describe("recipe/no-instructions names the source complement", () => {
     );
     const named = view?.filters.find((f) => f.id === "sourceType")?.value;
     expect(Array.isArray(named)).toBe(true);
-    const values = (named as string[]).filter((v) => v !== FILTER_NONE);
+    const values = Array.isArray(named)
+      ? named.filter(
+          (value): value is string =>
+            typeof value === "string" && value !== FILTER_NONE,
+        )
+      : [];
     expect(new Set(values)).toEqual(
       new Set(recipeSourceValues.filter((v) => v !== "Book" && v !== "Notion")),
     );

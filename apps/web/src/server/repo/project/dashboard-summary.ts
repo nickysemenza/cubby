@@ -75,16 +75,16 @@ const NEXT_TASKS_CAP = 10;
  * instead of that status silently vanishing from every project's breakdown
  * (see CLAUDE.md's finite-enum-Record convention).
  */
-const TASK_STATUS_FIELD: Record<
-  TaskStatus,
-  Exclude<keyof ProjectTaskStatusBreakdown, "projectId">
-> = {
+const TASK_STATUS_FIELD = {
   not_started: "notStarted",
   later: "later",
   in_progress: "inProgress",
   blocked: "blocked",
   done: "done",
-};
+} as const satisfies Record<
+  TaskStatus,
+  Exclude<keyof ProjectTaskStatusBreakdown, "projectId">
+>;
 
 export async function projectDashboardSummary(
   db: Database,

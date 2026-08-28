@@ -290,7 +290,7 @@ export function RecipeList({
           // safe to edit inline.
           if (recipe.yield) return formatYield(recipe.yield);
           return (
-            <EditableCell<number>
+            <EditableCell
               value={recipe.servings ?? null}
               config={{ type: "number" }}
               clipboard={specFromCellData(servingsCellDataDef, recipe)}

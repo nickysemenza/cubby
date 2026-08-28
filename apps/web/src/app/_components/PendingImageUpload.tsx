@@ -1,12 +1,10 @@
 import type { EntityImage } from "@cubby/schemas/entity";
-import {
-  ALLOWED_IMAGE_TYPES,
-  type AllowedImageType,
-} from "@cubby/schemas/image";
+import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
 import { Camera, ChevronLeft, ChevronRight, Link, Star, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Grid } from "~/components/layout";
@@ -17,6 +15,8 @@ import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { cn } from "~/lib/utils";
+
+const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
 
 export interface PendingImage {
   id: string;
@@ -160,7 +160,8 @@ export function PendingImageUpload({
       setUploading(true);
 
       try {
-        if (!ALLOWED_IMAGE_TYPES.includes(file.type as AllowedImageType)) {
+        const contentType = imageContentTypeSchema.safeParse(file.type);
+        if (!contentType.success) {
           toast.error(
             `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
           );
@@ -169,7 +170,7 @@ export function PendingImageUpload({
 
         const initResult = await uploadImageMutation.mutateAsync({
           filename: file.name,
-          contentType: file.type as AllowedImageType,
+          contentType: contentType.data,
           size: file.size,
           entityType,
         });

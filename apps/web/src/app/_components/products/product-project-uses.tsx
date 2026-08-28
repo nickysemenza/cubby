@@ -51,6 +51,19 @@ type ProjectUse = ProductProjectUsesOut["projects"][number];
 /** `id`/`name` are what the shared list hook keys and links rows by. */
 type ProjectUseRow = ProjectUse & { id: ProjectShortcode; name: string };
 
+/** Product/project operations used by this relationship surface. */
+export interface ProductProjectUsesOperations {
+  projectUses: typeof productOperations.projectUses;
+  setProjectUses: typeof productOperations.setProjectUses;
+  setToolUsage: typeof project.setToolUsage;
+}
+
+const productionOperations: ProductProjectUsesOperations = {
+  projectUses: productOperations.projectUses,
+  setProjectUses: productOperations.setProjectUses,
+  setToolUsage: project.setToolUsage,
+};
+
 /**
  * Project-use history survives a Product recategorization. Current reusable
  * resources can always open the section; others only do once the relationship
@@ -91,16 +104,20 @@ const HIDDEN_RELATED_COLUMNS = {
  * replacement, one product-keyed audit entry) rather than N per-project
  * attaches, which could half-apply and would log N entries for one action.
  */
-export function ProductProjectUses({ productId }: { productId: string }) {
+export function ProductProjectUses({
+  productId,
+  operations = productionOperations,
+}: {
+  productId: string;
+  operations?: ProductProjectUsesOperations;
+}) {
   const [editing, setEditing] = useState(false);
-  const query = useQuery(
-    productOperations.projectUses.queryOptions({ productId }),
-  );
+  const query = useQuery(operations.projectUses.queryOptions({ productId }));
   const data = query.data;
   const canEdit = data?.canEdit ?? false;
 
   const detach = useActionMutation({
-    mutationFn: project.setToolUsage.mutationOptions,
+    mutationFn: operations.setToolUsage.mutationOptions,
     success: "Removed from project",
   });
 
@@ -229,6 +246,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         {canEdit ? (
           <ProjectUsesDialog
             productId={productId}
+            operations={operations}
             open={editing}
             onOpenChange={setEditing}
             selectedIds={[]}
@@ -272,6 +290,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
       {canEdit && editing && (
         <ProjectUsesDialog
           productId={productId}
+          operations={operations}
           open
           onOpenChange={setEditing}
           selectedIds={data.projects.map((project) => project.projectId)}
@@ -283,11 +302,13 @@ export function ProductProjectUses({ productId }: { productId: string }) {
 
 function ProjectUsesDialog({
   productId,
+  operations,
   open,
   onOpenChange,
   selectedIds,
 }: {
   productId: string;
+  operations: ProductProjectUsesOperations;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedIds: string[];
@@ -313,7 +334,7 @@ function ProjectUsesDialog({
   };
 
   const save = useActionMutation({
-    mutationFn: productOperations.setProjectUses.mutationOptions,
+    mutationFn: operations.setProjectUses.mutationOptions,
     success: "Project uses updated",
     onSuccess: () => resetAndClose(false),
   });
@@ -328,8 +349,9 @@ function ProjectUsesDialog({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isRowSelectionUpdater(updater)
+      ? updater(rowSelection)
+      : updater;
     setSelected(
       new Set(
         Object.entries(next)
@@ -434,4 +456,10 @@ function ProjectUsesDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function isRowSelectionUpdater(
+  updater: Updater<RowSelectionState>,
+): updater is (previous: RowSelectionState) => RowSelectionState {
+  return typeof updater === "function";
 }

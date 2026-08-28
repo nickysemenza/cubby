@@ -46,6 +46,8 @@ import type {
 import type { WishCreateInput, WishUpdateData } from "@cubby/schemas/wish";
 import type { z } from "zod";
 
+import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
+
 type UpdateData<T> = T extends { data: infer D } ? D : never;
 
 type FinancialAccountEditorFields = {
@@ -202,7 +204,7 @@ type EntityEditSpecification<E extends keyof EntityEditIntentCatalog> = {
   draft: EntityEditDraftMap[E];
   createInput: EntityEditCreateInputMap[E];
   updateInput: EntityEditUpdateInputMap[E];
-  result: { id: string } & EntityEditDraftMap[E];
+  result: EntityMutationOutputByEntity[E];
   intents: EntityEditIntentCatalog[E];
 };
 
@@ -226,7 +228,6 @@ export type EntityEditRecordFor<E extends TypedEditableEntity> = {
     K in keyof EntityEditSpecification<E>["record"]
   ]: EntityEditSpecification<E>["record"][K];
 };
-/** Standard CRUD routers return at least identity and may return any subset of
- * the entity's editable fields. Rich callers can narrow their own result. */
+/** Exact public output returned by this entity's generated mutation schema. */
 export type EntityEditResultFor<E extends TypedEditableEntity> =
   EntityEditSpecification<E>["result"];

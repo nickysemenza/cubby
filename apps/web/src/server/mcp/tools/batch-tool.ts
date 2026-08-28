@@ -1,0 +1,178 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+
+import {
+  type Caller,
+  describeToolError,
+  getCaller,
+  registerMcpTool,
+  type ToolErrorDetail,
+} from "./tool-registration";
+
+const DEFAULT_BATCH_MAX_ITEMS = 50;
+
+type BatchResultDetail = "summary" | "full";
+
+type BatchSuccess<TItem> = {
+  index: number;
+  status: "succeeded";
+  reference: string;
+  item?: TItem;
+};
+
+type BatchFailure = {
+  index: number;
+  status: "failed";
+  error: ToolErrorDetail;
+};
+
+type BatchResult<TItem> = BatchSuccess<TItem> | BatchFailure;
+
+function batchOutputSchema<TItemOutput extends z.ZodType>(
+  itemOutputSchema: TItemOutput,
+) {
+  return z.object({
+    summary: z.object({
+      requested: z.number().int().nonnegative(),
+      succeeded: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    }),
+    results: z.array(
+      z.discriminatedUnion("status", [
+        z.object({
+          index: z.number().int().nonnegative(),
+          status: z.literal("succeeded"),
+          reference: z.string(),
+          item: itemOutputSchema.optional(),
+        }),
+        z.object({
+          index: z.number().int().nonnegative(),
+          status: z.literal("failed"),
+          error: z.object({
+            message: z.string(),
+            code: z.string().optional(),
+            reason: z.string().optional(),
+          }),
+        }),
+      ]),
+    ),
+  });
+}
+
+function batchResultDetailParam(fallback: BatchResultDetail) {
+  return z
+    .enum(["summary", "full"])
+    .default(fallback)
+    .describe(
+      `How much of each result to return. 'summary' gives {index, status, reference}; 'full' also includes the parsed item. This tool defaults to '${fallback}'.`,
+    );
+}
+
+export function registerBatchTool<
+  TItemInput extends z.ZodType,
+  TItemOutput extends z.ZodType,
+>(
+  server: McpServer,
+  config: {
+    name: string;
+    description: string;
+    itemInputSchema: TItemInput;
+    itemOutputSchema: TItemOutput;
+    projectReference: (item: z.output<TItemOutput>) => string;
+    maxItems?: number;
+    defaultResultDetail?: BatchResultDetail;
+    annotations: ToolAnnotations;
+    telemetryEntity?: (params: {
+      items: Array<z.output<TItemInput>>;
+    }) => string | undefined;
+    refineItems?: (
+      items: Array<z.output<TItemInput>>,
+      ctx: z.core.$RefinementCtx,
+    ) => void;
+    run: (
+      caller: Caller,
+      item: z.output<TItemInput>,
+    ) => Promise<z.output<TItemOutput>>;
+  },
+): void {
+  const items = z
+    .array(config.itemInputSchema)
+    .min(1)
+    .max(config.maxItems ?? DEFAULT_BATCH_MAX_ITEMS);
+  const defaultDetail = config.defaultResultDetail ?? "summary";
+  const baseInputSchema = z.strictObject({
+    items,
+    resultDetail: batchResultDetailParam(defaultDetail),
+  });
+  const inputSchema = config.refineItems
+    ? baseInputSchema.superRefine((input, ctx) =>
+        config.refineItems?.(input.items, ctx),
+      )
+    : baseInputSchema;
+  const outputSchema = batchOutputSchema(config.itemOutputSchema);
+
+  registerMcpTool(server, {
+    name: config.name,
+    description: config.description,
+    inputSchema,
+    outputSchema,
+    annotations: config.annotations,
+    telemetryEntity: config.telemetryEntity,
+    handler: async (params, extra) => {
+      const caller = getCaller(extra);
+      const results: Array<BatchResult<z.output<TItemOutput>>> = [];
+
+      for (const [index, item] of params.items.entries()) {
+        try {
+          const produced = config.itemOutputSchema.parse(
+            await config.run(caller, item),
+          );
+          const success: BatchSuccess<z.output<TItemOutput>> = {
+            index,
+            status: "succeeded",
+            reference: config.projectReference(produced),
+          };
+          if (params.resultDetail === "full") success.item = produced;
+          results.push(success);
+        } catch (error) {
+          results.push({
+            index,
+            status: "failed",
+            error: describeToolError(error),
+          });
+        }
+      }
+
+      const succeeded = results.filter(
+        (result) => result.status === "succeeded",
+      ).length;
+      return {
+        summary: {
+          requested: results.length,
+          succeeded,
+          failed: results.length - succeeded,
+        },
+        results,
+      };
+    },
+  });
+}
+
+export function rejectDuplicateIds<TItem extends { id?: string }>(
+  items: ReadonlyArray<TItem>,
+  ctx: z.core.$RefinementCtx,
+): void {
+  const seen = new Set<string>();
+  for (const [index, item] of items.entries()) {
+    if (!item.id) continue;
+    if (seen.has(item.id)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["items", index, "id"],
+        message: `Duplicate update id ${item.id}; each item must target a different entity.`,
+      });
+    }
+    seen.add(item.id);
+  }
+}

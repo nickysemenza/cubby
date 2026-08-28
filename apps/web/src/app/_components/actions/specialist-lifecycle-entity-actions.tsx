@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
@@ -20,6 +21,27 @@ type StagedDeleteRow = EntityActionRow & {
   recipeCount?: number;
 };
 
+export interface SpecialistLifecycleOperations {
+  deleteCookbook: typeof recipe.deleteCookbook;
+  deleteImage: typeof image.delete;
+}
+
+const productionOperations: SpecialistLifecycleOperations = {
+  deleteCookbook: recipe.deleteCookbook,
+  deleteImage: image.delete,
+};
+
+interface StagedSpecialistDeleteConfig {
+  entityLabel: string;
+  description: string;
+  pendingLabel: string;
+  stageRow: (row: EntityActionRow) => StagedDeleteRow;
+  renderItem: (row: StagedDeleteRow) => string;
+  submit: (row: StagedDeleteRow) => Promise<void>;
+  isPending: boolean;
+  failureMessage: string;
+}
+
 function useStagedSpecialistDelete({
   entityLabel,
   description,
@@ -29,16 +51,7 @@ function useStagedSpecialistDelete({
   submit,
   isPending,
   failureMessage,
-}: {
-  entityLabel: string;
-  description: string;
-  pendingLabel: string;
-  stageRow: (row: EntityActionRow) => StagedDeleteRow;
-  renderItem: (row: StagedDeleteRow) => string;
-  submit: (row: StagedDeleteRow) => Promise<unknown>;
-  isPending: boolean;
-  failureMessage: string;
-}): EntityActionHandles {
+}: StagedSpecialistDeleteConfig): EntityActionHandles {
   const [staged, setStaged] = useState<StagedDeleteRow | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
@@ -123,10 +136,12 @@ function useStagedSpecialistDelete({
  * imported from the book, including recipes used as sub-recipes or planned
  * into meals. The staged promise keeps a list selection until confirmation.
  */
-export function useDeleteCookbookEntityAction(): EntityActionHandles {
+export function useDeleteCookbookEntityAction(
+  operations: SpecialistLifecycleOperations = productionOperations,
+): EntityActionHandles {
   const navigate = useNavigate();
   const mutation = useActionMutation({
-    mutationFn: recipe.deleteCookbook.mutationOptions,
+    mutationFn: operations.deleteCookbook.mutationOptions,
     success: ({ deletedRecipes }) =>
       `Deleted cookbook and ${deletedRecipes} recipe${deletedRecipes === 1 ? "" : "s"}`,
     error: (err) => getErrorMessage(err) || "Failed to delete cookbook",
@@ -165,10 +180,12 @@ export function useDeleteCookbookEntityAction(): EntityActionHandles {
 }
 
 /** Image deletion removes the database record and its R2 object together. */
-export function useDeleteImageEntityAction(): EntityActionHandles {
+export function useDeleteImageEntityAction(
+  operations: SpecialistLifecycleOperations = productionOperations,
+): EntityActionHandles {
   const navigate = useNavigate();
   const mutation = useActionMutation({
-    mutationFn: image.delete.mutationOptions,
+    mutationFn: operations.deleteImage.mutationOptions,
     success: ({ sideEffects }) =>
       savedWithBackgroundWork(sideEffects, "Image deleted"),
     error: (err) => getErrorMessage(err) || "Failed to delete image",
@@ -203,6 +220,14 @@ export function useDeleteImageEntityAction(): EntityActionHandles {
   });
 }
 
+function useCatalogCookbookDeleteAction(_entity: Entity): EntityActionHandles {
+  return useDeleteCookbookEntityAction();
+}
+
+function useCatalogImageDeleteAction(_entity: Entity): EntityActionHandles {
+  return useDeleteImageEntityAction();
+}
+
 export const specialistLifecycleEntityActionDefinitions = [
   {
     verb: "delete",
@@ -211,7 +236,7 @@ export const specialistLifecycleEntityActionDefinitions = [
     surfaces: ["row", "selection", "inspector", "detail"],
     group: "destructive",
     priority: 100,
-    use: useDeleteCookbookEntityAction,
+    use: useCatalogCookbookDeleteAction,
   },
   {
     verb: "delete",
@@ -220,6 +245,6 @@ export const specialistLifecycleEntityActionDefinitions = [
     surfaces: ["inspector", "detail"],
     group: "destructive",
     priority: 100,
-    use: useDeleteImageEntityAction,
+    use: useCatalogImageDeleteAction,
   },
 ] as const satisfies readonly EntityActionDefinition[];

@@ -15,10 +15,25 @@ import { search } from "~/lib/search.functions";
 
 import {
   ProductImageSummariesProvider,
+  type ProductImageMap,
   useHydratedProductImages,
 } from "../products/product-image-summaries";
 
 const EMPTY_RELATED_PRODUCTS: RelatednessOut["items"] = [];
+
+/** The rail's only remote dependencies, grouped so browser tests can use the
+ * same parsed operation descriptors with an in-memory transport. */
+export interface RelatednessRailOperations {
+  relatedness: typeof relatedness.product;
+  requestEmbeddingRefresh: typeof search.requestEmbeddingRefresh;
+  batchSummary: typeof backgroundBatch.summary;
+}
+
+const productionOperations: RelatednessRailOperations = {
+  relatedness: relatedness.product,
+  requestEmbeddingRefresh: search.requestEmbeddingRefresh,
+  batchSummary: backgroundBatch.summary,
+};
 
 /**
  * Product's compact relationship ledger. Tags remain compatibility evidence;
@@ -27,16 +42,23 @@ const EMPTY_RELATED_PRODUCTS: RelatednessOut["items"] = [];
  */
 export function RelatednessRail({
   product,
+  operations = productionOperations,
+  imageSummaries,
 }: {
   product: { id: ProductShortcode; tags: string[] };
+  operations?: RelatednessRailOperations;
+  /** An established product-summary projection avoids a duplicate query. */
+  imageSummaries?: ProductImageMap;
 }) {
   const queryClient = useQueryClient();
   const relatednessQuery = useQuery(
-    relatedness.product.queryOptions(product.id),
+    operations.relatedness.queryOptions(product.id),
   );
-  const refresh = useMutation(search.requestEmbeddingRefresh.mutationOptions());
+  const refresh = useMutation(
+    operations.requestEmbeddingRefresh.mutationOptions(),
+  );
   const batch = useQuery({
-    ...backgroundBatch.summary.queryOptions({
+    ...operations.batchSummary.queryOptions({
       batchId: refresh.data?.batchId ?? "00000000-0000-4000-8000-000000000000",
     }),
     enabled: refresh.data?.batchId != null,
@@ -98,7 +120,10 @@ export function RelatednessRail({
         </p>
       )}
 
-      <ProductImageSummariesProvider productIds={relatedProductIds}>
+      <ProductImageSummariesProvider
+        productIds={relatedProductIds}
+        summaries={imageSummaries}
+      >
         {items.map((item) => (
           <RelatedProductRow key={item.shortcode} item={item} />
         ))}

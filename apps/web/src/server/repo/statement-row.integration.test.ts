@@ -3,6 +3,8 @@ import { financialTransactionCreateInput } from "@cubby/schemas/financial-transa
 import {
   findStatementRowDriftInput,
   recordStatementRowsInput,
+  type StatementImportInput,
+  type StatementRowInput,
 } from "@cubby/schemas/statement-row";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
@@ -27,7 +29,9 @@ import {
 } from "./statement-row";
 import { statementRowExternalId } from "./statement-row-identity";
 
-const importInput = (overrides: Record<string, unknown> = {}) => ({
+const importInput = (
+  overrides: Partial<StatementImportInput> = {},
+): StatementImportInput => ({
   source: "monarch",
   label: "monarch-2026-08.csv",
   fingerprint: "fp-monarch-1",
@@ -37,7 +41,9 @@ const importInput = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const rowInput = (overrides: Record<string, unknown> = {}) => ({
+const rowInput = (
+  overrides: Partial<StatementRowInput> = {},
+): StatementRowInput => ({
   accountDescriptor: "Test Card (...4242)",
   statementDate: "2026-05-04",
   providerAmount: -128.5,
@@ -52,8 +58,8 @@ const rowInput = (overrides: Record<string, unknown> = {}) => ({
 const record = (
   db: Parameters<typeof recordStatementRows>[0],
   actor: Parameters<typeof recordStatementRows>[2],
-  rows: Record<string, unknown>[],
-  importOverrides: Record<string, unknown> = {},
+  rows: StatementRowInput[],
+  importOverrides: Partial<StatementImportInput> = {},
   dryRun = false,
 ) =>
   recordStatementRows(

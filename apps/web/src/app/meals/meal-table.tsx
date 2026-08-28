@@ -2,14 +2,16 @@ import type { MealFilters, MealOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
-  type MealKind,
-  type MealType,
+  mealKindSchema,
+  mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
 import { useMemo } from "react";
 
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 
 import {
@@ -30,6 +32,15 @@ import {
   mealTypeOptions,
 } from "./meal-options";
 
+/** The meal list's remote descriptor; browser tests replace only its transport. */
+export interface MealTableOperations {
+  list: ListQueryOptionsFn<MealFilters>;
+}
+
+const productionOperations: MealTableOperations = {
+  list: entityListFor("meal").queryOptions,
+};
+
 /**
  * The `/meals?view=table` surface — the CRUD-complete sibling of the
  * calendar view: inline rename/reschedule, delete (row + bulk), and a
@@ -43,7 +54,11 @@ import {
  * by slot rather than by slug) removed that blocker. Cost stays unsortable on
  * purpose: see the column below.
  */
-export function MealTable() {
+export function MealTable({
+  operations = productionOperations,
+}: {
+  operations?: MealTableOperations;
+}) {
   const {
     onRowClick,
     inspectRow,
@@ -116,13 +131,14 @@ export function MealTable() {
         className: "w-28",
         mobile: { slot: "meta", priority: 30 },
         filterConfig: manifestFilterConfig("meal", "mealType"),
-        renderCell: (value) =>
-          value ? (
-            <Badge variant="outline">
-              {MEAL_TYPE_LABELS[value as MealType]}
-            </Badge>
-          ) : null,
+        renderCell: (value) => {
+          const mealType = mealTypeSchema.nullable().parse(value);
+          return mealType ? (
+            <Badge variant="outline">{MEAL_TYPE_LABELS[mealType]}</Badge>
+          ) : null;
+        },
         editable: {
+          parseValue: (value) => mealTypeSchema.nullable().parse(value),
           onSave: async (newValue, meal) => {
             await updateMealMutation.mutateAsync({
               id: meal.id,
@@ -138,12 +154,16 @@ export function MealTable() {
         className: "w-28",
         mobile: { slot: "meta", priority: 40 },
         filterConfig: manifestFilterConfig("meal", "mealKind"),
-        renderCell: (value) => (
-          <Badge variant={mealKindBadgeVariant[value as MealKind]}>
-            {MEAL_KIND_LABELS[value as MealKind]}
-          </Badge>
-        ),
+        renderCell: (value) => {
+          const mealKind = mealKindSchema.parse(value);
+          return (
+            <Badge variant={mealKindBadgeVariant[mealKind]}>
+              {MEAL_KIND_LABELS[mealKind]}
+            </Badge>
+          );
+        },
         editable: {
+          parseValue: (value) => mealKindSchema.parse(value),
           onSave: async (newValue, meal) => {
             await updateMealMutation.mutateAsync({
               id: meal.id,
@@ -203,6 +223,7 @@ export function MealTable() {
   // server `MealFilters` object, and the URL round-trip at once.
   const { workbench } = useEntityList<MealOut, MealFilters>({
     entity: "meal",
+    queryOptions: operations.list,
     onInspectRow: inspectRow,
     columns,
     deletable: deletableConfig,

@@ -28,19 +28,22 @@ interface GraphLink extends d3Force.SimulationLinkDatum<GraphNode> {
   target: string | GraphNode;
 }
 
+const isResolvedGraphNode = (value: string | GraphNode): value is GraphNode =>
+  typeof value !== "string";
+
 /** Node treatment: default reference-graph coloring, delete/merge lifecycle, or referential-health. */
 export type EntityGraphLens = "logical" | "lifecycle" | "health";
 
 /** Stable empty default — a fresh `new Set()` per render would destabilize `fillFor`. */
 const EMPTY_UNHEALTHY: ReadonlySet<Entity> = new Set();
 
-const LENS_CAPTION: Record<EntityGraphLens, string> = {
+const LENS_CAPTION = {
   logical:
     "Arrow → the entity it references · size = times referenced · dashed ring = self-reference",
   lifecycle:
     "Fill = delete mode (ultramarine soft · red hard · slate none) · dashed plum ring = mergeable",
   health: "Red = has a live referential-integrity finding",
-};
+} satisfies Record<EntityGraphLens, string>;
 
 interface EntityReferenceGraphProps {
   /** Entity shown in a detail panel elsewhere on the page; drawn with a selection ring. */
@@ -105,7 +108,7 @@ export function EntityReferenceGraph({
   const inDegree = useMemo(() => {
     const counts = new Map<Entity, number>();
     for (const e of links) {
-      const t = e.target as Entity;
+      const t = e.target;
       counts.set(t, (counts.get(t) ?? 0) + 1);
     }
     return counts;
@@ -219,8 +222,14 @@ export function EntityReferenceGraph({
 
         <g>
           {simLinks.map((link) => {
-            const source = link.source as GraphNode;
-            const target = link.target as GraphNode;
+            if (
+              !isResolvedGraphNode(link.source) ||
+              !isResolvedGraphNode(link.target)
+            ) {
+              return null;
+            }
+            const source = link.source;
+            const target = link.target;
             if (source.x == null || target.x == null) return null;
             const dx = (target.x ?? 0) - (source.x ?? 0);
             const dy = (target.y ?? 0) - (source.y ?? 0);

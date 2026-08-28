@@ -7,11 +7,20 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import {
+  entityBulkUpdateResultSchema,
   ENTITY_KERNEL_ENTITIES,
   entityCommandSchema,
-  entityMutationResultSchema,
-  entityQueryResultSchema,
+  entityDeleteResultSchema,
+  entityRelationMutationResultSchema,
+  entitySearchResultSchema,
 } from "~/server/entity-kernel/contracts";
+import {
+  generatedMcpEntityGetResultSchema,
+  generatedMcpEntityListResultSchema,
+  generatedMcpEntityMergeResultSchema,
+  generatedMcpEntityMutationCreateResultSchema,
+  generatedMcpEntityMutationUpdateResultSchema,
+} from "~/server/generated/entity-bindings.gen";
 
 import { getEntityKernelContext } from "../kernel-context";
 import { registerMcpTool, WRITE_DESTRUCTIVE_CLOSED } from "./_shared";
@@ -19,8 +28,15 @@ import { registerMcpTool, WRITE_DESTRUCTIVE_CLOSED } from "./_shared";
 const entityToolInput = z.object({ command: entityCommandSchema });
 
 const entityToolOutput = z.union([
-  entityQueryResultSchema,
-  entityMutationResultSchema,
+  generatedMcpEntityGetResultSchema,
+  generatedMcpEntityListResultSchema,
+  entitySearchResultSchema,
+  generatedMcpEntityMutationCreateResultSchema,
+  generatedMcpEntityMutationUpdateResultSchema,
+  generatedMcpEntityMergeResultSchema,
+  entityDeleteResultSchema,
+  entityBulkUpdateResultSchema,
+  entityRelationMutationResultSchema,
 ]);
 
 type EntityResult = z.infer<typeof entityToolOutput>;
@@ -69,6 +85,8 @@ export function registerEntityTools(
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     telemetryEntity: (params) => params.command.entity,
     handler: async (params, extra) =>
-      await runEntity(getEntityKernelContext(extra), params.command),
+      entityToolOutput.parse(
+        await runEntity(getEntityKernelContext(extra), params.command),
+      ),
   });
 }

@@ -17,11 +17,24 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { useHydrated } from "~/hooks/useHydrated";
-import { auditLogListOptions } from "~/lib/audit-log.functions";
+import { auditLog, auditLogListOptions } from "~/lib/audit-log.functions";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { AuditLogEntryComponent } from "./audit-log-entry";
+
+export interface AuditLogListOperations {
+  list: typeof auditLog.list;
+}
+
+export interface AuditLogSession {
+  isAuthenticated: boolean;
+  isPending: boolean;
+}
+
+const productionOperations: AuditLogListOperations = {
+  list: auditLog.list,
+};
 
 interface AuditLogListProps {
   entityType?: AuditEntityType;
@@ -32,6 +45,10 @@ interface AuditLogListProps {
   limit?: number;
   /** "ledger" renders glanceable single-line entries (home feed) */
   variant?: "default" | "ledger";
+  /** Remote audit-log descriptor; browser tests supply an in-memory transport. */
+  operations?: AuditLogListOperations;
+  /** Auth state is an external browser boundary, independent of the log query. */
+  session?: AuditLogSession;
 }
 
 export function AuditLogList({
@@ -41,14 +58,19 @@ export function AuditLogList({
   showEntityLink = true,
   limit = 20,
   variant = "default",
+  operations = productionOperations,
+  session: suppliedSession,
 }: AuditLogListProps) {
-  const session = authClient.useSession();
+  const authSession = authClient.useSession();
   // Hydration gate: the session store can resolve before React hydrates, so
   // branching on it alone makes the first client render diverge from SSR.
   // Gating the query on auth also stops it from firing Unauthorized when
   // signed out (this list renders on the public home page).
   const hydrated = useHydrated();
-  const isAuthenticated = hydrated && !!session.data?.user;
+  const session = suppliedSession ?? {
+    isAuthenticated: hydrated && !!authSession.data?.user,
+    isPending: authSession.isPending,
+  };
   const {
     data,
     error,
@@ -69,8 +91,9 @@ export function AuditLogList({
       {
         getNextPageParam: (lastPage) => lastPage.nextCursor,
       },
+      operations.list,
     ),
-    enabled: isAuthenticated,
+    enabled: session.isAuthenticated,
   });
 
   const entries = useMemo(

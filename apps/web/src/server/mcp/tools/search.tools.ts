@@ -5,15 +5,20 @@ import {
 } from "@cubby/schemas/mcp";
 import { similarEntitiesInputSchema } from "@cubby/schemas/search";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { z } from "zod";
 
 import { getReadCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
+
+const RELATED_NOT_REQUESTED: z.output<
+  typeof globalSearchMcpOut
+>["relatedStatus"] = "not_requested";
 
 export function registerSearchTools(server: McpServer) {
   registerMcpTool(server, {
     name: "global_search",
     description:
       "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityTypes to restrict results. Every hit carries its public shortcode in id, ready for get_*/update_* tools. This lexical lookup never calls an embedding provider. Set includeRelated to true only when useful; semantic results are returned separately and never replace direct matches. For entity-to-entity matching use find_similar_entities instead.",
-    inputSchema: globalSearchMcpInputSchema.shape,
+    inputSchema: globalSearchMcpInputSchema,
     outputSchema: globalSearchMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
@@ -25,7 +30,7 @@ export function registerSearchTools(server: McpServer) {
         return {
           results,
           related: [],
-          relatedStatus: "not_requested" as const,
+          relatedStatus: RELATED_NOT_REQUESTED,
         };
       }
 
@@ -47,7 +52,7 @@ export function registerSearchTools(server: McpServer) {
     name: "find_similar_entities",
     description:
       "Find products whose stored embedding is closest to one product seed. This is the only active public similarity direction; other declared pairs remain unavailable until their independent backtests pass. Pass the pair key plus the seed's id; results are nearest first with cosine similarity and the resolved source ref. Similarity ranks candidates but never verifies a match. Returns no results when the seed is uncomputed, stale, or embeddings are unavailable.",
-    inputSchema: similarEntitiesInputSchema.shape,
+    inputSchema: similarEntitiesInputSchema,
     outputSchema: similarEntitiesMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {

@@ -48,7 +48,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
-  type AllowedImageType,
   MAX_IMAGE_UPLOAD_BYTES,
 } from "@cubby/schemas/image";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,6 +62,8 @@ import {
 } from "~/lib/background-batch-polling";
 import { imageUpload } from "~/lib/image.functions";
 
+type LocationMutationResult = { id: LocationShortcode };
+
 export function useLocationPhotoCapture() {
   const queryClient = useQueryClient();
   const uploadImage = useMutation(imageUpload.uploadImage.mutationOptions());
@@ -71,7 +72,7 @@ export function useLocationPhotoCapture() {
   );
 
   const invalidate = useCallback(
-    (result?: unknown) => {
+    (result?: LocationMutationResult) => {
       void invalidateOperationTags(queryClient, ripple.location);
       // The AI description lands later, off the background queue — re-invalidate
       // when it drains so the description fills in without a reload.
@@ -96,7 +97,10 @@ export function useLocationPhotoCapture() {
       locationId: LocationShortcode,
       file: File,
     ): Promise<ImageShortcode> => {
-      if (!ALLOWED_IMAGE_TYPES.includes(file.type as AllowedImageType)) {
+      const contentType = ALLOWED_IMAGE_TYPES.find(
+        (type) => type === file.type,
+      );
+      if (!contentType) {
         // iOS hands over an empty or exotic MIME type often enough that this
         // needs to fail as a readable message, not an opaque server zod reject
         // three steps into a walk.
@@ -110,7 +114,7 @@ export function useLocationPhotoCapture() {
 
       const init = await uploadImage.mutateAsync({
         filename: file.name,
-        contentType: file.type as AllowedImageType,
+        contentType,
         size: file.size,
         entityType: "LOCATION",
       });

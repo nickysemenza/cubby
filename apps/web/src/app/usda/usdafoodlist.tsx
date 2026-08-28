@@ -42,22 +42,28 @@ type USDAListFilters = {
 
 const USDA_TABLE_STATE = { initialSort: "fdc_id" } as const;
 
+export interface USDAFoodListOperations {
+  list: typeof usdaFood.list;
+}
+
+const productionOperations: USDAFoodListOperations = { list: usdaFood.list };
+
 const buildUSDAFilters = (tableState: TableStateReturn): USDAListFilters => ({
   nameFilter: tableState.getColumnFilter("foodinfo-description"),
-  dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type") as
-    | DataType
-    | undefined,
+  dataTypeFilter: dataTypeEnum
+    .optional()
+    .parse(tableState.getColumnFilter("foodInfo-data_type")),
   linkedProductsOnly:
     tableState.getColumnFilter("linkedProducts") === "linked" || undefined,
   foodsOnly: true,
 });
 
-const USDA_SORT_FIELDS: Record<string, USDAFoodSortField> = {
-  fdc_id: "fdc_id",
-  "foodinfo-description": "description",
-  "foodInfo-data_type": "data_type",
-  linkedProducts: "linkedProducts",
-};
+const USDA_SORT_FIELDS = new Map<string, USDAFoodSortField>([
+  ["fdc_id", "fdc_id"],
+  ["foodinfo-description", "description"],
+  ["foodInfo-data_type", "data_type"],
+  ["linkedProducts", "linkedProducts"],
+]);
 
 export const withUSDAListIdentity = <
   TFood extends { fdc_id: number; foodInfo: { description: string } },
@@ -69,7 +75,11 @@ export const withUSDAListIdentity = <
   name: food.foodInfo.description,
 });
 
-export function USDAFoodList() {
+export function USDAFoodList({
+  operations = productionOperations,
+}: {
+  operations?: USDAFoodListOperations;
+}) {
   const {
     onRowClick,
     inspectRow,
@@ -91,21 +101,21 @@ export function USDAFoodList() {
         pagination: params.pagination,
         sort: params.sort,
       };
-      const base = usdaFood.list.queryOptions({
+      const base = operations.list.queryOptions({
         ...listParams,
         sort: searching
           ? [{ orderBy: "relevance", direction: "asc" }]
           : params.sort.map((sort) => ({
               ...sort,
-              orderBy: USDA_SORT_FIELDS[sort.orderBy] ?? "fdc_id",
+              orderBy: USDA_SORT_FIELDS.get(sort.orderBy) ?? "fdc_id",
             })),
       });
-      const queryFn = base.queryFn;
-      if (typeof queryFn !== "function") {
+      if (!base.queryFn) {
         throw new Error(
           "USDA list query options must include a query function",
         );
       }
+      const queryFn = base.queryFn;
       return {
         ...base,
         queryFn: async (context: Parameters<typeof queryFn>[0]) => {
@@ -117,7 +127,7 @@ export function USDAFoodList() {
         },
       };
     },
-    [],
+    [operations.list],
   );
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<USDAListRow>(),

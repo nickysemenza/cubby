@@ -26,9 +26,15 @@ import {
   SpanStatusCode,
   trace,
 } from "@opentelemetry/api";
+import { z } from "zod";
 
 declare const __CF_WORKERS__: boolean | undefined;
-const IS_CF = typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+const isCloudflareWorkerBuild = (
+  flag: boolean | undefined = typeof __CF_WORKERS__ === "undefined"
+    ? undefined
+    : __CF_WORKERS__,
+): flag is true => flag === true;
+const IS_CF = isCloudflareWorkerBuild();
 
 // Single OTel tracer instance — used by the dev `withTrace` backend and by the
 // synchronous WASM spans in `~/lib/wasm.ts` (which can't use the async
@@ -47,6 +53,12 @@ interface CfTracing {
   startActiveSpan<T>(name: string, cb: (span: CfSpan) => T): T;
 }
 
+const cfRuntimeModuleSchema = z.object({
+  tracing: z.custom<CfTracing>(),
+});
+
+const traceExceptionSchema = z.union([z.instanceof(Error), z.string()]);
+
 // Lazily import the runtime built-in only in the CF bundle. The specifier is
 // indirected + `@vite-ignore`d so `vite dev` (Node, which can't resolve
 // `cloudflare:workers`) never tries to — the IS_CF branch is dead there anyway.
@@ -54,9 +66,9 @@ let cfTracing: CfTracing | undefined;
 const getCfTracing = async (): Promise<CfTracing> => {
   if (!cfTracing) {
     const specifier = "cloudflare:workers";
-    const mod = (await import(/* @vite-ignore */ specifier)) as {
-      tracing: CfTracing;
-    };
+    const mod = cfRuntimeModuleSchema.parse(
+      await import(/* @vite-ignore */ specifier),
+    );
     cfTracing = mod.tracing;
   }
   return cfTracing;
@@ -112,7 +124,7 @@ export interface AppSpan {
   /** Mark the span as errored (degrades to attributes in the CF backend). */
   setError(message?: string): void;
   /** Record an exception (degrades to an attribute in the CF backend). */
-  recordException(error: unknown): void;
+  recordException<TError>(error: TError): void;
 }
 
 export const getTracer = () => tracer;
@@ -124,11 +136,17 @@ const wrapOtel = (span: ReturnType<typeof tracer.startSpan>): AppSpan => ({
   },
   setAttributes: (attrs) => span.setAttributes(attrs),
   setError: () => span.setStatus({ code: SpanStatusCode.ERROR }),
-  recordException: (error) =>
+  recordException: (error) => {
+    const parsed = traceExceptionSchema.safeParse(error);
     span.setAttribute(
       "error.type",
-      error instanceof Error ? error.name || "Error" : typeof error,
-    ),
+      parsed.success
+        ? parsed.data instanceof Error
+          ? parsed.data.name || "Error"
+          : "string"
+        : "NonErrorThrow",
+    );
+  },
 });
 
 const wrapCf = (span: CfSpan): AppSpan => ({
@@ -140,11 +158,17 @@ const wrapCf = (span: CfSpan): AppSpan => ({
   setError: () => {
     span.setAttribute("error", true);
   },
-  recordException: (error) =>
+  recordException: (error) => {
+    const parsed = traceExceptionSchema.safeParse(error);
     span.setAttribute(
       "error.type",
-      error instanceof Error ? error.name || "Error" : typeof error,
-    ),
+      parsed.success
+        ? parsed.data instanceof Error
+          ? parsed.data.name || "Error"
+          : "string"
+        : "NonErrorThrow",
+    );
+  },
 });
 
 /**
@@ -232,8 +256,10 @@ export const withManualTrace = async <T>(
  * minification, unlike `fn.name`) and the result accessor — so detector names
  * are never written twice.
  */
+type TraceTaskResult = string | number | boolean | null | undefined | object;
+
 export const traceAll = async <
-  T extends Record<string, () => Promise<unknown>>,
+  T extends Record<string, () => Promise<TraceTaskResult>>,
 >(
   tasks: T,
 ): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> => {
@@ -242,6 +268,8 @@ export const traceAll = async <
       async ([name, run]) => [name, await withTrace(name, run)] as const,
     ),
   );
+  // SAFETY: Each entry is emitted from the same task key exactly once; only
+  // Object.fromEntries erases that key-to-awaited-result correlation.
   return Object.fromEntries(entries) as {
     [K in keyof T]: Awaited<ReturnType<T[K]>>;
   };
@@ -256,7 +284,7 @@ export const traceAll = async <
  * generic so the concurrency policy is testable without a database or clock.
  */
 export const traceAllBounded = async <
-  T extends Record<string, () => Promise<unknown>>,
+  T extends Record<string, () => Promise<TraceTaskResult>>,
 >(
   tasks: T,
   concurrency: number,
@@ -268,7 +296,7 @@ export const traceAllBounded = async <
   const entries = Object.entries(tasks);
   const results = Array.from(
     { length: entries.length },
-    (): readonly [string, unknown] => ["", undefined],
+    (): readonly [string, TraceTaskResult] => ["", undefined],
   );
   let nextIndex = 0;
 
@@ -286,6 +314,8 @@ export const traceAllBounded = async <
   await Promise.all(
     Array.from({ length: Math.min(concurrency, entries.length) }, worker),
   );
+  // SAFETY: Workers fill the pre-sized slot for every source entry before this
+  // join; the slot index preserves each task key's result correlation.
   return Object.fromEntries(results) as {
     [K in keyof T]: Awaited<ReturnType<T[K]>>;
   };
@@ -360,11 +390,7 @@ export const annotateActiveSpanError = (
   span.setAttributes(attributes);
   if (failure) {
     span.setStatus({ code: SpanStatusCode.ERROR, message: failure.message });
-    if (
-      failure.exception instanceof Error ||
-      typeof failure.exception === "string"
-    ) {
-      span.recordException(failure.exception);
-    }
+    const parsedException = traceExceptionSchema.safeParse(failure.exception);
+    if (parsedException.success) span.recordException(parsedException.data);
   }
 };

@@ -152,6 +152,7 @@ export const ProductAddToInventoryDialog: FC<
           form={form}
           name="location"
           productId={product.id}
+          acceptLocation={(location) => form.setValue("location", location)}
         />
         {locationId ? (
           <QuickInventoryAdd

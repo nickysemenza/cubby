@@ -1,7 +1,7 @@
 import {
   type LocationListItemOut,
-  type LocationType,
   locationCoverImage,
+  locationType,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
@@ -128,6 +128,7 @@ export function LocationList() {
         renderCell: (type) => <LocationTypeLabel type={type} product={null} />,
         mobile: { slot: "subtitle", priority: 15 },
         editable: {
+          parseValue: (value) => locationType.nullable().parse(value),
           onSave: async (newType, location) => {
             await updateLocationMutation.mutateAsync({
               id: location.id,
@@ -202,10 +203,10 @@ export function LocationList() {
   );
 
   const groupKeyFn = useCallback((item: LocationListItemOut) => item.type, []);
-  const groupColorFn = useCallback(
-    (key: string) => getLocationTypeColor(key as LocationType),
-    [],
-  );
+  const groupColorFn = useCallback((key: string) => {
+    const parsedType = locationType.safeParse(key);
+    return getLocationTypeColor(parsedType.success ? parsedType.data : null);
+  }, []);
   const groupConfig = useMemo(
     (): GroupConfig<LocationListItemOut> => ({
       field: "type",

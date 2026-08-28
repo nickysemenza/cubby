@@ -8,23 +8,24 @@ import {
   type OperationQueryKey,
   query,
 } from "~/integrations/tanstack-query/operation-catalog";
-import type {
-  CubbyOperationMeta,
-  OperationFreshnessPolicy,
-} from "~/integrations/tanstack-query/operation-meta";
 
 import { getEntityFilters } from "./filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
+  type FilterPatch,
   paramToSort,
 } from "./filters";
 import {
   type EntityListInputByEntity,
+  type EntityListParseInput,
+  type EntityListParamsByEntity,
   type EntityListResultByEntity,
+  entityListParamsFromParsed,
+  entityListInputFor,
+  getEntityListOutputSchema,
   type ListEntity,
   parseEntityListInput,
-  parseEntityListResult,
 } from "./generated/entity-lists.gen";
 
 const stableIndexEntities = new Set<ListEntity>([
@@ -44,17 +45,21 @@ export const entityList = defineOperationDomain("entity", {
   list: query({
     input: z.custom<EntityListInputByEntity[ListEntity]>(),
     output: z.custom<EntityListResultByEntity[ListEntity]>(),
-    parse: (result, input) => parseEntityListResult(input.entity, result),
+    parse: (result, input) =>
+      getEntityListOutputSchema(input.entity).parse(result),
     tags: [["entity", "list"]],
     freshness: (input) =>
       stableIndexEntities.has(input.entity) ? stableIndexFreshness : undefined,
   }),
 });
 
-export type EntityListParams<E extends ListEntity> = Omit<
-  EntityListInputByEntity[E],
-  "entity"
->;
+export type EntityListParams<E extends ListEntity> =
+  EntityListParamsByEntity[E];
+interface CompileEntityListOptions {
+  pageSize?: number;
+  defaultSort?: { orderBy: string; direction: "asc" | "desc" };
+  groupBy?: string;
+}
 
 /**
  * Compile validated route search into the exact first-page input consumed by
@@ -63,27 +68,15 @@ export type EntityListParams<E extends ListEntity> = Omit<
  */
 export function compileEntityListInput<E extends ListEntity>(
   entity: E,
-  validatedSearch: Record<string, unknown>,
-  options?: {
-    pageSize?: number;
-    defaultSort?: { orderBy: string; direction: "asc" | "desc" };
-    groupBy?: string;
-  },
-): EntityListParams<E>;
-export function compileEntityListInput(
-  entity: ListEntity,
-  validatedSearch: Record<string, unknown>,
-  options: {
-    pageSize?: number;
-    defaultSort?: { orderBy: string; direction: "asc" | "desc" };
-    groupBy?: string;
-  } = {},
-): unknown {
+  validatedSearch: FilterPatch,
+  options: CompileEntityListOptions = {},
+): EntityListParams<E> {
   const parsedSort = paramToSort(validatedSearch.sort)?.map((term) => ({
     orderBy: term.id,
     direction: term.desc ? ("desc" as const) : ("asc" as const),
   }));
-  return {
+  const input: EntityListParseInput = {
+    entity,
     filters: buildFiltersFromManifest(
       getEntityFilters(entity),
       filterGetterFromSearch(getEntityFilters(entity), validatedSearch),
@@ -95,29 +88,13 @@ export function compileEntityListInput(
       pageIndex: 0,
       pageSize: options.pageSize ?? defaultPagination.pageSize,
     },
-    ...(options.groupBy ? { groupBy: options.groupBy } : {}),
   };
+  if (options.groupBy) input.groupBy = options.groupBy;
+  return entityListParamsFromParsed(
+    entity,
+    parseEntityListInput(entity, input),
+  );
 }
-
-/**
- * A catalog descriptor is parameterized by one schema pair, so its
- * `forEntity(entity: string)` cannot narrow `entity.list` to a single entity's
- * filters and rows. This declaration plus the one cast in `entityListFor` buy
- * that narrowing once, for every caller.
- */
-type ScopedListOperation<E extends ListEntity> = {
-  policy(input: EntityListInputByEntity[E]): {
-    meta: CubbyOperationMeta;
-    freshness?: OperationFreshnessPolicy;
-  };
-  queryKey(
-    input: EntityListInputByEntity[E],
-  ): OperationQueryKey<EntityListInputByEntity[E]>;
-  call(
-    input: EntityListInputByEntity[E],
-    options: { signal?: AbortSignal },
-  ): Promise<EntityListResultByEntity[E]>;
-};
 
 /**
  * Bind `entity.list` to one entity, so its filters, rows, and cache key all
@@ -125,11 +102,23 @@ type ScopedListOperation<E extends ListEntity> = {
  * registered for.
  */
 export function entityListFor<E extends ListEntity>(entity: E) {
-  const operation = entityList.list.forEntity(
-    entity,
-  ) as unknown as ScopedListOperation<E>;
+  const operation = entityList.list.forEntity(entity);
   const wireInputFor = (input: EntityListParams<E>) =>
-    ({ entity, ...input }) as EntityListInputByEntity[E];
+    entityListInputFor(entity, input);
+  const queryKeyFor = (
+    input: EntityListInputByEntity[E],
+  ): OperationQueryKey<EntityListInputByEntity[E]> => [
+    "operation",
+    operation.id,
+    { entity, input },
+  ];
+  const call = async (
+    input: EntityListInputByEntity[E],
+    signal?: AbortSignal,
+  ): Promise<EntityListResultByEntity[E]> => {
+    const result = await operation.call(input, { signal });
+    return getEntityListOutputSchema(entity).parse(result);
+  };
   const keyInputFor = (wireInput: EntityListInputByEntity[E]) => {
     try {
       return parseEntityListInput(entity, wireInput);
@@ -146,15 +135,15 @@ export function entityListFor<E extends ListEntity>(entity: E) {
   return {
     entity,
     queryKey: (input: EntityListParams<E>) =>
-      operation.queryKey(keyInputFor(wireInputFor(input))),
+      queryKeyFor(keyInputFor(wireInputFor(input))),
     queryOptions: (input: EntityListParams<E>) => {
       const wireInput = wireInputFor(input);
       const keyInput = keyInputFor(wireInput);
       const policy = operation.policy(keyInput);
       return queryOptions({
-        queryKey: operation.queryKey(keyInput),
+        queryKey: queryKeyFor(keyInput),
         queryFn: async ({ signal }) =>
-          operation.call(parseEntityListInput(entity, wireInput), { signal }),
+          call(parseEntityListInput(entity, wireInput), signal),
         meta: policy.meta,
         ...policy.freshness,
       });
@@ -162,18 +151,17 @@ export function entityListFor<E extends ListEntity>(entity: E) {
     /** Query options shared by SSR loaders and the mounted infinite table. */
     infiniteQueryOptions: (input: EntityListParams<E>) => {
       const firstPage = firstPageOf(input);
-      const parsed = parseEntityListInput(entity, { entity, ...firstPage });
+      const parsed = parseEntityListInput(entity, wireInputFor(firstPage));
       const policy = operation.policy(parsed);
       return infiniteQueryOptions({
-        queryKey: infiniteOperationQueryKey(operation.queryKey(parsed)),
+        queryKey: infiniteOperationQueryKey(queryKeyFor(parsed)),
         queryFn: async ({ pageParam, signal }) =>
-          operation.call(
+          call(
             parseEntityListInput(entity, {
-              entity,
-              ...firstPage,
+              ...wireInputFor(firstPage),
               pagination: { ...firstPage.pagination, pageIndex: pageParam },
             }),
-            { signal },
+            signal,
           ),
         initialPageParam: 0,
         getNextPageParam: (lastPage) => {

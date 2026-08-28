@@ -1,122 +1,156 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  success: vi.fn(),
-  error: vi.fn(),
-}));
+import {
+  copyIdentifiers,
+  copyShortcodes,
+  copyText,
+  type ClipboardPort,
+} from "./clipboard";
 
-vi.mock("sonner", () => ({
-  toast: { success: mocks.success, error: mocks.error },
-}));
-
-import { copyIdentifiers, copyShortcodes, copyText } from "./clipboard";
-
-/** Point `navigator.clipboard.writeText` at a stub for one test. */
-function stubClipboard(writeText: (text: string) => Promise<void>) {
-  Object.defineProperty(navigator, "clipboard", {
-    value: { writeText },
-    configurable: true,
-  });
+interface ClipboardFakeOptions {
+  readonly writeText?: (text: string) => Promise<void>;
+  readonly fallbackCopy?: (text: string) => boolean;
 }
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  vi.clearAllMocks();
-});
+interface ClipboardFake {
+  readonly port: ClipboardPort;
+  readonly writes: string[];
+  readonly fallbackTexts: string[];
+  readonly successMessages: string[];
+  readonly errorMessages: string[];
+}
+
+function createClipboardFake(
+  options: ClipboardFakeOptions = {},
+): ClipboardFake {
+  const writes: string[] = [];
+  const fallbackTexts: string[] = [];
+  const successMessages: string[] = [];
+  const errorMessages: string[] = [];
+
+  return {
+    port: {
+      writeText: async (text) => {
+        writes.push(text);
+        await options.writeText?.(text);
+      },
+      fallbackCopy: (text) => {
+        fallbackTexts.push(text);
+        return options.fallbackCopy?.(text) ?? false;
+      },
+      notifications: {
+        success: (message) => successMessages.push(message),
+        error: (message) => errorMessages.push(message),
+      },
+    },
+    writes,
+    fallbackTexts,
+    successMessages,
+    errorMessages,
+  };
+}
 
 describe("copyText", () => {
   it("uses the async clipboard when it resolves", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    stubClipboard(writeText);
-    const execCommand = vi.fn();
-    document.execCommand = execCommand;
+    const clipboard = createClipboardFake();
 
-    await expect(copyText("PRD-4K7M")).resolves.toBe(true);
-    expect(writeText).toHaveBeenCalledWith("PRD-4K7M");
-    expect(execCommand).not.toHaveBeenCalled();
+    await expect(copyText("PRD-4K7M", clipboard.port)).resolves.toBe(true);
+    expect(clipboard.writes).toEqual(["PRD-4K7M"]);
+    expect(clipboard.fallbackTexts).toEqual([]);
   });
 
   // iOS Safari rejects `writeText` outside a trusted gesture — an expected
   // path, not an anomaly, so the legacy ladder has to carry it.
-  it("falls back to execCommand when the clipboard API rejects", async () => {
-    stubClipboard(vi.fn().mockRejectedValue(new Error("denied")));
-    let staged = "";
-    document.execCommand = vi.fn(() => {
-      staged = document.querySelector("textarea")?.value ?? "";
-      return true;
+  it("uses the legacy fallback when the clipboard API rejects", async () => {
+    const clipboard = createClipboardFake({
+      writeText: async () => {
+        throw new Error("denied");
+      },
+      fallbackCopy: () => true,
     });
 
-    await expect(copyText("LOC-9X2A")).resolves.toBe(true);
-    expect(staged).toBe("LOC-9X2A");
-    // The scratch textarea must not survive the copy.
-    expect(document.querySelector("textarea")).toBeNull();
+    await expect(copyText("LOC-9X2A", clipboard.port)).resolves.toBe(true);
+    expect(clipboard.fallbackTexts).toEqual(["LOC-9X2A"]);
   });
 
   it("reports failure when both paths fail", async () => {
-    stubClipboard(vi.fn().mockRejectedValue(new Error("denied")));
-    document.execCommand = vi.fn(() => false);
+    const clipboard = createClipboardFake({
+      writeText: async () => {
+        throw new Error("denied");
+      },
+    });
 
-    await expect(copyText("PRD-4K7M")).resolves.toBe(false);
+    await expect(copyText("PRD-4K7M", clipboard.port)).resolves.toBe(false);
   });
 
   // The fallback can throw rather than return false (older WebKit, and any
   // context where `execCommand` is absent entirely) — a copy button must not
   // take the page down with it.
   it("swallows a throwing fallback instead of rejecting", async () => {
-    stubClipboard(vi.fn().mockRejectedValue(new Error("denied")));
-    document.execCommand = vi.fn(() => {
-      throw new Error("unsupported");
+    const clipboard = createClipboardFake({
+      writeText: async () => {
+        throw new Error("denied");
+      },
+      fallbackCopy: () => {
+        throw new Error("unsupported");
+      },
     });
 
-    await expect(copyText("PRD-4K7M")).resolves.toBe(false);
+    await expect(copyText("PRD-4K7M", clipboard.port)).resolves.toBe(false);
   });
 });
 
 describe("copyShortcodes", () => {
   it("joins codes one per line and names the count", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    stubClipboard(writeText);
+    const clipboard = createClipboardFake();
 
     await expect(
-      copyShortcodes(["PRD-4K7M", "PRD-9X2A", "PRD-1B3C"]),
+      copyShortcodes(["PRD-4K7M", "PRD-9X2A", "PRD-1B3C"], clipboard.port),
     ).resolves.toBe(true);
-    expect(writeText).toHaveBeenCalledWith("PRD-4K7M\nPRD-9X2A\nPRD-1B3C");
-    expect(mocks.success).toHaveBeenCalledWith("Copied 3 codes");
+    expect(clipboard.writes).toEqual(["PRD-4K7M\nPRD-9X2A\nPRD-1B3C"]);
+    expect(clipboard.successMessages).toEqual(["Copied 3 codes"]);
   });
 
   it("names the code itself when there is only one", async () => {
-    stubClipboard(vi.fn().mockResolvedValue(undefined));
+    const clipboard = createClipboardFake();
 
-    await expect(copyShortcodes(["PRD-4K7M"])).resolves.toBe(true);
-    expect(mocks.success).toHaveBeenCalledWith("Copied PRD-4K7M");
+    await expect(copyShortcodes(["PRD-4K7M"], clipboard.port)).resolves.toBe(
+      true,
+    );
+    expect(clipboard.successMessages).toEqual(["Copied PRD-4K7M"]);
   });
 
   it("toasts an error and reports failure when the copy does not land", async () => {
-    stubClipboard(vi.fn().mockRejectedValue(new Error("denied")));
-    document.execCommand = vi.fn(() => false);
+    const clipboard = createClipboardFake({
+      writeText: async () => {
+        throw new Error("denied");
+      },
+    });
 
-    await expect(copyShortcodes(["PRD-4K7M"])).resolves.toBe(false);
-    expect(mocks.error).toHaveBeenCalledWith("Copy failed");
-    expect(mocks.success).not.toHaveBeenCalled();
+    await expect(copyShortcodes(["PRD-4K7M"], clipboard.port)).resolves.toBe(
+      false,
+    );
+    expect(clipboard.errorMessages).toEqual(["Copy failed"]);
+    expect(clipboard.successMessages).toEqual([]);
   });
 
   it("is a no-op on an empty selection", async () => {
-    const writeText = vi.fn();
-    stubClipboard(writeText);
+    const clipboard = createClipboardFake();
 
-    await expect(copyShortcodes([])).resolves.toBe(false);
-    expect(writeText).not.toHaveBeenCalled();
-    expect(mocks.error).not.toHaveBeenCalled();
+    await expect(copyShortcodes([], clipboard.port)).resolves.toBe(false);
+    expect(clipboard.writes).toEqual([]);
+    expect(clipboard.errorMessages).toEqual([]);
   });
 });
 
 describe("copyIdentifiers", () => {
   it("uses identifier language for external public ids", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    stubClipboard(writeText);
+    const clipboard = createClipboardFake();
 
-    await expect(copyIdentifiers(["12345", "67890"])).resolves.toBe(true);
-    expect(writeText).toHaveBeenCalledWith("12345\n67890");
-    expect(mocks.success).toHaveBeenCalledWith("Copied 2 identifiers");
+    await expect(
+      copyIdentifiers(["12345", "67890"], clipboard.port),
+    ).resolves.toBe(true);
+    expect(clipboard.writes).toEqual(["12345\n67890"]);
+    expect(clipboard.successMessages).toEqual(["Copied 2 identifiers"]);
   });
 });

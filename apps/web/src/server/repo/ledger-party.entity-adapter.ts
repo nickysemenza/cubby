@@ -1,12 +1,11 @@
 import {
-  ledgerPartyFiltersSchema,
   ledgerPartyOut,
   ledgerPartySortableFields,
 } from "@cubby/schemas/ledger-party";
 import { z } from "zod";
 
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import {
   createLedgerParty,
@@ -20,14 +19,22 @@ import {
 } from "./ledger-party";
 
 const mergeInput = z.object({
-  keepId: ENTITY_BINDINGS.ledgerParty.crud!.idSchema,
-  mergeIds: z.array(ENTITY_BINDINGS.ledgerParty.crud!.idSchema).min(1),
+  keepId: ENTITY_SCHEMA_BINDINGS.ledgerParty.id,
+  mergeIds: z.array(ENTITY_SCHEMA_BINDINGS.ledgerParty.id).min(1),
+});
+
+const ledgerPartyMergeSummary = z.object({
+  deletedIds: z.array(ENTITY_SCHEMA_BINDINGS.ledgerParty.id),
+  merged: z.number().int().nonnegative(),
+  attributionEdgesRepointed: z.number().int().nonnegative(),
+  accountEdgesRepointed: z.number().int().nonnegative(),
+  transferEdgesRepointed: z.number().int().nonnegative(),
+  carriedFields: z.array(z.string()),
 });
 
 export const ledgerPartyEntityAdapter = defineEntityAdapter({
   entity: "ledgerParty",
   sideEffects: false,
-  filters: ledgerPartyFiltersSchema,
   sort: { fields: ledgerPartySortableFields, default: "name" },
   lifecycle: {
     delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
@@ -46,12 +53,11 @@ export const ledgerPartyEntityAdapter = defineEntityAdapter({
     input: mergeInput,
     output: z.object({
       ledgerParty: ledgerPartyOut,
-      mergeSummary: z.unknown(),
+      mergeSummary: ledgerPartyMergeSummary,
     }),
-    item: (output) => (output as { ledgerParty: unknown }).ledgerParty,
-    summary: (output) => (output as { mergeSummary: unknown }).mergeSummary,
-    execute: async (ctx, value) => {
-      const input = mergeInput.parse(value);
+    item: (output) => output.ledgerParty,
+    summary: (output) => output.mergeSummary,
+    execute: async (ctx, input) => {
       const { mergeSummary } = await mergeLedgerParties(
         ctx.db,
         input,

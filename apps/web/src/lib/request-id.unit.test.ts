@@ -15,12 +15,12 @@ describe("request correlation header", () => {
   it("keeps out-of-order response ids paired with their own operations", async () => {
     vi.stubGlobal("window", {});
     const pending = new Map<string, (response: Response) => void>();
-    const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl: typeof fetch = (_input, init) => {
       const operation = new Headers(init?.headers).get("x-cubby-operation")!;
       return new Promise<Response>((resolve) =>
         pending.set(operation, resolve),
       );
-    }) as typeof fetch;
+    };
 
     const first = fetchWithRequestDiagnostics(fetchImpl, "/_serverFn/first", {
       headers: { "x-cubby-operation": "entity.detail" },

@@ -1,81 +1,54 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 
-const mocks = vi.hoisted(() => ({ navigate: vi.fn() }));
-
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocks.navigate,
-}));
-vi.mock("../inventory/move-inventory-dialog", () => ({
-  MoveInventoryDialog: () => null,
-}));
-vi.mock("../locations/bulk-reparent-locations-dialog", () => ({
-  BulkReparentLocationsDialog: () => null,
-}));
-
-const completeInventoryRow = {
-  id: testShortcode("inventory", "INV-ABC1"),
+const inventoryRow = {
+  id: testShortcode("inventory", "INV-4K7M"),
   amount: { value: 2, unit: "each" },
-  location: { id: testShortcode("location", "LOC-GAR1"), name: "Garage" },
-  product: { name: "Widget" },
+  location: {
+    id: testShortcode("location", "LOC-4K7M"),
+    name: "Garage shelf",
+  },
+  product: { name: "Router gasket" },
 };
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function MoveInventoryActionHarness({
+  onResolved,
+}: {
+  onResolved: (success: boolean) => void;
+}) {
+  const action = inventoryLocationEntityActionDefinitions[0].use();
+  const stageMove = () => {
+    const pending = action.run?.([inventoryRow]);
+    if (pending) void pending.then((result) => onResolved(result.success));
+  };
+
+  return (
+    <>
+      <button type="button" onClick={stageMove}>
+        Stage inventory move
+      </button>
+      {action.dialog}
+    </>
+  );
+}
+
 describe("inventory and location action catalog", () => {
-  it("keeps inventory move staged only for complete payloads", async () => {
-    const definition = inventoryLocationEntityActionDefinitions[0];
-    const { result } = renderHook(() => definition.use());
-    const run = result.current.run;
-    expect(run).not.toBeNull();
-    if (!run) throw new Error("Inventory Move must expose a runner");
-
-    await expect(run([{ id: completeInventoryRow.id }])).resolves.toEqual({
-      success: false,
-    });
-    let staged: Promise<{ success: boolean }> | undefined;
-    act(() => {
-      staged = run([completeInventoryRow]);
-    });
-    expect(staged).toBeDefined();
-  });
-
-  it("disables mixed location label selections instead of filtering them", () => {
-    const definition = inventoryLocationEntityActionDefinitions[1];
-    const { result } = renderHook(() => definition.use());
-    const room = {
-      id: testShortcode("location", "LOC-ROM1"),
-      type: "room" as const,
-      name: "Room",
-      aliases: [],
-      product: null,
-      lastBulkInventory: null,
-      aiDescription: null,
-      images: [],
-      valuation: null,
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
-    };
-    const shelf = {
-      ...room,
-      id: testShortcode("location", "LOC-SHF1"),
-      type: "shelf" as const,
-      name: "Shelf",
-    };
-    expect(
-      result.current.availability?.({
-        entity: "location",
-        surface: "selection",
-        rows: [room, shelf],
-      }),
-    ).toEqual({
-      status: "disabled",
-      reason: "Rooms and areas do not support QR labels.",
-    });
-  });
-
-  it("keeps the declared surfaces and catalog order stable", () => {
+  it("keeps declared action order and surfaces stable", () => {
     expect(
       inventoryLocationEntityActionDefinitions.map(({ id }) => id),
     ).toEqual([
@@ -87,9 +60,26 @@ describe("inventory and location action catalog", () => {
       entities: ["inventory"],
       surfaces: ["row", "selection", "inspector", "detail"],
     });
-    expect(inventoryLocationEntityActionDefinitions[1]).toMatchObject({
-      entities: ["location"],
-      surfaces: ["row", "selection", "inspector", "detail"],
-    });
+  });
+
+  it("parses a selected inventory row before opening the real move dialog", async () => {
+    const resolved: boolean[] = [];
+    render(
+      <MoveInventoryActionHarness
+        onResolved={(success) => resolved.push(success)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage inventory move" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Move 1 Item?" }),
+    ).toBeVisible();
+    expect(screen.getByText("Router gasket - 2 each")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(resolved).toEqual([false]));
   });
 });

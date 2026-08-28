@@ -9,7 +9,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SPEC_DIRECTORY = resolve(ROOT, "scripts/entity-literals/entities");
 const SPEC_PATH = SPEC_DIRECTORY;
 
-type AstNode = { type: string; [key: string]: unknown };
+type AstValue = string | number | boolean | null | AstNode | AstValue[];
+type AstNode = { type: string; [key: string]: AstValue | undefined };
 type LiteralValue =
   | string
   | number
@@ -22,6 +23,7 @@ interface LiteralObject {
 }
 
 type SourceRef = Readonly<{ module: string; export: string }>;
+type ParsedEntityRoute = { basePath: string; detailParam?: string };
 type IdentifierRef = Readonly<{
   entity: string;
   kind: "id" | "shortcode";
@@ -75,13 +77,16 @@ export type EntityLiteral = Readonly<{
   }>;
   descriptor: LiteralObject;
   contract: Readonly<{
-    create: SourceRef;
-    update: SourceRef;
+    create: SourceRef | null;
+    update: SourceRef | null;
     output: SourceRef;
     list: SourceRef;
     detail: SourceRef;
+    mcpOutput: SourceRef;
+    mcpList: SourceRef;
+    mcpDetail: SourceRef;
   }> | null;
-  route: Readonly<{ basePath: string; detailParam?: string }> | null;
+  route: Readonly<ParsedEntityRoute> | null;
   filterAudit: boolean;
   filterUrlKeys: readonly string[];
   filterSchema: SourceRef | null;
@@ -103,18 +108,27 @@ class LiteralSpecError extends Error {
   }
 }
 
-const isNode = (value: unknown): value is AstNode =>
+const isNode = <T>(value: T): value is T & AstNode =>
   typeof value === "object" && value !== null && "type" in value;
 
-const asNode = (value: unknown, context: string): AstNode => {
+const asNode = <T>(value: T, context: string): AstNode => {
   if (!isNode(value)) {
     throw new LiteralSpecError(`${context} must be syntax.`);
   }
   return value;
 };
 
+const isLiteralObject = (value: LiteralValue): value is LiteralObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isNonEmptyString = (value: LiteralValue): value is string =>
+  typeof value === "string" && value.length > 0;
+
+const isBoolean = (value: LiteralValue): value is boolean =>
+  typeof value === "boolean";
+
 const objectValue = (value: LiteralValue, context: string): LiteralObject => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isLiteralObject(value)) {
     throw new LiteralSpecError(`${context} must be an object.`);
   }
   return value;
@@ -132,14 +146,14 @@ const required = (object: LiteralObject, key: string, context: string) => {
 };
 
 const stringValue = (value: LiteralValue, context: string): string => {
-  if (typeof value !== "string" || value.length === 0) {
+  if (!isNonEmptyString(value)) {
     throw new LiteralSpecError(`${context} must be a non-empty string.`);
   }
   return value;
 };
 
 const booleanValue = (value: LiteralValue, context: string): boolean => {
-  if (typeof value !== "boolean") {
+  if (!isBoolean(value)) {
     throw new LiteralSpecError(`${context} must be a boolean.`);
   }
   return value;
@@ -155,6 +169,19 @@ const exactKeys = (
       throw new LiteralSpecError(`${context}.${key} is not allowed.`);
     }
   }
+};
+
+const includesString = (values: readonly string[], value: string) =>
+  values.includes(value);
+
+const literalObjectArray = (
+  value: LiteralValue,
+  context: string,
+): LiteralObject[] => {
+  if (!Array.isArray(value)) {
+    throw new LiteralSpecError(`${context} must be an array.`);
+  }
+  return value.map((item, index) => objectValue(item, `${context}[${index}]`));
 };
 
 const sourceRef = (value: LiteralValue, context: string): SourceRef => {
@@ -360,7 +387,8 @@ const filterDescriptor = (
     required(object, "kind", context),
     `${context}.kind`,
   );
-  if (!(filterKinds as readonly string[]).includes(kind)) {
+  const parsedKind = filterKinds.find((candidate) => candidate === kind);
+  if (parsedKind === undefined) {
     throw new LiteralSpecError(`${context}.kind is unsupported.`);
   }
   const rawOptions = object.options;
@@ -423,7 +451,7 @@ const filterDescriptor = (
     columnId,
     field: optionalString(object, "field", context),
     urlKey: optionalString(object, "urlKey", context) ?? columnId,
-    kind: kind as FilterDescriptor["kind"],
+    kind: parsedKind,
     placeholder: stringValue(
       required(object, "placeholder", context),
       `${context}.placeholder`,
@@ -448,7 +476,10 @@ const filterDescriptor = (
   };
 };
 
-const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
+const normalizedEntitySource = (
+  raw: LiteralObject,
+  context: string,
+): LiteralObject => {
   if (raw.descriptor !== undefined) {
     return {
       filters: { audit: false, descriptors: [] },
@@ -627,7 +658,7 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
             relation.deletionPolicy,
             `${context}.relations[${index}].deletionPolicy`,
           );
-    if (!(policies as readonly string[]).includes(policy))
+    if (!includesString(policies, policy))
       throw new LiteralSpecError(
         `${context}.relations[${index}].deletionPolicy is invalid.`,
       );
@@ -645,7 +676,58 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
       `${context}.route`,
     );
   }
-  return {
+  const descriptor: LiteralObject = {
+    dbTable: required(raw, "table", context),
+    idBrand: required(identifiers, "brand", `${context}.identifiers`),
+  };
+  if (identifiers.shortcode !== null && identifiers.shortcode !== undefined) {
+    descriptor.shortcodePrefix = identifiers.shortcode;
+  }
+  if (identifiers.legacy !== null && identifiers.legacy !== undefined) {
+    descriptor.legacyShortcodePrefix = identifiers.legacy;
+  }
+  descriptor.softDelete = required(
+    capabilities,
+    "softDelete",
+    `${context}.capabilities`,
+  );
+  if (route === null) descriptor.browserRoutes = false;
+  descriptor.auditable = required(
+    capabilities,
+    "auditable",
+    `${context}.capabilities`,
+  );
+  descriptor.hasImages = required(
+    capabilities,
+    "images",
+    `${context}.capabilities`,
+  );
+  descriptor.searchable = required(search, "enabled", `${context}.search`);
+  descriptor.countable = required(
+    capabilities,
+    "countable",
+    `${context}.capabilities`,
+  );
+  descriptor.relationships = relations;
+  descriptor.lifecycle = {
+    delete: required(capabilities, "delete", `${context}.capabilities`),
+    merge: required(capabilities, "merge", `${context}.capabilities`),
+  };
+  descriptor.mcp = required(capabilities, "mcp", `${context}.capabilities`);
+  if (extensions.countFilter !== null && extensions.countFilter !== undefined) {
+    descriptor.countFilter = extensions.countFilter;
+  }
+  if (extensions.mcpNames !== null && extensions.mcpNames !== undefined) {
+    descriptor.mcpNames = extensions.mcpNames;
+  }
+  if (
+    extensions.relatednessSignals !== null &&
+    extensions.relatednessSignals !== undefined
+  ) {
+    descriptor.relatednessSignals = extensions.relatednessSignals;
+  }
+
+  const normalized: LiteralObject = {
     key: required(raw, "key", context),
     route,
     inspector: {
@@ -657,51 +739,20 @@ const legacyShape = (raw: LiteralObject, context: string): LiteralObject => {
         `${context}.presentation`,
       ),
     },
-    descriptor: {
-      dbTable: required(raw, "table", context),
-      idBrand: required(identifiers, "brand", `${context}.identifiers`),
-      ...(identifiers.shortcode === null
-        ? {}
-        : { shortcodePrefix: identifiers.shortcode }),
-      ...(identifiers.legacy === null
-        ? {}
-        : { legacyShortcodePrefix: identifiers.legacy }),
-      softDelete: required(
-        capabilities,
-        "softDelete",
-        `${context}.capabilities`,
-      ),
-      ...(route === null ? { browserRoutes: false } : {}),
-      auditable: required(capabilities, "auditable", `${context}.capabilities`),
-      hasImages: required(capabilities, "images", `${context}.capabilities`),
-      searchable: required(search, "enabled", `${context}.search`),
-      countable: required(capabilities, "countable", `${context}.capabilities`),
-      relationships: relations,
-      lifecycle: {
-        delete: required(capabilities, "delete", `${context}.capabilities`),
-        merge: required(capabilities, "merge", `${context}.capabilities`),
-      },
-      mcp: required(capabilities, "mcp", `${context}.capabilities`),
-      ...(extensions.countFilter === null
-        ? {}
-        : { countFilter: extensions.countFilter }),
-      ...(extensions.mcpNames === null
-        ? {}
-        : { mcpNames: extensions.mcpNames }),
-      ...(extensions.relatednessSignals === null
-        ? {}
-        : { relatednessSignals: extensions.relatednessSignals }),
-    },
+    descriptor,
     contract: required(raw, "fields", context),
     filters: required(raw, "filters", context),
     bulkUpdate: bulkUpdateCapability,
-    ...(extensions.ports === undefined ? {} : { ports: extensions.ports }),
   };
+  if (extensions.ports !== undefined) {
+    normalized.ports = extensions.ports;
+  }
+  return normalized;
 };
 
 const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   const context = `ENTITY_LITERALS[${index}]`;
-  const object = legacyShape(objectValue(value, context), context);
+  const object = normalizedEntitySource(objectValue(value, context), context);
   exactKeys(
     object,
     [
@@ -870,20 +921,19 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
       ? null
       : (() => {
           const value = objectValue(routeValue, `${context}.route`);
-          return {
+          const parsedRoute: ParsedEntityRoute = {
             basePath: stringValue(
               required(value, "basePath", `${context}.route`),
               `${context}.route.basePath`,
             ),
-            ...(value.detailParam === undefined
-              ? {}
-              : {
-                  detailParam: stringValue(
-                    value.detailParam,
-                    `${context}.route.detailParam`,
-                  ),
-                }),
           };
+          if (value.detailParam !== undefined) {
+            parsedRoute.detailParam = stringValue(
+              value.detailParam,
+              `${context}.route.detailParam`,
+            );
+          }
+          return parsedRoute;
         })();
   const shortcodeValue = descriptor.shortcodePrefix;
   const shortcode =
@@ -933,33 +983,67 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
           );
           exactKeys(
             contractObject,
-            ["create", "update", "output", "list", "detail"],
+            [
+              "create",
+              "update",
+              "output",
+              "list",
+              "detail",
+              "mcpOutput",
+              "mcpList",
+              "mcpDetail",
+            ],
             `${context}.contract`,
           );
           const output = sourceRef(
             required(contractObject, "output", `${context}.contract`),
             `${context}.contract.output`,
           );
+          const list =
+            contractObject.list === undefined
+              ? output
+              : sourceRef(contractObject.list, `${context}.contract.list`);
+          const detail =
+            contractObject.detail === undefined
+              ? output
+              : sourceRef(contractObject.detail, `${context}.contract.detail`);
           return {
-            create: sourceRef(
+            create: nullableSourceRef(
               required(contractObject, "create", `${context}.contract`),
               `${context}.contract.create`,
             ),
-            update: sourceRef(
+            update: nullableSourceRef(
               required(contractObject, "update", `${context}.contract`),
               `${context}.contract.update`,
             ),
             output,
-            list:
-              contractObject.list === undefined
-                ? output
-                : sourceRef(contractObject.list, `${context}.contract.list`),
-            detail:
-              contractObject.detail === undefined
+            list,
+            detail,
+            mcpOutput:
+              contractObject.mcpOutput === undefined
                 ? output
                 : sourceRef(
-                    contractObject.detail,
-                    `${context}.contract.detail`,
+                    contractObject.mcpOutput,
+                    `${context}.contract.mcpOutput`,
+                  ),
+            mcpList:
+              contractObject.mcpList === undefined
+                ? list
+                : sourceRef(
+                    contractObject.mcpList,
+                    `${context}.contract.mcpList`,
+                  ),
+            mcpDetail:
+              contractObject.mcpDetail === undefined
+                ? contractObject.mcpOutput === undefined
+                  ? detail
+                  : sourceRef(
+                      contractObject.mcpOutput,
+                      `${context}.contract.mcpOutput`,
+                    )
+                : sourceRef(
+                    contractObject.mcpDetail,
+                    `${context}.contract.mcpDetail`,
                   ),
           };
         })();
@@ -974,8 +1058,25 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   const bulkUpdateFields =
     bulkUpdateValue === undefined || bulkUpdateValue === null
       ? null
-      : (objectValue(bulkUpdateValue, `${context}.bulkUpdate`)
-          .fields as string[]);
+      : (() => {
+          const bulkUpdate = objectValue(
+            bulkUpdateValue,
+            `${context}.bulkUpdate`,
+          );
+          const fields = required(
+            bulkUpdate,
+            "fields",
+            `${context}.bulkUpdate`,
+          );
+          if (!Array.isArray(fields)) {
+            throw new LiteralSpecError(
+              `${context}.bulkUpdate.fields must be an array.`,
+            );
+          }
+          return fields.map((field, index) =>
+            stringValue(field, `${context}.bulkUpdate.fields[${index}]`),
+          );
+        })();
   return {
     key,
     shortcode,
@@ -1002,16 +1103,22 @@ const unwrapTypeAssertion = (node: AstNode): AstNode => {
   return node;
 };
 
+const isLiteralPrimitive = (
+  value: AstValue | undefined,
+): value is string | number | boolean | null =>
+  value === null ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean";
+
+const isNonEmptyAstString = (value: AstValue | undefined): value is string =>
+  typeof value === "string" && value.length > 0;
+
 const literalFromNode = (node: AstNode, context: string): LiteralValue => {
   const expression = unwrapTypeAssertion(node);
   if (expression.type === "Literal") {
     const value = expression.value;
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      value === null
-    ) {
+    if (isLiteralPrimitive(value)) {
       return value;
     }
   }
@@ -1055,7 +1162,7 @@ const literalFromNode = (node: AstNode, context: string): LiteralValue => {
           : keyNode.type === "Literal"
             ? keyNode.value
             : undefined;
-      if (typeof key !== "string" || key.length === 0) {
+      if (!isNonEmptyAstString(key)) {
         throw new LiteralSpecError(`${context} has an invalid property key.`);
       }
       if (key in result) {
@@ -1116,20 +1223,18 @@ export const parseEntityLiterals = (
     throw new LiteralSpecError(`${filename}: ${firstError.message}`);
   }
 
-  const declarations = (parsed.program.body as unknown[]).flatMap(
-    (statement) => {
-      const node = asNode(statement, filename);
-      if (node.type !== "ExportNamedDeclaration") {
-        return [];
-      }
-      const declaration = node.declaration;
-      if (!isNode(declaration) || declaration.type !== "VariableDeclaration") {
-        return [];
-      }
-      const declarators = declaration.declarations;
-      return Array.isArray(declarators) ? declarators : [];
-    },
-  );
+  const declarations = parsed.program.body.flatMap((statement) => {
+    const node = asNode(statement, filename);
+    if (node.type !== "ExportNamedDeclaration") {
+      return [];
+    }
+    const declaration = node.declaration;
+    if (!isNode(declaration) || declaration.type !== "VariableDeclaration") {
+      return [];
+    }
+    const declarators = declaration.declarations;
+    return Array.isArray(declarators) ? declarators : [];
+  });
   const matching = declarations.filter((declaration) => {
     if (!isNode(declaration) || declaration.type !== "VariableDeclarator") {
       return false;
@@ -1175,7 +1280,7 @@ const parseEntityLiteralFile = (
   const firstError = parsed.errors.at(0);
   if (firstError !== undefined)
     throw new LiteralSpecError(`${filename}: ${firstError.message}`);
-  const declaration = (parsed.program.body as unknown[]).find((statement) => {
+  const declaration = parsed.program.body.find((statement) => {
     const node = asNode(statement, filename);
     return node.type === "ExportDefaultDeclaration";
   });
@@ -1184,7 +1289,10 @@ const parseEntityLiteralFile = (
       `${filename} must default-export literalEntity({...}).`,
     );
   const expression = unwrapTypeAssertion(
-    asNode(declaration, filename).declaration as AstNode,
+    asNode(
+      asNode(declaration, filename).declaration,
+      `${filename}.declaration`,
+    ),
   );
   if (expression.type !== "CallExpression")
     throw new LiteralSpecError(`${filename} must call literalEntity({...}).`);
@@ -1239,7 +1347,7 @@ export const parseEntityLiteralFiles = async (): Promise<EntityLiteral[]> => {
 const generatedHeader =
   "// Generated by `pnpm entity:generate` from `scripts/entity-literals/entities/*.entity.ts`. Do not edit.\n\n";
 
-const compactLiteral = (value: unknown) =>
+const compactLiteral = <T>(value: T) =>
   JSON.stringify(value).replaceAll(
     /"([A-Za-z_$][\w$]*)":/g,
     (_, key: string) => `${key}:`,
@@ -1251,15 +1359,16 @@ const lowerCamelCase = (value: string): string =>
     ? value
     : `${value[0]?.toLowerCase() ?? ""}${value.slice(1)}`;
 
-const browserRouteExtension: Readonly<
-  Partial<Record<string, Readonly<{ basePath: string; detailParam?: string }>>>
-> = {
-  inventory: { basePath: "inventory" },
-  "usda-food": { basePath: "usda", detailParam: "id" },
-};
+const browserRouteExtension = new Map<
+  string,
+  Readonly<{ basePath: string; detailParam?: string }>
+>([
+  ["inventory", { basePath: "inventory" }],
+  ["usda-food", { basePath: "usda", detailParam: "id" }],
+]);
 
 const browserBasePath = (entity: string): string =>
-  browserRouteExtension[entity]?.basePath ??
+  browserRouteExtension.get(entity)?.basePath ??
   (() => {
     const singular = entity.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
     return singular.endsWith("y")
@@ -1273,7 +1382,7 @@ const browserRoutes = (entity: EntityLiteral) => {
   const basePath = entity.route?.basePath ?? browserBasePath(entity.key);
   const detailParam =
     entity.route?.detailParam ??
-    browserRouteExtension[entity.key]?.detailParam ??
+    browserRouteExtension.get(entity.key)?.detailParam ??
     "shortcode";
   return {
     basePath,
@@ -1285,9 +1394,20 @@ export const renderEntityArtifacts = (
   entities: readonly EntityLiteral[],
 ): EntityArtifacts[] => {
   const imports = new Map<string, Set<string>>();
-  for (const { contract } of entities) {
+  for (const { contract, filterSchema } of entities) {
     if (contract === null) continue;
-    for (const ref of [contract.create, contract.update, contract.output]) {
+    for (const ref of [
+      contract.create,
+      contract.update,
+      contract.output,
+      contract.list,
+      contract.detail,
+      contract.mcpOutput,
+      contract.mcpList,
+      contract.mcpDetail,
+      filterSchema,
+    ]) {
+      if (ref === null) continue;
       const exports = imports.get(ref.module) ?? new Set<string>();
       exports.add(ref.export);
       imports.set(ref.module, exports);
@@ -1312,13 +1432,44 @@ export const renderEntityArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
+  const schemaEntitySpecs = entities.filter(
+    (
+      entity,
+    ): entity is EntityLiteral & {
+      contract: NonNullable<EntityLiteral["contract"]>;
+    } => entity.contract !== null,
+  );
+  const schemaBindings = schemaEntitySpecs
+    .map((entity) => {
+      const { contract, filterSchema } = entity;
+      if (entity.bulkUpdateFields !== null && contract.update === null) {
+        throw new LiteralSpecError(
+          `${entity.key}.bulkUpdate requires an update contract.`,
+        );
+      }
+      const bulkUpdateInput =
+        entity.bulkUpdateFields === null
+          ? "null"
+          : `${contract.update?.export}.pick({${entity.bulkUpdateFields
+              .map((field) => `${JSON.stringify(field)}:true`)
+              .join(",")}}).strict()`;
+      const filters =
+        filterSchema === null
+          ? "z.object({})"
+          : `z.object(${filterSchema.export})`;
+      return `  ${JSON.stringify(entity.key)}: entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}}),`;
+    })
+    .join("\n");
   const bindings = entities
     .filter((entity) => entity.shortcode !== null)
     .map((entity) => {
-      if (entity.contract === null)
+      if (
+        entity.contract === null ||
+        entity.contract.create === null ||
+        entity.contract.update === null
+      )
         return `  ${JSON.stringify(entity.key)}: { crud: null },`;
-      const { create, update, output } = entity.contract;
-      return `  ${JSON.stringify(entity.key)}: {crud:crud(${JSON.stringify(entity.key)},{createInput:${create.export},updateInput:${update.export},output:${output.export}})},`;
+      return `  ${JSON.stringify(entity.key)}: {crud:ENTITY_SCHEMA_BINDINGS[${JSON.stringify(entity.key)}]},`;
     })
     .join("\n");
   const detailEntities = entities.filter(
@@ -1326,7 +1477,10 @@ export const renderEntityArtifacts = (
       entity,
     ): entity is EntityLiteral & {
       contract: NonNullable<EntityLiteral["contract"]>;
-    } => entity.contract !== null,
+    } =>
+      entity.contract !== null &&
+      entity.contract.create !== null &&
+      entity.contract.update !== null,
   );
   const detailSchemas = detailEntities
     .map(
@@ -1374,6 +1528,12 @@ export const renderEntityArtifacts = (
         `  ${JSON.stringify(key)}: { entity: ${JSON.stringify(key)}; shortcode: z.input<typeof ${key}Shortcode> };`,
     )
     .join("\n");
+  const detailParsedInputTypes = detailEntities
+    .map(
+      ({ key }) =>
+        `  ${JSON.stringify(key)}: { entity: ${JSON.stringify(key)}; shortcode: z.output<typeof ${key}Shortcode> };`,
+    )
+    .join("\n");
   const detailInputVariants = detailEntities
     .map(
       ({ key }) =>
@@ -1389,7 +1549,10 @@ export const renderEntityArtifacts = (
       entity,
     ): entity is EntityLiteral & {
       contract: NonNullable<EntityLiteral["contract"]>;
-    } => entity.contract !== null,
+    } =>
+      entity.contract !== null &&
+      entity.contract.create !== null &&
+      entity.contract.update !== null,
   );
   const browserCrudEntities = browserCrudEntitySpecs.map(({ key }) => key);
   const listRuntimeOutputImports = browserCrudEntitySpecs
@@ -1419,10 +1582,16 @@ export const renderEntityArtifacts = (
         `const ${key}ListFiltersSchema = z.object(${key}ListFilterFields);`,
     )
     .join("\n");
-  const listFilterTypes = browserCrudEntitySpecs
+  const listInputFilterTypes = browserCrudEntitySpecs
     .map(
       ({ key }) =>
         `  ${JSON.stringify(key)}: z.input<typeof ${key}ListFiltersSchema>;`,
+    )
+    .join("\n");
+  const listParsedFilterTypes = browserCrudEntitySpecs
+    .map(
+      ({ key }) =>
+        `  ${JSON.stringify(key)}: z.output<typeof ${key}ListFiltersSchema>;`,
     )
     .join("\n");
   const listOutputSchemas = browserCrudEntitySpecs
@@ -1473,7 +1642,10 @@ export const renderEntityArtifacts = (
     schema: "create" | "update",
   ) =>
     entities
-      .filter((entity) => entity.contract !== null)
+      .filter(
+        (entity) =>
+          entity.contract !== null && entity.contract[schema] !== null,
+      )
       .map((entity) => {
         const schemaRef = entity.contract?.[schema];
         if (!schemaRef)
@@ -1487,7 +1659,10 @@ export const renderEntityArtifacts = (
       .join(",\n  ");
   const mutationResultVariants = (action: "create" | "update") =>
     entities
-      .filter((entity) => entity.contract !== null)
+      .filter(
+        (entity) =>
+          entity.contract !== null && entity.contract[action] !== null,
+      )
       .map((entity) => {
         const output = entity.contract?.output;
         if (!output)
@@ -1495,12 +1670,50 @@ export const renderEntityArtifacts = (
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
+  const mcpMutationResultVariants = (action: "create" | "update") =>
+    entities
+      .filter(
+        (entity) =>
+          entity.contract !== null && entity.contract[action] !== null,
+      )
+      .map((entity) => {
+        const output = entity.contract?.mcpOutput;
+        if (!output)
+          throw new LiteralSpecError(`${entity.key}.mcpOutput is missing.`);
+        return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
+      })
+      .join(",\n  ");
+  const queryGetResultVariants = schemaEntitySpecs
+    .map(
+      ({ key, contract }) =>
+        `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:${contract.detail.export}.nullable()})`,
+    )
+    .join(",\n  ");
+  const queryListResultVariants = schemaEntitySpecs
+    .map(
+      ({ key, contract }) =>
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(${contract.list.export}),meta:generatedEntityListMetaSchema})`,
+    )
+    .join(",\n  ");
+  const mcpQueryGetResultVariants = schemaEntitySpecs
+    .map(
+      ({ key, contract }) =>
+        `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:${contract.mcpDetail.export}.nullable()})`,
+    )
+    .join(",\n  ");
+  const mcpQueryListResultVariants = schemaEntitySpecs
+    .map(
+      ({ key, contract }) =>
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(${contract.mcpList.export}),meta:generatedEntityListMetaSchema})`,
+    )
+    .join(",\n  ");
   // A declared field list is compiled into `.pick({...}).strict()` on the
   // entity's own update schema: an undeclared field is REFUSED rather than
   // silently stripped, and a field the update schema does not have fails
   // `pnpm typecheck` on the generated file.
   const bulkUpdateEntities = entities.filter(
-    (entity) => entity.bulkUpdateFields !== null && entity.contract !== null,
+    (entity) =>
+      entity.bulkUpdateFields !== null && entity.contract?.update !== null,
   );
   const bulkUpdateCommandVariants = bulkUpdateEntities
     .map((entity) => {
@@ -1549,6 +1762,12 @@ export const renderEntityArtifacts = (
         `  ${JSON.stringify(key)}: ${ports.repository?.export},`,
     )
     .join("\n");
+  const runtimeOperations = kernelEntities
+    .map(
+      ({ key, ports }) =>
+        `  ${JSON.stringify(key)}: defineEntityOperations(${ports.repository?.export}),`,
+    )
+    .join("\n");
   const filterFieldImports = new Map<string, Set<string>>();
   for (const { filterSchema } of entities) {
     if (filterSchema === null) continue;
@@ -1582,8 +1801,8 @@ export const renderEntityArtifacts = (
       "get",
       "list",
       ...(entity.descriptor.searchable === true ? ["search"] : []),
-      ...(entity.contract === null ? [] : ["create"]),
-      "update",
+      ...(entity.contract?.create ? ["create"] : []),
+      ...(entity.contract?.update ? ["update"] : []),
       ...(lifecycle.delete === null ? [] : ["delete"]),
       ...(lifecycle.merge === true ? ["merge"] : []),
     ];
@@ -1603,6 +1822,24 @@ export const renderEntityArtifacts = (
     Object.entries(kernelContractCases)
       .filter(([, contractCase]) => contractCase.actions.includes(action))
       .map(([key]) => key);
+  const mergeResultVariants = kernelEntities
+    .filter((entity) => kernelActionsFor(entity).includes("merge"))
+    .map((entity) => {
+      if (entity.contract === null) {
+        throw new LiteralSpecError(`${entity.key}.merge output is missing.`);
+      }
+      return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:${entity.contract.output.export},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
+    })
+    .join(",\n  ");
+  const mcpMergeResultVariants = kernelEntities
+    .filter((entity) => kernelActionsFor(entity).includes("merge"))
+    .map((entity) => {
+      if (entity.contract === null) {
+        throw new LiteralSpecError(`${entity.key}.merge output is missing.`);
+      }
+      return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:${entity.contract.mcpOutput.export},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
+    })
+    .join(",\n  ");
   const shortcodePrefixes = Object.fromEntries(
     entities.flatMap(({ key, shortcode }) =>
       shortcode === null ? [] : [[key, shortcode]],
@@ -1626,10 +1863,11 @@ export const renderEntityArtifacts = (
         entity.contract === null
           ? null
           : Object.fromEntries(
-              Object.entries(entity.contract).map(([operation, ref]) => [
-                operation,
-                `${ref.module}#${ref.export}`,
-              ]),
+              Object.entries(entity.contract).flatMap(([operation, ref]) =>
+                ref === null
+                  ? []
+                  : [[operation, `${ref.module}#${ref.export}`]],
+              ),
             );
       return [
         entity.key,
@@ -1661,9 +1899,13 @@ export const renderEntityArtifacts = (
           ports: entity.ports,
           references: [
             ...new Set(
-              ((entity.descriptor.relationships ?? []) as LiteralObject[]).map(
-                (relationship) => relationship.target,
-              ),
+              (entity.descriptor.relationships === undefined
+                ? []
+                : literalObjectArray(
+                    entity.descriptor.relationships,
+                    `${entity.key}.descriptor.relationships`,
+                  )
+              ).map((relationship) => relationship.target),
             ),
           ],
         },
@@ -1818,14 +2060,16 @@ export const renderEntityArtifacts = (
         "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
         '  mcpOperations: readonly ("get" | "list" | "create" | "update" | "delete")[];\n' +
         '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean; bulkUpdate: { fields: readonly string[] } | null };\n' +
-        "  sourceRefs: { create: string; update: string; output: string; list: string; detail: string } | null;\n" +
+        "  sourceRefs: { create?: string; update?: string; output: string; list: string; detail: string; mcpOutput: string; mcpList: string; mcpDetail: string } | null;\n" +
         "  ports: EntityPortSourceRoster;\n" +
         "  references: readonly Entity[];\n" +
         "};\n\n" +
         "type EntityPortSourceRef = { module: string; export: string };\n" +
+        "type EntityInspectorOptionValue = string | number | boolean | null;\n" +
+        "type EntityInspectorOption = Readonly<Record<string, EntityInspectorOptionValue>>;\n" +
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
-        "  options: readonly Record<string, unknown>[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
+        "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
         '  label: string | null; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
@@ -1853,19 +2097,22 @@ export const renderEntityArtifacts = (
         "export type EntityDetailInputByEntity = {\n" +
         `${detailInputTypes}\n` +
         "};\n\n" +
+        "export type ParsedEntityDetailInputByEntity = {\n" +
+        `${detailParsedInputTypes}\n` +
+        "};\n\n" +
+        'export function entityDetailInputFor<E extends DetailEntity>(entity: E, shortcode: EntityDetailInputByEntity[E]["shortcode"]): EntityDetailInputByEntity[E];\n' +
+        'export function entityDetailInputFor(entity: DetailEntity, shortcode: EntityDetailInputByEntity[DetailEntity]["shortcode"]) {\n' +
+        "  return { entity, shortcode };\n" +
+        "}\n\n" +
         "// One generated detail schema per entity.\n// oxfmt-ignore\n" +
         `const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
         "// One generated detail input variant per entity.\n// oxfmt-ignore\n" +
         `export const entityDetailInputSchema = z.discriminatedUnion("entity", [\n  ${detailInputVariants}\n]);\n\n` +
-        "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: unknown): EntityDetailInputByEntity[E];\n" +
-        "export function parseEntityDetailInput(entity: DetailEntity, value: unknown): unknown {\n" +
+        "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: EntityDetailInputByEntity[E]): ParsedEntityDetailInputByEntity[E];\n" +
+        "export function parseEntityDetailInput(entity: DetailEntity, value: EntityDetailInputByEntity[DetailEntity]) {\n" +
         "  const parsed = entityDetailInputSchema.parse(value);\n" +
         '  if (parsed.entity !== entity) throw new Error("Entity detail input discriminator mismatch");\n' +
         "  return parsed;\n" +
-        "}\n\n" +
-        "export function parseEntityDetailResult<E extends DetailEntity>(entity: E, value: unknown): EntityDetailByEntity[E];\n" +
-        "export function parseEntityDetailResult(entity: DetailEntity, value: unknown): unknown {\n" +
-        "  return getEntityDetailOutputSchema(entity).parse(value);\n" +
         "}\n\n" +
         "export function getEntityDetailOutputSchema<E extends DetailEntity>(entity: E): z.ZodType<EntityDetailByEntity[E]>;\n" +
         "export function getEntityDetailOutputSchema(entity: DetailEntity): z.ZodType {\n" +
@@ -1879,6 +2126,7 @@ export const renderEntityArtifacts = (
         "// Generated schema aliases retain deterministic import order.\n" +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
         'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
+        'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
@@ -1891,25 +2139,39 @@ export const renderEntityArtifacts = (
         "const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
         `${listOutputSchemas}\n` +
         "} as const;\n\n" +
-        "type EntityListFiltersByEntity = {\n" +
-        `${listFilterTypes}\n` +
+        "type EntityListInputFiltersByEntity = {\n" +
+        `${listInputFilterTypes}\n` +
+        "};\n" +
+        "type EntityListParsedFiltersByEntity = {\n" +
+        `${listParsedFilterTypes}\n` +
         "};\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListFiltersByEntity[E]; sort?: EntityListSort | EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort | EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n" +
+        "};\n" +
+        "export type ParsedEntityListInputByEntity = {\n" +
+        '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
         "};\n\n" +
+        'export type EntityListParamsByEntity = { [E in ListEntity]: Omit<EntityListInputByEntity[E], "entity"> };\n' +
+        "export function entityListInputFor<E extends ListEntity>(entity: E, input: EntityListParamsByEntity[E]): EntityListInputByEntity[E];\n" +
+        "export function entityListInputFor(entity: ListEntity, input: EntityListParamsByEntity[ListEntity]) {\n" +
+        "  return { entity, ...input };\n" +
+        "}\n\n" +
+        "export function entityListParamsFromParsed<E extends ListEntity>(entity: E, input: ParsedEntityListInputByEntity[E]): EntityListParamsByEntity[E];\n" +
+        "export function entityListParamsFromParsed(entity: ListEntity, input: ParsedEntityListInputByEntity[ListEntity]) {\n" +
+        '  if (input.entity !== entity) throw new Error("Entity list input discriminator mismatch");\n' +
+        "  const { entity: _entity, ...params } = input;\n" +
+        "  return params;\n" +
+        "}\n\n" +
+        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort | EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +
-        "export function parseEntityListInput<E extends ListEntity>(entity: E, value: unknown): EntityListInputByEntity[E];\n" +
-        "export function parseEntityListInput(entity: ListEntity, value: unknown): unknown {\n" +
+        "export function parseEntityListInput<E extends ListEntity>(entity: E, value: EntityListInputByEntity[E] | EntityListParseInput): ParsedEntityListInputByEntity[E];\n" +
+        "export function parseEntityListInput(entity: ListEntity, value: EntityListParseInput) {\n" +
         "  const parsed = entityListInputSchema.parse(value);\n" +
         '  if (parsed.entity !== entity) throw new Error("Entity list input discriminator mismatch");\n' +
         "  return parsed;\n" +
-        "}\n\n" +
-        "export function parseEntityListResult<E extends ListEntity>(entity: E, value: unknown): EntityListResultByEntity[E];\n" +
-        "export function parseEntityListResult(entity: ListEntity, value: unknown): unknown {\n" +
-        "  return getEntityListOutputSchema(entity).parse(value);\n" +
         "}\n\n" +
         "export function getEntityListOutputSchema<E extends ListEntity>(entity: E): z.ZodType<EntityListResultByEntity[E]>;\n" +
         "export function getEntityListOutputSchema(entity: ListEntity): z.ZodType {\n" +
@@ -1930,8 +2192,10 @@ export const renderEntityArtifacts = (
         "};\n\n" +
         "// One generated mutation output schema per entity.\n// oxfmt-ignore\n" +
         `const ENTITY_MUTATION_OUTPUT_SCHEMAS = {\n${mutationOutputSchemas}\n} as const;\n\n` +
-        "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: unknown): EntityMutationOutputByEntity[E];\n" +
-        "export function parseEntityMutationOutput(entity: EntityMutationOutputEntity, value: unknown): unknown {\n" +
+        'type UnparsedMutationOutput = Parameters<z.ZodType["parse"]>[0];\n' +
+        "type EntityMutationOutput = EntityMutationOutputByEntity[EntityMutationOutputEntity];\n\n" +
+        "export function parseEntityMutationOutput<E extends EntityMutationOutputEntity>(entity: E, value: UnparsedMutationOutput): EntityMutationOutputByEntity[E];\n" +
+        "export function parseEntityMutationOutput(entity: EntityMutationOutputEntity, value: UnparsedMutationOutput): EntityMutationOutput {\n" +
         "  return ENTITY_MUTATION_OUTPUT_SCHEMAS[entity].parse(value);\n" +
         "}\n",
     },
@@ -1941,29 +2205,53 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
+        'import type { z } from "zod";\n' +
         `${filterFieldImportSource}\n\n` +
         "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const entityFilterFieldMaps: Partial<Record<Entity, Record<string, unknown>>> = {\n${filterFieldBindings}\n};\n`,
+        `export const entityFilterFieldMaps = {\n${filterFieldBindings}\n} satisfies Partial<Record<Entity, Record<string, z.ZodType>>>;\n`,
     },
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:
         generatedHeader +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
+        'import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
-        'import { type ZodSchema, z } from "zod";\n\n' +
-        "type CrudBinding = {\n" +
-        "  idSchema: ZodSchema;\n" +
-        "  createInput: ZodSchema;\n" +
-        "  updateInput: ZodSchema;\n" +
-        "  output: ZodSchema;\n" +
-        "};\n\n" +
-        "type EntityBinding = { crud: CrudBinding | null };\n\n" +
-        'const crud = <E extends ShortcodeEntity, S extends Omit<CrudBinding, "idSchema">>(\n' +
+        'import { z } from "zod";\n\n' +
+        "const entitySchema = <\n" +
+        "  const E extends ShortcodeEntity,\n" +
+        "  SFilters extends z.ZodType,\n" +
+        "  SCreate extends z.ZodType | null,\n" +
+        "  SUpdate extends z.ZodType | null,\n" +
+        "  SBulkUpdate extends z.ZodType | null,\n" +
+        "  SOutput extends z.ZodType,\n" +
+        "  SDetail extends z.ZodType,\n" +
+        "  SList extends z.ZodType,\n" +
+        "  SMcpOutput extends z.ZodType,\n" +
+        "  SMcpDetail extends z.ZodType,\n" +
+        "  SMcpList extends z.ZodType,\n" +
+        ">(\n" +
         "  entity: E,\n" +
-        "  schemas: S,\n" +
-        ") => ({ idSchema: shortcodeSchema(entity), ...schemas });\n\n" +
+        "  schemas: {\n" +
+        "    filters: SFilters;\n" +
+        "    createInput: SCreate;\n" +
+        "    updateInput: SUpdate;\n" +
+        "    bulkUpdateInput: SBulkUpdate;\n" +
+        "    output: SOutput;\n" +
+        "    detail: SDetail;\n" +
+        "    list: SList;\n" +
+        "    mcpOutput: SMcpOutput;\n" +
+        "    mcpDetail: SMcpDetail;\n" +
+        "    mcpList: SMcpList;\n" +
+        "  },\n" +
+        ") => ({ entity, id: shortcodeSchema(entity), ...schemas });\n\n" +
+        "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
+        `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
+        "export type EntitySchemaBindingMap = typeof ENTITY_SCHEMA_BINDINGS;\n" +
+        "export type EntitySchemaBindingEntity = keyof EntitySchemaBindingMap;\n" +
+        "type EntitySchemaBinding = EntitySchemaBindingMap[EntitySchemaBindingEntity];\n" +
+        "type EntityBinding = { crud: EntitySchemaBinding | null };\n\n" +
         "// Generated bindings stay one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_BINDINGS = {\n${bindings}\n} satisfies Record<ShortcodeEntity, EntityBinding>;\n\n` +
         "// One generated variant per entity.\n// oxfmt-ignore\n" +
@@ -1975,7 +2263,29 @@ export const renderEntityArtifacts = (
         `export const generatedEntityBulkUpdateCommandSchema = ${bulkUpdateCommandFactory};\n` +
         "\n" +
         `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
-        `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n`,
+        `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n` +
+        "\nconst generatedEntityListMetaSchema = z.object({\n" +
+        "  pageIndex: z.number().int().nonnegative(),\n" +
+        "  pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),\n" +
+        "  totalCount: z.number().int().nonnegative(),\n" +
+        "  sums: z.record(z.string(), z.number()).optional(),\n" +
+        "});\n\n" +
+        "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
+        `export const generatedEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${queryGetResultVariants}\n]);\n\n` +
+        "// One generated query result per correlated entity output.\n// oxfmt-ignore\n" +
+        `export const generatedEntityListResultSchema = z.discriminatedUnion("entity", [\n  ${queryListResultVariants}\n]);\n` +
+        "\n// Merge summaries are workflow-specific JSON; the surviving item remains entity-correlated.\n// oxfmt-ignore\n" +
+        `export const generatedEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mergeResultVariants}\n]);\n` +
+        "\n// MCP variants preserve entity correlation while projecting storage-only child ids.\n// oxfmt-ignore\n" +
+        `export const generatedMcpEntityGetResultSchema = z.discriminatedUnion("entity", [\n  ${mcpQueryGetResultVariants}\n]);\n\n` +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityListResultSchema = z.discriminatedUnion("entity", [\n  ${mcpQueryListResultVariants}\n]);\n\n` +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mcpMutationResultVariants("create")}\n]);\n\n` +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mcpMutationResultVariants("update")}\n]);\n\n` +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mcpMergeResultVariants}\n]);\n`,
     },
     {
       relativePath: "apps/web/src/entities/generated/entity-routes.gen.ts",
@@ -2014,7 +2324,9 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         "// Generated port aliases retain deterministic import order.\n" +
+        'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
+        'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n\n' +
         `${portTypeImports}\n\n` +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
         `type EntityPortExportChecks = readonly [${portExportChecks
@@ -2024,8 +2336,13 @@ export const renderEntityArtifacts = (
           )
           .join(", ")}];\n\n` +
         `${runtimeAdapterImportSource}\n\n` +
+        "type CorrelatedEntityKernelBindings = {\n" +
+        "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
+        "};\n\n" +
         "// Generated runtime assembly stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies Record<EntityKernelEntity, unknown> & { readonly __portExportChecks?: EntityPortExportChecks };\n`,
+        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies CorrelatedEntityKernelBindings & { readonly __portExportChecks?: EntityPortExportChecks };\n` +
+        "// Generated operation closures retain each binding's schema correlation.\n// oxfmt-ignore\n" +
+        `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n`,
     },
     {
       relativePath:
@@ -2196,16 +2513,17 @@ export const renderFilterArtifacts = (
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         'import { urlStringParam } from "~/lib/search-params";\n\n' +
         "// Generated data stays one entity per line.\n// oxfmt-ignore\n" +
-        `const entityFilterUrlKeyRoster: Partial<Record<Entity, readonly string[]>> = ${compactLiteral(roster)};\n\n` +
+        `const entityFilterUrlKeyRoster = ${compactLiteral(roster)} as const satisfies Record<Entity, readonly string[]>;\n` +
+        "\n" +
         "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
         "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
         "  entityFilterUrlKeyRoster[entity] ?? [];\n\n" +
         "export function entityFilterSearchFields(\n" +
         "  entity: Entity,\n" +
-        "): Record<string, typeof urlStringParam> {\n" +
-        "  const fields: Record<string, typeof urlStringParam> = {};\n" +
-        "  for (const key of entityFilterUrlKeys(entity)) fields[key] = urlStringParam;\n" +
-        "  return fields;\n" +
+        ") {\n" +
+        "  return Object.fromEntries(\n" +
+        "    entityFilterUrlKeys(entity).map((key) => [key, urlStringParam]),\n" +
+        "  );\n" +
         "}\n",
     },
     {
@@ -2370,7 +2688,7 @@ const writeEntityArtifacts = async (
   }
   for (const artifact of artifacts) {
     const artifactPath = resolve(root, artifact.relativePath);
-    await stat(dirname(artifactPath)).catch(async (error: unknown) => {
+    await stat(dirname(artifactPath)).catch(async (error) => {
       if (
         error instanceof Error &&
         "code" in error &&
@@ -2429,7 +2747,7 @@ if (
   process.argv[1] !== undefined &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  void main().catch((error: unknown) => {
+  void main().catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });

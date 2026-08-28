@@ -49,7 +49,7 @@ interface UseEntitySelectionReturn<TData extends { id: string }> {
    * because the bar reads the selected rows off it, and the table is built
    * from the columns this hook contributes to.
    */
-  renderBulkActionBar: (table: Table<TData>) => ReactNode;
+  renderBulkActionBar: (table: Table<TData> | null) => ReactNode;
   /**
    * Spread into `RTable`. A bundle rather than two props because wiring only
    * half of it is silent: the bar's actions and their dialogs must come from
@@ -63,7 +63,13 @@ interface UseEntitySelectionReturn<TData extends { id: string }> {
   };
 }
 
-const NO_SELECT_COLUMNS: ColumnDef<never>[] = [];
+export function canSelectEntityRecord<TData>(
+  selectionEnabled: boolean,
+  predicate: ((record: TData) => boolean) | undefined,
+  record: TData,
+): boolean {
+  return selectionEnabled && (predicate?.(record) ?? true);
+}
 
 /**
  * Selection for a table built straight on `useCubbyTable`.
@@ -92,23 +98,21 @@ export function useEntitySelection<TData extends { id: string }>({
   const selectable = listBulkActions.enableRowSelection;
 
   const selectColumns = useMemo(
-    () =>
-      selectable
-        ? [buildSelectColumn<TData>()]
-        : (NO_SELECT_COLUMNS as ColumnDef<TData>[]),
+    () => (selectable ? [buildSelectColumn<TData>()] : []),
     [selectable],
   );
 
   const enableRowSelection = useMemo(
     () =>
       canSelectRow
-        ? (row: Row<TData>) => selectable && canSelectRow(row.original)
+        ? (row: Row<TData>) =>
+            canSelectEntityRecord(selectable, canSelectRow, row.original)
         : selectable,
     [canSelectRow, selectable],
   );
 
-  const renderBulkActionBar = (table: Table<TData>) =>
-    state.selectedCount > 0 ? (
+  const renderBulkActionBar = (table: Table<TData> | null) =>
+    table && state.selectedCount > 0 ? (
       <ListBulkActionBar table={table} config={config} state={state} />
     ) : null;
 

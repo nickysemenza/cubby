@@ -40,6 +40,20 @@ const EXPECTED_ERROR_CODES: Set<string> = new Set([
   "PRECONDITION_FAILED",
 ]);
 
+const unparsedErrorSchema = z.unknown();
+const publicErrorCarrierSchema = z.object({
+  code: z.string().optional().catch(undefined),
+  cause: z
+    .object({
+      reason: z.string().optional().catch(undefined),
+      blockers: z.array(publicImpactItemSchema).optional().catch(undefined),
+    })
+    .optional()
+    .catch(undefined),
+});
+
+type UnparsedError = z.input<typeof unparsedErrorSchema>;
+
 /**
  * Create an application error with consistent diagnostics:
  * - Derives its transport-neutral code from AppErrorReason
@@ -50,7 +64,7 @@ const EXPECTED_ERROR_CODES: Set<string> = new Set([
 export function createAppError(
   reason: AppErrorReason,
   message: string,
-  originalError?: unknown,
+  originalError?: UnparsedError,
 ): AppError {
   const code = AppErrors[reason];
   const isExpectedError = EXPECTED_ERROR_CODES.has(code);
@@ -142,7 +156,7 @@ export interface PublicErrorPayload {
   blockers?: PublicImpactItem[];
 }
 
-export function toPublicErrorPayload(error: unknown): PublicErrorPayload {
+export function toPublicErrorPayload(error: UnparsedError): PublicErrorPayload {
   const payload: PublicErrorPayload = {};
   const appError = appErrorFromUnknown(error);
   if (appError) {
@@ -152,19 +166,12 @@ export function toPublicErrorPayload(error: unknown): PublicErrorPayload {
     return payload;
   }
 
-  const directCode = (error as { code?: unknown } | null | undefined)?.code;
-  if (typeof directCode === "string") payload.code = directCode;
-
-  const cause = (error as { cause?: unknown } | null | undefined)?.cause;
-  if (!cause || typeof cause !== "object") return payload;
-
-  const reason = (cause as Record<string, unknown>).reason;
-  if (typeof reason === "string") payload.reason = reason;
-
-  const blockers = (cause as Record<string, unknown>).blockers;
-  if (Array.isArray(blockers)) {
-    const parsed = z.array(publicImpactItemSchema).safeParse(blockers);
-    if (parsed.success) payload.blockers = parsed.data;
+  const parsed = publicErrorCarrierSchema.safeParse(error);
+  if (!parsed.success) return payload;
+  if (parsed.data.code) payload.code = parsed.data.code;
+  if (parsed.data.cause?.reason) payload.reason = parsed.data.cause.reason;
+  if (parsed.data.cause?.blockers) {
+    payload.blockers = parsed.data.cause.blockers;
   }
   return payload;
 }
@@ -187,7 +194,7 @@ export function toPublicErrorPayload(error: unknown): PublicErrorPayload {
  * need to be, because `merge_entity` already reports every cluster failure
  * inside its own result rather than erroring the envelope.
  */
-export function isBlockedRefusal(error: unknown): boolean {
+export function isBlockedRefusal(error: UnparsedError): boolean {
   const payload = toPublicErrorPayload(error);
   return (
     payload.code === "PRECONDITION_FAILED" ||
@@ -202,13 +209,13 @@ export function isBlockedRefusal(error: unknown): boolean {
  * and otherwise flood the issue stream (e.g. a stale cached getByID for a
  * deleted entity, or an unauthenticated request to a protected procedure).
  */
-export function isExpectedAppError(error: unknown): boolean {
+export function isExpectedAppError(error: UnparsedError): boolean {
   const code = toPublicErrorPayload(error).code;
-  return typeof code === "string" && EXPECTED_ERROR_CODES.has(code);
+  return code !== undefined && EXPECTED_ERROR_CODES.has(code);
 }
 
-export function appErrorFromUnknown(error: unknown): AppError | null {
+export function appErrorFromUnknown(error: UnparsedError): AppError | null {
   if (error instanceof AppError) return error;
-  const cause = (error as { cause?: unknown } | null | undefined)?.cause;
-  return cause instanceof AppError ? cause : null;
+  const carrier = z.object({ cause: z.instanceof(AppError) }).safeParse(error);
+  return carrier.success ? carrier.data.cause : null;
 }

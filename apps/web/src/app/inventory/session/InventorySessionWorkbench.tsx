@@ -7,11 +7,14 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCircle2, ListChecks, RotateCcw } from "lucide-react";
 import pluralize from "pluralize";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  useActionMutation,
+  useEntityActionMutation,
+} from "~/app/_components/hooks/useActionMutation";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
 import { inventory } from "~/app/inventory/inventory.functions";
@@ -194,22 +197,17 @@ export function InventorySessionWorkbench({
 
   const { invalidate } = useSessionMutations();
 
-  // reconcile is a documented useActionMutation carve-out (variables-driven
-  // setState in onSuccess), so it keeps this shared invalidator inline.
-  const invalidateSession = useCallback(
-    (result?: unknown) => invalidate({ result, watch: true }),
-    [invalidate],
-  );
-
   const bulkMove = useActionMutation({
     mutationFn: inventory.bulkMove.mutationOptions,
   });
-  const updateLocation = useActionMutation({
+  const updateLocation = useEntityActionMutation({
     mutationFn: entityMutationOptionsFactory("location", "update"),
+    entity: "location",
+    operation: "update",
     // A location write's own ripple does not reach the session's inventory
     // panes; the audit session reads both sides of the bin, so it settles with
     // the shared session invalidator (which also polls any enqueued batches).
-    onSuccess: invalidateSession,
+    onSuccess: (result) => invalidate({ result, watch: true }),
   });
   // "Done" commits the staged diff for the current bin. On success the committed
   // resolutions leave the staged map (read from `variables`, so it's never the
@@ -217,7 +215,7 @@ export function InventorySessionWorkbench({
   const reconcile = useMutation(
     inventory.reconcileSession.mutationOptions({
       onSuccess: (data, variables) => {
-        invalidateSession(data);
+        invalidate({ result: data, watch: true });
         setItemResolutions((prev) => {
           const next = new Map(prev);
           for (const r of variables.resolutions)

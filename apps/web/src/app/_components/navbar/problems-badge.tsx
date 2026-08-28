@@ -16,15 +16,20 @@ import { cn } from "~/lib/utils";
 const pl = (n: number, sing: string, plur = `${sing}s`) =>
   `${n} ${n === 1 ? sing : plur}`;
 
+export function problemsBadgeQueryOptions(isAuthed: boolean) {
+  return {
+    ...problems.getCounts.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+    enabled: isAuthed,
+  };
+}
+
 // One tooltip phrase per `byType` key, in Problems-page section order. A Record
 // (not a list) so adding a category to the count schema is a *compile error*
 // here until its phrase is added. Object insertion order drives the tooltip
 // order. Coverage-classed keys keep a phrase (the Record must stay exhaustive)
 // but are filtered out at render, so the breakdown still sums to `total`.
-const PROBLEM_LABELS: Record<
-  keyof ProblemsCount["byType"],
-  (n: number) => string
-> = {
+const PROBLEM_LABELS = {
   duplicateInventory: (n) => pl(n, "duplicate"),
   duplicateProductIdentities: (n) => pl(n, "duplicate product"),
   orphanedProducts: (n) => `${n} orphaned`,
@@ -84,7 +89,7 @@ const PROBLEM_LABELS: Record<
   invalidFinancialJson: (n) => `${n} invalid financial record`,
   incompleteStatementImports: (n) => `${n} incomplete statement import`,
   referentialLivenessViolations: (n) => pl(n, "dangling reference"),
-};
+} satisfies Record<keyof ProblemsCount["byType"], (n: number) => string>;
 
 export const ProblemsBadge = () => {
   const { isAuthed } = useRouteContext({ from: "__root__" });
@@ -92,11 +97,9 @@ export const ProblemsBadge = () => {
   // Counts are a cheap KV snapshot and share Home's authenticated route
   // context, so this can reuse the server-prefetched result without risking an
   // unauthenticated request.
-  const { data: count, isLoading } = useQuery({
-    ...problems.getCounts.queryOptions(),
-    staleTime: 5 * 60 * 1000,
-    enabled: isAuthed,
-  });
+  const { data: count, isLoading } = useQuery(
+    problemsBadgeQueryOptions(isAuthed),
+  );
 
   // A disabled query reports isLoading=false with empty data, so keep the
   // spinner until the authenticated route enables the read and a snapshot

@@ -1,8 +1,12 @@
-import { type UserId, userId } from "@cubby/schemas/identifiers";
-import { getErrorMessage } from "@cubby/shared";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
 import { auth, MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth";
+
+import {
+  createMcpTokenVerifier,
+  createUnauthorizedResponse,
+  type VerifyMcpAccessToken,
+} from "./auth-verifier";
 
 /**
  * OAuth 2.1 bearer-token auth for the MCP endpoint.
@@ -38,19 +42,6 @@ const JWKS_CACHE_KEY = {};
  * + the resource's path), and matches what the better-auth plugin's own
  * `handleMcpErrors` would emit for this audience.
  */
-const RESOURCE_METADATA_URL = (() => {
-  const url = new URL(MCP_RESOURCE);
-  return `${url.origin}/.well-known/oauth-protected-resource${url.pathname}`;
-})();
-
-export interface McpActor {
-  userId: UserId;
-  /** `sid` claim — the better-auth session the grant hangs off, if present. */
-  sessionId: string | null;
-  /** OAuth authorized-party claim; absent only on legacy access tokens. */
-  clientId: string | null;
-}
-
 /**
  * Verify the `Authorization: Bearer <jwt>` on an MCP request.
  *
@@ -58,88 +49,22 @@ export interface McpActor {
  * bad signature, wrong issuer/audience, expired. Callers respond with
  * {@link unauthorizedResponse}.
  */
-export async function verifyMcpToken(
-  request: Request,
-): Promise<McpActor | null> {
-  const authorization = request.headers.get("authorization");
-  if (!authorization?.startsWith("Bearer ")) return null;
+const verifyAccessToken: VerifyMcpAccessToken = async (token, options) =>
+  verifyJwsAccessToken(token, options);
 
-  const token = authorization.slice("Bearer ".length).trim();
-  if (!token) return null;
-
-  try {
-    const payload = await verifyJwsAccessToken(token, {
-      jwksFetch: fetchJwks,
-      jwksCacheKey: JWKS_CACHE_KEY,
-      verifyOptions: { issuer: OAUTH_ISSUER, audience: MCP_RESOURCE },
-    });
-    // `subjectType` is left at its "public" default, so `sub` is the user id
-    // verbatim rather than a pairwise pseudonym.
-    if (typeof payload.sub !== "string" || !payload.sub) {
-      console.error("[MCP auth] token has no subject", { aud: payload.aud });
-      return null;
-    }
-    return {
-      userId: userId.parse(payload.sub),
-      sessionId: typeof payload.sid === "string" ? payload.sid : null,
-      clientId: typeof payload.azp === "string" ? payload.azp : null,
-    };
-  } catch (error) {
-    // Every rejection reaches the client as a bare 401, so without this the
-    // difference between "expired", "wrong audience" and "opaque token, not a
-    // JWT" is invisible in production — which is exactly the hole that made a
-    // misconfigured connector impossible to diagnose from the outside.
-    console.error("[MCP auth] token rejected", {
-      reason: getErrorMessage(error),
-      code:
-        error && typeof error === "object" && "code" in error
-          ? String((error as { code: unknown }).code)
-          : undefined,
-      // Claims only — never the token itself; this goes to `wrangler tail`.
-      claims: unverifiedClaims(token),
-    });
-    return null;
-  }
-}
-
-/**
- * Decode a JWT payload *without* verifying it, purely so a rejection can be
- * explained in logs. Returns null for anything that isn't a JWT at all — which
- * is itself the answer when a client was issued an opaque access token.
- */
-function unverifiedClaims(
-  token: string,
-): { iss?: unknown; aud?: unknown; exp?: unknown } | null {
-  const segments = token.split(".");
-  if (segments.length !== 3 || !segments[1]) return null;
-  try {
-    const payload: unknown = JSON.parse(
-      new TextDecoder().decode(
-        Uint8Array.from(
-          atob(segments[1].replace(/-/g, "+").replace(/_/g, "/")),
-          (c) => c.charCodeAt(0),
-        ),
-      ),
-    );
-    if (typeof payload !== "object" || payload === null) return null;
-    const { iss, aud, exp } = payload as Record<string, unknown>;
-    return { iss, aud, exp };
-  } catch {
-    return null;
-  }
-}
+export const verifyMcpToken = createMcpTokenVerifier({
+  verifyAccessToken,
+  verificationOptions: {
+    jwksFetch: fetchJwks,
+    jwksCacheKey: JWKS_CACHE_KEY,
+    verifyOptions: { issuer: OAUTH_ISSUER, audience: MCP_RESOURCE },
+  },
+  reportRejection: (message, detail) => console.error(message, detail),
+});
 
 /**
  * 401 that tells an MCP client where to start the OAuth flow. Without the
  * `WWW-Authenticate` header a client just reports a failed connection instead
  * of offering to sign in.
  */
-export function unauthorizedResponse() {
-  return new Response(JSON.stringify({ error: "Unauthorized" }), {
-    status: 401,
-    headers: {
-      "Content-Type": "application/json",
-      "WWW-Authenticate": `Bearer resource_metadata="${RESOURCE_METADATA_URL}"`,
-    },
-  });
-}
+export const unauthorizedResponse = createUnauthorizedResponse(MCP_RESOURCE);

@@ -185,13 +185,12 @@ const rowsRendererParam = urlStringParam
   .pipe(z.enum(PROJECT_ROWS_RENDERERS).optional())
   .catch(undefined);
 const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
-  z.preprocess(
-    (value) =>
-      typeof value === "string"
-        ? value.split(",").filter((item) => item.length > 0)
-        : value,
-    z.array(itemSchema).optional(),
-  );
+  z.preprocess((value) => {
+    const text = z.string().safeParse(value);
+    return text.success
+      ? text.data.split(",").filter((item) => item.length > 0)
+      : value;
+  }, z.array(itemSchema).optional());
 
 export const projectSearchSchema = listSearchSchema("project", {
   // Absent `statuses` is unrestricted. Invalid enum values fail this route's
@@ -293,19 +292,30 @@ export const taskSearchDefaults = {
  * link lands on the same rows instead of a dead tab. Precedent:
  * `RecipeDetail.tsx`'s legacy-tab normalizer.
  */
-const LEGACY_EXPENSE_VIEW_FILTERS: Record<string, Record<string, string>> = {
+const LEGACY_EXPENSE_VIEW_FILTERS = {
   planned: { future: "true" },
   unassigned: { project: "__none__" },
   unclassified: { trade: "other", cost: "none" },
-};
+} satisfies Record<
+  "planned" | "unassigned" | "unclassified",
+  Record<string, string>
+>;
+type LegacyExpenseView = keyof typeof LEGACY_EXPENSE_VIEW_FILTERS;
+const isLegacyExpenseView = (value: string): value is LegacyExpenseView =>
+  Object.hasOwn(LEGACY_EXPENSE_VIEW_FILTERS, value);
 
 export const EXPENSE_LIST_VIEWS = ["ledger", "analytics"] as const;
+type ExpenseListView = (typeof EXPENSE_LIST_VIEWS)[number];
 
-const isExpenseView = (
-  value: string | undefined,
-): value is (typeof EXPENSE_LIST_VIEWS)[number] =>
-  value !== undefined &&
-  (EXPENSE_LIST_VIEWS as readonly string[]).includes(value);
+const isExpenseView = (value: string | undefined): value is ExpenseListView =>
+  value !== undefined && EXPENSE_LIST_VIEWS.some((view) => view === value);
+
+function withExpenseListView<TSearch extends object>(
+  search: TSearch,
+  view: string | undefined,
+): TSearch & { view?: ExpenseListView } {
+  return isExpenseView(view) ? { ...search, view } : search;
+}
 
 /**
  * The ledger's filter params are also what the Analytics view decodes back out,
@@ -348,20 +358,58 @@ export const expenseSearchSchema = listSearchSchema("expense", {
   // Quick-capture deep link (navbar "+" / command palette) — there is no
   // /expenses/new route, so the create dialog is opened by this param.
   create: z.boolean().optional().catch(undefined),
-}).transform(({ view, ...rest }) => {
-  const legacy = view ? LEGACY_EXPENSE_VIEW_FILTERS[view] : undefined;
-  const normalizedRest = {
-    ...rest,
-    ...expenseAnalyzeSearchPatch(expenseAnalyzeConfigFromSearch(rest)),
-  };
-  // A retired preset tab becomes the filter state it used to pin, so the
-  // bookmark lands on the same rows — and now says so in the URL.
-  if (legacy) return { ...normalizedRest, ...legacy, view: undefined };
-  return {
-    ...normalizedRest,
-    view: isExpenseView(view) ? view : undefined,
-  };
-});
+}).transform(
+  ({
+    view,
+    analyzeRows,
+    analyzeColumns,
+    analyzeMetric,
+    analyzeCompare,
+    analyzeShow,
+    ...rest
+  }) => {
+    const legacy =
+      view && isLegacyExpenseView(view)
+        ? LEGACY_EXPENSE_VIEW_FILTERS[view]
+        : undefined;
+    const analyzePatch = expenseAnalyzeSearchPatch(
+      expenseAnalyzeConfigFromSearch({
+        ...rest,
+        analyzeRows,
+        analyzeColumns,
+        analyzeMetric,
+        analyzeCompare,
+        analyzeShow,
+      }),
+    );
+    const canonicalAnalyzeSearch: Partial<typeof analyzePatch> = {};
+    if (analyzePatch.analyzeRows !== undefined) {
+      canonicalAnalyzeSearch.analyzeRows = analyzePatch.analyzeRows;
+    }
+    if (analyzePatch.analyzeColumns !== undefined) {
+      canonicalAnalyzeSearch.analyzeColumns = analyzePatch.analyzeColumns;
+    }
+    if (analyzePatch.analyzeMetric !== undefined) {
+      canonicalAnalyzeSearch.analyzeMetric = analyzePatch.analyzeMetric;
+    }
+    if (analyzePatch.analyzeCompare !== undefined) {
+      canonicalAnalyzeSearch.analyzeCompare = analyzePatch.analyzeCompare;
+    }
+    if (analyzePatch.analyzeShow !== undefined) {
+      canonicalAnalyzeSearch.analyzeShow = analyzePatch.analyzeShow;
+    }
+    const normalizedRest = {
+      ...rest,
+      ...canonicalAnalyzeSearch,
+    };
+    // A retired preset tab becomes the filter state it used to pin, so the
+    // bookmark lands on the same rows — and now says so in the URL.
+    const canonicalSearch = legacy
+      ? { ...normalizedRest, ...legacy }
+      : normalizedRest;
+    return withExpenseListView(canonicalSearch, legacy ? undefined : view);
+  },
+);
 
 export const expenseSearchDefaults = {
   q: undefined,
@@ -390,6 +438,30 @@ export const expenseSearchDefaults = {
   analyzeShow: undefined,
   create: undefined,
 } as const;
+
+/**
+ * The ledger preloader has no use for the selected renderer or Analyze-only
+ * URL controls. Keep them outside its client-navigation loader payload: Start
+ * serializes loader dependencies, while this route's transform intentionally
+ * reintroduces those absent fields to normalize a shared URL.
+ */
+export function expenseListLoaderDeps(
+  search: z.output<typeof expenseSearchSchema>,
+) {
+  const {
+    view,
+    analyzeRows: _analyzeRows,
+    analyzeColumns: _analyzeColumns,
+    analyzeMetric: _analyzeMetric,
+    analyzeCompare: _analyzeCompare,
+    analyzeShow: _analyzeShow,
+    ...listSearch
+  } = search;
+  return {
+    active: (view ?? "ledger") === "ledger",
+    search: listSearch,
+  };
+}
 
 export const vendorSearchSchema = listSearchSchema("vendor", {
   q: urlStringParam,

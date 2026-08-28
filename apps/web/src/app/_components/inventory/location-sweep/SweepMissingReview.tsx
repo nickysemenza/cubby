@@ -56,6 +56,7 @@ function MissingRow({
         <div className="min-w-0 flex-1">
           <DestinationLocationField
             form={form}
+            name="targetLocation"
             label="Move to"
             error={error}
             sourceLocationIds={sweptLocationId}

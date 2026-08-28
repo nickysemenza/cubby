@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { nameLabel } from "./name-label";
 
 type Meal = { date: string };
-const forMeal = (raw: unknown) =>
+type NameLabelInput = Parameters<typeof nameLabel<Meal>>[0];
+const forMeal = (raw: NameLabelInput) =>
   nameLabel<Meal>(raw, { date: "2026-07-20" }, (m) => `Meal on ${m.date}`);
 
 describe("nameLabel", () => {

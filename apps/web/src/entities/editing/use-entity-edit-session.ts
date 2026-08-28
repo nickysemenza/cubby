@@ -1,7 +1,8 @@
 import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { Path, UseFormReturn } from "react-hook-form";
+import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -15,11 +16,18 @@ import type {
   EntityEditAccess,
   EntityEditIssue,
   EntityEditResult,
+  EntityEditValue,
+  EntityMutationPort,
   RuntimeEntityEditRequest,
 } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 
-type RuntimeEntityEditDraft = Record<string, unknown>;
+type RuntimeEntityEditDraft = FieldValues;
+
+const entityEditValueBagSchema = z.record(
+  z.string(),
+  z.union([z.json(), z.date(), z.undefined()]),
+);
 
 export interface EntityEditSession<E extends EditableEntity> {
   /** Exposed so specialized form adapters can use RHF's native field helpers. */
@@ -28,9 +36,14 @@ export interface EntityEditSession<E extends EditableEntity> {
   readonly access: EntityEditAccess | null;
   readonly isPending: boolean;
   readonly issues: readonly EntityEditIssue[];
-  set(field: Path<RuntimeEntityEditDraft>, value: unknown): void;
+  set(field: Path<RuntimeEntityEditDraft>, value: EntityEditValue): void;
   reset(): void;
   submit(): Promise<EntityEditResult<E>>;
+}
+
+export interface EntityEditSessionOptions {
+  /** A browser-local command adapter for a surface whose remote transport is unavailable. */
+  readonly mutationPort?: EntityMutationPort;
 }
 
 function isDraftField<T extends object>(
@@ -59,9 +72,10 @@ function useStableEntityEditRequest<E extends EditableEntity>(
  */
 export function useEntityEditSession<E extends EditableEntity>(
   request: RuntimeEntityEditRequest<E>,
+  options?: EntityEditSessionOptions,
 ): EntityEditSession<E> {
   const stableRequest = useStableEntityEditRequest(request);
-  const commands = useEntityCommands(stableRequest.entity);
+  const commands = useEntityCommands(stableRequest.entity, options);
   const resolved = useMemo(
     () => resolveEntityEdit(entityEditRegistry, stableRequest),
     [stableRequest],
@@ -113,7 +127,7 @@ export function useEntityEditSession<E extends EditableEntity>(
     [form],
   );
   const set = useCallback(
-    (field: Path<RuntimeEntityEditDraft>, value: unknown) => {
+    (field: Path<RuntimeEntityEditDraft>, value: EntityEditValue) => {
       form.setValue(field, value, { shouldDirty: true });
     },
     [form],
@@ -127,8 +141,9 @@ export function useEntityEditSession<E extends EditableEntity>(
       applyIssues(resolved.issues);
       return { ok: false, issues: resolved.issues };
     }
+    const values = entityEditValueBagSchema.parse(form.getValues());
     const result = await commands.commit(
-      buildEntityEdit(resolved, stableRequest, form.getValues()),
+      buildEntityEdit(resolved, stableRequest, values),
     );
     if (!result.ok) applyIssues(result.issues);
     else form.clearErrors();

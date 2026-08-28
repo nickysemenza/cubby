@@ -233,15 +233,18 @@ export const createMealWithEntityId = async (
   actor: ActorContext,
 ): Promise<MealMutationResult> => {
   const id = await withTransaction(db, async (tx) => {
-    const created = await insertWithShortcode(tx, "meal", {
+    const mealValues = {
       date: data.date,
       name: data.name ?? null,
       sortOrder: data.sortOrder ?? null,
       mealType: data.mealType ?? null,
-      // Omitted rather than coalesced — let the column default supply "cooked"
-      // in one place instead of restating it here.
-      ...(data.mealKind !== undefined ? { mealKind: data.mealKind } : {}),
-    });
+    };
+    // Omitted rather than coalesced — let the column default supply "cooked"
+    // in one place instead of restating it here.
+    if (data.mealKind !== undefined) {
+      Object.assign(mealValues, { mealKind: data.mealKind });
+    }
+    const created = await insertWithShortcode(tx, "meal", mealValues);
     if (data.recipes?.length) {
       // `resolveAllOrThrow` returns ids positionally, one per input code, so
       // `recipeIds[i]` pairs with `data.recipes[i]` — the documented zip case.
@@ -289,18 +292,13 @@ export const updateMeal = async (
 ): Promise<MealOut> => {
   // Mutation + audit in one transaction so the change is never left unrecorded.
   await withTransaction(db, async (tx) => {
-    await updateLiveAndReturn(
-      tx,
-      meal,
-      {
-        ...(data.date !== undefined ? { date: data.date } : {}),
-        ...(data.name !== undefined ? { name: data.name } : {}),
-        ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
-        ...(data.mealType !== undefined ? { mealType: data.mealType } : {}),
-        ...(data.mealKind !== undefined ? { mealKind: data.mealKind } : {}),
-      },
-      id,
-    );
+    const mealPatch: typeof data = {};
+    if (data.date !== undefined) mealPatch.date = data.date;
+    if (data.name !== undefined) mealPatch.name = data.name;
+    if (data.sortOrder !== undefined) mealPatch.sortOrder = data.sortOrder;
+    if (data.mealType !== undefined) mealPatch.mealType = data.mealType;
+    if (data.mealKind !== undefined) mealPatch.mealKind = data.mealKind;
+    await updateLiveAndReturn(tx, meal, mealPatch, id);
     await logAuditEntry(tx, actor, {
       entityType: "meal",
       entityId: id,
@@ -399,15 +397,10 @@ const updateMealRecipe = async (
 ): Promise<MealOut> => {
   const mealId = await getMealIdForRecipe(db, id);
   await withTransaction(db, async (tx) => {
-    await updateAndReturn(
-      tx,
-      mealRecipe,
-      {
-        ...(data.scale !== undefined ? { scale: data.scale } : {}),
-        ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
-      },
-      eq(mealRecipe.id, id),
-    );
+    const recipePatch: typeof data = {};
+    if (data.scale !== undefined) recipePatch.scale = data.scale;
+    if (data.sortOrder !== undefined) recipePatch.sortOrder = data.sortOrder;
+    await updateAndReturn(tx, mealRecipe, recipePatch, eq(mealRecipe.id, id));
     await logAuditEntry(tx, actor, {
       entityType: "meal",
       entityId: mealId,

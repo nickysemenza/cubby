@@ -73,7 +73,7 @@ const EMBEDDED_TABLE_STATE = {
   urlSync: false,
   readUrlState: false,
 } as const;
-const NO_TABLE_FILTERS = () => ({}) as Record<string, never>;
+const NO_TABLE_FILTERS = () => ({});
 
 /**
  * An inventory entry is about its product, so product verbs reach this row

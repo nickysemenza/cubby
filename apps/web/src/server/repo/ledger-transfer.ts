@@ -8,6 +8,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
+  LedgerSourceClaimOut,
   LedgerTransferCreateInput,
   LedgerTransferFilters,
   LedgerTransferOut,
@@ -88,7 +89,7 @@ const columns = {
   notes: ledgerTransfer.notes,
   createdAt: ledgerTransfer.createdAt,
   updatedAt: ledgerTransfer.updatedAt,
-  sourceClaims: sql<unknown[]>`COALESCE((
+  sourceClaims: sql<LedgerSourceClaimRow[]>`COALESCE((
     SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
       'source', c.source,
       'sourceKey', c."sourceKey", 'sourceKeyVersion', c."sourceKeyVersion",
@@ -107,6 +108,14 @@ const columns = {
   ), '[]'::jsonb)`,
 } as const;
 
+type LedgerSourceClaimRow = Omit<
+  LedgerSourceClaimOut,
+  "createdAt" | "updatedAt"
+> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
 type LedgerTransferRow = {
   id: LedgerTransferId;
   shortcode: string;
@@ -121,7 +130,7 @@ type LedgerTransferRow = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
-  sourceClaims: unknown[];
+  sourceClaims: LedgerSourceClaimRow[];
   evidenceTransactionIds: string[];
 };
 
@@ -144,11 +153,10 @@ const toOut = (row: LedgerTransferRow): LedgerTransferOut =>
     notes: row.notes,
     classification: classificationFor(row),
     sourceClaims: row.sourceClaims.map((claim) => {
-      const value = claim as Record<string, unknown>;
       return {
-        ...value,
-        createdAt: new Date(String(value.createdAt)),
-        updatedAt: new Date(String(value.updatedAt)),
+        ...claim,
+        createdAt: new Date(claim.createdAt),
+        updatedAt: new Date(claim.updatedAt),
       };
     }),
     evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>

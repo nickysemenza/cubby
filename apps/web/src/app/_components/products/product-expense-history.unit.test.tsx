@@ -6,103 +6,18 @@ import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks: {
-  expenses: { current: ExpenseOut[] };
-  membership: { current: KitMembershipOut[] };
-} = vi.hoisted(() => ({
-  expenses: { current: [] },
-  membership: { current: [] },
-}));
+import { expense } from "~/app/expenses/expense.functions";
+import { product as productOperations } from "~/app/products/product.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  mutationOptions: (options: unknown) => options,
-  useQuery: (options: { queryKey: unknown[] }) => ({
-    data:
-      options.queryKey[0] === "chartData"
-        ? mocks.expenses.current
-        : options.queryKey[0] === "kitMembership"
-          ? mocks.membership.current
-          : undefined,
-    isPending: false,
-  }),
-  useMutation: () => ({
-    mutate: vi.fn(),
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
-
-vi.mock("~/app/expenses/expense.functions", () => ({
-  expense: {
-    chartData: {
-      queryOptions: (input: unknown) => ({
-        queryKey: ["chartData", input],
-      }),
-    },
-  },
-}));
-
-vi.mock("~/app/products/product.functions", () => ({
-  product: {
-    kitMembership: {
-      queryOptions: (input: unknown) => ({
-        queryKey: ["kitMembership", input],
-      }),
-    },
-  },
-}));
-
-// This suite only exercises the empty/table-vs-empty branches, not the table
-// itself — `useClientEntityList` and `RTable` are heavy, router/URL-state
-// machinery that a table-shape test elsewhere already covers.
-vi.mock("~/app/_components/hooks/useClientEntityList", () => ({
-  useClientEntityList: () => ({
-    workbench: {
-      entity: "expense",
-      table: {
-        getSortedRowModel: () => ({ flatRows: [] }),
-        state: { pagination: { pageSize: 25 } },
-        setPageIndex: vi.fn(),
-        resetRowSelection: vi.fn(),
-      },
-      bulkActionBar: null,
-      deleteDialog: null,
-    },
-  }),
-}));
-
-vi.mock("~/app/_components/data-table/Table", () => ({
-  default: () => <div data-testid="rtable" />,
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, to }: { children?: ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
-  ),
-}));
-
-vi.mock("~/app/_components/EntityInlineLink", () => ({
-  EntityInlineLink: ({
-    entity,
-    data,
-  }: {
-    entity: string;
-    data: { id: string; name: string };
-  }) => (
-    <a href={`/${entity}s/${data.id}`} data-entity={entity}>
-      {data.name}
-    </a>
-  ),
-}));
-
-import { ProductExpenseHistory } from "./product-expense-history";
+import {
+  type ProductExpenseHistoryOperations,
+  ProductExpenseHistory,
+} from "./product-expense-history";
 
 const COMBO_ID = testShortcode("product", "PRD-COMB");
-
 const product: ProductWithFoodOut = productWithFoodOut.parse({
   id: testShortcode("product", "PRD-BATT"),
   name: "Battery Pack",
@@ -171,7 +86,7 @@ const membershipEntry: KitMembershipOut = {
   purchase: null,
 };
 
-const expense: ExpenseOut = {
+const expenseEntry: ExpenseOut = {
   id: testShortcode("expense", "EXP-2345"),
   name: "Battery pack",
   cost: 49,
@@ -203,57 +118,81 @@ const expense: ExpenseOut = {
   updatedAt: new Date("2026-07-31T12:00:00Z"),
 };
 
-const renderWith = (
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function historyOperations(
+  expenses: ExpenseOut[],
+  membership: KitMembershipOut[],
+): ProductExpenseHistoryOperations {
+  return {
+    // The descriptors still parse output and publish their production cache
+    // metadata; the test only replaces their browser transport.
+    expenses: expense.chartData.withTransport(async () => expenses),
+    kitMembership: productOperations.kitMembership.withTransport(
+      async () => membership,
+    ),
+  };
+}
+
+function renderHistory(
   expenses: ExpenseOut[],
   membership: KitMembershipOut[] = [],
-) => {
-  mocks.expenses.current = expenses;
-  mocks.membership.current = membership;
-  return render(<ProductExpenseHistory product={product} />);
-};
+) {
+  return render(
+    <ProductExpenseHistory
+      product={product}
+      operations={historyOperations(expenses, membership)}
+    />,
+    { wrapper: harness.wrapper },
+  );
+}
 
 describe("ProductExpenseHistory empty states", () => {
-  it("shows the ordinary empty state for a plain product with no expenses", () => {
-    renderWith([]);
+  it("shows the ordinary empty state for a plain product with no expenses", async () => {
+    renderHistory([]);
 
-    expect(screen.getByText("No expenses linked")).toBeInTheDocument();
+    expect(await screen.findByText("No expenses linked")).toBeVisible();
     expect(
       screen.getByText("Link one to track this product's cost basis."),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("No expenses of its own"),
-    ).not.toBeInTheDocument();
+    ).toBeVisible();
+    expect(screen.queryByText("No expenses of its own")).toBeNull();
   });
 
-  it("names the kit and explains the derived share when the product is a kit component", () => {
-    renderWith([], [membershipEntry]);
+  it("names the kit and explains the derived share for a component", async () => {
+    renderHistory([], [membershipEntry]);
 
-    expect(screen.getByText("No expenses of its own")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "18V Combo Kit" })).toHaveAttribute(
+    expect(await screen.findByText("No expenses of its own")).toBeVisible();
+    expect(screen.getByRole("link", { name: /18V Combo Kit/ })).toHaveAttribute(
       "href",
       `/products/${COMBO_ID}`,
     );
-    expect(screen.getByText(/derived share/)).toBeInTheDocument();
-    expect(screen.getByText("See the kit's expenses →")).toBeInTheDocument();
-    expect(screen.queryByText("No expenses linked")).not.toBeInTheDocument();
+    expect(screen.getByText(/derived share/)).toBeVisible();
+    expect(screen.getByText("See the kit's expenses →")).toBeVisible();
+    expect(screen.queryByText("No expenses linked")).toBeNull();
   });
 
-  it("doesn't offer a ledger link when the kit itself has no expenses yet", () => {
-    renderWith([], [{ ...membershipEntry, expenseCount: 0 }]);
+  it("does not offer a ledger link when the kit itself has no expenses", async () => {
+    renderHistory([], [{ ...membershipEntry, expenseCount: 0 }]);
 
-    expect(screen.getByText("No expenses of its own")).toBeInTheDocument();
-    expect(
-      screen.queryByText("See the kit's expenses →"),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("No expenses of its own")).toBeVisible();
+    expect(screen.queryByText("See the kit's expenses →")).toBeNull();
   });
 
-  it("renders the table instead of an empty state when expenses exist", () => {
-    renderWith([expense]);
+  it("renders the real expense workbench when expenses exist", async () => {
+    renderHistory([expenseEntry]);
 
-    expect(screen.getByTestId("rtable")).toBeInTheDocument();
-    expect(screen.queryByText("No expenses linked")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("No expenses of its own"),
-    ).not.toBeInTheDocument();
+      await screen.findByLabelText("Battery Pack expense history"),
+    ).toBeVisible();
+    expect(screen.queryByText("No expenses linked")).toBeNull();
+    expect(screen.queryByText("No expenses of its own")).toBeNull();
   });
 });

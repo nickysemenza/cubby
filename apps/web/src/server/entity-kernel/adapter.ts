@@ -1,18 +1,21 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type { EntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
+import {
+  ENTITY_SCHEMA_BINDINGS,
+  type EntitySchemaBindingEntity,
+  type EntitySchemaBindingMap,
+} from "~/server/generated/entity-bindings.gen";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
-
-import type { EntityKernelEntity } from "./contracts";
 
 export interface EntityKernelContext {
   /** Authoritative adapter for strong reads, mutations, and side effects. */
@@ -46,7 +49,7 @@ export const entityKernelContextSchema = z.custom<EntityKernelContext>(
   "expected an entity-kernel request context",
 );
 
-export interface EntityKernelDeleteResult {
+interface EntityKernelDeleteResult {
   deleted: number;
   detachedImageKeys?: string[];
   backgroundBatches?: BackgroundBatchRef[];
@@ -62,168 +65,193 @@ export interface EntityKernelDeleteResult {
  * owns the transaction and the per-entity side-effect fan-out, exactly as
  * `delete` does.
  */
-export interface EntityKernelBulkUpdateResult {
+interface EntityKernelBulkUpdateResult {
   updated: number;
   detachedImageKeys?: string[];
   backgroundBatches?: BackgroundBatchRef[];
 }
 
-export interface EntityKernelBinding {
-  entity: EntityKernelEntity;
-  sideEffects: boolean;
-  schemas: {
-    id: ZodSchema;
-    create?: ZodSchema;
-    update?: ZodSchema;
-    output: ZodSchema;
-    detail: ZodSchema;
-    list: ZodSchema;
-    filters: ZodSchema;
-  };
-  sort: {
-    fields: readonly [string, ...string[]];
-    default: string;
-    groupable?: readonly [string, ...string[]];
-  };
-  lifecycle: {
-    delete: Record<string, OperationDisposition>;
-    merge?: Record<string, OperationDisposition>;
-  };
-  repository: {
-    get(ctx: EntityKernelContext, id: unknown): Promise<unknown | null>;
-    list(
-      ctx: EntityKernelContext,
-      filters: unknown,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-      groupBy?: string,
-    ): Promise<{
-      data: unknown[];
-      count: number;
-      sums?: Record<string, number>;
-    }>;
-    create?(
-      ctx: EntityKernelContext,
-      data: unknown,
-    ): Promise<{
-      output: unknown;
-      entityId: unknown;
-      detachedImageKeys?: string[];
-      backgroundBatches?: BackgroundBatchRef[];
-    }>;
-    update?(
-      ctx: EntityKernelContext,
-      id: unknown,
-      data: unknown,
-    ): Promise<{
-      output: unknown;
-      entityId: unknown;
-      detachedImageKeys?: string[];
-      backgroundBatches?: BackgroundBatchRef[];
-    }>;
-    delete(
-      ctx: EntityKernelContext,
-      ids: unknown[],
-    ): Promise<EntityKernelDeleteResult>;
-    /** Absent means the capability gate refuses, as an unsupported merge does. */
-    bulkUpdate?(
-      ctx: EntityKernelContext,
-      ids: unknown[],
-      data: unknown,
-    ): Promise<EntityKernelBulkUpdateResult>;
-  };
-  merge?: {
-    input: ZodSchema;
-    output: ZodSchema;
-    item: (output: unknown) => unknown;
-    summary: (output: unknown) => unknown;
-    execute: (
-      ctx: EntityKernelContext,
-      input: unknown,
-    ) => Promise<{
-      output: unknown;
-      entityId: unknown | null;
-      detachedImageKeys: string[];
-      backgroundBatches?: BackgroundBatchRef[];
-    }>;
-  };
+type SchemaOutput<S> = S extends ZodSchema ? ZodOutput<S> : never;
+type SchemasFor<E extends EntitySchemaBindingEntity> =
+  EntitySchemaBindingMap[E];
+export interface EntityBindingSchemas {
+  id: ZodSchema;
+  filters: ZodSchema;
+  createInput: ZodSchema | null;
+  updateInput: ZodSchema | null;
+  bulkUpdateInput: ZodSchema | null;
+  output: ZodSchema;
+  detail: ZodSchema;
+  list: ZodSchema;
 }
 
-type CrudFor<E extends EntityKernelEntity> = NonNullable<
-  (typeof ENTITY_BINDINGS)[E]["crud"]
->;
+export type EntityCreateInput<E extends EntitySchemaBindingEntity> =
+  SchemaOutput<SchemasFor<E>["createInput"]>;
+export type EntityPublicOutput<E extends EntitySchemaBindingEntity> =
+  SchemaOutput<SchemasFor<E>["output"]>;
+
+export type EntityInternalId<E extends EntitySchemaBindingEntity> = EntityId<E>;
+
+export interface EntitySortContract {
+  fields: readonly [string, ...string[]];
+  default: string;
+  groupable?: readonly [string, ...string[]];
+}
+
+export interface EntityLifecycleContract {
+  delete: Record<string, OperationDisposition>;
+  merge?: Record<string, OperationDisposition>;
+}
+
+interface EntityRepositoryWriteResult<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas,
+> {
+  output: ZodOutput<S["output"]>;
+  entityId: EntityInternalId<E>;
+  detachedImageKeys?: string[];
+  backgroundBatches?: BackgroundBatchRef[];
+}
+
+type PresentSchemaOutput<S> = ZodOutput<Extract<S, ZodSchema>>;
+
+type EntityCreateRepository<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas,
+> =
+  SchemaOutput<S["createInput"]> extends never
+    ? { create?: never }
+    : {
+        create(
+          ctx: EntityKernelContext,
+          data: PresentSchemaOutput<S["createInput"]>,
+        ): Promise<EntityRepositoryWriteResult<E, S>>;
+      };
+
+type EntityUpdateRepository<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas,
+> =
+  SchemaOutput<S["updateInput"]> extends never
+    ? { update?: never }
+    : {
+        update(
+          ctx: EntityKernelContext,
+          id: ZodOutput<S["id"]>,
+          data: PresentSchemaOutput<S["updateInput"]>,
+        ): Promise<EntityRepositoryWriteResult<E, S>>;
+      };
+
+type EntityBulkUpdateRepository<S extends EntityBindingSchemas> =
+  SchemaOutput<S["bulkUpdateInput"]> extends never
+    ? { bulkUpdate?: never }
+    : {
+        bulkUpdate(
+          ctx: EntityKernelContext,
+          ids: ZodOutput<S["id"]>[],
+          data: PresentSchemaOutput<S["bulkUpdateInput"]>,
+        ): Promise<EntityKernelBulkUpdateResult>;
+      };
+
+export type EntityRepository<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas = SchemasFor<E>,
+> = {
+  get(
+    ctx: EntityKernelContext,
+    id: ZodOutput<S["id"]>,
+  ): Promise<ZodOutput<S["detail"]> | null>;
+  list(
+    ctx: EntityKernelContext,
+    filters: ZodOutput<S["filters"]>,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+    groupBy?: string,
+  ): Promise<{
+    data: ZodOutput<S["list"]>[];
+    count: number;
+    sums?: Record<string, number>;
+  }>;
+  delete(
+    ctx: EntityKernelContext,
+    ids: ZodOutput<S["id"]>[],
+  ): Promise<EntityKernelDeleteResult>;
+} & EntityCreateRepository<E, S> &
+  EntityUpdateRepository<E, S> &
+  EntityBulkUpdateRepository<S>;
+
+export interface EntityMergePort<
+  E extends EntitySchemaBindingEntity,
+  SInput extends ZodSchema,
+  SOutput extends ZodSchema,
+  TItem,
+  TSummary,
+> {
+  input: SInput;
+  output: SOutput;
+  item: (output: ZodOutput<SOutput>) => TItem;
+  summary: (output: ZodOutput<SOutput>) => TSummary;
+  execute: (
+    ctx: EntityKernelContext,
+    input: ZodOutput<SInput>,
+  ) => Promise<{
+    output: ZodOutput<SOutput>;
+    entityId: EntityInternalId<E> | null;
+    detachedImageKeys: string[];
+    backgroundBatches?: BackgroundBatchRef[];
+  }>;
+}
+
+export interface EntityKernelCoreBinding<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas = SchemasFor<E>,
+> {
+  entity: E;
+  sideEffects: boolean;
+  schemas: S;
+  sort: EntitySortContract;
+  lifecycle: EntityLifecycleContract;
+  repository: EntityRepository<E, S>;
+}
 
 export function defineEntityAdapter<
-  const E extends EntityKernelEntity,
-  SFilters extends ZodSchema,
+  const E extends EntitySchemaBindingEntity,
+  SMergeInput extends ZodSchema = z.ZodNever,
+  SMergeOutput extends ZodSchema = z.ZodNever,
+  TMergeItem = never,
+  TMergeSummary = never,
 >(config: {
   entity: E;
   sideEffects?: boolean;
-  filters: SFilters;
-  listOutput?: ZodSchema;
-  detailOutput?: ZodSchema;
-  sort: EntityKernelBinding["sort"];
-  lifecycle: EntityKernelBinding["lifecycle"];
-  repository: {
-    get: (
-      ctx: EntityKernelContext,
-      id: ZodOutput<CrudFor<E>["idSchema"]>,
-    ) => Promise<ZodOutput<CrudFor<E>["output"]> | null>;
-    list: (
-      ctx: EntityKernelContext,
-      filters: ZodOutput<SFilters>,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-      groupBy?: string,
-    ) => Promise<{
-      data: unknown[];
-      count: number;
-      sums?: Record<string, number>;
-    }>;
-    create: (
-      ctx: EntityKernelContext,
-      data: ZodOutput<CrudFor<E>["createInput"]>,
-    ) => Promise<{
-      output: ZodOutput<CrudFor<E>["output"]>;
-      entityId: unknown;
-      detachedImageKeys?: string[];
-      backgroundBatches?: BackgroundBatchRef[];
-    }>;
-    update: (
-      ctx: EntityKernelContext,
-      id: ZodOutput<CrudFor<E>["idSchema"]>,
-      data: ZodOutput<CrudFor<E>["updateInput"]>,
-    ) => Promise<{
-      output: ZodOutput<CrudFor<E>["output"]>;
-      entityId: unknown;
-      detachedImageKeys?: string[];
-      backgroundBatches?: BackgroundBatchRef[];
-    }>;
-    delete: (
-      ctx: EntityKernelContext,
-      ids: ZodOutput<CrudFor<E>["idSchema"]>[],
-    ) => Promise<EntityKernelDeleteResult>;
-    /** Opt-in; the declared `capabilities.bulkUpdate.fields` narrow `data`. */
-    bulkUpdate?: (
-      ctx: EntityKernelContext,
-      ids: ZodOutput<CrudFor<E>["idSchema"]>[],
-      data: Partial<ZodOutput<CrudFor<E>["updateInput"]>>,
-    ) => Promise<EntityKernelBulkUpdateResult>;
-  };
-  merge?: EntityKernelBinding["merge"];
+  sort: EntitySortContract;
+  lifecycle: EntityLifecycleContract;
+  repository: EntityRepository<E>;
+  merge?: EntityMergePort<
+    E,
+    SMergeInput,
+    SMergeOutput,
+    TMergeItem,
+    TMergeSummary
+  >;
 }) {
-  const crud = ENTITY_BINDINGS[config.entity].crud as CrudFor<E>;
+  const merge = config.merge;
+  const mergeOperation = merge
+    ? {
+        execute: async <TInput>(ctx: EntityKernelContext, input: TInput) => {
+          const result = await merge.execute(ctx, merge.input.parse(input));
+          const output = merge.output.parse(result.output);
+          return {
+            ...result,
+            item: merge.item(output),
+            mergeSummary: merge.summary(output),
+          };
+        },
+      }
+    : null;
   return {
     ...config,
     sideEffects: config.sideEffects ?? true,
-    schemas: {
-      id: crud.idSchema,
-      create: crud.createInput,
-      update: crud.updateInput,
-      output: crud.output,
-      detail: config.detailOutput ?? crud.output,
-      list: config.listOutput ?? crud.output,
-      filters: config.filters,
-    },
+    schemas: ENTITY_SCHEMA_BINDINGS[config.entity],
+    mergeOperation,
   };
 }

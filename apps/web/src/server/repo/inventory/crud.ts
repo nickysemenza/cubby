@@ -309,11 +309,7 @@ export const buildInventoryWhere = async (
     ],
     [
       ...auditDateWhereConditions(inventoryEntry, filters),
-      ...relatedWhereConditions(
-        "inventory",
-        filters as unknown as Record<string, unknown>,
-        inventoryEntry.id,
-      ),
+      ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
       eqAnyRequested(inventoryEntry.productId, productIds),
       eqAny(product.category, filters.categoryFilter),
@@ -593,14 +589,15 @@ export const createInventoryEntry = async (
     data.amount,
   );
 
-  const created = await insertWithShortcode(db, "inventory", {
+  const values: Omit<typeof inventoryEntry.$inferInsert, "shortcode"> = {
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
-    ...(data.placement ? { placement: data.placement } : {}),
-    ...(data.verifiedAt ? { verifiedAt: data.verifiedAt } : {}),
     valuation,
-  });
+  };
+  if (data.placement) values.placement = data.placement;
+  if (data.verifiedAt) values.verifiedAt = data.verifiedAt;
+  const created = await insertWithShortcode(db, "inventory", values);
 
   await logAuditEntry(db, actor, {
     entityType: "inventory",

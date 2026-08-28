@@ -34,7 +34,7 @@ import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
 
 import { ConversionCapabilitiesSummary } from "./conversion-capabilities-summary";
-import { kindIconMap } from "./kind-icons";
+import { kindIconFor } from "./kind-icons";
 import { UnitMappingGraph } from "./unit-mapping-graph";
 import { UnitMappingsTable } from "./unitmappingstable";
 
@@ -240,8 +240,7 @@ function ConversionDialogContent({
                   {effectiveKinds.map((kind) => {
                     const result = conversions[kind];
                     const path = paths[kind];
-                    const Meta = kindIconMap[kind];
-                    if (!Meta) return null;
+                    const Meta = kindIconFor(kind);
                     return (
                       <div key={kind} className="border-b py-1">
                         <Row align="center" justify="between">

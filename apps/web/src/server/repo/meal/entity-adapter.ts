@@ -1,4 +1,4 @@
-import { mealFiltersSchema, mealSortableFields } from "@cubby/schemas/meal";
+import { mealSortableFields } from "@cubby/schemas/meal";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
@@ -16,7 +16,6 @@ const mealShortcodes = bindShortcodeResolver("meal");
 
 export const mealEntityAdapter = defineEntityAdapter({
   entity: "meal",
-  filters: mealFiltersSchema,
   sort: { fields: mealSortableFields, default: "date" },
   lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
   repository: {

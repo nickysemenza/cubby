@@ -6,9 +6,10 @@ import { SpendTrend } from "~/app/_components/charts/kit";
 
 import { ChartEmpty } from "./chart-empty";
 
-const SERIES_COLORS: Record<string, string> = {
-  Actual: "var(--chart-1)",
-  Committed: "var(--chart-7)", // light ink — reads as "not yet real"
+const seriesColor = (seriesId: string | number) => {
+  if (seriesId === "Actual") return "var(--chart-1)";
+  if (seriesId === "Committed") return "var(--chart-7)";
+  return "var(--chart-1)";
 };
 
 /**
@@ -56,7 +57,7 @@ export function MonthlyTrend({
       yScale={{ type: "linear", min: 0, stacked: false }}
       axisBottom={{ tickRotation: -45 }}
       areaOpacity={0.15}
-      colors={(datum) => SERIES_COLORS[String(datum.id)] ?? "var(--chart-1)"}
+      colors={(datum) => seriesColor(datum.id)}
       filterZeroValues
       legends={[
         {

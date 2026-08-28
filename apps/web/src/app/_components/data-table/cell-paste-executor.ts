@@ -10,8 +10,10 @@
  * the summary message. Keeping them here makes the tricky bits unit-testable.
  */
 
+import type { getErrorMessage } from "@cubby/shared";
 import pMap from "p-map";
 
+import type { CellJsonValue } from "./cell-clipboard";
 import type {
   CellKind,
   CellRect,
@@ -91,7 +93,7 @@ export function alignExternalGrid(params: {
  */
 export function isOpUnchanged(
   source: CopiedCell,
-  currentJson: unknown,
+  currentJson: CellJsonValue,
 ): boolean {
   if (source.json === undefined) return false;
   return JSON.stringify(source.json) === JSON.stringify(currentJson);
@@ -118,7 +120,7 @@ export async function runPastePlan<TRow>(params: {
   ops: readonly PasteOp[];
   rows: readonly TRow[];
   columnCellData: readonly (ColumnCellData<TRow> | null)[];
-  formatError: (err: unknown) => string;
+  formatError: typeof getErrorMessage;
   concurrency?: number;
 }): Promise<PasteRunResult> {
   const { ops, rows, columnCellData, formatError, concurrency = 5 } = params;

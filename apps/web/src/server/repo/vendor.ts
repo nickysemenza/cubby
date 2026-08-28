@@ -717,6 +717,24 @@ export const mergeVendors = async (
       .set({ logoImageId: null })
       .where(inArray(vendor.id, losers));
 
+    type VendorMergeSurvivorChanges = {
+      mergedFrom: { from: null; to: VendorId[] };
+      carriedOver?: { from: null; to: VendorMergePlan["carried"] };
+      foldedCharges?: { from: null; to: PurchaseId[] };
+    };
+    const survivorChanges: VendorMergeSurvivorChanges = {
+      mergedFrom: { from: null, to: losers },
+    };
+    if (Object.keys(plan.carried).length > 0) {
+      survivorChanges.carriedOver = { from: null, to: plan.carried };
+    }
+    if (plan.folded.length > 0) {
+      survivorChanges.foldedCharges = {
+        from: null,
+        to: plan.folded.map((entry) => entry.deadId),
+      };
+    }
+
     const { removed } = await finalizeMerge(tx, {
       entity: "vendor",
       table: vendor,
@@ -724,20 +742,7 @@ export const mergeVendors = async (
       loserIds: losers,
       removal: "soft",
       actor,
-      survivorChanges: {
-        mergedFrom: { from: null, to: losers },
-        ...(Object.keys(plan.carried).length > 0
-          ? { carriedOver: { from: null, to: plan.carried } }
-          : {}),
-        ...(plan.folded.length > 0
-          ? {
-              foldedCharges: {
-                from: null,
-                to: plan.folded.map((d) => d.deadId),
-              },
-            }
-          : {}),
-      },
+      survivorChanges,
     });
     planSummary.merged = removed;
 

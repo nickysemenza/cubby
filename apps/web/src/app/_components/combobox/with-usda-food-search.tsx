@@ -43,11 +43,11 @@ interface UsdaFoodSearchFieldProps {
 // (Foundation / SR Legacy / Survey), which branded items otherwise out-rank;
 // "All" leaves it to foodsOnly. Undefined ⇒ no dataTypes filter.
 type SearchScope = "all" | "generic" | "branded";
-const SCOPE_DATA_TYPES: Record<SearchScope, DataType[] | undefined> = {
+const SCOPE_DATA_TYPES = {
   all: undefined,
   generic: ["foundation_food", "sr_legacy_food", "survey_fndds_food"],
   branded: ["branded_food"],
-};
+} satisfies Record<SearchScope, DataType[] | undefined>;
 const SCOPES: SearchScope[] = ["all", "generic", "branded"];
 
 /**
@@ -108,7 +108,9 @@ export function UsdaFoodSearchField({
   });
 
   const { data: byIdFood, isLoading: byIdLoading } = useQuery({
-    ...usdaFood.detail.queryOptions({ id: parsedFdcId ?? 0 }),
+    // Disabled queries still construct and validate their options. USDA ids
+    // are positive integers, so keep the dormant key schema-valid.
+    ...usdaFood.detail.queryOptions({ id: parsedFdcId ?? 1 }),
     enabled: parsedFdcId != null,
   });
 

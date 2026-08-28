@@ -247,14 +247,14 @@ function TotalSpend({
         pointSize={6}
         pointColor={({ point }) => {
           if (costEstimate == null) return "var(--card)";
-          return (point.data.y as number) > costEstimate
+          return Number(point.data.y) > costEstimate
             ? "var(--destructive)"
             : "var(--card)";
         }}
         pointBorderWidth={2}
         pointBorderColor={(point) => {
           if (costEstimate == null) return "var(--chart-1)";
-          return (point.data.y as number) > costEstimate
+          return Number(point.data.y) > costEstimate
             ? "var(--destructive)"
             : "var(--chart-1)";
         }}
@@ -268,7 +268,7 @@ function TotalSpend({
                   {point.data.xFormatted}
                 </span>
                 {": "}
-                <strong>{formatCurrency(point.data.y as number, 0)}</strong>
+                <strong>{formatCurrency(Number(point.data.y), 0)}</strong>
               </div>
             ))}
           </ChartTooltip>
@@ -366,7 +366,7 @@ function StackedSpend({
                 />
                 <span>{point.seriesId}</span>
                 <strong className="ml-auto">
-                  {formatCurrency(point.data.y as number, 0)}
+                  {formatCurrency(Number(point.data.y), 0)}
                 </strong>
               </div>
             ))}

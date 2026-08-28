@@ -1,39 +1,53 @@
+import { testUserId } from "@cubby/schemas/testing";
+import { fromAny } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import type { ObservedResult } from "~/server/observed-request";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import type { AppSpan } from "~/server/tracing";
 
 import {
+  createStartOperationRunner,
   normalizeStartOperationError,
-  runStartOperation,
+  type StartOperationRuntime,
 } from "./start-operation.server";
 
-const mocks = vi.hoisted(() => ({
-  createRequestContext: vi.fn(),
-  requireActor: vi.fn((context: unknown) => context),
-  observeOperation: vi.fn(),
-  setAttribute: vi.fn(),
-  setAttributes: vi.fn(),
-}));
+const database = new Database(() => {
+  throw new Error("The Start operation unit test must not resolve a database");
+});
+const context = requireActor(
+  createTestRequestContext(database, {
+    auth: { userId: testUserId("start-operation-user") },
+  }),
+);
 
-vi.mock("~/server/request-context", () => ({
-  createRequestContext: mocks.createRequestContext,
-  requireActor: mocks.requireActor,
-}));
-
-vi.mock("~/server/observed-request", () => ({
-  observeOperation: mocks.observeOperation,
-}));
-
-const database = {};
-const context = {
-  db: database,
-  readDb: database,
-  auth: { userId: "user-1", sessionId: "session-1" },
-  actorContext: { userId: "user-1" },
-  requestOrigin: "ui",
-  readConsistency: { consistency: "bounded-stale", reason: "cached-policy" },
+const setAttribute = vi.fn<AppSpan["setAttribute"]>();
+const setAttributes = vi.fn<AppSpan["setAttributes"]>();
+const span: AppSpan = {
+  isRecording: true,
+  setAttribute,
+  setAttributes,
+  setError: () => undefined,
+  recordException: () => undefined,
 };
+const authenticate = vi.fn<StartOperationRuntime["authenticate"]>();
+const observedOperations: string[] = [];
+const inspections: ObservedResult[] = [];
+const runtime: StartOperationRuntime = {
+  authenticate,
+  observe: async (definition, observation, run) => {
+    observedOperations.push(definition.id);
+    const result = await run(span);
+    const inspection = observation.inspectResult?.(result);
+    if (inspection) inspections.push(inspection);
+    return result;
+  },
+};
+const runStartOperation = createStartOperationRunner(runtime);
 
 const request = (signal = new AbortController().signal) => ({
   headers: new Headers(),
@@ -43,32 +57,9 @@ const request = (signal = new AbortController().signal) => ({
 describe("runStartOperation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.createRequestContext.mockResolvedValue(context);
-    mocks.observeOperation.mockImplementation(
-      async (
-        _definition: unknown,
-        observation: {
-          inspectResult?: (result: {
-            result: unknown;
-            observedError?: unknown;
-          }) => unknown;
-        },
-        run: (span: {
-          setAttribute: typeof mocks.setAttribute;
-          setAttributes: typeof mocks.setAttributes;
-        }) => Promise<{
-          result: unknown;
-          observedError?: unknown;
-        }>,
-      ) => {
-        const result = await run({
-          setAttribute: mocks.setAttribute,
-          setAttributes: mocks.setAttributes,
-        });
-        observation.inspectResult?.(result);
-        return result;
-      },
-    );
+    observedOperations.length = 0;
+    inspections.length = 0;
+    authenticate.mockResolvedValue(context);
   });
 
   it("propagates a request id only through the structured failure", () => {
@@ -101,14 +92,10 @@ describe("runStartOperation", () => {
       }),
     ).resolves.toEqual({ ok: true, data: { doubled: 6 } });
 
-    expect(mocks.createRequestContext).toHaveBeenCalledOnce();
-    expect(mocks.requireActor).toHaveBeenCalledWith(context);
+    expect(authenticate).toHaveBeenCalledOnce();
     expect(run).toHaveBeenCalledWith(context, { count: 3 });
-    expect(mocks.observeOperation).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "entity.detail", kind: "query" }),
-      expect.objectContaining({ origin: "ui" }),
-      expect.any(Function),
-    );
+    expect(observedOperations).toEqual(["entity.detail"]);
+    expect(inspections).toEqual([{ workload: "ui" }]);
   });
 
   it("uses the parsed input entity rather than an inbound header on the inner span", async () => {
@@ -131,7 +118,7 @@ describe("runStartOperation", () => {
       run: async () => ({ ok: true }),
     });
 
-    expect(mocks.setAttribute).toHaveBeenCalledWith("cubby.entity", "product");
+    expect(setAttribute).toHaveBeenCalledWith("cubby.entity", "product");
   });
 
   it("returns normalized validation issues without running the operation", async () => {
@@ -157,6 +144,15 @@ describe("runStartOperation", () => {
       }),
     });
     expect(run).not.toHaveBeenCalled();
+    expect(inspections).toEqual([
+      {
+        error: expect.objectContaining({
+          code: "BAD_REQUEST",
+          reason: "INVALID_INPUT",
+        }),
+        workload: "ui",
+      },
+    ]);
   });
 
   it("selects dependent output schemas only after input validation", async () => {
@@ -241,6 +237,8 @@ describe("runStartOperation", () => {
         message: "A product with that name already exists.",
       },
     });
+    expect(inspections).toHaveLength(2);
+    expect(inspections.every(({ error }) => error instanceof Error)).toBe(true);
   });
 
   it("does not expose unknown or invalid-output details", async () => {
@@ -275,7 +273,8 @@ describe("runStartOperation", () => {
       inputSchema: z.object({}),
       outputSchema: z.object({ ok: z.boolean() }),
       request: request(),
-      run: async () => ({ ok: "not-a-boolean" }),
+      run: async () =>
+        fromAny<{ ok: boolean }, { ok: string }>({ ok: "not-a-boolean" }),
     });
     expect(invalidOutput).toEqual({
       ok: false,
@@ -285,6 +284,8 @@ describe("runStartOperation", () => {
         message: "The operation could not be completed",
       },
     });
+    expect(inspections).toHaveLength(2);
+    expect(inspections.every(({ error }) => error instanceof Error)).toBe(true);
   });
 
   it("throws cancellation before and after execution", async () => {

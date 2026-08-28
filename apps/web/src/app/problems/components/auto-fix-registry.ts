@@ -225,11 +225,7 @@ export const AUTO_FIX_SECTION_IDS = new Set(
 export function buildAutoFixPlan(
   problems: AllProblems,
   counts: MaintenanceCounts | undefined,
-): {
-  items: number;
-  listedItems: number;
-  tasks: AutoFixTask[];
-} {
+) {
   const counted = AUTO_FIX_TASKS.map((task) => ({
     task,
     count: task.count(problems, counts),

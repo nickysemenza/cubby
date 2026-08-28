@@ -1,8 +1,10 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import { fromAny } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { executeEntity } from "~/server/entity-kernel";
@@ -33,6 +35,21 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import { taskListActionableWorkflow } from "~/server/workflows/task.server";
 
 import { makeProductInput } from "./repo.fixtures";
+
+const projectAuditChangeSchema = z.object({
+  projectId: z.object({ to: z.string() }).optional(),
+});
+const statusAuditChangeSchema = z.object({
+  status: z.object({ to: z.string() }).optional(),
+});
+const projectAuditTarget = <Changes>(changes: Changes) => {
+  const parsed = projectAuditChangeSchema.safeParse(changes);
+  return parsed.success ? parsed.data.projectId?.to : undefined;
+};
+const statusAuditTarget = <Changes>(changes: Changes) => {
+  const parsed = statusAuditChangeSchema.safeParse(changes);
+  return parsed.success ? parsed.data.status?.to : undefined;
+};
 
 describe("task repository — listActionableTasks", () => {
   const ctx = withTestDb();
@@ -1234,15 +1251,12 @@ describe("task repository — projectPresenceFilter", () => {
       ["filed", project.id],
       ["inbox", undefined],
     ] as const) {
-      await createTask(
-        ctx.db,
-        taskCreateInput.parse({
-          trade: "other",
-          name,
-          ...(projectId ? { projectId } : {}),
-        }),
-        ctx.actor,
-      );
+      const input: z.input<typeof taskCreateInput> = {
+        trade: "other",
+        name,
+      };
+      if (projectId) input.projectId = projectId;
+      await createTask(ctx.db, taskCreateInput.parse(input), ctx.actor);
     }
     return project;
   };
@@ -1337,17 +1351,12 @@ describe("task repository — moveTasks (bulk move to project)", () => {
           // `getAuditLog` resolves the raw `projectId` FK column write to its
           // public shortcode on read, same as it does for `entityId` — see
           // `remapChangeShortcodes` in repo/audit-log.ts.
-          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectB.id,
+          projectAuditTarget(e.changes) === projectB.id,
       ),
     ).toBe(true);
     // Never the raw uuid the DB column actually stores.
     expect(
-      auditT1.entries.some(
-        (e) =>
-          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectBId,
-      ),
+      auditT1.entries.some((e) => projectAuditTarget(e.changes) === projectBId),
     ).toBe(false);
   });
 
@@ -1563,8 +1572,7 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
     expect(
       alreadyAudit.entries.some(
         (e) =>
-          e.action === "update" &&
-          (e.changes as { status?: unknown } | null)?.status !== undefined,
+          e.action === "update" && statusAuditTarget(e.changes) !== undefined,
       ),
     ).toBe(false);
 
@@ -1575,10 +1583,7 @@ describe("task repository — setTasksStatus (bulk status write)", () => {
     });
     expect(
       changingAudit.entries.some(
-        (e) =>
-          e.action === "update" &&
-          (e.changes as { status?: { to: unknown } } | null)?.status?.to ===
-            "done",
+        (e) => e.action === "update" && statusAuditTarget(e.changes) === "done",
       ),
     ).toBe(true);
   });
@@ -1590,16 +1595,20 @@ describe("task kernel — bulkUpdate", () => {
     requireActor(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-  // The patch shape is exactly what is under test (including the undeclared
-  // field the kernel must refuse), so it stays a loose record here and the
-  // command is asserted onto the mutation union rather than narrowed away.
-  const bulkUpdate = async (ids: string[], data: Record<string, unknown>) => {
-    const result = await executeEntity(kernelContext(), {
+  // The patch shape is exactly what is under test (including an undeclared
+  // field the kernel must refuse), so the invalid case is made explicit at the
+  // test-data boundary rather than weakening the production command type.
+  const bulkUpdate = async <Patch extends object>(
+    ids: string[],
+    data: Patch,
+  ) => {
+    const command = fromAny<EntityMutationCommand, EntityMutationCommand>({
       action: "bulkUpdate",
       entity: "task",
       ids,
       data,
-    } as EntityMutationCommand);
+    });
+    const result = await executeEntity(kernelContext(), command);
     if (result.action !== "bulkUpdate") throw new Error("unreachable");
     return result;
   };

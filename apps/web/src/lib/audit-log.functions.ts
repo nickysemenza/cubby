@@ -1,5 +1,5 @@
 import { auditLogListInput, auditLogListOut } from "@cubby/schemas/audit";
-import type { z } from "zod";
+import { z } from "zod";
 
 import {
   defineOperationDomain,
@@ -24,13 +24,16 @@ export function auditLogListOptions(
       lastPage: z.output<typeof auditLogListOut>,
     ) => string | undefined;
   } = {},
+  list = auditLog.list,
 ) {
   const { cursor, ...inputWithoutCursor } = input;
-  return auditLog.list.infiniteQueryOptions<string | null>(inputWithoutCursor, {
-    page: (pageInput, pageParam) => ({
-      ...pageInput,
-      ...(pageParam === null ? {} : { cursor: pageParam }),
-    }),
+  return list.infiniteQueryOptions(inputWithoutCursor, {
+    pageParamSchema: z.string().nullable(),
+    page: (pageInput, pageParam) => {
+      const page = { ...pageInput };
+      if (pageParam !== null) page.cursor = pageParam;
+      return page;
+    },
     initialPageParam: cursor ?? null,
     getNextPageParam:
       options.getNextPageParam ?? ((lastPage) => lastPage.nextCursor),

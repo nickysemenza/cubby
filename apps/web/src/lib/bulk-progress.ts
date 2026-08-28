@@ -1,3 +1,5 @@
+import type { UnparsedError } from "./error-utils";
+
 /**
  * Shared event shape for server-side streaming bulk operations.
  *
@@ -67,23 +69,19 @@ export async function collectBulkStream<Result>(
  * any post-loop step (e.g. a single batched recompute); collect side-data
  * (inserted ids, failure details) in closures these callbacks capture.
  */
-export async function* streamItems<
-  T,
-  Item = never,
-  Result = { succeeded: number; failed: number },
->(
+export async function* streamItems<T, Item, Result>(
   items: readonly T[],
   // `| void` lets a no-payload step (an `async` fn with no return) be passed as-is.
   // A step may return a per-item payload or nothing.
   step: (item: T, index: number) => Promise<Item | void>,
   opts: {
     // onError may return a per-item payload or nothing.
-    onError?: (item: T, index: number, error: unknown) => Item | void;
-    finalize?: (summary: {
+    onError?: (item: T, index: number, error: UnparsedError) => Item | void;
+    finalize: (summary: {
       succeeded: number;
       failed: number;
     }) => Result | Promise<Result>;
-  } = {},
+  },
 ): AsyncGenerator<BulkProgressEvent<Item, Result>> {
   const total = items.length;
   let succeeded = 0;
@@ -107,10 +105,6 @@ export async function* streamItems<
         : { type: "progress", done, total, item };
     }
   }
-  const result = (
-    opts.finalize
-      ? await opts.finalize({ succeeded, failed })
-      : { succeeded, failed }
-  ) as Result;
+  const result = await opts.finalize({ succeeded, failed });
   yield { type: "done", result };
 }

@@ -148,7 +148,7 @@ export const cookbookReprocessEventSchema = z.discriminatedUnion("type", [
     type: z.literal("done"),
     result: z.object({
       reprocessed: z.number().int().nonnegative(),
-      importableExtras: z.number().int().nonnegative(),
+      importableExtras: z.array(z.string()),
     }),
   }),
 ]);
@@ -272,7 +272,7 @@ export const chunkRequestInput = z.object({
   system: z.string(),
   user: z.string(),
   toolName: z.string(),
-  toolSchema: z.record(z.string(), z.unknown()),
+  toolSchema: z.record(z.string(), z.json()),
   // Escalate this chunk to the stronger fallback model. The browser sets
   // this only after the default model fails to return parseable output. The
   // model itself stays server-owned (a bool, not a model id) so a client
@@ -280,7 +280,7 @@ export const chunkRequestInput = z.object({
   escalate: z.boolean().optional(),
 });
 
-export const chunkResponseOut = z.record(z.string(), z.unknown());
+export const chunkResponseOut = z.record(z.string(), z.json());
 
 export const mcpRecipeCreateFromTextSection = z.object({
   name: z

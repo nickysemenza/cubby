@@ -12,15 +12,12 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
 import type { DrizzleTransaction } from "~/server/db";
-import {
-  productExternalId,
-  productImage,
-  productUnitMappings,
-} from "~/server/db/schema";
+import { productExternalId, productUnitMappings } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   applyImageOrder,
   associatePendingImages,
+  imageJoinBindings,
   nextImageSortOrder,
   notDeleted,
 } from "~/server/repo/database-helpers";
@@ -470,13 +467,7 @@ export async function syncProductImages(
 
   if (imageOrder && imageOrder.length > 0) {
     const orderedIds = await resolveAllPresent(tx, "image", imageOrder);
-    await applyImageOrder(
-      tx,
-      productImage,
-      productImage.productId,
-      productId,
-      orderedIds,
-    );
+    await applyImageOrder(tx, imageJoinBindings.product, productId, orderedIds);
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
@@ -496,14 +487,12 @@ export async function syncProductImages(
     );
     const startSortOrder = await nextImageSortOrder(
       tx,
-      productImage,
-      productImage.productId,
+      imageJoinBindings.product,
       productId,
     );
     await associatePendingImages(
       tx,
-      productImage,
-      "productId",
+      imageJoinBindings.product,
       productId,
       resolvedPendingImageIds,
       startSortOrder,

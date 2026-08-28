@@ -8,7 +8,7 @@ import { asDragData } from "./arrange-types";
 export function canDropOnArrangeTarget(
   roots: InfLocation[],
   targetLocationId: LocationShortcode | null,
-  sourceData: Record<string | symbol, unknown>,
+  sourceData: Parameters<typeof asDragData>[0],
 ): boolean {
   const drag = asDragData(sourceData);
   if (!drag) return false;

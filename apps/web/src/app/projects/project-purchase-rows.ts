@@ -70,31 +70,28 @@ export const buildProjectPurchaseRows = (
 
   return purchases.map((purchase) => {
     const lines = byPurchase.get(purchase.id) ?? [];
-    return {
-      kind: "purchase" as const,
+    const row: Extract<ProjectPurchaseRow, { kind: "purchase" }> = {
+      kind: "purchase",
       id: purchase.id,
       name: purchaseIdentityLabel(purchase),
       date: purchase.date,
       purchase,
       linesOnProject: lines.length,
       projectSpend: lines.reduce((total, line) => total + (line.cost ?? 0), 0),
-      ...(lines.length > 0
-        ? {
-            subRows: lines.map((expense) => ({
-              kind: "expense" as const,
-              // One Expense belongs to exactly one Purchase, but namespacing
-              // keeps row ids unambiguous if that ever stops being true —
-              // `useEntityList` keys expansion and virtualizer measurements
-              // by `id`.
-              id: `${purchase.id}:${expense.id}`,
-              name: expense.name,
-              date: expense.date,
-              expenseId: expense.id,
-              expense,
-            })),
-          }
-        : {}),
     };
+    if (lines.length > 0) {
+      row.subRows = lines.map((expense) => ({
+        kind: "expense",
+        // One Expense belongs to exactly one Purchase, but namespacing keeps
+        // row ids unambiguous if that ever stops being true.
+        id: `${purchase.id}:${expense.id}`,
+        name: expense.name,
+        date: expense.date,
+        expenseId: expense.id,
+        expense,
+      }));
+    }
+    return row;
   });
 };
 

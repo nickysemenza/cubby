@@ -25,6 +25,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
   const { commonSections, editMode } = useEntityDetail<
+    "inventory",
     InventoryItem,
     InventoryUpdateInput
   >({

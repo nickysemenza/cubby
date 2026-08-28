@@ -94,10 +94,7 @@ type ProductWithUpcGapCandidate = {
 };
 
 /** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
-const PRODUCT_RETAINING_NOT_EXISTS: Record<
-  ProductRetainingEdgeKey,
-  (dbClient: DrizzleClient) => SQL
-> = {
+const PRODUCT_RETAINING_NOT_EXISTS = {
   "InventoryEntry.productId": (dbClient) =>
     notExists(
       dbClient
@@ -190,7 +187,7 @@ const PRODUCT_RETAINING_NOT_EXISTS: Record<
           ),
         ),
     ),
-};
+} satisfies Record<ProductRetainingEdgeKey, (dbClient: DrizzleClient) => SQL>;
 
 /** Orphan candidates have no live evidence; deletion remains a transactional canonical-policy decision. */
 export const findOrphanedProducts = async (
@@ -211,11 +208,7 @@ export const findOrphanedProducts = async (
       and(
         notDeleted(product),
         isNull(product.ingredientId),
-        ...(
-          Object.keys(PRODUCT_EDGE_ROLES) as Array<
-            keyof typeof PRODUCT_EDGE_ROLES
-          >
-        )
+        ...Object.keys(PRODUCT_EDGE_ROLES)
           .filter(isRetainingEdgeKey)
           .map((key) => PRODUCT_RETAINING_NOT_EXISTS[key](dbClient)),
       ),

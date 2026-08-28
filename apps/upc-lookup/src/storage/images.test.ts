@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
-import type { Env } from "../types";
-import { cleanupImageVariants, deleteImageVariants } from "./images";
+import { describe, expect, it } from "vitest";
+import {
+  cleanupImageVariants,
+  deleteImageVariants,
+  type ImageCleanupEnv,
+} from "./images";
 
 const upc = "012345678905";
 const imageKeys = [
@@ -13,29 +16,33 @@ const imageKeys = [
 ];
 
 function envWithImagesDelete() {
-  const deleteImageObjects = vi.fn().mockResolvedValue(undefined);
+  let deletedKeys: string[] = [];
+  const deleteImageObjects = async (keys: string | string[]) => {
+    deletedKeys = Array.isArray(keys) ? keys : [keys];
+  };
+  const env: ImageCleanupEnv = { IMAGES: { delete: deleteImageObjects } };
   return {
-    env: { IMAGES: { delete: deleteImageObjects } } as unknown as Env,
-    deleteImageObjects,
+    env,
+    getDeletedKeys: () => deletedKeys,
   };
 }
 
 describe("image variant cleanup", () => {
   it("removes obsolete MIME variants after a PNG pointer replaces a JPEG", async () => {
-    const { env, deleteImageObjects } = envWithImagesDelete();
+    const { env, getDeletedKeys } = envWithImagesDelete();
 
     await cleanupImageVariants(env, upc, `images/${upc}.png`);
 
-    expect(deleteImageObjects).toHaveBeenCalledWith(
+    expect(getDeletedKeys()).toEqual(
       imageKeys.filter((key) => key !== `images/${upc}.png`),
     );
   });
 
   it("removes every MIME variant when deleting a product", async () => {
-    const { env, deleteImageObjects } = envWithImagesDelete();
+    const { env, getDeletedKeys } = envWithImagesDelete();
 
     await deleteImageVariants(env, upc);
 
-    expect(deleteImageObjects).toHaveBeenCalledWith(imageKeys);
+    expect(getDeletedKeys()).toEqual(imageKeys);
   });
 });

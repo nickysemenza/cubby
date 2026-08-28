@@ -38,7 +38,7 @@ function formatDraftQty(
 export const RecipeLivePreview: FC<{
   control: Control<RecipeFormValues>;
 }> = ({ control }) => {
-  const values = useWatch({ control }) as Partial<RecipeFormValues>;
+  const values = useWatch({ control });
 
   const sections = values.sections ?? [];
   const kicker = buildRecipeKicker({

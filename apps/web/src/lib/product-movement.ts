@@ -84,10 +84,7 @@ export function classifyProductMovement(
 export function buildConfidentOwnershipIntervals(
   markers: readonly ProductMovementMarker[],
   today: string,
-): {
-  intervals: ProductOwnershipInterval[];
-  confidenceLostAt: string | null;
-} {
+): ProductOwnershipEvidence {
   const totalsByDate = new Map<string, number | null>();
   for (const marker of markers) {
     const current = totalsByDate.get(marker.date);
@@ -123,4 +120,9 @@ export function buildConfidentOwnershipIntervals(
 
   if (openStart !== null) intervals.push({ start: openStart, end: today });
   return { intervals, confidenceLostAt: null };
+}
+
+interface ProductOwnershipEvidence {
+  intervals: ProductOwnershipInterval[];
+  confidenceLostAt: string | null;
 }

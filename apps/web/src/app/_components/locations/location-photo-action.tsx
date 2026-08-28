@@ -29,7 +29,7 @@ export function LocationPhotoAction({
         action: {
           label: "Retake",
           onClick: () => {
-            void discardCapture(location.id, imageId).catch((error: unknown) =>
+            void discardCapture(location.id, imageId).catch((error) =>
               toast.error(`Retake failed: ${getErrorMessage(error)}`),
             );
           },

@@ -4,9 +4,10 @@ import type {
   RelatedSummaryRelationKey,
 } from "@cubby/schemas/related-view";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import type { OnChangeFn, SortingState } from "@tanstack/react-table";
+import type { OnChangeFn, SortingState, Updater } from "@tanstack/react-table";
 import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
@@ -56,9 +57,18 @@ interface RelationshipSummaryTableProps {
   nullLabel?: string;
   /** Exact ledger scope for one aggregate bucket. */
   expenseHref: (target: SummaryRow["target"]) => string;
+  operations?: RelationshipSummaryOperations;
 }
 
-const COLUMN_LABELS: Record<Column, string> = {
+export interface RelationshipSummaryOperations {
+  summary: typeof relatedData.summary;
+}
+
+const productionRelationshipSummaryOperations: RelationshipSummaryOperations = {
+  summary: relatedData.summary,
+};
+
+const COLUMN_LABELS = {
   target: "Name",
   acquired: "Acquired",
   purchases: "Purchases",
@@ -66,32 +76,42 @@ const COLUMN_LABELS: Record<Column, string> = {
   unpriced: "Unpriced",
   netSpend: "Net spend",
   latestActivity: "Latest",
-};
+} satisfies Record<Column, string>;
 
-const SORT_BY_COLUMN: Partial<Record<Column, SortField>> = {
-  target: "target",
-  acquired: "knownAcquiredUnits",
-  purchases: "purchaseCount",
-  expenses: "expenseCount",
-  netSpend: "netSpend",
-  latestActivity: "latestActivity",
-};
+function columnForSort(field: SortField): Column {
+  if (field === "target") return "target";
+  if (field === "knownAcquiredUnits") return "acquired";
+  if (field === "purchaseCount") return "purchases";
+  if (field === "expenseCount") return "expenses";
+  if (field === "netSpend") return "netSpend";
+  return "latestActivity";
+}
 
-const COLUMN_BY_SORT = Object.fromEntries(
-  Object.entries(SORT_BY_COLUMN).map(([column, field]) => [field, column]),
-) as Record<SortField, Column>;
+function sortFieldForColumn(column: string): SortField | undefined {
+  if (column === "target") return "target";
+  if (column === "acquired") return "knownAcquiredUnits";
+  if (column === "purchases") return "purchaseCount";
+  if (column === "expenses") return "expenseCount";
+  if (column === "netSpend") return "netSpend";
+  if (column === "latestActivity") return "latestActivity";
+  return undefined;
+}
 
-const TARGET_ENTITY_BY_RELATION: Record<
-  RelatedSummaryRelationKey,
-  NonNullable<SummaryRow["target"]>["entity"]
-> = {
-  "vendor.products": "product",
-  "vendor.projects": "project",
-  "purchase.projects": "project",
-  "project.vendors": "vendor",
-  "project.purchasedProducts": "product",
-  "product.vendors": "vendor",
-};
+function targetEntityForRelation(
+  relationKey: RelatedSummaryRelationKey,
+): NonNullable<SummaryRow["target"]>["entity"] {
+  if (relationKey === "project.vendors" || relationKey === "product.vendors")
+    return "vendor";
+  if (relationKey === "vendor.projects" || relationKey === "purchase.projects")
+    return "project";
+  return "product";
+}
+
+function isSortingUpdater(
+  updater: Updater<SortingState>,
+): updater is (previous: SortingState) => SortingState {
+  return typeof updater === "function";
+}
 
 function targetImage(
   target: SummaryRow["target"],
@@ -140,8 +160,9 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   note,
   nullLabel = "Unassigned",
   expenseHref,
+  operations = productionRelationshipSummaryOperations,
 }) => {
-  const targetEntity = TARGET_ENTITY_BY_RELATION[relationKey];
+  const targetEntity = targetEntityForRelation(relationKey);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState(defaultSort);
 
@@ -159,8 +180,9 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   );
 
   const query = useInfiniteQuery({
-    ...relatedData.summary.infiniteQueryOptions(pageInput(0), {
+    ...operations.summary.infiniteQueryOptions(pageInput(0), {
       initialPageParam: 0,
+      pageParamSchema: z.number().int().nonnegative(),
       page: (input, offset) => ({ ...input, offset }),
       getNextPageParam: (page) => page.nextOffset ?? undefined,
     }),
@@ -284,7 +306,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
         // silently do nothing under `manualSorting`.
         return {
           ...built,
-          enableSorting: SORT_BY_COLUMN[column] !== undefined,
+          enableSorting: sortFieldForColumn(column) !== undefined,
         };
       }),
       helper.display({
@@ -309,16 +331,16 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   }, [helper, columnsKey, targetEntity, nullLabel]);
 
   const sorting = useMemo<SortingState>(
-    () => [{ id: COLUMN_BY_SORT[sort.field], desc: sort.direction === "desc" }],
+    () => [{ id: columnForSort(sort.field), desc: sort.direction === "desc" }],
     [sort],
   );
 
   const onSortingChange = useCallback<OnChangeFn<SortingState>>(
     (updater) => {
-      const next = typeof updater === "function" ? updater(sorting) : updater;
+      const next = isSortingUpdater(updater) ? updater(sorting) : updater;
       const first = next[0];
       if (!first) return;
-      const field = SORT_BY_COLUMN[first.id as Column];
+      const field = sortFieldForColumn(first.id);
       if (!field) return;
       setSort({ field, direction: first.desc ? "desc" : "asc" });
     },

@@ -1,4 +1,4 @@
-import type { FoodSummary } from "@cubby/usda-schemas";
+import { foodSummary, type FoodSummary } from "@cubby/usda-schemas";
 import type { D1Database } from "@cloudflare/workers-types";
 
 const MAX_SQL_VARIABLES = 100;
@@ -48,7 +48,7 @@ export async function readFoodCache(
         .all<{ fdc_id: number; data: string }>();
       for (const row of result.results ?? []) {
         try {
-          out.set(row.fdc_id, JSON.parse(row.data) as FoodSummary);
+          out.set(row.fdc_id, foodSummary.parse(JSON.parse(row.data)));
         } catch (error) {
           console.warn(
             `[food-cache] ignoring unparseable cached food ${row.fdc_id}`,

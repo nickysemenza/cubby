@@ -67,16 +67,19 @@ export type ActiveRelatednessPair = {
   ]: (typeof relatednessPairRegistry)[K]["active"] extends true ? K : never;
 }[RelatednessPair];
 
-const activeRelatednessPairKeyNames = Object.entries(relatednessPairRegistry)
-  .filter(([, pair]) => pair.active)
-  .map(([key]) => key);
-export const activeRelatednessPairKeys =
-  // SAFETY: the registry's active flag is the source of truth for this
-  // non-empty tuple; each returned key belongs to the active pair union.
-  activeRelatednessPairKeyNames as [
-    ActiveRelatednessPair,
-    ...ActiveRelatednessPair[],
-  ];
+export const activeRelatednessPairKeys = [
+  "product_to_product",
+] as const satisfies readonly [
+  ActiveRelatednessPair,
+  ...ActiveRelatednessPair[],
+];
+
+const declaredActivePairs = new Set<string>(activeRelatednessPairKeys);
+for (const [key, pair] of Object.entries(relatednessPairRegistry)) {
+  if (pair.active !== declaredActivePairs.has(key)) {
+    throw new Error(`${key} active flag disagrees with the active pair tuple`);
+  }
+}
 
 export const embeddingReadinessValues = [
   "ready",

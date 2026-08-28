@@ -354,13 +354,7 @@ export const fullBatchNeeds = (root: RecipeTreeNode): CombinedNeed[] =>
  * Carries the upper bound the engine tracks, so a recipe with a ranged amount
  * ("2–3 cups") doesn't read as a point cost here while reading as a range
  * everywhere else. */
-export const fullBatchCostByComponent = (
-  root: RecipeTreeNode,
-): {
-  byComponent: Map<string, ComponentCost>;
-  total: number | null;
-  totalUpper: number | null;
-} => {
+export const fullBatchCostByComponent = (root: RecipeTreeNode) => {
   const byComponent = new Map<string, ComponentCost>();
   let any = false;
   let anyUpper = false;

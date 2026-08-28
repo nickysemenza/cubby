@@ -1,4 +1,8 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import {
+  imageBrowserListInput,
+  type ImageListFilters,
+  type ImageWithEntity,
+} from "@cubby/schemas/image";
 import prettyBytes from "pretty-bytes";
 import { useCallback, useMemo } from "react";
 
@@ -9,33 +13,35 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
+import { useFilenameEditable } from "~/app/_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
 import { imageStatusOptions } from "~/app/images/image-options";
 import { image } from "~/entities/image.functions";
 
 import { UploadImageDialog } from "./upload-image-dialog";
 
+// Image association types use uppercase storage labels. The list preview is
+// keyed by the page's known "image" entity, so that storage-only field is not
+// part of its browser row contract.
+type ImageListRow = Omit<ImageWithEntity, "entityType">;
+
 export default function ImageList() {
-  const queryOptions = useCallback<ListQueryOptionsFn<unknown>>(
-    (params) => image.list.queryOptions(params as never),
+  const queryOptions = useCallback<ListQueryOptionsFn<ImageListFilters>>(
+    (params) => image.list.queryOptions(imageBrowserListInput.parse(params)),
     [],
   );
   const columnHelper = useMemo(
-    () => createCubbyColumnHelper<ImageWithEntity>(),
+    () => createCubbyColumnHelper<ImageListRow>(),
     [],
   );
 
-  const updateImageMutation = useUpdateMutation({
+  const updateImageMutation = useImageUpdateMutation({
     mutationFn: () => image.update.mutationOptions(),
-    entity: "image",
   });
-  // Images use `filename`, not `name` — see useNameEditable's `field` param.
-  const nameEditable = useNameEditable<ImageWithEntity, "filename">(
+  const nameEditable = useFilenameEditable<ImageListRow>(
     updateImageMutation.mutateAsync,
-    "filename",
   );
 
   // Memoize columns to prevent recreating on every render (feeds the
@@ -99,7 +105,7 @@ export default function ImageList() {
   );
 
   return (
-    <EntityListPage<ImageWithEntity>
+    <EntityListPage<ImageListRow, ImageListFilters>
       entity="image"
       queryOptions={queryOptions}
       columns={columns}

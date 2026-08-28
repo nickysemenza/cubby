@@ -1,20 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ~/lib/auth pulls in the DB client and env validation; the two constants below
-// are all this module actually consumes from it.
-const getJwks = vi.fn();
-vi.mock("~/lib/auth", () => ({
-  MCP_RESOURCE: "http://localhost:3000/api/mcp",
-  OAUTH_ISSUER: "http://localhost:3000/api/auth",
-  auth: { api: { getJwks: () => getJwks() } },
-}));
+import {
+  createMcpTokenVerifier,
+  createUnauthorizedResponse,
+  type McpAuthRejectionDetail,
+  type VerifyMcpAccessToken,
+} from "./auth-verifier";
 
-const verifyAccessToken = vi.fn();
-vi.mock("better-auth/oauth2", () => ({
-  verifyJwsAccessToken: (...args: unknown[]) => verifyAccessToken(...args),
-}));
+const RESOURCE = "http://localhost:3000/api/mcp";
+const ISSUER = "http://localhost:3000/api/auth";
 
-const { unauthorizedResponse, verifyMcpToken } = await import("./auth");
+const getJwks = vi.fn<() => Promise<{ keys: never[] }>>();
+const verifyAccessToken = vi.fn<VerifyMcpAccessToken>();
+const verificationOptions = {
+  jwksFetch: () => getJwks(),
+  jwksCacheKey: {},
+  verifyOptions: { issuer: ISSUER, audience: RESOURCE },
+} satisfies Parameters<VerifyMcpAccessToken>[1];
+const reportRejection =
+  vi.fn<(message: string, detail: McpAuthRejectionDetail) => void>();
+const verifyMcpToken = createMcpTokenVerifier({
+  verifyAccessToken,
+  verificationOptions,
+  reportRejection,
+});
+const unauthorizedResponse = createUnauthorizedResponse(RESOURCE);
 
 function request(headers: Record<string, string> = {}) {
   return new Request("http://localhost:3000/api/mcp", {
@@ -26,6 +36,8 @@ function request(headers: Record<string, string> = {}) {
 describe("verifyMcpToken", () => {
   beforeEach(() => {
     verifyAccessToken.mockReset();
+    getJwks.mockReset();
+    reportRejection.mockReset();
   });
 
   it("verifies against this resource server's issuer and audience", async () => {
@@ -48,8 +60,8 @@ describe("verifyMcpToken", () => {
       "token.abc.def",
       expect.objectContaining({
         verifyOptions: {
-          issuer: "http://localhost:3000/api/auth",
-          audience: "http://localhost:3000/api/mcp",
+          issuer: ISSUER,
+          audience: RESOURCE,
         },
       }),
     );
@@ -64,14 +76,9 @@ describe("verifyMcpToken", () => {
 
     await verifyMcpToken(request({ authorization: "Bearer t" }));
 
-    const opts = verifyAccessToken.mock.calls[0]?.[1] as {
-      jwksUrl?: string;
-      jwksFetch: () => unknown;
-      jwksCacheKey?: object;
-    };
-    expect(opts.jwksUrl).toBeUndefined();
-    expect(opts.jwksCacheKey).toBeDefined();
-    await opts.jwksFetch();
+    expect(Object.keys(verificationOptions)).not.toContain("jwksUrl");
+    expect(verificationOptions.jwksCacheKey).toBeDefined();
+    await verificationOptions.jwksFetch();
     expect(getJwks).toHaveBeenCalled();
   });
 

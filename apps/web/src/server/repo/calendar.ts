@@ -49,12 +49,12 @@ const emptyDaySummary = (): CalendarDaySummary => ({
 const shiftPlainDate = (value: string, amount: number) =>
   formatPlainDate(addDays(parsePlainDate(value), amount));
 
-const itemOrder: Record<CalendarItem["kind"], number> = {
+const itemOrder = {
   project: 0,
   task: 1,
   meal: 2,
   expense: 3,
-};
+} as const satisfies Record<CalendarItem["kind"], number>;
 
 /** How an unnamed meal names itself: its slot, or the generic fallback. */
 const mealTypeTitle = (mealType: MealType | null): string =>

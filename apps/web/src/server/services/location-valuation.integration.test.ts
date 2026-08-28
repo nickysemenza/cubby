@@ -36,7 +36,9 @@ describe("LocationValuationService.recompute", () => {
   const seedProduct = (name: string, price: number | null) =>
     createProductFixture(
       ctx.db,
-      makeProductInput({ name, ...(price === null ? {} : { price }) }),
+      price === null
+        ? makeProductInput({ name })
+        : makeProductInput({ name, price }),
       TEST_ACTOR,
     );
 

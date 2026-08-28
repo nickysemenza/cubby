@@ -1,16 +1,15 @@
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import type { z } from "zod";
+import { z } from "zod";
 
 import {
   entityMutation,
-  executeEntityMutation,
-  flattenEntityMutationResult,
   parseEntityMutationResultFor,
 } from "~/entities/entity-mutation.functions";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import type { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
+import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
+import type { StandardEntity } from "../entity-contracts";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
@@ -20,17 +19,27 @@ import {
   resolveEntityEdit,
 } from "./kernel";
 import type {
+  EntityActionData,
+  EntityActionVariables,
   EditableEntity,
   EntityBulkUpdateOutcome,
-  EntityBulkUpdateResult,
+  EntityBulkUpdateCommand,
   EntityEditBuildResult,
   EntityEditCommand,
+  EntityEditCommandInput,
   EntityEditIssue,
+  EntityEditMutationData,
   EntityEditRecord,
   EntityEditResult,
   EntityMutationPort,
+  EntityMutationExecution,
   RuntimeEntityEditRequest,
 } from "./types";
+
+const entityEditValueBagSchema = z.record(
+  z.string(),
+  z.union([z.json(), z.date(), z.undefined()]),
+);
 
 /**
  * A Start refusal already says which field failed and what lifecycle edge
@@ -42,18 +51,20 @@ import type {
  * The server path is the operation input's path (`data.name`), while form
  * fields are named without that envelope.
  */
-function issuesFromRefusal(error: unknown): EntityEditIssue[] {
-  const details = getAppErrorDetails(error);
+function issuesFromRefusal(
+  details: ReturnType<typeof getAppErrorDetails>,
+): EntityEditIssue[] {
   const issues: EntityEditIssue[] = [
     { message: details.message, source: "server" },
   ];
   for (const issue of details.validationIssues ?? []) {
     const path = issue.path[0] === "data" ? issue.path.slice(1) : issue.path;
-    issues.push({
-      ...(path.length > 0 ? { field: path.join(".") } : {}),
+    const nextIssue: EntityEditIssue = {
       message: issue.message,
       source: "server",
-    });
+    };
+    if (path.length > 0) nextIssue.field = path.join(".");
+    issues.push(nextIssue);
   }
   for (const blocker of details.blockers ?? []) {
     issues.push({
@@ -64,70 +75,94 @@ function issuesFromRefusal(error: unknown): EntityEditIssue[] {
   return issues;
 }
 
-/**
- * Client adapter for the common command port. Semantic definitions stay
- * transport-neutral while this adapter maps them to the Start command shape.
- */
-function useEntityMutationPort(): EntityMutationPort {
-  return useMemo(
-    () => ({
-      execute: async (command) => {
-        const startCommand =
-          command.operation === "create"
-            ? {
-                action: command.operation,
-                entity: command.entity,
-                data: command.data,
-              }
-            : command.operation === "delete"
-              ? {
-                  action: command.operation,
-                  entity: command.entity,
-                  ids: [...(command.ids ?? (command.id ? [command.id] : []))],
-                }
-              : command.operation === "bulkUpdate"
-                ? {
-                    action: command.operation,
-                    entity: command.entity,
-                    ids: [...(command.ids ?? (command.id ? [command.id] : []))],
-                    data: command.data,
-                  }
-                : {
-                    action: command.operation,
-                    entity: command.entity,
-                    id: command.id,
-                    data: command.data,
-                  };
-        const result = await executeEntityMutation({
-          data: startCommand as z.input<
-            typeof entityBrowserMutationCommandSchema
-          >,
-        });
-        if (command.operation === "bulkUpdate") {
-          // A bulk patch reports a count over N rows, so there is no single
-          // entity output to recover through the entity's own schema.
-          return { id: command.ids?.[0] ?? "", result };
+export interface EntityMutationOperations {
+  readonly mutation: typeof entityMutation.mutate;
+}
+
+const productionEntityMutationOperations: EntityMutationOperations = {
+  mutation: entityMutation.mutate,
+};
+
+const executeMutation = async <E extends EditableEntity>(
+  command: EntityEditCommand<E>,
+  operations: EntityMutationOperations,
+): Promise<EntityMutationExecution<E>> => {
+  const data = entityBrowserMutationCommandSchema.parse(
+    command.operation === "create"
+      ? {
+          action: command.operation,
+          entity: command.entity,
+          data: command.data,
         }
-        const resultId =
-          result && typeof result === "object" && "item" in result
-            ? String(result.item.id)
-            : (command.id ?? command.ids?.[0]);
-        if (!resultId) {
-          throw new Error(
-            `${command.entity} ${command.operation} did not return an id.`,
-          );
-        }
-        return {
-          id: resultId,
-          result: parseEntityMutationResultFor(
-            command.entity,
-            flattenEntityMutationResult(result),
-          ),
-        };
-      },
-    }),
-    [],
+      : command.operation === "update"
+        ? {
+            action: command.operation,
+            entity: command.entity,
+            id: command.id,
+            data: command.data,
+          }
+        : {
+            action: command.operation,
+            entity: command.entity,
+            ids: [...command.ids],
+          },
   );
+  const result = await operations.mutation.forEntity(data.entity).call(data);
+  if (command.operation === "create" || command.operation === "update") {
+    if (result.action !== command.operation || !("item" in result)) {
+      throw new Error(
+        `${command.entity} ${command.operation} returned ${result.action}.`,
+      );
+    }
+    return {
+      operation: command.operation,
+      id: result.item.id,
+      result: {
+        ...parseEntityMutationResultFor(command.entity, result.item),
+        sideEffects: result.sideEffects,
+      },
+    };
+  }
+  if (result.action !== "delete") {
+    throw new Error(`${command.entity} delete returned ${result.action}.`);
+  }
+  const id = command.ids[0];
+  if (!id) throw new Error(`${command.entity} delete requires an id.`);
+  return { operation: command.operation, id, result };
+};
+
+const executeBulkMutation = async <E extends EditableEntity>(
+  command: EntityBulkUpdateCommand<E>,
+  operations: EntityMutationOperations,
+) => {
+  const data = entityBrowserMutationCommandSchema.parse({
+    action: command.operation,
+    entity: command.entity,
+    ids: [...command.ids],
+    data: command.data,
+  });
+  const result = await operations.mutation.forEntity(data.entity).call(data);
+  if (result.action !== "bulkUpdate") {
+    throw new Error(`${command.entity} bulk update returned ${result.action}.`);
+  }
+  return result;
+};
+
+/** Start adapter for the schema-correlated editing command interface. */
+export function createEntityMutationPort(
+  operations: EntityMutationOperations = productionEntityMutationOperations,
+): EntityMutationPort {
+  return {
+    execute: async <E extends EditableEntity>(command: EntityEditCommand<E>) =>
+      await executeMutation(command, operations),
+    executeBulk: async <E extends EditableEntity>(
+      command: EntityBulkUpdateCommand<E>,
+    ) => await executeBulkMutation(command, operations),
+  };
+}
+
+function useEntityMutationPort(): EntityMutationPort {
+  return useMemo(() => createEntityMutationPort(), []);
 }
 
 /**
@@ -151,19 +186,22 @@ export interface EntityCommands<E extends EditableEntity> {
   /** Submit a complete payload from a rich form adapter. Semantic field forms
    * should prefer `commit`; this interface exists for Recipe/Inventory/media-rich forms. */
   submit(
-    command: Omit<EntityEditCommand<E>, "entity">,
-  ): Promise<{ id: string; result: unknown }>;
+    command: EntityEditCommandInput<E>,
+  ): Promise<EntityMutationExecution<E>>;
   create(input: {
     values: Readonly<Partial<EntityEditDraft<E>>>;
     intent: EntityEditIntent<E, "create">;
-    context?: Readonly<Record<string, unknown>>;
+    context?: RuntimeEntityEditRequest<E>["context"];
     surface?: "create-page" | "dialog" | "quick-create";
   }): Promise<EntityEditResult<E>>;
   remove(ids: readonly string[]): Promise<EntityEditResult<E>>;
+  executeDeleteAction(
+    ids: readonly string[],
+  ): Promise<EntityActionData<StandardEntity, "delete">>;
   /** Patch one declared field set across a bounded id set, as `remove` deletes. */
   bulkUpdate(
     ids: readonly string[],
-    data: Readonly<object>,
+    data: EntityBulkUpdateCommand<E>["data"],
   ): Promise<EntityBulkUpdateOutcome>;
   commitFields(input: {
     record: EntityEditRecord;
@@ -171,10 +209,10 @@ export interface EntityCommands<E extends EditableEntity> {
     intent?: EntityEditIntent<E, "update">;
     surface?: "cell" | "detail" | "preview" | "calendar";
   }): Promise<EntityEditResult<E>>;
-  /** Generic transport adapter after the entity/payload correlation is erased. */
+  /** Runtime adapter after a UI-selected field set has been correlated to E. */
   commitRuntimeFields(input: {
     record: EntityEditRecord;
-    values: Readonly<object>;
+    values: EntityEditMutationData<E>;
     intent?: string;
     surface?: "cell" | "detail" | "preview" | "calendar";
   }): Promise<EntityEditResult<E>>;
@@ -187,6 +225,28 @@ export interface EntityCommands<E extends EditableEntity> {
   }): Promise<EntityEditResult<E>>;
 }
 
+export interface EntityActionCommands<E extends StandardEntity> {
+  createAction(
+    data: EntityActionVariables<E, "create">,
+    intent: string,
+  ): Promise<EntityActionData<E, "create">>;
+  updateAction(
+    variables: EntityActionVariables<E, "update">,
+    intent: string,
+  ): Promise<EntityActionData<E, "update">>;
+  deleteAction(
+    variables: EntityActionVariables<E, "delete">,
+  ): Promise<EntityActionData<E, "delete">>;
+  bulkUpdateAction(
+    variables: EntityActionVariables<E, "bulkUpdate">,
+  ): Promise<EntityActionData<E, "bulkUpdate">>;
+}
+
+export interface EntityCommandsOptions {
+  /** A local operation adapter for browser surfaces that cannot reach Start. */
+  readonly mutationPort?: EntityMutationPort;
+}
+
 /**
  * Canonical command lifecycle for one entity. The hook owns mutation state,
  * invalidation, and background-work re-invalidation; callers only provide a
@@ -194,8 +254,10 @@ export interface EntityCommands<E extends EditableEntity> {
  */
 export function useEntityCommands<E extends EditableEntity>(
   entity: E,
+  options?: EntityCommandsOptions,
 ): EntityCommands<E> {
-  const port = useEntityMutationPort();
+  const productionPort = useEntityMutationPort();
+  const port = options?.mutationPort ?? productionPort;
   const [issues, setIssues] = useState<readonly EntityEditIssue[]>([]);
   // Spreading the descriptor's options is what carries `meta` — and with it the
   // operation id the root MutationCache resolves the fan-out from. The kernel
@@ -216,8 +278,15 @@ export function useEntityCommands<E extends EditableEntity>(
   );
 
   const submit = useCallback(
-    async (command: Omit<EntityEditCommand<E>, "entity">) =>
-      await executeCommand({ ...command, entity }),
+    async (command: EntityEditCommandInput<E>) => {
+      if (command.operation === "create") {
+        return await executeCommand({ ...command, entity });
+      }
+      if (command.operation === "update") {
+        return await executeCommand({ ...command, entity });
+      }
+      return await executeCommand({ ...command, entity });
+    },
     [entity, executeCommand],
   );
 
@@ -226,15 +295,17 @@ export function useEntityCommands<E extends EditableEntity>(
       setIssues([]);
       try {
         const execution = await executeCommand(command);
-        return {
+        const success = {
           ok: true,
           entity,
           id: execution.id,
           changed: true,
-          result: parseEntityMutationResultFor(entity, execution.result),
-        };
+        } satisfies Omit<Extract<EntityEditResult<E>, { ok: true }>, "result">;
+        return execution.operation === "delete"
+          ? success
+          : { ...success, result: execution.result };
       } catch (error) {
-        const nextIssues = issuesFromRefusal(error);
+        const nextIssues = issuesFromRefusal(getAppErrorDetails(error));
         setIssues(nextIssues);
         return { ok: false, issues: nextIssues };
       }
@@ -253,7 +324,12 @@ export function useEntityCommands<E extends EditableEntity>(
         return {
           ok: true,
           entity,
-          id: build.command.id ?? "",
+          id:
+            build.command.operation === "update"
+              ? build.command.id
+              : build.command.operation === "delete"
+                ? (build.command.ids[0] ?? "")
+                : "",
           changed: false,
         };
       }
@@ -269,19 +345,48 @@ export function useEntityCommands<E extends EditableEntity>(
         operation: "delete",
         intent: "delete",
         ids,
-        data: {},
       }),
     [entity, executeResult],
+  );
+
+  const executeDeleteAction = useCallback(
+    async (
+      ids: readonly string[],
+    ): Promise<EntityActionData<StandardEntity, "delete">> => {
+      setIssues([]);
+      try {
+        const execution = await executeCommand({
+          entity,
+          operation: "delete",
+          intent: "delete",
+          ids,
+        });
+        if (execution.operation !== "delete") {
+          throw new Error(`${entity} delete returned ${execution.operation}.`);
+        }
+        return {
+          deleted: execution.result.deleted,
+          sideEffects: execution.result.sideEffects,
+        };
+      } catch (error) {
+        const nextIssues = issuesFromRefusal(getAppErrorDetails(error));
+        setIssues(nextIssues);
+        throw new Error(nextIssues[0]?.message ?? "Delete failed", {
+          cause: error,
+        });
+      }
+    },
+    [entity, executeCommand],
   );
 
   const bulkUpdate = useCallback(
     async (
       ids: readonly string[],
-      data: Readonly<object>,
+      data: EntityBulkUpdateCommand<E>["data"],
     ): Promise<EntityBulkUpdateOutcome> => {
       setIssues([]);
       try {
-        const execution = await executeCommand({
+        const result = await port.executeBulk({
           entity,
           operation: "bulkUpdate",
           intent: "bulkUpdate",
@@ -295,15 +400,15 @@ export function useEntityCommands<E extends EditableEntity>(
         return {
           ok: true,
           entity,
-          result: execution.result as EntityBulkUpdateResult,
+          result,
         };
       } catch (error) {
-        const nextIssues = issuesFromRefusal(error);
+        const nextIssues = issuesFromRefusal(getAppErrorDetails(error));
         setIssues(nextIssues);
         return { ok: false, issues: nextIssues };
       }
     },
-    [entity, executeCommand],
+    [entity, port],
   );
 
   const create = useCallback(
@@ -315,7 +420,7 @@ export function useEntityCommands<E extends EditableEntity>(
     }: {
       values: Readonly<Partial<EntityEditDraft<E>>>;
       intent: EntityEditIntent<E, "create">;
-      context?: Readonly<Record<string, unknown>>;
+      context?: RuntimeEntityEditRequest<E>["context"];
       surface?: "create-page" | "dialog" | "quick-create";
     }): Promise<EntityEditResult<E>> => {
       const request: RuntimeEntityEditRequest<E> = {
@@ -348,7 +453,7 @@ export function useEntityCommands<E extends EditableEntity>(
       surface = "cell",
     }: {
       record: EntityEditRecord;
-      values: Readonly<object>;
+      values: EntityEditMutationData<E>;
       intent?: string;
       surface?: "cell" | "detail" | "preview" | "calendar";
     }): Promise<EntityEditResult<E>> => {
@@ -364,8 +469,9 @@ export function useEntityCommands<E extends EditableEntity>(
         setIssues(resolved.issues);
         return { ok: false, issues: resolved.issues };
       }
-      const requestedFields = Object.keys(values);
-      const selected = resolved.fields.filter(({ id }) => id in values);
+      const parsedValues = entityEditValueBagSchema.parse(values);
+      const requestedFields = Object.keys(parsedValues);
+      const selected = resolved.fields.filter(({ id }) => id in parsedValues);
       const missing = requestedFields.filter(
         (fieldId) => !selected.some(({ id }) => id === fieldId),
       );
@@ -383,7 +489,7 @@ export function useEntityCommands<E extends EditableEntity>(
       const fieldsResolved = { ...resolved, fields: selected };
       const nextValues = {
         ...initialEntityEditValues(fieldsResolved, request),
-        ...values,
+        ...parsedValues,
       };
       return await commit(buildEntityEdit(fieldsResolved, request, nextValues));
     },
@@ -404,7 +510,7 @@ export function useEntityCommands<E extends EditableEntity>(
     }) =>
       await commitFields({
         ...input,
-        values: { [field]: value },
+        values: entityEditValueBagSchema.parse({ [field]: value }),
       }),
     [commitFields],
   );
@@ -416,9 +522,87 @@ export function useEntityCommands<E extends EditableEntity>(
     submit,
     create,
     remove,
+    executeDeleteAction,
     bulkUpdate,
     commitFields,
     commitRuntimeFields: commitFields,
     commitField,
   };
+}
+
+/** Exact browser-action adapter layered over the semantic editing lifecycle. */
+export function useEntityActionCommands<E extends StandardEntity>(
+  entity: E,
+): EntityActionCommands<E> {
+  const commands = useEntityCommands(entity);
+
+  const createAction = useCallback(
+    async (
+      data: EntityActionVariables<E, "create">,
+      intent: string,
+    ): Promise<EntityActionData<E, "create">> => {
+      const parsedData = entityEditValueBagSchema.parse(data);
+      const execution = await commands.submit({
+        operation: "create",
+        intent,
+        data: parsedData,
+      });
+      if (execution.operation !== "create") {
+        throw new Error(`${entity} create returned ${execution.operation}.`);
+      }
+      return execution.result;
+    },
+    [commands, entity],
+  );
+
+  const updateAction = useCallback(
+    async (
+      variables: EntityActionVariables<E, "update">,
+      intent: string,
+    ): Promise<EntityActionData<E, "update">> => {
+      const { id, data } = z
+        .object({ id: z.string(), data: entityEditValueBagSchema })
+        .parse(variables);
+      const result = await commands.commitRuntimeFields({
+        record: { id },
+        values: data,
+        intent,
+        surface: "detail",
+      });
+      if (!result.ok) {
+        throw new Error(result.issues[0]?.message ?? "Update failed");
+      }
+      if (result.result === undefined) {
+        throw new Error(`${entity} update returned no mutation result.`);
+      }
+      return result.result;
+    },
+    [commands, entity],
+  );
+
+  const deleteAction = useCallback(
+    async ({ ids }: EntityActionVariables<E, "delete">) => {
+      return await commands.executeDeleteAction(ids);
+    },
+    [commands],
+  );
+
+  const bulkUpdateAction = useCallback(
+    async (variables: EntityActionVariables<E, "bulkUpdate">) => {
+      const { ids, data } = z
+        .object({ ids: z.array(z.string()), data: entityEditValueBagSchema })
+        .parse(variables);
+      const result = await commands.bulkUpdate(ids, data);
+      if (!result.ok) {
+        throw new Error(result.issues[0]?.message ?? "Bulk update failed");
+      }
+      return {
+        updated: result.result.updated,
+        sideEffects: result.result.sideEffects,
+      };
+    },
+    [commands],
+  );
+
+  return { createAction, updateAction, deleteAction, bulkUpdateAction };
 }

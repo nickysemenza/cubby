@@ -27,7 +27,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { SweepMissingReview } from "./SweepMissingReview";
 import { SweepProductFollowUp } from "./SweepProductFollowUp";
 import { SweepStrayReview } from "./SweepStrayReview";
-import { useLocationSweep } from "./useLocationSweep";
+import { type SweepSettledResult, useLocationSweep } from "./useLocationSweep";
 
 export function LocationSweep({
   locationId,
@@ -39,7 +39,7 @@ export function LocationSweep({
   locationName: string;
   /** Drives the missing panel's "items aren't checked here" disclosure. */
   hasItems?: boolean;
-  onSettled: (result?: unknown) => void;
+  onSettled: (result?: SweepSettledResult) => void;
 }) {
   const {
     scan,

@@ -53,6 +53,7 @@ import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { completeNavLeaves } from "./navigation/nav-items";
+import type { NavItem } from "./navigation/nav-items";
 import {
   entityTypeMap,
   getSearchMatchText,
@@ -69,8 +70,14 @@ import {
  * so nothing appears twice in the browse state.
  */
 const quickActionPaths = new Set(quickActions.map((action) => action.path));
+type RoutedNavItem = NavItem & { to: string };
+const hasRoutedPath = (leaf: NavItem): leaf is RoutedNavItem =>
+  typeof leaf.to === "string";
 const goToLeaves = completeNavLeaves.filter(
-  (leaf) => leaf.to !== "/settings" && !quickActionPaths.has(leaf.to as string),
+  (leaf): leaf is RoutedNavItem =>
+    hasRoutedPath(leaf) &&
+    leaf.to !== "/settings" &&
+    !quickActionPaths.has(leaf.to),
 );
 
 const AskCubbyPanel = React.lazy(() =>
@@ -88,7 +95,7 @@ interface GlobalCommandMenuProps {
 const isSearchableEntity = (
   entity: ShortcodeType,
 ): entity is ShortcodeType & SearchableEntity =>
-  (searchableEntities as readonly string[]).includes(entity);
+  searchableEntities.some((candidate) => candidate === entity);
 
 export function GlobalCommandMenu({
   open: externalOpen,
@@ -265,8 +272,15 @@ export function GlobalCommandMenu({
   // `search` carries an action's deep-link params (e.g. the tracker quick
   // captures' `{ create: true }`) — a query string on `path` would be treated
   // as part of the pathname.
-  const goToPage = (path: string, searchParams?: Record<string, unknown>) => {
-    navigate({ to: path, search: searchParams });
+  type NavigationSearch = NonNullable<NavItem["search"]>;
+  const goToPage = (
+    path: string,
+    searchParams?: NavigationSearch | { create: true },
+  ) => {
+    navigate({
+      to: path,
+      search: searchParams ? { ...searchParams } : undefined,
+    });
     setOpen(false);
   };
 
@@ -619,8 +633,8 @@ export function GlobalCommandMenu({
                     <CommandGroup heading="Go to">
                       {goToLeaves.map((leaf) => (
                         <CommandItem
-                          key={leaf.to as string}
-                          onSelect={() => goToPage(leaf.to as string)}
+                          key={leaf.to}
+                          onSelect={() => goToPage(leaf.to)}
                         >
                           <leaf.icon className="size-4" />
                           <span>{leaf.label}</span>

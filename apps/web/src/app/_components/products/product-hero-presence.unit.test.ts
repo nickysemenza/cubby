@@ -117,7 +117,7 @@ describe("heroPresence", () => {
 
 describe("heroPresence location stat", () => {
   const base = {
-    entryUnit: "each" as string | undefined,
+    entryUnit: "each",
     componentCount: 0,
   };
 

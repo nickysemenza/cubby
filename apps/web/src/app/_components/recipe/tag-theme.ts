@@ -13,13 +13,17 @@ import {
  * - Plain: "quick", "kid-approved", "make-ahead"
  */
 type TagPrefix = "cuisine" | "author" | "cookbook" | "none";
+interface ParsedTag {
+  prefix: TagPrefix;
+  value: string;
+}
 
 /**
  * Extract prefix and value from a tag string
  * "cuisine:thai" -> { prefix: "cuisine", value: "thai" }
  * "quick" -> { prefix: "none", value: "quick" }
  */
-export function parseTag(tag: string): { prefix: TagPrefix; value: string } {
+export function parseTag(tag: string): ParsedTag {
   const colonIndex = tag.indexOf(":");
   if (colonIndex === -1) {
     return { prefix: "none", value: tag };
@@ -48,12 +52,12 @@ function isKnownPrefix(prefix: string): prefix is TagPrefix {
  * plain→graphite-secondary. Returned as
  * `var(--token)` strings for use in inline `color` / `borderColor`.
  */
-const tagPrefixColors: Record<TagPrefix, string> = {
+const tagPrefixColors = {
   cuisine: "var(--warning)",
   author: "var(--primary)",
   cookbook: "var(--plum)",
   none: "var(--slate)",
-};
+} satisfies Record<TagPrefix, string>;
 
 /**
  * Get the color for a tag prefix

@@ -23,6 +23,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { backgroundBatch, backgroundJob } from "~/server/db/schema";
@@ -50,6 +51,8 @@ interface CreateBackgroundBatchInput {
 
 type BatchRow = typeof backgroundBatch.$inferSelect;
 type JobRow = typeof backgroundJob.$inferSelect;
+
+const backgroundMetadataSchema = z.record(z.string(), z.json());
 
 /** A queue redelivery may reclaim work left running by a crashed worker. */
 export const BACKGROUND_JOB_LEASE_MS = 15 * 60 * 1_000;
@@ -196,14 +199,13 @@ export async function startOrReuseBackgroundWorkflow(
         `Background workflow ${input.dedupeKey} conflicts with another active workflow`,
       );
     }
-    if (
-      existing.metadata &&
-      typeof existing.metadata === "object" &&
-      !Array.isArray(existing.metadata)
-    ) {
+    const existingMetadata = backgroundMetadataSchema.safeParse(
+      existing.metadata,
+    );
+    if (existingMetadata.success) {
       await tx
         .update(backgroundBatch)
-        .set({ metadata: { ...existing.metadata, reused: true } })
+        .set({ metadata: { ...existingMetadata.data, reused: true } })
         .where(eq(backgroundBatch.id, existing.id));
     }
     const seedDedupeKeys = input.initialJobs?.map((job) => job.dedupeKey) ?? [];
@@ -376,15 +378,13 @@ export async function appendBackgroundJobsToWorkflow(
       ),
       columns: { metadata: true },
     });
-    const currentMetadata = currentBatch?.metadata;
+    const currentMetadata = backgroundMetadataSchema.safeParse(
+      currentBatch?.metadata,
+    );
+    const appendedMetadata = backgroundMetadataSchema.safeParse(input.metadata);
     const nextMetadata =
-      currentMetadata &&
-      typeof currentMetadata === "object" &&
-      !Array.isArray(currentMetadata) &&
-      input.metadata &&
-      typeof input.metadata === "object" &&
-      !Array.isArray(input.metadata)
-        ? { ...currentMetadata, ...input.metadata }
+      currentMetadata.success && appendedMetadata.success
+        ? { ...currentMetadata.data, ...appendedMetadata.data }
         : input.metadata;
 
     await tx
@@ -703,10 +703,10 @@ export async function finishBackgroundJob(
   });
 }
 
-export async function failOrRetryBackgroundJob(
+export async function failOrRetryBackgroundJob<Failure>(
   db: Database,
   jobId: string,
-  error: unknown,
+  error: Failure,
 ): Promise<"retry" | "failed"> {
   return await withTransaction(db, async (tx) => {
     const now = new Date();

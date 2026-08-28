@@ -419,7 +419,7 @@ describe("calculateTotals with sub-recipes", () => {
     );
 
     expect(result).toBeDefined();
-    expect(typeof result.price).toBe("number");
+    expect(result.price).toBeTypeOf("number");
   });
 
   it("flags a yield-less sub-recipe as missing instead of guessing", () => {

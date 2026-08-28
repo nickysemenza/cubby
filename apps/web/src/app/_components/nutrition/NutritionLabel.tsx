@@ -1,6 +1,7 @@
 import {
   dailyValuePct,
   getNutrientValueByKey,
+  isNutrientKey,
   type NutrientKey,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
@@ -28,9 +29,9 @@ const MACRO_ORDER: readonly NutrientKey[] = [
  * vitamins) — the FDA label doesn't mandate an order beyond "after the
  * macros", so the source roster's grouping is a reasonable default.
  */
-const MICRO_ORDER: readonly NutrientKey[] = (
-  Object.keys(TIER1_NUTRIENTS) as NutrientKey[]
-).filter((key) => key !== "kcal" && !MACRO_ORDER.includes(key));
+const MICRO_ORDER: readonly NutrientKey[] = Object.keys(TIER1_NUTRIENTS)
+  .filter(isNutrientKey)
+  .filter((key) => key !== "kcal" && !MACRO_ORDER.includes(key));
 
 const ROW_ORDER: readonly NutrientKey[] = [...MACRO_ORDER, ...MICRO_ORDER];
 

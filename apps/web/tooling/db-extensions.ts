@@ -1,7 +1,7 @@
 import { type SQL, sql } from "drizzle-orm";
 
 interface ExtensionExecutor {
-  execute(query: SQL): Promise<unknown>;
+  execute(query: SQL): Promise<object>;
 }
 
 export async function ensureDbExtensions(db: ExtensionExecutor): Promise<void> {

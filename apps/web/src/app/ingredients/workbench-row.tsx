@@ -114,9 +114,8 @@ export function WorkbenchRow({
           // Don't toggle the row when the click came from the checkbox, the
           // merge button, or any other interactive control inside it.
           if (
-            (e.target as HTMLElement).closest(
-              'button, input, a, [role="checkbox"]',
-            )
+            e.target instanceof Element &&
+            e.target.closest('button, input, a, [role="checkbox"]')
           ) {
             return;
           }

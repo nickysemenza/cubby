@@ -75,11 +75,12 @@ describe("computed purchase and product data quality", () => {
       size: 12,
       status: "UPLOADED",
     });
-    const joinRow = await insertAndReturn(ctx.db, purchaseImage, {
+    const imageLink: typeof purchaseImage.$inferInsert = {
       purchaseId,
       imageId: stored.id,
-      ...(documentKind ? { documentKind } : {}),
-    });
+    };
+    if (documentKind) imageLink.documentKind = documentKind;
+    const joinRow = await insertAndReturn(ctx.db, purchaseImage, imageLink);
     // `reclassifyPurchaseDocument` now takes the public `IMG-` shortcode, not
     // the join row's raw uuid FK.
     return {

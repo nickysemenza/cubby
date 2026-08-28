@@ -202,6 +202,11 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
  * "externalId = X" into a whole-table match. An empty list means "no constraint
  * on that field", never "no constraint at all".
  */
+interface SourceReferenceOperand {
+  source?: string;
+  externalId?: string;
+}
+
 const refsCondition = (
   sources?: string[],
   externalIds?: string[],
@@ -210,14 +215,12 @@ const refsCondition = (
   const ext = externalIds?.length ? externalIds : undefined;
   if (!src && !ext) return undefined;
   const operands = (src ?? [undefined]).flatMap((source) =>
-    (ext ?? [undefined]).map((externalId) =>
-      JSON.stringify([
-        {
-          ...(source === undefined ? {} : { source }),
-          ...(externalId === undefined ? {} : { externalId }),
-        },
-      ]),
-    ),
+    (ext ?? [undefined]).map((externalId) => {
+      const reference: SourceReferenceOperand = {};
+      if (source !== undefined) reference.source = source;
+      if (externalId !== undefined) reference.externalId = externalId;
+      return JSON.stringify([reference]);
+    }),
   );
   return or(
     ...operands.map(
@@ -688,7 +691,7 @@ export async function updateFinancialTransaction(
       );
       assertAllocationSetValid({
         transactionAmount: nextAmount,
-        kind: nextKind,
+        kind: financialTransactionKind.parse(nextKind),
         next: nextAllocations,
       });
       await writeAllocationSet(tx, id, nextAllocations, allocationsBefore);

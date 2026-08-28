@@ -1,33 +1,52 @@
-import type { Query } from "@tanstack/react-query";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { matchesTags } from "./operation-cache";
 import type { CubbyOperationMeta, OperationCacheTag } from "./operation-meta";
-import { getContext } from "./root-provider";
+import { getContext, type RootMutationSuccessRuntime } from "./root-provider";
 
-const asQuery = (cacheTags: readonly OperationCacheTag[]) =>
-  ({ meta: { cacheTags } }) as unknown as Query;
+const entityMutationVariablesSchema = z.object({ entity: z.string() });
+
+const registeredInvalidations = <Variables>(
+  operation: string | undefined,
+  variables: Variables,
+): readonly OperationCacheTag[] => {
+  if (operation !== "entity.mutate") return [];
+  const parsed = entityMutationVariablesSchema.safeParse(variables);
+  return parsed.success ? [[parsed.data.entity]] : [];
+};
 
 /**
  * Runs one mutation through the real root `MutationCache` and reports which
- * queries its invalidation predicate would have matched. `invalidateQueries` is
- * stubbed rather than exercised so the assertion is about the tag set the cache
- * resolved, not about React Query's own refetch machinery.
+ * queries its invalidation predicate matches. The injected success port records
+ * the resolved tags without replacing any TanStack module or client method.
  */
-async function invalidatedTagsFor(
+async function invalidatedTagsFor<Variables>(
   meta: CubbyOperationMeta,
-  variables: unknown,
+  variables: Variables,
   probes: readonly OperationCacheTag[],
-) {
-  const { queryClient } = getContext();
+): Promise<OperationCacheTag[]> {
   const matched: OperationCacheTag[] = [];
-  vi.spyOn(queryClient, "invalidateQueries").mockImplementation(
-    async (filters) => {
-      const predicate = filters?.predicate;
-      if (!predicate) return;
-      for (const probe of probes)
-        if (predicate(asQuery([probe]))) matched.push(probe);
+  const probeByHash = new Map<string, OperationCacheTag>();
+  const runtime: RootMutationSuccessRuntime = {
+    registeredInvalidations,
+    afterSuccess: ({ queryClient, invalidations }) => {
+      const matches = matchesTags(invalidations);
+      for (const query of queryClient.getQueryCache().getAll()) {
+        const probe = probeByHash.get(query.queryHash);
+        if (probe && matches(query)) matched.push(probe);
+      }
     },
-  );
+  };
+  const { queryClient } = getContext(runtime);
+  probes.forEach((probe, index) => {
+    const query = queryClient.getQueryCache().build(queryClient, {
+      queryKey: ["invalidation-probe", index],
+      queryFn: async () => null,
+      meta: { cacheTags: [probe] },
+    });
+    probeByHash.set(query.queryHash, probe);
+  });
   await queryClient
     .getMutationCache()
     .build(queryClient, { mutationFn: async () => ({ ok: true }), meta })
@@ -49,7 +68,6 @@ describe("root MutationCache invalidation", () => {
   it("falls back to the registered policy when meta declares nothing", async () => {
     // `entity.mutate` declares `invalidates` as a FUNCTION, so its `meta` is the
     // empty array and only the registered policy knows the entity.
-    await import("~/entities/entity-mutation.functions");
     expect(
       await invalidatedTagsFor(
         { operation: "entity.mutate", invalidates: [] },
@@ -60,7 +78,6 @@ describe("root MutationCache invalidation", () => {
   });
 
   it("lets a non-empty meta.invalidates beat the registered policy", async () => {
-    await import("~/entities/entity-mutation.functions");
     // The variables a component hands `entity.mutate` carry no `entity`, so the
     // policy alone would resolve the wrong fan-out; `meta` overrides it.
     expect(

@@ -403,8 +403,10 @@ export function buildProjectRows(
   const taskById = keyBy(tasks, (t) => t.id);
   // Own tasks per project id, for the sub-project row's dominant-trade colour.
   const tasksByProject = groupBy(
-    tasks.filter((t) => t.projectId != null),
-    (t) => t.projectId as string,
+    tasks.filter(
+      (t): t is TaskOut & { projectId: string } => t.projectId != null,
+    ),
+    (t) => t.projectId,
   );
 
   function datedTaskRows(ownerId: string, depth: number): GanttTaskRow[] {

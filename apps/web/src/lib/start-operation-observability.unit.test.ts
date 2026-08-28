@@ -3,24 +3,30 @@ import { describe, expect, it } from "vitest";
 import { START_OPERATIONS } from "./generated/start-operation-registry.gen";
 import {
   readStartOperationTraceContext,
+  startOperationDefinitionFor,
   startOperationHeaders,
   startOperationTraceAttributes,
+  type StartOperationTraceContext,
 } from "./start-operation-observability";
 
 describe("Start operation trace context", () => {
   it("round-trips every generated operation definition", () => {
     for (const [operation, definition] of Object.entries(START_OPERATIONS)) {
+      const registered = startOperationDefinitionFor(operation);
+      if (!registered) throw new Error(`Missing operation ${operation}`);
       const entity = definition.entities[0];
-      const headers = startOperationHeaders({
-        operation: operation as keyof typeof START_OPERATIONS,
-        kind: definition.kind,
-        ...(entity ? { entity } : {}),
-      });
-      expect(readStartOperationTraceContext(new Headers(headers))).toEqual({
-        operation,
-        kind: definition.kind,
-        ...(entity ? { entity } : {}),
-      });
+      const headerInput = {
+        operation: registered.id,
+        kind: registered.kind,
+      };
+      const expected: StartOperationTraceContext = { ...headerInput };
+      if (entity) expected.entity = entity;
+      const headers = startOperationHeaders(
+        entity ? { ...headerInput, entity } : headerInput,
+      );
+      expect(readStartOperationTraceContext(new Headers(headers))).toEqual(
+        expected,
+      );
     }
   });
 

@@ -1,6 +1,8 @@
 import { type AgentToolCall, agentToolCallSchema } from "@cubby/schemas/agent";
 import type { UserId } from "@cubby/schemas/identifiers";
+import type { McpTelemetryIdentity } from "@cubby/schemas/telemetry";
 import { type Tool, toolDefinition } from "@tanstack/ai";
+import { type JSONType, z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -31,8 +33,31 @@ export function isReadOnlyTool(name: string): boolean {
  */
 export type ToolCallRecord = AgentToolCall & {
   /** Parsed JSON of the tool's text output, used for source extraction. */
-  result: unknown;
+  result: JSONType;
 };
+
+function createAgentMcpExtra(
+  caller: McpWorkflowCaller | undefined,
+  db: Database | undefined,
+  userId: UserId | undefined,
+) {
+  const telemetry =
+    db && userId
+      ? {
+          identity: {
+            userId,
+            clientId: "cubby-agent",
+            surface: "in_app_agent",
+          } satisfies McpTelemetryIdentity,
+          emit: (event: Parameters<typeof emitTelemetry>[1]) =>
+            emitTelemetry(db, event),
+        }
+      : undefined;
+  return { caller, telemetry };
+}
+
+const mcpInputSchema = z.record(z.string(), z.json());
+const mcpResultSchema = z.json();
 
 interface AgentToolset {
   tools: Tool[];
@@ -47,7 +72,7 @@ interface AgentToolset {
  * `api/mcp.ts` passes `extra: { caller }` over HTTP.
  */
 export async function createAgentToolset(
-  caller: McpWorkflowCaller,
+  caller?: McpWorkflowCaller,
   db?: Database,
   userId?: UserId,
 ): Promise<AgentToolset> {
@@ -61,11 +86,13 @@ export async function createAgentToolset(
     { InMemoryTransport },
     { createMcpClientValidator },
     { createMcpServer },
+    { CallToolResultSchema },
   ] = await Promise.all([
     import("@modelcontextprotocol/sdk/client/index.js"),
     import("@modelcontextprotocol/sdk/inMemory.js"),
     import("~/server/mcp/validation"),
     import("~/server/mcp/server"),
+    import("@modelcontextprotocol/sdk/types.js"),
   ]);
 
   const [clientTransport, serverTransport] =
@@ -74,31 +101,18 @@ export async function createAgentToolset(
   // The MCP Client doesn't set authInfo on outgoing requests, so wrap the
   // client transport's send to attach the caller on every message.
   const originalSend = clientTransport.send.bind(clientTransport);
-  clientTransport.send = (message, options) =>
-    originalSend(message, {
+  clientTransport.send = (message, options) => {
+    const extra = createAgentMcpExtra(caller, db, userId);
+    return originalSend(message, {
       ...options,
       authInfo: {
         token: "",
         clientId: "cubby-agent",
         scopes: [],
-        extra: {
-          caller,
-          ...(db && userId
-            ? {
-                telemetry: {
-                  identity: {
-                    userId,
-                    clientId: "cubby-agent",
-                    surface: "in_app_agent",
-                  },
-                  emit: (event: Parameters<typeof emitTelemetry>[1]) =>
-                    emitTelemetry(db, event),
-                },
-              }
-            : {}),
-        },
+        extra,
       },
     });
+  };
 
   const server = createMcpServer();
   const client = new Client(
@@ -122,34 +136,36 @@ export async function createAgentToolset(
         description: mcpTool.description ?? mcpTool.name,
         // MCP inputSchema is already a JSON Schema object; toolDefinition
         // accepts plain JSON Schema.
-        inputSchema: mcpTool.inputSchema as Record<string, unknown>,
+        inputSchema: mcpInputSchema.parse(mcpTool.inputSchema),
       }).server(async (rawArgs) => {
-        const args = (rawArgs ?? {}) as Record<string, unknown>;
+        const args = agentToolCallSchema.shape.args.parse(rawArgs ?? {});
         const startedAt = Date.now();
         let ok = true;
         let text = "";
-        let parsed: unknown = null;
+        let parsed: JSONType = null;
 
         try {
-          const res = await client.callTool({
-            name: mcpTool.name,
-            arguments: args,
-          });
+          const res = CallToolResultSchema.parse(
+            await client.callTool({
+              name: mcpTool.name,
+              arguments: args,
+            }),
+          );
           ok = res.isError !== true;
           if (
             ok &&
             res.structuredContent !== undefined &&
             res.structuredContent !== null
           ) {
-            parsed = res.structuredContent;
+            parsed = mcpResultSchema.parse(res.structuredContent);
             text = JSON.stringify(parsed, null, 2);
           } else {
-            text = (res.content as Array<{ type: string; text?: string }>)
-              .filter((c) => c.type === "text" && typeof c.text === "string")
-              .map((c) => c.text)
+            text = res.content
+              .filter((content) => content.type === "text")
+              .map((content) => content.text)
               .join("\n");
             try {
-              parsed = JSON.parse(text);
+              parsed = mcpResultSchema.parse(JSON.parse(text));
             } catch {
               parsed = text;
             }
@@ -162,7 +178,7 @@ export async function createAgentToolset(
 
         records.push({
           tool: mcpTool.name,
-          args: agentToolCallSchema.shape.args.parse(args),
+          args,
           durationMs: Date.now() - startedAt,
           ok,
           result: parsed,

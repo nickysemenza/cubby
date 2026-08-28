@@ -1,4 +1,3 @@
-import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
@@ -6,13 +5,17 @@ import { toast } from "sonner";
 
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import type { EntityCommands } from "~/entities/editing/use-entity-commands";
 import { entities, entityDialogLabel } from "~/entities/entities";
 import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
-import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
-const emptySideEffects: MutationSideEffects = { backgroundBatches: [] };
+/** The delete dialog depends on this small command surface, not the form kernel. */
+export type DeleteEntityActionCommands = Pick<
+  EntityCommands<GeneratedBrowserCrudEntity>,
+  "isPending" | "remove"
+>;
 
 export function deleteDescriptionForEntity(
   entity: GeneratedBrowserCrudEntity,
@@ -31,9 +34,14 @@ export function deleteDescriptionForEntity(
  * The dialog owns confirmation and refusal reporting; the command port owns
  * lifecycle guards, cache invalidation, and background-work side effects.
  */
-export function useDeleteEntityAction(entity: Entity): EntityActionHandles {
+export function useDeleteEntityAction(
+  entity: Entity,
+  commandOverride?: DeleteEntityActionCommands,
+): EntityActionHandles {
+  // SAFETY: this action definition is registered only for generated CRUD entities.
   const generatedEntity = entity as GeneratedBrowserCrudEntity;
-  const commands = useEntityCommands(generatedEntity);
+  const generatedCommands = useEntityCommands(generatedEntity);
+  const commands = commandOverride ?? generatedCommands;
   const navigate = useNavigate();
   const [staged, setStaged] = useState<EntityActionRow | null>(null);
   const [failures, setFailures] = useState<readonly string[]>([]);
@@ -101,13 +109,10 @@ export function useDeleteEntityAction(entity: Entity): EntityActionHandles {
             );
             return;
           }
-          toast.success(
-            savedWithBackgroundWork(
-              (execution.result as { sideEffects?: MutationSideEffects })
-                .sideEffects ?? emptySideEffects,
-              `${label} deleted`,
-            ),
-          );
+          // `useEntityCommands` owns cache invalidation and background-work
+          // revalidation; its public delete result intentionally exposes no
+          // transport payload for this action to inspect.
+          toast.success(`${label} deleted`);
           finish(true);
           void navigate({ to: entities[generatedEntity].routes.list });
         }}

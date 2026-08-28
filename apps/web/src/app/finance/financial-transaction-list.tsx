@@ -139,18 +139,20 @@ export function FinancialTransactionList() {
       helper.accessor("purchaseId", {
         header: "Purchase",
         meta: { className: "w-32" },
-        cell: (i) =>
-          i.getValue() ? (
+        cell: (i) => {
+          const purchaseId = i.getValue();
+          return purchaseId ? (
             <TableLink
               to={entities.purchase.routes.detail}
-              params={entityDetailParams(i.getValue() as string)}
+              params={entityDetailParams(purchaseId)}
               variant="mono"
             >
-              {i.getValue()}
+              {purchaseId}
             </TableLink>
           ) : (
             "—"
-          ),
+          );
+        },
       }),
       createPlainDateColumn(helper, "postedDate", { header: "Posted" }),
       // Hidden by default: these exist so `purchasePresence`, `merchant` and

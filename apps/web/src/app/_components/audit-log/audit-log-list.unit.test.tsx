@@ -1,83 +1,72 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { AuditLogList } from "./audit-log-list";
+import { auditLog } from "~/lib/audit-log.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-type ActivityQueryData = { pages: Array<{ entries: never[] }> };
+import {
+  type AuditLogListOperations,
+  type AuditLogSession,
+  AuditLogList,
+} from "./audit-log-list";
 
-const queryState = vi.hoisted(() => ({
-  current: {
-    data: undefined as ActivityQueryData | undefined,
-    error: new Error("Activity service unavailable") as Error | null,
-    fetchNextPage: vi.fn(),
-    hasNextPage: false,
-    isError: true,
-    isFetchingNextPage: false,
-    isLoading: false,
-    refetch: vi.fn(),
-  },
-}));
+const authenticatedSession = {
+  isAuthenticated: true,
+  isPending: false,
+} satisfies AuditLogSession;
 
-vi.mock("@tanstack/react-query", () => ({
-  useInfiniteQuery: () => queryState.current,
-}));
-vi.mock("~/hooks/useHydrated", () => ({
-  useHydrated: () => true,
-}));
-vi.mock("~/lib/auth-client", () => ({
-  authClient: {
-    useSession: () => ({ data: { user: { id: "user" } }, isPending: false }),
-  },
-}));
-vi.mock("~/lib/audit-log.functions", () => ({
-  auditLogListOptions: () => ({}),
-}));
-vi.mock("./audit-log-entry", () => ({
-  AuditLogEntryComponent: () => null,
-}));
-vi.mock("~/components/reui/timeline", () => ({
-  AuditTimeline: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-}));
+let activityError: Error | null = null;
+let requestCount = 0;
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+const testOperations: AuditLogListOperations = {
+  // The catalog remains responsible for input/output parsing and cache keys.
+  // This is only the unavailable remote service represented in a browser test.
+  list: auditLog.list.withTransport(async () => {
+    requestCount += 1;
+    if (activityError) throw activityError;
+    return { entries: [] };
+  }),
+};
+
+beforeEach(() => {
+  activityError = new Error("Activity service unavailable");
+  requestCount = 0;
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function renderActivityLog() {
+  return render(
+    <AuditLogList operations={testOperations} session={authenticatedSession} />,
+    { wrapper: harness.wrapper },
+  );
+}
 
 describe("AuditLogList", () => {
-  beforeEach(() => {
-    queryState.current = {
-      data: undefined,
-      error: new Error("Activity service unavailable"),
-      fetchNextPage: vi.fn(),
-      hasNextPage: false,
-      isError: true,
-      isFetchingNextPage: false,
-      isLoading: false,
-      refetch: vi.fn(),
-    };
-  });
+  it("distinguishes a failed activity load and offers retry", async () => {
+    renderActivityLog();
 
-  it("distinguishes a failed activity load and offers retry", () => {
-    render(<AuditLogList />);
-
-    expect(screen.getByText("Couldn't load activity")).toBeVisible();
+    expect(await screen.findByText("Couldn't load activity")).toBeVisible();
     expect(screen.getByText("Activity service unavailable")).toBeVisible();
+    expect(requestCount).toBe(1);
+
+    activityError = null;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(queryState.current.refetch).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText("No activity yet")).not.toBeInTheDocument();
+
+    await waitFor(() => expect(requestCount).toBe(2));
+    expect(await screen.findByText("No activity yet")).toBeVisible();
   });
 
-  it("keeps an empty activity log distinct from a failed load", () => {
-    queryState.current = {
-      ...queryState.current,
-      data: { pages: [{ entries: [] }] },
-      error: null,
-      isError: false,
-    };
+  it("keeps an empty activity log distinct from a failed load", async () => {
+    activityError = null;
 
-    render(<AuditLogList />);
+    renderActivityLog();
 
-    expect(screen.getByText("No activity yet")).toBeVisible();
-    expect(
-      screen.queryByText("Couldn't load activity"),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("No activity yet")).toBeVisible();
+    expect(screen.queryByText("Couldn't load activity")).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { browserEntityDefinition } from "./entities";
 import { compileEntityListInput, entityListFor } from "./entity-list.functions";
+import type { FilterPatch } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
 
 /**
@@ -11,7 +12,7 @@ import type { ListEntity } from "./generated/entity-lists.gen";
 export async function ensureEntityListSsr<E extends ListEntity>(options: {
   queryClient: QueryClient;
   entity: E;
-  search: Record<string, unknown>;
+  search: FilterPatch;
   active?: boolean;
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
   signal?: AbortSignal;
@@ -59,12 +60,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
 }
 
 /** Mirrors `useEntityListPresentation`'s opening table-state sort. */
-export function entityListDefaultSort<E extends ListEntity>(
-  entity: E,
-): {
-  orderBy: string;
-  direction: "asc" | "desc";
-} {
+export function entityListDefaultSort<E extends ListEntity>(entity: E) {
   const list = browserEntityDefinition(entity).list;
   return {
     orderBy: list?.defaultSort ?? "createdAt",

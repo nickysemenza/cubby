@@ -1,3 +1,4 @@
+import { QueryClient, type FetchQueryOptions } from "@tanstack/react-query";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { OperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
@@ -8,14 +9,10 @@ import {
 } from "./entity-detail.functions";
 import { type EntityListScoped, entityListFor } from "./entity-list.functions";
 import type {
-  DetailEntity,
   EntityDetailByEntity,
   EntityDetailInputByEntity,
 } from "./generated/entity-details.gen";
-import type {
-  EntityListResultByEntity,
-  ListEntity,
-} from "./generated/entity-lists.gen";
+import type { EntityListResultByEntity } from "./generated/entity-lists.gen";
 
 /**
  * Query keys are the persisted-cache and SSR-hydration contract: a changed key
@@ -177,25 +174,39 @@ type QueryData<Options> = Options extends { queryFn?: infer Fn }
     : never
   : never;
 
-const withoutFunctions = (options: object) => {
+const withoutFunctions = <
+  TQueryFn,
+  TQueryKey,
+  TNextPageParam,
+  TOptions extends {
+    queryFn?: TQueryFn;
+    queryKey?: TQueryKey;
+    getNextPageParam?: TNextPageParam;
+  },
+>(
+  options: TOptions,
+): Omit<TOptions, "queryFn" | "queryKey" | "getNextPageParam"> => {
   const {
     queryFn: _queryFn,
     queryKey: _queryKey,
     getNextPageParam: _getNextPageParam,
     ...rest
-  } = options as Record<string, unknown>;
+  } = options;
   return rest;
 };
 
-const runQueryFn = (options: object) =>
-  (
-    options as {
-      queryFn: (context: {
-        signal: AbortSignal;
-        pageParam?: number;
-      }) => Promise<unknown>;
-    }
-  ).queryFn({ signal: new AbortController().signal, pageParam: 0 });
+const runQueryFn = <
+  TData,
+  TError,
+  TSelected,
+  TQueryKey extends readonly unknown[],
+  TPageParam,
+>(
+  options: FetchQueryOptions<TData, TError, TSelected, TQueryKey, TPageParam>,
+) =>
+  new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  }).fetchQuery(options);
 
 describe("entity detail query keys", () => {
   it("keys on the canonical shortcode", () => {
@@ -300,7 +311,10 @@ describe("entity list query keys", () => {
     const options =
       entityListFor("product").infiniteQueryOptions(PRODUCT_LIST_INPUT);
     const page = (pageIndex: number, totalCount: number) =>
-      ({ meta: { pageIndex, pageSize: 25, totalCount } }) as never;
+      ({
+        items: [],
+        meta: { pageIndex, pageSize: 25, totalCount },
+      }) satisfies EntityListResultByEntity["product"];
     expect(options.initialPageParam).toBe(0);
     expect(options.getNextPageParam(page(0, 60), [], 0, [])).toBe(1);
     expect(options.getNextPageParam(page(2, 60), [], 2, [])).toBeUndefined();
@@ -366,11 +380,13 @@ describe("scoped entity descriptors", () => {
 
   it("rejects an entity the operation is not registered for", () => {
     expect(
-      () => entityDetailFor("not-an-entity" as unknown as DetailEntity),
+      // @ts-expect-error invalid entity labels must still be rejected at runtime
+      () => entityDetailFor("not-an-entity"),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
     expect(
-      () => entityListFor("not-an-entity" as unknown as ListEntity),
+      // @ts-expect-error invalid entity labels must still be rejected at runtime
+      () => entityListFor("not-an-entity"),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).toThrow();
   });

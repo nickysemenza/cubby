@@ -30,8 +30,11 @@ import {
  * an empty result has to collapse to one module value or the memo below churns
  * on every render for every list in the app.
  */
-const NO_REGISTERED_ACTIONS: readonly never[] = [];
 const NO_ENTITY_ACTION_DEFINITIONS: readonly EntityActionDefinition[] = [];
+
+function emptyBulkActions<TData extends { id: string }>(): BulkAction<TData>[] {
+  return [];
+}
 
 export function useListBulkActions<TData extends { id: string }>({
   entity,
@@ -74,7 +77,7 @@ export function useListBulkActions<TData extends { id: string }>({
   );
   const registeredActions = registered.selectionActions.length
     ? registered.selectionActions
-    : (NO_REGISTERED_ACTIONS as readonly BulkAction<TData>[]);
+    : emptyBulkActions<TData>();
 
   const config = useMemo((): BulkActionsConfig<TData> | undefined => {
     if (

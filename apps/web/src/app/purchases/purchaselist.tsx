@@ -206,13 +206,7 @@ export function PurchaseList() {
         header: "Settlement",
         meta: { className: "w-28", mobile: { slot: "meta", priority: 65 } },
         cell: (info) => (
-          <FinancialSettlementBadge
-            purchase={
-              info.row.original as Parameters<
-                typeof FinancialSettlementBadge
-              >[0]["purchase"]
-            }
-          />
+          <FinancialSettlementBadge purchase={info.row.original} />
         ),
       }),
       // Hidden by default. These three exist so the transaction-presence and

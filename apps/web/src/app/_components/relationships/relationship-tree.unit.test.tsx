@@ -1,26 +1,35 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { type ReactNode, StrictMode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { StrictMode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    className,
-  }: {
-    children?: ReactNode;
-    className?: string;
-  }) => (
-    <a href="/entity" className={className}>
-      {children}
-    </a>
-  ),
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { RelationshipTree } from "./relationship-tree";
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
+
+function renderTree(tree: React.ReactNode) {
+  return render(tree, { wrapper: harness.wrapper });
+}
+
 describe("RelationshipTree display images", () => {
   it("does not relabel first-level records as cycle references in Strict Mode", () => {
-    render(
+    renderTree(
       <StrictMode>
         <RelationshipTree
           presets={[
@@ -53,7 +62,7 @@ describe("RelationshipTree display images", () => {
   });
 
   it("renders a progressive cover and keeps an icon-only fallback aligned", () => {
-    const { container } = render(
+    const { container } = renderTree(
       <RelationshipTree
         presets={[
           {
@@ -105,7 +114,7 @@ describe("RelationshipTree display images", () => {
       ],
       hasMore: false,
     });
-    const { container } = render(
+    const { container } = renderTree(
       <RelationshipTree
         presets={[
           {
@@ -142,7 +151,7 @@ describe("RelationshipTree display images", () => {
   });
 
   it("renders route-less ledger records as text instead of a broken link", () => {
-    render(
+    renderTree(
       <RelationshipTree
         presets={[
           {

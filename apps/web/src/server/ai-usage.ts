@@ -3,6 +3,12 @@ import type { SupportedAiModelRef } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
 
+export interface AiUsagePort {
+  emit: typeof emitTelemetry;
+}
+
+const productionAiUsagePort: AiUsagePort = { emit: emitTelemetry };
+
 export type RecordAiUsageInput = SupportedAiModelRef & {
   feature: string;
   operation: string;
@@ -18,9 +24,10 @@ export type RecordAiUsageInput = SupportedAiModelRef & {
 export async function recordAiUsage(
   db: Database,
   input: RecordAiUsageInput,
+  port: AiUsagePort = productionAiUsagePort,
 ): Promise<void> {
   try {
-    await emitTelemetry(db, {
+    await port.emit(db, {
       version: 1,
       eventId: crypto.randomUUID(),
       occurredAt: new Date().toISOString(),

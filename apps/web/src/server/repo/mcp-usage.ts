@@ -18,6 +18,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { mcpToolCall, oauthClient, user } from "~/server/db/schema";
@@ -177,7 +178,17 @@ export async function getMcpUsageAggregateData(
 
 const CURSOR_PREFIX = "v1.";
 
-function encodeCursor(row: { occurredAt: Date; id: string }): string {
+interface McpUsageCursor {
+  occurredAt: Date;
+  id: string;
+}
+
+const mcpUsageCursorPayload = z.object({
+  occurredAt: z.string(),
+  id: z.string(),
+});
+
+function encodeCursor(row: McpUsageCursor): string {
   const encoded = btoa(
     JSON.stringify({ occurredAt: row.occurredAt.toISOString(), id: row.id }),
   )
@@ -187,22 +198,16 @@ function encodeCursor(row: { occurredAt: Date; id: string }): string {
   return `${CURSOR_PREFIX}${encoded}`;
 }
 
-function decodeCursor(cursor: string): { occurredAt: Date; id: string } {
+function decodeCursor(cursor: string): McpUsageCursor {
   try {
     if (!cursor.startsWith(CURSOR_PREFIX)) throw new Error("bad prefix");
     const raw = cursor
       .slice(CURSOR_PREFIX.length)
       .replaceAll("-", "+")
       .replaceAll("_", "/");
-    const parsed = JSON.parse(
-      atob(raw.padEnd(Math.ceil(raw.length / 4) * 4, "=")),
-    ) as { occurredAt?: unknown; id?: unknown };
-    if (
-      typeof parsed.occurredAt !== "string" ||
-      typeof parsed.id !== "string"
-    ) {
-      throw new Error("bad shape");
-    }
+    const parsed = mcpUsageCursorPayload.parse(
+      JSON.parse(atob(raw.padEnd(Math.ceil(raw.length / 4) * 4, "="))),
+    );
     const occurredAt = new Date(parsed.occurredAt);
     if (Number.isNaN(occurredAt.getTime())) throw new Error("bad date");
     return { occurredAt, id: parsed.id };

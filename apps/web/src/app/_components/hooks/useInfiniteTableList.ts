@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef } from "react";
 
 import {
   infiniteOperationQueryKey,
-  type OperationQueryKey,
+  isOperationQueryKey,
 } from "~/integrations/tanstack-query/operation-catalog";
 import type { QueryTiming } from "~/lib/query-timing";
 
@@ -82,29 +82,48 @@ export function useInfiniteTableList<
     groupBy,
   });
 
-  const infiniteQueryKey = useMemo(() => {
-    const finiteQueryKey = queryOptions({
-      sort: sortParams,
-      pagination: { pageIndex: 0, pageSize: pagination.pageSize },
-      filters,
-      ...(groupBy && { groupBy }),
-    }).queryKey;
-    return finiteQueryKey[0] === "operation"
-      ? infiniteOperationQueryKey(finiteQueryKey as OperationQueryKey<unknown>)
-      : [...finiteQueryKey, "__infinite__"];
-  }, [queryOptions, sortParams, pagination.pageSize, filters, groupBy]);
-
-  const pageOptions = useMemo(
-    () => (pageParam: number) =>
+  const firstPageOptions = useMemo(
+    () =>
       queryOptions({
         sort: sortParams,
-        pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
+        pagination: { pageIndex: 0, pageSize: pagination.pageSize },
         filters,
         ...(groupBy && { groupBy }),
       }),
     [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
   );
 
+  const infiniteQueryKey = useMemo(() => {
+    const finiteQueryKey = firstPageOptions.queryKey;
+    if (isOperationQueryKey(finiteQueryKey)) {
+      return infiniteOperationQueryKey(finiteQueryKey);
+    }
+    return [...finiteQueryKey, "__infinite__"];
+  }, [firstPageOptions.queryKey]);
+
+  const pageOptions = useMemo(
+    () => (pageParam: number) =>
+      pageParam === 0
+        ? firstPageOptions
+        : queryOptions({
+            sort: sortParams,
+            pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
+            filters,
+            ...(groupBy && { groupBy }),
+          }),
+    [
+      firstPageOptions,
+      queryOptions,
+      sortParams,
+      pagination.pageSize,
+      filters,
+      groupBy,
+    ],
+  );
+
+  // SAFETY: this adapter narrows TanStack's observer result to the exact
+  // page/result members consumed below; queryFn and getNextPageParam carry the
+  // same ListQueryResponse<TData> contract.
   const {
     data: infiniteData,
     isLoading,
@@ -121,6 +140,10 @@ export function useInfiniteTableList<
     // count (useEntityList withholds totalCount while isLoading).
     placeholderData: keepPreviousData,
     queryKey: infiniteQueryKey,
+    // The infinite adapter owns a different key but the same operation. Carry
+    // the descriptor metadata so root mutation invalidation can still match
+    // its entity/cache tags; omitting it left every list permanently stale.
+    meta: firstPageOptions.meta,
     queryFn: async ({
       pageParam,
       signal,
@@ -129,6 +152,8 @@ export function useInfiniteTableList<
       signal: AbortSignal;
     }) => {
       const options = pageOptions(pageParam);
+      // SAFETY: list query options are the caller's typed TData contract, and
+      // every page adapter returns the corresponding list response shape.
       return (await options.queryFn({
         queryKey: options.queryKey,
         signal,
@@ -158,7 +183,7 @@ export function useInfiniteTableList<
     isFetchingNextPage: boolean;
     isPlaceholderData: boolean;
     isRefetching: boolean;
-    refetch: () => Promise<unknown>;
+    refetch: () => Promise<{ data?: { pages: ListQueryResponse<TData>[] } }>;
   };
 
   // Flatten all pages into a single array, with a row-identity backstop for an

@@ -50,13 +50,13 @@ export const snapshotQueriesByTags = (
     ? []
     : queryClient.getQueriesData({ predicate: matchesTags(tags) });
 
-export const updateQueriesByTags = (
+export const updateQueriesByTags = <TData>(
   queryClient: QueryClient,
   tags: readonly OperationCacheTag[],
-  updater: (old: unknown) => unknown,
+  updater: (old: TData | undefined) => TData | undefined,
 ): void => {
   if (tags.length === 0) return;
-  queryClient.setQueriesData({ predicate: matchesTags(tags) }, updater);
+  queryClient.setQueriesData<TData>({ predicate: matchesTags(tags) }, updater);
 };
 
 /** Roll a snapshot from `snapshotQueriesByTags` back into the cache. */

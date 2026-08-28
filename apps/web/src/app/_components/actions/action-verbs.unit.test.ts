@@ -39,9 +39,9 @@ describe("action verb registry", () => {
   });
 
   it("reserves the destructive tone for delete", () => {
-    const toned = Object.keys(actionVerbs).filter(
-      (id) => verbDef(id as ActionVerbId).tone === "destructive",
-    );
+    const toned = Object.keys(actionVerbs)
+      .filter((id): id is ActionVerbId => id in actionVerbs)
+      .filter((id) => verbDef(id).tone === "destructive");
     expect(toned).toEqual(["delete"]);
   });
 

@@ -1,3 +1,4 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { describe, expect, it } from "vitest";
 
@@ -10,6 +11,7 @@ import {
   decodeFilters,
   encodeFilters,
 } from "./filters";
+import type { FilterSpecCore } from "./filters";
 import { problemActionsFor } from "./problem-actions";
 import {
   compileProblemFilters,
@@ -128,37 +130,41 @@ describe("Problem Query registry", () => {
 
   it("keeps Problem semantics URL-serializable and aligned with the UI adapter", () => {
     for (const [entity, coreSpecs] of Object.entries(problemFilterSpecs)) {
+      const parsedEntity = entitySchema.safeParse(entity);
+      if (!parsedEntity.success) {
+        throw new Error(`Unknown Problem filter entity: ${entity}`);
+      }
       const uiSpecs = new Map(
-        getEntityFilters(entity as Parameters<typeof getEntityFilters>[0]).map(
-          (spec) => [spec.columnId, spec],
-        ),
+        getEntityFilters(parsedEntity.data).map((spec) => [
+          spec.columnId,
+          spec,
+        ]),
       );
-      const urlKeys = new Set(
-        entityFilterUrlKeys(entity as Parameters<typeof getEntityFilters>[0]),
-      );
+      const urlKeys = new Set(entityFilterUrlKeys(parsedEntity.data));
 
       for (const core of coreSpecs) {
-        // Individual declarative specs omit irrelevant optional fields, so the
-        // readonly union needs widening before comparing its shared contract.
-        const semantic = core as {
-          columnId: string;
-          field?: string;
-          kind: string;
-          urlKey?: string;
-          nullable?: unknown;
-        };
+        const semantic = (spec: FilterSpecCore) => ({
+          columnId: spec.columnId,
+          field: spec.field,
+          kind: spec.kind,
+          urlKey: spec.urlKey,
+          nullable: spec.nullable,
+        });
+        const normalized = semantic(core);
         const ui = uiSpecs.get(core.columnId);
         expect(
           ui,
           `${entity}.${core.columnId} needs a UI adapter spec`,
         ).toBeDefined();
-        expect(urlKeys.has(semantic.urlKey ?? semantic.columnId)).toBe(true);
-        expect(ui?.field ?? ui?.columnId).toBe(
-          semantic.field ?? semantic.columnId,
+        expect(urlKeys.has(normalized.urlKey ?? normalized.columnId)).toBe(
+          true,
         );
-        expect(ui?.kind).toBe(semantic.kind);
-        expect(ui?.urlKey).toBe(semantic.urlKey);
-        expect(ui?.nullable).toEqual(semantic.nullable);
+        expect(ui?.field ?? ui?.columnId).toBe(
+          normalized.field ?? normalized.columnId,
+        );
+        expect(ui?.kind).toBe(normalized.kind);
+        expect(ui?.urlKey).toBe(normalized.urlKey);
+        expect(ui?.nullable).toEqual(normalized.nullable);
       }
     }
   });

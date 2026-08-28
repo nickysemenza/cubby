@@ -409,9 +409,10 @@ async function semanticProductCandidatesBestEffort(
   try {
     return await semanticProductCandidates(db, query, 3);
   } catch (error) {
+    const parsedError = error instanceof Error ? error : null;
     console.warn("ai.inventory.semantic-product-match.failed", {
       query,
-      errorName: error instanceof Error ? error.name : typeof error,
+      errorName: parsedError?.name ?? "UnparsedError",
       message: getErrorMessage(error),
     });
     return [];

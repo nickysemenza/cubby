@@ -38,6 +38,7 @@ import {
   projectAttentionItemSchema,
   projectAttentionTypeSchema,
 } from "@cubby/schemas/project";
+import { purchaseOut } from "@cubby/schemas/purchase";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
@@ -51,8 +52,6 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
 import { type Database, withConnection } from "~/server/db";
 import {
   findOrphanedEntityEmbeddings,
@@ -101,6 +100,7 @@ import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   type DiagnosticRunOptions,
   type DiagnosticSampleResult,
+  type UpcLookupBatchPort,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
 import {
@@ -108,6 +108,7 @@ import {
   executeProblem,
   findViewProblems,
 } from "~/server/services/problem-views.service";
+import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllBounded } from "~/server/tracing";
 
@@ -144,7 +145,7 @@ const countMissingEmbeddings = async (db: Database) =>
 //     the `product/unmapped` view.
 const findProductCoverageProblems = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<{
   ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
   productsWithIslandedMappings: ProductWithIslandedMappings[];
@@ -310,7 +311,7 @@ const findProductCoverageProblems = async (
 /** Rebuild the persisted list-query projection using this exact detector scan. */
 export const rebuildProductConversionCoverageProjection = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<ProductConversionCoverageProjection[]> => {
   const { projection } = await findProductCoverageProblems(db, usdaClient);
   await writeProductConversionCoverageProjection(db, projection);
@@ -553,7 +554,7 @@ const exactSectionTotals = (
  */
 const presentCoverageExactRows = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   partialPage: ExactProblemPage,
   islandPage: ExactProblemPage,
 ): Promise<{
@@ -710,11 +711,8 @@ const exactProblemPresentationRowSchema = z.object({
   expenseTotal: z.number().nullish(),
   expenseCount: z.number().nullish(),
   unpricedExpenseCount: z.number().nullish(),
-  reconciliation: z
-    .object({ postedRefundTotal: z.number().optional() })
-    .nullish(),
-  financialReconciliation:
-    allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.shape.financialReconciliation.optional(),
+  reconciliation: purchaseOut.shape.reconciliation.nullish(),
+  financialReconciliation: purchaseOut.shape.financialReconciliation.nullish(),
 });
 
 type FastProblemCard = ProblemsFast[FastEntityProblemKey][number];
@@ -887,7 +885,9 @@ const presentFastExactRows = (
           expenseTotal: Number(r.expenseTotal),
           expenseCount: Number(r.expenseCount),
           unpricedExpenseCount: Number(r.unpricedExpenseCount),
-          postedRefundTotal: Number(r.reconciliation?.postedRefundTotal ?? 0),
+          postedRefundTotal: Number(
+            r.financialReconciliation?.postedRefundTotal ?? 0,
+          ),
         });
       case "purchaseFinancialSettlementMismatches":
         return allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
@@ -1258,7 +1258,7 @@ export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
  */
 export const findCoverageProblems = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<ProblemsCoverage> => {
   let freshness = await getProductConversionCoverageFreshness(db);
   // Normal mutations synchronously mark affected rows stale. This isolated
@@ -1320,7 +1320,7 @@ export const findCoverageProblems = async (
 
 const findProductsWithBetterUpcData = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupBatchPort,
 ): Promise<{
   products: ProductWithBetterUpcData[];
   count: number;
@@ -1473,7 +1473,7 @@ export const findTrackerProblems = async (
 
 export const findUpcProblems = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupBatchPort,
 ): Promise<ProblemsUpc> => {
   const {
     products: productsWithBetterUpcData,
@@ -1497,7 +1497,7 @@ export const findUpcProblems = async (
  */
 export const findProblemCounts = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupBatchPort,
 ): Promise<ProblemsCount> => {
   const declarations = problemQueryDeclarations();
   const tasks: Record<string, () => Promise<number>> = {};
@@ -1538,8 +1538,8 @@ export const findProblemCounts = async (
 export const findProblemByType = async (
   db: Database,
   key: ProblemKey,
-  upcLookupClient: UPCLookupClient,
-  usdaClient: USDAClient,
+  upcLookupClient: UpcLookupBatchPort,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<{ type: ProblemKey; items: unknown[]; total: number }> => {
   const result = await executeProblem(db, key, {
     diagnostic: { upcLookupClient },
@@ -1587,8 +1587,8 @@ export const findProblemByType = async (
 // sum of every section length — derived, never hand-summed.
 export const findAllProblems = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
-  usdaClient: USDAClient,
+  upcLookupClient: UpcLookupBatchPort,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<AllProblems> => {
   const groups = await traceAll({
     fast: () => findFastProblems(db),

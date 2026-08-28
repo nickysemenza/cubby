@@ -316,12 +316,12 @@ describe("calendar repository", () => {
       filters: Partial<Parameters<typeof getCalendarRange>[1]>,
     ) => {
       const result = await getCalendarRange(ctx.db, { ...range, ...filters });
-      const counts: Record<CalendarItemKind, number> = {
+      const counts = {
         meal: 0,
         task: 0,
         expense: 0,
         project: 0,
-      };
+      } satisfies Record<CalendarItemKind, number>;
       for (const item of result.items) counts[item.kind] += 1;
       return counts;
     };

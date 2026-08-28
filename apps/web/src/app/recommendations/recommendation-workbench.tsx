@@ -17,6 +17,36 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { recommendations } from "~/lib/recommendations.functions";
 
+const productUpdateMutationOptions = entityMutationOptionsFactory(
+  "product",
+  "update",
+);
+
+export interface RecommendationWorkbenchOperations {
+  readonly placement: typeof recommendations.placement;
+  readonly tagPropagation: typeof recommendations.tagPropagation;
+  readonly product: typeof recommendations.product;
+  readonly duplicateProduct: typeof recommendations.duplicateProduct;
+  readonly dismissTagPropagation: typeof recommendations.dismissTagPropagation;
+  readonly dismissProduct: typeof recommendations.dismissProduct;
+  readonly dismissDuplicateProduct: typeof recommendations.dismissDuplicateProduct;
+  readonly moveEntries: typeof inventory.moveEntries;
+  readonly productUpdateMutationOptions: typeof productUpdateMutationOptions;
+}
+
+export const productionRecommendationWorkbenchOperations: RecommendationWorkbenchOperations =
+  {
+    placement: recommendations.placement,
+    tagPropagation: recommendations.tagPropagation,
+    product: recommendations.product,
+    duplicateProduct: recommendations.duplicateProduct,
+    dismissTagPropagation: recommendations.dismissTagPropagation,
+    dismissProduct: recommendations.dismissProduct,
+    dismissDuplicateProduct: recommendations.dismissDuplicateProduct,
+    moveEntries: inventory.moveEntries,
+    productUpdateMutationOptions,
+  };
+
 function RetryAction({
   onRetry,
   label = "Retry",
@@ -59,37 +89,50 @@ export function RecommendationWorkbench({
   sourceId,
   inventoryId,
   kind,
+  operations = productionRecommendationWorkbenchOperations,
 }: {
   sourceId?: ProductShortcode;
   inventoryId?: InventoryShortcode;
   kind: RecommendationKind;
+  operations?: RecommendationWorkbenchOperations;
 }) {
   if (kind === "placement") {
     return inventoryId ? (
-      <PlacementRecommendation inventoryId={inventoryId} />
+      <PlacementRecommendation
+        inventoryId={inventoryId}
+        operations={operations}
+      />
     ) : null;
   }
   if (!sourceId) return null;
   return kind === "duplicate-product" ? (
-    <DuplicateProductRecommendation sourceId={sourceId} />
+    <DuplicateProductRecommendation
+      sourceId={sourceId}
+      operations={operations}
+    />
   ) : kind === "tag-propagation" ? (
-    <TagPropagationRecommendation sourceId={sourceId} />
+    <TagPropagationRecommendation sourceId={sourceId} operations={operations} />
   ) : (
-    <ProductRelatednessRecommendation sourceId={sourceId} />
+    <ProductRelatednessRecommendation
+      sourceId={sourceId}
+      operations={operations}
+    />
   );
 }
 
 function PlacementRecommendation({
   inventoryId,
+  operations,
 }: {
   inventoryId: InventoryShortcode;
+  operations: RecommendationWorkbenchOperations;
 }) {
   const queryClient = useQueryClient();
   const recommendation = useQuery(
-    recommendations.placement.queryOptions({ inventoryId }),
+    operations.placement.queryOptions({ inventoryId }),
   );
   const accept = useMutation(
-    inventory.moveEntries.mutationOptions({
+    operations.moveEntries.mutationOptions({
       onSuccess: () => {
         // The move's own ripple covers `problems`; the placement suggestion
         // that offered it is this page's alone.
@@ -156,18 +199,17 @@ function PlacementRecommendation({
 
 function TagPropagationRecommendation({
   sourceId,
+  operations,
 }: {
   sourceId: ProductShortcode;
+  operations: RecommendationWorkbenchOperations;
 }) {
   const queryClient = useQueryClient();
   const recommendation = useQuery(
-    recommendations.tagPropagation.queryOptions({ sourceId }),
+    operations.tagPropagation.queryOptions({ sourceId }),
   );
   const accept = useMutation(
-    entityMutationOptionsFactory(
-      "product",
-      "update",
-    )({
+    operations.productUpdateMutationOptions({
       onSuccess: () => {
         void invalidateOperationTags(queryClient, [
           ["recommendations", "tagPropagation"],
@@ -177,7 +219,7 @@ function TagPropagationRecommendation({
     }),
   );
   const dismiss = useMutation(
-    recommendations.dismissTagPropagation.mutationOptions({}),
+    operations.dismissTagPropagation.mutationOptions({}),
   );
 
   if (recommendation.isLoading) {
@@ -278,15 +320,13 @@ function TagPropagationRecommendation({
 
 function ProductRelatednessRecommendation({
   sourceId,
+  operations,
 }: {
   sourceId: ProductShortcode;
+  operations: RecommendationWorkbenchOperations;
 }) {
-  const relatedness = useQuery(
-    recommendations.product.queryOptions({ sourceId }),
-  );
-  const dismiss = useMutation(
-    recommendations.dismissProduct.mutationOptions({}),
-  );
+  const relatedness = useQuery(operations.product.queryOptions({ sourceId }));
+  const dismiss = useMutation(operations.dismissProduct.mutationOptions({}));
   const items = relatedness.data?.items ?? [];
 
   if (relatedness.isLoading)
@@ -365,15 +405,17 @@ function ProductRelatednessRecommendation({
 
 function DuplicateProductRecommendation({
   sourceId,
+  operations,
 }: {
   sourceId: ProductShortcode;
+  operations: RecommendationWorkbenchOperations;
 }) {
   const [merged, setMerged] = useState(false);
   const recommendation = useQuery(
-    recommendations.duplicateProduct.queryOptions({ sourceId }),
+    operations.duplicateProduct.queryOptions({ sourceId }),
   );
   const dismiss = useMutation(
-    recommendations.dismissDuplicateProduct.mutationOptions({}),
+    operations.dismissDuplicateProduct.mutationOptions({}),
   );
 
   if (merged) {

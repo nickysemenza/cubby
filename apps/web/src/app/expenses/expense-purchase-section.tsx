@@ -18,6 +18,23 @@ import { expense as expenseOperations } from "./expense.functions";
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];
 
+type ChargeContextQuery = ReturnType<
+  typeof expenseOperations.chargeContext.queryOptions
+>;
+
+export interface ExpensePurchaseOperations {
+  chargeContext: (expenseId: ExpenseOut["id"]) => ChargeContextQuery;
+}
+
+interface ExpensePurchaseSectionProps {
+  expense: ExpenseOut;
+  operations?: ExpensePurchaseOperations;
+}
+
+const productionOperations: ExpensePurchaseOperations = {
+  chargeContext: expenseOperations.chargeContext.queryOptions,
+};
+
 /**
  * "This purchase" — the transaction this expense line belongs to, and the other
  * lines filed under it.
@@ -35,15 +52,14 @@ const NO_OTHER_EXPENSES: ExpenseOut[] = [];
  * lines it doubles as the reconciliation readout the import pass used to run
  * `GROUP BY vendor, orderId` by hand for.
  */
-export const ExpensePurchaseSection: FC<{ expense: ExpenseOut }> = ({
+export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   expense,
+  operations = productionOperations,
 }) => {
   // Called unconditionally, before the no-purchase return below: `purchaseId` can
   // change under the same component instance (clearing a vendor detaches the
   // Expense), and a conditional hook would break the hook order when it does.
-  const { data, isPending } = useQuery(
-    expenseOperations.chargeContext.queryOptions(expense.id),
-  );
+  const { data, isPending } = useQuery(operations.chargeContext(expense.id));
   const others = data?.siblings ?? NO_OTHER_EXPENSES;
 
   // The caller only mounts this section for an Expense that has a Purchase; this keeps

@@ -6,9 +6,11 @@ import { productWithMappingsOut } from "@cubby/schemas/product";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
+import { Database } from "~/server/db";
+
 import {
   dbIngredientToAPI,
-  dbIngredientToTopLevelShape,
+  dbIngredientToTopLevel,
   type IngredientDeepDB,
   mapIngredientProducts,
   mapIngredientProductsLean,
@@ -37,6 +39,9 @@ const DELETED_UNIT_MAPPING_ID = "823e4567-e89b-12d3-a456-426614174000";
 const CREATED_AT = new Date("2024-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
 const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
+const unusedDatabase = new Database(() => {
+  throw new Error("Ingredient mapper unexpectedly accessed the database");
+});
 
 const baseProduct = {
   id: PRODUCT_ID,
@@ -134,7 +139,7 @@ const firstResult = <T>(items: T[]): T => {
 
 describe("ingredient product mappers", () => {
   it("maps ingredient scalar rows without DB-only fields", () => {
-    const result = dbIngredientToTopLevelShape(baseIngredient);
+    const result = dbIngredientToTopLevel(baseIngredient);
 
     expect(result).toEqual({
       id: testShortcode("ingredient", "ING-TEST"),
@@ -265,7 +270,7 @@ describe("ingredient product mappers", () => {
 
   it("maps full ingredient rows without leaking DB-only recipe fields", async () => {
     const liveRecipe = { ...baseRecipe, deletedAt: null };
-    const result = await dbIngredientToAPI({} as never, {
+    const result = await dbIngredientToAPI(unusedDatabase, {
       ...baseIngredient,
       recipe: liveRecipe,
       product: [

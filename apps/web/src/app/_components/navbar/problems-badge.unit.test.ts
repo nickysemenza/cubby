@@ -1,34 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  useQuery: vi.fn(() => ({ data: undefined, isLoading: true })),
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  queryOptions: <T>(options: T) => options,
-  useQuery: mocks.useQuery,
-}));
-vi.mock("@tanstack/react-router", () => ({
-  Link: () => null,
-  useRouteContext: () => ({ isAuthed: true }),
-}));
-
-import { ProblemsBadge } from "./problems-badge";
+import { problemsBadgeQueryOptions } from "./problems-badge";
 
 describe("ProblemsBadge", () => {
-  beforeEach(() => {
-    mocks.useQuery.mockClear();
-  });
-
   it("requests the count-only route with the five-minute cache", () => {
-    ProblemsBadge();
+    const options = problemsBadgeQueryOptions(true);
 
-    expect(mocks.useQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        queryKey: ["operation", "problems.getCounts", { input: undefined }],
-        staleTime: 5 * 60 * 1000,
-        enabled: true,
-      }),
-    );
+    expect(options).toMatchObject({
+      queryKey: ["operation", "problems.getCounts", { input: undefined }],
+      staleTime: 5 * 60 * 1000,
+      enabled: true,
+    });
   });
 });

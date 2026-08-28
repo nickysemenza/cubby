@@ -1,75 +1,135 @@
-import { act, render, waitFor } from "@testing-library/react";
-import { useEffect, useRef } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { testShortcode } from "@cubby/schemas/testing";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
+  type DeleteEntityActionCommands,
   deleteDescriptionForEntity,
   useDeleteEntityAction,
 } from "./delete-entity-action";
+import type { EntityActionRow } from "./entity-actions";
 
-const mocks = vi.hoisted(() => ({
-  remove: vi.fn(),
-  navigate: vi.fn(),
-  toastSuccess: vi.fn(),
-  dialogProps: null as {
-    error?: unknown;
-    onSubmit: () => Promise<void>;
-  } | null,
-}));
+const expenseRow = {
+  id: testShortcode("expense", "EXP-4K7M"),
+  name: "Router gasket",
+} satisfies EntityActionRow;
 
-vi.mock("~/entities/editing/use-entity-commands", () => ({
-  useEntityCommands: () => ({ remove: mocks.remove, isPending: false }),
-}));
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocks.navigate,
-}));
-vi.mock("sonner", () => ({ toast: { success: mocks.toastSuccess } }));
-vi.mock("~/components/dialogs/bulk-action-dialog", () => ({
-  BulkActionDialog: (props: typeof mocks.dialogProps) => {
-    mocks.dialogProps = props;
-    return null;
-  },
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+type DeleteResult = Awaited<ReturnType<DeleteEntityActionCommands["remove"]>>;
+
+function deleteCommands(
+  remove: (ids: readonly string[]) => Promise<DeleteResult>,
+): DeleteEntityActionCommands {
+  return { isPending: false, remove };
+}
+
+function DeleteActionHarness({
+  commands,
+  onResolved,
+}: {
+  commands: DeleteEntityActionCommands;
+  onResolved: (success: boolean) => void;
+}) {
+  const action = useDeleteEntityAction("expense", commands);
+  const stageDelete = () => {
+    const pending = action.run?.([expenseRow]);
+    if (pending) void pending.then((result) => onResolved(result.success));
+  };
+
+  return (
+    <>
+      <button type="button" onClick={stageDelete}>
+        Stage expense deletion
+      </button>
+      {action.dialog}
+    </>
+  );
+}
 
 describe("generated CRUD delete action", () => {
-  function Harness({ entity }: { entity: "expense" | "project" }) {
-    const action = useDeleteEntityAction(entity);
-    const started = useRef(false);
-    useEffect(() => {
-      if (!started.current) {
-        started.current = true;
-        if (action.run) void action.run([{ id: "x1", name: "Record" }]);
-      }
-    }, [action]);
-    return action.dialog;
-  }
-
-  it("stages, reports success, and navigates after removal", async () => {
-    mocks.remove.mockResolvedValueOnce({
-      ok: true,
-      result: { sideEffects: { backgroundBatches: [] } },
-    });
-    render(<Harness entity="expense" />);
-    await waitFor(() => expect(mocks.dialogProps).not.toBeNull());
-    await act(async () => mocks.dialogProps!.onSubmit());
-    expect(mocks.remove).toHaveBeenCalledWith(["x1"]);
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Expense deleted.");
-    expect(mocks.navigate).toHaveBeenCalledWith({ to: "/expenses" });
-  });
-
-  it("keeps the dialog open and reports refusal issues", async () => {
-    mocks.remove.mockResolvedValueOnce({
-      ok: false,
-      issues: [{ message: "Has dependents" }],
-    });
-    mocks.dialogProps = null;
-    render(<Harness entity="project" />);
-    await waitFor(() => expect(mocks.dialogProps).not.toBeNull());
-    await act(async () => mocks.dialogProps!.onSubmit());
-    await waitFor(() => expect(mocks.dialogProps?.error).toBeTruthy());
-    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+  it("describes task dependents without hiding the destructive consequence", () => {
     expect(deleteDescriptionForEntity("task", { subtaskCount: 1 })).toContain(
       "deletes 1 subtask",
     );
+  });
+
+  it("confirms through the command port, resolves selection, and returns to the list", async () => {
+    const removedIds: Array<readonly string[]> = [];
+    const resolved: boolean[] = [];
+    render(
+      <DeleteActionHarness
+        commands={deleteCommands(async (ids) => {
+          removedIds.push(ids);
+          return {
+            ok: true,
+            entity: "expense",
+            id: ids[0] ?? "",
+            changed: true,
+          };
+        })}
+        onResolved={(success) => resolved.push(success)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage expense deletion" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Delete 1 Expense?" }),
+    ).toBeVisible();
+    expect(screen.getByText("Router gasket")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(removedIds).toEqual([[expenseRow.id]]));
+    await waitFor(() => expect(resolved).toEqual([true]));
+    await waitFor(() =>
+      expect(harness.router.state.location.pathname).toBe("/expenses"),
+    );
+  });
+
+  it("keeps the dialog open and exposes an operation refusal", async () => {
+    const resolved: boolean[] = [];
+    render(
+      <DeleteActionHarness
+        commands={deleteCommands(async () => ({
+          ok: false,
+          issues: [
+            {
+              message: "This expense is linked to a purchase.",
+              source: "server",
+            },
+          ],
+        }))}
+        onResolved={(success) => resolved.push(success)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage expense deletion" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+
+    expect(
+      await screen.findByText("This expense is linked to a purchase."),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("heading", { name: "Delete 1 Expense?" }),
+    ).toBeVisible();
+    expect(resolved).toEqual([]);
+    expect(harness.router.state.location.pathname).toBe("/");
   });
 });

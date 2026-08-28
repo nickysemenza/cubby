@@ -15,10 +15,10 @@ import { scrubSentryEvent } from "~/lib/sentry-scrub";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";
 
-// Defined by Vite only for CF builds (build:cf), absent under `vite dev`.
+// Defined by Vite for every build and dev mode; true only for CF builds.
 // We gate SW registration on this rather than import.meta.env.PROD so the SW
 // only ever registers for deployed CF builds, never a local production build.
-declare const __CF_WORKERS__: boolean | undefined;
+declare const __CF_WORKERS__: boolean;
 
 export const getRouter = () => {
   const rqContext = TanstackQuery.getContext();
@@ -123,8 +123,7 @@ export const getRouter = () => {
     // Register the app-shell service worker. Gate on the CF build (the SW only
     // exists there; `vite dev` has no /sw.js and SW + HMR is noisy anyway).
     // Best-effort: a failed registration must not break boot.
-    const isCfBuild =
-      typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+    const isCfBuild = __CF_WORKERS__;
     if (isCfBuild && "serviceWorker" in navigator) {
       const register = () =>
         navigator.serviceWorker.register("/sw.js").catch((error) => {

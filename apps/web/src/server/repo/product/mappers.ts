@@ -1,6 +1,6 @@
-import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import {
   canonicalExternalIdUrl,
+  externalIdKind,
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -84,7 +84,9 @@ export const mapProductExternalIds = (
   (externalIds ?? [])
     .filter((externalId) => externalId.deletedAt === null)
     .map((externalId) => {
-      const kind = (externalId.kind ?? "legacy_unspecified") as ExternalIdKind;
+      const kind = externalIdKind.parse(
+        externalId.kind ?? "legacy_unspecified",
+      );
       return {
         id: externalId.id,
         source: externalId.source,
@@ -118,7 +120,7 @@ export const mapProductUnitMappings = (
       updatedAt: unitMapping.updatedAt,
     }));
 
-export const dbProductToTopLevelShape = (
+export const mapDbProductToTopLevel = (
   productData: ProductTopLevelDB,
 ): ProductTopLevelOut => ({
   id: parseShortcodeFor("product", productData.shortcode),
@@ -146,7 +148,7 @@ export const dbProductToTopLevelShape = (
 export const dbProductToTopLevelAPI = (
   productData: ProductTopLevelDB,
 ): ProductTopLevelOut => {
-  const result = dbProductToTopLevelShape(productData);
+  const result = mapDbProductToTopLevel(productData);
 
   return parseWithContext(productTopLevelOut, result, {
     entityType: "Product",
@@ -154,7 +156,7 @@ export const dbProductToTopLevelAPI = (
   });
 };
 
-const dbProductToPickerItemShape = (
+const mapDbProductToPickerItem = (
   productData: Pick<
     typeof product.$inferSelect,
     "id" | "shortcode" | "name" | "manufacturer" | "category"
@@ -186,7 +188,7 @@ export const dbProductToPickerItemAPI = (
     onHand: ProductPickerItemOut["onHand"];
   },
 ): ProductPickerItemOut => {
-  const result = dbProductToPickerItemShape(productData);
+  const result = mapDbProductToPickerItem(productData);
 
   return parseWithContext(productPickerItemOut, result, {
     entityType: "Product",
@@ -194,7 +196,7 @@ export const dbProductToPickerItemAPI = (
   });
 };
 
-export const dbProductToInventoryEmbedShape = (
+export const mapDbProductToInventoryEmbed = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
     pricing: ProductPricing;
     primaryGtin: string | null;
@@ -215,7 +217,7 @@ export const dbProductToInventoryEmbedShape = (
   updatedAt: productData.updatedAt,
 });
 
-export const dbProductToInventoryListShape = (
+export const mapDbProductToInventoryList = (
   productData: RowWithOptionalAliases<typeof product.$inferSelect> & {
     pricing?: ProductPricing;
     primaryGtin: string | null;
@@ -235,7 +237,7 @@ export const dbProductToInventoryListShape = (
   usdaUnavailable: productData.usdaUnavailable,
 });
 
-const dbProductIngredientToShape = (
+const mapDbProductIngredient = (
   ingredientData: typeof ingredient.$inferSelect,
 ) => ({
   id: parseShortcodeFor("ingredient", ingredientData.shortcode),
@@ -246,7 +248,7 @@ const dbProductIngredientToShape = (
   updatedAt: ingredientData.updatedAt,
 });
 
-const dbLocationToProductListInventoryShape = (
+const mapDbLocationToProductListInventory = (
   locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
 ) => ({
   id: parseShortcodeFor("location", locationData.shortcode),
@@ -281,7 +283,7 @@ export const mapProductListInventoryEntries = (
       placement: entry.placement,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
-      location: dbLocationToProductListInventoryShape(entry.location),
+      location: mapDbLocationToProductListInventory(entry.location),
     }),
   );
 
@@ -310,14 +312,15 @@ export const mapProductListInventoryEntries = (
  * the TS half of the rule `onHandUnitsSql` implements in SQL for sorting and
  * filtering — keep the two in step, they are one rule with two call sites.
  */
-const deriveProductQuantityShape = (
+type ProductQuantitySummary = Pick<
+  ProductListItem,
+  "quantityLedger" | "onHandUnits" | "quantityVariance"
+>;
+
+const deriveProductQuantitySummary = (
   entries: ReadonlyArray<{ amount: { value: number; unit: string } }>,
   quantityLedger: QuantityLedger,
-): {
-  quantityLedger: QuantityLedger;
-  onHandUnits: number | null;
-  quantityVariance: number | null;
-} => {
+): ProductQuantitySummary => {
   const empty = {
     quantityLedger,
     onHandUnits: null,
@@ -347,10 +350,10 @@ export const dbProductToListAPI = (
     productData.inventoryEntry,
   );
   const result = {
-    ...dbProductToTopLevelShape(productData),
+    ...mapDbProductToTopLevel(productData),
     ingredient:
       productData.ingredient && isNotDeleted(productData.ingredient)
-        ? dbProductIngredientToShape(productData.ingredient)
+        ? mapDbProductIngredient(productData.ingredient)
         : null,
     unitMappings: mapProductUnitMappings(
       parseShortcodeFor("product", productData.shortcode),
@@ -363,7 +366,7 @@ export const dbProductToListAPI = (
     // null) — mirrors `purchaseExpenseTotal`'s dbPurchaseToAPI coercion.
     expenseTotal: Number(productData.expenseTotal),
     purchaseDate: productData.purchaseDate,
-    ...deriveProductQuantityShape(inventoryEntry, productData.quantityLedger),
+    ...deriveProductQuantitySummary(inventoryEntry, productData.quantityLedger),
   };
 
   return parseWithContext(productListItemOut, result, {
@@ -386,7 +389,7 @@ export const dbProductToAPI = (
   // `onHandUnitsSql`, which inner-joins live locations. Without it a detail
   // read counted an entry whose LOCATION was soft-deleted while the list
   // dropped it — one product, two surfaces, different stock. Same drift the
-  // `deriveProductQuantityShape` docblock exists to prevent.
+  // `deriveProductQuantitySummary` docblock exists to prevent.
   const mappedInventoryEntry = mapRelation(
     inventoryEntry.filter((entry) => isNotDeleted(entry.location)),
     (entry) => ({
@@ -439,7 +442,7 @@ export const dbProductToAPI = (
     dataQuality,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,
-    ingredient: ingredient ? dbProductIngredientToShape(ingredient) : null,
+    ingredient: ingredient ? mapDbProductIngredient(ingredient) : null,
     unitMappings: mapProductUnitMappings(
       parseShortcodeFor("product", productData.shortcode),
       unitMappings,
@@ -472,7 +475,7 @@ export const dbProductToAPI = (
         name: cb.name,
         recipeCount: Number(productData.cookbookRecipeCount ?? 0),
       }))[0] ?? null,
-    ...deriveProductQuantityShape(
+    ...deriveProductQuantitySummary(
       mappedInventoryEntry,
       productData.quantityLedger,
     ),

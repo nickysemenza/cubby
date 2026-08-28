@@ -2,7 +2,13 @@ import {
   type PurchaseShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
+import {
+  costTypeSchema,
+  type CostType,
+  type ExpenseOut,
+  tradeSchema,
+  type Trade,
+} from "@cubby/schemas/project";
 import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { Plus, X } from "lucide-react";
@@ -250,8 +256,9 @@ export function SplitExpenseDialog({
                   value={part.costType}
                   onValueChange={(next) => {
                     // Required enum — a cleared picker is a no-op.
-                    if (next) {
-                      updatePart(part.key, { costType: next as CostType });
+                    const parsed = costTypeSchema.safeParse(next);
+                    if (parsed.success) {
+                      updatePart(part.key, { costType: parsed.data });
                     }
                   }}
                   className="w-36"
@@ -262,7 +269,10 @@ export function SplitExpenseDialog({
                   items={tradeOptions}
                   value={part.trade}
                   onValueChange={(next) => {
-                    if (next) updatePart(part.key, { trade: next as Trade });
+                    const parsed = tradeSchema.safeParse(next);
+                    if (parsed.success) {
+                      updatePart(part.key, { trade: parsed.data });
+                    }
                   }}
                   className="w-40"
                   label={`Part ${index + 1} trade`}

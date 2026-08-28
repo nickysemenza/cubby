@@ -1,3 +1,4 @@
+import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -64,6 +65,11 @@ type EmbeddingTextLoader = (
   db: Database,
   options?: EmbeddingLoadOptions,
 ) => Promise<SearchableEntityText[]>;
+
+const withOptionalLimit = <const TConfig extends object>(
+  config: TConfig,
+  limit: number | undefined,
+) => (limit === undefined ? config : { ...config, limit });
 
 /**
  * The stored hash for an entity under the current model, or null when there is
@@ -160,27 +166,30 @@ async function getProductEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.product.findMany({
-    where: and(
-      notDeleted(product),
-      options.ids?.length
-        ? inArray(
-            product.id,
-            options.ids.map((id) => parseEntityId("product", id)),
-          )
-        : undefined,
-    ),
-    columns: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      category: true,
-      model: true,
-      notes: true,
-      aliases: true,
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(product),
+        options.ids?.length
+          ? inArray(
+              product.id,
+              options.ids.map((id) => parseEntityId("product", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        manufacturer: true,
+        category: true,
+        model: true,
+        notes: true,
+        aliases: true,
+      },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.product.findMany(queryConfig);
   const gtins = await loadAllGtins(
     db,
     rows.map((row) => row.id),
@@ -199,27 +208,32 @@ async function getWishEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.wish.findMany({
-    where: and(
-      notDeleted(wish),
-      options.ids?.length
-        ? inArray(
-            wish.id,
-            options.ids.map((id) => parseEntityId("wish", id)),
-          )
-        : undefined,
-    ),
-    columns: { id: true, name: true, notes: true },
-    with: {
-      candidates: {
-        where: notDeleted(wishCandidate),
-        with: {
-          product: { columns: { name: true, manufacturer: true, model: true } },
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(wish),
+        options.ids?.length
+          ? inArray(
+              wish.id,
+              options.ids.map((id) => parseEntityId("wish", id)),
+            )
+          : undefined,
+      ),
+      columns: { id: true, name: true, notes: true },
+      with: {
+        candidates: {
+          where: notDeleted(wishCandidate),
+          with: {
+            product: {
+              columns: { name: true, manufacturer: true, model: true },
+            },
+          },
         },
       },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.wish.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "wish",
     entityId: row.id,
@@ -243,25 +257,28 @@ async function getLocationEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.location.findMany({
-    where: and(
-      notDeleted(location),
-      options.ids?.length
-        ? inArray(
-            location.id,
-            options.ids.map((id) => parseEntityId("location", id)),
-          )
-        : undefined,
-    ),
-    columns: {
-      id: true,
-      name: true,
-      type: true,
-      aiDescription: true,
-      aliases: true,
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(location),
+        options.ids?.length
+          ? inArray(
+              location.id,
+              options.ids.map((id) => parseEntityId("location", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        type: true,
+        aiDescription: true,
+        aliases: true,
+      },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.location.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "location",
     entityId: row.id,
@@ -273,24 +290,27 @@ async function getIngredientEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.ingredient.findMany({
-    where: and(
-      notDeleted(ingredient),
-      isNull(ingredient.recipeId),
-      options.ids?.length
-        ? inArray(
-            ingredient.id,
-            options.ids.map((id) => parseEntityId("ingredient", id)),
-          )
-        : undefined,
-    ),
-    columns: {
-      id: true,
-      name: true,
-      aliases: true,
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(ingredient),
+        isNull(ingredient.recipeId),
+        options.ids?.length
+          ? inArray(
+              ingredient.id,
+              options.ids.map((id) => parseEntityId("ingredient", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        aliases: true,
+      },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.ingredient.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "ingredient",
     entityId: row.id,
@@ -350,25 +370,28 @@ async function getCookbookEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.cookbook.findMany({
-    where: and(
-      notDeleted(cookbook),
-      options.ids?.length
-        ? inArray(
-            cookbook.id,
-            options.ids.map((id) => parseEntityId("cookbook", id)),
-          )
-        : undefined,
-    ),
-    columns: {
-      id: true,
-      name: true,
-      author: true,
-      subjects: true,
-      sourceLabel: true,
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(cookbook),
+        options.ids?.length
+          ? inArray(
+              cookbook.id,
+              options.ids.map((id) => parseEntityId("cookbook", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        author: true,
+        subjects: true,
+        sourceLabel: true,
+      },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.cookbook.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "cookbook",
     entityId: row.id,
@@ -490,26 +513,29 @@ async function getProjectEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.project.findMany({
-    where: and(
-      notDeleted(project),
-      options.ids?.length
-        ? inArray(
-            project.id,
-            options.ids.map((id) => parseEntityId("project", id)),
-          )
-        : undefined,
-    ),
-    columns: {
-      id: true,
-      name: true,
-      status: true,
-      kind: true,
-      locations: true,
-      notes: true,
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(project),
+        options.ids?.length
+          ? inArray(
+              project.id,
+              options.ids.map((id) => parseEntityId("project", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        status: true,
+        kind: true,
+        locations: true,
+        notes: true,
+      },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.project.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "project",
     entityId: row.id,
@@ -600,19 +626,22 @@ async function getVendorEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.vendor.findMany({
-    where: and(
-      notDeleted(vendor),
-      options.ids?.length
-        ? inArray(
-            vendor.id,
-            options.ids.map((id) => parseEntityId("vendor", id)),
-          )
-        : undefined,
-    ),
-    columns: { id: true, name: true, website: true, notes: true },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(vendor),
+        options.ids?.length
+          ? inArray(
+              vendor.id,
+              options.ids.map((id) => parseEntityId("vendor", id)),
+            )
+          : undefined,
+      ),
+      columns: { id: true, name: true, website: true, notes: true },
+    },
+    options.limit,
+  );
+  const rows = await getDb(db).query.vendor.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "vendor",
     entityId: row.id,
@@ -658,34 +687,68 @@ async function getPurchaseEmbeddingTexts(
   }));
 }
 
-const identityTerms = (identity: Record<string, unknown>): string[] =>
-  Object.values(identity).flatMap((value) =>
-    typeof value === "string" && value.length > 0 ? [value] : [],
-  );
+const presentIdentityTerms = (terms: Array<string | null>): string[] =>
+  terms.filter((term): term is string => term !== null && term.length > 0);
+
+const identityTerms = (identity: FinancialAccountIdentity): string[] => {
+  switch (identity.kind) {
+    case "credit_card":
+      return presentIdentityTerms([
+        identity.kind,
+        identity.issuer,
+        identity.network,
+        identity.last4,
+      ]);
+    case "bank_account":
+      return presentIdentityTerms([
+        identity.kind,
+        identity.institution,
+        identity.accountType,
+        identity.last4,
+      ]);
+    case "stored_value":
+      return presentIdentityTerms([
+        identity.kind,
+        identity.provider,
+        identity.last4,
+      ]);
+    case "cash":
+      return [identity.kind];
+    case "other":
+      return presentIdentityTerms([
+        identity.kind,
+        identity.institution,
+        identity.last4,
+      ]);
+  }
+};
 
 async function getFinancialAccountEmbeddingTexts(
   db: Database,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const rows = await getDb(db).query.financialAccount.findMany({
-    where: and(
-      notDeleted(financialAccount),
-      options.ids?.length
-        ? inArray(
-            financialAccount.id,
-            options.ids.map((id) => parseEntityId("financialAccount", id)),
-          )
-        : undefined,
-    ),
-    columns: {
-      id: true,
-      name: true,
-      identity: true,
-      sourceAliases: true,
-      notes: true,
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(financialAccount),
+        options.ids?.length
+          ? inArray(
+              financialAccount.id,
+              options.ids.map((id) => parseEntityId("financialAccount", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        name: true,
+        identity: true,
+        sourceAliases: true,
+        notes: true,
+      },
     },
-    ...(options.limit == null ? {} : { limit: options.limit }),
-  });
+    options.limit,
+  );
+  const rows = await getDb(db).query.financialAccount.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "financialAccount",
     entityId: row.id,

@@ -14,19 +14,15 @@ import { notFound } from "@tanstack/react-router";
  * module stays React-free on purpose. Page bodies belong in `./entity-routes`,
  * which no unsplittable route property may reference.
  */
-export async function ensureDetailRecord(
+export async function ensureDetailRecord<
+  TQueryFnData,
+  TError,
+  TData,
+  TQueryKey extends QueryKey,
+>(
   queryClient: QueryClient,
-  // The structural minimum a transport `queryOptions()` result satisfies; see the
-  // cast note in `./entity-routes`.
-  options: { queryKey: readonly unknown[] },
+  options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
 ): Promise<void> {
-  const record = await queryClient.ensureQueryData(
-    options as unknown as EnsureQueryDataOptions<
-      unknown,
-      Error,
-      unknown,
-      QueryKey
-    >,
-  );
+  const record = await queryClient.ensureQueryData(options);
   if (!record) throw notFound();
 }

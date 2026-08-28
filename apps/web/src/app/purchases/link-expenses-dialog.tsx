@@ -50,6 +50,17 @@ import { purchase as purchaseOperations } from "./purchase.functions";
 const NO_CANDIDATES: ExpenseOut[] = [];
 const CANDIDATE_PAGE_SIZE = 100;
 type CandidateScope = "vendorOrUnattached" | "unattached" | "any";
+const candidateScopeValues = [
+  "vendorOrUnattached",
+  "unattached",
+  "any",
+] as const satisfies readonly CandidateScope[];
+const isCandidateScope = (value: string): value is CandidateScope =>
+  candidateScopeValues.some((candidate) => candidate === value);
+const isUpdater = (
+  updater: Updater<RowSelectionState>,
+): updater is (previous: RowSelectionState) => RowSelectionState =>
+  typeof updater === "function";
 const SCOPE_OPTIONS: FilterableComboboxItem[] = [
   { value: "vendorOrUnattached", label: "This vendor or unattached" },
   { value: "unattached", label: "Unattached expenses only" },
@@ -126,8 +137,7 @@ export function LinkExpensesDialog({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isUpdater(updater) ? updater(rowSelection) : updater;
     setSelectedRows((previous) => {
       const rows = new Map(previous);
       for (const id of rows.keys()) {
@@ -242,7 +252,7 @@ export function LinkExpensesDialog({
             items={SCOPE_OPTIONS}
             value={scope}
             onValueChange={(next) => {
-              if (next) setScope(next as CandidateScope);
+              if (next && isCandidateScope(next)) setScope(next);
             }}
             className="w-56 shrink-0"
           />

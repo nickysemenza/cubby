@@ -1,4 +1,4 @@
-import { mealCreateInput } from "@cubby/schemas/meal";
+import { type MealCreateInput, mealCreateInput } from "@cubby/schemas/meal";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -231,7 +231,7 @@ describe("mealList classification filters", () => {
 describe("mealList sorting", () => {
   const ctx = withTestDb();
 
-  const makeMeal = (date: string, overrides: Record<string, unknown> = {}) =>
+  const makeMeal = (date: string, overrides: Partial<MealCreateInput> = {}) =>
     createMeal(
       ctx.db,
       mealCreateInput.parse({ date, ...overrides }),

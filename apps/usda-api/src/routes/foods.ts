@@ -8,7 +8,15 @@ import {
 import { foodLookupParam } from "@cubby/usda-schemas";
 import type { USDADataSource } from "../data/types.js";
 
-export function createFoodRoutes(dataSource: USDADataSource) {
+export interface FoodRoutePort {
+  readonly getFoodById: USDADataSource["getFoodById"];
+  readonly findFoodByUpc: USDADataSource["findFoodByUpc"];
+  readonly findFoodByNdb: USDADataSource["findFoodByNdb"];
+  readonly findFoodsByLookupBatch: USDADataSource["findFoodsByLookupBatch"];
+  readonly listFoods: USDADataSource["listFoods"];
+}
+
+export function createFoodRoutes(dataSource: FoodRoutePort) {
   const app = new Hono();
 
   app.get(

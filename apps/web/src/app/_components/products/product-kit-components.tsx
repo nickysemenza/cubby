@@ -64,6 +64,23 @@ const TABLE_STATE = {
   pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
 } as const;
 
+/** Remote descriptors used by the kit composition and its add dialog. */
+export interface ProductKitComponentsOperations {
+  components: typeof productOperations.components;
+  kitMembership: typeof productOperations.kitMembership;
+  search: typeof productOperations.search;
+  attachComponents: typeof productOperations.attachComponents;
+  detachComponents: typeof productOperations.detachComponents;
+}
+
+const productionOperations: ProductKitComponentsOperations = {
+  components: productOperations.components,
+  kitMembership: productOperations.kitMembership,
+  search: productOperations.search,
+  attachComponents: productOperations.attachComponents,
+  detachComponents: productOperations.detachComponents,
+};
+
 type ProductRow = {
   id: string;
   name: string;
@@ -104,6 +121,12 @@ function componentStockSummary(
       };
 }
 type PickerRow = ProductPickerItemOut & { images: ProductRow["images"] };
+
+function isRowSelectionUpdater(
+  updater: Updater<RowSelectionState>,
+): updater is (previous: RowSelectionState) => RowSelectionState {
+  return typeof updater === "function";
+}
 
 function imagesFor(id: string, name: string, url: string | null) {
   return url ? [{ id: `cover:${id}`, url, filename: name }] : [];
@@ -234,11 +257,13 @@ function AddComponentsDialog({
   onOpenChange,
   parentProductId,
   attachedIds,
+  operations,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parentProductId: string;
   attachedIds: Set<string>;
+  operations: ProductKitComponentsOperations;
 }) {
   const [selected, setSelected] = useState<Map<ProductShortcode, number>>(
     new Map(),
@@ -247,7 +272,7 @@ function AddComponentsDialog({
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...productOperations.search.queryOptions({
+    ...operations.search.queryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -275,7 +300,7 @@ function AddComponentsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: productOperations.attachComponents.mutationOptions,
+    mutationFn: operations.attachComponents.mutationOptions,
     success: (result) =>
       `Added ${result.changed} component${result.changed === 1 ? "" : "s"}`,
     onSuccess: () => resetAndClose(false),
@@ -286,8 +311,9 @@ function AddComponentsDialog({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isRowSelectionUpdater(updater)
+      ? updater(rowSelection)
+      : updater;
     setSelected((previous) => {
       const quantities = new Map(previous);
       for (const id of Object.keys(rowSelection)) {
@@ -440,13 +466,19 @@ function AddComponentsDialog({
   );
 }
 
-export function ProductKitComponents({ productId }: { productId: string }) {
+export function ProductKitComponents({
+  productId,
+  operations = productionOperations,
+}: {
+  productId: string;
+  operations?: ProductKitComponentsOperations;
+}) {
   const [addOpen, setAddOpen] = useState(false);
   const componentsQuery = useQuery(
-    productOperations.components.queryOptions({ parentProductId: productId }),
+    operations.components.queryOptions({ parentProductId: productId }),
   );
   const membershipQuery = useQuery(
-    productOperations.kitMembership.queryOptions({ productId }),
+    operations.kitMembership.queryOptions({ productId }),
   );
   const components = componentsQuery.data ?? EMPTY_COMPONENTS;
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
@@ -489,11 +521,11 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   );
 
   const detachComponent = useActionMutation({
-    mutationFn: productOperations.detachComponents.mutationOptions,
+    mutationFn: operations.detachComponents.mutationOptions,
     success: "Component removed",
   });
   const detachMembership = useActionMutation({
-    mutationFn: productOperations.detachComponents.mutationOptions,
+    mutationFn: operations.detachComponents.mutationOptions,
     success: "Removed from kit",
   });
   // The one direction that is already a bulk operation:
@@ -621,6 +653,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         onOpenChange={setAddOpen}
         parentProductId={productId}
         attachedIds={new Set(components.map((item) => item.productId))}
+        operations={operations}
       />
     </Stack>
   );

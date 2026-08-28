@@ -81,9 +81,13 @@ export function SearchDebugPage() {
   const [entityTypes, setEntityTypes] = useState<SearchableEntity[]>([
     ...searchableEntities,
   ]);
+  const shouldSearch = submitted.trim().length > 0;
   const debugQuery = useQuery({
-    ...search.debug.queryOptions({ query: submitted, limit: 10 }),
-    enabled: submitted.trim().length > 0,
+    ...search.debug.queryOptions({
+      query: shouldSearch ? submitted : "inactive-search",
+      limit: 10,
+    }),
+    enabled: shouldSearch,
   });
   const backfill = useMutation(
     search.enqueueEmbeddingBackfill.mutationOptions(),

@@ -1,12 +1,15 @@
+import type { Query } from "@tanstack/react-query";
+
 import { getAppErrorDetails } from "~/lib/error-utils";
+import type { UnparsedError } from "~/lib/error-utils";
 
 interface FailedQuery {
-  meta: Record<string, unknown> | undefined;
+  meta: Query["meta"];
   getObserversCount: () => number;
 }
 
 export function shouldToastQueryError(
-  error: unknown,
+  error: UnparsedError,
   query: FailedQuery,
 ): boolean {
   const code = getAppErrorDetails(error).code;

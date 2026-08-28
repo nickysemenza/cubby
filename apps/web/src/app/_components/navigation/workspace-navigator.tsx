@@ -77,6 +77,8 @@ function NavigatorLink({
   return (
     <Link
       to={item.to}
+      // SAFETY: nav-item search values are generated for their own literal
+      // routes; the heterogeneous navigation catalog loses that correlation.
       search={item.search as never}
       onClick={onNavigate}
       className={cn(

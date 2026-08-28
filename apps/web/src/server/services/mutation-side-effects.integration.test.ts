@@ -6,6 +6,7 @@ import {
 import { testEntityId } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -36,6 +37,12 @@ import {
   runMutationSideEffectsForEntities,
 } from "./mutation-side-effects";
 import { cleanupOrphanedEntityEmbeddings } from "./problems.service";
+
+const batchMetadataSchema = z.object({ source: z.string().optional() });
+const batchSource = <Metadata>(metadata: Metadata): string | undefined => {
+  const parsed = batchMetadataSchema.safeParse(metadata);
+  return parsed.success ? parsed.data.source : undefined;
+};
 
 describe("mutation side effects integration", () => {
   const ctx = withTestDb();
@@ -81,8 +88,7 @@ describe("mutation side effects integration", () => {
     const embeddingBatches = batches.filter(
       (batch) =>
         batch.kind === "entity-embedding.refresh" &&
-        (batch.metadata as { source?: string } | null)?.source ===
-          "test.product.update",
+        batchSource(batch.metadata) === "test.product.update",
     );
     expect(embeddingBatches.length).toBeGreaterThan(0);
     const details = await Promise.all(
@@ -150,8 +156,7 @@ describe("mutation side effects integration", () => {
     const embeddingBatches = batches.filter(
       (batch) =>
         batch.kind === "entity-embedding.refresh" &&
-        (batch.metadata as { source?: string } | null)?.source ===
-          "test.project.rename",
+        batchSource(batch.metadata) === "test.project.rename",
     );
     expect(embeddingBatches.length).toBeGreaterThan(0);
     const details = await Promise.all(
@@ -191,11 +196,7 @@ describe("mutation side effects integration", () => {
 
     const batches = await listBackgroundBatches(ctx.db, 20);
     const matchingKinds = batches
-      .filter(
-        (batch) =>
-          (batch.metadata as { source?: string } | null)?.source ===
-          "test.location.update",
-      )
+      .filter((batch) => batchSource(batch.metadata) === "test.location.update")
       .map((batch) => batch.kind);
     expect(matchingKinds).toEqual(
       expect.arrayContaining([
@@ -222,11 +223,7 @@ describe("mutation side effects integration", () => {
 
     const batches = await listBackgroundBatches(ctx.db, 20);
     const matchingKinds = batches
-      .filter(
-        (batch) =>
-          (batch.metadata as { source?: string } | null)?.source ===
-          "test.location.rename",
-      )
+      .filter((batch) => batchSource(batch.metadata) === "test.location.rename")
       .map((batch) => batch.kind);
     expect(matchingKinds).not.toContain("location-ai.description.refresh");
     expect(matchingKinds).not.toContain("location-ai.inventory.refresh");
@@ -275,8 +272,7 @@ describe("mutation side effects integration", () => {
     const valuationBatches = batches.filter(
       (batch) =>
         batch.kind === "location-valuation.recompute" &&
-        (batch.metadata as { source?: string } | null)?.source ===
-          "test.inventory.bulk",
+        batchSource(batch.metadata) === "test.inventory.bulk",
     );
     // Whole-tree valuation must collapse to a single job, not one per entity.
     expect(valuationBatches).toHaveLength(1);
@@ -324,8 +320,7 @@ describe("mutation side effects integration", () => {
     const embeddingBatches = batches.filter(
       (batch) =>
         batch.kind === "entity-embedding.refresh" &&
-        (batch.metadata as { source?: string } | null)?.source ===
-          "test.embedding.bulk",
+        batchSource(batch.metadata) === "test.embedding.bulk",
     );
     // Three entities whose only handler is refreshOwnEmbedding must collapse
     // into a single batch (one transaction), not one batch per entity.

@@ -8,12 +8,12 @@ import { BASE_KINDS } from "~/lib/conversion-coverage";
 
 import { macroCoverage } from "./macro-coverage";
 
-const KIND_LABEL: Record<(typeof BASE_KINDS)[number], string> = {
+const KIND_LABEL = {
   weight: "weight",
   volume: "volume",
   money: "price",
   calories: "calories",
-};
+} satisfies Record<(typeof BASE_KINDS)[number], string>;
 
 /** A lit/dim coverage pill — the shared vocabulary for big-4 + macro chips. */
 function chip(key: string, label: string, on: boolean) {

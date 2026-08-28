@@ -1,11 +1,11 @@
 import {
   ALLOWED_IMAGE_TYPES,
-  type AllowedImageType,
   MAX_IMAGE_UPLOAD_BYTES,
 } from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
@@ -16,6 +16,8 @@ export interface UploadedImage {
   filename: string;
   key: string;
 }
+
+const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
 
 /**
  * Standalone `/images` upload transport: validate → presigned PUT → finalize.
@@ -49,7 +51,8 @@ export function useImageUpload() {
 
   const uploadFile = useCallback(
     async (file: File): Promise<UploadedImage | null> => {
-      if (!ALLOWED_IMAGE_TYPES.includes(file.type as AllowedImageType)) {
+      const contentType = imageContentTypeSchema.safeParse(file.type);
+      if (!contentType.success) {
         toast.error(
           `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
         );
@@ -63,7 +66,7 @@ export function useImageUpload() {
       try {
         const initResult = await uploadImageMutation.mutateAsync({
           filename: file.name,
-          contentType: file.type as AllowedImageType,
+          contentType: contentType.data,
           size: file.size,
         });
 

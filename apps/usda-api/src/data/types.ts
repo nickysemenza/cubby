@@ -8,7 +8,7 @@ import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
 
 export type { ListFoodsArgs, ListFoodsResult };
 
-export type Counts = z.infer<typeof countsSchema>;
+type Counts = z.infer<typeof countsSchema>;
 
 export interface USDADataSource {
   getCounts(): Promise<Counts>;

@@ -8,21 +8,28 @@ import {
 import type { MouseEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-// Mock sonner toast
-vi.mock("sonner", () => ({
-  toast: {
-    error: vi.fn(),
-  },
-}));
-
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
+import {
+  EditorNotificationContext,
+  type EditorNotificationPort,
+} from "./editable-cell";
 import { EditableEntityCell } from "./editable-entity-cell";
 
 const PANTRY: ComboboxItem<string> = { id: "loc-1", name: "Pantry" };
 const FRIDGE: ComboboxItem<string> = { id: "loc-2", name: "Fridge" };
 const GARAGE: ComboboxItem<string> = { id: "loc-3", name: "Garage" };
 const STATIC_ITEMS: ComboboxItem<string>[] = [PANTRY, FRIDGE, GARAGE];
+
+function createEditorNotifications(): EditorNotificationPort & {
+  errors: string[];
+} {
+  const errors: string[] = [];
+  return {
+    errors,
+    showError: (message) => errors.push(message),
+  };
+}
 
 /** Stub SearchProvider — bypasses the real query hooks and hands back a
  * static item list synchronously, as real=false loading state. */
@@ -42,10 +49,13 @@ const renderValue = (v: ComboboxItem<string> | null) => (
 /** The ✗ cancel action is icon-only; find it by its lucide svg class, matching
  * the pattern used in editable-cell.unit.test.tsx. (Commit-on-pick removed the
  * ✓ confirm button — picking a row saves immediately.) */
-const getCancelButton = () =>
-  screen
+const getCancelButton = () => {
+  const cancelButton = screen
     .getAllByRole("button")
     .find((btn) => btn.querySelector("svg.lucide-x"));
+  if (!cancelButton) throw new Error("cancel button was not rendered");
+  return cancelButton;
+};
 
 const enterEditMode = () => {
   fireEvent.click(screen.getByRole("button"));
@@ -170,8 +180,7 @@ describe("EditableEntityCell", () => {
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
 
     const cancelButton = getCancelButton();
-    expect(cancelButton).toBeDefined();
-    fireEvent.click(cancelButton as HTMLElement);
+    fireEvent.click(cancelButton);
 
     await waitFor(() => {
       expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
@@ -231,16 +240,18 @@ describe("EditableEntityCell", () => {
   });
 
   it("shows a toast and stays in edit mode when onSave rejects", async () => {
-    const { toast } = await import("sonner");
+    const notifications = createEditorNotifications();
     const onSave = vi.fn().mockRejectedValue(new Error("Failed to save"));
     render(
-      <EditableEntityCell
-        value={PANTRY}
-        onSave={onSave}
-        SearchProvider={StubSearchProvider}
-        label="location"
-        renderValue={renderValue}
-      />,
+      <EditorNotificationContext.Provider value={notifications}>
+        <EditableEntityCell
+          value={PANTRY}
+          onSave={onSave}
+          SearchProvider={StubSearchProvider}
+          label="location"
+          renderValue={renderValue}
+        />
+      </EditorNotificationContext.Provider>,
     );
 
     enterEditMode();
@@ -248,7 +259,7 @@ describe("EditableEntityCell", () => {
     clickDropdownItem("Fridge");
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Failed to save");
+      expect(notifications.errors).toEqual(["Failed to save"]);
     });
     expect(screen.getByRole("combobox")).toBeInTheDocument();
   });

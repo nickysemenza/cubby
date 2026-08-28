@@ -1,4 +1,5 @@
 import { LRUCache } from "lru-cache";
+import { z } from "zod";
 
 import { env } from "~/env";
 import { recordAiUsage } from "~/server/ai-usage";
@@ -8,43 +9,63 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 import { getSemanticEmbeddingConfig } from "./config";
 
-interface EmbeddingResponse {
-  data?: Array<{
-    embedding?: number[];
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    total_tokens?: number;
-  };
+const embeddingResponseSchema = z.object({
+  data: z
+    .array(z.object({ embedding: z.array(z.number()).optional() }))
+    .optional(),
+  usage: z
+    .object({
+      prompt_tokens: z.number().optional(),
+      total_tokens: z.number().optional(),
+    })
+    .optional(),
+});
+
+export interface EmbeddingPorts {
+  readonly apiKey: string | undefined;
+  readonly accountId: string;
+  readonly gatewayId: string;
+  readonly fetch: typeof fetch;
+  readonly recordAiUsage: typeof recordAiUsage;
+  readonly config: typeof getSemanticEmbeddingConfig;
 }
+
+const productionEmbeddingPorts: EmbeddingPorts = {
+  apiKey: env.AI_GATEWAY_API_KEY,
+  accountId: CF_ACCOUNT_ID,
+  gatewayId: CF_AIG_GATEWAY_ID,
+  fetch,
+  recordAiUsage,
+  config: getSemanticEmbeddingConfig,
+};
 
 const queryEmbeddingCache = new LRUCache<string, number[]>({
   max: 500,
   ttl: 1000 * 60 * 60,
 });
 
-function gatewayEmbeddingsUrl(): string {
-  return `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/openai/embeddings`;
+function gatewayEmbeddingsUrl(ports: EmbeddingPorts): string {
+  return `https://gateway.ai.cloudflare.com/v1/${ports.accountId}/${ports.gatewayId}/openai/embeddings`;
 }
 
-function embeddingHeaders(): HeadersInit | null {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-  };
+function embeddingHeaders(ports: EmbeddingPorts): HeadersInit | null {
+  const headers = new Headers({ "content-type": "application/json" });
 
-  if (env.AI_GATEWAY_API_KEY) {
-    headers["cf-aig-authorization"] = `Bearer ${env.AI_GATEWAY_API_KEY}`;
+  if (ports.apiKey) {
+    headers.set("cf-aig-authorization", `Bearer ${ports.apiKey}`);
   }
 
-  if (!headers["cf-aig-authorization"]) {
+  if (!headers.has("cf-aig-authorization")) {
     return null;
   }
 
   return headers;
 }
 
-export function semanticEmbeddingsConfigured(): boolean {
-  return embeddingHeaders() !== null;
+export function semanticEmbeddingsConfigured(
+  ports: EmbeddingPorts = productionEmbeddingPorts,
+): boolean {
+  return embeddingHeaders(ports) !== null;
 }
 
 export async function embedTexts(
@@ -56,9 +77,10 @@ export async function embedTexts(
     entity?: { entityType: string; entityId: string };
     batchId?: string;
   },
+  ports: EmbeddingPorts = productionEmbeddingPorts,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const headers = embeddingHeaders();
+  const headers = embeddingHeaders(ports);
   if (!headers) {
     throw new Error(
       "Semantic embeddings are not configured. Set AI_GATEWAY_API_KEY so Cubby can call Cloudflare AI Gateway.",
@@ -68,7 +90,7 @@ export async function embedTexts(
   return withTrace(
     TraceNames.api("embeddings", opts?.operation ?? "embeddings"),
     async (span) => {
-      const config = getSemanticEmbeddingConfig();
+      const config = ports.config();
       span.setAttributes({
         "ai.provider": config.provider,
         "ai.model": config.model,
@@ -76,7 +98,7 @@ export async function embedTexts(
         "ai.input_count": texts.length,
       });
       const startedAt = performance.now();
-      const response = await fetch(gatewayEmbeddingsUrl(), {
+      const response = await ports.fetch(gatewayEmbeddingsUrl(ports), {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -93,11 +115,11 @@ export async function embedTexts(
         );
       }
 
-      const json = (await response.json()) as EmbeddingResponse;
+      const json = embeddingResponseSchema.parse(await response.json());
       if (opts?.db) {
         const inputTokens =
           json.usage?.prompt_tokens ?? json.usage?.total_tokens ?? null;
-        await recordAiUsage(opts.db, {
+        await ports.recordAiUsage(opts.db, {
           feature: opts.feature ?? "semantic-embedding",
           provider: config.provider,
           model: config.model,

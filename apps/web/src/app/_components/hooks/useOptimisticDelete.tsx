@@ -1,4 +1,4 @@
-import type { QueryKey } from "@tanstack/react-query";
+import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
@@ -7,7 +7,10 @@ import { toast } from "sonner";
 
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
-import type { EditableEntity } from "~/entities/editing/types";
+import type {
+  EditableEntity,
+  EntityEditResult,
+} from "~/entities/editing/types";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import {
   cancelQueriesByTags,
@@ -24,11 +27,36 @@ import type {
   EntityActionRow,
 } from "../actions/entity-actions";
 import type { BulkAction } from "../data-table/bulk-actions.types";
-import type { DeletableConfig } from "./useDeletableConfig";
+import type {
+  DeletableConfig,
+  DeleteMutationResult,
+  DeleteMutationVariables,
+} from "./useDeletableConfig";
+
+interface DeleteCommandPort {
+  remove: (ids: readonly string[]) => Promise<EntityEditResult<EditableEntity>>;
+}
+
+interface DeleteRollbackContext {
+  previousData: Array<[QueryKey, unknown]>;
+}
+
+interface DeleteTarget extends EntityActionRow {
+  displayName: string;
+}
+
+type OptimisticDeleteMutationOptions = UseMutationOptions<
+  DeleteMutationResult,
+  Error,
+  DeleteMutationVariables,
+  DeleteRollbackContext
+>;
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
   deletable: DeletableConfig | undefined;
   extraActions?: (row: TData) => ReactNode;
+  /** Testable command boundary; production uses the registered entity command. */
+  commandPort?: DeleteCommandPort;
   /**
    * How to name a row in the confirm dialog when `row.name` is null/empty.
    * Without it such a row is listed by its raw UUID, which tells the user
@@ -69,16 +97,21 @@ export function useOptimisticDelete<
 >({
   deletable,
   extraActions,
+  commandPort,
   emptyLabel,
 }: UseOptimisticDeleteOptions<TData>): UseOptimisticDeleteReturn<TData> {
   const queryClient = useQueryClient();
   const registeredDelete =
-    deletable !== undefined && deletable.entity !== "image";
-  const commandEntity = (
-    registeredDelete ? deletable.entity : "product"
-  ) as EditableEntity;
+    deletable?.entity !== undefined && deletable.entity !== "image";
+  const commandEntity: EditableEntity =
+    deletable?.entity && deletable.entity !== "image"
+      ? deletable.entity
+      : "product";
   const commands = useEntityCommands(commandEntity);
-  const [deleteTargets, setDeleteTargets] = useState<TData[] | null>(null);
+  const deleteCommands: DeleteCommandPort = commandPort ?? commands;
+  const [deleteTargets, setDeleteTargets] = useState<DeleteTarget[] | null>(
+    null,
+  );
   // Set only while the dialog was opened via the bulk-action toolbar. Lets the
   // dialog resolve `deleteBulkAction.onExecute`'s promise on close/submit so
   // `useBulkActions.executeAction` knows whether to clear the row selection —
@@ -88,97 +121,97 @@ export function useOptimisticDelete<
   >(null);
 
   // Memoize the mutation options to prevent infinite re-renders
-  const deleteMutationOptions = useMemo(() => {
-    if (!deletable) return null;
+  const deleteMutationOptions =
+    useMemo<OptimisticDeleteMutationOptions | null>(() => {
+      if (!deletable) return null;
 
-    // No invalidation here. The root MutationCache owns it, from the
-    // descriptor's own fan-out — which is WIDER than the surface patched below,
-    // and correctly so. Coupling the two is what forced the patch to walk a
-    // whole entity fan-out and rewrite unrelated caches on the way past.
-    const onSuccess = () => {
-      toast.success(`${deletable.entityLabel} deleted`);
-    };
-    const onError = (err: { message?: string }) => {
-      toast.error(
-        err.message ||
-          `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
-      );
-    };
-    const baseMutationOptions = registeredDelete
-      ? ({
-          mutationFn: async ({ ids }: { ids: string[] }) => {
-            const result = await commands.remove(ids);
-            if (!result.ok) {
-              throw new Error(result.issues[0]?.message ?? "Delete failed");
-            }
-            return result;
-          },
-          onSuccess,
-          onError,
-        } as Record<string, unknown>)
-      : (deletable.mutationOptions({ onSuccess, onError }) as Record<
-          string,
-          unknown
-        >);
-
-    // Extend with optimistic updates
-    return {
-      ...baseMutationOptions,
-      onMutate: async (variables: { ids: string[] }) => {
-        // The NARROW surface: only queries that list this entity's own rows can
-        // have a deleted id spliced out of them. A product delete ripples to
-        // recipes and dashboards too, but `removeDeletedIdsFromCache` has
-        // nothing sensible to say about those — it would walk them, match no
-        // id, and hand back the same object.
-        const patched: readonly OperationCacheTag[] = [[deletable.entity]];
-        await cancelQueriesByTags(queryClient, patched);
-        const previousData = snapshotQueriesByTags(queryClient, patched);
-        const deletedIds = new Set(variables.ids);
-        updateQueriesByTags(queryClient, patched, (old) =>
-          removeCachedListItems(old, deletedIds),
+      // No invalidation here. The root MutationCache owns it, from the
+      // descriptor's own fan-out — which is WIDER than the surface patched below,
+      // and correctly so. Coupling the two is what forced the patch to walk a
+      // whole entity fan-out and rewrite unrelated caches on the way past.
+      const onSuccess = () => {
+        toast.success(`${deletable.entityLabel} deleted`);
+      };
+      const onError = (error: Error) => {
+        toast.error(
+          error.message ||
+            `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
         );
-        return { previousData };
-      },
-      onError: (
-        err: unknown,
-        _variables: unknown,
-        context: { previousData?: Array<[QueryKey, unknown]> } | undefined,
-      ) => {
-        // Roll back optimistic update on error
-        if (context?.previousData)
-          restoreQueries(queryClient, context.previousData);
-        // Call the mutation factory's base error callback.
-        if (baseMutationOptions.onError) {
-          (
-            baseMutationOptions.onError as (
-              err: unknown,
-              variables: unknown,
-              context: unknown,
-            ) => void
-          )(err, _variables, context);
-        }
-      },
-    };
-    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
-  }, [commands.remove, deletable, queryClient, registeredDelete]);
+      };
+      const baseMutationOptions = registeredDelete
+        ? ({
+            mutationFn: async ({ ids }) => {
+              const result = await deleteCommands.remove(ids);
+              if (!result.ok) {
+                throw new Error(result.issues[0]?.message ?? "Delete failed");
+              }
+              return { deleted: ids.length };
+            },
+          } satisfies OptimisticDeleteMutationOptions)
+        : deletable.mutationOptions();
+
+      // Extend with optimistic updates
+      return {
+        ...baseMutationOptions,
+        onMutate: async (variables: { ids: string[] }) => {
+          // The NARROW surface: only queries that list this entity's own rows can
+          // have a deleted id spliced out of them. A product delete ripples to
+          // recipes and dashboards too, but `removeDeletedIdsFromCache` has
+          // nothing sensible to say about those — it would walk them, match no
+          // id, and hand back the same object.
+          const patched: readonly OperationCacheTag[] = [[deletable.entity]];
+          await cancelQueriesByTags(queryClient, patched);
+          const previousData = snapshotQueriesByTags(queryClient, patched);
+          const deletedIds = new Set(variables.ids);
+          updateQueriesByTags(queryClient, patched, (old) =>
+            removeCachedListItems(old, deletedIds),
+          );
+          return { previousData };
+        },
+        onSuccess,
+        onError: (error, _variables, context) => {
+          // Roll back optimistic update on error
+          if (context) restoreQueries(queryClient, context.previousData);
+          onError(error);
+        },
+      };
+    }, [deleteCommands, deletable, queryClient, registeredDelete]);
 
   // Always call useMutation unconditionally (Rules of Hooks).
   // When deletable is not configured, pass a no-op mutation function.
-  const noopMutationOptions = useMemo(
-    () => ({ mutationFn: async () => {} }),
+  const noopMutationOptions = useMemo<OptimisticDeleteMutationOptions>(
+    () => ({ mutationFn: async () => ({ deleted: 0 }) }),
     [],
   );
-  const deleteMutation = useMutation(
-    (deleteMutationOptions ?? noopMutationOptions) as Parameters<
-      typeof useMutation
-    >[0],
-  );
+  const deleteMutation = useMutation<
+    DeleteMutationResult,
+    Error,
+    DeleteMutationVariables,
+    DeleteRollbackContext
+  >(deleteMutationOptions ?? noopMutationOptions);
+  const { isPending: isDeletePending, mutateAsync: mutateDelete } =
+    deleteMutation;
 
   // Opens the dialog for a single row (row menu / swipe action). Not part of
   // the bulk-action toolbar, so nothing needs to resolve on close.
-  const requestDelete = useCallback((item: TData) => {
+  const requestDelete = useCallback(
+    (item: TData) => {
+      bulkResolveRef.current = null;
+      setDeleteTargets([
+        {
+          ...item,
+          displayName: item.name || emptyLabel?.(item) || item.id,
+        },
+      ]);
+    },
+    [emptyLabel],
+  );
+
+  const requestActionRowDelete = useCallback((item: EntityActionRow) => {
     bulkResolveRef.current = null;
-    setDeleteTargets([item]);
+    setDeleteTargets([
+      { ...item, displayName: item.name || item.filename || item.id },
+    ]);
   }, []);
 
   // Settle the bulk action's held-open promise, if this dialog session came
@@ -211,16 +244,29 @@ export function useOptimisticDelete<
       onExecute: (selectedRows) =>
         new Promise<{ success: boolean }>((resolve) => {
           bulkResolveRef.current = resolve;
-          setDeleteTargets(selectedRows.map((row) => row.original));
+          setDeleteTargets(
+            selectedRows.map((row) => ({
+              ...row.original,
+              displayName:
+                row.original.name ||
+                emptyLabel?.(row.original) ||
+                row.original.id,
+            })),
+          );
         }),
     });
-  }, [deletable]);
+  }, [deletable, emptyLabel]);
 
   const requestBulkDelete = useCallback(
     (rows: readonly EntityActionRow[]) =>
       new Promise<{ success: boolean }>((resolve) => {
         bulkResolveRef.current = resolve;
-        setDeleteTargets(rows as readonly TData[] as TData[]);
+        setDeleteTargets(
+          rows.map((row) => ({
+            ...row,
+            displayName: row.name || row.filename || row.id,
+          })),
+        );
       }),
     [],
   );
@@ -250,6 +296,15 @@ export function useOptimisticDelete<
 
   const targetCount = deleteTargets?.length ?? 0;
 
+  const submitDelete = useCallback(async () => {
+    if (!deleteTargets || deleteTargets.length === 0) return;
+    await mutateDelete({
+      ids: deleteTargets.map((target) => target.id),
+    });
+    setDeleteTargets(null);
+    settleBulkAction({ success: true });
+  }, [deleteTargets, mutateDelete, settleBulkAction]);
+
   // Build delete dialog element
   const deleteDialog = useMemo(
     () =>
@@ -264,7 +319,7 @@ export function useOptimisticDelete<
           items={
             deleteTargets?.map((target) => ({
               id: target.id,
-              name: target.name || emptyLabel?.(target) || target.id,
+              name: target.displayName,
             })) ?? []
           }
           itemNoun={deletable.entityLabel}
@@ -277,28 +332,23 @@ export function useOptimisticDelete<
           )} from your workspace. This action cannot be undone.`}
           renderItem={(item) => item.name}
           onSubmit={async () => {
-            if (!deleteTargets || deleteTargets.length === 0) return;
-            await deleteMutation.mutateAsync({
-              ids: deleteTargets.map((target) => target.id),
-            });
-            setDeleteTargets(null);
-            settleBulkAction({ success: true });
+            try {
+              await submitDelete();
+            } catch {
+              // `useMutation` has already rolled back the snapshot and shown
+              // the structured refusal toast; keep this dialog open for retry.
+            }
           }}
-          isPending={deletable ? deleteMutation.isPending : false}
+          isPending={deletable ? isDeletePending : false}
         />
       ) : null,
-    // Not `deleteMutation` wholesale — react-query hands back a new result
-    // object every render, so depending on it made this memo a no-op.
-    // `mutateAsync` is bound once by its observer; only `isPending` is read.
-    // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [
       deletable,
       deleteTargets,
       targetCount,
       settleBulkAction,
-      deleteMutation.isPending,
-      deleteMutation.mutateAsync,
-      emptyLabel,
+      isDeletePending,
+      submitDelete,
     ],
   );
 
@@ -322,7 +372,7 @@ export function useOptimisticDelete<
                     verb="delete"
                     onSelect={(event) => {
                       event.stopPropagation();
-                      requestDelete(row as TData);
+                      requestActionRowDelete(row);
                     }}
                   />
                 </>
@@ -333,7 +383,7 @@ export function useOptimisticDelete<
             }),
           }
         : null,
-    [deletable, requestBulkDelete, requestDelete],
+    [deletable, requestActionRowDelete, requestBulkDelete],
   );
 
   return {

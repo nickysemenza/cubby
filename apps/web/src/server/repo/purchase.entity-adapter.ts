@@ -1,7 +1,6 @@
 import {
   mergePurchasesInput,
   mergePurchasesOut,
-  purchaseFiltersSchema,
   purchaseSortableFields,
 } from "@cubby/schemas/purchase";
 
@@ -24,7 +23,6 @@ const purchaseShortcodes = bindShortcodeResolver("purchase");
 
 export const purchaseEntityAdapter = defineEntityAdapter({
   entity: "purchase",
-  filters: purchaseFiltersSchema,
   sort: { fields: purchaseSortableFields, default: "date" },
   lifecycle: {
     delete: PURCHASE_DELETE_EDGE_POLICY,
@@ -64,14 +62,10 @@ export const purchaseEntityAdapter = defineEntityAdapter({
   merge: {
     input: mergePurchasesInput,
     output: mergePurchasesOut,
-    item: (output) => (output as { purchase: unknown }).purchase,
-    summary: (output) => (output as { mergeSummary: unknown }).mergeSummary,
-    execute: async (ctx, value) => {
-      const output = await mergePurchases(
-        ctx.db,
-        mergePurchasesInput.parse(value),
-        ctx.actorContext,
-      );
+    item: (output) => output.purchase,
+    summary: (output) => output.mergeSummary,
+    execute: async (ctx, input) => {
+      const output = await mergePurchases(ctx.db, input, ctx.actorContext);
       return {
         output,
         entityId: await purchaseShortcodes.one(ctx.db, output.purchase.id),

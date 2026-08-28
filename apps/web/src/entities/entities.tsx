@@ -104,8 +104,15 @@ const newRouteExtensions = {
  * Names are stamped BEFORE the definition spreads in, so an entity that has a
  * genuine reason to depart can still say so and win.
  */
+type EntityDefinitionSeed = Pick<
+  EntityDefinition,
+  "basePath" | "lucideIcon" | "color" | "routes" | "sortableFields"
+>;
+const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
+  Object.hasOwn(entityNames, value);
+
 const withEntityNames = <
-  const Definitions extends Record<BrowserRoutedEntity, object>,
+  const Definitions extends Record<BrowserRoutedEntity, EntityDefinitionSeed>,
 >(
   definitions: Definitions,
 ): {
@@ -114,15 +121,21 @@ const withEntityNames = <
     pluralLabel: (typeof entityNames)[Entity]["plural"];
   } & Definitions[Entity];
 } =>
+  // SAFETY: the runtime key guard preserves every entity key, while
+  // Object.fromEntries cannot retain that mapped key/value correlation.
   Object.fromEntries(
-    Object.entries(definitions).map(([entity, definition]) => [
-      entity,
-      {
-        label: entityNames[entity as BrowserRoutedEntity].singular,
-        pluralLabel: entityNames[entity as BrowserRoutedEntity].plural,
-        ...definition,
-      },
-    ]),
+    Object.entries(definitions).map(([entity, definition]) => {
+      if (!isBrowserEntityKey(entity))
+        throw new Error(`Unknown entity ${entity}`);
+      return [
+        entity,
+        {
+          label: entityNames[entity].singular,
+          pluralLabel: entityNames[entity].plural,
+          ...definition,
+        },
+      ];
+    }),
     // `Object.entries` widens the key to `string` and loses the pairing the
     // signature above states; the mapped type is the real contract.
   ) as never;
@@ -666,9 +679,7 @@ export const entityPluralLabel = (entity: Entity): string =>
  * `usda` is NOT routed through here — it legitimately keys on an external USDA
  * `fdc_id` rather than a shortcode.
  */
-export const entityDetailParams = (
-  shortcode: string,
-): { shortcode: string } => ({
+export const entityDetailParams = (shortcode: string) => ({
   shortcode,
 });
 
@@ -711,11 +722,13 @@ export const EntityIcon = ({
   const domainColor = domain
     ? `var(${domainWayfinding(domain).accentToken})`
     : undefined;
+  const style = { ...props.style };
+  if (domainColor) style.color = domainColor;
   return (
     <def.lucideIcon
       {...props}
       className={cn(colored && !domainColor && def.color.text, className)}
-      style={{ ...(domainColor ? { color: domainColor } : {}), ...props.style }}
+      style={style}
     />
   );
 };

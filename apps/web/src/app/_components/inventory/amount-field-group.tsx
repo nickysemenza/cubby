@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type {
+  FieldPathByValue,
+  FieldValues,
+  UseFormReturn,
+} from "react-hook-form";
 
 import { cn } from "~/lib/utils";
 
@@ -20,25 +24,29 @@ import { getHoverableMeasureUnitIcon } from "./format-amount";
 export const DEFAULT_AMOUNT_UNIT = "each";
 
 interface AmountFieldGroupProps<
-  TFieldValues extends FieldValues = FieldValues,
+  TFieldValues extends FieldValues,
+  TValuePath extends FieldPathByValue<TFieldValues, number | null | undefined>,
+  TUnitPath extends FieldPathByValue<TFieldValues, string | null | undefined>,
 > {
   form: UseFormReturn<TFieldValues>;
-  valuePath: Path<TFieldValues>;
-  unitPath: Path<TFieldValues>;
+  valuePath: TValuePath;
+  unitPath: TUnitPath;
   step?: string;
   /** Compact mode for dense rows: shorter labels ("Qty"/"Unit") + tighter width. */
   compact?: boolean;
 }
 
 export function AmountFieldGroup<
-  TFieldValues extends FieldValues = FieldValues,
+  TFieldValues extends FieldValues,
+  TValuePath extends FieldPathByValue<TFieldValues, number | null | undefined>,
+  TUnitPath extends FieldPathByValue<TFieldValues, string | null | undefined>,
 >({
   form,
   valuePath,
   unitPath,
   step = "1",
   compact = false,
-}: AmountFieldGroupProps<TFieldValues>): ReactNode {
+}: AmountFieldGroupProps<TFieldValues, TValuePath, TUnitPath>): ReactNode {
   // Function to get unit icon if enabled
   const getIcon = (x: string | null): ReactNode | undefined => {
     if (!x) return undefined;

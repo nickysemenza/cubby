@@ -12,7 +12,7 @@ import { TraceNames, withTrace } from "~/server/tracing";
  * Services and routers should never call this - they just pass Database around.
  */
 export const getDb = (db: Database): DrizzleClient => {
-  return db as unknown as DrizzleClient;
+  return db.clientForRepository();
 };
 
 /**

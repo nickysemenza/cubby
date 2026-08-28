@@ -39,9 +39,9 @@ export function AliasesField<TFieldValues extends FieldValues>({
       {(_field, index) => (
         <Controller
           control={form.control}
-          // Cast: the row path is built from a caller-supplied `name`, so it
-          // can't be verified against TFieldValues at compile time (same
-          // constraint ArrayFieldManager documents).
+          // SAFETY: the row path is built from a caller-supplied `name`, so
+          // React Hook Form cannot verify it against TFieldValues here.
+          // ArrayFieldManager documents the same dynamic-path boundary.
           name={
             `${name}.${index}` as Parameters<
               typeof Controller<TFieldValues>
@@ -50,7 +50,7 @@ export function AliasesField<TFieldValues extends FieldValues>({
           render={({ field: controllerField }) => (
             <Input
               {...controllerField}
-              value={(controllerField.value as string | undefined) ?? ""}
+              value={String(controllerField.value ?? "")}
               placeholder={placeholder}
               className="flex-1"
             />

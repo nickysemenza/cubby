@@ -43,7 +43,7 @@ import type { WayfindingDomain } from "./domain-wayfinding";
 export type NavItem = {
   to: LinkProps["to"];
   /** Static search params — only the scanner shortcut needs these today. */
-  search?: Record<string, unknown>;
+  search?: Readonly<Record<string, string | undefined>>;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 };
@@ -380,8 +380,8 @@ export function getEntityNavGroup(
 
 /** Every reachable nav target, deduped — the universe active matching resolves over. */
 const allTargets: string[] = uniq(
-  [...completeNavLeaves, ...bottomNavItems, ...publicNavItems].map(
-    (leaf) => leaf.to as string,
+  [...completeNavLeaves, ...bottomNavItems, ...publicNavItems].map((leaf) =>
+    String(leaf.to),
   ),
 );
 

@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -51,33 +52,45 @@ type MatchStateSearchValue = StatementRowMatchState | "all";
 const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];
 
-const MATCH_STATE_TONE: Record<StatementRowMatchState, BadgeVariant> = {
+const MATCH_STATE_TONE = {
   matched: "positive",
   unmatched: "warning",
   superseded: "slate",
   ignored: "secondary",
-};
+} satisfies Record<StatementRowMatchState, BadgeVariant>;
 
-const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = (
-  Object.keys(MATCH_STATE_TONE) as StatementRowMatchState[]
-).map((value) => ({
-  value,
-  label: value.charAt(0).toUpperCase() + value.slice(1),
-  color: badgeVariantColor[MATCH_STATE_TONE[value]],
-}));
+const MATCH_STATE_VALUES = [
+  "matched",
+  "unmatched",
+  "superseded",
+  "ignored",
+] as const satisfies readonly StatementRowMatchState[];
+const matchStateSearchSchema = z.enum([...MATCH_STATE_VALUES, "all"] as const);
 
-const DISPOSITION_TONE: Record<StatementRowDisposition, BadgeVariant> = {
+const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = MATCH_STATE_VALUES.map(
+  (value) => ({
+    value,
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+    color: badgeVariantColor[MATCH_STATE_TONE[value]],
+  }),
+);
+
+const DISPOSITION_TONE = {
   open: "outline",
   ignored: "secondary",
-};
+} satisfies Record<StatementRowDisposition, BadgeVariant>;
+const DISPOSITION_VALUES = [
+  "open",
+  "ignored",
+] as const satisfies readonly StatementRowDisposition[];
 
-const DISPOSITION_OPTIONS: FilterableComboboxItem[] = (
-  Object.keys(DISPOSITION_TONE) as StatementRowDisposition[]
-).map((value) => ({
-  value,
-  label: value.charAt(0).toUpperCase() + value.slice(1),
-  color: badgeVariantColor[DISPOSITION_TONE[value]],
-}));
+const DISPOSITION_OPTIONS: FilterableComboboxItem[] = DISPOSITION_VALUES.map(
+  (value) => ({
+    value,
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+    color: badgeVariantColor[DISPOSITION_TONE[value]],
+  }),
+);
 
 /** Route search → server filters. `"all"` never reaches the wire — it's the
  * client-only way to say "no matchState filter" (see the route file). */
@@ -235,7 +248,7 @@ function StatementRowFilterBar({
         aria-label="Match state"
         value={search.matchState ?? "unmatched"}
         onChange={(e) =>
-          onUpdate({ matchState: e.target.value as MatchStateSearchValue })
+          onUpdate({ matchState: matchStateSearchSchema.parse(e.target.value) })
         }
       >
         <option value="unmatched">Unmatched</option>
@@ -250,7 +263,8 @@ function StatementRowFilterBar({
         onChange={(e) =>
           onUpdate({
             disposition: e.target.value
-              ? (e.target.value as StatementRowDisposition)
+              ? (DISPOSITION_VALUES.find((value) => value === e.target.value) ??
+                undefined)
               : undefined,
           })
         }
@@ -297,12 +311,10 @@ const columnHelper = createCubbyColumnHelper<StatementRowOut>();
 
 type StatementRowSortField = (typeof statementRowSortableFields)[number];
 
-// Match `statementRowSortableFields` exactly — a column id outside this set
-// would sort client-side visuals only, since the server only understands
-// these five (see listStatementRows' orderColumn switch).
-const SORTABLE: ReadonlySet<StatementRowSortField> = new Set(
-  statementRowSortableFields,
-);
+const isStatementRowSortField = (
+  value: string,
+): value is StatementRowSortField =>
+  statementRowSortableFields.some((field) => field === value);
 
 export function StatementRowList() {
   const search = route.useSearch();
@@ -346,9 +358,9 @@ export function StatementRowList() {
 
   const sortParams = tableState.getSortParams();
   const sort: { orderBy: StatementRowSortField; direction: "asc" | "desc" } =
-    SORTABLE.has(sortParams.orderBy as StatementRowSortField)
+    isStatementRowSortField(sortParams.orderBy)
       ? {
-          orderBy: sortParams.orderBy as StatementRowSortField,
+          orderBy: sortParams.orderBy,
           direction: sortParams.direction,
         }
       : { orderBy: "statementDate", direction: sortParams.direction };

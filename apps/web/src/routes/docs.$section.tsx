@@ -13,12 +13,18 @@ export const Route = createFileRoute("/docs/$section")({
   head: ({ params }) => ({
     meta: [{ title: pageTitle(getDocSection(params.section)?.title, "Docs") }],
   }),
-  loader: ({ params }) => {
-    if (!getDocSection(params.section)) throw notFound();
-  },
+  loader: loadDocsSection,
   notFoundComponent: DocsSectionNotFound,
   component: DocsSectionRoute,
 });
+
+export interface DocsSectionLoaderArgs {
+  params: { section: string };
+}
+
+export function loadDocsSection({ params }: DocsSectionLoaderArgs): void {
+  if (!getDocSection(params.section)) throw notFound();
+}
 
 function DocsSectionNotFound() {
   const headingId = useId();

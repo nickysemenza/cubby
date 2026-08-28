@@ -3,6 +3,7 @@ import {
   EMPTY_PROBLEM_ARRAYS,
   maintenanceCountsSchema,
 } from "@cubby/schemas/problems";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { AUTO_FIX_SECTION_IDS, buildAutoFixPlan } from "./auto-fix-registry";
@@ -18,8 +19,12 @@ describe("buildAutoFixPlan", () => {
   it("keeps maintenance work out of the listed-problems count", () => {
     const plan = buildAutoFixPlan(
       problems({
-        orphanedEntityEmbeddings: [{ id: "orphan" }] as never,
-        entitiesMissingEmbeddings: [{ entityId: "sample" }] as never,
+        orphanedEntityEmbeddings: fromPartial<
+          AllProblems["orphanedEntityEmbeddings"]
+        >([{ id: "orphan" }]),
+        entitiesMissingEmbeddings: fromPartial<
+          AllProblems["entitiesMissingEmbeddings"]
+        >([{ entityId: "sample" }]),
       }),
       maintenanceCountsSchema.parse({
         cullablePendingImages: 4,

@@ -15,11 +15,14 @@ import {
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
 import {
-  entities,
+  entityDetailLink,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
-import { entityPreviewQueryOptions } from "~/entities/entity-query";
+import {
+  entityPreviewQueryOptions,
+  prefetchEntityPreview,
+} from "~/entities/entity-query";
 
 import { EntityWorkbenchInspector } from "../entity-workbench-inspector";
 
@@ -49,17 +52,28 @@ const SHEET_MEDIA_QUERY = "(min-width: 768px) and (max-width: 1279px)";
 
 export type PreviewPresentation = "dock" | "sheet" | "mobile";
 
+export interface EntityPreviewBrowserOperations {
+  navigateToDetail: (entity: Entity, id: string) => void | Promise<void>;
+  prefetchDetail: (entity: Entity, id: string) => void | Promise<void>;
+  cancelPrefetch: (queryKey: readonly unknown[]) => void | Promise<void>;
+}
+
+export interface PreviewPresentationPort {
+  getSnapshot: () => PreviewPresentation;
+  subscribe: (onStoreChange: () => void) => () => void;
+}
+
 const previewPresentation = (): PreviewPresentation => {
-  if (typeof window === "undefined") return "mobile";
-  if (window.matchMedia(DOCK_MEDIA_QUERY).matches) return "dock";
-  if (window.matchMedia(SHEET_MEDIA_QUERY).matches) return "sheet";
+  if (!globalThis.window) return "mobile";
+  if (globalThis.window.matchMedia(DOCK_MEDIA_QUERY).matches) return "dock";
+  if (globalThis.window.matchMedia(SHEET_MEDIA_QUERY).matches) return "sheet";
   return "mobile";
 };
 
 const subscribePreviewPresentation = (onStoreChange: () => void) => {
-  if (typeof window === "undefined") return () => undefined;
-  const dock = window.matchMedia(DOCK_MEDIA_QUERY);
-  const sheet = window.matchMedia(SHEET_MEDIA_QUERY);
+  if (!globalThis.window) return () => undefined;
+  const dock = globalThis.window.matchMedia(DOCK_MEDIA_QUERY);
+  const sheet = globalThis.window.matchMedia(SHEET_MEDIA_QUERY);
   dock.addEventListener("change", onStoreChange);
   sheet.addEventListener("change", onStoreChange);
   return () => {
@@ -70,9 +84,23 @@ const subscribePreviewPresentation = (onStoreChange: () => void) => {
 
 const getServerPreviewPresentation = (): PreviewPresentation => "mobile";
 
-interface UseEntityPreviewOptions {
+const browserPreviewPresentation: PreviewPresentationPort = {
+  getSnapshot: previewPresentation,
+  subscribe: subscribePreviewPresentation,
+};
+
+export type PreviewIdField = "id" | "previewId" | "fdc_id";
+
+export interface EntityPreviewRowData {
+  id?: string | number | null;
+  previewId?: string | number | null;
+  fdc_id?: string | number | null;
+  entityType?: Entity | null;
+}
+
+export interface UseEntityPreviewOptions {
   /** Field to use as ID (default: "id") */
-  idField?: string;
+  idField?: PreviewIdField;
   /**
    * Opt into the workbench presentation: dock at desktop, Sheet at tablet,
    * and canonical navigation-only cards at mobile widths.
@@ -87,6 +115,10 @@ interface UseEntityPreviewOptions {
    * close/reopen behavior as every other top-level list.
    */
   renderInspector?: EntityPreviewRenderer;
+  /** Explicit browser seam used by deterministic UI harnesses. */
+  browserOperations?: EntityPreviewBrowserOperations;
+  /** Viewport seam; production reads matchMedia, tests use a memory store. */
+  presentationPort?: PreviewPresentationPort;
 }
 
 // Module-level so its identity never changes across renders — a component
@@ -141,34 +173,51 @@ export function useEntityPreview(
 ) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [isInspectorOpen, setInspectorOpen] = useState(false);
+  const presentationPort =
+    options?.presentationPort ?? browserPreviewPresentation;
   const presentation = useSyncExternalStore(
-    subscribePreviewPresentation,
-    previewPresentation,
+    presentationPort.subscribe,
+    presentationPort.getSnapshot,
     getServerPreviewPresentation,
   );
   const idField = options?.idField ?? "id";
   const responsiveInspector = options?.responsiveInspector ?? false;
   const renderInspector = options?.renderInspector ?? renderDefaultInspector;
   const queryClient = useQueryClient();
-  const navigate = useNavigate() as unknown as (options: {
-    to: string;
-    params: Record<string, string>;
-  }) => Promise<void>;
+  const navigate = useNavigate();
+  const productionBrowserOperations = useMemo<EntityPreviewBrowserOperations>(
+    () => ({
+      navigateToDetail: (entity, id) => {
+        if (entity === "usda-food") {
+          return navigate({ to: "/usda/$id", params: { id } });
+        }
+        if (!isBrowserRoutedEntity(entity)) return;
+        return navigate(entityDetailLink(entity, id));
+      },
+      prefetchDetail: (entity, id) =>
+        prefetchEntityPreview(queryClient, entity, id),
+      cancelPrefetch: (queryKey) =>
+        queryClient.cancelQueries({
+          queryKey,
+          exact: true,
+          type: "inactive",
+        }),
+    }),
+    [navigate, queryClient],
+  );
+  const browserOperations =
+    options?.browserOperations ?? productionBrowserOperations;
   const intentRef = useRef<PreviewIntent | null>(null);
 
   const stopIntent = useCallback(
     (intent: PreviewIntent, cancelStarted: boolean) => {
       if (intent.timer) clearTimeout(intent.timer);
       if (cancelStarted && intent.started) {
-        void queryClient.cancelQueries({
-          queryKey: intent.queryKey,
-          exact: true,
-          type: "inactive",
-        });
+        void browserOperations.cancelPrefetch(intent.queryKey);
       }
       if (intentRef.current === intent) intentRef.current = null;
     },
-    [queryClient],
+    [browserOperations],
   );
 
   useEffect(
@@ -183,17 +232,19 @@ export function useEntityPreview(
   // Note: entityType is handled separately to avoid conflicts with data that
   // has its own entityType field (search results carry a per-row entityType).
   const resolveRow = useCallback(
-    <T extends Record<string, unknown>>(row: {
+    <T extends EntityPreviewRowData>(row: {
       id?: string;
       original: T;
     }): PreviewState | null => {
-      const rowData = row.original as T & {
-        entityType?: Entity | string | null;
-      };
-      const entityType =
-        fixedEntity ?? (rowData.entityType as Entity | undefined);
+      const rowData = row.original;
+      const entityType = fixedEntity ?? rowData.entityType;
       if (!entityType) return null;
-      const targetId = rowData[idField];
+      const targetId =
+        idField === "previewId"
+          ? rowData.previewId
+          : idField === "fdc_id"
+            ? rowData.fdc_id
+            : rowData.id;
       if (targetId === undefined || targetId === null) return null;
       const id = String(targetId);
       const rowKey = String(row.id ?? rowData.id ?? id);
@@ -206,7 +257,7 @@ export function useEntityPreview(
   // The row key controls list selection; idField independently identifies the
   // canonical entity target for heterogeneous relationship rosters.
   const onRowClick = useCallback(
-    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
+    <T extends EntityPreviewRowData>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       if (!resolved) {
         console.warn("useEntityPreview: could not resolve entity/id from row");
@@ -234,30 +285,26 @@ export function useEntityPreview(
    * selection bar must not introduce a squeezed or second mobile inspector.
    */
   const inspectRow = useCallback(
-    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
+    <T extends EntityPreviewRowData>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) return;
 
       if (responsiveInspector && presentation === "mobile") {
-        const params: Record<string, string> =
-          resolved.entityType === "usda-food"
-            ? { id: resolved.id }
-            : { shortcode: resolved.id };
-        void navigate({
-          to: entities[resolved.entityType].routes.detail,
-          params,
-        });
+        void browserOperations.navigateToDetail(
+          resolved.entityType,
+          resolved.id,
+        );
         return;
       }
 
       setPreview(resolved);
       setInspectorOpen(true);
     },
-    [navigate, presentation, resolveRow, responsiveInspector],
+    [browserOperations, presentation, resolveRow, responsiveInspector],
   );
 
   const onRowHover = useCallback(
-    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
+    <T extends EntityPreviewRowData>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) {
         return;
@@ -275,11 +322,7 @@ export function useEntityPreview(
       const queryOptions = entityPreviewQueryOptions(
         resolved.entityType,
         resolved.id,
-      ) as {
-        queryKey: readonly unknown[];
-        meta?: Record<string, unknown>;
-        [key: string]: unknown;
-      };
+      );
       const intent: PreviewIntent = {
         preview: resolved,
         queryKey: queryOptions.queryKey,
@@ -289,19 +332,15 @@ export function useEntityPreview(
       intent.timer = setTimeout(() => {
         intent.timer = null;
         intent.started = true;
-        void queryClient.prefetchQuery({
-          // oxlint-disable-next-line typescript/no-explicit-any -- the generated entity union cannot be narrowed at this dispatch seam
-          ...(queryOptions as any),
-          meta: { ...queryOptions.meta, speculative: true },
-        });
+        void browserOperations.prefetchDetail(resolved.entityType, resolved.id);
       }, PREVIEW_INTENT_DELAY_MS);
       intentRef.current = intent;
     },
-    [resolveRow, queryClient, stopIntent],
+    [browserOperations, resolveRow, stopIntent],
   );
 
   const onRowHoverEnd = useCallback(
-    <T extends Record<string, unknown>>(row: { id?: string; original: T }) => {
+    <T extends EntityPreviewRowData>(row: { id?: string; original: T }) => {
       const resolved = resolveRow(row);
       const intent = intentRef.current;
       if (

@@ -2,7 +2,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeVendorsInput,
   mergeVendorsOut,
-  vendorFiltersSchema,
   vendorSortableFields,
 } from "@cubby/schemas/vendor";
 
@@ -22,7 +21,6 @@ import {
 
 export const vendorEntityAdapter = defineEntityAdapter({
   entity: "vendor",
-  filters: vendorFiltersSchema,
   sort: { fields: vendorSortableFields, default: "name" },
   lifecycle: {
     delete: VENDOR_DELETE_EDGE_POLICY,
@@ -39,12 +37,12 @@ export const vendorEntityAdapter = defineEntityAdapter({
   merge: {
     input: mergeVendorsInput,
     output: mergeVendorsOut,
-    item: (output) => (output as { vendor: unknown }).vendor,
-    summary: (output) => (output as { mergeSummary: unknown }).mergeSummary,
+    item: (output) => output.vendor,
+    summary: (output) => output.mergeSummary,
     execute: async (ctx, input) => {
       const { vendor, detachedImageKeys, mergeSummary } = await mergeVendors(
         ctx.db,
-        mergeVendorsInput.parse(input),
+        input,
         ctx.actorContext,
       );
       const entityId = await resolveLiveShortcode(ctx.db, vendor.id, "vendor");

@@ -27,6 +27,9 @@ const factorLabel = (f: number): string =>
 
 type AnchorMode = ScaleAnchor["type"];
 
+const isAnchorMode = (value: string): value is AnchorMode =>
+  value === "multiplier" || value === "totalWeight" || value === "ingredient";
+
 /**
  * An ingredient whose line couldn't reach grams, so the total-weight anchor
  * can't use it. Links to where the missing mapping is fixed: the product edit
@@ -172,7 +175,7 @@ export function RecipeScaleControl({
               className="w-full"
               value={[mode]}
               onValueChange={(values: string[]) => {
-                const next = values[0] as AnchorMode | undefined;
+                const next = values.find(isAnchorMode);
                 if (next) {
                   setMode(next);
                   setDraft("");

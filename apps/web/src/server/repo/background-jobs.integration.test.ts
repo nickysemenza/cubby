@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   dispatchBackgroundJobs,
@@ -12,6 +12,7 @@ import {
   processBackgroundQueueMessage,
 } from "~/server/background-queue";
 import { BACKGROUND_MESSAGE_VERSION } from "~/server/background-queue-types";
+import type { BackgroundQueueProducer } from "~/server/background-queue-types";
 import { setCfEnv } from "~/server/cf-env";
 import { backgroundJob } from "~/server/db/schema";
 import {
@@ -37,10 +38,22 @@ import { createLocation } from "~/server/repo/location";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
+type QueueBody = Parameters<BackgroundQueueProducer["send"]>[0];
+type QueueMessage = { body: QueueBody };
+
+function queueFor(sent: QueueMessage[][]): BackgroundQueueProducer {
+  return {
+    send: async () => {},
+    sendBatch: async (messages) => {
+      sent.push([...messages]);
+    },
+  };
+}
+
 describe("background job persistence", () => {
   const ctx = withTestDb();
 
-  afterEach(() => setCfEnv(undefined as unknown as Env));
+  afterEach(() => setCfEnv());
 
   it("summarizes job transitions on the batch", async () => {
     const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
@@ -98,7 +111,7 @@ describe("background job persistence", () => {
         "entity-embedding.backfill.coordinator",
       ),
     ).resolves.toBe("leased");
-    const retry = vi.fn();
+    const retries: Array<{ delaySeconds: number }> = [];
     await processBackgroundQueueMessage(ctx.db, {
       body: {
         messageVersion: BACKGROUND_MESSAGE_VERSION,
@@ -106,12 +119,16 @@ describe("background job persistence", () => {
         jobId,
         kind: "entity-embedding.backfill.coordinator",
       },
-      ack: vi.fn(),
-      retry,
+      ack: () => {},
+      retry: (options) => {
+        if (options) retries.push(options);
+      },
     });
-    expect(retry).toHaveBeenCalledWith({
-      delaySeconds: BACKGROUND_JOB_LEASE_MS / 1_000,
-    });
+    expect(retries).toEqual([
+      {
+        delaySeconds: BACKGROUND_JOB_LEASE_MS / 1_000,
+      },
+    ]);
 
     await getDb(ctx.db)
       .update(backgroundJob)
@@ -281,21 +298,10 @@ describe("background job persistence", () => {
   });
 
   it("delivers 201 persisted queued jobs in queue-sized chunks", async () => {
-    const sent: Array<
-      Array<{ body: { batchId: string; jobId: string; kind: string } }>
-    > = [];
-    setCfEnv({
-      BACKGROUND_QUEUE: {
-        send: vi.fn(),
-        sendBatch: vi.fn(
-          async (
-            messages: Iterable<{
-              body: { batchId: string; jobId: string; kind: string };
-            }>,
-          ) => sent.push([...messages]),
-        ),
-      },
-    } as unknown as Env);
+    const sent: QueueMessage[][] = [];
+    // SAFETY: this fixture supplies the only Worker binding consumed by this
+    // dispatch path; all other Env properties are intentionally absent.
+    setCfEnv({ BACKGROUND_QUEUE: queueFor(sent) } as Env);
     const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
       kind: "entity-embedding.refresh",
       source: "backfill",
@@ -502,18 +508,10 @@ describe("background job persistence", () => {
   // re-driving an old backlog nobody wants paid for.
   describe("stranded job reconciliation", () => {
     const stubQueue = () => {
-      const sent: Array<Array<{ body: { batchId: string; jobId: string } }>> =
-        [];
-      setCfEnv({
-        BACKGROUND_QUEUE: {
-          send: vi.fn(),
-          sendBatch: vi.fn(
-            async (
-              messages: Iterable<{ body: { batchId: string; jobId: string } }>,
-            ) => sent.push([...messages]),
-          ),
-        },
-      } as unknown as Env);
+      const sent: QueueMessage[][] = [];
+      // SAFETY: this fixture supplies the only Worker binding consumed by this
+      // dispatch path; all other Env properties are intentionally absent.
+      setCfEnv({ BACKGROUND_QUEUE: queueFor(sent) } as Env);
       return sent;
     };
 

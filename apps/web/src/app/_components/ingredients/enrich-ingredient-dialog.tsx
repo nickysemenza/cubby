@@ -1,7 +1,7 @@
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import { useRouter } from "@tanstack/react-router";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ProductForm } from "~/app/_components/products/product-form";
 import {
   Dialog,
@@ -40,8 +40,9 @@ export function EnrichIngredientDialog({
 }: EnrichIngredientDialogProps) {
   const router = useRouter();
 
-  const createProduct = useActionMutation({
+  const createProduct = useEntityActionMutation({
     entity: "product",
+    operation: "create",
     mutationFn: productCreateMutationOptions,
     success: (product) =>
       savedWithBackgroundWork(

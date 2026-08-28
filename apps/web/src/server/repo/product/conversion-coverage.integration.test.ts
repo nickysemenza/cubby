@@ -1,8 +1,10 @@
+import type { ProductFilters } from "@cubby/schemas/product";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import type { USDAClient } from "~/server/clients/usda";
+import { USDAClient } from "~/server/clients/usda";
 import { productConversionCoverage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import {
@@ -27,20 +29,34 @@ import {
 import { productList, updateProduct } from "./crud";
 import { mergeProducts } from "./merge";
 
+type UsdaBatchBehavior = (
+  lookups: FoodLookupParam[],
+) => Promise<(FoodSummary | null)[]>;
+
+class TestUSDAClient extends USDAClient {
+  constructor(private readonly batchBehavior: UsdaBatchBehavior) {
+    super("https://usda.test.invalid");
+  }
+
+  override findFoodsBatch(
+    lookups: FoodLookupParam[],
+  ): Promise<(FoodSummary | null)[]> {
+    return this.batchBehavior(lookups);
+  }
+}
+
 describe("ProductConversionCoverage projection", () => {
   const ctx = withTestDb();
-  const list = (filters: Record<string, unknown>) =>
+  const list = (filters: ProductFilters) =>
     productList(ctx.db, filters, [{ orderBy: "name", direction: "asc" }], {
       pageIndex: 0,
       pageSize: 50,
     });
 
   it("reads a healthy coverage lane without invoking the USDA rebuild path", async () => {
-    const client = {
-      findFoodsBatch: async () => {
-        throw new Error("healthy projection should not rebuild");
-      },
-    } as unknown as USDAClient;
+    const client = new TestUSDAClient(async () => {
+      throw new Error("healthy projection should not rebuild");
+    });
 
     const result = await findCoverageProblems(ctx.db, client);
     expect(result.freshness).toMatchObject({
@@ -80,11 +96,9 @@ describe("ProductConversionCoverage projection", () => {
     ]);
     await updateProduct(ctx.db, product.entityId, { price: 4 }, ctx.actor);
 
-    const client = {
-      findFoodsBatch: async () => {
-        throw new Error("USDA temporarily unavailable");
-      },
-    } as unknown as USDAClient;
+    const client = new TestUSDAClient(async () => {
+      throw new Error("USDA temporarily unavailable");
+    });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     const result = await findCoverageProblems(ctx.db, client);
@@ -410,9 +424,10 @@ describe("ProductConversionCoverage projection", () => {
       makeProductInput({ name: "Projection Rebuild" }),
       ctx.actor,
     );
-    const rows = await rebuildProductConversionCoverageProjection(ctx.db, {
-      findFoodsBatch: async (lookups: unknown[]) => lookups.map(() => null),
-    } as unknown as USDAClient);
+    const rows = await rebuildProductConversionCoverageProjection(
+      ctx.db,
+      new TestUSDAClient(async (lookups) => lookups.map(() => null)),
+    );
 
     expect(rows.some((row) => row.productId === product.entityId)).toBe(true);
     expect(

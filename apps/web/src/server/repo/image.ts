@@ -45,7 +45,6 @@ import type {
   IncomingEdgeKey,
   IncomingEdgePolicy,
 } from "~/server/db/entity-incoming-edges";
-import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   cookbook,
   image,
@@ -72,6 +71,7 @@ import {
   eqAny,
   executeListQueryWithCount,
   getDb,
+  imageJoinBindings,
   isNotDeleted,
   type ListReadIntent,
   nextImageSortOrder,
@@ -759,6 +759,165 @@ export const IMAGE_HARD_DELETE = {
   },
 } satisfies IncomingEdgePolicy<"image", OperationDisposition>;
 
+type ImageEdgeOperation = {
+  clear: (tx: DrizzleTransaction, imageIds: string[]) => Promise<void>;
+  findReferenced: (
+    dbc: DrizzleClient | DrizzleTransaction,
+    imageIds?: string[],
+  ) => Promise<string[]>;
+  joinColumn?: PgColumn;
+};
+
+const IMAGE_EDGE_OPERATIONS = {
+  "Cookbook.coverImageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .update(cookbook)
+        .set({ coverImageId: null })
+        .where(inArray(cookbook.coverImageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: cookbook.coverImageId })
+        .from(cookbook)
+        .where(
+          and(
+            isNotNull(cookbook.coverImageId),
+            imageIds ? inArray(cookbook.coverImageId, imageIds) : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
+  "Vendor.logoImageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .update(vendor)
+        .set({ logoImageId: null })
+        .where(inArray(vendor.logoImageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: vendor.logoImageId })
+        .from(vendor)
+        .where(
+          and(
+            isNotNull(vendor.logoImageId),
+            imageIds ? inArray(vendor.logoImageId, imageIds) : undefined,
+          ),
+        );
+      return rows.flatMap(({ imageId }) => (imageId ? [imageId] : []));
+    },
+    joinColumn: undefined,
+  },
+  "ProductImage.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .delete(productImage)
+        .where(inArray(productImage.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: productImage.imageId })
+        .from(productImage)
+        .where(
+          and(
+            isNotNull(productImage.imageId),
+            imageIds ? inArray(productImage.imageId, imageIds) : undefined,
+            notDeleted(productImage),
+          ),
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: productImage.imageId,
+  },
+  "LocationImage.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .delete(locationImage)
+        .where(inArray(locationImage.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: locationImage.imageId })
+        .from(locationImage)
+        .where(
+          and(
+            isNotNull(locationImage.imageId),
+            imageIds ? inArray(locationImage.imageId, imageIds) : undefined,
+            notDeleted(locationImage),
+          ),
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: locationImage.imageId,
+  },
+  "RecipeImage.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .delete(recipeImage)
+        .where(inArray(recipeImage.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: recipeImage.imageId })
+        .from(recipeImage)
+        .where(
+          and(
+            isNotNull(recipeImage.imageId),
+            imageIds ? inArray(recipeImage.imageId, imageIds) : undefined,
+            notDeleted(recipeImage),
+          ),
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: recipeImage.imageId,
+  },
+  "ProjectImage.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .delete(projectImage)
+        .where(inArray(projectImage.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: projectImage.imageId })
+        .from(projectImage)
+        .where(
+          and(
+            isNotNull(projectImage.imageId),
+            imageIds ? inArray(projectImage.imageId, imageIds) : undefined,
+            notDeleted(projectImage),
+          ),
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: projectImage.imageId,
+  },
+  "PurchaseImage.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .delete(purchaseImage)
+        .where(inArray(purchaseImage.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: purchaseImage.imageId })
+        .from(purchaseImage)
+        .where(
+          and(
+            isNotNull(purchaseImage.imageId),
+            imageIds ? inArray(purchaseImage.imageId, imageIds) : undefined,
+            notDeleted(purchaseImage),
+          ),
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: purchaseImage.imageId,
+  },
+} satisfies Record<IncomingEdgeKey<"image">, ImageEdgeOperation>;
+
 /**
  * Resolve `imageIds` down to the subset that actually exists — bogus or
  * already-gone ids are silently skipped rather than causing a partial
@@ -822,18 +981,8 @@ const deleteImagesTx = async (
     .from(purchaseImage)
     .where(and(inArray(purchaseImage.imageId, ids), notDeleted(purchaseImage)));
 
-  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
-    const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
-    const edgeColumn = column as PgColumn;
-    const edgeTable = column.table as PgTable;
-    if (disposition.effect === "hard-delete") {
-      await tx.delete(edgeTable).where(inArray(edgeColumn, ids));
-    } else {
-      await tx
-        .update(edgeTable)
-        .set({ [column.name]: null })
-        .where(inArray(edgeColumn, ids));
-    }
+  for (const operation of Object.values(IMAGE_EDGE_OPERATIONS)) {
+    await operation.clear(tx, ids);
   }
 
   await tx.delete(image).where(inArray(image.id, ids));
@@ -853,25 +1002,9 @@ const findReferencedImageIds = async (
   const referenced = new Set<string>();
   // Sequential, not Promise.all: a pg transaction is a single connection, and
   // this runs inside the caller's.
-  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
-    const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
-    const edgeColumn = column as PgColumn;
-    const edgeTable = column.table as PgTable;
-    const rows = (await dbc
-      .select({ imageId: edgeColumn })
-      .from(edgeTable)
-      .where(
-        and(
-          isNotNull(edgeColumn),
-          imageIds ? inArray(edgeColumn, imageIds) : undefined,
-          disposition.effect === "hard-delete"
-            ? // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic table type is too narrow for notDeleted().
-              notDeleted(edgeTable as any)
-            : undefined,
-        ),
-      )) as Array<{ imageId: string | null }>;
-    for (const row of rows) {
-      if (row.imageId) referenced.add(row.imageId);
+  for (const operation of Object.values(IMAGE_EDGE_OPERATIONS)) {
+    for (const imageId of await operation.findReferenced(dbc, imageIds)) {
+      referenced.add(imageId);
     }
   }
   return referenced;
@@ -978,10 +1111,8 @@ export const reapUnreferencedImages = async (
  * the ids before they stop being findable.
  */
 export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
-  for (const [key, disposition] of Object.entries(IMAGE_HARD_DELETE)) {
-    if (disposition.effect !== "hard-delete") continue;
-    const { column } = INCOMING_EDGES.image[key as IncomingEdgeKey<"image">];
-    if (column.table === table) return column;
+  for (const operation of Object.values(IMAGE_EDGE_OPERATIONS)) {
+    if (operation.joinColumn?.table === table) return operation.joinColumn;
   }
   return undefined;
 };
@@ -1083,8 +1214,7 @@ export const associateImagesWithProduct = async (
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
     getDb(db),
-    productImage,
-    "productId",
+    imageJoinBindings.product,
     productId,
     resolvedImageIds,
   );
@@ -1104,8 +1234,7 @@ export const associateImagesWithRecipe = async (
   const resolvedImageIds = await resolveAllPresent(db, "image", imageIds);
   await associatePendingImages(
     getDb(db),
-    recipeImage,
-    "recipeId",
+    imageJoinBindings.recipe,
     recipeId,
     resolvedImageIds,
   );
@@ -1512,22 +1641,21 @@ const associateImageWithEntity = async (
 ): Promise<void> => {
   await match(entity)
     .with({ entity: "product" }, ({ id }) =>
-      associatePendingImages(dbc, productImage, "productId", id, [imageId]),
+      associatePendingImages(dbc, imageJoinBindings.product, id, [imageId]),
     )
     .with({ entity: "recipe" }, ({ id }) =>
-      associatePendingImages(dbc, recipeImage, "recipeId", id, [imageId]),
+      associatePendingImages(dbc, imageJoinBindings.recipe, id, [imageId]),
     )
     .with({ entity: "location" }, ({ id }) =>
-      associatePendingImages(dbc, locationImage, "locationId", id, [imageId]),
+      associatePendingImages(dbc, imageJoinBindings.location, id, [imageId]),
     )
     .with({ entity: "project" }, ({ id }) =>
-      associatePendingImages(dbc, projectImage, "projectId", id, [imageId]),
+      associatePendingImages(dbc, imageJoinBindings.project, id, [imageId]),
     )
     .with({ entity: "purchase" }, async ({ id }) => {
       const sortOrder = await nextImageSortOrder(
         dbc,
-        purchaseImage,
-        purchaseImage.purchaseId,
+        imageJoinBindings.purchase,
         id,
       );
       await dbc.insert(purchaseImage).values({

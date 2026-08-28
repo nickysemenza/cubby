@@ -197,6 +197,11 @@ const mealOutFields = {
 export const mealOut = z.object(mealOutFields);
 export type MealOut = z.infer<typeof mealOut>;
 
+/** Generic MCP entity result; MealRecipe rows have no public shortcode. */
+export const mealMcpEntityOut = mealOut.extend({
+  recipes: z.array(mealRecipeOut.omit({ id: true })),
+});
+
 /**
  * Slim MCP projection of a meal row: built from the same field map as
  * `mealOut` minus its audit timestamps, so it cannot drift from the plain

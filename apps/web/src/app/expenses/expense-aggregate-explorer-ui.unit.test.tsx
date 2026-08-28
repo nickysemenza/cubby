@@ -1,26 +1,15 @@
 import type { ExpenseAnalyzeReadyOut } from "@cubby/schemas/project";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import {
+  type ExpenseAggregateExplorerOperations,
+  ExpenseAggregateExplorer,
+} from "./expense-aggregate-explorer";
 import type { ExpenseAnalyzeConfig } from "./expense-analyze-config";
-
-const mocks = vi.hoisted(() => ({
-  useQuery: vi.fn(),
-  copyText: vi.fn(),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  queryOptions: (options: unknown) => options,
-  useQuery: mocks.useQuery,
-}));
-vi.mock("~/lib/clipboard", () => ({ copyText: mocks.copyText }));
-vi.mock("sonner", () => ({
-  toast: { success: mocks.toastSuccess, error: mocks.toastError },
-}));
-
-import { ExpenseAggregateExplorer } from "./expense-aggregate-explorer";
+import { expense as expenseOperations } from "./expense.functions";
 
 const aggregate = { actual: 10, committed: 0, credits: 0, net: 10, count: 1 };
 const ready = {
@@ -85,39 +74,74 @@ const config: ExpenseAnalyzeConfig = {
 };
 const filters = { dateFrom: "2026-08-01", dateTo: "2026-08-15" };
 
+function createBrowserOperations() {
+  const copiedValues: string[] = [];
+  const downloads: Array<{ filename: string; content: string }> = [];
+  return {
+    browser: {
+      copyText: async (value: string) => {
+        copiedValues.push(value);
+        return true;
+      },
+      downloadCsv: (download: { filename: string; content: string }) => {
+        downloads.push(download);
+      },
+    },
+    copiedValues,
+    downloads,
+  };
+}
+
+function readyOperations(
+  browser: ExpenseAggregateExplorerOperations["browser"],
+): ExpenseAggregateExplorerOperations {
+  const analyze = expenseOperations.analyze.withTransport(async () => ready);
+  return { analyze: analyze.queryOptions, browser };
+}
+
+function loadingOperations(
+  browser: ExpenseAggregateExplorerOperations["browser"],
+): ExpenseAggregateExplorerOperations {
+  const analyze = expenseOperations.analyze.withTransport(
+    () => new Promise<typeof ready>(() => undefined),
+  );
+  return { analyze: analyze.queryOptions, browser };
+}
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
 afterEach(() => {
-  vi.restoreAllMocks();
-  mocks.useQuery.mockReset();
-  mocks.copyText.mockReset();
-  mocks.toastSuccess.mockReset();
-  mocks.toastError.mockReset();
+  harness.dispose();
 });
 
 describe("ExpenseAggregateExplorer controls", () => {
-  it("swaps axes through its controlled configuration while loading", () => {
-    mocks.useQuery.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-      isError: false,
-      refetch: vi.fn(),
-    });
-    const onConfigChange = vi.fn();
+  it("swaps axes through its controlled configuration while loading", async () => {
+    const changes: ExpenseAnalyzeConfig[] = [];
+    const browserOperations = createBrowserOperations();
 
     render(
       <ExpenseAggregateExplorer
         filters={filters}
         config={config}
-        onConfigChange={onConfigChange}
-        onOpenLedger={vi.fn()}
+        onConfigChange={(next) => changes.push(next)}
+        onOpenLedger={() => undefined}
+        operations={loadingOperations(browserOperations.browser)}
       />,
+      { wrapper: harness.wrapper },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Swap" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Swap" }));
 
-    expect(onConfigChange).toHaveBeenCalledWith({
-      ...config,
-      rowDimension: "costType",
-      columnDimension: "trade",
-    });
+    expect(changes).toEqual([
+      {
+        ...config,
+        rowDimension: "costType",
+        columnDimension: "trade",
+      },
+    ]);
     expect(screen.getByRole("button", { name: "Download CSV" })).toBeDisabled();
     expect(
       screen.getByRole("status", { name: "Loading analysis" }),
@@ -125,46 +149,29 @@ describe("ExpenseAggregateExplorer controls", () => {
   });
 
   it("copies the current URL and downloads only the complete ready result", async () => {
-    mocks.useQuery.mockReturnValue({
-      data: ready,
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
-    mocks.copyText.mockResolvedValue(true);
-    window.history.replaceState(
-      {},
-      "",
-      "/expenses?view=analytics&analyzeColumns=costType",
-    );
-    const createObjectUrl = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:expense-analysis");
-    const revokeObjectUrl = vi
-      .spyOn(URL, "revokeObjectURL")
-      .mockImplementation(() => undefined);
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => undefined);
+    const browserOperations = createBrowserOperations();
 
     render(
       <ExpenseAggregateExplorer
         filters={filters}
         config={config}
-        onConfigChange={vi.fn()}
-        onOpenLedger={vi.fn()}
+        onConfigChange={() => undefined}
+        onOpenLedger={() => undefined}
+        operations={readyOperations(browserOperations.browser)}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy link" }));
     await waitFor(() =>
-      expect(mocks.copyText).toHaveBeenCalledWith(window.location.href),
+      expect(browserOperations.copiedValues).toEqual([window.location.href]),
     );
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Analysis link copied");
 
     fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
-    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
-    expect(click).toHaveBeenCalledOnce();
-    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:expense-analysis");
+    expect(browserOperations.downloads).toHaveLength(1);
+    expect(browserOperations.downloads[0]?.filename).toMatch(
+      /expenses-analysis/,
+    );
+    expect(browserOperations.downloads[0]?.content).toContain("Electrical");
   });
 });

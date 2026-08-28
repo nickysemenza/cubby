@@ -22,6 +22,14 @@ const EntityEditDialog = lazy(() =>
 export const createDialogSearchField = {
   create: z.boolean().optional().catch(undefined),
 };
+const routeSearchValueSchema = z.json();
+type RouteSearchValue = z.infer<typeof routeSearchValueSchema> | undefined;
+type CreateDialogNavigate = (options: {
+  search: (
+    previous: Record<string, RouteSearchValue>,
+  ) => Record<string, RouteSearchValue>;
+  replace?: boolean;
+}) => void;
 
 /**
  * Shared list-toolbar trigger for entities created in a dialog.
@@ -45,13 +53,16 @@ export function CreateDialogAction({
   // Both hooks are route-agnostic on purpose: this button renders on a dozen
   // list routes, and each declares `create` via `createDialogSearchField`
   // rather than through a shared route type. `useNavigate`'s search reducer is
-  // typed per-route, so a component that works on all of them can't satisfy it
-  // — the cast is that boundary, not a shortcut around a real type error.
-  const navigate = useNavigate() as unknown as (opts: {
-    search: (prev: Record<string, unknown>) => Record<string, unknown>;
-    replace?: boolean;
-  }) => void;
-  const search = useSearch({ strict: false }) as { create?: boolean };
+  // typed per-route, so a component that works on all of them can't satisfy it.
+  const routeNavigate = useNavigate();
+  const navigate = (options: Parameters<CreateDialogNavigate>[0]) => {
+    // SAFETY: route-specific search keys are intentionally erased here; every
+    // caller's validator accepts the shared optional `create` field.
+    routeNavigate(options as never);
+  };
+  const search = z
+    .object({ create: z.boolean().optional() })
+    .parse(useSearch({ strict: false }));
   const openedFromUrl = search.create === true;
   // Two sources, deliberately. The button opens through local state so a click
   // is instant and needs nothing from the router — routing the click through a

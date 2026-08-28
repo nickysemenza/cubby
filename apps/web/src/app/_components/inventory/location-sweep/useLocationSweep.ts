@@ -1,4 +1,8 @@
-import type { LocationShortcode } from "@cubby/schemas/identifiers";
+import {
+  locationShortcode,
+  type LocationShortcode,
+} from "@cubby/schemas/identifiers";
+import type { LocationBulkUpdateParentInput } from "@cubby/schemas/location";
 /**
  * The state behind a location sweep: a serialized scan queue and the strays it
  * turns up.
@@ -19,12 +23,14 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
  * at and a late result against a stale anchor is discarded outright.
  */
 import type {
+  ResolveScanStraysInput,
   ResolveScanStraysOut,
+  ScanAtLocationInput,
   ScanAtLocationOut,
   ScanStrayOut,
 } from "@cubby/schemas/scan";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
@@ -35,7 +41,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { resolveLocationScan, resolveProductScan } from "~/lib/scan-code";
 
-import type { QueuedBin, SweepBinVerdict } from "./sweep-bin-plan";
+import type {
+  QueuedBin,
+  SweepBinNode,
+  SweepBinVerdict,
+} from "./sweep-bin-plan";
 import { canGoMissing, planSweptBin } from "./sweep-bin-plan";
 import type { SweepFollowUp } from "./SweepProductFollowUp";
 
@@ -82,6 +92,28 @@ export interface SweepCommitOutcome {
   keptInAdoptedBin: number;
   failed: "bins" | "products" | null;
 }
+
+export interface LocationSweepDependencies {
+  fetchLocation: (shortcode: string) => Promise<LocationSweepLocation | null>;
+  scanAtLocation: (input: ScanAtLocationInput) => Promise<ScanAtLocationOut>;
+  resolveScanStrays: (
+    input: ResolveScanStraysInput,
+  ) => Promise<ResolveScanStraysOut>;
+  bulkUpdateParent: (
+    input: LocationBulkUpdateParentInput,
+  ) => Promise<{ updated: number }>;
+  ensureGlobalUnknown: () => Promise<LocationSweepLocation>;
+  notifyError: (message: string) => void;
+  notifySuccess: (message: string) => void;
+}
+
+export type LocationSweepLocation = SweepBinNode & {
+  children?: SweepBinNode[];
+};
+
+export type SweepSettledResult = ScanAtLocationOut | ResolveScanStraysOut;
+
+type SweepMove = ResolveScanStraysInput["moves"][number];
 
 /**
  * A direct child that could have been scanned this pass and was not.
@@ -139,12 +171,30 @@ function commitSummary(outcome: SweepCommitOutcome): string {
 export function useLocationSweep({
   locationId,
   onSettled,
+  dependencies,
 }: {
   locationId: LocationShortcode;
   /** Fired after any write, so the caller can invalidate its own queries. */
-  onSettled: (result?: unknown) => void;
+  onSettled: (result?: SweepSettledResult) => void;
+  dependencies?: LocationSweepDependencies;
 }) {
   const queryClient = useQueryClient();
+  const services = useMemo<LocationSweepDependencies>(
+    () =>
+      dependencies ?? {
+        fetchLocation: (shortcode) =>
+          queryClient.fetchQuery(
+            entityDetailFor("location").queryOptions(shortcode),
+          ),
+        scanAtLocation: (input) => inventory.scanAtLocation.call(input),
+        resolveScanStrays: (input) => inventory.resolveScanStrays.call(input),
+        bulkUpdateParent: (input) => location.bulkUpdateParent.call(input),
+        ensureGlobalUnknown: () => location.ensureGlobalUnknown.call(undefined),
+        notifyError: (message) => toast.error(message),
+        notifySuccess: (message) => toast.success(message),
+      },
+    [dependencies, queryClient],
+  );
   const [recentScans, setRecentScans] = useState<ScanFeedbackEntry[]>([]);
   const [strays, setStrays] = useState<QueuedStray[]>([]);
   const [bins, setBins] = useState<QueuedBin[]>([]);
@@ -166,16 +216,16 @@ export function useLocationSweep({
     null,
   );
 
-  const scanMutation = useMutation(inventory.scanAtLocation.mutationOptions());
-  const commitMutation = useMutation(
-    inventory.resolveScanStrays.mutationOptions(),
-  );
-  const reparentMutation = useMutation(
-    location.bulkUpdateParent.mutationOptions(),
-  );
-  const unknownMutation = useMutation(
-    location.ensureGlobalUnknown.mutationOptions(),
-  );
+  const scanMutation = useMutation({ mutationFn: services.scanAtLocation });
+  const commitMutation = useMutation({
+    mutationFn: services.resolveScanStrays,
+  });
+  const reparentMutation = useMutation({
+    mutationFn: services.bulkUpdateParent,
+  });
+  const unknownMutation = useMutation({
+    mutationFn: services.ensureGlobalUnknown,
+  });
 
   // The drain loop reads these through refs so a scan enqueued mid-flight is
   // picked up by the loop already running, rather than starting a second one.
@@ -272,11 +322,8 @@ export function useLocationSweep({
   );
 
   const fetchLocation = useCallback(
-    (shortcode: string) =>
-      queryClient.fetchQuery(
-        entityDetailFor("location").queryOptions(shortcode),
-      ),
-    [queryClient],
+    (shortcode: string) => services.fetchLocation(shortcode),
+    [services],
   );
 
   /**
@@ -325,7 +372,7 @@ export function useLocationSweep({
       }
       if (verdict.kind === "refuse") {
         patchChip(key, { label: name, status: "failed" });
-        toast.error(verdict.message);
+        services.notifyError(verdict.message);
         return;
       }
       patchChip(key, { label: name, status: "queued" });
@@ -336,7 +383,7 @@ export function useLocationSweep({
           : [...prev, verdict.bin],
       );
     },
-    [patchChip],
+    [patchChip, services],
   );
 
   const drain = useCallback(async () => {
@@ -364,7 +411,7 @@ export function useLocationSweep({
         const failChip = (message: string) =>
           settle(() => {
             patchChip(next.key, { status: "failed" });
-            toast.error(message);
+            services.notifyError(message);
           });
 
         const asBin = resolveLocationScan(next.raw);
@@ -417,6 +464,7 @@ export function useLocationSweep({
     planBinScan,
     patchChip,
     scanMutation,
+    services,
     onSettled,
   ]);
 
@@ -488,16 +536,13 @@ export function useLocationSweep({
           // The item filter below assumes the reparents landed, so a bin
           // failure aborts the whole commit. Both queues stay intact and the
           // retry is free — bulkUpdateParent is idempotent.
-          toast.error(`Nothing moved. ${getErrorMessage(error)}`);
+          services.notifyError(`Nothing moved. ${getErrorMessage(error)}`);
           return { ...outcome, failed: "bins" };
         }
       }
 
       const adopted = new Set<string>(adoptedIds);
-      const moves: Array<{
-        entryId: string;
-        quantity?: { value: number; unit: string };
-      }> = [];
+      const moves: SweepMove[] = [];
       for (const stray of strays) {
         for (const row of stray.rows) {
           // The row travelled in with its bin, so moving it now would empty
@@ -509,10 +554,9 @@ export function useLocationSweep({
             continue;
           }
           const quantity = quantities[row.entryId];
-          moves.push({
-            entryId: row.entryId,
-            ...(quantity ? { quantity } : {}),
-          });
+          const move: SweepMove = { entryId: row.entryId };
+          if (quantity) move.quantity = quantity;
+          moves.push(move);
         }
       }
 
@@ -525,7 +569,7 @@ export function useLocationSweep({
           onSettled(result);
           outcome.products = { moved: result.moved, skipped: result.skipped };
         } catch (error) {
-          toast.error(
+          services.notifyError(
             outcome.bins.moved > 0
               ? `Moved ${countLabel(0, outcome.bins.moved)} in. Items couldn't move: ${getErrorMessage(error)}`
               : getErrorMessage(error),
@@ -543,10 +587,18 @@ export function useLocationSweep({
       // yank them out of the bin this ordering exists to protect.
       setStrays([]);
 
-      toast.success(commitSummary(outcome));
+      services.notifySuccess(commitSummary(outcome));
       return outcome;
     },
-    [strays, bins, locationId, commitMutation, reparentMutation, onSettled],
+    [
+      strays,
+      bins,
+      locationId,
+      commitMutation,
+      reparentMutation,
+      onSettled,
+      services,
+    ],
   );
 
   /**
@@ -566,15 +618,15 @@ export function useLocationSweep({
         .map((child) => ({
           id: child.id,
           name: child.name,
-          type: child.type,
+          type: child.type ?? null,
         }));
       setMissing(absent);
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      services.notifyError(getErrorMessage(error));
     } finally {
       setCheckingMissing(false);
     }
-  }, [fetchLocation, locationId, seenBins]);
+  }, [fetchLocation, locationId, seenBins, services]);
 
   /**
    * Absence never writes on its own — every repair here is an explicit,
@@ -584,14 +636,17 @@ export function useLocationSweep({
   const relocateMissing = useCallback(
     async (binId: string, parentId: string) => {
       try {
-        await reparentMutation.mutateAsync({ ids: [binId], parentId });
+        await reparentMutation.mutateAsync({
+          ids: [locationShortcode.parse(binId)],
+          parentId: locationShortcode.parse(parentId),
+        });
         setMissing((prev) => prev?.filter((bin) => bin.id !== binId) ?? null);
         onSettled();
       } catch (error) {
-        toast.error(getErrorMessage(error));
+        services.notifyError(getErrorMessage(error));
       }
     },
-    [reparentMutation, onSettled],
+    [reparentMutation, onSettled, services],
   );
 
   const sendMissingToUnknown = useCallback(
@@ -602,10 +657,10 @@ export function useLocationSweep({
         const unknown = await unknownMutation.mutateAsync(undefined);
         await relocateMissing(binId, unknown.id);
       } catch (error) {
-        toast.error(getErrorMessage(error));
+        services.notifyError(getErrorMessage(error));
       }
     },
-    [unknownMutation, relocateMissing],
+    [unknownMutation, relocateMissing, services],
   );
 
   const finishCuration = useCallback((id: string) => {

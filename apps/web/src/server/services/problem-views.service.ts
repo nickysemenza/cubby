@@ -1,4 +1,5 @@
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { imageListFiltersSchema } from "@cubby/schemas/image";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   EmptyCookedMeal,
@@ -31,10 +32,15 @@ import {
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 
+import {
+  parseEntityListInput,
+  type ListEntity,
+} from "~/entities/generated/entity-lists.gen";
 import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import type {
   DiagnosticKey,
   EntityProblemSource,
+  FilterAssembly,
   ProblemFreshness,
   ProblemSource,
 } from "~/entities/problem-query";
@@ -67,7 +73,6 @@ import { taskList } from "~/server/repo/task";
 import { vendorList } from "~/server/repo/vendor";
 import {
   type DiagnosticRunOptions,
-  type DiagnosticStatus,
   diagnosticAdapters,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
@@ -102,25 +107,34 @@ type EntityReadKind = "sample" | "count";
 type EntityReadAdapter = {
   read: (
     db: Database,
-    filters: Record<string, unknown>,
+    filters: FilterAssembly,
     sorts: SortParams[],
     pagination: { pageIndex: number; pageSize: number },
     kind: EntityReadKind,
   ) => Promise<{ data: ListRow[]; count: number }>;
   ids?: (
     db: Database,
-    filters: Record<string, unknown>,
+    filters: FilterAssembly,
     sorts: SortParams[],
     pagination: { pageIndex: number; pageSize: number },
   ) => Promise<{ ids: string[]; hasMore: boolean }>;
 };
+
+const parsedFiltersFor = <E extends ListEntity>(
+  entity: E,
+  filters: FilterAssembly,
+) =>
+  parseEntityListInput(entity, {
+    entity,
+    filters: compileProblemFilters(entity, filters),
+  }).filters;
 
 const ENTITY_READERS = {
   expense: {
     read: (db, filters, sorts, pagination, kind) =>
       expenseList(
         db,
-        filters as Parameters<typeof expenseList>[1],
+        parsedFiltersFor("expense", filters),
         sorts,
         pagination,
         kind,
@@ -130,7 +144,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       listFinancialTransactions(
         db,
-        filters as Parameters<typeof listFinancialTransactions>[1],
+        parsedFiltersFor("financialTransaction", filters),
         sorts,
         pagination,
         kind,
@@ -140,7 +154,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       imageList(
         db,
-        filters as Parameters<typeof imageList>[1],
+        imageListFiltersSchema.parse(compileProblemFilters("image", filters)),
         sorts,
         pagination,
         kind,
@@ -150,7 +164,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       ingredientList(
         db,
-        filters as Parameters<typeof ingredientList>[1],
+        parsedFiltersFor("ingredient", filters),
         sorts,
         pagination,
         kind,
@@ -158,7 +172,7 @@ const ENTITY_READERS = {
     ids: async (db, filters, sorts, pagination) => {
       const result = await ingredientList(
         db,
-        filters as Parameters<typeof ingredientList>[1],
+        parsedFiltersFor("ingredient", filters),
         sorts,
         pagination,
         "ids",
@@ -173,7 +187,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       inventoryentryList(
         db,
-        filters as Parameters<typeof inventoryentryList>[1],
+        parsedFiltersFor("inventory", filters),
         sorts,
         pagination,
         kind,
@@ -183,7 +197,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       locationList(
         db,
-        filters as Parameters<typeof locationList>[1],
+        parsedFiltersFor("location", filters),
         sorts,
         pagination,
         undefined,
@@ -192,19 +206,13 @@ const ENTITY_READERS = {
   },
   meal: {
     read: (db, filters, sorts, pagination, kind) =>
-      mealList(
-        db,
-        filters as Parameters<typeof mealList>[1],
-        sorts,
-        pagination,
-        kind,
-      ),
+      mealList(db, parsedFiltersFor("meal", filters), sorts, pagination, kind),
   },
   product: {
     read: (db, filters, sorts, pagination, kind) =>
       productList(
         db,
-        filters as Parameters<typeof productList>[1],
+        parsedFiltersFor("product", filters),
         sorts,
         pagination,
         undefined,
@@ -215,7 +223,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       projectList(
         db,
-        filters as Parameters<typeof projectList>[1],
+        parsedFiltersFor("project", filters),
         sorts,
         pagination,
         kind,
@@ -225,7 +233,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       purchaseList(
         db,
-        filters as Parameters<typeof purchaseList>[1],
+        parsedFiltersFor("purchase", filters),
         sorts,
         pagination,
         kind,
@@ -235,7 +243,7 @@ const ENTITY_READERS = {
     read: (db, filters, sorts, pagination, kind) =>
       recipeList(
         db,
-        filters as Parameters<typeof recipeList>[1],
+        parsedFiltersFor("recipe", filters),
         sorts,
         pagination,
         kind,
@@ -243,19 +251,13 @@ const ENTITY_READERS = {
   },
   task: {
     read: (db, filters, sorts, pagination, kind) =>
-      taskList(
-        db,
-        filters as Parameters<typeof taskList>[1],
-        sorts,
-        pagination,
-        kind,
-      ),
+      taskList(db, parsedFiltersFor("task", filters), sorts, pagination, kind),
   },
   vendor: {
     read: (db, filters, sorts, pagination, kind) =>
       vendorList(
         db,
-        filters as Parameters<typeof vendorList>[1],
+        parsedFiltersFor("vendor", filters),
         sorts,
         pagination,
         kind,
@@ -264,12 +266,17 @@ const ENTITY_READERS = {
 } satisfies Partial<Record<Entity, EntityReadAdapter>>;
 
 type ReaderEntity = keyof typeof ENTITY_READERS;
+const isReaderEntity = (value: string): value is ReaderEntity =>
+  entitySchema.safeParse(value).success && Object.hasOwn(ENTITY_READERS, value);
 const entityReaderFor = (entity: Entity): EntityReadAdapter | undefined =>
-  entity in ENTITY_READERS ? ENTITY_READERS[entity as ReaderEntity] : undefined;
+  isReaderEntity(entity) ? ENTITY_READERS[entity] : undefined;
+
+const isDiagnosticKey = (value: string): value is DiagnosticKey =>
+  Object.hasOwn(diagnosticAdapters, value);
 
 validateCompleteProblemRegistry(problemQueryDeclarations(), {
-  listEntities: new Set(Object.keys(ENTITY_READERS) as Entity[]),
-  diagnostics: new Set(Object.keys(diagnosticAdapters) as DiagnosticKey[]),
+  listEntities: new Set(Object.keys(ENTITY_READERS).filter(isReaderEntity)),
+  diagnostics: new Set(Object.keys(diagnosticAdapters).filter(isDiagnosticKey)),
 });
 
 const toSortParams = (
@@ -282,24 +289,22 @@ const toSortParams = (
 
 const entityFiltersFor = (
   declaration: ViewProblemDeclaration,
-): Record<string, unknown> => {
+): FilterAssembly => {
   const source = declaration.problem.source;
   if (source.kind !== "entity") {
     throw new Error(
       `View problem "${declaration.problem.key}" is not entity-backed`,
     );
   }
-  return compileProblemFilters(source.entity, source.filters);
+  return source.filters;
 };
 
-const entityProblemForKey = (
-  key: ProblemKey,
-): { source: EntityProblemSource } => {
+const entityProblemForKey = (key: ProblemKey): EntityProblemSource => {
   const definition = problemQuery(key);
   if (definition?.source.kind !== "entity") {
     throw new Error(`No entity Problem declares "${key}"`);
   }
-  return definition as { source: EntityProblemSource };
+  return definition.source;
 };
 
 /**
@@ -447,24 +452,21 @@ export const executeProblem = async (
       items,
       count: diagnostic.count,
       source: definition.source,
-      status: diagnostic.status as DiagnosticStatus,
+      status: diagnostic.status,
       freshness: diagnostic.freshness,
     };
   }
-  const entityDefinition = definition as { source: EntityProblemSource };
-  const reader = entityReaderFor(entityDefinition.source.entity);
+  const source = definition.source;
+  const reader = entityReaderFor(source.entity);
   if (!reader) {
     throw new Error(
-      `No list function registered for entity "${entityDefinition.source.entity}"`,
+      `No list function registered for entity "${source.entity}"`,
     );
   }
   const page = await reader.read(
     db,
-    compileProblemFilters(
-      entityDefinition.source.entity,
-      entityDefinition.source.filters,
-    ),
-    toSortParams(entityDefinition.source.sort),
+    source.filters,
+    toSortParams(source.sort),
     {
       pageIndex: options.pageIndex ?? 0,
       pageSize: options.sampleSize ?? SAMPLE_SIZE,
@@ -479,7 +481,7 @@ export const executeProblem = async (
   return {
     ...page,
     items: presentProblemRows(key, page.data),
-    source: entityDefinition.source,
+    source,
     status: projection
       ? statusForProjection(projection)
       : statusForFreshness(definition.freshness),
@@ -777,16 +779,16 @@ export const findAllViewProblemIds = async (
   db: Database,
   key: ProblemKey,
 ): Promise<string[]> => {
-  const definition = entityProblemForKey(key);
-  const reader = entityReaderFor(definition.source.entity);
+  const source = entityProblemForKey(key);
+  const reader = entityReaderFor(source.entity);
   if (!reader) {
     throw new Error(
-      `No list function registered for entity "${definition.source.entity}"`,
+      `No list function registered for entity "${source.entity}"`,
     );
   }
   if (!reader.ids) {
     throw new Error(
-      `Entity "${definition.source.entity}" has no identity projection for Problem "${key}"`,
+      `Entity "${source.entity}" has no identity projection for Problem "${key}"`,
     );
   }
 
@@ -798,11 +800,8 @@ export const findAllViewProblemIds = async (
   for (let pageIndex = 0; ; pageIndex++) {
     const { ids: pageIds, hasMore } = await reader.ids(
       db,
-      compileProblemFilters(
-        definition.source.entity,
-        definition.source.filters,
-      ),
-      toSortParams(definition.source.sort),
+      source.filters,
+      toSortParams(source.sort),
       { pageIndex, pageSize: PAGE },
     );
     ids.push(...pageIds);
@@ -820,16 +819,16 @@ export const countViewProblem = async (
   db: Database,
   key: ProblemKey,
 ): Promise<number> => {
-  const definition = entityProblemForKey(key);
-  const reader = entityReaderFor(definition.source.entity);
+  const source = entityProblemForKey(key);
+  const reader = entityReaderFor(source.entity);
   if (!reader) {
     throw new Error(
-      `No list function registered for entity "${definition.source.entity}"`,
+      `No list function registered for entity "${source.entity}"`,
     );
   }
   const { count } = await reader.read(
     db,
-    compileProblemFilters(definition.source.entity, definition.source.filters),
+    source.filters,
     [],
     { pageIndex: 0, pageSize: SAMPLE_SIZE },
     "count",

@@ -1,4 +1,4 @@
-import { JsonEditor } from "json-edit-react";
+import { JsonEditor, type JsonData } from "json-edit-react";
 import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
@@ -46,7 +46,7 @@ export function EditableComponentDemo<T>({
   }, [schema]);
 
   const handleUpdate = useCallback(
-    (newData: unknown) => {
+    (newData: JsonData) => {
       // Validate with Zod before accepting
       const result = schema.safeParse(newData);
       if (result.success) {

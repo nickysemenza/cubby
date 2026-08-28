@@ -2,63 +2,50 @@ import { testUserId } from "@cubby/schemas/testing";
 
 import type { Database } from "~/server/db";
 import { executeEntity } from "~/server/entity-kernel";
-import type {
-  EntityKernelEntity,
-  EntityMutationCommand,
-} from "~/server/entity-kernel/contracts";
+import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-// oxlint-disable-next-line typescript/no-explicit-any -- Test callers deliberately expose each entity's schema-inferred wire shape.
-type WireValue = any;
+type RecipeCreateCommand = Extract<
+  EntityMutationCommand,
+  { action: "create"; entity: "recipe" }
+>;
+type RecipeUpdateCommand = Extract<
+  EntityMutationCommand,
+  { action: "update"; entity: "recipe" }
+>;
 
-export function withEntityKernelMutations<T extends object>(
-  caller: T,
-  entity: Exclude<EntityKernelEntity, "image">,
-  db: Database,
-) {
+/**
+ * The one integration caller that needs recipe creation through the entity
+ * kernel. Keeping the command concrete preserves its generated recipe input
+ * and result correlation without a proxy, reflective lookup, or erased wire
+ * value.
+ */
+export function createRecipeKernelTestCaller(db: Database) {
   const baseContext = createTestRequestContext(db, {
     auth: { userId: testUserId("test-user-id") },
   });
   if (!baseContext.actorContext) throw new Error("Test actor is required");
   const context = { ...baseContext, actorContext: baseContext.actorContext };
-  const run = (command: EntityMutationCommand): Promise<WireValue> =>
-    executeEntity(context, command as never) as Promise<WireValue>;
 
-  const mutations = {
-    create: async (data: WireValue) => {
-      const result = await run({
-        entity,
+  return {
+    create: async (data: RecipeCreateCommand["data"]) => {
+      const command = {
+        entity: "recipe",
         action: "create",
         data,
-      } as EntityMutationCommand);
-      if (result.action !== "create") throw new Error("Wrong kernel action");
-      return { ...result.item, sideEffects: result.sideEffects } as WireValue;
+      } satisfies RecipeCreateCommand;
+      const result = await executeEntity(context, command);
+      return { ...result.item, sideEffects: result.sideEffects };
     },
-    update: async ({ id, data }: WireValue) => {
-      const result = await run({
-        entity,
+    update: async ({ id, data }: Pick<RecipeUpdateCommand, "id" | "data">) => {
+      const command = {
+        entity: "recipe",
         action: "update",
         id,
         data,
-      } as EntityMutationCommand);
-      if (result.action !== "update") throw new Error("Wrong kernel action");
-      return { ...result.item, sideEffects: result.sideEffects } as WireValue;
-    },
-    delete: async ({ ids }: WireValue) => {
-      const result = await run({
-        entity,
-        action: "delete",
-        ids,
-      } as EntityMutationCommand);
-      if (result.action !== "delete") throw new Error("Wrong kernel action");
-      return { deleted: result.deleted, sideEffects: result.sideEffects };
+      } satisfies RecipeUpdateCommand;
+      const result = await executeEntity(context, command);
+      return { ...result.item, sideEffects: result.sideEffects };
     },
   };
-  return new Proxy(caller, {
-    get(target, property, receiver) {
-      return property in mutations
-        ? Reflect.get(mutations, property)
-        : Reflect.get(target, property, receiver);
-    },
-  }) as T & typeof mutations;
 }

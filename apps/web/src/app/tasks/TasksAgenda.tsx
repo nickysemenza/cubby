@@ -3,7 +3,7 @@ import { format, parseISO } from "date-fns";
 import { keyBy } from "es-toolkit";
 import { useState } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
 import type { BoardColumnKey } from "./board/board-types";
@@ -60,13 +60,13 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
   // blocker outside its known set (see its `unresolvedBlockerCount`).
   const taskById = keyBy(tasks, (t) => t.id);
 
-  const setStatus = useActionMutation({
+  const setStatus = useEntityActionMutation({
     entity: "task",
     operation: "update",
     intent: "status",
     mutationFn: entityMutationOptionsFactory("task", "update"),
   });
-  const remove = useActionMutation({
+  const remove = useEntityActionMutation({
     entity: "task",
     operation: "delete",
     intent: "delete",

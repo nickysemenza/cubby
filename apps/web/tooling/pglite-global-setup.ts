@@ -6,6 +6,7 @@ import { vector } from "@electric-sql/pglite-pgvector";
 import { pushSchema } from "drizzle-kit/api";
 import { drizzle } from "drizzle-orm/pglite";
 import * as schema from "../src/server/db/schema";
+import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 
 /**
  * Prepare one schema-complete PGlite data directory for the PGlite integration
@@ -25,11 +26,9 @@ export default async function setupPgliteTemplate() {
   try {
     await pg.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
     await pg.exec("CREATE EXTENSION IF NOT EXISTS vector;");
-    const { apply } = await pushSchema(
-      schema,
-      db as unknown as Parameters<typeof pushSchema>[1],
-      ["public"],
-    );
+    const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
+      "public",
+    ]);
     await apply();
 
     const archive = await pg.dumpDataDir("gzip");

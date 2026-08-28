@@ -5,39 +5,11 @@ import type {
 import { EMPTY_PROBLEM_ARRAYS, PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PROBLEM_SECTIONS } from "./problem-sections";
-
-// Router-free render, the same shape the expense-section tests use: resolve
-// `to`/`params` into a plain href so the route a card points at is assertable.
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    params,
-    className,
-    ...props
-  }: {
-    children?: ReactNode;
-    to: string;
-    params?: Record<string, string>;
-    className?: string;
-  }) => {
-    const href = params
-      ? Object.entries(params).reduce(
-          (path, [key, value]) => path.replace(`$${key}`, value),
-          to,
-        )
-      : to;
-    return (
-      <a href={href} className={className} {...props}>
-        {children}
-      </a>
-    );
-  },
-}));
 
 /**
  * The section is a registry entry, so nothing type-level proves it was actually
@@ -73,24 +45,38 @@ const problems = (rows: DuplicateSpendCandidate[]): AllProblems => ({
   totalProblems: rows.length,
 });
 
-const entry = () =>
-  PROBLEM_SECTIONS.find((s) => s.id === "duplicate-spend-candidates");
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function entry() {
+  const section = PROBLEM_SECTIONS.find(
+    (candidate) => candidate.id === "duplicate-spend-candidates",
+  );
+  if (!section) throw new Error("Missing duplicate-spend problem section");
+  return section;
+}
 
 describe("duplicate spend section", () => {
   it("is registered and reads its own problem key", () => {
     const section = entry();
-    expect(section).toBeDefined();
-    expect(section?.count(problems([candidate(), candidate()]))).toBe(2);
-    expect(section?.count(problems([]))).toBe(0);
+    expect(section.count(problems([candidate(), candidate()]))).toBe(2);
+    expect(section.count(problems([]))).toBe(0);
   });
 
   it("declares coverage, so it groups as advisory rather than as a defect", () => {
-    expect(entry()?.coverage).toBeDefined();
+    expect(entry().coverage).toBeDefined();
     expect(PROBLEM_CLASS.duplicateSpendCandidates).not.toBe("defect");
   });
 
   it("renders a row naming the expense, the collision, and the day gap", () => {
-    const node = entry()?.node(
+    const node = entry().node(
       problems([
         candidate({
           matchedOn: "stated_total",
@@ -100,9 +86,9 @@ describe("duplicate spend section", () => {
           alternateMatchCount: 1,
         }),
       ]),
-      undefined as never,
+      undefined,
     );
-    const { container } = render(node);
+    const { container } = render(node, { wrapper: harness.wrapper });
 
     expect(screen.getByText("washer stacking bracket")).toBeTruthy();
     // The stated-total arm must show the stated total, not the line sum — the
@@ -122,7 +108,9 @@ describe("duplicate spend section", () => {
   });
 
   it("renders the common row against the purchase's line sum, with no gap or alternate badges", () => {
-    render(entry()?.node(problems([candidate()]), undefined as never));
+    render(entry().node(problems([candidate()]), undefined), {
+      wrapper: harness.wrapper,
+    });
 
     expect(screen.getByText(/Best Buy expense total of \$43\.44/)).toBeTruthy();
     expect(screen.getByText(/across 2 lines/)).toBeTruthy();
@@ -131,7 +119,7 @@ describe("duplicate spend section", () => {
   });
 
   it("handles the singular and deleted-vendor wording", () => {
-    const node = entry()?.node(
+    const node = entry().node(
       problems([
         candidate({
           vendorName: null,
@@ -140,9 +128,9 @@ describe("duplicate spend section", () => {
           alternateMatchCount: 2,
         }),
       ]),
-      undefined as never,
+      undefined,
     );
-    render(node);
+    render(node, { wrapper: harness.wrapper });
 
     expect(screen.getByText(/deleted vendor expense total/)).toBeTruthy();
     expect(screen.getByText(/across 1 line$/)).toBeTruthy();
@@ -151,7 +139,9 @@ describe("duplicate spend section", () => {
   });
 
   it("renders the empty state when nothing is flagged", () => {
-    render(entry()?.node(problems([]), undefined as never));
+    render(entry().node(problems([]), undefined), {
+      wrapper: harness.wrapper,
+    });
     expect(
       screen.getByText(
         "No unlinked expense looks like a purchase already recorded.",

@@ -11,8 +11,8 @@
  */
 export type IngredientPart = "amount" | "name" | "modifier";
 
-export const INGREDIENT_PART_COLOR: Record<IngredientPart, string> = {
+export const INGREDIENT_PART_COLOR = {
   amount: "var(--ingredient-amount)",
   name: "var(--ingredient-name)",
   modifier: "var(--ingredient-modifier)",
-};
+} satisfies Record<IngredientPart, string>;

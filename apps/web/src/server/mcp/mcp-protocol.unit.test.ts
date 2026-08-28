@@ -1,7 +1,10 @@
 import { mcpToolName } from "@cubby/schemas/entity-manifest";
+import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
+import { mock } from "~/lib/test/mock-schema";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 
 import { callMcpTool } from "./mcp-test-utils";
@@ -15,8 +18,11 @@ describe("MCP protocol smoke", () => {
       listMcpResourceCatalog(),
     ]);
     const names = new Set(tools.map((tool) => tool.name));
-    const entityInput = tools.find((tool) => tool.name === "entity")
-      ?.inputSchema as { properties?: { command?: unknown } };
+    const entityInput = z
+      .object({
+        properties: z.object({ command: z.json().optional() }).optional(),
+      })
+      .parse(tools.find((tool) => tool.name === "entity")?.inputSchema);
 
     expect(names).toContain("entity");
     expect(resources.map((resource) => resource.uri)).toContain(
@@ -75,5 +81,40 @@ describe("MCP protocol smoke", () => {
       entity: "expense",
       meta: { pageIndex: 0, pageSize: 10, totalCount: 0 },
     });
+  });
+
+  it("projects storage-only child ids out of generic entity results", async () => {
+    const mealRecipe = mock(mealRecipeOut);
+    const meal = { ...mock(mealOut), recipes: [mealRecipe] };
+    const runEntity: ExecuteEntity = async () => ({
+      action: "list",
+      entity: "meal",
+      items: [meal],
+      meta: { pageIndex: 0, pageSize: 10, totalCount: 1 },
+    });
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerEntityTools(server, runEntity);
+
+    const result = await callMcpTool(
+      server,
+      "entity",
+      { command: { action: "list", entity: "meal" } },
+      {},
+      {
+        entityKernel: {
+          db: null,
+          readDb: null,
+          actorContext: null,
+          usdaClient: null,
+          upcLookupClient: null,
+          services: null,
+        },
+      },
+    );
+    const serialized = JSON.stringify(result.structuredContent);
+
+    expect(result.isError).not.toBe(true);
+    expect(serialized).not.toContain(mealRecipe.id);
+    expect(serialized).toContain(mealRecipe.recipeId);
   });
 });

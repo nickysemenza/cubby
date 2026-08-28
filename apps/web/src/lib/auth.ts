@@ -1,6 +1,6 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthAdvancedOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { jwt, openAPI } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
@@ -41,6 +41,24 @@ export const OAUTH_SCOPES = ["openid", "profile", "email", "offline_access"];
 // previews. Unset in prod, which keeps a host-only cookie. Passkeys remain
 // bound to the production WebAuthn RP; this only covers the session.
 const previewCookieDomain = env.COOKIE_DOMAIN;
+
+const advancedOptions: BetterAuthAdvancedOptions = {};
+// E2E only: the production Worker artifact otherwise emits Secure cookies,
+// which Playwright's Linux WebKit rejects over the harness's localhost HTTP.
+if (env.INSECURE_AUTH_COOKIES === "true") {
+  advancedOptions.useSecureCookies = false;
+}
+// Workers supplies the real address in this header; local dev has no CF proxy
+// and keeps Better Auth's default resolution.
+if (!isDev) {
+  advancedOptions.ipAddress = { ipAddressHeaders: ["cf-connecting-ip"] };
+}
+if (previewCookieDomain) {
+  advancedOptions.crossSubDomainCookies = {
+    enabled: true,
+    domain: previewCookieDomain,
+  };
+}
 
 export const auth = betterAuth({
   database: drizzleAdapter(drizzle, {
@@ -123,33 +141,7 @@ export const auth = betterAuth({
     openAPI(isDev ? {} : { disableDefaultReference: true }),
     tanstackStartCookies(), // Must be last
   ],
-  advanced: {
-    // E2E only: the CF build runs with NODE_ENV=production, so better-auth
-    // defaults to Secure `__Secure-`-prefixed cookies — which Playwright's
-    // Linux WebKit refuses to store/replay over http://localhost (cookie-prefix
-    // rule; macOS WebKit and Chromium are lenient, so this only ever failed in
-    // CI). e2e-global-setup passes INSECURE_AUTH_COOKIES=true via wrangler
-    // --var; never set in real deploys.
-    ...(env.INSECURE_AUTH_COOKIES === "true"
-      ? { useSecureCookies: false }
-      : {}),
-    // Cloudflare Workers (prod + preview deploys) puts the real client IP in
-    // `cf-connecting-ip`; without this Better Auth can't determine the IP and
-    // skips rate limiting (logging a warning on every auth request). x-forwarded-for
-    // is spoofable and absent on Workers, so trust only the CF-set header. Prod-only:
-    // there's no CF proxy in dev (vite Node), so the header would never be present —
-    // better-auth's default IP resolution applies there, and dev global rate limiting
-    // is off anyway, so the IP is never consulted.
-    ...(isDev ? {} : { ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] } }),
-    ...(previewCookieDomain
-      ? {
-          crossSubDomainCookies: {
-            enabled: true,
-            domain: previewCookieDomain,
-          },
-        }
-      : {}),
-  },
+  advanced: advancedOptions,
   // In dev, trust any localhost/127.0.0.1 origin regardless of port so worktree
   // dev servers (which run on auto-assigned ports — see README "Worktrees") can
   // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and

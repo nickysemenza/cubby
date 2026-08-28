@@ -1,9 +1,11 @@
-import type {
-  BackgroundBatchStatus,
-  MutationSideEffects,
+import {
+  mutationSideEffectsSchema,
+  type BackgroundBatchStatus,
+  type MutationSideEffects,
 } from "@cubby/schemas/background-jobs";
 import type { QueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
@@ -16,11 +18,22 @@ import { backgroundBatch } from "~/lib/background-batch.functions";
  * never loads the batch's jobs: large mutation batches can contain thousands
  * of rows, while this watcher needs one status field.
  */
-export function makeBatchStatusFetcher(queryClient: QueryClient) {
+export interface BackgroundBatchPollingOperations {
+  summary: typeof backgroundBatch.summary;
+}
+
+const productionBackgroundBatchPollingOperations: BackgroundBatchPollingOperations =
+  { summary: backgroundBatch.summary };
+const jsonValueSchema = z.json();
+
+export function makeBatchStatusFetcher(
+  queryClient: QueryClient,
+  operations: BackgroundBatchPollingOperations = productionBackgroundBatchPollingOperations,
+) {
   return (batchId: string): Promise<BackgroundBatchStatus> =>
     queryClient
       .fetchQuery({
-        ...backgroundBatch.summary.queryOptions({ batchId }),
+        ...operations.summary.queryOptions({ batchId }),
         staleTime: 0,
       })
       .then((batch) => batch.status);
@@ -42,17 +55,25 @@ const sleep = (ms: number) =>
   });
 
 /** Pull a mutation result's side-effects, if it carries any (many don't). */
-function extractSideEffects(result: unknown): MutationSideEffects | undefined {
-  if (!result || typeof result !== "object") return undefined;
-  if ("sideEffects" in result) {
-    return (result as { sideEffects?: MutationSideEffects }).sideEffects;
+function extractSideEffects<Result>(
+  result: Result,
+): MutationSideEffects | undefined {
+  const parsedResult = jsonValueSchema.safeParse(result);
+  if (!parsedResult.success) return undefined;
+  let current: z.output<typeof jsonValueSchema> = parsedResult.data;
+  const carrierSchema = z.object({
+    sideEffects: mutationSideEffectsSchema.optional(),
+    result: z.json().optional(),
+  });
+  for (;;) {
+    const carrier = carrierSchema.safeParse(current);
+    if (!carrier.success) return undefined;
+    if (carrier.data.sideEffects) return carrier.data.sideEffects;
+    if (carrier.data.result === undefined) return undefined;
+    // The entity command port answers `{ id, result }`; continue through that
+    // parsed JSON envelope until the owned side-effects schema is found.
+    current = carrier.data.result;
   }
-  // The entity command port answers `{ id, result }` — the side-effects ride on
-  // the parsed entity result inside it, one level down.
-  if ("result" in result) {
-    return extractSideEffects((result as { result: unknown }).result);
-  }
-  return undefined;
 }
 
 /**

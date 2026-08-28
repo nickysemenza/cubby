@@ -51,6 +51,17 @@ const EMPTY_EXPENSES: ExpenseOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 const QUANTITY_TARGET_PREFIX = "product-expense-quantity-";
 
+/** Read descriptors the history needs before it can choose its empty state. */
+export interface ProductExpenseHistoryOperations {
+  expenses: typeof expense.chartData;
+  kitMembership: typeof productOperations.kitMembership;
+}
+
+const productionOperations: ProductExpenseHistoryOperations = {
+  expenses: expense.chartData,
+  kitMembership: productOperations.kitMembership,
+};
+
 /** A section table must not write the product route's URL. */
 const EMBEDDED_TABLE_STATE = { urlSync: false, readUrlState: false } as const;
 
@@ -123,22 +134,23 @@ function buildProjectRollup(expenses: ExpenseOut[]): ProjectRollupEntry[] {
 }
 
 /** Expense history for a product, with direct Expense fields editable in place. */
-export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
-  product,
-}) => {
+export const ProductExpenseHistory: FC<{
+  product: ProductWithFoodOut;
+  operations?: ProductExpenseHistoryOperations;
+}> = ({ product, operations = productionOperations }) => {
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const [quantityEditorExpenseId, setQuantityEditorExpenseId] = useState<
     string | null
   >(null);
   const { data, isPending } = useQuery(
-    expense.chartData.queryOptions({ productId: product.id }),
+    operations.expenses.queryOptions({ productId: product.id }),
   );
   const expenses = data ?? EMPTY_EXPENSES;
   // Only consulted when `expenses` is empty (below) — a component of a kit
   // legitimately has zero Expenses of its own, and the generic "link one"
   // empty state is actively misleading there.
   const membershipQuery = useQuery(
-    productOperations.kitMembership.queryOptions({ productId: product.id }),
+    operations.kitMembership.queryOptions({ productId: product.id }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const update = useUpdateMutation({

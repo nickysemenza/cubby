@@ -4,7 +4,7 @@ import {
   type AuditSource,
   buildActorContext,
 } from "@cubby/schemas/context";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   testEntityId,
   testShortcode,
@@ -15,13 +15,50 @@ import {
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { beforeEach } from "vitest";
-import type { Database } from "../src/server/db/database";
+import {
+  Database,
+  type DatabaseClient,
+  type DatabaseRuntime,
+} from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
+import type {
+  EntityCreateInput,
+  EntityKernelContext,
+  EntityPublicOutput,
+} from "../src/server/entity-kernel/adapter";
+import { generatedEntityMutationCreateResultSchema } from "../src/server/generated/entity-bindings.gen";
+import { ENTITY_KERNEL_BINDINGS } from "../src/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_KERNEL_OPERATIONS } from "../src/server/generated/entity-kernel-bindings.gen";
+import {
+  ENTITY_KERNEL_ENTITIES,
+  type EntityKernelEntity,
+} from "../src/server/entity-kernel/contracts";
 import { ensureDbExtensions } from "./db-extensions";
+import { toPushSchemaDatabase } from "./drizzle-kit-interop";
+import { z } from "zod";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
+
+const toTestDatabase = (
+  value: DatabaseClient | Database,
+  pool: Pool,
+): Database => {
+  if (value instanceof Database) return value;
+  const runtime: DatabaseRuntime = {
+    client: value,
+    withConnection: async (fn) => {
+      const connection = await pool.connect();
+      try {
+        return await fn(drizzle({ client: connection, schema }));
+      } finally {
+        connection.release();
+      }
+    },
+  };
+  return new Database(() => runtime);
+};
 
 let hash = "";
 
@@ -32,26 +69,35 @@ let hash = "";
  * work within a lane count correctly without leaking setup/fixture SQL into a
  * measurement.
  */
-const queryMeasurement = new AsyncLocalStorage<{
+interface QueryMeasurement {
   count: number;
   statements: string[];
-}>();
+}
+
+const queryMeasurement = new AsyncLocalStorage<QueryMeasurement>();
 const QUERY_COUNTED = Symbol("test-query-counted");
 
-type QueryCountedClient = {
-  query: (...args: unknown[]) => unknown;
+type QueryTextInput = string | { text?: string } | undefined;
+
+const isQueryText = (value: QueryTextInput): value is string =>
+  typeof value === "string";
+
+type QueryCountedClient = Pick<PoolClient, "query"> & {
   [QUERY_COUNTED]?: boolean;
 };
 
 const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
   if (client[QUERY_COUNTED]) return client;
   const query = client.query.bind(client);
-  client.query = (...args: unknown[]) => {
+  const countedQuery = (...args: Parameters<PoolClient["query"]>) => {
     const measurement = queryMeasurement.getStore();
     if (measurement) {
       measurement.count += 1;
-      const first = args[0] as { text?: string } | string | undefined;
-      const text = typeof first === "string" ? first : (first?.text ?? "");
+      // SAFETY: node-postgres exposes `query` as overloads; Parameters selects
+      // its callback overload even though every overload shares this runtime
+      // first argument contract.
+      const first = args[0] as QueryTextInput;
+      const text = isQueryText(first) ? first : (first?.text ?? "");
       // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
       // two measurements compares statement SHAPES, not page sizes.
       measurement.statements.push(
@@ -63,37 +109,34 @@ const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
     }
     return query(...args);
   };
+  // SAFETY: preserve node-postgres's overloaded query method while wrapping
+  // its shared runtime implementation for measurement.
+  client.query = countedQuery as PoolClient["query"];
   client[QUERY_COUNTED] = true;
   return client;
 };
 
 const countPoolQueries = (pool: Pool): Pool => {
   const connect = pool.connect.bind(pool);
-  pool.connect = ((...args: unknown[]) => {
-    const callback = args[0];
+  type ConnectCallback = (
+    error: Error | undefined,
+    client: PoolClient | undefined,
+    done: (release?: Error | boolean) => void,
+  ) => void;
+  const countedConnect = (callback?: ConnectCallback) => {
     // `pool.query()` calls `connect(callback)` internally. Preserve that
     // overload exactly; awaiting it would turn its `undefined` return into the
     // "client" and break every ordinary Drizzle query.
-    if (typeof callback === "function") {
+    if (callback) {
       return connect((error, client, done) =>
-        callback(
-          error,
-          client
-            ? (countClientQueries(
-                client as unknown as QueryCountedClient,
-              ) as typeof client)
-            : client,
-          done,
-        ),
+        callback(error, client ? countClientQueries(client) : client, done),
       );
     }
-    return connect().then(
-      (client) =>
-        countClientQueries(
-          client as unknown as QueryCountedClient,
-        ) as typeof client,
-    );
-  }) as typeof pool.connect;
+    return connect().then((client) => countClientQueries(client));
+  };
+  // SAFETY: preserve node-postgres's promise and callback connect overloads
+  // while routing checked-out clients through the query counter.
+  pool.connect = countedConnect as typeof pool.connect;
   return pool;
 };
 
@@ -111,7 +154,10 @@ export async function countTestDbQueries<T>(
       "countTestDbQueries requires the node-postgres provider; keep query-count contracts in the IntegreSQL project",
     );
   }
-  const measurement = { count: 0, statements: [] as string[] };
+  const measurement = {
+    count: 0,
+    statements: [],
+  } satisfies QueryMeasurement;
   const result = await queryMeasurement.run(measurement, run);
   return {
     result,
@@ -187,11 +233,9 @@ export async function setup() {
       // drizzle-orm (an @opentelemetry/api peer-dep dupe), so bridge the
       // structurally-identical PgDatabase types. Runtime parity is covered by
       // the integration + E2E suites.
-      const { apply } = await pushSchema(
-        schema,
-        db as unknown as Parameters<typeof pushSchema>[1],
-        ["public"],
-      );
+      const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
+        "public",
+      ]);
       await apply();
       console.log("Template database schema pushed");
     } catch (err) {
@@ -321,7 +365,7 @@ async function getFileDb() {
     );
   }
 
-  fileDb = { db: rawDb as unknown as Database, rawDb, pool, testId };
+  fileDb = { db: toTestDatabase(rawDb, pool), rawDb, pool, testId };
   return fileDb;
 }
 
@@ -440,15 +484,22 @@ export async function closeTestDb() {
  */
 export function withTestDb(source: AuditSource = "ui"): TestDbContext {
   const actor = buildActorContext(testUserId(TEST_USER_ID), source);
-  // `db` is assigned in the beforeEach below before any test reads it; the cast
-  // keeps call sites free of an `undefined` union they'd otherwise have to narrow.
+  interface TestDbState {
+    db: Database | null;
+  }
+  const state: TestDbState = { db: null };
   const ctx: TestDbContext = {
-    db: undefined as unknown as Database,
+    get db() {
+      if (!state.db) {
+        throw new Error("withTestDb database is unavailable before beforeEach");
+      }
+      return state.db;
+    },
     actor,
   };
 
   beforeEach(async () => {
-    ctx.db = await resetTestDb();
+    state.db = await resetTestDb();
     ctx.actor = actor;
   });
   return ctx;
@@ -465,56 +516,43 @@ const remapDBConfig = (
 // NOTE: We use dynamic imports for repo modules to avoid loading env.js
 // during vitest globalSetup phase (before test.env variables are applied)
 
-export async function seedEntity<E extends ShortcodeEntity>(
+type SeedOverrides<E extends EntityKernelEntity> = Partial<
+  EntityCreateInput<E>
+>;
+const entityKernelEntitySchema = z.enum(ENTITY_KERNEL_ENTITIES);
+
+export async function seedEntity<E extends (typeof shortcodeEntities)[number]>(
   db: Database,
   entity: E,
-  overrides?: Record<string, unknown>,
-): Promise<unknown> {
-  const [
-    { mock },
-    { createTestRequestContext },
-    { ENTITY_BINDINGS },
-    { ENTITY_KERNEL_BINDINGS },
-  ] = await Promise.all([
-    import("../src/lib/test/mock-schema"),
-    import("../src/server/testing/request-context"),
-    import("../src/server/entity-bindings"),
-    import("../src/server/generated/entity-kernel-bindings.gen"),
-  ]);
+  overrides?: SeedOverrides<Extract<E, EntityKernelEntity>>,
+): Promise<EntityPublicOutput<Extract<E, EntityKernelEntity>>> {
+  const [{ mock }, { createTestRequestContext }, { requireActor }] =
+    await Promise.all([
+      import("../src/lib/test/mock-schema"),
+      import("../src/server/testing/request-context"),
+      import("../src/server/request-context"),
+    ]);
 
-  const binding = ENTITY_BINDINGS[entity].crud;
-  if (!binding) {
+  const kernelEntity = entityKernelEntitySchema.parse(entity);
+  const binding = ENTITY_KERNEL_BINDINGS[kernelEntity];
+  if (!binding.schemas.createInput || !binding.repository.create) {
     throw new Error(`seedEntity: "${entity}" is not kernel-creatable`);
   }
 
-  const input = mock(binding.createInput, { overrides });
+  const input = mock(binding.schemas.createInput, { overrides });
   const baseContext = createTestRequestContext(db, {
     auth: { userId: testUserId("test-user-id") },
   });
-  if (!baseContext.actorContext) {
-    throw new Error("seedEntity: test actor is required");
-  }
-  const adapter = (
-    ENTITY_KERNEL_BINDINGS as unknown as Record<
-      string,
-      {
-        repository: {
-          create?: (
-            context: typeof baseContext & {
-              actorContext: NonNullable<typeof baseContext.actorContext>;
-            },
-            data: unknown,
-          ) => Promise<{ output: unknown }>;
-        };
-      }
-    >
-  )[entity];
-  if (!adapter?.repository.create) {
-    throw new Error(`seedEntity: "${entity}" has no create adapter`);
-  }
-  const created = await adapter.repository.create(
-    { ...baseContext, actorContext: baseContext.actorContext },
+  const context: EntityKernelContext = requireActor(baseContext);
+  const created = await ENTITY_KERNEL_OPERATIONS[kernelEntity].create(
+    context,
     input,
   );
-  return binding.output.parse(created.output);
+  const createdResult =
+    generatedEntityMutationCreateResultSchema.parse(created);
+  // SAFETY: `kernelEntity` is parsed from the generated binding map and the
+  // output schema is that same binding's owner-derived public result schema.
+  return binding.schemas.output.parse(createdResult.item) as EntityPublicOutput<
+    Extract<E, EntityKernelEntity>
+  >;
 }

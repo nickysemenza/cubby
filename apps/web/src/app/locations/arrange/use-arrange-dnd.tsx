@@ -72,8 +72,8 @@ export function ArrangeDndProvider({
   const keyboardCoordinates = useMemo(
     () =>
       createValidTargetKeyboardCoordinates((activeData, targetData) => {
-        const drag = asDragData(activeData ?? {});
-        const drop = asDropData(targetData ?? {});
+        const drag = asDragData(activeData);
+        const drop = asDropData(targetData);
         return (
           !!drag &&
           !!drop &&
@@ -90,15 +90,11 @@ export function ArrangeDndProvider({
   useEffect(() => () => autoScroller.stop(), [autoScroller]);
   const collisionDetection = useMemo<CollisionDetection>(
     () => (args) => {
-      const drag = asDragData(
-        (args.active.data.current ?? {}) as Record<string, unknown>,
-      );
+      const drag = asDragData(args.active.data.current);
       if (!drag) return [];
       const droppableContainers = args.droppableContainers.filter(
         (container) => {
-          const drop = asDropData(
-            (container.data.current ?? {}) as Record<string, unknown>,
-          );
+          const drop = asDropData(container.data.current);
           return !!drop && canDropOnArrangeTarget(roots, drop.locationId, drag);
         },
       );
@@ -110,14 +106,18 @@ export function ArrangeDndProvider({
     [roots],
   );
   const onDragStart = ({ active: drag, activatorEvent }: DragStartEvent) => {
-    const event = activatorEvent as MouseEvent | TouchEvent;
-    const touch = "touches" in event ? event.touches[0] : undefined;
-    origin.current = touch
-      ? { x: touch.clientX, y: touch.clientY }
-      : "clientX" in event
-        ? { x: event.clientX, y: event.clientY }
-        : null;
-    setActive(asDragData((drag.data.current ?? {}) as Record<string, unknown>));
+    if (activatorEvent instanceof TouchEvent) {
+      const touch = activatorEvent.touches[0];
+      origin.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    } else if (activatorEvent instanceof MouseEvent) {
+      origin.current = {
+        x: activatorEvent.clientX,
+        y: activatorEvent.clientY,
+      };
+    } else {
+      origin.current = null;
+    }
+    setActive(asDragData(drag.data.current));
   };
   const onDragMove = ({ delta }: DragMoveEvent) => {
     if (!origin.current) return;
@@ -127,12 +127,8 @@ export function ArrangeDndProvider({
     );
   };
   const onDragEnd = ({ active: dragEvent, over }: DragEndEvent) => {
-    const drag = asDragData(
-      (dragEvent.data.current ?? {}) as Record<string, unknown>,
-    );
-    const drop = over
-      ? asDropData((over.data.current ?? {}) as Record<string, unknown>)
-      : null;
+    const drag = asDragData(dragEvent.data.current);
+    const drop = over ? asDropData(over.data.current) : null;
     autoScroller.stop();
     origin.current = null;
     setActive(null);
@@ -157,8 +153,7 @@ export function ArrangeDndProvider({
         }}
         onDragEnd={onDragEnd}
         accessibility={{
-          container:
-            typeof document === "undefined" ? undefined : document.body,
+          container: globalThis.document?.body,
           announcements: createDndAnnouncements({
             item: (id) =>
               id

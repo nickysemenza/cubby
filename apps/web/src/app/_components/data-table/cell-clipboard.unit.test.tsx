@@ -1,12 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Mock sonner toast — handlePaste's rejection path routes through it.
-vi.mock("sonner", () => ({
-  toast: {
-    error: vi.fn(),
-  },
-}));
-
 import {
   CELL_CLIPBOARD_MIME,
   type CellClipboardSpec,
@@ -193,11 +186,12 @@ describe("paste", () => {
   });
 
   it("shows a toast when onPasteValue rejects, and doesn't flash or throw", async () => {
-    const { toast } = await import("sonner");
+    const errors: string[] = [];
     const onPasteValue = vi.fn().mockRejectedValue(new Error("bad paste"));
     const { el, unregister } = registerFocusedButton({
       kindKey: "x",
       onPasteValue,
+      onError: (message) => errors.push(message),
     });
     cleanups.push(unregister);
 
@@ -206,7 +200,7 @@ describe("paste", () => {
 
     await flushMicrotasks();
 
-    expect(toast.error).toHaveBeenCalledWith("bad paste");
+    expect(errors).toEqual(["bad paste"]);
     expect(el.getAttribute("data-clipboard-flash")).toBeNull();
   });
 });

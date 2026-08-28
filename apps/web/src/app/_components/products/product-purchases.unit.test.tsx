@@ -1,134 +1,53 @@
 import type { KitMembershipOut } from "@cubby/schemas/product-components";
 import type { ProductPurchaseOut } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
-import { flexRender } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks: {
-  purchases: { current: ProductPurchaseOut[] };
-  membership: { current: KitMembershipOut[] };
-} = vi.hoisted(() => ({
-  purchases: { current: [] },
-  membership: { current: [] },
-}));
+import { product as productOperations } from "~/app/products/product.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: { queryKey: unknown[] }) => ({
-    data:
-      options.queryKey[0] === "purchases"
-        ? mocks.purchases.current
-        : options.queryKey[0] === "kitMembership"
-          ? mocks.membership.current
-          : undefined,
-    isPending: false,
-  }),
-  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
-  // The descriptor builds its options through react-query's own
-  // `mutationOptions`, so this partial mock has to carry it too.
-  mutationOptions: (options: unknown) => options,
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
-
-vi.mock("~/app/products/product.functions", () => ({
-  product: {
-    purchases: {
-      queryOptions: (input: unknown) => ({ queryKey: ["purchases", input] }),
-    },
-    kitMembership: {
-      queryOptions: (input: unknown) => ({
-        queryKey: ["kitMembership", input],
-      }),
-    },
-  },
-}));
-
-vi.mock("~/app/purchases/purchase.functions", () => ({
-  purchase: {
-    detachProducts: {
-      mutationOptions: () => ({}),
-    },
-  },
-}));
-
-vi.mock("~/app/_components/EntityInlineLink", () => ({
-  EntityInlineLink: ({
-    entity,
-    data,
-  }: {
-    entity: string;
-    data: { id: string; name?: string; orderId?: string | null };
-  }) => (
-    <a href={`/${entity}s/${data.id}`} data-entity={entity}>
-      {data.name ?? data.orderId ?? data.id}
-    </a>
-  ),
-}));
-vi.mock("~/app/_components/data-table/Table", () => ({
-  default: ({
-    table,
-    emptyState,
-  }: {
-    table: {
-      getRowModel: () => {
-        rows: Array<{
-          id: string;
-          getVisibleCells: () => Array<{
-            id: string;
-            column: { columnDef: { cell?: unknown } };
-            getContext: () => never;
-          }>;
-        }>;
-      };
-    };
-    emptyState?: React.ReactNode;
-  }) => {
-    const rows = table.getRowModel().rows;
-    if (rows.length === 0) return emptyState;
-    return (
-      <table>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>
-                  {flexRender(
-                    cell.column.columnDef.cell as never,
-                    cell.getContext(),
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  },
-}));
-vi.mock("~/app/_components/table/TableLink", () => ({
-  TableLink: ({
-    to,
-    params,
-    children,
-  }: {
-    to: string;
-    params: { shortcode: string };
-    children: React.ReactNode;
-  }) => <a href={to.replace("$shortcode", params.shortcode)}>{children}</a>,
-}));
-
-import { ProductPurchases } from "./product-purchases";
+import {
+  type ProductPurchasesOperations,
+  ProductPurchases,
+} from "./product-purchases";
 
 const COMBO_ID = testShortcode("product", "PRD-COMB");
 
-const renderWith = (
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function purchaseOperations(
   purchases: ProductPurchaseOut[],
   membership: KitMembershipOut[] = [],
-) => {
-  mocks.purchases.current = purchases;
-  mocks.membership.current = membership;
-  return render(<ProductPurchases productId="PRD-BATT" />);
-};
+): ProductPurchasesOperations {
+  return {
+    purchases: productOperations.purchases.withTransport(async () => purchases),
+    kitMembership: productOperations.kitMembership.withTransport(
+      async () => membership,
+    ),
+  };
+}
+
+function renderWith(
+  purchases: ProductPurchaseOut[],
+  membership: KitMembershipOut[] = [],
+) {
+  return render(
+    <ProductPurchases
+      productId="PRD-BATT"
+      operations={purchaseOperations(purchases, membership)}
+    />,
+    { wrapper: harness.wrapper },
+  );
+}
 
 const membershipEntry: KitMembershipOut = {
   parentProductId: COMBO_ID,
@@ -149,10 +68,10 @@ const membershipEntry: KitMembershipOut = {
 };
 
 describe("ProductPurchases empty states", () => {
-  it("shows the ordinary empty state for a plain product with no purchases", () => {
+  it("shows the ordinary empty state for a plain product with no purchases", async () => {
     renderWith([]);
 
-    expect(screen.getByText("No purchases recorded")).toBeInTheDocument();
+    expect(await screen.findByText("No purchases recorded")).toBeVisible();
     expect(
       screen.getByText(
         "No expense on this product names an order, and no order has been linked to it directly. Record the spend on an expense, or attach it from a purchase's Products section when the order was never itemized.",
@@ -160,11 +79,11 @@ describe("ProductPurchases empty states", () => {
     ).toBeInTheDocument();
   });
 
-  it("points at the kit's purchase instead of inviting a direct attach, for a kit component", () => {
+  it("points at the kit's purchase instead of inviting a direct attach, for a kit component", async () => {
     renderWith([], [membershipEntry]);
 
-    expect(screen.getByText("No purchases of its own")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "18V Combo Kit" })).toHaveAttribute(
+    expect(await screen.findByText("No purchases of its own")).toBeVisible();
+    expect(screen.getByRole("link", { name: /18V Combo Kit/ })).toHaveAttribute(
       "href",
       `/products/${COMBO_ID}`,
     );
@@ -174,20 +93,20 @@ describe("ProductPurchases empty states", () => {
         "Attach this product from a purchase's Products section to record which order it came from.",
       ),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "#11325" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /#11325/ })).toHaveAttribute(
       "href",
       "/purchases/PUR-2345",
     );
   });
 
-  it("omits the purchase link when the kit itself has never been purchased", () => {
+  it("omits the purchase link when the kit itself has never been purchased", async () => {
     renderWith([], [{ ...membershipEntry, purchase: null }]);
 
-    expect(screen.getByText("No purchases of its own")).toBeInTheDocument();
+    expect(await screen.findByText("No purchases of its own")).toBeVisible();
     expect(screen.queryByRole("link", { name: "#11325" })).toBeNull();
   });
 
-  it("renders the purchase list instead of an empty state when purchases exist", () => {
+  it("renders the purchase list instead of an empty state when purchases exist", async () => {
     renderWith([
       {
         purchaseId: testShortcode("purchase", "PUR-9999"),
@@ -200,14 +119,14 @@ describe("ProductPurchases empty states", () => {
       },
     ]);
 
-    expect(screen.getByRole("link", { name: "#999" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "#999" })).toBeVisible();
     expect(screen.queryByText("No purchases recorded")).not.toBeInTheDocument();
     expect(
       screen.queryByText("No purchases of its own"),
     ).not.toBeInTheDocument();
   });
 
-  it("badges only the explicitly-linked row, not the expense-derived one", () => {
+  it("badges only the explicitly-linked row, not the expense-derived one", async () => {
     renderWith([
       {
         purchaseId: testShortcode("purchase", "PUR-LINK"),
@@ -229,7 +148,7 @@ describe("ProductPurchases empty states", () => {
       },
     ]);
 
-    expect(screen.getByRole("link", { name: "#link" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "#link" })).toBeVisible();
     expect(screen.getByRole("link", { name: "#expense" })).toBeInTheDocument();
     expect(screen.getAllByText("Linked")).toHaveLength(1);
   });

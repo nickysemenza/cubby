@@ -1,7 +1,7 @@
 import { wrapFetchWithSentry } from "@sentry/tanstackstart-react";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
-// __CF_WORKERS__ is a build-time define (true only in build:cf). In production
+// __CF_WORKERS__ is a build-time define (true only in build:cf, false elsewhere). In production
 // the Workers entry (cf-server.ts) wraps everything with @sentry/cloudflare's
 // withSentry — the workerd-native SDK. wrapFetchWithSentry is built on
 // @sentry/node: its error capture is safe, but its tracing (startSpan on the
@@ -17,9 +17,8 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 // @sentry/node never enters the worker bundle at all. That second guard is
 // what keeps ~600 KiB of Node-only OpenTelemetry code out of the eager chunk;
 // the runtime guard alone left it shipped-but-unused.
-declare const __CF_WORKERS__: boolean | undefined;
-const isCfBuild =
-  typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+declare const __CF_WORKERS__: boolean;
+const isCfBuild = __CF_WORKERS__;
 
 const serverEntry = {
   async fetch(request: Request) {

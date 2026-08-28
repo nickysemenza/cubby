@@ -66,6 +66,14 @@ const failedChunksSchema = z.array(
 
 const CHUNK_CONCURRENCY = 8;
 
+const isAllowedImageType = (value: string): value is AllowedImageType =>
+  ALLOWED_IMAGE_TYPES.some((type) => type === value);
+const extractResultSchema = z.object({
+  recipes: z.unknown(),
+  skipped: z.number().int().nonnegative(),
+  failed_chunks: z.unknown().optional(),
+});
+
 // Min gap between live-preview re-renders during extraction. Each re-assemble
 // re-renders the whole growing card list (re-parsing every ingredient line), so
 // without this an 8-chunk burst would fire 8 heavy renders back-to-back.
@@ -125,12 +133,12 @@ export function CookbookImport({
   const uploadImageBytes = useCallback(
     async (
       bytes: Uint8Array,
-      mime: string,
+      mime: AllowedImageType,
       filename: string,
     ): Promise<string> => {
       const init = await uploadImageMut.mutateAsync({
         filename,
-        contentType: mime as AllowedImageType,
+        contentType: mime,
         size: bytes.byteLength,
         entityType: "COOKBOOK",
       });
@@ -300,20 +308,22 @@ export function CookbookImport({
 
       // TRANSPORT: one authenticated proxy hop per call. Rust decides when to call
       // this (and whether to `escalate`); `withRetry` handles transport failures.
+      type ExtractChunkOutput = Awaited<
+        ReturnType<typeof extractChunk.mutateAsync>
+      >;
       const callChunk = (
         request: WChunkRequest,
         escalate: boolean,
-      ): Promise<unknown> => {
+      ): Promise<ExtractChunkOutput> => {
         const input: ChunkRequestInput = {
           system: request.system,
           user: request.user,
           toolName: request.tool_name,
           // WASM emits the schema as a JSON string (a serde_json::Value would
           // cross as a JS Map); parse it back to a plain object.
-          toolSchema: JSON.parse(request.tool_schema) as Record<
-            string,
-            unknown
-          >,
+          toolSchema: z
+            .record(z.string(), z.json())
+            .parse(JSON.parse(request.tool_schema)),
           escalate,
         };
         inFlight++;
@@ -333,7 +343,7 @@ export function CookbookImport({
       const onProgress = (
         doneCount: number,
         total: number,
-        rawRecipes: unknown,
+        rawRecipes: z.input<typeof importRecipesSchema>,
       ) => {
         setExtract(source, { status: "extracting", done: doneCount, total });
         const now = performance.now();
@@ -357,13 +367,15 @@ export function CookbookImport({
       let recipes: ImportRecipe[];
       let failedChunks: FailedChunk[];
       try {
-        const result = (await wasm.extract_cookbook(
-          chunks,
-          source,
-          CHUNK_CONCURRENCY,
-          callChunk,
-          onProgress,
-        )) as { recipes: unknown; skipped: number; failed_chunks?: unknown };
+        const result = extractResultSchema.parse(
+          await wasm.extract_cookbook(
+            chunks,
+            source,
+            CHUNK_CONCURRENCY,
+            callChunk,
+            onProgress,
+          ),
+        );
         recipes = importRecipesSchema.parse(result.recipes);
         // Prefer the per-chunk failure detail (index + doc + reason). Fall back to
         // anonymous entries synthesized from the aggregate `skipped` count if an
@@ -573,10 +585,7 @@ export function CookbookImport({
         cookbookId = book.cookbookId;
       } else {
         let coverImageId: string | undefined;
-        if (
-          book.cover &&
-          (ALLOWED_IMAGE_TYPES as readonly string[]).includes(book.cover.mime)
-        ) {
+        if (book.cover && isAllowedImageType(book.cover.mime)) {
           try {
             coverImageId = await uploadImageBytes(
               book.cover.bytes,
@@ -588,7 +597,9 @@ export function CookbookImport({
           }
         }
         try {
-          const cookbook = await upsertCookbook.mutateAsync({
+          const cookbookInput: Parameters<
+            typeof upsertCookbook.mutateAsync
+          >[0] = {
             name: bookName,
             rawJson: book.recipes,
             author: book.epubMeta?.author ?? [],
@@ -597,8 +608,9 @@ export function CookbookImport({
             coverImageId,
             // Transient — the server resolves it to a Product and stores only
             // the link. Omitted, not nulled, when the EPUB declares no ISBN.
-            ...(book.epubMeta?.isbn ? { isbn: book.epubMeta.isbn } : {}),
-          });
+          };
+          if (book.epubMeta?.isbn) cookbookInput.isbn = book.epubMeta.isbn;
+          const cookbook = await upsertCookbook.mutateAsync(cookbookInput);
           cookbookId = cookbook.id;
         } catch (error) {
           toast.error(`Couldn't save cookbook: ${getErrorMessage(error)}`);

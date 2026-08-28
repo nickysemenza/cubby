@@ -52,11 +52,7 @@ export function useBulkActions<TData extends RowData>({
   ).length;
 
   const onRowSelectionChange: OnChangeFn<RowSelectionState> = useCallback(
-    (updater) => {
-      setRowSelection((prev) =>
-        typeof updater === "function" ? updater(prev) : updater,
-      );
-    },
+    (updater) => setRowSelection(updater),
     [],
   );
 

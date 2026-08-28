@@ -5,41 +5,28 @@ import {
   sectionIngredientOut,
 } from "@cubby/schemas/recipe";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ok } from "neverthrow";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { RecipeCosting } from "~/lib/recipe-costing";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { RecipeTreeNode } from "./recipe-tree";
 import { RecipeSpecView } from "./RecipeSpecView";
 
-vi.mock("../EntityPreviewLink", () => ({
-  dottedEntityLink: "",
-  EntityPreviewLink: ({ children }: { children: ReactNode }) => (
-    <span>{children}</span>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-vi.mock("~/app/_components/inventory/format-amount", () => ({
-  tryFormatAmount: () => "$1",
-}));
+beforeEach(async () => {
+  harness = createBrowserTestHarness();
+  await act(async () => {
+    await harness.loadRouter();
+  });
+});
 
-vi.mock("./IngredientQuantities", () => ({
-  buildDisplayQuantities: () => [],
-  gramMapFromCosting: () => new Map(),
-  IngredientModifier: () => null,
-  IngredientQuantities: () => <span>1 cup</span>,
-}));
-
-vi.mock("./recipe-utils", () => ({
-  entityRefForRow: () => null,
-  formatYield: ({ value, unit }: { value: number; unit: string }) =>
-    `${value} ${unit}`,
-  getIngredientName: (row: SectionIngredientOut) =>
-    row.ingredient?.name ?? row.recipe?.name ?? "Unknown",
-}));
+afterEach(() => {
+  harness.dispose();
+});
 
 const ingredient = (id: string, name: string): SectionIngredientOut =>
   sectionIngredientOut.parse({
@@ -175,7 +162,9 @@ function tree(): RecipeTreeNode {
 
 describe("RecipeSpecView variants", () => {
   it("keeps cost and re-anchoring interactive in detail mode", () => {
-    render(<RecipeSpecView tree={tree()} />);
+    render(<RecipeSpecView tree={tree()} />, {
+      wrapper: harness.routerWrapper,
+    });
     expect(screen.getByText("Cost")).toBeInTheDocument();
     const waterScaling = screen.getByRole("button", { name: "50%" });
     fireEvent.click(waterScaling);
@@ -184,7 +173,9 @@ describe("RecipeSpecView variants", () => {
   });
 
   it("keeps export mode static while preserving scaling values", () => {
-    render(<RecipeSpecView tree={tree()} variant="export" />);
+    render(<RecipeSpecView tree={tree()} variant="export" />, {
+      wrapper: harness.routerWrapper,
+    });
     expect(screen.queryByText("Cost")).not.toBeInTheDocument();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByText("50%")).toBeInTheDocument();
@@ -192,7 +183,9 @@ describe("RecipeSpecView variants", () => {
   });
 
   it("shares nested panels and stub rendering across variants", () => {
-    render(<RecipeSpecView tree={tree()} variant="export" />);
+    render(<RecipeSpecView tree={tree()} variant="export" />, {
+      wrapper: harness.routerWrapper,
+    });
     expect(screen.getAllByText("Starter").length).toBeGreaterThan(0);
     expect(screen.getByText("Missing preferment")).toBeInTheDocument();
     expect(screen.getByText("missing")).toBeInTheDocument();

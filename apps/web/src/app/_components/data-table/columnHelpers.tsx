@@ -1,15 +1,13 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity";
 import {
-  type IngredientShortcode,
   type LocationShortcode,
   type ProductShortcode,
   type ProjectShortcode,
   parseShortcodeFor,
-  type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import type { LocationType } from "@cubby/schemas/location";
+import { locationType, type LocationType } from "@cubby/schemas/location";
 import type { ProductPricingOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
@@ -24,6 +22,7 @@ import {
   Sigma,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { z } from "zod";
 
 import {
   EntityActionRowMenuItems,
@@ -63,6 +62,7 @@ import { cn, formatCurrency } from "~/lib/utils";
 import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
+  buildProductComboboxItem,
   buildRecipeComboboxItem,
 } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -82,7 +82,6 @@ import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import {
   amountCellData,
-  type ColumnCellData,
   dateCellData,
   entityCellData,
   numberCellData,
@@ -101,11 +100,15 @@ import type {
   InventoryEntryBase,
   InventoryRelatedEntity,
 } from "./inventory-column-helpers";
-import { InventoryEntriesCell } from "./inventory-entries-cell";
+import {
+  InventoryEntriesCell,
+  type InventoryEntriesCellProps,
+} from "./inventory-entries-cell";
 import { nameLabel } from "./name-label";
 import type {
   CubbyCellContext as CellContext,
   CubbyColumnHelper as ColumnHelper,
+  CubbyRow as TableRow,
 } from "./table-features";
 import type { FilterConfig, MobileColumnMeta } from "./table-meta";
 
@@ -113,9 +116,15 @@ export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
 
 export { multiSelectFilterFn };
 
-const projectRefFilterFn = multiSelectFilterFnBy(
-  (v) => (v as { id?: string | null } | null)?.id ?? null,
-);
+const projectRefSchema = z.object({ id: z.string().nullish() }).nullish();
+const sortableEntityRefSchema = z
+  .object({ name: z.string().nullish() })
+  .nullish();
+
+const projectRefFilterFn = multiSelectFilterFnBy((value) => {
+  const parsed = projectRefSchema.safeParse(value);
+  return parsed.success ? (parsed.data?.id ?? null) : null;
+});
 
 /**
  * Sorts an entity-reference column ({id, name}) by name.
@@ -132,12 +141,14 @@ const projectRefFilterFn = multiSelectFilterFnBy(
  * server-sorted one agree.
  */
 function entityRefSortingFn(
-  a: { getValue: (id: string) => unknown },
-  b: { getValue: (id: string) => unknown },
+  a: Pick<TableRow<RowData>, "getValue">,
+  b: Pick<TableRow<RowData>, "getValue">,
   columnId: string,
 ): number {
-  const nameOf = (row: { getValue: (id: string) => unknown }) =>
-    (row.getValue(columnId) as { name?: string | null } | null)?.name ?? null;
+  const nameOf = (row: Pick<TableRow<RowData>, "getValue">) => {
+    const parsed = sortableEntityRefSchema.safeParse(row.getValue(columnId));
+    return parsed.success ? (parsed.data?.name ?? null) : null;
+  };
   const left = nameOf(a);
   const right = nameOf(b);
   if (left === right) return 0;
@@ -156,7 +167,7 @@ interface BaseRow {
   updatedAt?: string | Date;
 }
 
-function nameColumnParams(row: BaseRow): { shortcode: string } {
+function nameColumnParams(row: BaseRow) {
   return { shortcode: String(row.id) };
 }
 
@@ -207,7 +218,7 @@ export const rowImages = <T extends ImageRow>(row: T) =>
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
-  fieldName: keyof T = "name" as keyof T,
+  fieldName?: keyof T,
   options?: {
     filterConfig?: FilterConfig;
     /**
@@ -232,21 +243,22 @@ export function createNameColumn<T extends BaseRow>(
     rowLink?: RowLinkResolver<T>;
   },
 ) {
+  const resolvedFieldName = fieldName ?? "name";
+  const nameValue = (row: T) => {
+    const raw = row[resolvedFieldName];
+    return raw == null ? null : String(raw);
+  };
   const singularLabel = entityLabel(entity).toLowerCase();
   const pluralLabel = entityPluralLabel(entity).toLowerCase();
   const rowLink = options?.rowLink ?? defaultRowLink<T>(entity);
+  const editable = options?.editable;
   const cellData = textCellData<T>(
     "text",
-    (row) => {
-      const raw = row[fieldName];
-      return raw == null ? null : String(raw);
-    },
-    options?.editable
-      ? (row, v) => options.editable!.onSave(v ?? "", row)
-      : undefined,
+    nameValue,
+    editable ? (row, v) => editable.onSave(v ?? "", row) : undefined,
   );
   const config = {
-    id: String(fieldName),
+    id: String(resolvedFieldName),
     enableSorting: true,
     meta: {
       className: options?.className ?? "w-64",
@@ -268,7 +280,7 @@ export function createNameColumn<T extends BaseRow>(
         info.table.getFilteredRowModel().rows.length;
       return `${count} ${count === 1 ? singularLabel : pluralLabel}`;
     },
-    cell: (info: CellContext<T, T[keyof T]>) => {
+    cell: (info: CellContext<T, string>) => {
       // NOT `String(info.getValue())` — that renders a null name as the literal
       // text "null", in the cell, the tooltip, AND the link. `stored` and
       // `value` must stay distinct; see nameLabel's doc.
@@ -351,7 +363,7 @@ export function createNameColumn<T extends BaseRow>(
         );
       };
 
-      if (options?.editable) {
+      if (editable) {
         return wrapExpandable(
           <EditableCell
             // The EDITOR gets the stored value, not the fallback — prefilling
@@ -359,7 +371,7 @@ export function createNameColumn<T extends BaseRow>(
             // real name on the next save.
             value={stored}
             onSave={(newVal) =>
-              options.editable!.onSave(newVal ?? "", info.row.original)
+              editable.onSave(newVal ?? "", info.row.original)
             }
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text" }}
@@ -396,12 +408,12 @@ export function createNameColumn<T extends BaseRow>(
   };
 
   const header =
-    options?.header ?? (fieldName === "filename" ? "Filename" : undefined);
+    options?.header ??
+    (resolvedFieldName === "filename" ? "Filename" : undefined);
 
-  return columnHelper.accessor(
-    (row) => row[fieldName],
-    header ? { ...config, header } : config,
-  );
+  return header === undefined
+    ? columnHelper.accessor(nameValue, config)
+    : columnHelper.accessor(nameValue, { ...config, header });
 }
 
 export function createCreatedAtColumn<T extends BaseRow>(
@@ -516,10 +528,93 @@ type EntityColumnData =
       items: { name: string; id: string; type: LocationType | null }[];
     };
 
+type EntityColumnItems<TEntity extends EntityColumnData["entity"]> = Extract<
+  EntityColumnData,
+  { entity: TEntity }
+>["items"];
+
+type KeysRendering<T, TValue> = {
+  [K in keyof T]-?: NonNullable<T[K]> extends TValue ? K : never;
+}[keyof T];
+
+const ingredientLinkItemsSchema = z.array(
+  z.object({ name: z.string(), id: z.string() }),
+);
+const productLinkItemsSchema = z.array(
+  z.object({ name: z.string(), id: z.string(), manufacturer: z.string() }),
+);
+const recipeLinkItemsSchema = z.array(
+  z.object({ name: z.string(), id: z.string() }),
+);
+const locationLinkItemsSchema = z.array(
+  z.object({
+    name: z.string(),
+    id: z.string(),
+    type: locationType.nullable(),
+  }),
+);
+
+function renderEntityInlineItems<TValue>(
+  entity: EntityColumnData["entity"],
+  value: TValue,
+  dedupe: boolean,
+) {
+  switch (entity) {
+    case "ingredient": {
+      const parsed = ingredientLinkItemsSchema.parse(value);
+      const items = dedupe ? uniqBy(parsed, (item) => item.id) : parsed;
+      return (
+        <EntityInlineLinkList
+          entity="ingredient"
+          items={items}
+          maxItems={1}
+          compact
+        />
+      );
+    }
+    case "product": {
+      const parsed = productLinkItemsSchema.parse(value);
+      const items = dedupe ? uniqBy(parsed, (item) => item.id) : parsed;
+      return (
+        <EntityInlineLinkList
+          entity="product"
+          items={items}
+          maxItems={1}
+          compact
+        />
+      );
+    }
+    case "recipe": {
+      const parsed = recipeLinkItemsSchema.parse(value);
+      const items = dedupe ? uniqBy(parsed, (item) => item.id) : parsed;
+      return (
+        <EntityInlineLinkList
+          entity="recipe"
+          items={items}
+          maxItems={1}
+          compact
+        />
+      );
+    }
+    case "location": {
+      const parsed = locationLinkItemsSchema.parse(value);
+      const items = dedupe ? uniqBy(parsed, (item) => item.id) : parsed;
+      return (
+        <EntityInlineLinkList
+          entity="location"
+          items={items}
+          maxItems={1}
+          compact
+        />
+      );
+    }
+  }
+}
+
 export function createEntityInlineLinkColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
   TEntity extends EntityColumnData["entity"],
+  T extends object,
+  K extends KeysRendering<T, EntityColumnItems<TEntity>>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -533,35 +628,24 @@ export function createEntityInlineLinkColumn<
     mobile?: MobileColumnMeta;
   },
 ) {
-  return columnHelper.accessor(
-    (row) => row[accessor] as { id: string; name: string }[],
-    {
-      id: String(accessor),
-      header: options?.header ?? entityLabel(entity),
-      enableSorting: options?.enableSorting ?? false,
-      meta: {
-        className: options?.className
-          ? `${options.className} overflow-hidden`
-          : undefined,
-        filterConfig: options?.filterConfig,
-        mobile: options?.mobile,
-      },
-      cell: (info) => {
-        let items = info.getValue() ?? [];
-        if (options?.dedupe) {
-          items = uniqBy(items, (item) => item.id);
-        }
-        return (
-          <EntityInlineLinkList
-            entity={entity}
-            items={items as never}
-            maxItems={1}
-            compact
-          />
-        );
-      },
+  return columnHelper.accessor((row: T) => row[accessor], {
+    id: String(accessor),
+    header: options?.header ?? entityLabel(entity),
+    enableSorting: options?.enableSorting ?? false,
+    meta: {
+      className: options?.className
+        ? `${options.className} overflow-hidden`
+        : undefined,
+      filterConfig: options?.filterConfig,
+      mobile: options?.mobile,
     },
-  );
+    cell: (info) =>
+      renderEntityInlineItems(
+        entity,
+        info.getValue() ?? [],
+        options?.dedupe ?? false,
+      ),
+  });
 }
 
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
@@ -614,17 +698,19 @@ export function createUnitMappingsColumn<
 }
 
 export function createInventoryEntriesColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
   TEntry extends InventoryEntryBase,
   TEntity extends InventoryRelatedEntity["entity"],
+  K extends PropertyKey,
+  T extends Record<K, TEntry[]>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
   entity: TEntity,
-  getRelatedEntity: (
-    entry: TEntry,
-  ) => Extract<InventoryRelatedEntity, { entity: TEntity }>["data"] | undefined,
+  getRelatedEntity: InventoryEntriesCellProps<
+    T,
+    TEntry,
+    TEntity
+  >["getRelatedEntity"],
   options?: {
     id?: string;
     header?: string;
@@ -663,7 +749,7 @@ export function createInventoryEntriesColumn<
 ) {
   const layout = options?.layout ?? "inline";
 
-  return columnHelper.accessor((row) => row[accessor] as TEntry[], {
+  return columnHelper.accessor((row: T) => row[accessor], {
     id: options?.id ?? String(accessor),
     header:
       options?.header ?? (entity === "location" ? "Locations" : "Products"),
@@ -674,10 +760,10 @@ export function createInventoryEntriesColumn<
       filterConfig: options?.filterConfig,
     },
     cell: (info) => (
-      <InventoryEntriesCell
+      <InventoryEntriesCell<T, TEntry, TEntity>
         entries={info.getValue() ?? []}
         entity={entity}
-        getRelatedEntity={getRelatedEntity as never}
+        getRelatedEntity={getRelatedEntity}
         layout={layout}
         row={info.row.original}
         onQuickEdit={options?.onQuickEdit}
@@ -794,8 +880,8 @@ export function createActionsColumnBase<T extends RowData>(
 }
 
 export function createTextColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, string | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -821,40 +907,32 @@ export function createTextColumn<
   const renderValue =
     options?.renderValue ?? ((v: string | null) => (v ? v : <NoneValue />));
   const renderRow = (value: string | null, row: T) => renderValue(value, row);
+  const editable = options?.editable;
+  const textValue = (row: T): string | null => row[accessor] ?? null;
 
   const cellData = textCellData<T>(
     "text",
-    (row) => row[accessor] as string | null,
-    options?.editable
-      ? (row, v) => options.editable!.onSave(v, row)
-      : undefined,
+    textValue,
+    editable ? (row, v) => editable.onSave(v, row) : undefined,
   );
 
-  return columnHelper.accessor((row) => row[accessor] as string | null, {
+  const definition = {
     id: String(accessor),
     header: options?.header,
-    // Same reason as `createSelectColumn`: a client-side table resolves its
-    // filterFn from the ROW value's type, so a string column handed an array
-    // would silently match nothing. (Vendor is a text column with a picklist.)
-    ...(options?.filterConfig?.filterType === "multiselect"
-      ? { filterFn: multiSelectFilterFn }
-      : {}),
     meta: {
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
     },
-    cell: (info) => {
-      const value = info.getValue();
+    cell: (info: CellContext<T, string>) => {
+      const value = info.getValue() ?? null;
 
-      if (options?.editable) {
+      if (editable) {
         return (
           <EditableCell
             value={value}
-            onSave={(newVal) =>
-              options.editable!.onSave(newVal, info.row.original)
-            }
+            onSave={(newVal) => editable.onSave(newVal, info.row.original)}
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "text", placeholder: options?.placeholder }}
             trigger={options?.trigger}
@@ -865,12 +943,19 @@ export function createTextColumn<
 
       return renderRow(value, info.row.original);
     },
-  });
+  };
+  // Same reason as `createSelectColumn`: a client-side table resolves its
+  // filterFn from the ROW value's type, so a string column handed an array
+  // would silently match nothing. (Vendor is a text column with a picklist.)
+  if (options?.filterConfig?.filterType === "multiselect") {
+    Object.assign(definition, { filterFn: multiSelectFilterFn });
+  }
+  return columnHelper.accessor(textValue, definition);
 }
 
 export function createCurrencyColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, number | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -914,6 +999,7 @@ export function createCurrencyColumn<
   const zeroAsEmpty = options?.zeroAsEmpty ?? false;
   const decimals = options?.decimals;
   const signedTone = options?.signedTone ?? false;
+  const editable = options?.editable;
   const isEmpty = (v: number | null | undefined): v is null | undefined | 0 =>
     v === null || v === undefined || (zeroAsEmpty && v === 0);
   // Flat green by default; sign-tinted columns leave positive spend neutral and
@@ -922,10 +1008,8 @@ export function createCurrencyColumn<
     signedTone ? (v < 0 ? "text-positive" : "font-medium") : "text-positive";
   const cellData = numberCellData<T>(
     "currency",
-    (row) => row[accessor] as number | null,
-    options?.editable
-      ? (row, v) => options.editable!.onSave(v, row)
-      : undefined,
+    (row) => row[accessor] ?? null,
+    editable ? (row, v) => editable.onSave(v, row) : undefined,
   );
   // Widest realistic formatted value is "-$NNN,NNN.NN" (12 chars, JetBrains
   // Mono); w-20 (80px) clipped it mid-digit with no ellipsis and no way to
@@ -943,7 +1027,7 @@ export function createCurrencyColumn<
         {formatCurrency(v, decimals)}
       </span>
     );
-  return columnHelper.accessor((row) => row[accessor] as number | null, {
+  return columnHelper.accessor((row: T) => row[accessor] ?? null, {
     id: String(accessor),
     header: options?.header,
     meta: {
@@ -974,15 +1058,13 @@ export function createCurrencyColumn<
       );
     },
     cell: (info) => {
-      const val = info.getValue();
+      const val = info.getValue() ?? null;
 
-      if (options?.editable) {
+      if (editable) {
         return (
           <EditableCell
             value={val}
-            onSave={(newVal) =>
-              options.editable!.onSave(newVal, info.row.original)
-            }
+            onSave={(newVal) => editable.onSave(newVal, info.row.original)}
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{ type: "currency" }}
             renderValue={renderValue}
@@ -1012,48 +1094,171 @@ type SingleEntityColumnData =
     }
   | {
       entity: "usda-food";
-      data: { fdc_id: number; description: string } | null;
+      data: {
+        fdc_id: number;
+        foodInfo: { description: string | null };
+      } | null;
     };
 
-type SingleEntityIdMap = {
-  ingredient: IngredientShortcode;
-  product: ProductShortcode;
-  recipe: RecipeShortcode;
-  location: LocationShortcode;
-};
+type EditableSingleEntity = Exclude<
+  SingleEntityColumnData["entity"],
+  "usda-food"
+>;
 
-// entity → async search provider + row-summary → ComboboxItem builder, for the
-// inline entity editor. The `as never` on SearchProvider erases the per-entity
-// branding so the values coexist in one record; call sites re-narrow via
-// SingleEntityIdMap.
-const entityPickers = {
-  ingredient: {
-    SearchProvider: WithIngredientSearch as never,
-    buildItem: buildIngredientComboboxItem as never,
-  },
-  product: {
-    SearchProvider: WithProductSearch as never,
-    buildItem: ((product: {
-      id: string;
-      name: string;
-      manufacturer: string;
-    }) => ({
-      id: parseShortcodeFor("product", product.id),
-      name: `${product.name} (${product.manufacturer})`,
-    })) as never,
-  },
-  recipe: {
-    SearchProvider: WithRecipeSearch as never,
-    buildItem: buildRecipeComboboxItem as never,
-  },
-  location: {
-    SearchProvider: WithLocationSearch as never,
-    buildItem: buildLocationComboboxItem as never,
-  },
-} satisfies Record<keyof SingleEntityIdMap, unknown>;
+type SingleEntityData<TEntity extends SingleEntityColumnData["entity"]> =
+  Extract<SingleEntityColumnData, { entity: TEntity }>["data"];
 
-function getEntityPicker(entity: keyof SingleEntityIdMap) {
-  return entityPickers[entity];
+const ingredientInlineSchema = z.object({ id: z.string(), name: z.string() });
+const productInlineSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+});
+const recipeInlineSchema = z.object({ id: z.string(), name: z.string() });
+const locationInlineSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: locationType.nullable(),
+});
+const usdaFoodInlineSchema = z.object({
+  fdc_id: z.number(),
+  foodInfo: z.object({ description: z.string().nullable() }),
+});
+
+function buildSingleEntityItem(
+  entity: EditableSingleEntity,
+  data: Exclude<SingleEntityColumnData["data"], null>,
+): ComboboxItem<string> | null {
+  switch (entity) {
+    case "ingredient": {
+      const parsed = ingredientInlineSchema.safeParse(data);
+      return parsed.success
+        ? buildIngredientComboboxItem({
+            ...parsed.data,
+            id: parseShortcodeFor("ingredient", parsed.data.id),
+          })
+        : null;
+    }
+    case "product": {
+      const parsed = productInlineSchema.safeParse(data);
+      return parsed.success
+        ? buildProductComboboxItem({
+            ...parsed.data,
+            id: parseShortcodeFor("product", parsed.data.id),
+          })
+        : null;
+    }
+    case "recipe": {
+      const parsed = recipeInlineSchema.safeParse(data);
+      return parsed.success
+        ? buildRecipeComboboxItem({
+            ...parsed.data,
+            id: parseShortcodeFor("recipe", parsed.data.id),
+          })
+        : null;
+    }
+    case "location": {
+      const parsed = locationInlineSchema.safeParse(data);
+      return parsed.success
+        ? buildLocationComboboxItem({
+            ...parsed.data,
+            id: parseShortcodeFor("location", parsed.data.id),
+          })
+        : null;
+    }
+  }
+}
+
+function IngredientSearchProvider(props: WithEntitySearchProps<string>) {
+  return <WithIngredientSearch>{props.children}</WithIngredientSearch>;
+}
+
+function ProductSearchProvider(props: WithEntitySearchProps<string>) {
+  return <WithProductSearch>{props.children}</WithProductSearch>;
+}
+
+function RecipeSearchProvider(props: WithEntitySearchProps<string>) {
+  return <WithRecipeSearch>{props.children}</WithRecipeSearch>;
+}
+
+function LocationSearchProvider(props: WithEntitySearchProps<string>) {
+  return <WithLocationSearch>{props.children}</WithLocationSearch>;
+}
+
+const singleEntitySearchProviders = {
+  ingredient: IngredientSearchProvider,
+  product: ProductSearchProvider,
+  recipe: RecipeSearchProvider,
+  location: LocationSearchProvider,
+} satisfies Record<
+  EditableSingleEntity,
+  (props: WithEntitySearchProps<string>) => ReactNode
+>;
+
+function getSingleEntitySearchProvider(
+  entity: SingleEntityColumnData["entity"],
+) {
+  switch (entity) {
+    case "ingredient":
+      return singleEntitySearchProviders.ingredient;
+    case "product":
+      return singleEntitySearchProviders.product;
+    case "recipe":
+      return singleEntitySearchProviders.recipe;
+    case "location":
+      return singleEntitySearchProviders.location;
+    case "usda-food":
+      return undefined;
+  }
+}
+
+function renderSingleEntityLink(
+  entity: SingleEntityColumnData["entity"],
+  data: Exclude<SingleEntityColumnData["data"], null>,
+) {
+  const shared = { displayImage: undefined, truncate: true } as const;
+  switch (entity) {
+    case "ingredient": {
+      const parsed = ingredientInlineSchema.safeParse(data);
+      return parsed.success ? (
+        <EntityInlineLink {...shared} entity="ingredient" data={parsed.data} />
+      ) : (
+        <NoneValue />
+      );
+    }
+    case "product": {
+      const parsed = productInlineSchema.safeParse(data);
+      return parsed.success ? (
+        <EntityInlineLink {...shared} entity="product" data={parsed.data} />
+      ) : (
+        <NoneValue />
+      );
+    }
+    case "recipe": {
+      const parsed = recipeInlineSchema.safeParse(data);
+      return parsed.success ? (
+        <EntityInlineLink {...shared} entity="recipe" data={parsed.data} />
+      ) : (
+        <NoneValue />
+      );
+    }
+    case "location": {
+      const parsed = locationInlineSchema.safeParse(data);
+      return parsed.success ? (
+        <EntityInlineLink {...shared} entity="location" data={parsed.data} />
+      ) : (
+        <NoneValue />
+      );
+    }
+    case "usda-food": {
+      const parsed = usdaFoodInlineSchema.safeParse(data);
+      return parsed.success ? (
+        <EntityInlineLink {...shared} entity="usda-food" data={parsed.data} />
+      ) : (
+        <NoneValue />
+      );
+    }
+  }
 }
 
 /**
@@ -1062,10 +1267,10 @@ function getEntityPicker(entity: keyof SingleEntityIdMap) {
  * any location cell). Text paste is rejected — id resolution by name would be
  * guesswork; server-side validation still applies to the pasted id.
  */
-interface SingleEntityEditableConfig<T, TId extends string> {
-  onSave: (newId: TId | null, row: T) => Promise<void>;
+interface SingleEntityEditableConfig<T> {
+  onSave: (newId: string | null, row: T) => Promise<void>;
   clearable?: boolean;
-  filterItems?: (item: ComboboxItem<TId>, row: T) => boolean;
+  filterItems?: (item: ComboboxItem<string>, row: T) => boolean;
   /**
    * Per-row gate. A false row falls through to the read-only render rather
    * than getting an editor that would fail on save — for a table whose rows
@@ -1076,9 +1281,9 @@ interface SingleEntityEditableConfig<T, TId extends string> {
 }
 
 export function createSingleEntityInlineLinkColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
   TEntity extends SingleEntityColumnData["entity"],
+  K extends PropertyKey,
+  T extends Record<K, SingleEntityData<TEntity>>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -1089,35 +1294,24 @@ export function createSingleEntityInlineLinkColumn<
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     enableSorting?: boolean;
-    editable?: TEntity extends keyof SingleEntityIdMap
-      ? SingleEntityEditableConfig<T, SingleEntityIdMap[TEntity]>
+    editable?: TEntity extends EditableSingleEntity
+      ? SingleEntityEditableConfig<T>
       : never;
   },
 ) {
-  const editableConfig = options?.editable as
-    | SingleEntityEditableConfig<T, string>
-    | undefined;
+  const editableConfig = options?.editable;
+  const valueFor = (row: T): SingleEntityColumnData["data"] => row[accessor];
   // usda-food has no generic picker, so it's never copy/pasteable here.
-  const cellData: ColumnCellData<T, ComboboxItem<string> | null> | undefined =
+  const cellData =
     entity === "usda-food"
       ? undefined
       : entityCellData<T, string>(
           entity,
           (value) => parseShortcodeFor(entity, value),
           (row) => {
-            const item = row[accessor] as Extract<
-              SingleEntityColumnData,
-              { entity: TEntity }
-            >["data"];
+            const item = valueFor(row);
             if (!item) return null;
-            const buildItem = getEntityPicker(entity).buildItem as (
-              data: NonNullable<typeof item>,
-            ) => ComboboxItem;
-            const built = buildItem(item);
-            return {
-              ...built,
-              id: parseShortcodeFor(entity, built.id),
-            };
+            return buildSingleEntityItem(entity, item);
           },
           editableConfig
             ? (row, id) => editableConfig.onSave(id, row)
@@ -1127,92 +1321,67 @@ export function createSingleEntityInlineLinkColumn<
             : undefined,
         );
 
-  return columnHelper.accessor(
-    (row) =>
-      row[accessor] as Extract<
-        SingleEntityColumnData,
-        { entity: TEntity }
-      >["data"],
-    {
-      id: String(accessor),
-      header: options?.header ?? entityLabel(entity),
-      enableSorting: options?.enableSorting ?? false,
-      meta: {
-        className: options?.className,
-        mobile: options?.mobile,
-        filterConfig: options?.filterConfig,
-        cellData,
-      },
-      cell: (info) => {
-        const item = info.getValue();
-        const editable = options?.editable as
-          | SingleEntityEditableConfig<T, string>
-          | undefined;
+  return columnHelper.accessor(valueFor, {
+    id: String(accessor),
+    header: options?.header ?? entityLabel(entity),
+    enableSorting: options?.enableSorting ?? false,
+    meta: {
+      className: options?.className,
+      mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
+      cellData,
+    },
+    cell: (info) => {
+      const item = info.getValue();
+      const editable = options?.editable;
 
-        if (
-          editable &&
-          entity !== "usda-food" &&
-          (editable.isEditable?.(info.row.original) ?? true)
-        ) {
-          const picker = getEntityPicker(entity);
-          const buildItem = picker.buildItem as (
-            data: NonNullable<typeof item>,
-          ) => ComboboxItem;
-          const row = info.row.original;
-          const built = item ? buildItem(item) : null;
-          const current = built
-            ? { ...built, id: parseShortcodeFor(entity, built.id) }
-            : null;
-          return (
-            <EditableEntityCell
-              value={current}
-              label={entity}
-              clearable={editable.clearable}
-              trigger="pencil"
-              filterItems={
-                editable.filterItems
-                  ? (ci) => editable.filterItems!(ci, row)
-                  : undefined
-              }
-              onSave={(newId) => editable.onSave(newId, row)}
-              clipboard={cellData ? specFromCellData(cellData, row) : undefined}
-              SearchProvider={picker.SearchProvider}
-              renderValue={(v) => {
-                if (!v) return <NoneValue />;
-                // Keep the real inline link while the display matches the row
-                // data; a transient optimistic value renders as plain text
-                // until the invalidated query restores the relation summary.
-                // (`id in item` is a type guard only — usda-food, the one
-                // id-less member, can't reach the editable branch.)
-                const currentId = item && "id" in item ? item.id : null;
-                if (item && v.id === currentId) {
-                  return (
-                    <EntityInlineLink
-                      displayImage={undefined}
-                      entity={entity}
-                      data={item as never}
-                      truncate
-                    />
-                  );
-                }
-                return <span className="truncate">{v.name}</span>;
-              }}
-            />
-          );
-        }
-
-        if (!item) return <NoneValue />;
+      if (
+        editable &&
+        entity !== "usda-food" &&
+        (editable.isEditable?.(info.row.original) ?? true)
+      ) {
+        const SearchProvider = getSingleEntitySearchProvider(entity);
+        if (!SearchProvider) return <NoneValue />;
+        const row = info.row.original;
+        const current = item ? buildSingleEntityItem(entity, item) : null;
         return (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity={entity}
-            data={item as never}
-            truncate
+          <EditableEntityCell
+            value={current}
+            label={entity}
+            clearable={editable.clearable}
+            trigger="pencil"
+            filterItems={
+              editable.filterItems
+                ? (candidate) => editable.filterItems?.(candidate, row) ?? true
+                : undefined
+            }
+            onSave={(newId) => editable.onSave(newId, row)}
+            clipboard={cellData ? specFromCellData(cellData, row) : undefined}
+            SearchProvider={SearchProvider}
+            renderValue={(v) => {
+              if (!v) return <NoneValue />;
+              // Keep the real inline link while the display matches the row
+              // data; a transient optimistic value renders as plain text
+              // until the invalidated query restores the relation summary.
+              // (`id in item` is a type guard only — usda-food, the one
+              // id-less member, can't reach the editable branch.)
+              const currentItem = item
+                ? buildSingleEntityItem(entity, item)
+                : null;
+              const currentId = currentItem?.id ?? null;
+              if (item && v.id === currentId) {
+                return renderSingleEntityLink(entity, item);
+              }
+              return <span className="truncate">{v.name}</span>;
+            }}
           />
         );
-      },
+      }
+
+      if (!item) return <NoneValue />;
+      return renderSingleEntityLink(entity, item);
     },
-  );
+  });
 }
 
 /**
@@ -1334,8 +1503,8 @@ export function productPriceClearLabel(
  * every existing column for no gain.
  */
 export function createBooleanColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, boolean | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -1376,13 +1545,14 @@ export function createBooleanColumn<
   // The editor's own empty state names the undecided state where there is one,
   // so clearing has a word attached rather than being an unlabelled ✗.
   const editorPlaceholder = options.undecided?.label ?? filterPlaceholder;
-  const encode = (v: unknown): string | null =>
-    v === true ? "true" : v === false ? "false" : null;
+  const encode = (value: boolean | null | undefined): string | null =>
+    value === true ? "true" : value === false ? "false" : null;
   const decode = (v: string | null): boolean | null =>
     v === "true" ? true : v === "false" ? false : null;
 
-  const save = options.editable
-    ? (row: T, v: string | null) => options.editable!.onSave(decode(v), row)
+  const editable = options.editable;
+  const save = editable
+    ? (row: T, value: string | null) => editable.onSave(decode(value), row)
     : undefined;
   const cellData = selectCellData<T>(
     (row) => encode(row[accessor]),
@@ -1398,7 +1568,7 @@ export function createBooleanColumn<
           options: selectOptions,
         });
 
-  return columnHelper.accessor((row) => encode(row[accessor]), {
+  return columnHelper.accessor((row: T) => encode(row[accessor]), {
     id: String(accessor),
     header: options.header,
     enableSorting: false,
@@ -1411,13 +1581,11 @@ export function createBooleanColumn<
     cell: (info) => {
       const value = info.getValue();
 
-      if (options.editable) {
+      if (editable) {
         return (
           <EditableCell
             value={value}
-            onSave={(next) =>
-              options.editable!.onSave(decode(next), info.row.original)
-            }
+            onSave={(next) => editable.onSave(decode(next), info.row.original)}
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{
               type: "select",
@@ -1439,8 +1607,8 @@ export function createBooleanColumn<
 }
 
 export function createFilterableSelectColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, string | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -1470,19 +1638,20 @@ export function createFilterableSelectColumn<
      */
     filterConfig?: FilterConfig | null;
     editable?: {
+      parseValue: (value: string | null) => T[K];
       onSave: (newValue: T[K], row: T) => Promise<void>;
     };
   },
 ) {
   const renderCell =
     options.renderCell ??
-    ((value: T[K]) =>
-      renderOptionCell(value as string | null, options.selectOptions));
+    ((value: T[K]) => renderOptionCell(value ?? null, options.selectOptions));
+  const editable = options.editable;
   const cellData = selectCellData<T>(
-    (row) => (row[accessor] as string | null) ?? null,
+    (row) => row[accessor] ?? null,
     options.selectOptions,
-    options.editable
-      ? (row, v) => options.editable!.onSave(v as T[K], row)
+    editable
+      ? (row, value) => editable.onSave(editable.parseValue(value), row)
       : undefined,
   );
   // `null` is an explicit opt-out (no control); `undefined` derives one.
@@ -1494,29 +1663,24 @@ export function createFilterableSelectColumn<
           filterType: "select",
           options: options.selectOptions,
         });
-  return columnHelper.accessor((row) => row[accessor], {
+  const columnOptions = {
     id: String(accessor),
     header: options.header,
-    // Client-side tables resolve a filterFn from the ROW value's type, so a
-    // string column handed an array would silently match nothing.
-    ...(filterConfig?.filterType === "multiselect"
-      ? { filterFn: multiSelectFilterFn }
-      : {}),
     meta: {
       className: options.className,
       mobile: options.mobile,
       filterConfig,
       cellData,
     },
-    cell: (info) => {
-      const value = info.getValue() as T[K];
+    cell: (info: CellContext<T, T[K]>) => {
+      const value = info.row.original[accessor];
 
-      if (options.editable) {
+      if (editable) {
         return (
           <EditableCell
-            value={value as string | null}
-            onSave={(newVal) =>
-              options.editable!.onSave(newVal as T[K], info.row.original)
+            value={value ?? null}
+            onSave={(newValue) =>
+              editable.onSave(editable.parseValue(newValue), info.row.original)
             }
             clipboard={specFromCellData(cellData, info.row.original)}
             config={{
@@ -1524,26 +1688,32 @@ export function createFilterableSelectColumn<
               options: options.selectOptions,
               placeholder: options.placeholder,
             }}
-            renderValue={(v) => renderCell(v as T[K])}
+            renderValue={(nextValue) =>
+              renderCell(editable.parseValue(nextValue))
+            }
           />
         );
       }
 
       return renderCell(value);
     },
-  });
+  };
+  // Client-side tables resolve a filter function from the row value's type.
+  if (filterConfig?.filterType === "multiselect") {
+    Object.assign(columnOptions, { filterFn: multiSelectFilterFn });
+  }
+  return columnHelper.accessor((row: T) => row[accessor], columnOptions);
 }
 
 export function createExternalLinkColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, string | number | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  linkTo: string,
+  linkTo: "/usda/$id",
   options?: {
     header?: string;
-    paramName?: string;
     variant?: "mono" | "default";
     className?: string;
     mobile?: MobileColumnMeta;
@@ -1559,86 +1729,69 @@ export function createExternalLinkColumn<
     };
   },
 ) {
-  const paramName = options?.paramName ?? "code";
   const variant = options?.variant ?? "mono";
   const display = options?.display ?? ((value: string) => value);
+  const editable = options?.editable;
 
   const cellData = textCellData<T>(
     "text",
     (row) => {
-      const v = row[accessor] as string | number | null;
-      return v !== null && v !== undefined ? String(v) : null;
+      const value = row[accessor];
+      return value !== null && value !== undefined ? String(value) : null;
     },
-    options?.editable
-      ? (row, v) => options.editable!.onSave(v, row)
-      : undefined,
+    editable ? (row, value) => editable.onSave(value, row) : undefined,
   );
 
-  return columnHelper.accessor(
-    (row) => row[accessor] as string | number | null,
-    {
-      id: String(accessor),
-      header: options?.header,
-      meta: {
-        className: options?.className,
-        mono: variant === "mono",
-        mobile: options?.mobile,
-        filterConfig: options?.filterConfig,
-        cellData,
-      },
-      cell: (info) => {
-        const value = info.getValue();
+  return columnHelper.accessor((row: T) => row[accessor], {
+    id: String(accessor),
+    header: options?.header,
+    meta: {
+      className: options?.className,
+      mono: variant === "mono",
+      mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
+      cellData,
+    },
+    cell: (info) => {
+      const value = info.getValue();
 
-        if (options?.editable) {
-          return (
-            <EditableCell
-              value={
-                value !== null && value !== undefined ? String(value) : null
-              }
-              onSave={(newVal) =>
-                options.editable!.onSave(newVal, info.row.original)
-              }
-              clipboard={specFromCellData(cellData, info.row.original)}
-              config={{ type: "text" }}
-              trigger="pencil"
-              renderValue={(v) => {
-                if (v === null || v === undefined || v === "") {
-                  return <NoneValue />;
-                }
-                const shown = display(String(v));
-                return (
-                  <TableLink
-                    to={linkTo as "/usda/upc/$code"}
-                    params={{ [paramName]: shown } as { code: string }}
-                    variant={variant}
-                  >
-                    {shown}
-                  </TableLink>
-                );
-              }}
-            />
-          );
-        }
-
-        if (value === null || value === undefined) return <NoneValue />;
-        const shown = display(String(value));
+      if (editable) {
         return (
-          <TableLink
-            to={linkTo as "/usda/upc/$code"}
-            params={{ [paramName]: shown } as { code: string }}
-            variant={variant}
-          >
-            {shown}
-          </TableLink>
+          <EditableCell
+            value={value !== null && value !== undefined ? String(value) : null}
+            onSave={(newValue) => editable.onSave(newValue, info.row.original)}
+            clipboard={specFromCellData(cellData, info.row.original)}
+            config={{ type: "text" }}
+            trigger="pencil"
+            renderValue={(v) => {
+              if (v === null || v === undefined || v === "") {
+                return <NoneValue />;
+              }
+              const shown = display(String(v));
+              return (
+                <TableLink to={linkTo} params={{ id: shown }} variant={variant}>
+                  {shown}
+                </TableLink>
+              );
+            }}
+          />
         );
-      },
+      }
+
+      if (value === null || value === undefined) return <NoneValue />;
+      const shown = display(String(value));
+      return (
+        <TableLink to={linkTo} params={{ id: shown }} variant={variant}>
+          {shown}
+        </TableLink>
+      );
     },
-  );
+  });
 }
 
 export function createTimestampColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, string | Date | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -1650,8 +1803,9 @@ export function createTimestampColumn<
   },
 ) {
   const fallback = options?.fallback ?? <NoneValue />;
+  const valueFor = (row: T) => row[accessor] ?? null;
 
-  return columnHelper.accessor((row) => row[accessor] as string | Date | null, {
+  return columnHelper.accessor(valueFor, {
     id: String(accessor),
     header: options?.header,
     meta: {
@@ -1659,9 +1813,7 @@ export function createTimestampColumn<
       mono: true,
       mobile: options?.mobile,
       // Copy-only ISO date-time (see createCreatedAtColumn).
-      cellData: timestampCellData<T>(
-        (row) => row[accessor] as string | Date | null,
-      ),
+      cellData: timestampCellData<T>(valueFor),
     },
     cell: (info) => {
       const value = info.getValue();
@@ -1670,9 +1822,12 @@ export function createTimestampColumn<
   });
 }
 
-export function createEditableAmountColumn<T extends Record<string, unknown>>(
+export function createEditableAmountColumn<
+  K extends PropertyKey,
+  T extends Record<K, Amount>,
+>(
   columnHelper: ColumnHelper<T>,
-  accessor: keyof T,
+  accessor: K,
   options: {
     header?: string;
     className?: string;
@@ -1687,11 +1842,12 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     isEditable?: (row: T) => boolean;
   },
 ) {
-  const cellData = amountCellData<T>(
-    (row) => row[accessor] as Amount,
-    (row, amount) => options.onSave(amount, row),
+  const valueFor = (row: T) => row[accessor];
+  const cellData = amountCellData<T>(valueFor, (row, amount) =>
+    options.onSave(amount, row),
   );
-  return columnHelper.accessor((row) => row[accessor] as Amount, {
+  const renderDisplay = options.renderDisplay;
+  return columnHelper.accessor(valueFor, {
     id: String(accessor),
     header: options.header ?? "Amount",
     meta: {
@@ -1718,11 +1874,9 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
           unitMappings={unitMappings}
           onSave={(newAmount) => options.onSave(newAmount, row)}
           clipboard={specFromCellData(cellData, row)}
-          trigger={options.renderDisplay ? "pencil" : "wrap"}
+          trigger={renderDisplay ? "pencil" : "wrap"}
           renderDisplay={
-            options.renderDisplay
-              ? (content) => options.renderDisplay!(content, row)
-              : undefined
+            renderDisplay ? (content) => renderDisplay(content, row) : undefined
           }
         />
       );
@@ -1738,8 +1892,8 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
  * `editable` for an inline `EditableCell` date-picker.
  */
 export function createPlainDateColumn<
-  T extends Record<string, unknown>,
-  K extends keyof T,
+  K extends PropertyKey,
+  T extends Record<K, string | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -1771,6 +1925,8 @@ export function createPlainDateColumn<
     displayValue?: (row: T) => { value: string | null; muted?: boolean };
   },
 ) {
+  const editable = options?.editable;
+  const valueFor = (row: T): string | null => row[accessor] ?? null;
   const renderValue = (value: string | null, muted?: boolean) =>
     value ? (
       <span className={muted ? "text-muted-foreground" : undefined}>
@@ -1782,16 +1938,11 @@ export function createPlainDateColumn<
 
   // Copy the raw "YYYY-MM-DD" string; paste only when editable (kind "date").
   const cellData = dateCellData<T>(
-    (row) =>
-      options?.editValue
-        ? options.editValue(row)
-        : (row[accessor] as string | null),
-    options?.editable
-      ? (row, v) => options.editable!.onSave(v, row)
-      : undefined,
+    (row) => (options?.editValue ? options.editValue(row) : valueFor(row)),
+    editable ? (row, value) => editable.onSave(value, row) : undefined,
   );
 
-  return columnHelper.accessor((row) => row[accessor] as string | null, {
+  return columnHelper.accessor(valueFor, {
     id: String(accessor),
     header: options?.header,
     meta: {
@@ -1806,14 +1957,14 @@ export function createPlainDateColumn<
       const row = info.row.original;
       const display = options?.displayValue?.(row);
 
-      if (options?.editable) {
+      if (editable) {
         const editableValue = options.editValue
           ? options.editValue(row)
           : value;
         return (
           <EditableCell
             value={editableValue}
-            onSave={(newVal) => options.editable!.onSave(newVal, row)}
+            onSave={(newValue) => editable.onSave(newValue, row)}
             clipboard={specFromCellData(cellData, row)}
             config={{ type: "date" }}
             // EditableCell only calls renderValue in closed/display mode (never
@@ -1858,6 +2009,7 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     };
   },
 ) {
+  const editable = options?.editable;
   const cellData = entityCellData<T, ProjectShortcode>(
     "project",
     (value) => parseShortcodeFor("project", value),
@@ -1868,78 +2020,74 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
             name: row.projectName,
           }
         : null,
-    options?.editable
-      ? (row, id) => options.editable!.onSave(id, row)
-      : undefined,
-    options?.editable
-      ? (row) => options.editable!.onSave(null, row)
-      : undefined,
+    editable ? (row, id) => editable.onSave(id, row) : undefined,
+    editable ? (row) => editable.onSave(null, row) : undefined,
   );
+  const columnOptions = {
+    id: "project",
+    header: options?.header ?? "Project",
+    sortFn: entityRefSortingFn,
+    meta: {
+      className: options?.className,
+      mobile: options?.mobile,
+      filterConfig: options?.filterConfig,
+      cellData,
+    },
+    cell: (
+      info: CellContext<T, { id: string | null; name: string | null }>,
+    ) => {
+      const { id, name } = info.getValue();
+
+      if (editable) {
+        const current: ComboboxItem<ProjectShortcode> | null =
+          id && name ? { id: parseShortcodeFor("project", id), name } : null;
+        const row = info.row.original;
+        return (
+          <EditableEntityCell
+            value={current}
+            label="project"
+            clearable
+            trigger="pencil"
+            onSave={(newId) => editable.onSave(newId, row)}
+            clipboard={specFromCellData(cellData, row)}
+            SearchProvider={WithProjectSearch}
+            renderValue={(value) => {
+              if (!value) return <NoneValue />;
+              return (
+                <TableLink
+                  to="/projects/$shortcode"
+                  params={{ shortcode: row.projectId ?? "" }}
+                  variant="muted"
+                >
+                  {value.name}
+                </TableLink>
+              );
+            }}
+          />
+        );
+      }
+
+      if (!id || !name) return <NoneValue />;
+      return (
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="project"
+          data={{ id, name }}
+          truncate
+        />
+      );
+    },
+  };
+  // Client-side project-detail tables filter the object-valued accessor by id.
+  if (options?.filterConfig?.filterType === "multiselect") {
+    Object.assign(columnOptions, { filterFn: projectRefFilterFn });
+  }
   return columnHelper.accessor(
-    (row) => ({
+    (row: T) => ({
       id: row.projectId,
       name: row.projectName,
     }),
-    {
-      id: "project",
-      header: options?.header ?? "Project",
-      sortFn: entityRefSortingFn,
-      // Client-side tables (the embedded project-detail lists) filter this
-      // column by project id. The accessor yields an object, which the default
-      // stringifying comparison turns into "[object Object]" — so the roster
-      // matched nothing and `(none)` never found an unassigned row.
-      ...(options?.filterConfig?.filterType === "multiselect"
-        ? { filterFn: projectRefFilterFn }
-        : {}),
-      meta: {
-        className: options?.className,
-        mobile: options?.mobile,
-        filterConfig: options?.filterConfig,
-        cellData,
-      },
-      cell: (info) => {
-        const { id, name } = info.getValue();
-
-        if (options?.editable) {
-          const current: ComboboxItem<ProjectShortcode> | null =
-            id && name ? { id: parseShortcodeFor("project", id), name } : null;
-          const row = info.row.original;
-          return (
-            <EditableEntityCell
-              value={current}
-              label="project"
-              clearable
-              trigger="pencil"
-              onSave={(newId) => options.editable!.onSave(newId, row)}
-              clipboard={specFromCellData(cellData, row)}
-              SearchProvider={WithProjectSearch}
-              renderValue={(v) => {
-                if (!v) return <NoneValue />;
-                return (
-                  <TableLink
-                    to="/projects/$shortcode"
-                    params={{ shortcode: row.projectId ?? "" }}
-                    variant="muted"
-                  >
-                    {v.name}
-                  </TableLink>
-                );
-              }}
-            />
-          );
-        }
-
-        if (!id || !name) return <NoneValue />;
-        return (
-          <EntityInlineLink
-            displayImage={undefined}
-            entity="project"
-            data={{ id, name }}
-            truncate
-          />
-        );
-      },
-    },
+    columnOptions,
   );
 }
 
@@ -2134,13 +2282,16 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
 }
 
 export function createParentLinkColumn<
-  T extends Record<string, unknown>,
   TEntity extends "task" | "project",
+  TIdField extends PropertyKey,
+  TNameField extends PropertyKey,
+  T extends Record<TIdField, string | null | undefined> &
+    Record<TNameField, string | null | undefined>,
 >(
   columnHelper: ColumnHelper<T>,
   entity: TEntity,
-  idField: keyof T,
-  nameField: keyof T,
+  idField: TIdField,
+  nameField: TNameField,
   options?: {
     id?: string;
     header?: string;
@@ -2152,9 +2303,9 @@ export function createParentLinkColumn<
   const defaultId = entity === "task" ? "parentTask" : "parent";
   const defaultHeader = entity === "task" ? "Parent Task" : "Parent";
   return columnHelper.accessor(
-    (row) => ({
-      id: row[idField] as string | null,
-      name: row[nameField] as string | null,
+    (row: T) => ({
+      id: row[idField] ?? null,
+      name: row[nameField] ?? null,
     }),
     {
       id: options?.id ?? defaultId,

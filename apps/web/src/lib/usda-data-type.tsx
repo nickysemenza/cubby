@@ -13,7 +13,7 @@ import { cn } from "~/lib/utils";
 // Tokens only (CLAUDE.md): never hardcode hex/oklch — these are the chart
 // ink-ladder + semantic tokens from styles.css, referenced as CSS vars so a
 // single record drives dots and tinted icons everywhere.
-const DATA_TYPE_COLOR: Record<DataType, string> = {
+const DATA_TYPE_COLOR = {
   sr_legacy_food: "var(--chart-1)",
   survey_fndds_food: "var(--chart-2)",
   foundation_food: "var(--chart-3)",
@@ -23,7 +23,7 @@ const DATA_TYPE_COLOR: Record<DataType, string> = {
   sample_food: "var(--chart-8)",
   sub_sample_food: "var(--chart-8)",
   experimental_food: "var(--chart-8)",
-};
+} satisfies Record<DataType, string>;
 
 export function dataTypeColor(dataType: DataType): string {
   return DATA_TYPE_COLOR[dataType];

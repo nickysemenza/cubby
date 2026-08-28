@@ -20,6 +20,8 @@ type StreamFrame =
   | { kind: "event"; payload: ReturnType<typeof superjson.serialize> }
   | { kind: "error"; error: PublicStartOperationError };
 
+type UnparsedWorkflowStreamError = z.input<z.ZodUnknown>;
+
 const encoder = new TextEncoder();
 const encodeFrame = (frame: StreamFrame) =>
   encoder.encode(`${JSON.stringify(frame)}\n`);
@@ -41,7 +43,7 @@ export const workflowStreamErrorResponse = (
   });
 
 const errorResponse = (
-  error: unknown,
+  error: UnparsedWorkflowStreamError,
   stage: OperationStage,
   requestId?: string,
 ) =>

@@ -36,7 +36,7 @@ import {
   ENTITY_NOT_FOUND_REASON,
   type EntityId,
 } from "@cubby/schemas/identifiers";
-import type { AnyColumn } from "drizzle-orm";
+import type { AnyColumn, InferSelectModel } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -70,7 +70,7 @@ interface EntityReaderConfig<
   TRow,
   TOut,
   E extends ShortcodeEntity,
-  TDb = Database,
+  TDb extends ReaderDb = Database,
 > {
   /** Drives the 404 message and the shortcode this reader resolves. */
   entity: E;
@@ -80,7 +80,11 @@ interface EntityReaderConfig<
   fromDB: (db: TDb, row: TRow) => TOut | Promise<TOut>;
 }
 
-export interface EntityReader<TOut, E extends ShortcodeEntity, TDb = Database> {
+export interface EntityReader<
+  TOut,
+  E extends ShortcodeEntity,
+  TDb extends ReaderDb = Database,
+> {
   /** Fetch by id, throwing `ENTITY_NOT_FOUND_REASON[entity]` when there is no live row. */
   getByID: (db: TDb, id: EntityId<E>) => Promise<TOut>;
   /** Fetch by id, returning `null` when there is no live row. */
@@ -98,7 +102,7 @@ export function createEntityReader<
   TRow,
   TOut,
   E extends ShortcodeEntity,
-  TDb = Database,
+  TDb extends ReaderDb = Database,
 >(config: EntityReaderConfig<TRow, TOut, E, TDb>): EntityReader<TOut, E, TDb> {
   const getByIDOrNull = async (
     db: TDb,
@@ -125,11 +129,7 @@ export function createEntityReader<
   ): Promise<TOut | null> => {
     // `resolveLiveShortcode` pins the entity, so another entity's (valid) code
     // resolves to null here rather than to a uuid of the wrong type.
-    const id = await resolveLiveShortcode(
-      db as Database | DrizzleTransaction,
-      shortcode,
-      config.entity,
-    );
+    const id = await resolveLiveShortcode(db, shortcode, config.entity);
     return id === null ? null : getByIDOrNull(db, id);
   };
 
@@ -138,7 +138,7 @@ export function createEntityReader<
 
 interface EntityCrudConfig<
   TTable extends CrudTable,
-  TRow extends Record<string, unknown>,
+  TRow extends object,
   TOut,
   TUpdate,
   E extends AuditableEntity & ShortcodeEntity,
@@ -148,7 +148,10 @@ interface EntityCrudConfig<
   entity: E;
   toUpdate: (data: TUpdate) => PgUpdateSetSource<TTable>;
   /** Columns whose change is recorded in the audit diff. */
-  auditUpdateFields: readonly string[];
+  auditUpdateFields: readonly Extract<
+    keyof TRow,
+    keyof InferSelectModel<TTable>
+  >[];
 }
 
 export interface EntityCrud<
@@ -171,7 +174,7 @@ export interface EntityCrud<
 
 export function createEntityCrud<
   TTable extends CrudTable,
-  TRow extends Record<string, unknown>,
+  TRow extends object,
   TOut,
   TUpdate,
   E extends AuditableEntity & ShortcodeEntity,
@@ -222,11 +225,13 @@ export function createEntityCrud<
     );
 
     if (manifest.auditable && before) {
-      const changes = computeChanges(
-        before,
-        updated as Record<string, unknown>,
-        [...config.auditUpdateFields],
-      );
+      // The update returns base-table columns while the fetch may also include
+      // relations. Overlaying those columns retains the richer row contract
+      // and gives the audit diff the exact post-write scalar values.
+      const after = { ...before, ...updated };
+      const changes = computeChanges(before, after, [
+        ...config.auditUpdateFields,
+      ]);
       if (changes) {
         await logAuditEntry(tx, actor, {
           entityType: config.entity,

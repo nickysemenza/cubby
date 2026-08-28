@@ -4,19 +4,19 @@ import { useState } from "react";
 import { entities, entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import type { EditableEntity } from "./types";
+import type { EntityEditResultFor } from "./intent-types";
+import type { EditableEntity, EntityEditMutationData } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
 
 /** Surface lifecycle adapter for rich create forms that own specialized RHF
  * state. The form supplies one domain payload; commands own the write. */
 export function useEntityCreateController<
   E extends EditableEntity,
-  TData extends object,
-  TResult extends { id: string },
+  TData extends EntityEditMutationData<E>,
 >(
   entity: E,
   callbacks?: {
-    onSuccess?: (result: TResult) => void;
+    onSuccess?: (result: EntityEditResultFor<E>) => void;
     onError?: () => void;
   },
 ) {
@@ -31,7 +31,10 @@ export function useEntityCreateController<
         intent: "full",
         data,
       });
-      const result = execution.result as TResult;
+      if (execution.operation !== "create") {
+        throw new Error(`${entity} create returned ${execution.operation}.`);
+      }
+      const result = execution.result;
       callbacks?.onSuccess?.(result);
       await navigate(entityDetailLink(entity, result.id));
       return result;

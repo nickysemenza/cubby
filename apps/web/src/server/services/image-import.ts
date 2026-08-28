@@ -1,7 +1,7 @@
 import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
 
 import { env } from "~/env";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   associateImagesWithProduct,
@@ -9,6 +9,20 @@ import {
   recipeHasImages,
 } from "~/server/repo/image";
 import { importImageFromUrl } from "~/server/services/image-storage.service";
+
+export type ImageUrlImportPort = typeof importImageFromUrl;
+
+export interface RecipeImageImportPort {
+  hasImages: typeof recipeHasImages;
+  importFromUrl: ImageUrlImportPort;
+  associate: typeof associateImagesWithRecipe;
+}
+
+export const productionRecipeImageImportPort: RecipeImageImportPort = {
+  hasImages: recipeHasImages,
+  importFromUrl: importImageFromUrl,
+  associate: associateImagesWithRecipe,
+};
 
 /**
  * Import an image from UPC lookup and associate it with a product.
@@ -26,7 +40,7 @@ import { importImageFromUrl } from "~/server/services/image-storage.service";
  */
 export const importImageFromUPC = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: Pick<UpcLookupPort, "lookup">,
   upc: string,
   productId: ProductId,
 ): Promise<{ imageId: string } | null> => {
@@ -83,13 +97,14 @@ export const importRecipeImageFromUrl = async (
   db: Database,
   recipeId: RecipeId,
   sourceUrl: string,
+  port: RecipeImageImportPort = productionRecipeImageImportPort,
 ): Promise<{ imageId: string } | null> => {
   try {
-    if (await recipeHasImages(db, recipeId)) {
+    if (await port.hasImages(db, recipeId)) {
       return null;
     }
 
-    const imported = await importImageFromUrl(db, {
+    const imported = await port.importFromUrl(db, {
       sourceUrl,
       filenamePrefix: `recipe-${recipeId}`,
     });
@@ -101,7 +116,7 @@ export const importRecipeImageFromUrl = async (
       return null;
     }
 
-    await associateImagesWithRecipe(db, recipeId, [imported.imageId]);
+    await port.associate(db, recipeId, [imported.imageId]);
 
     return { imageId: imported.imageId };
   } catch (error) {

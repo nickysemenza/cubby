@@ -1,6 +1,11 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import { isbnFromGtin, normalizeIsbn } from "@cubby/schemas/isbn";
-import type { ProductFilters, ProductListItem } from "@cubby/schemas/product";
+import {
+  productCategory,
+  productCategoryValues,
+  type ProductFilters,
+  type ProductListItem,
+} from "@cubby/schemas/product";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
@@ -351,6 +356,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
         // chip is redundant per-row — prefer manufacturer as the subtitle.
         mobile: { slot: "subtitle", priority: 30 },
         editable: {
+          parseValue: (value) => productCategory.nullable().parse(value),
           onSave: async (newCategory, product) => {
             await updateProductMutation.mutateAsync({
               id: product.id,
@@ -887,15 +893,12 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     (item: ProductTreeRow) => formatCategoryLabel(item.category),
     [],
   );
-  const groupColorFn = useCallback(
-    (key: string) =>
-      getCategoryColor(
-        key === "uncategorized"
-          ? null
-          : (key.replace(" ", "-") as Parameters<typeof getCategoryColor>[0]),
-      ),
-    [],
-  );
+  const groupColorFn = useCallback((key: string) => {
+    const category = productCategoryValues.find(
+      (candidate) => formatCategoryLabel(candidate) === key,
+    );
+    return getCategoryColor(category ?? null);
+  }, []);
   const groupConfig = useMemo(
     (): GroupConfig<ProductTreeRow> => ({
       field: "category",

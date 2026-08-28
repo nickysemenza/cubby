@@ -16,6 +16,11 @@ import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
 import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
 
+const entityMutationResultInputSchema = z.unknown();
+type EntityMutationResultInput = z.input<
+  typeof entityMutationResultInputSchema
+>;
+
 /**
  * A product create/update whose payload names an ingredient link (and,
  * optionally, an explicit USDA food link) moves more than a plain product
@@ -101,11 +106,11 @@ export function flattenEntityMutationResult(
 /** Recover the entity-specific output through the same schema that backs the kernel. */
 export function parseEntityMutationResultFor<E extends EditableEntity>(
   entity: E,
-  value: unknown,
+  value: EntityMutationResultInput,
 ): EntityEditResultFor<E>;
 export function parseEntityMutationResultFor(
   entity: EditableEntity,
-  value: unknown,
+  value: EntityMutationResultInput,
 ) {
   return parseEntityMutationOutput(entity, value);
 }

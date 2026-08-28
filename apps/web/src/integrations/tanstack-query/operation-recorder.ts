@@ -1,4 +1,5 @@
 import { isCancelledError, type QueryClient } from "@tanstack/react-query";
+import { type JSONType, z } from "zod";
 
 import { getFlag } from "~/lib/flags";
 import {
@@ -14,7 +15,6 @@ import {
 } from "~/lib/start-operation-observability";
 
 import {
-  type CubbyOperationMeta,
   type OperationDescriptor,
   operationDescriptor,
 } from "./operation-meta";
@@ -32,7 +32,17 @@ let operationSequence = 0;
 
 const nextOperationId = () => `op-${++operationSequence}`;
 
-function isOperationCancellation(error: unknown): boolean {
+type ObservedFailure = Error | JSONType;
+
+const parseObservedFailure = <Failure>(failure: Failure): ObservedFailure => {
+  if (failure instanceof Error) return failure;
+  const parsed = z.json().safeParse(failure);
+  return parsed.success
+    ? parsed.data
+    : new Error("A non-serializable value was thrown");
+};
+
+function isOperationCancellation(error: ObservedFailure): boolean {
   return (
     isCancelledError(error) ||
     (error instanceof DOMException && error.name === "AbortError") ||
@@ -40,8 +50,7 @@ function isOperationCancellation(error: unknown): boolean {
   );
 }
 
-const consoleEnabled = () =>
-  typeof window !== "undefined" && getFlag("queryLogger");
+const consoleEnabled = () => "window" in globalThis && getFlag("queryLogger");
 
 export function beginObservedOperation(options: {
   kind: ObservedKind;
@@ -71,13 +80,17 @@ export function beginObservedOperation(options: {
   return observed;
 }
 
-export function finishObservedOperation(
+export function finishObservedOperation<Failure>(
   observed: ObservedOperation,
-  options: { result?: unknown; error?: unknown },
+  options: { result?: unknown; error?: Failure },
 ): void {
+  const failure =
+    options.error === undefined
+      ? undefined
+      : parseObservedFailure(options.error);
   const durationMs = performance.now() - observed.startedAt;
-  const outcome: OperationOutcome = options.error
-    ? isOperationCancellation(options.error)
+  const outcome: OperationOutcome = failure
+    ? isOperationCancellation(failure)
       ? "cancelled"
       : "error"
     : "success";
@@ -105,9 +118,9 @@ export function finishObservedOperation(
     entity: observed.entity,
     elapsedMs: Math.round(durationMs),
     outcome,
-    ...(options.error ? { error: options.error } : { result: options.result }),
+    ...(failure ? { error: failure } : { result: options.result }),
   };
-  if (outcome === "error" && typeof window !== "undefined")
+  if (outcome === "error" && "window" in globalThis)
     console.error(`<< ${observed.id} ${observed.operation}`, payload);
   else if (consoleEnabled())
     console.log(`<< ${observed.id} ${observed.operation}`, payload);
@@ -146,10 +159,7 @@ const finishCachedQuery = (hash: string, outcome: OperationOutcome): void => {
 export function installOperationRecorder(queryClient: QueryClient): () => void {
   const unsubscribeQuery = queryClient.getQueryCache().subscribe((event) => {
     const query = event.query;
-    const descriptor = operationDescriptor(
-      query.queryKey,
-      query.meta as CubbyOperationMeta | undefined,
-    );
+    const descriptor = operationDescriptor(query.queryKey, query.meta);
     if (
       event.type === "added" &&
       query.state.status === "success" &&
@@ -199,7 +209,7 @@ export function installOperationRecorder(queryClient: QueryClient): () => void {
     .subscribe((event) => {
       if (event.type !== "updated") return;
       const mutation = event.mutation;
-      const meta = mutation.meta as CubbyOperationMeta | undefined;
+      const meta = mutation.meta;
       const descriptor: OperationDescriptor = {
         transport: meta?.transport ?? "client",
         operation:

@@ -2311,7 +2311,7 @@ describe("project dashboard — summary scope filters", () => {
     ]);
   });
 
-  const seedDateShapes = async () => {
+  const seedDateFixtures = async () => {
     await mkProject({
       name: "date bounded",
       startDate: "2025-03-01",
@@ -2336,7 +2336,7 @@ describe("project dashboard — summary scope filters", () => {
   };
 
   it("a two-sided date window keeps overlapping intervals and drops the undated project", async () => {
-    await seedDateShapes();
+    await seedDateFixtures();
 
     expect(scopedNames(await projectDashboardSummary(ctx.db, {}))).toEqual([
       "date bounded",
@@ -2359,7 +2359,7 @@ describe("project dashboard — summary scope filters", () => {
   });
 
   it("one-sided date windows drop only their own half, and still drop the undated project", async () => {
-    await seedDateShapes();
+    await seedDateFixtures();
 
     // dateFrom only: keeps anything still running on/after it — an open end
     // (null) counts as still running.
@@ -3072,18 +3072,22 @@ describe("project repository — imagePresenceFilter", () => {
       joinDeleted?: boolean;
     } = {},
   ) => {
-    const img = await insertWithShortcode(ctx.db, "image", {
+    const imageInput: Parameters<typeof insertWithShortcode<"image">>[2] = {
       key: `image-presence-${entityId}-${overrides.contentType ?? "png"}`,
       filename: "image-presence.png",
       contentType: overrides.contentType ?? "image/png",
       size: 100,
       status: "UPLOADED",
-      ...(overrides.imageDeleted ? { deletedAt: new Date() } : {}),
-    });
-    await insertAndReturn(ctx.db, projectImage, {
+    };
+    if (overrides.imageDeleted) imageInput.deletedAt = new Date();
+    const img = await insertWithShortcode(ctx.db, "image", imageInput);
+    const association: typeof projectImage.$inferInsert = {
       projectId: entityId,
       imageId: img.id,
-      ...(overrides.joinDeleted ? { deletedAt: new Date() } : {}),
+    };
+    if (overrides.joinDeleted) association.deletedAt = new Date();
+    await insertAndReturn(ctx.db, projectImage, {
+      ...association,
     });
   };
 

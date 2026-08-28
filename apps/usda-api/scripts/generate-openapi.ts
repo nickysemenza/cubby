@@ -5,39 +5,57 @@ import { fileURLToPath } from "node:url";
 import { usdaContract } from "@cubby/usda-contract";
 import { z } from "zod";
 
-interface ContractRoute {
-  method: string;
-  path: string;
-  summary?: string;
-  body?: unknown;
-  query?: unknown;
-  pathParams?: unknown;
-  responses: Record<string, unknown>;
-}
-
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const outputPath = path.resolve(scriptDir, "../src/generated/openapi.json");
 
-function schema(value: unknown): Record<string, unknown> {
-  if (!(value instanceof z.ZodType)) return {};
+type JsonSchema = z.core.JSONSchema.JSONSchema;
+type JsonSchemaValue = z.core.JSONSchema._JSONSchema;
+
+interface OpenApiParameter {
+  name: string;
+  in: "path" | "query";
+  required: boolean;
+  schema: JsonSchemaValue;
+}
+
+interface OpenApiResponse {
+  description: string;
+  content: { "application/json": { schema: JsonSchema } };
+}
+
+interface OpenApiOperation {
+  operationId: string;
+  summary?: string;
+  responses: Map<string, OpenApiResponse>;
+  parameters?: OpenApiParameter[];
+  requestBody?: {
+    required: true;
+    content: { "application/json": { schema: JsonSchema } };
+  };
+}
+
+interface SerializedOpenApiOperation {
+  operationId: string;
+  summary?: string;
+  responses: Record<string, OpenApiResponse>;
+  parameters?: OpenApiParameter[];
+  requestBody?: OpenApiOperation["requestBody"];
+}
+
+function schema(value: z.ZodType): JsonSchema {
   return z.toJSONSchema(value, {
     target: "draft-2020-12",
     unrepresentable: "any",
-  }) as Record<string, unknown>;
+  });
 }
 
 function parameters(
-  value: unknown,
+  value: z.ZodObject,
   location: "path" | "query",
-): Array<Record<string, unknown>> {
+): OpenApiParameter[] {
   const json = schema(value);
-  const properties = (json.properties ?? {}) as Record<
-    string,
-    Record<string, unknown>
-  >;
-  const required = new Set(
-    Array.isArray(json.required) ? (json.required as string[]) : [],
-  );
+  const properties = json.properties ?? {};
+  const required = new Set(json.required ?? []);
   return Object.entries(properties).map(([name, propertySchema]) => ({
     name,
     in: location,
@@ -52,15 +70,21 @@ function responseDescription(status: string): string {
   return "Error response";
 }
 
-const paths: Record<string, Record<string, unknown>> = {};
-for (const [operationId, route] of Object.entries(
-  usdaContract as unknown as Record<string, ContractRoute>,
-)) {
+const routes = [
+  ["counts", usdaContract.counts],
+  ["getFood", usdaContract.getFood],
+  ["findByLookup", usdaContract.findByLookup],
+  ["findByLookupBatch", usdaContract.findByLookupBatch],
+  ["listFoods", usdaContract.listFoods],
+] as const;
+
+const paths = new Map<string, Map<string, OpenApiOperation>>();
+for (const [operationId, route] of routes) {
   const openApiPath = route.path.replace(/:([A-Za-z0-9_]+)/g, "{$1}");
-  const operation: Record<string, unknown> = {
+  const operation: OpenApiOperation = {
     operationId,
     summary: route.summary,
-    responses: Object.fromEntries(
+    responses: new Map(
       Object.entries(route.responses).map(([status, responseSchema]) => [
         status,
         {
@@ -74,20 +98,46 @@ for (const [operationId, route] of Object.entries(
   };
 
   const routeParameters = [
-    ...parameters(route.pathParams, "path"),
-    ...parameters(route.query, "query"),
+    ...("pathParams" in route ? parameters(route.pathParams, "path") : []),
+    ...("query" in route ? parameters(route.query, "query") : []),
   ];
   if (routeParameters.length > 0) operation.parameters = routeParameters;
-  if (route.body instanceof z.ZodType) {
+  if ("body" in route) {
     operation.requestBody = {
       required: true,
       content: { "application/json": { schema: schema(route.body) } },
     };
   }
 
-  paths[openApiPath] ??= {};
-  paths[openApiPath]![route.method.toLowerCase()] = operation;
+  const pathOperations = paths.get(openApiPath) ?? new Map();
+  pathOperations.set(route.method.toLowerCase(), operation);
+  paths.set(openApiPath, pathOperations);
 }
+
+function serializeOperation(
+  operation: OpenApiOperation,
+): SerializedOpenApiOperation {
+  const serialized: SerializedOpenApiOperation = {
+    operationId: operation.operationId,
+    summary: operation.summary,
+    responses: Object.fromEntries(operation.responses),
+  };
+  if (operation.parameters) serialized.parameters = operation.parameters;
+  if (operation.requestBody) serialized.requestBody = operation.requestBody;
+  return serialized;
+}
+
+const serializedPaths = Object.fromEntries(
+  Array.from(paths, ([pathName, operations]) => [
+    pathName,
+    Object.fromEntries(
+      Array.from(operations, ([method, operation]) => [
+        method,
+        serializeOperation(operation),
+      ]),
+    ),
+  ]),
+);
 
 const document = {
   openapi: "3.1.0",
@@ -103,7 +153,7 @@ const document = {
       description: "Current USDA API origin",
     },
   ],
-  paths,
+  paths: serializedPaths,
 };
 
 const formatted = spawnSync(

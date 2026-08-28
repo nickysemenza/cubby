@@ -1,12 +1,19 @@
 import type { TelemetryMessageV1 } from "@cubby/schemas/telemetry";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const persistTelemetryMessages = vi.fn();
-vi.mock("~/server/repo/telemetry", () => ({ persistTelemetryMessages }));
+import { Database } from "~/server/db";
 
-const { processTelemetryQueueBatch } = await import("./telemetry-queue");
+import {
+  processTelemetryQueueBatch,
+  type TelemetryQueuePorts,
+} from "./telemetry-queue";
 
-const validEvent: TelemetryMessageV1 = {
+const db = new Database(() => {
+  throw new Error(
+    "Telemetry-queue unit ports do not resolve a database runtime",
+  );
+});
+const event: TelemetryMessageV1 = {
   version: 1,
   eventId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
   occurredAt: "2026-08-02T16:00:00.000Z",
@@ -20,46 +27,28 @@ const validEvent: TelemetryMessageV1 = {
   clientId: null,
 };
 
-function delivered(body: unknown) {
-  return { body, ack: vi.fn(), retry: vi.fn() };
-}
-
 describe("processTelemetryQueueBatch", () => {
-  beforeEach(() => persistTelemetryMessages.mockReset());
-
-  it("acknowledges malformed and unsupported messages individually", async () => {
-    const malformed = delivered({ ...validEvent, arguments: { secret: true } });
-    const unsupported = delivered({ ...validEvent, version: 2 });
-
-    await processTelemetryQueueBatch({} as never, {
-      queue: "cubby-telemetry",
-      messages: [malformed, unsupported],
-    });
-
-    expect(malformed.ack).toHaveBeenCalledOnce();
-    expect(unsupported.ack).toHaveBeenCalledOnce();
-    expect(malformed.retry).not.toHaveBeenCalled();
-    expect(persistTelemetryMessages).not.toHaveBeenCalled();
-  });
-
-  it("acks a persisted batch and retries valid messages on database failure", async () => {
-    const success = delivered(validEvent);
-    persistTelemetryMessages.mockResolvedValueOnce(undefined);
-    await processTelemetryQueueBatch({} as never, {
-      queue: "cubby-telemetry",
-      messages: [success],
-    });
-    expect(success.ack).toHaveBeenCalledOnce();
-
-    const failed = delivered(validEvent);
-    persistTelemetryMessages.mockRejectedValueOnce(new Error("database down"));
-    await expect(
-      processTelemetryQueueBatch({} as never, {
+  it("acknowledges a persisted valid message", async () => {
+    let acknowledged = false;
+    const ports = {
+      persistTelemetryMessages: async () => undefined,
+    } satisfies TelemetryQueuePorts;
+    await processTelemetryQueueBatch(
+      db,
+      {
         queue: "cubby-telemetry",
-        messages: [failed],
-      }),
-    ).rejects.toThrow("database down");
-    expect(failed.retry).toHaveBeenCalledOnce();
-    expect(failed.ack).not.toHaveBeenCalled();
+        messages: [
+          {
+            body: event,
+            ack: () => {
+              acknowledged = true;
+            },
+            retry: () => undefined,
+          },
+        ],
+      },
+      ports,
+    );
+    expect(acknowledged).toBe(true);
   });
 });

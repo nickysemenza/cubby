@@ -42,7 +42,11 @@ export interface UnitTools {
 // the recipe happened to use). Dimensions not listed (count/"other", money,
 // nutrient, …) are treated as their own island — kept as the literal unit, since
 // "1 large egg" can't be re-expressed as another count.
-const DISPLAY_UNIT: Record<string, string> = { weight: "g", volume: "cup" };
+const displayUnitFor = (kind: string): string | undefined => {
+  if (kind === "weight") return "g";
+  if (kind === "volume") return "cup";
+  return undefined;
+};
 
 // Only these kinds are ingredient-quantity measures worth equating: weight,
 // volume, and count/"other" islands (egg, bunch, can). Everything else a recipe
@@ -65,7 +69,7 @@ interface DimInfo {
 
 const dimInfo = (tools: UnitTools, m: Amount): DimInfo => {
   const kind = tools.kindOf(m);
-  const display = DISPLAY_UNIT[kind];
+  const display = displayUnitFor(kind);
   return display
     ? { token: kind, displayUnit: display, island: false }
     : { token: m.unit, displayUnit: m.unit, island: true };

@@ -43,7 +43,7 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
 
   // Overview is edited through inline EditableCell fields, not a Form, so
   // editMode/mappings go unused — this is only here for the History section.
-  const { commonSections } = useEntityDetail<VendorOut, never>({
+  const { commonSections } = useEntityDetail<"vendor", VendorOut, never>({
     entity: "vendor",
     data: vendor,
   });

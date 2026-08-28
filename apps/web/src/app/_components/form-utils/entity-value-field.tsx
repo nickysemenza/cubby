@@ -10,6 +10,7 @@ import {
   type PathValue,
   type UseFormReturn,
 } from "react-hook-form";
+import { z } from "zod";
 
 import type { ComboboxItem, PickerEntity } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
@@ -44,10 +45,8 @@ export function EntityValueField<
           control={form.control}
           name={name}
           render={({ field, fieldState }) => {
-            const id =
-              typeof field.value === "string"
-                ? parseShortcodeFor(entity, field.value)
-                : null;
+            const rawId = z.string().safeParse(field.value).data;
+            const id = rawId ? parseShortcodeFor(entity, rawId) : null;
             const selected =
               items.find((item) => item.id === id) ??
               (id
@@ -70,6 +69,9 @@ export function EntityValueField<
                   value={selected}
                   setValue={(item) =>
                     field.onChange(
+                      // SAFETY: `name` is a caller-owned Path whose value is
+                      // the selected entity shortcode; RHF cannot derive the
+                      // relationship from this generic form type.
                       (item?.id ?? "") as PathValue<
                         TFieldValues,
                         Path<TFieldValues>

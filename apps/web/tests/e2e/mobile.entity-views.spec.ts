@@ -8,33 +8,43 @@ import {
 import { expect, test } from "./e2e-test";
 
 const entityLists = Object.entries(generatedBrowserRoutes).map(
-  ([entity, definition]) => ({
-    entity: entity as keyof typeof generatedBrowserRoutes,
-    path: definition.routes.list,
-  }),
+  ([entity, definition]) => {
+    if (!isBrowserRouteEntity(entity)) {
+      throw new Error(
+        `Generated browser route has an unknown entity: ${entity}`,
+      );
+    }
+    return { entity, path: definition.routes.list };
+  },
 );
 
+function isBrowserRouteEntity(
+  entity: string,
+): entity is keyof typeof generatedBrowserRoutes {
+  return Object.hasOwn(generatedBrowserRoutes, entity);
+}
+
 const rendererRoutes = [
-  ["/products?view=table", "Table"],
-  ["/products?view=shelf", "Shelf"],
-  ["/products?view=events", "Events"],
-  ["/products?view=lifecycles", "Lifecycles"],
-  ["/locations?view=gallery", "Gallery"],
-  ["/locations?view=table", "Table"],
-  ["/locations?view=visualizations", "Visualizations"],
-  ["/meals?view=calendar", "Calendar"],
-  ["/meals?view=table", "Table"],
-  ["/projects?view=overview", "Overview"],
-  ["/projects?view=analytics", "Analytics"],
-  ["/projects?view=data", "Data"],
-  ["/projects?view=gallery", "Gallery"],
-  ["/tasks?view=next", "Next"],
-  ["/tasks?view=board", "Board"],
-  ["/tasks?view=timeline", "Timeline"],
-  ["/tasks?view=list", "List"],
-  ["/expenses?view=ledger", "Ledger"],
-  ["/expenses?view=analytics", "Analytics"],
-] as const;
+  { path: "/products?view=table", renderer: "Table" },
+  { path: "/products?view=shelf", renderer: "Shelf" },
+  { path: "/products?view=events", renderer: "Events" },
+  { path: "/products?view=lifecycles", renderer: "Lifecycles" },
+  { path: "/locations?view=gallery", renderer: "Gallery" },
+  { path: "/locations?view=table", renderer: "Table" },
+  { path: "/locations?view=visualizations", renderer: "Visualizations" },
+  { path: "/meals?view=calendar", renderer: "Calendar" },
+  { path: "/meals?view=table", renderer: "Table" },
+  { path: "/projects?view=overview", renderer: "Overview" },
+  { path: "/projects?view=analytics", renderer: "Analytics" },
+  { path: "/projects?view=data", renderer: "Data" },
+  { path: "/projects?view=gallery", renderer: "Gallery" },
+  { path: "/tasks?view=next", renderer: "Next" },
+  { path: "/tasks?view=board", renderer: "Board" },
+  { path: "/tasks?view=timeline", renderer: "Timeline" },
+  { path: "/tasks?view=list", renderer: "List" },
+  { path: "/expenses?view=ledger", renderer: "Ledger" },
+  { path: "/expenses?view=analytics", renderer: "Analytics" },
+];
 
 test.describe("phone entity views", () => {
   for (const { entity, path } of entityLists) {
@@ -103,7 +113,7 @@ test.describe("phone entity views", () => {
     await expectViewportBounded(page);
   });
 
-  for (const [path, renderer] of rendererRoutes) {
+  for (const { path, renderer } of rendererRoutes) {
     test(`${path} mounts its selected phone renderer`, async ({ page }) => {
       const pageErrors: string[] = [];
       page.on("pageerror", (error) => pageErrors.push(error.message));

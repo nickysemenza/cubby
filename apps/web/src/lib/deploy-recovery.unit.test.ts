@@ -36,8 +36,7 @@ function createAttempt({
     storage,
     reload,
     now: () => now,
-    schedule: (callback, delay) =>
-      setTimeout(callback, delay) as unknown as number,
+    schedule: (callback, delay) => Number(setTimeout(callback, delay)),
     cancel: (handle) => clearTimeout(handle),
   };
   return {

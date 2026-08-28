@@ -11,15 +11,18 @@ import {
   problemsCountSchema,
   problemsCoverageSchema,
   problemsFastSchema,
+  problemsPruneAliasesEventSchema,
+  problemsReparseEventSchema,
   problemsTrackerSchema,
   problemsUpcSchema,
   problemsViewsSchema,
   recipeUsageByProductInput,
   recipeUsageByProductOut,
+  PROBLEM_CLASS,
+  type ProblemKey,
 } from "@cubby/schemas/problems";
 import { z } from "zod";
 
-import { expectedProblemKeys } from "~/entities/problem-registry";
 import { getProblemCountsCache } from "~/server/cf-env";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -50,11 +53,9 @@ export type ProblemsWorkflowContext = Pick<
   "db" | "upcLookupClient" | "usdaClient" | "actorContext" | "services"
 >;
 
-const problemKeySchema = z.enum(
-  expectedProblemKeys as [
-    (typeof expectedProblemKeys)[number],
-    ...(typeof expectedProblemKeys)[number][],
-  ],
+const problemKeySchema = z.custom<ProblemKey>(
+  (value): value is ProblemKey =>
+    typeof value === "string" && Object.hasOwn(PROBLEM_CLASS, value),
 );
 const problemByTypeSchema = z.object({
   type: problemKeySchema,
@@ -89,7 +90,7 @@ const problemsWorkflowSchemas = {
     input: cleanupOrphanedEntityEmbeddingsInput,
     output: cleanupOrphanedEntityEmbeddingsOut,
   },
-} as const;
+};
 
 export const findFastProblemsWorkflow = (c: ProblemsWorkflowContext) =>
   findFastProblems(c.db);
@@ -146,10 +147,13 @@ export const deleteUnusedIngredientsWorkflow = async (
   );
   return {
     deleted: result.deleted,
-    failed: result.failed.map(({ id, reason }) => ({
-      id: shortcodeByEntityId.get(id)!,
-      reason,
-    })),
+    failed: result.failed.map(({ id, reason }) => {
+      const shortcode = shortcodeByEntityId.get(id);
+      if (!shortcode) {
+        throw new Error(`Deleted ingredient result returned unknown id ${id}.`);
+      }
+      return { id: shortcode, reason };
+    }),
   };
 };
 export const reparseStaleWorkflow = async function* (
@@ -159,22 +163,22 @@ export const reparseStaleWorkflow = async function* (
   let next = await generator.next();
   while (!next.done) {
     yield {
-      type: "progress" as const,
+      type: "progress",
       done: next.value.done,
       total: next.value.total,
-    };
+    } satisfies z.output<typeof problemsReparseEventSchema>;
     next = await generator.next();
   }
   await c.services.recipeCosting.dispatchRecompute(next.value.recipesAffected, {
     source: "problems.reparseStale",
   });
   yield {
-    type: "done" as const,
+    type: "done",
     result: {
       updated: next.value.updated,
       recipesAffected: next.value.recipesAffected.length,
     },
-  };
+  } satisfies z.output<typeof problemsReparseEventSchema>;
 };
 export const pruneAllUnusedAliasesWorkflow = async function* (
   c: ProblemsWorkflowContext,
@@ -183,11 +187,14 @@ export const pruneAllUnusedAliasesWorkflow = async function* (
   let next = await generator.next();
   while (!next.done) {
     yield {
-      type: "progress" as const,
+      type: "progress",
       done: next.value.done,
       total: next.value.total,
-    };
+    } satisfies z.output<typeof problemsPruneAliasesEventSchema>;
     next = await generator.next();
   }
-  yield { type: "done" as const, result: next.value };
+  yield {
+    type: "done",
+    result: next.value,
+  } satisfies z.output<typeof problemsPruneAliasesEventSchema>;
 };

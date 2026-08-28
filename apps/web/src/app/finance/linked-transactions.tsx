@@ -10,7 +10,10 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityListFor } from "~/entities/entity-list.functions";
+import {
+  type EntityListParams,
+  entityListFor,
+} from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
@@ -18,19 +21,40 @@ import { TableLink } from "../_components/table/TableLink";
 import { financialTransactionStatusOptions } from "./financial-transaction-kind-options";
 
 /** Compact linked-evidence table for account and Purchase detail plates. */
+type FinancialTransactionListQuery = ReturnType<
+  ReturnType<typeof entityListFor<"financialTransaction">>["queryOptions"]
+>;
+
+export interface LinkedTransactionsOperations {
+  list: (
+    params: EntityListParams<"financialTransaction">,
+  ) => FinancialTransactionListQuery;
+}
+
+interface LinkedTransactionFilters {
+  accountId?: string;
+  purchaseId?: string;
+}
+
+const productionOperations: LinkedTransactionsOperations = {
+  list: entityListFor("financialTransaction").queryOptions,
+};
+
 export function LinkedTransactions({
   accountId,
   purchaseId,
+  operations = productionOperations,
 }: {
   accountId?: string;
   purchaseId?: string;
+  operations?: LinkedTransactionsOperations;
 }) {
+  const filters: LinkedTransactionFilters = {};
+  if (accountId) filters.accountId = accountId;
+  if (purchaseId) filters.purchaseId = purchaseId;
   const { data } = useQuery(
-    entityListFor("financialTransaction").queryOptions({
-      filters: {
-        ...(accountId ? { accountId } : {}),
-        ...(purchaseId ? { purchaseId } : {}),
-      },
+    operations.list({
+      filters,
       pagination: { pageIndex: 0, pageSize: 100 },
     }),
   );

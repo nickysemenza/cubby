@@ -7,11 +7,27 @@ import type {
 } from "@tanstack/react-table";
 import { type Atom, batch, createAtom } from "@tanstack/store";
 import { type CSSProperties, useEffect, useMemo, useRef } from "react";
+import { z } from "zod";
 
 import type { CubbyColumnDef } from "./table-features";
 
 const MIN_COLUMN_WIDTH = 48;
 const MAX_COLUMN_WIDTH = 1200;
+
+const columnVisibilitySchema = z.record(z.string(), z.boolean());
+const columnSizingSchema = z.record(z.string(), z.number());
+const storedTableLayoutSchema = z.object({
+  version: z.literal(1).optional(),
+  columnOrder: z.array(z.string()).optional(),
+  columnPinning: z
+    .object({
+      start: z.array(z.string()).optional(),
+      end: z.array(z.string()).optional(),
+    })
+    .optional(),
+  columnVisibility: columnVisibilitySchema.optional(),
+  columnSizing: columnSizingSchema.optional(),
+});
 
 /** Structural columns that always lead the desktop table in this order. */
 const LOCKED_START_COLUMN_IDS = ["select", "image"] as const;
@@ -65,9 +81,15 @@ function columnIdHash(id: string) {
 }
 
 /** Collision-resistant CSS custom property shared by every column surface. */
-function columnWidthVariable(id: string) {
+type ColumnWidthVariable = `--cubby-column-${string}`;
+
+function columnWidthVariable(id: string): ColumnWidthVariable {
   const readable = id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 32);
   return `--cubby-column-${readable}-${columnIdHash(id)}`;
+}
+
+function isNonEmptyColumnHeader(header: unknown): header is string {
+  return typeof header === "string" && header.trim().length > 0;
 }
 
 export function columnWidthValue(id: string) {
@@ -109,8 +131,7 @@ export function tableSurplusColumnId(
   return candidates.find(
     (column) =>
       !column.columnDef.meta?.numeric &&
-      typeof column.columnDef.header === "string" &&
-      column.columnDef.header.trim().length > 0,
+      isNonEmptyColumnHeader(column.columnDef.header),
   )?.id;
 }
 
@@ -123,10 +144,11 @@ export function tableSurplusColumnId(
 export function resolvedTableColumnWidths(
   columns: readonly TableWidthColumn[],
   availableWidth: number,
-): Record<string, number> {
-  const widths = Object.fromEntries(
-    columns.map((column) => [column.id, column.getSize()]),
-  ) as Record<string, number>;
+) {
+  const widths: Record<string, number> = {};
+  for (const column of columns) {
+    widths[column.id] = column.getSize();
+  }
   const surplusId = tableSurplusColumnId(columns);
   if (!surplusId || availableWidth <= 0) return widths;
 
@@ -146,12 +168,13 @@ export function columnWidthVariables(
   availableWidth = 0,
 ): CSSProperties {
   const widths = resolvedTableColumnWidths(columns, availableWidth);
-  return Object.fromEntries(
-    columns.map((column) => [
-      columnWidthVariable(column.id),
-      `${widths[column.id] ?? column.getSize()}px`,
-    ]),
-  ) as CSSProperties;
+  const variables: CSSProperties &
+    Partial<Record<ColumnWidthVariable, string>> = {};
+  for (const column of columns) {
+    variables[columnWidthVariable(column.id)] =
+      `${widths[column.id] ?? column.getSize()}px`;
+  }
+  return variables;
 }
 
 type ColumnSizeBounds = Record<string, { min: number; max: number }>;
@@ -234,17 +257,38 @@ const storageKey = (key: string) => `table-layout:v1:${key}`;
 const legacyVisibilityStorageKey = (key: string) => `table-columns:${key}`;
 const legacySizingStorageKey = (key: string) => `table-sizes:${key}`;
 
-function readObject(key: string): Record<string, unknown> | undefined {
+function readStoredValue<Schema extends z.ZodTypeAny>(
+  key: string,
+  schema: Schema,
+): z.output<Schema> | undefined {
   try {
     const raw = window.localStorage?.getItem(key);
     if (!raw) return undefined;
     const value: unknown = JSON.parse(raw);
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : undefined;
+    const parsed = schema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }
+}
+
+function readStoredLayout(
+  key: string,
+): Partial<CubbyTableLayoutV1> | undefined {
+  const stored = readStoredValue(key, storedTableLayoutSchema);
+  if (!stored) return undefined;
+  return {
+    version: stored.version,
+    columnOrder: stored.columnOrder,
+    columnPinning: stored.columnPinning
+      ? {
+          start: stored.columnPinning.start ?? [],
+          end: stored.columnPinning.end ?? [],
+        }
+      : undefined,
+    columnVisibility: stored.columnVisibility,
+    columnSizing: stored.columnSizing,
+  };
 }
 
 function dedupeKnown(ids: readonly string[], known: ReadonlySet<string>) {
@@ -296,9 +340,7 @@ export function normalizeTableLayout(
     const requested = candidate?.columnVisibility?.[id];
     columnVisibility[id] = isLockedColumnId(id)
       ? true
-      : typeof requested === "boolean"
-        ? requested
-        : defaults.columnVisibility[id] !== false;
+      : (requested ?? defaults.columnVisibility[id] !== false);
   }
 
   const columnSizing: ColumnSizingState = {};
@@ -337,7 +379,7 @@ function columnIdsFromDefs<TData extends RowData>(
       const id =
         def.id ??
         accessorKey?.replaceAll(".", "_") ??
-        (typeof def.header === "string" ? def.header : undefined);
+        (isNonEmptyColumnHeader(def.header) ? def.header : undefined);
       if (id) result.push(id);
     }
   };
@@ -347,7 +389,7 @@ function columnIdsFromDefs<TData extends RowData>(
 
 function columnSizeBoundsFromDefs<TData extends RowData>(
   columns: CubbyColumnDef<TData>[],
-): ColumnSizeBounds {
+) {
   const result: ColumnSizeBounds = {};
   const visit = (defs: CubbyColumnDef<TData>[]) => {
     for (const def of defs) {
@@ -391,9 +433,7 @@ function normalizeColumnDefinitions<TData extends RowData>(
     if ("columns" in definition && Array.isArray(definition.columns)) {
       return {
         ...definition,
-        columns: normalizeColumnDefinitions(
-          definition.columns as CubbyColumnDef<TData>[],
-        ),
+        columns: normalizeColumnDefinitions(definition.columns),
       };
     }
     const className = definition.meta?.className ?? "";
@@ -419,20 +459,29 @@ function normalizeColumnDefinitions<TData extends RowData>(
         ? Math.max(normalizedSize * 2, minSize ?? MIN_COLUMN_WIDTH)
         : undefined);
     const locked = id != null && isLockedColumnId(id);
-    return {
+    const normalized = {
       ...definition,
-      ...(locked
-        ? {
-            enablePinning: false,
-            enableHiding: false,
-            enableCellSelection: false,
-          }
-        : {}),
-      ...(fixedImageSize != null ? { enableResizing: false } : {}),
-      ...(normalizedSize != null ? { size: normalizedSize } : {}),
-      ...(minSize != null ? { minSize } : {}),
-      ...(maxSize != null ? { maxSize } : {}),
     };
+    if (locked) {
+      Object.assign(normalized, {
+        enablePinning: false,
+        enableHiding: false,
+        enableCellSelection: false,
+      });
+    }
+    if (fixedImageSize != null) {
+      Object.assign(normalized, { enableResizing: false });
+    }
+    if (normalizedSize != null) {
+      Object.assign(normalized, { size: normalizedSize });
+    }
+    if (minSize != null) {
+      Object.assign(normalized, { minSize });
+    }
+    if (maxSize != null) {
+      Object.assign(normalized, { maxSize });
+    }
+    return normalized;
   });
 }
 
@@ -463,7 +512,7 @@ function persist(store: LayoutStore) {
     !store.key ||
     !store.hydrated ||
     store.suppressPersistence ||
-    typeof window === "undefined"
+    !globalThis.window
   ) {
     return;
   }
@@ -508,21 +557,25 @@ function hydrate(store: LayoutStore) {
   if (store.hydrated) return;
   let candidate: Partial<CubbyTableLayoutV1> | undefined;
   if (store.key) {
-    candidate = readObject(storageKey(store.key)) as
-      | Partial<CubbyTableLayoutV1>
-      | undefined;
+    candidate = readStoredLayout(storageKey(store.key));
   }
   if (!candidate) {
     const legacyVisibility = store.legacyVisibilityKey
-      ? readObject(legacyVisibilityStorageKey(store.legacyVisibilityKey))
+      ? readStoredValue(
+          legacyVisibilityStorageKey(store.legacyVisibilityKey),
+          columnVisibilitySchema,
+        )
       : undefined;
     const legacySizing = store.legacySizingKey
-      ? readObject(legacySizingStorageKey(store.legacySizingKey))
+      ? readStoredValue(
+          legacySizingStorageKey(store.legacySizingKey),
+          columnSizingSchema,
+        )
       : undefined;
     if (legacyVisibility || legacySizing) {
       candidate = {
-        columnVisibility: legacyVisibility as ColumnVisibilityState | undefined,
-        columnSizing: legacySizing as ColumnSizingState | undefined,
+        columnVisibility: legacyVisibility,
+        columnSizing: legacySizing,
       };
     }
   }

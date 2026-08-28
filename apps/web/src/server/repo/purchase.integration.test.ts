@@ -6,7 +6,7 @@ import type {
   VendorId,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDocumentFile } from "@cubby/schemas/image";
 import {
   type ExpenseOut,
@@ -22,18 +22,9 @@ import {
 } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
-
-import type * as S3 from "~/server/utils/s3";
-
-vi.mock("~/server/utils/s3", async (importOriginal) => ({
-  ...(await importOriginal<typeof S3>()),
-  uploadToS3: vi.fn(async () => undefined),
-  deleteS3Object: vi.fn(async () => undefined),
-}));
-
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import {
@@ -46,10 +37,6 @@ import {
   purchaseImage,
   vendor,
 } from "~/server/db/schema";
-import {
-  attachFileToEntity,
-  initiateDocumentUpload,
-} from "~/server/services/image-storage.service";
 
 import { getAuditLog } from "./audit-log";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
@@ -61,6 +48,7 @@ import {
   getExpenseByShortcode,
   updateExpense,
 } from "./expense";
+import { createUploadedImageRecord } from "./image";
 import { createProduct } from "./product";
 import {
   createProject,
@@ -1402,17 +1390,9 @@ describe("purchase repository — mergePurchases", () => {
     );
 
     for (const mergeIds of [[keeper.id], [bystander.id, keeper.id]]) {
-      const error = await mergePurchases(
-        ctx.db,
-        { keepId: keeper.id, mergeIds },
-        ctx.actor,
-      ).then(
-        () => undefined,
-        (thrown: unknown) => thrown,
-      );
-      expect((error as { cause?: { reason?: string } })?.cause?.reason).toBe(
-        "MERGE_SELF_REFERENCE",
-      );
+      await expect(
+        mergePurchases(ctx.db, { keepId: keeper.id, mergeIds }, ctx.actor),
+      ).rejects.toMatchObject({ cause: { reason: "MERGE_SELF_REFERENCE" } });
     }
 
     const survivor = await getPurchaseByID(
@@ -2449,6 +2429,23 @@ describe("purchase repository — a soft-deleted charge reads as absent", () => 
 describe("purchase repository — documents", () => {
   const ctx = withTestDb();
 
+  const seedDocument = async (purchaseId: PurchaseId, filename: string) => {
+    const stored = await createUploadedImageRecord(ctx.db, {
+      key: `test/documents/${crypto.randomUUID()}.pdf`,
+      filename,
+      contentType: "application/pdf",
+      size: 24,
+    });
+    await insertAndReturn(ctx.db, purchaseImage, {
+      purchaseId,
+      imageId: stored.id,
+    });
+    return {
+      imageId: parseShortcodeFor("image", stored.shortcode),
+      key: stored.key,
+    };
+  };
+
   /**
    * Detaching a document deletes it — the join row is not the only thing the
    * removal has to take. This is also the one detach site with a data-quality
@@ -2468,14 +2465,7 @@ describe("purchase repository — documents", () => {
     );
     const chargeUuid = await purchaseUuid(ctx.db, charge.id);
 
-    const attached = await attachFileToEntity(ctx.db, {
-      entityType: "purchase",
-      entityId: charge.id,
-      data: Buffer.from("%PDF-1.4 detach me").toString("base64"),
-      contentType: "application/pdf",
-      filename: "detach-me.pdf",
-      documentKind: "invoice",
-    });
+    const attached = await seedDocument(chargeUuid, "detach-me.pdf");
     const [before] = await getDb(ctx.db)
       .select({ key: image.key, shortcode: image.shortcode })
       .from(image)
@@ -2511,7 +2501,7 @@ describe("purchase repository — documents", () => {
     expect(stillListed.data.map((row) => row.id)).not.toContain(charge.id);
   });
 
-  it("attaches a PDF to a charge and reads it back as a document", async () => {
+  it("reads a stored PDF attachment as a purchase document", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Metal Supermarkets");
     const { output: charge } = await createPurchase(
       ctx.db,
@@ -2524,18 +2514,7 @@ describe("purchase repository — documents", () => {
     );
     const chargeUuid = await purchaseUuid(ctx.db, charge.id);
 
-    const result = await attachFileToEntity(ctx.db, {
-      entityType: "purchase",
-      entityId: charge.id,
-      data: Buffer.from("%PDF-1.4 metal invoice").toString("base64"),
-      contentType: "application/pdf",
-      filename: "metal-invoice.pdf",
-    });
-
-    expect(result.kind).toBe("document");
-    expect(result.entityType).toBe("purchase");
-    expect(result.entityId).toBe(charge.id);
-    expect(isDocumentFile({ contentType: result.contentType })).toBe(true);
+    const result = await seedDocument(chargeUuid, "metal-invoice.pdf");
 
     const [row] = await getDb(ctx.db)
       .select({
@@ -2546,9 +2525,10 @@ describe("purchase repository — documents", () => {
       })
       .from(image)
       .where(eq(image.shortcode, result.imageId));
-    expect(row?.key).toContain(`/documents/${charge.id}/metal-invoice-`);
+    expect(row?.key).toBe(result.key);
     expect(row?.key).toMatch(/\.pdf$/);
     expect(row?.contentType).toBe("application/pdf");
+    expect(isDocumentFile({ contentType: row?.contentType ?? "" })).toBe(true);
     expect(row?.status).toBe("UPLOADED");
 
     const joins = await getDb(ctx.db).query.purchaseImage.findMany({
@@ -2589,13 +2569,14 @@ describe("purchase repository — documents", () => {
 
     // A tombstoned association is absent from both the count and presence
     // filter, matching the detail query's soft-delete semantics.
+    if (!row) throw new Error("Expected seeded purchase document");
     await getDb(ctx.db)
       .update(purchaseImage)
       .set({ deletedAt: new Date() })
       .where(
         and(
           eq(purchaseImage.purchaseId, chargeUuid),
-          eq(purchaseImage.imageId, row!.id),
+          eq(purchaseImage.imageId, row.id),
         ),
       );
     expect(
@@ -2612,50 +2593,6 @@ describe("purchase repository — documents", () => {
     expect(withoutDocuments.data.every((row) => row.documentCount === 0)).toBe(
       true,
     );
-  });
-
-  it("the browser's two-phase document upload uses the same purchase-scoped folder", async () => {
-    const vendorId = await vendorShortcodeByName(ctx.db, "Folder Vendor");
-    const { output: charge } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-15",
-        vendorId,
-        orderId: "FV-1",
-      }),
-      ctx.actor,
-    );
-
-    const initiated = await initiateDocumentUpload(ctx.db, {
-      filename: "flow-form-invoice.pdf",
-      contentType: "application/pdf",
-      size: 2048,
-      entityType: "PURCHASE",
-      folder: charge.id,
-    });
-
-    expect(initiated.key).toContain(`/documents/${charge.id}/`);
-    expect(initiated.key).toContain("flow-form-invoice.pdf");
-    // Still PENDING until the client finishes its PUT and finalizes.
-    // `initiated.imageId` is the public `IMG-` code, so this looks the row up
-    // by shortcode — the uuid never leaves the repo layer.
-    const pending = await getDb(ctx.db)
-      .select({ status: image.status })
-      .from(image)
-      .where(eq(image.shortcode, initiated.imageId));
-    expect(pending[0]?.status).toBe("PENDING");
-  });
-
-  it("rejects a document aimed at a charge that does not exist", async () => {
-    // Fails BEFORE anything reaches R2, so a bad id can never orphan an object.
-    await expect(
-      attachFileToEntity(ctx.db, {
-        entityType: "purchase",
-        entityId: "00000000-0000-0000-0000-000000000000",
-        data: Buffer.from("%PDF-1.4").toString("base64"),
-        contentType: "application/pdf",
-      }),
-    ).rejects.toMatchObject({ cause: { reason: "IMAGE_ATTACH_FAILED" } });
   });
 });
 
@@ -2706,16 +2643,10 @@ describe("purchase repository — audit log resolves FK values to shortcodes", (
     });
 
     const updateEntry = audit.entries.find(
-      (e) =>
-        e.action === "update" &&
-        (e.changes as { vendorId?: { from: unknown; to: unknown } } | null)
-          ?.vendorId !== undefined,
+      (entry) =>
+        entry.action === "update" && entry.changes?.vendorId !== undefined,
     );
-    const vendorChange = (
-      updateEntry?.changes as
-        | { vendorId: { from: unknown; to: unknown } }
-        | undefined
-    )?.vendorId;
+    const vendorChange = updateEntry?.changes?.vendorId;
 
     expect(vendorChange?.to).toBe(newVendor);
     expect(vendorChange?.to).not.toBe(newVendorUuid);

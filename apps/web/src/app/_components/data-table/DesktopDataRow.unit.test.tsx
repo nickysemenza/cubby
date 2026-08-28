@@ -1,58 +1,57 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { DesktopDataRow } from "./DesktopDataRow";
-import type { CubbyRow as Row } from "./table-features";
+import { DesktopDataRow, type DesktopDataRowProps } from "./DesktopDataRow";
+import type { CubbyRow as Row, CubbyColumnDef } from "./table-features";
+import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
 
 interface TestRow {
   id: string;
 }
 
+const columnHelper = createCubbyColumnHelper<TestRow>();
+
+function useTestTable(cell?: () => string) {
+  const columns: CubbyColumnDef<TestRow>[] = [
+    columnHelper.accessor("id", {
+      id: "related:product.vendors",
+      header: "Vendors",
+      cell,
+    }),
+  ];
+  return useCubbyTable({
+    data: [{ id: "PRD-TEST" }],
+    columns,
+    getRowId: (row) => row.id,
+  });
+}
+
+type RowOverrides = Partial<Omit<DesktopDataRowProps<TestRow>, "row">>;
+
+function desktopRowProps(row: Row<TestRow>, overrides: RowOverrides = {}) {
+  return {
+    row,
+    rowIndex: 0,
+    isSelected: false,
+    isCurrent: false,
+    isExpanded: false,
+    isFocused: false,
+    isDebugEnabled: false,
+    rowClassName: "",
+    cellClassName: "",
+    columnsKey: "",
+    ...overrides,
+  };
+}
+
 describe("DesktopDataRow", () => {
   it("re-renders memoized cells when external row content changes", () => {
     let preview = "…";
-    const cell = {
-      id: "related:product.vendors",
-      column: {
-        id: "related:product.vendors",
-        columnDef: { cell: () => preview, meta: {} },
-        getIsPinned: () => false,
-        getSize: () => 256,
-      },
-      getContext: () => ({
-        table: {
-          getStartVisibleLeafColumns: () => [],
-          getEndVisibleLeafColumns: () => [],
-        },
-      }),
-      getIsSelected: () => false,
-      getCanSelect: () => true,
-      getIsFocused: () => false,
-      getTabIndex: () => -1,
-      getSelectionStartHandler: () => undefined,
-      getSelectionExtendHandler: () => undefined,
-    };
-    const row = {
-      id: "row-1",
-      original: { id: "PRD-TEST" },
-      getIsSelected: () => false,
-      getIsExpanded: () => false,
-      getStartVisibleCells: () => [],
-      getCenterVisibleCells: () => [cell],
-      getEndVisibleCells: () => [],
-    } as unknown as Row<TestRow>;
-    const props = {
-      row,
-      rowIndex: 0,
-      isSelected: false,
-      isCurrent: false,
-      isExpanded: false,
-      isFocused: false,
-      isDebugEnabled: false,
-      rowClassName: "",
-      cellClassName: "",
+    const { result } = renderHook(() => useTestTable(() => preview));
+    const row = result.current.getRow("PRD-TEST");
+    const props = desktopRowProps(row, {
       columnsKey: "related:product.vendors",
-    };
+    });
     const { rerender } = render(
       <table>
         <tbody>
@@ -77,32 +76,17 @@ describe("DesktopDataRow", () => {
     const onRowClick = vi.fn();
     const onRowHover = vi.fn();
     const onRowHoverEnd = vi.fn();
-    const row = {
-      id: "row-1",
-      original: { id: "PRD-4K7M" },
-      getIsSelected: () => false,
-      getIsExpanded: () => false,
-      getStartVisibleCells: () => [],
-      getCenterVisibleCells: () => [],
-      getEndVisibleCells: () => [],
-    } as unknown as Row<TestRow>;
+    const { result } = renderHook(() => useTestTable());
+    const row = result.current.getRow("PRD-TEST");
     render(
       <table>
         <tbody>
           <DesktopDataRow
-            row={row}
-            rowIndex={0}
-            isSelected={false}
-            isCurrent={false}
-            isExpanded={false}
-            isFocused={false}
-            isDebugEnabled={false}
-            onRowClick={onRowClick}
-            onRowHover={onRowHover}
-            onRowHoverEnd={onRowHoverEnd}
-            rowClassName=""
-            cellClassName=""
-            columnsKey=""
+            {...desktopRowProps(row, {
+              onRowClick,
+              onRowHover,
+              onRowHoverEnd,
+            })}
           />
         </tbody>
       </table>,
@@ -123,31 +107,13 @@ describe("DesktopDataRow", () => {
   });
 
   it("marks the inspector's current record without changing bulk selection", () => {
-    const row = {
-      id: "row-current",
-      original: { id: "PRD-CURRENT" },
-      getIsSelected: () => false,
-      getIsExpanded: () => false,
-      getStartVisibleCells: () => [],
-      getCenterVisibleCells: () => [],
-      getEndVisibleCells: () => [],
-    } as unknown as Row<TestRow>;
+    const { result } = renderHook(() => useTestTable());
+    const row = result.current.getRow("PRD-TEST");
 
     render(
       <table>
         <tbody>
-          <DesktopDataRow
-            row={row}
-            rowIndex={0}
-            isSelected={false}
-            isCurrent
-            isExpanded={false}
-            isFocused={false}
-            isDebugEnabled={false}
-            rowClassName=""
-            cellClassName=""
-            columnsKey=""
-          />
+          <DesktopDataRow {...desktopRowProps(row, { isCurrent: true })} />
         </tbody>
       </table>,
     );

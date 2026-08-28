@@ -4,6 +4,7 @@ import { once } from "node:events";
 import BetterSqlite3 from "better-sqlite3";
 import type { Database } from "better-sqlite3";
 import { TIER1_CODES } from "@cubby/usda-schemas";
+import { z } from "zod";
 import {
   assertVersion,
   bundleKey,
@@ -16,36 +17,40 @@ import { cliArgs } from "./lib/cli-args.js";
 
 const D1_INSERT_BATCH_SIZE = 50;
 
-interface FoodRow {
-  fdc_id: number;
-  data_type: string;
-  description: string;
-  brand_owner: string | null;
-  brand_name: string | null;
-  branded_food_category: string | null;
-  gtin_upc: string | null;
-  ingredients: string | null;
-  serving_size: number | null;
-  serving_size_unit: string | null;
-  household_serving_fulltext: string | null;
-  short_description: string | null;
-  ndb_number: number | null;
-}
+const foodRowSchema = z.object({
+  fdc_id: z.number(),
+  data_type: z.string(),
+  description: z.string(),
+  brand_owner: z.string().nullable(),
+  brand_name: z.string().nullable(),
+  branded_food_category: z.string().nullable(),
+  gtin_upc: z.string().nullable(),
+  ingredients: z.string().nullable(),
+  serving_size: z.number().nullable(),
+  serving_size_unit: z.string().nullable(),
+  household_serving_fulltext: z.string().nullable(),
+  short_description: z.string().nullable(),
+  ndb_number: z.number().nullable(),
+});
 
-interface NutrientRow {
-  fdc_id: number;
-  amount: number;
-  name: string;
-  unit: string;
-  nutrient_nbr: string | null;
-}
+const nutrientRowSchema = z.object({
+  fdc_id: z.number(),
+  amount: z.number(),
+  name: z.string(),
+  unit: z.string(),
+  nutrient_nbr: z.string().nullable(),
+});
 
-interface PortionRow {
-  fdc_id: number;
-  amount: number;
-  modifier: string | null;
-  gram_weight: number;
-}
+const portionRowSchema = z.object({
+  fdc_id: z.number(),
+  amount: z.number(),
+  modifier: z.string().nullable(),
+  gram_weight: z.number(),
+});
+
+type FoodRow = z.infer<typeof foodRowSchema>;
+type NutrientRow = z.infer<typeof nutrientRowSchema>;
+type PortionRow = z.infer<typeof portionRowSchema>;
 
 interface CliOptions {
   dbPath: string;
@@ -100,11 +105,13 @@ function parseArgs(): CliOptions {
   };
 }
 
-function sqlString(value: string | number | null): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number")
-    return Number.isFinite(value) ? String(value) : "NULL";
+function sqlString(value: string | null): string {
+  if (value === null) return "NULL";
   return `'${value.replaceAll("'", "''")}'`;
+}
+
+function sqlNumber(value: number | null): string {
+  return value !== null && Number.isFinite(value) ? String(value) : "NULL";
 }
 
 async function write(
@@ -122,10 +129,11 @@ async function close(stream: fs.WriteStream): Promise<void> {
 }
 
 function tableCounts(db: Database) {
+  const countSchema = z.object({ count: z.number().int().nonnegative() });
   const count = (table: string) =>
-    db.prepare(`SELECT count(*) as count FROM ${table}`).get() as {
-      count: number;
-    };
+    countSchema.parse(
+      db.prepare(`SELECT count(*) as count FROM ${table}`).get(),
+    );
 
   return {
     usda_food: count("usda_food").count,
@@ -330,12 +338,18 @@ async function main() {
     ORDER BY fdc_id
   `;
 
-  const foods = db.prepare(foodSql).iterate() as IterableIterator<FoodRow>;
+  const foods = Array.from(db.prepare(foodSql).iterate(), (row) =>
+    foodRowSchema.parse(row),
+  )[Symbol.iterator]();
   const nutrients = new GroupedIterator<NutrientRow>(
-    db.prepare(nutrientSql).iterate() as IterableIterator<NutrientRow>,
+    Array.from(db.prepare(nutrientSql).iterate(), (row) =>
+      nutrientRowSchema.parse(row),
+    )[Symbol.iterator](),
   );
   const portions = new GroupedIterator<PortionRow>(
-    db.prepare(portionSql).iterate() as IterableIterator<PortionRow>,
+    Array.from(db.prepare(portionSql).iterate(), (row) =>
+      portionRowSchema.parse(row),
+    )[Symbol.iterator](),
   );
 
   let insertValues: string[] = [];
@@ -407,7 +421,7 @@ async function main() {
         sqlString(food.brand_name),
         sqlString(food.brand_owner),
         sqlString(food.gtin_upc),
-        sqlString(food.ndb_number),
+        sqlNumber(food.ndb_number),
         sqlString(currentBundleKey),
         byteOffset,
         lineBytes,

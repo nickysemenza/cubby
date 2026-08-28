@@ -10,6 +10,7 @@ import {
   taskStatusSchema,
   tradeSchema,
 } from "@cubby/schemas/project";
+import type { Data } from "@dnd-kit/core";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
@@ -150,20 +151,14 @@ export function isQuickAddEligible(column: BoardColumnKey): boolean {
   return !(column.kind === "status" && column.status === "done");
 }
 
-export function asDragData(
-  data: Record<string | symbol, unknown>,
-): TaskCardDragData | null {
+export function asDragData(data: Data): TaskCardDragData | null {
   return taskCardDragDataSchema.safeParse(data).data ?? null;
 }
 
-export function asDropData(
-  data: Record<string | symbol, unknown>,
-): BoardDropData | null {
+export function asDropData(data: Data): BoardDropData | null {
   return boardDropDataSchema.safeParse(data).data ?? null;
 }
 
-export function asCardDropData(
-  data: Record<string | symbol, unknown>,
-): BoardCardDropData | null {
+export function asCardDropData(data: Data): BoardCardDropData | null {
   return boardCardDropDataSchema.safeParse(data).data ?? null;
 }

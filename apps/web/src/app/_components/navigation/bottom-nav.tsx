@@ -3,6 +3,7 @@ import { LogIn, MoreHorizontal } from "lucide-react";
 import * as React from "react";
 
 import { Row } from "~/components/layout";
+import type { FilterSearch } from "~/entities/filters";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
@@ -21,7 +22,13 @@ type BottomNavItemProps = {
    */
   as?: React.ElementType;
   className?: string;
-} & Record<string, unknown>;
+  to?: string;
+  search?: FilterSearch;
+  params?: Readonly<Record<string, string>>;
+  type?: "button" | "submit" | "reset";
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  "aria-label"?: string;
+};
 
 /**
  * The shared bottom-nav tab shape (icon over label, 48px touch target). Renders
@@ -91,7 +98,7 @@ export function BottomNav() {
                 // `search` can't be correlated to the union `to` here. Keep
                 // the local cast so manifest-backed shortcuts can add static
                 // search state without widening every bottom-tab route.
-                search={item.search as never}
+                search={item.search}
                 icon={item.icon}
                 label={item.label}
                 active={

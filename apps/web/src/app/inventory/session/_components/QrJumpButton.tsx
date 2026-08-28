@@ -79,13 +79,14 @@ export function QrJumpButton({
           default: {
             // The case the bin sweep exists for: a bin that ended up somewhere
             // else. Offer to pull it in rather than only offering to leave.
-            toast(`${name} lives elsewhere.`, {
+            const options: NonNullable<Parameters<typeof toast>[1]> = {
               action: {
                 label: `Move into ${current.name}`,
                 onClick: () => onAdopt(adoptTarget(parent, targetId, name)),
               },
-              ...(switchAction ? { cancel: switchAction } : {}),
-            });
+            };
+            if (switchAction) options.cancel = switchAction;
+            toast(`${name} lives elsewhere.`, options);
             return false;
           }
         }

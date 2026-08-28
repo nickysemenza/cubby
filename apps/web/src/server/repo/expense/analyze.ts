@@ -8,6 +8,7 @@
  */
 import type {
   ExpenseAnalyzeAggregate,
+  ExpenseAnalyzeBucket,
   ExpenseAnalyzeColumnDimension,
   ExpenseAnalyzeInput,
   ExpenseAnalyzeOut,
@@ -159,26 +160,28 @@ const bucketFilter = (
   dimension: Dimension,
   key: string,
   principalOnly: boolean,
-): Record<string, string> => {
-  const principal: Record<string, string> = principalOnly
-    ? { lineKind: "principal" }
-    : {};
+): ExpenseAnalyzeBucket["filter"] => {
+  const filter: ExpenseAnalyzeBucket["filter"] = {};
+  if (principalOnly) filter.lineKind = "principal";
   switch (dimension) {
     case "trade":
-      return { ...principal, trade: key };
+      filter.trade = key;
+      break;
     case "costType":
-      return { ...principal, costType: key };
+      filter.costType = key;
+      break;
     case "project":
-      return { ...principal, project: key };
+      filter.project = key;
+      break;
     case "vendor":
-      return { ...principal, vendor: key };
+      filter.vendor = key;
+      break;
     case "month":
-      return {
-        ...principal,
-        dateFrom: `${key}-01`,
-        dateTo: format(endOfMonth(parseISO(`${key}-01`)), "yyyy-MM-dd"),
-      };
+      filter.dateFrom = `${key}-01`;
+      filter.dateTo = format(endOfMonth(parseISO(`${key}-01`)), "yyyy-MM-dd");
+      break;
   }
+  return filter;
 };
 
 const dimensionColumns = (dimension: DirectDimension) =>
@@ -271,10 +274,7 @@ async function groupedCells(
   return rows.map((row) => ({ ...row, rowKey: String(row.rowKey) }));
 }
 
-function previousFilters(filters: ExpenseFilters): {
-  filters: ExpenseFilters;
-  range: { dateFrom: string; dateTo: string };
-} {
+function previousFilters(filters: ExpenseFilters) {
   // The schema rejects unbounded comparison requests. This guard keeps the
   // repository sound for direct internal callers as well.
   if (!filters.dateFrom || !filters.dateTo) {

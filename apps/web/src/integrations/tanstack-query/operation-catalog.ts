@@ -10,7 +10,10 @@ import {
 import type { z } from "zod";
 
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import type { StartOperationId } from "~/lib/start-operation-observability";
+import {
+  startOperationDefinitionFor,
+  type StartOperationId,
+} from "~/lib/start-operation-observability";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 
 import type {
@@ -20,11 +23,13 @@ import type {
 } from "./operation-meta";
 import { type StartCallOptions, startOperation } from "./start-transport";
 
-export type OperationTransport = (request: {
+type RawOperationValue = z.input<z.ZodUnknown>;
+
+export type OperationTransport<Input, Output> = (request: {
   operation: StartOperationId;
-  input: unknown;
+  input: Input;
   signal?: AbortSignal;
-}) => Promise<unknown>;
+}) => Promise<Output>;
 
 type SharedDefinition<
   Input extends z.ZodTypeAny,
@@ -33,7 +38,10 @@ type SharedDefinition<
   input: Input;
   output: Output;
   parse?: {
-    bivarianceHack(data: unknown, input: z.input<Input>): z.output<Output>;
+    bivarianceHack(
+      data: RawOperationValue,
+      input: z.output<Input>,
+    ): z.output<Output>;
   }["bivarianceHack"];
 };
 
@@ -47,14 +55,14 @@ export type QueryDefinition<
     | OperationFreshnessPolicy
     | {
         bivarianceHack(
-          input: z.input<Input>,
+          input: z.output<Input>,
         ): OperationFreshnessPolicy | undefined;
       }["bivarianceHack"];
   persistence?:
     | "persist"
     | "memory"
     | {
-        bivarianceHack(input: z.input<Input>): "persist" | "memory";
+        bivarianceHack(input: z.output<Input>): "persist" | "memory";
       }["bivarianceHack"];
 };
 
@@ -66,7 +74,7 @@ export type MutationDefinition<
   invalidates?:
     | readonly OperationCacheTag[]
     | {
-        bivarianceHack(input: z.input<Input>): readonly OperationCacheTag[];
+        bivarianceHack(input: z.output<Input>): readonly OperationCacheTag[];
       }["bivarianceHack"];
 };
 
@@ -118,13 +126,6 @@ export const subscription = <
   kind: "subscription",
 });
 
-type InputOf<Definition extends AnyDefinition> = z.input<Definition["input"]>;
-/** Conditional so it resolves for the subscription arm too, which has none. */
-type OutputOf<Definition extends AnyDefinition> = Definition extends {
-  output: infer Output extends z.ZodTypeAny;
-}
-  ? z.output<Output>
-  : never;
 type InputArguments<Input> = undefined extends Input
   ? [input?: Input]
   : [input: Input];
@@ -141,6 +142,29 @@ export type InfiniteOperationQueryKey<Input> = readonly [
   { entity?: string; input: Input },
 ];
 
+const isOperationQueryPayload = (
+  value: unknown,
+): value is { entity?: string; input: unknown } =>
+  value !== null &&
+  typeof value === "object" &&
+  "input" in value &&
+  (!("entity" in value) ||
+    value.entity === undefined ||
+    typeof value.entity === "string");
+
+export const isOperationQueryKey = (
+  queryKey: readonly unknown[],
+): queryKey is OperationQueryKey<unknown> => {
+  const operation = queryKey[1];
+  return (
+    queryKey.length === 3 &&
+    queryKey[0] === "operation" &&
+    typeof operation === "string" &&
+    startOperationDefinitionFor(operation) !== undefined &&
+    isOperationQueryPayload(queryKey[2])
+  );
+};
+
 export const infiniteOperationQueryKey = <Input>(
   queryKey: OperationQueryKey<Input>,
 ): InfiniteOperationQueryKey<Input> => [
@@ -152,17 +176,38 @@ export const infiniteOperationQueryKey = <Input>(
 
 const invalidationPolicies = new Map<
   StartOperationId,
-  (input: unknown) => readonly OperationCacheTag[]
+  (input: RawOperationValue) => readonly OperationCacheTag[]
 >();
 const NO_POLICY_INPUT = Symbol("no-operation-policy-input");
 
+function isFreshnessResolver<Input extends z.ZodTypeAny>(
+  policy: QueryDefinition<Input, z.ZodTypeAny>["freshness"],
+): policy is (input: z.output<Input>) => OperationFreshnessPolicy | undefined {
+  return typeof policy === "function";
+}
+
+function isPersistenceResolver<Input extends z.ZodTypeAny>(
+  policy: QueryDefinition<Input, z.ZodTypeAny>["persistence"],
+): policy is (input: z.output<Input>) => "persist" | "memory" {
+  return typeof policy === "function";
+}
+
+function isInvalidationResolver<Input extends z.ZodTypeAny>(
+  policy: MutationDefinition<Input, z.ZodTypeAny>["invalidates"],
+): policy is (input: z.output<Input>) => readonly OperationCacheTag[] {
+  return typeof policy === "function";
+}
+
 export const operationInvalidationTags = (
   operation: string | undefined,
-  input: unknown,
-): readonly OperationCacheTag[] | undefined =>
-  operation
-    ? invalidationPolicies.get(operation as StartOperationId)?.(input)
+  input: RawOperationValue,
+): readonly OperationCacheTag[] | undefined => {
+  if (!operation) return undefined;
+  const definition = startOperationDefinitionFor(operation);
+  return definition
+    ? invalidationPolicies.get(definition.id)?.(input)
     : undefined;
+};
 
 type QueryDescriptor<
   Input extends z.ZodTypeAny,
@@ -182,34 +227,42 @@ type QueryDescriptor<
   ): Promise<z.output<Output>>;
   queryKey(
     ...args: InputArguments<z.input<Input>>
-  ): OperationQueryKey<z.input<Input>>;
+  ): OperationQueryKey<z.output<Input>>;
   queryOptions(
     ...args: InputArguments<z.input<Input>>
   ): UnusedSkipTokenOptions<
     z.output<Output>,
     Error,
     z.output<Output>,
-    OperationQueryKey<z.input<Input>>
-  > & { queryKey: OperationQueryKey<z.input<Input>> };
-  infiniteQueryOptions<PageParam = number>(
+    OperationQueryKey<z.output<Input>>
+  > & { queryKey: OperationQueryKey<z.output<Input>> };
+  infiniteQueryOptions<PageParamSchema extends z.ZodTypeAny>(
     input: z.input<Input>,
     options: {
-      page: (input: z.input<Input>, pageParam: PageParam) => z.input<Input>;
-      getNextPageParam: (lastPage: z.output<Output>) => PageParam | undefined;
-      initialPageParam?: PageParam;
+      pageParamSchema: PageParamSchema;
+      page: (
+        input: z.input<Input>,
+        pageParam: z.output<PageParamSchema>,
+      ) => z.input<Input>;
+      getNextPageParam: (
+        lastPage: z.output<Output>,
+      ) => z.input<PageParamSchema> | undefined;
+      initialPageParam: z.input<PageParamSchema>;
     },
   ): UseInfiniteQueryOptions<
     z.output<Output>,
     Error,
-    InfiniteData<z.output<Output>, PageParam>,
-    InfiniteOperationQueryKey<z.input<Input>>,
-    PageParam
+    InfiniteData<z.output<Output>, z.input<PageParamSchema>>,
+    InfiniteOperationQueryKey<z.output<Input>>,
+    z.input<PageParamSchema>
   > & {
-    queryKey: InfiniteOperationQueryKey<z.input<Input>>;
-    initialPageParam: PageParam;
+    queryKey: InfiniteOperationQueryKey<z.output<Input>>;
+    initialPageParam: z.input<PageParamSchema>;
   };
   forEntity(entity: string): QueryDescriptor<Input, Output>;
-  withTransport(transport: OperationTransport): QueryDescriptor<Input, Output>;
+  withTransport(
+    transport: OperationTransport<z.output<Input>, z.output<Output>>,
+  ): QueryDescriptor<Input, Output>;
 };
 
 type MutationDescriptor<
@@ -233,7 +286,7 @@ type MutationDescriptor<
   invalidates(input: z.input<Input>): readonly OperationCacheTag[];
   forEntity(entity: string): MutationDescriptor<Input, Output>;
   withTransport(
-    transport: OperationTransport,
+    transport: OperationTransport<z.output<Input>, z.output<Output>>,
   ): MutationDescriptor<Input, Output>;
 };
 
@@ -249,9 +302,8 @@ type SubscriptionDescriptor<
    * `useAgentStream`) drive it directly.
    */
   open(
-    ...args: undefined extends z.input<Input>
-      ? [input?: z.input<Input>, options?: { signal?: AbortSignal }]
-      : [input: z.input<Input>, options?: { signal?: AbortSignal }]
+    input: z.input<Input>,
+    options?: { signal?: AbortSignal },
   ): Promise<AsyncIterable<z.output<Event>>>;
 };
 
@@ -264,224 +316,321 @@ export type OperationDescriptorFor<Definition extends AnyDefinition> =
         ? SubscriptionDescriptor<Input, Event>
         : never;
 
-const descriptorMeta = (
+const descriptorMeta = <
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+>(
   id: StartOperationId,
-  definition: AnyOperationDefinition,
+  definition:
+    | QueryDefinition<Input, Output>
+    | MutationDefinition<Input, Output>,
   entity?: string,
-  input: unknown | typeof NO_POLICY_INPUT = NO_POLICY_INPUT,
-) => ({
-  transport: "start" as const,
-  operation: id,
-  ...(entity ? { entity } : {}),
-  observedByTransport: true,
-  ...(definition.kind === "query"
-    ? {
-        cacheTags: [
-          ...(definition.tags ?? []),
-          ...(entity ? ([[entity]] as const) : []),
-        ],
-        persistence:
-          typeof definition.persistence === "function"
-            ? input === NO_POLICY_INPUT
-              ? "memory"
-              : (
-                  definition.persistence as (
-                    policyInput: unknown,
-                  ) => "persist" | "memory"
-                )(input)
-            : (definition.persistence ?? "memory"),
-        ...(() => {
-          const freshness =
-            typeof definition.freshness === "function"
-              ? input === NO_POLICY_INPUT
-                ? undefined
-                : (
-                    definition.freshness as (
-                      policyInput: unknown,
-                    ) => OperationFreshnessPolicy | undefined
-                  )(input)
-              : definition.freshness;
-          return freshness ? { freshness } : {};
-        })(),
-      }
-    : {
-        invalidates:
-          typeof definition.invalidates === "function"
-            ? []
-            : (definition.invalidates ?? []),
-      }),
-});
+  input: z.output<Input> | typeof NO_POLICY_INPUT = NO_POLICY_INPUT,
+): CubbyOperationMeta => {
+  const meta: CubbyOperationMeta = {
+    transport: "start",
+    operation: id,
+    observedByTransport: true,
+  };
+  if (entity) meta.entity = entity;
+  if (definition.kind === "mutation") {
+    meta.invalidates = isInvalidationResolver(definition.invalidates)
+      ? []
+      : (definition.invalidates ?? []);
+    return meta;
+  }
 
-const keyPayload = <Input>(entity: string | undefined, input: Input) => ({
-  ...(entity ? { entity } : {}),
-  input,
-});
+  const cacheTags: OperationCacheTag[] = [...(definition.tags ?? [])];
+  if (entity) cacheTags.push([entity]);
+  meta.cacheTags = cacheTags;
+  meta.persistence = isPersistenceResolver(definition.persistence)
+    ? input === NO_POLICY_INPUT
+      ? "memory"
+      : definition.persistence(input)
+    : (definition.persistence ?? "memory");
+  const freshness = isFreshnessResolver(definition.freshness)
+    ? input === NO_POLICY_INPUT
+      ? undefined
+      : definition.freshness(input)
+    : definition.freshness;
+  if (freshness) meta.freshness = freshness;
+  return meta;
+};
 
-function buildDescriptor<Definition extends AnyDefinition>(options: {
+type OperationKeyPayload<Input> = { entity?: string; input: Input };
+
+const keyPayload = <Input>(entity: string | undefined, input: Input) => {
+  const payload: OperationKeyPayload<Input> = { input };
+  if (entity) payload.entity = entity;
+  return payload;
+};
+
+function isSubscriptionOperationId(
+  id: StartOperationId,
+): id is StartOperationIdOfKind<"subscription"> {
+  return startOperationDefinitionFor(id)?.kind === "subscription";
+}
+
+type OperationBuildOptions<
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+  Definition extends
+    | QueryDefinition<Input, Output>
+    | MutationDefinition<Input, Output>,
+> = {
   id: StartOperationId;
   definition: Definition;
   entity?: string;
-  transport?: OperationTransport;
-}): OperationDescriptorFor<Definition> {
+  transport?: OperationTransport<z.output<Input>, z.output<Output>>;
+};
+
+function catalogOperation<
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+>(
+  options: OperationBuildOptions<
+    Input,
+    Output,
+    QueryDefinition<Input, Output> | MutationDefinition<Input, Output>
+  >,
+) {
   const { id, definition, entity, transport } = options;
-  if (definition.kind === "subscription") {
-    return {
-      id,
-      definition,
-      // The URL is derived from the operation id, so a stream cannot be
-      // pointed at the wrong route: the one dispatch route resolves the id
-      // against the same generated registry the descriptor was built from.
-      // `kind: "mutation"` is the CLIENT-side observation bucket (perf-store
-      // row + `markFreshReads()`); every workflow stream writes. The wire
-      // `x-cubby-operation-kind` header is read from the registry and stays
-      // "subscription".
-      open: (
-        input: InputOf<Definition>,
-        callOptions?: { signal?: AbortSignal },
-      ) =>
-        openWorkflowStream({
-          operation: id as StartOperationIdOfKind<"subscription">,
-          kind: "mutation",
-          url: `/api/workflow-stream/${id}`,
-          input,
-          eventSchema: definition.event,
-          ...(callOptions?.signal ? { signal: callOptions.signal } : {}),
-        }),
-    } as unknown as OperationDescriptorFor<Definition>;
-  }
-  const operation = startOperation<InputOf<Definition>, OutputOf<Definition>>({
+  const config: Parameters<
+    typeof startOperation<z.output<Input>, z.output<Output>>
+  >[0] = {
     operation: id,
     kind: definition.kind,
-    ...(entity ? { entity } : {}),
-    ...(transport
-      ? {
-          transport: async (input, callOptions) => ({
-            ok: true as const,
-            data: await transport({
-              operation: id,
-              input,
-              signal: callOptions.signal,
-            }),
-          }),
-        }
-      : {}),
     parse: (value, input) =>
-      (definition.parse
+      definition.parse
         ? definition.parse(value, input)
-        : definition.output.parse(value)) as OutputOf<Definition>,
-  });
+        : definition.output.parse(value),
+  };
+  if (entity) config.entity = entity;
+  if (transport) {
+    config.transport = async (input, callOptions) => ({
+      ok: true,
+      data: await transport({
+        operation: id,
+        input,
+        signal: callOptions.signal,
+      }),
+    });
+  }
+  return startOperation(config);
+}
+
+function buildSubscriptionDescriptor<
+  Input extends z.ZodTypeAny,
+  Event extends z.ZodTypeAny,
+>(
+  id: StartOperationId,
+  definition: SubscriptionDefinition<Input, Event>,
+): SubscriptionDescriptor<Input, Event> {
+  if (!isSubscriptionOperationId(id)) {
+    throw new Error(`${id} is not registered as a subscription`);
+  }
+  return {
+    id,
+    definition,
+    // Every workflow stream writes, so it uses the mutation observation bucket
+    // while the generated registry retains the subscription wire kind.
+    open: (rawInput, callOptions) => {
+      const input = definition.input.parse(rawInput);
+      const streamOptions = {
+        operation: id,
+        kind: "mutation" as const,
+        url: `/api/workflow-stream/${id}`,
+        input,
+        eventSchema: definition.event,
+      };
+      if (callOptions?.signal) {
+        Object.assign(streamOptions, { signal: callOptions.signal });
+      }
+      return openWorkflowStream<z.output<Input>, Event>(streamOptions);
+    },
+  };
+}
+
+function buildMutationDescriptor<
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+>(
+  options: OperationBuildOptions<
+    Input,
+    Output,
+    MutationDefinition<Input, Output>
+  >,
+): MutationDescriptor<Input, Output> {
+  const { id, definition, entity } = options;
+  const operation = catalogOperation(options);
   const meta = descriptorMeta(id, definition, entity);
-  const common = {
+  const invalidates = (rawInput: z.input<Input>) => {
+    const input = definition.input.parse(rawInput);
+    return isInvalidationResolver(definition.invalidates)
+      ? definition.invalidates(input)
+      : (definition.invalidates ?? []);
+  };
+  invalidationPolicies.set(id, (input) => {
+    const parsed = definition.input.safeParse(input);
+    if (!parsed.success) return [];
+    return isInvalidationResolver(definition.invalidates)
+      ? definition.invalidates(parsed.data)
+      : (definition.invalidates ?? []);
+  });
+  return {
     id,
     definition,
     meta,
-    call: (input: InputOf<Definition>, callOptions?: StartCallOptions) =>
-      operation.call(input, callOptions),
-    forEntity: (nextEntity: string) =>
-      buildDescriptor({ ...options, entity: nextEntity }),
-    withTransport: (nextTransport: OperationTransport) =>
-      buildDescriptor({ ...options, transport: nextTransport }),
+    call: (...args) => operation.call(definition.input.parse(args[0]), args[1]),
+    invalidates,
+    mutationOptions: (mutationOptions = {}) =>
+      tanstackMutationOptions({
+        ...mutationOptions,
+        mutationKey: ["operation", id],
+        mutationFn: (input: z.input<Input>) =>
+          operation.call(definition.input.parse(input)),
+        meta,
+      }),
+    forEntity: (nextEntity) =>
+      buildMutationDescriptor({ ...options, entity: nextEntity }),
+    withTransport: (nextTransport) =>
+      buildMutationDescriptor({ ...options, transport: nextTransport }),
   };
+}
 
-  if (definition.kind === "mutation") {
-    const invalidates = (input: InputOf<Definition>) =>
-      typeof definition.invalidates === "function"
-        ? definition.invalidates(input)
-        : (definition.invalidates ?? []);
-    invalidationPolicies.set(id, (input) =>
-      invalidates(input as InputOf<Definition>),
-    );
-    return {
-      ...common,
-      invalidates,
-      mutationOptions: (mutationOptions = {}) =>
-        tanstackMutationOptions({
-          ...mutationOptions,
-          mutationKey: ["operation", id],
-          mutationFn: (input: InputOf<Definition>) => operation.call(input),
-          meta: {
-            ...meta,
-            invalidates:
-              typeof definition.invalidates === "function"
-                ? []
-                : (definition.invalidates ?? []),
-          },
-        }),
-    } as unknown as OperationDescriptorFor<Definition>;
-  }
-
-  const queryKey = (input: InputOf<Definition>) =>
-    ["operation", id, keyPayload(entity, input)] as const;
-  const queryPolicy = (input: InputOf<Definition>) => {
-    const freshness =
-      typeof definition.freshness === "function"
-        ? (
-            definition.freshness as (
-              policyInput: InputOf<Definition>,
-            ) => OperationFreshnessPolicy | undefined
-          )(input)
-        : definition.freshness;
-    return {
+function buildQueryDescriptor<
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+>(
+  options: OperationBuildOptions<Input, Output, QueryDefinition<Input, Output>>,
+): QueryDescriptor<Input, Output> {
+  const { id, definition, entity } = options;
+  const operation = catalogOperation(options);
+  const meta = descriptorMeta(id, definition, entity);
+  const parsedQueryKey = (
+    input: z.output<Input>,
+  ): OperationQueryKey<z.output<Input>> => [
+    "operation",
+    id,
+    keyPayload(entity, input),
+  ];
+  type QueryPolicy = {
+    meta: CubbyOperationMeta;
+    freshness?: OperationFreshnessPolicy;
+  };
+  const queryPolicy = (input: z.output<Input>): QueryPolicy => {
+    const policy: QueryPolicy = {
       meta: descriptorMeta(id, definition, entity, input),
-      ...(freshness ? { freshness } : {}),
     };
+    const freshness = isFreshnessResolver(definition.freshness)
+      ? definition.freshness(input)
+      : definition.freshness;
+    if (freshness) policy.freshness = freshness;
+    return policy;
   };
   return {
-    ...common,
-    policy: queryPolicy,
-    queryKey,
-    queryOptions: (input: InputOf<Definition>) =>
-      tanstackQueryOptions({
-        queryKey: queryKey(input),
+    id,
+    definition,
+    meta,
+    call: (...args) => operation.call(definition.input.parse(args[0]), args[1]),
+    policy: (input) => queryPolicy(definition.input.parse(input)),
+    queryKey: (...args) => parsedQueryKey(definition.input.parse(args[0])),
+    queryOptions: (...args) => {
+      const input = definition.input.parse(args[0]);
+      const policy = queryPolicy(input);
+      return tanstackQueryOptions({
+        queryKey: parsedQueryKey(input),
         queryFn: ({ signal }) => operation.call(input, { signal }),
-        meta: queryPolicy(input).meta,
-        ...queryPolicy(input).freshness,
-      }),
-    infiniteQueryOptions: <PageParam = number>(
-      input: InputOf<Definition>,
+        meta: policy.meta,
+        ...policy.freshness,
+      });
+    },
+    infiniteQueryOptions: <PageParamSchema extends z.ZodTypeAny>(
+      input: z.input<Input>,
       infiniteOptions: {
+        pageParamSchema: PageParamSchema;
         page: (
-          input: InputOf<Definition>,
-          pageParam: PageParam,
-        ) => InputOf<Definition>;
+          input: z.input<Input>,
+          pageParam: z.output<PageParamSchema>,
+        ) => z.input<Input>;
         getNextPageParam: (
-          lastPage: OutputOf<Definition>,
-        ) => PageParam | undefined;
-        initialPageParam?: PageParam;
+          lastPage: z.output<Output>,
+        ) => z.input<PageParamSchema> | undefined;
+        initialPageParam: z.input<PageParamSchema>;
       },
-    ) =>
-      infiniteQueryOptions({
-        queryKey: [
-          "operation",
-          id,
-          "infinite",
-          keyPayload(entity, input),
-        ] as const,
+    ) => {
+      const parsedInput = definition.input.parse(input);
+      const policy = queryPolicy(parsedInput);
+      const infiniteKey: InfiniteOperationQueryKey<z.output<Input>> = [
+        "operation",
+        id,
+        "infinite",
+        keyPayload(entity, parsedInput),
+      ];
+      return infiniteQueryOptions<
+        z.output<Output>,
+        Error,
+        InfiniteData<z.output<Output>, z.input<PageParamSchema>>,
+        InfiniteOperationQueryKey<z.output<Input>>,
+        z.input<PageParamSchema>
+      >({
+        queryKey: infiniteKey,
         queryFn: ({ pageParam, signal }) =>
-          operation.call(infiniteOptions.page(input, pageParam as PageParam), {
-            signal,
-          }),
-        initialPageParam:
-          "initialPageParam" in infiniteOptions
-            ? (infiniteOptions.initialPageParam as PageParam)
-            : (0 as PageParam),
+          operation.call(
+            definition.input.parse(
+              infiniteOptions.page(
+                input,
+                infiniteOptions.pageParamSchema.parse(pageParam),
+              ),
+            ),
+            { signal },
+          ),
+        initialPageParam: infiniteOptions.initialPageParam,
         getNextPageParam: infiniteOptions.getNextPageParam,
-        meta: queryPolicy(input).meta,
-        ...queryPolicy(input).freshness,
-      }),
-  } as unknown as OperationDescriptorFor<Definition>;
+        meta: policy.meta,
+        ...policy.freshness,
+      });
+    },
+    forEntity: (nextEntity) =>
+      buildQueryDescriptor({ ...options, entity: nextEntity }),
+    withTransport: (nextTransport) =>
+      buildQueryDescriptor({ ...options, transport: nextTransport }),
+  };
+}
+
+function buildDescriptor(options: {
+  id: StartOperationId;
+  definition: AnyDefinition;
+}): OperationDescriptorFor<AnyDefinition> {
+  const { id, definition } = options;
+  if (definition.kind === "subscription") {
+    return buildSubscriptionDescriptor(id, definition);
+  }
+  if (definition.kind === "mutation") {
+    return buildMutationDescriptor({ id, definition });
+  }
+  return buildQueryDescriptor({ id, definition });
 }
 
 export function defineOperationDomain<
   const Domain extends string,
   const Definitions extends Record<string, AnyDefinition>,
 >(domain: Domain, definitions: Definitions) {
+  // SAFETY: every entry is produced from the same `definitions` key and its
+  // corresponding descriptor; Object.fromEntries alone erases that key/value
+  // correlation from TypeScript's standard-library return type.
   return Object.fromEntries(
     Object.entries(definitions).map(([name, definition]) => {
-      const id = `${domain}.${name}` as StartOperationId;
+      const operation = startOperationDefinitionFor(`${domain}.${name}`);
+      if (!operation) {
+        throw new Error(
+          `${domain}.${name} is missing from the generated registry`,
+        );
+      }
+      const id = operation.id;
       return [name, buildDescriptor({ id, definition })];
     }),
-  ) as unknown as {
+  ) as {
     readonly [Name in keyof Definitions]: OperationDescriptorFor<
       Definitions[Name]
     >;

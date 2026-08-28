@@ -43,7 +43,7 @@ const QR_LABEL_GROUPS: ReadonlySet<LocationTypeGroup> = new Set([
 export const typeSupportsQrCode = (type: LocationType | null): boolean =>
   type === null || QR_LABEL_GROUPS.has(typeToGroup[type]);
 
-const typeToGroup: Record<LocationType, LocationTypeGroup> = {
+const typeToGroup = {
   // Spaces - large areas (warm brown family)
   house: "spaces",
   room: "spaces",
@@ -58,7 +58,7 @@ const typeToGroup: Record<LocationType, LocationTypeGroup> = {
   // Containers - portable (cyan family)
   box: "containers",
   bag: "containers",
-};
+} satisfies Record<LocationType, LocationTypeGroup>;
 
 /**
  * Get the group for a location type (useful for logic based on grouping)
@@ -69,7 +69,7 @@ export const getLocationTypeGroup = (
 
 // Exhaustive at construction: a new LocationType without a key here is a compile
 // error (replaces the old assertNever default-case guarantee).
-const locationIcons: Record<LocationType, LucideIcon> = {
+const locationIcons = {
   house: Home,
   room: Home,
   area: LayoutGrid,
@@ -80,7 +80,7 @@ const locationIcons: Record<LocationType, LucideIcon> = {
   cart: ShoppingCart,
   cabinet: Box,
   box: Box,
-};
+} satisfies Record<LocationType, LucideIcon>;
 
 /**
  * Get the icon component for a location type

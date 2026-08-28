@@ -12,12 +12,12 @@ export function assertVersion(version: string): void {
   }
 }
 
-const DATA_TYPE_ALIASES: Record<string, string> = {
-  market_acquistion: "market_acquisition",
-};
+const DATA_TYPE_ALIASES = new Map([
+  ["market_acquistion", "market_acquisition"],
+]);
 
 export function normalizeDataType(dataType: string): string {
-  return DATA_TYPE_ALIASES[dataType] ?? dataType;
+  return DATA_TYPE_ALIASES.get(dataType) ?? dataType;
 }
 
 export function indexTableName(version: string): string {

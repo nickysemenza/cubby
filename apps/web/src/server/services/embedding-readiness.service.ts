@@ -6,19 +6,29 @@ import { getEntityEmbeddingReadiness } from "~/server/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 
+export interface EmbeddingReadinessPort {
+  readonly configured: () => boolean;
+  readonly config: typeof getSemanticEmbeddingConfig;
+  readonly read: typeof getEntityEmbeddingReadiness;
+}
+
+const productionEmbeddingReadinessPort: EmbeddingReadinessPort = {
+  configured: semanticEmbeddingsConfigured,
+  config: getSemanticEmbeddingConfig,
+  read: getEntityEmbeddingReadiness,
+};
+
 /**
  * One readiness seam for every explicit entity-to-entity semantic interaction.
  * An empty candidate list never has to impersonate missing, stale, or disabled
  * embeddings at callers again.
  */
 export async function getEmbeddingReadiness(
-  db: Database,
+  db: Database | undefined,
   ref: SearchableEntityRef,
+  port: EmbeddingReadinessPort = productionEmbeddingReadinessPort,
 ): Promise<EmbeddingReadiness> {
-  if (!semanticEmbeddingsConfigured()) return "unavailable";
-  return await getEntityEmbeddingReadiness(
-    db,
-    ref,
-    getSemanticEmbeddingConfig(),
-  );
+  if (!port.configured()) return "unavailable";
+  if (!db) throw new Error("Configured embeddings require a database.");
+  return await port.read(db, ref, port.config());
 }

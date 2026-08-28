@@ -39,7 +39,7 @@ import {
 import type { MappableProductExternalId } from "~/server/repo/product/external-id-types";
 import {
   dbProductToTopLevelAPI,
-  dbProductToTopLevelShape,
+  mapDbProductToTopLevel,
   mapProductUnitMappings,
 } from "~/server/repo/product/mappers";
 import {
@@ -47,7 +47,7 @@ import {
   type ProductPricing,
 } from "~/server/repo/product/pricing";
 
-import { computeRecipeUsages, dbRecipeToTopLevelShape } from "../recipe";
+import { computeRecipeUsages, dbRecipeToTopLevel } from "../recipe";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect>;
@@ -77,7 +77,7 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
 
 /**
  * A product row is only mappable to the API once it carries a *real* computed
- * DataQuality — `dbProductToTopLevelAPI`/`dbProductToTopLevelShape` have no
+ * DataQuality — `dbProductToTopLevelAPI`/`mapDbProductToTopLevel` have no
  * safe fallback for it (unlike `pricing`, whose empty-aggregate default is
  * safe), so every caller of {@link mapIngredientProducts} /
  * {@link mapIngredientProductsLean} must batch-load it first via
@@ -85,6 +85,10 @@ export type IngredientDeepDB = typeof ingredient.$inferSelect & {
  * it before calling in.
  */
 export type Qualified<T> = T & { dataQuality: DataQuality };
+
+const hasDataQuality = <T extends { dataQuality?: DataQuality }>(
+  value: T,
+): value is Qualified<T> => value.dataQuality !== undefined;
 
 /**
  * Shape an ingredient's joined product rows into the API product list: brand the
@@ -113,7 +117,7 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
   >;
 };
 
-export const dbIngredientToTopLevelShape = (
+export const dbIngredientToTopLevel = (
   ingredientData: IngredientSelect,
 ): IngredientOut => ({
   id: parseShortcodeFor("ingredient", ingredientData.shortcode),
@@ -135,7 +139,7 @@ export const dbIngredientToListAPI = (
   ingredientData: IngredientListDB,
 ): IngredientListItem => {
   const result = {
-    ...dbIngredientToTopLevelShape(ingredientData),
+    ...dbIngredientToTopLevel(ingredientData),
     product: mapIngredientProducts(ingredientData.product),
     appearsInRecipes: ingredientData.appearsInRecipes ?? [],
     ownRecipeCount: Number(ingredientData.ownRecipeCount),
@@ -158,7 +162,7 @@ export const mapIngredientProductsLean = (
   productRel: Array<Qualified<IngredientLeanDB["product"][number]>>,
 ) =>
   mapRelation(productRel, (prod) => {
-    const baseProduct = dbProductToTopLevelShape(prod);
+    const baseProduct = mapDbProductToTopLevel(prod);
     return {
       ...baseProduct,
       unitMappings: mapProductUnitMappings(
@@ -183,22 +187,11 @@ export const dbIngredientToAPI = async (
   )
     ? productRel
     : await enrichProductRowsWithPricing(db, productRel);
-  const qualifiedProductRel = pricedProductRel.every(
-    (product) => product.dataQuality !== undefined,
-  )
-    ? // `.every` above is the runtime guarantee; the cast just tells the
-      // compiler what it already proved (same pattern as `pricedProductRel`
-      // being reused untyped above — dataQuality has no safe fallback, so
-      // unlike pricing this one MUST already be real, not just present).
-      //
-      // Do NOT "simplify" this to an unconditional enrich because no
-      // production caller pre-populates `dataQuality`. This branch is
-      // load-bearing for TESTS: `mappers.unit.test.ts` builds fixtures with
-      // `dataQuality` already attached so `dbIngredientToAPI` can be exercised
-      // with no database. Dropping it makes the enrich unconditional, which
-      // reaches `unwrapDb(db).select` and fails those DB-less fixtures. (Tried
-      // on #631, reverted in e2089ead6.)
-      (pricedProductRel as Array<Qualified<(typeof pricedProductRel)[number]>>)
+  const qualifiedProductRel = pricedProductRel.every(hasDataQuality)
+    ? // Do not make enrichment unconditional: unit fixtures deliberately
+      // provide computed quality so this mapper can prove its pure projection
+      // without opening a database connection.
+      pricedProductRel
     : await enrichProductRowsWithDataQuality(db, pricedProductRel);
   const productWithMappings = mapIngredientProducts(qualifiedProductRel);
 
@@ -210,10 +203,10 @@ export const dbIngredientToAPI = async (
   );
 
   return {
-    ...dbIngredientToTopLevelShape(ingredientData),
+    ...dbIngredientToTopLevel(ingredientData),
     recipe:
       recipeRel && recipeRel.deletedAt === null
-        ? dbRecipeToTopLevelShape(recipeRel)
+        ? dbRecipeToTopLevel(recipeRel)
         : null,
     product: productWithMappings,
     recipeUsages,

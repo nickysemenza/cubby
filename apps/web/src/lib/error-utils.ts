@@ -2,8 +2,7 @@ import {
   type PublicImpactItem,
   publicImpactItemSchema,
 } from "@cubby/schemas/entity-integrity";
-import type { AppErrorReason } from "@cubby/shared";
-import { getErrorMessage } from "@cubby/shared";
+import { AppErrors, getErrorMessage, type AppErrorReason } from "@cubby/shared";
 import { z } from "zod";
 
 import type { PublicStartValidationIssue } from "~/server/start-operation.contract";
@@ -14,15 +13,18 @@ export { getErrorMessage } from "@cubby/shared";
 export const SUPERSEDED_VIEW_TRANSITION_MESSAGE =
   "Old view transition aborted by new view transition.";
 
-function getNamedError(
-  error: unknown,
-): { name: string; message: string } | null {
-  if (typeof error !== "object" || error === null) return null;
-  if (!("name" in error) || !("message" in error)) return null;
-  if (typeof error.name !== "string" || typeof error.message !== "string") {
-    return null;
-  }
-  return { name: error.name, message: error.message };
+const unparsedErrorSchema = z.unknown();
+const namedErrorSchema = z.object({ name: z.string(), message: z.string() });
+const appErrorReasonSchema = z.custom<AppErrorReason>(
+  (value): value is AppErrorReason =>
+    typeof value === "string" && value in AppErrors,
+);
+
+export type UnparsedError = z.input<typeof unparsedErrorSchema>;
+
+function getNamedError(error: UnparsedError) {
+  const parsed = namedErrorSchema.safeParse(error);
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -30,7 +32,7 @@ function getNamedError(
  * Match only that browser-generated cancellation: a generic AbortError can
  * still represent a real failed loader/upload and must remain reportable.
  */
-export function isSupersededViewTransitionError(error: unknown): boolean {
+export function isSupersededViewTransitionError(error: UnparsedError): boolean {
   const details = getNamedError(error);
   if (!details) return false;
   return (
@@ -40,7 +42,7 @@ export function isSupersededViewTransitionError(error: unknown): boolean {
 }
 
 /** Errors emitted by browsers/Vite when a build's lazy chunk no longer exists. */
-export function isDynamicImportError(error: unknown): boolean {
+export function isDynamicImportError(error: UnparsedError): boolean {
   const details = getNamedError(error);
   if (!details) return false;
   if (details.name === "ChunkLoadError") return true;
@@ -55,29 +57,24 @@ export function isDynamicImportError(error: unknown): boolean {
   );
 }
 
-type TransportError = {
-  message: string;
-  data: {
-    code?: unknown;
-    reason?: unknown;
-    blockers?: unknown;
-    validationIssues?: unknown;
-  };
-};
-
 const validationIssueSchema = z.object({
   code: z.string(),
   path: z.array(z.union([z.string(), z.number()])),
   message: z.string(),
 });
 
-function isTransportError(err: unknown): err is TransportError {
-  if (typeof err !== "object" || err === null) return false;
-  const obj = err as Record<string, unknown>;
-  const messageOk = typeof obj.message === "string";
-  const dataOk = typeof obj.data === "object" && obj.data !== null;
-  return messageOk && dataOk;
-}
+const transportErrorSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    code: z.string().optional().catch(undefined),
+    reason: appErrorReasonSchema.optional().catch(undefined),
+    blockers: z.array(publicImpactItemSchema).optional().catch(undefined),
+    validationIssues: z
+      .array(validationIssueSchema)
+      .optional()
+      .catch(undefined),
+  }),
+});
 
 type AppErrorDetails = {
   message: string;
@@ -96,26 +93,19 @@ type AppErrorDetails = {
   validationIssues?: PublicStartValidationIssue[];
 };
 
-export function getAppErrorDetails(error: unknown): AppErrorDetails {
-  if (isTransportError(error)) {
-    const code = error.data.code as string | undefined;
-    const d = error.data as Record<string, unknown>;
-    const reason = typeof d?.reason === "string" ? d.reason : undefined;
-    // Re-validated on arrival: `error.data` is server-shaped but untyped here,
-    // and a malformed payload should read as "no blockers", not crash a toast.
-    const parsedBlockers = z
-      .array(publicImpactItemSchema)
-      .safeParse(d?.blockers);
-    const parsedIssues = z
-      .array(validationIssueSchema)
-      .safeParse(d?.validationIssues);
-    return {
-      message: error.message,
-      code,
-      reason: reason as AppErrorReason | undefined,
-      ...(parsedBlockers.success ? { blockers: parsedBlockers.data } : {}),
-      ...(parsedIssues.success ? { validationIssues: parsedIssues.data } : {}),
-    };
+export function getAppErrorDetails(error: UnparsedError): AppErrorDetails {
+  const parsed = transportErrorSchema.safeParse(error);
+  if (parsed.success) {
+    const details: AppErrorDetails = { message: parsed.data.message };
+    if (parsed.data.data.code) details.code = parsed.data.data.code;
+    if (parsed.data.data.reason) details.reason = parsed.data.data.reason;
+    if (parsed.data.data.blockers) {
+      details.blockers = parsed.data.data.blockers;
+    }
+    if (parsed.data.data.validationIssues) {
+      details.validationIssues = parsed.data.data.validationIssues;
+    }
+    return details;
   }
   return {
     message: getErrorMessage(error),

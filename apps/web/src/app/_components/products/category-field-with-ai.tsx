@@ -1,5 +1,9 @@
 import type { CategorySuggestion } from "@cubby/schemas/ai";
-import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type {
+  FieldPathByValue,
+  FieldValues,
+  UseFormReturn,
+} from "react-hook-form";
 
 import { ai } from "~/lib/ai.functions";
 
@@ -11,7 +15,7 @@ interface CategoryFieldWithAIProps<
   TFieldValues extends FieldValues = FieldValues,
 > {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, string | null | undefined>;
   productName: string;
   manufacturer: string;
   disabled?: boolean;
@@ -55,9 +59,11 @@ export function CategoryFieldWithAI<
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
       runSuggest={() => ai.suggestCategory.call({ productName, manufacturer })}
-      onAccept={(r) =>
-        form.setValue(name, r.category as TFieldValues[typeof name])
-      }
+      onAccept={(r) => {
+        // SAFETY: `name` is constrained to a string-valued field; React Hook
+        // Form cannot carry that value constraint through its generic setter.
+        form.setValue(name, r.category as TFieldValues[typeof name]);
+      }}
     />
   );
 }

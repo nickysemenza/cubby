@@ -29,9 +29,13 @@ interface NetworkLink extends d3Force.SimulationLinkDatum<NetworkNode> {
   recipes: Array<{ id: string; name: string }>;
 }
 
+const isNetworkNode = (
+  endpoint: string | NetworkNode,
+): endpoint is NetworkNode => endpoint instanceof Object;
+
 const resolvedNetworkNode = (
   endpoint: string | NetworkNode,
-): NetworkNode | null => (typeof endpoint === "string" ? null : endpoint);
+): NetworkNode | null => (isNetworkNode(endpoint) ? endpoint : null);
 
 export default function IngredientNetwork() {
   const { data, isError, isLoading, refetch } = useQuery(
@@ -92,10 +96,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
 
   // Helper to get a stable key for a link
   const getLinkKey = useCallback((link: NetworkLink) => {
-    const sourceId =
-      typeof link.source === "string" ? link.source : link.source.id;
-    const targetId =
-      typeof link.target === "string" ? link.target : link.target.id;
+    const sourceId = isNetworkNode(link.source) ? link.source.id : link.source;
+    const targetId = isNetworkNode(link.target) ? link.target.id : link.target;
     return [sourceId, targetId].sort().join("|");
   }, []);
 
@@ -152,7 +154,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
           .forceLink<NetworkNode, NetworkLink>(linksCopy)
           .id((d) => d.id)
           .distance(100)
-          .strength((d) => (d.weight as number) / maxWeight),
+          .strength((d) => d.weight / maxWeight),
       )
       .force("charge", d3Force.forceManyBody().strength(-200))
       .force(
@@ -210,10 +212,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
   const isLinkHighlighted = useCallback(
     (link: NetworkLink) => {
       if (!hoveredNode) return false;
-      const sourceId =
-        typeof link.source === "string" ? link.source : link.source.id;
-      const targetId =
-        typeof link.target === "string" ? link.target : link.target.id;
+      const sourceId = isNetworkNode(link.source)
+        ? link.source.id
+        : link.source;
+      const targetId = isNetworkNode(link.target)
+        ? link.target.id
+        : link.target;
       return sourceId === hoveredNode.id || targetId === hoveredNode.id;
     },
     [hoveredNode],
@@ -243,10 +247,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
       if (!hoveredNode) return true;
       if (node.id === hoveredNode.id) return true;
       return simulatedLinks.some((link) => {
-        const sourceId =
-          typeof link.source === "string" ? link.source : link.source.id;
-        const targetId =
-          typeof link.target === "string" ? link.target : link.target.id;
+        const sourceId = isNetworkNode(link.source)
+          ? link.source.id
+          : link.source;
+        const targetId = isNetworkNode(link.target)
+          ? link.target.id
+          : link.target;
         return (
           (sourceId === hoveredNode.id && targetId === node.id) ||
           (targetId === hoveredNode.id && sourceId === node.id)
@@ -472,10 +478,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
           <div className="text-xs text-muted-foreground">
             {
               simulatedLinks.filter((l) => {
-                const sourceId =
-                  typeof l.source === "string" ? l.source : l.source.id;
-                const targetId =
-                  typeof l.target === "string" ? l.target : l.target.id;
+                const sourceId = isNetworkNode(l.source)
+                  ? l.source.id
+                  : l.source;
+                const targetId = isNetworkNode(l.target)
+                  ? l.target.id
+                  : l.target;
                 return (
                   sourceId === hoveredNode.id || targetId === hoveredNode.id
                 );

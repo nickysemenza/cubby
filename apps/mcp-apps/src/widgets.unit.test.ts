@@ -1,62 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import usdaFixture from "../harness/fixtures/usda-picker.json";
+import { connectUsdaPicker, type UsdaPickerApp } from "./usda-picker";
 
-type ToolInputNotification = { arguments: Record<string, unknown> };
-type ToolResultNotification = {
-  isError?: boolean;
-  content: Array<{ type: string; text?: string }>;
-  structuredContent?: unknown;
-};
+type ToolResultNotification = Parameters<
+  NonNullable<UsdaPickerApp["ontoolresult"]>
+>[0];
 
-type MockApp = {
-  ontoolinput?: (input: ToolInputNotification) => void;
-  ontoolresult?: (result: ToolResultNotification) => void;
-  connectedWithHandlers: boolean;
-  nextToolResult: ToolResultNotification | null;
-  callServerTool: ReturnType<typeof vi.fn>;
-  sendMessage: ReturnType<typeof vi.fn>;
-  updateModelContext: ReturnType<typeof vi.fn>;
-};
-
-const appState = vi.hoisted(() => ({ instances: [] as MockApp[] }));
-
-vi.mock("@modelcontextprotocol/ext-apps", () => {
-  class App {
-    ontoolinput?: (input: ToolInputNotification) => void;
-    ontoolresult?: (result: ToolResultNotification) => void;
-    connectedWithHandlers = false;
-    nextToolResult: ToolResultNotification | null = null;
-    callServerTool = vi.fn(
-      async (_params: {
-        name: string;
-        arguments?: Record<string, unknown>;
-      }) => {
-        return (
-          this.nextToolResult ?? {
-            content: [],
-            structuredContent: { items: [], meta: { totalCount: 0 } },
-          }
-        );
-      },
+class TestUsdaPickerApp implements UsdaPickerApp {
+  ontoolinput: UsdaPickerApp["ontoolinput"];
+  ontoolresult: UsdaPickerApp["ontoolresult"];
+  connectedWithHandlers = false;
+  nextToolResult: ToolResultNotification | null = null;
+  callServerTool = vi.fn<UsdaPickerApp["callServerTool"]>(async () => {
+    return (
+      this.nextToolResult ?? {
+        content: [],
+        structuredContent: { items: [], meta: { totalCount: 0 } },
+      }
     );
-    sendMessage = vi.fn(async () => ({}));
-    updateModelContext = vi.fn(async () => ({}));
-    openLink = vi.fn(async () => ({}));
-    setupSizeChangedNotifications = vi.fn();
-    connect = vi.fn(async () => {
-      this.connectedWithHandlers = Boolean(
-        this.ontoolinput && this.ontoolresult,
-      );
-    });
+  });
+  sendMessage = vi.fn<UsdaPickerApp["sendMessage"]>(async () => ({}));
+  updateModelContext = vi.fn<UsdaPickerApp["updateModelContext"]>(
+    async () => ({}),
+  );
+  openLink = vi.fn<UsdaPickerApp["openLink"]>(async () => ({}));
+  setupSizeChangedNotifications =
+    vi.fn<UsdaPickerApp["setupSizeChangedNotifications"]>();
+  connect = vi.fn<UsdaPickerApp["connect"]>(async () => {
+    this.connectedWithHandlers = Boolean(this.ontoolinput && this.ontoolresult);
+  });
+}
 
-    constructor() {
-      appState.instances.push(this as MockApp);
-    }
-  }
-  return { App };
-});
-
-function result(structuredContent: unknown): ToolResultNotification {
+function result(
+  structuredContent: ToolResultNotification["structuredContent"],
+): ToolResultNotification {
   return { content: [], structuredContent };
 }
 
@@ -67,16 +44,14 @@ async function flush(): Promise<void> {
 
 async function loadWidget() {
   document.body.innerHTML = '<div id="root"></div>';
-  await import("./usda-picker");
+  const app = new TestUsdaPickerApp();
+  await connectUsdaPicker(app);
   await flush();
-  const app = appState.instances.at(-1);
-  if (!app) throw new Error("widget did not construct an App");
   return app;
 }
 
 beforeEach(() => {
-  vi.resetModules();
-  appState.instances.length = 0;
+  document.body.replaceChildren();
 });
 
 describe("USDA picker", () => {

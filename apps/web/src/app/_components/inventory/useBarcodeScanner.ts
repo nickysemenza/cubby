@@ -402,11 +402,13 @@ export function useScanBeep(enabled = true): () => void {
   const contextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
-    if (!enabled || typeof window === "undefined") return;
+    if (!enabled) return;
 
     const prime = () => {
       const Ctor: AudioContextCtor | undefined =
         window.AudioContext ??
+        // SAFETY: Safari exposes the same AudioContext constructor under this
+        // vendor-prefixed property; the browser window is the effect's runtime.
         (window as { webkitAudioContext?: AudioContextCtor })
           .webkitAudioContext;
       if (!Ctor) return;

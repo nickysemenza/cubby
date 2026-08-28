@@ -35,7 +35,7 @@ const MAX_DEPTH = 5;
 const DEFAULT_DEPTH = 3;
 
 function readDepth(): number {
-  if (typeof window === "undefined") return DEFAULT_DEPTH;
+  if (!globalThis.window) return DEFAULT_DEPTH;
   const raw = Number(window.localStorage.getItem(DEPTH_KEY));
   if (!Number.isFinite(raw) || raw < MIN_DEPTH || raw > MAX_DEPTH)
     return DEFAULT_DEPTH;

@@ -20,9 +20,13 @@ import { z } from "zod";
 import * as schema from "~/server/db/schema";
 import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 
-const ALL_TABLES = Object.values(schema).filter((v) =>
-  is(v, PgTable),
+// SAFETY: Drizzle's runtime `is` predicate has identified every retained
+// value as a PgTable; its generic predicate does not preserve that type here.
+const ALL_TABLES = Object.values(schema).filter((value) =>
+  is(value, PgTable),
 ) as PgTable[];
+
+const isEntity = (value: string): value is Entity => value in entityManifest;
 
 const tableFor = (entity: Entity): PgTable | undefined => {
   const dbTable = entityManifest[entity].dbTable;
@@ -45,7 +49,11 @@ const SERVER_MINTED_COLUMNS = new Set(["id", "shortcode"]);
  * A new unexplained field fails assertion 1; a field that becomes a real
  * column fails assertion 3.
  */
-const VIRTUAL_CREATE_INPUTS: Partial<Record<Entity, Record<string, string>>> = {
+type EntityFieldNotes = {
+  [E in Entity]?: Readonly<Record<string, string>>;
+};
+
+const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
   expense: {
     vendor: "free-text vendor name; the repo resolves it to Expense.vendorId",
     orderId: "attaches the expense to a Purchase rather than storing a column",
@@ -86,21 +94,20 @@ const VIRTUAL_CREATE_INPUTS: Partial<Record<Entity, Record<string, string>>> = {
  * required by its create schema, so a new one has to be either required or
  * justified here.
  */
-const UNSUPPLIED_REQUIRED_COLUMNS: Partial<
-  Record<Entity, Record<string, string>>
-> = {};
+const UNSUPPLIED_REQUIRED_COLUMNS: EntityFieldNotes = {};
 
 type BoundEntity = {
   entity: Entity;
   table: PgTable;
   /** `z.ZodRawShape` values are core `$ZodType` (no `safeParse`); narrow here. */
-  shape: Record<string, z.ZodType>;
+  createFields: Record<string, z.ZodType>;
 };
 
 const bound: BoundEntity[] = [];
 for (const [key, binding] of Object.entries(ENTITY_BINDINGS)) {
   if (!binding.crud) continue;
-  const entity = key as Entity;
+  if (!isEntity(key)) continue;
+  const entity = key;
   const table = tableFor(entity);
   const createInput = binding.crud.createInput;
   // A create input that stops being a plain object (a transform/pipe wrapper)
@@ -113,7 +120,9 @@ for (const [key, binding] of Object.entries(ENTITY_BINDINGS)) {
   bound.push({
     entity,
     table,
-    shape: createInput.shape as Record<string, z.ZodType>,
+    // SAFETY: ZodObject guarantees each entry in this runtime shape is a
+    // parseable ZodType; the public generic exposes only the core base type.
+    createFields: createInput.shape as Record<string, z.ZodType>,
   });
 }
 
@@ -128,10 +137,10 @@ describe("create-input shapes track their Drizzle tables", () => {
 
   it.each(bound)(
     "$entity: every create field maps to a column or an explained virtual input",
-    ({ entity, table, shape }) => {
+    ({ entity, table, createFields }) => {
       const columns = new Set(Object.keys(getTableColumns(table)));
       const virtual = VIRTUAL_CREATE_INPUTS[entity] ?? {};
-      const unexplained = Object.keys(shape).filter(
+      const unexplained = Object.keys(createFields).filter(
         (field) => !columns.has(field) && !(field in virtual),
       );
       expect(unexplained).toEqual([]);
@@ -140,7 +149,7 @@ describe("create-input shapes track their Drizzle tables", () => {
 
   it.each(bound)(
     "$entity: every required column is supplied by the create shape",
-    ({ entity, table, shape }) => {
+    ({ entity, table, createFields }) => {
       const exempt = UNSUPPLIED_REQUIRED_COLUMNS[entity] ?? {};
       const missing = Object.entries(getTableColumns(table))
         .filter(([, column]) => column.notNull && !column.hasDefault)
@@ -151,8 +160,8 @@ describe("create-input shapes track their Drizzle tables", () => {
             !(field in exempt) &&
             // Absent, or present but accepting `undefined` — both mean a
             // caller can omit a value the column has no way to fill.
-            (shape[field] === undefined ||
-              shape[field].safeParse(undefined).success),
+            (createFields[field] === undefined ||
+              createFields[field].safeParse(undefined).success),
         );
       expect(missing).toEqual([]);
     },
@@ -160,13 +169,13 @@ describe("create-input shapes track their Drizzle tables", () => {
 
   it("keeps both rosters free of stale entries", () => {
     const stale: string[] = [];
-    for (const { entity, table, shape } of bound) {
+    for (const { entity, table, createFields } of bound) {
       const columns = new Set(Object.keys(getTableColumns(table)));
       for (const [field, reason] of Object.entries(
         VIRTUAL_CREATE_INPUTS[entity] ?? {},
       )) {
         if (!reason) stale.push(`${entity}.${field}: empty reason`);
-        if (!(field in shape))
+        if (!(field in createFields))
           stale.push(`${entity}.${field}: not a create field`);
         else if (columns.has(field))
           stale.push(`${entity}.${field}: is a real column now`);
@@ -179,7 +188,7 @@ describe("create-input shapes track their Drizzle tables", () => {
     const boundEntities = new Set(bound.map((b) => b.entity));
     for (const roster of [VIRTUAL_CREATE_INPUTS, UNSUPPLIED_REQUIRED_COLUMNS])
       for (const entity of Object.keys(roster))
-        if (!boundEntities.has(entity as Entity))
+        if (isEntity(entity) && !boundEntities.has(entity))
           stale.push(`${entity}: rostered but has no create binding`);
     expect(stale).toEqual([]);
   });

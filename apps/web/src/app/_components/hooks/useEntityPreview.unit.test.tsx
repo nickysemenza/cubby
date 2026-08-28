@@ -1,4 +1,4 @@
-import type * as TanStackQuery from "@tanstack/react-query";
+import type { Entity } from "@cubby/schemas/entity";
 import {
   act,
   fireEvent,
@@ -6,107 +6,96 @@ import {
   renderHook,
   screen,
 } from "@testing-library/react";
-import type { PropsWithChildren } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const queryClient = vi.hoisted(() => ({
-  cancelQueries: vi.fn(async () => undefined),
-  prefetchQuery: vi.fn(async () => undefined),
-}));
-const navigate = vi.hoisted(() => vi.fn(async () => undefined));
-
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => navigate,
-}));
-
-vi.mock("@tanstack/react-query", async (importOriginal) => ({
-  ...(await importOriginal<typeof TanStackQuery>()),
-  useQueryClient: () => queryClient,
-}));
-
-vi.mock("~/entities/entity-query", () => ({
-  entityPreviewQueryOptions: (entity: string, id: string) => ({
-    queryKey: [[entity, "detail"], { shortcode: id }],
-    queryFn: async () => ({ id }),
-  }),
-}));
-
-vi.mock("~/components/ui/sheet", () => ({
-  Sheet: ({ children }: PropsWithChildren<{ open: boolean }>) => (
-    <div data-testid="preview-sheet">{children}</div>
-  ),
-  SheetContent: ({ children }: PropsWithChildren) => <div>{children}</div>,
-  SheetTitle: ({ children }: PropsWithChildren) => <h2>{children}</h2>,
-}));
-
-vi.mock("../entity-workbench-inspector", () => ({
-  EntityWorkbenchInspector: ({
-    entity,
-    id,
-  }: {
-    entity: string;
-    id: string;
-  }) => (
-    <div data-testid="workbench-inspector">
-      {entity}:{id}
-    </div>
-  ),
-}));
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
+  type EntityPreviewBrowserOperations,
   type EntityPreviewRendererProps,
+  type PreviewPresentation,
+  type PreviewPresentationPort,
   useEntityPreview,
+  type UseEntityPreviewOptions,
 } from "./useEntityPreview";
 
 const row = (id: string) => ({ original: { id } });
 
-type PreviewViewport = "dock" | "sheet" | "mobile";
+class MemoryPreviewOperations implements EntityPreviewBrowserOperations {
+  readonly navigations: Array<{ entity: Entity; id: string }> = [];
+  readonly prefetches: Array<{ entity: Entity; id: string }> = [];
+  readonly cancellations: Array<readonly unknown[]> = [];
 
-let viewport: PreviewViewport = "mobile";
-const mediaListeners = new Set<() => void>();
+  navigateToDetail(entity: Entity, id: string) {
+    this.navigations.push({ entity, id });
+  }
 
-function setViewport(nextViewport: PreviewViewport) {
-  viewport = nextViewport;
-  for (const listener of mediaListeners) listener();
+  prefetchDetail(entity: Entity, id: string) {
+    this.prefetches.push({ entity, id });
+  }
+
+  cancelPrefetch(queryKey: readonly unknown[]) {
+    this.cancellations.push(queryKey);
+  }
 }
 
-function matchesMediaQuery(query: string) {
-  if (query.includes("min-width: 1280px")) return viewport === "dock";
-  if (query.includes("min-width: 768px")) return viewport === "sheet";
-  return false;
+class MemoryPreviewPresentation implements PreviewPresentationPort {
+  private presentation: PreviewPresentation = "mobile";
+  private readonly listeners = new Set<() => void>();
+
+  getSnapshot = () => this.presentation;
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  set(presentation: PreviewPresentation) {
+    this.presentation = presentation;
+    for (const listener of this.listeners) listener();
+  }
+}
+
+const renderTestInspector = ({ preview }: EntityPreviewRendererProps) => (
+  <div data-testid="workbench-inspector">
+    {preview.entityType}:{preview.id}
+  </div>
+);
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+let browserOperations: MemoryPreviewOperations;
+let presentationPort: MemoryPreviewPresentation;
+
+function renderPreviewHook(
+  entity?: Entity,
+  options: UseEntityPreviewOptions = {},
+) {
+  return renderHook(
+    () =>
+      useEntityPreview(entity, {
+        renderInspector: renderTestInspector,
+        ...options,
+        browserOperations,
+        presentationPort,
+      }),
+    { wrapper: harness.wrapper },
+  );
 }
 
 describe("useEntityPreview intent prefetch", () => {
   beforeEach(() => {
+    harness = createBrowserTestHarness();
+    browserOperations = new MemoryPreviewOperations();
+    presentationPort = new MemoryPreviewPresentation();
     vi.useFakeTimers();
-    viewport = "mobile";
-    mediaListeners.clear();
-    navigate.mockClear();
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn((query: string) => ({
-        matches: matchesMediaQuery(query),
-        media: query,
-        onchange: null,
-        addEventListener: (_event: string, listener: () => void) =>
-          mediaListeners.add(listener),
-        removeEventListener: (_event: string, listener: () => void) =>
-          mediaListeners.delete(listener),
-        addListener: (listener: () => void) => mediaListeners.add(listener),
-        removeListener: (listener: () => void) =>
-          mediaListeners.delete(listener),
-        dispatchEvent: () => false,
-      })),
-    );
-    queryClient.cancelQueries.mockClear();
-    queryClient.prefetchQuery.mockClear();
   });
 
   it("opens the selected record through the shared desktop inspector command", () => {
-    viewport = "dock";
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    presentationPort.set("dock");
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
 
     act(() => result.current.inspectRow(row("PRD-4K7M")));
 
@@ -115,48 +104,44 @@ describe("useEntityPreview intent prefetch", () => {
       id: "PRD-4K7M",
     });
     expect(result.current.isInspectorOpen).toBe(true);
-    expect(navigate).not.toHaveBeenCalled();
+    expect(browserOperations.navigations).toEqual([]);
   });
 
   it("publishes the responsive presentation for card rosters that retain phone navigation", () => {
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
 
     expect(result.current.presentation).toBe("mobile");
-    act(() => setViewport("sheet"));
+    act(() => presentationPort.set("sheet"));
     expect(result.current.presentation).toBe("sheet");
-    act(() => setViewport("dock"));
+    act(() => presentationPort.set("dock"));
     expect(result.current.presentation).toBe("dock");
   });
 
   it("sends a selected USDA record to its canonical phone route", () => {
-    viewport = "mobile";
-    const { result } = renderHook(() =>
-      useEntityPreview("usda-food", {
-        idField: "fdc_id",
-        responsiveInspector: true,
-      }),
-    );
+    const { result } = renderPreviewHook("usda-food", {
+      idField: "fdc_id",
+      responsiveInspector: true,
+    });
 
     act(() =>
       result.current.inspectRow({ original: { id: "row-1", fdc_id: 12345 } }),
     );
 
-    expect(navigate).toHaveBeenCalledWith({
-      to: "/usda/$id",
-      params: { id: "12345" },
-    });
+    expect(browserOperations.navigations).toEqual([
+      { entity: "usda-food", id: "12345" },
+    ]);
     expect(result.current.preview).toBeNull();
   });
 
   afterEach(() => {
     vi.useRealTimers();
-    vi.unstubAllGlobals();
+    harness.dispose();
   });
 
   it("does not fan out detail requests while the pointer sweeps rows", () => {
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderPreviewHook("product");
 
     act(() => {
       for (let index = 0; index < 10; index += 1) {
@@ -164,35 +149,30 @@ describe("useEntityPreview intent prefetch", () => {
       }
     });
 
-    expect(queryClient.prefetchQuery).not.toHaveBeenCalled();
+    expect(browserOperations.prefetches).toEqual([]);
     act(() => vi.advanceTimersByTime(199));
-    expect(queryClient.prefetchQuery).not.toHaveBeenCalled();
+    expect(browserOperations.prefetches).toEqual([]);
     act(() => vi.advanceTimersByTime(1));
-    expect(queryClient.prefetchQuery).toHaveBeenCalledTimes(1);
-    expect(queryClient.prefetchQuery).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        queryKey: [["product", "detail"], { shortcode: "PRD-9" }],
-      }),
-    );
+    expect(browserOperations.prefetches).toEqual([
+      { entity: "product", id: "PRD-9" },
+    ]);
   });
 
   it("cancels a dispatched prefetch after intent ends", () => {
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderPreviewHook("product");
     const hovered = row("PRD-4K7M");
 
     act(() => result.current.onRowHover(hovered));
     act(() => vi.advanceTimersByTime(200));
     act(() => result.current.onRowHoverEnd(hovered));
 
-    expect(queryClient.cancelQueries).toHaveBeenCalledWith({
-      queryKey: [["product", "detail"], { shortcode: "PRD-4K7M" }],
-      exact: true,
-      type: "inactive",
-    });
+    expect(browserOperations.cancellations).toEqual([
+      entityPreviewQueryOptions("product", "PRD-4K7M").queryKey,
+    ]);
   });
 
   it("commits a pending intent on click without starting a second prefetch", () => {
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderPreviewHook("product");
     const hovered = row("PRD-4K7M");
 
     act(() => result.current.onRowHover(hovered));
@@ -204,15 +184,15 @@ describe("useEntityPreview intent prefetch", () => {
       id: "PRD-4K7M",
       rowKey: "PRD-4K7M",
     });
-    expect(queryClient.prefetchQuery).not.toHaveBeenCalled();
-    expect(queryClient.cancelQueries).not.toHaveBeenCalled();
+    expect(browserOperations.prefetches).toEqual([]);
+    expect(browserOperations.cancellations).toEqual([]);
   });
 
   it("docks the selected inspector at desktop widths", () => {
-    viewport = "dock";
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    presentationPort.set("dock");
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(result.current.dockedInspector);
@@ -223,10 +203,10 @@ describe("useEntityPreview intent prefetch", () => {
   });
 
   it("retains the selected row while closing and reopening the inspector", () => {
-    viewport = "dock";
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    presentationPort.set("dock");
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
     const view = render(
       <>
         {result.current.inspectorToggle}
@@ -286,16 +266,16 @@ describe("useEntityPreview intent prefetch", () => {
   });
 
   it("uses a list-owned inspector renderer through the shared presentation", () => {
-    viewport = "dock";
-    const renderInspector = vi.fn(({ preview }: EntityPreviewRendererProps) => (
-      <div data-testid="custom-inspector">{preview.id}</div>
-    ));
-    const { result } = renderHook(() =>
-      useEntityPreview("product", {
-        responsiveInspector: true,
-        renderInspector,
-      }),
-    );
+    presentationPort.set("dock");
+    const rendered: EntityPreviewRendererProps[] = [];
+    const renderInspector = (props: EntityPreviewRendererProps) => {
+      rendered.push(props);
+      return <div data-testid="custom-inspector">{props.preview.id}</div>;
+    };
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+      renderInspector,
+    });
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     const docked = render(result.current.dockedInspector);
@@ -303,39 +283,39 @@ describe("useEntityPreview intent prefetch", () => {
     expect(screen.getByTestId("custom-inspector")).toHaveTextContent(
       "PRD-4K7M",
     );
-    expect(renderInspector).toHaveBeenCalledWith(
+    expect(rendered).toContainEqual(
       expect.objectContaining({
         preview: expect.objectContaining({ id: "PRD-4K7M" }),
       }),
     );
 
     docked.unmount();
-    act(() => setViewport("sheet"));
+    act(() => presentationPort.set("sheet"));
     render(<result.current.PreviewSheet />);
-    expect(screen.getByTestId("preview-sheet")).toContainElement(
+    expect(screen.getByRole("dialog")).toContainElement(
       screen.getByTestId("custom-inspector"),
     );
   });
 
   it("uses the same inspector in a compact Sheet at medium widths", () => {
-    viewport = "sheet";
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    presentationPort.set("sheet");
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(<result.current.PreviewSheet />);
 
     expect(result.current.dockedInspector).toBeNull();
-    expect(screen.getByTestId("preview-sheet")).toContainElement(
+    expect(screen.getByRole("dialog")).toContainElement(
       screen.getByTestId("workbench-inspector"),
     );
   });
 
   it("keeps selection state but renders no inspector on mobile", () => {
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(<result.current.PreviewSheet />);
@@ -351,14 +331,14 @@ describe("useEntityPreview intent prefetch", () => {
   });
 
   it("moves an open preview between dock and Sheet when the viewport changes", () => {
-    viewport = "dock";
-    const { result } = renderHook(() =>
-      useEntityPreview("product", { responsiveInspector: true }),
-    );
+    presentationPort.set("dock");
+    const { result } = renderPreviewHook("product", {
+      responsiveInspector: true,
+    });
     act(() => result.current.onRowClick(row("PRD-4K7M")));
 
     expect(result.current.dockedInspector).not.toBeNull();
-    act(() => setViewport("sheet"));
+    act(() => presentationPort.set("sheet"));
     render(<result.current.PreviewSheet />);
 
     expect(result.current.dockedInspector).toBeNull();
@@ -368,26 +348,26 @@ describe("useEntityPreview intent prefetch", () => {
   });
 
   it("keeps the legacy Sheet visible at desktop widths", () => {
-    viewport = "dock";
-    const { result } = renderHook(() => useEntityPreview("product"));
+    presentationPort.set("dock");
+    const { result } = renderPreviewHook("product");
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(<result.current.PreviewSheet />);
 
     expect(result.current.dockedInspector).toBeNull();
-    expect(screen.getByTestId("preview-sheet")).toContainElement(
+    expect(screen.getByRole("dialog")).toContainElement(
       screen.getByTestId("workbench-inspector"),
     );
   });
 
   it("keeps the legacy Sheet visible at mobile widths", () => {
-    const { result } = renderHook(() => useEntityPreview("product"));
+    const { result } = renderPreviewHook("product");
 
     act(() => result.current.onRowClick(row("PRD-4K7M")));
     render(<result.current.PreviewSheet />);
 
     expect(result.current.dockedInspector).toBeNull();
-    expect(screen.getByTestId("preview-sheet")).toContainElement(
+    expect(screen.getByRole("dialog")).toContainElement(
       screen.getByTestId("workbench-inspector"),
     );
     expect(
@@ -396,9 +376,7 @@ describe("useEntityPreview intent prefetch", () => {
   });
 
   it("keeps a namespaced roster row selected while previewing its target", () => {
-    const { result } = renderHook(() =>
-      useEntityPreview(undefined, { idField: "previewId" }),
-    );
+    const { result } = renderPreviewHook(undefined, { idField: "previewId" });
     const candidateRow = {
       id: "WSH-8F2:PRD-4K7M",
       original: {

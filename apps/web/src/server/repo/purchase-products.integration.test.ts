@@ -11,6 +11,7 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { auditLog, purchaseProduct } from "~/server/db/schema";
 
@@ -33,6 +34,13 @@ import {
 import { resolveOrThrow } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
+
+const linkedProductIdsAuditChange = z.object({
+  linkedProductIds: z.object({
+    from: z.array(z.string()),
+    to: z.array(z.string()),
+  }),
+});
 
 describe("purchase ↔ product links", () => {
   const ctx = withTestDb();
@@ -403,14 +411,10 @@ describe("purchase ↔ product links", () => {
       );
 
     const linkChange = entries.find(
-      (e) =>
-        (e.changes as { linkedProductIds?: { to?: string[] } } | null)
-          ?.linkedProductIds !== undefined,
+      (e) => linkedProductIdsAuditChange.safeParse(e.changes).success,
     );
     expect(linkChange).toBeDefined();
-    const changes = linkChange?.changes as {
-      linkedProductIds: { from: string[]; to: string[] };
-    };
+    const changes = linkedProductIdsAuditChange.parse(linkChange?.changes);
     expect(changes.linkedProductIds.from).toEqual([]);
     expect(changes.linkedProductIds.to).toHaveLength(1);
   });

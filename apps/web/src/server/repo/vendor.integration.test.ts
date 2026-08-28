@@ -13,6 +13,7 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import {
   auditLog,
   expense,
@@ -21,6 +22,7 @@ import {
   purchaseImage,
   vendor,
 } from "~/server/db/schema";
+import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
@@ -1315,11 +1317,9 @@ describe("vendor repository — mergeVendors", () => {
         ctx.actor,
       ).then(
         () => undefined,
-        (thrown: unknown) => thrown,
+        (thrown: UnparsedError) => thrown,
       );
-      expect((error as { cause?: { reason?: string } })?.cause?.reason).toBe(
-        "MERGE_SELF_REFERENCE",
-      );
+      expect(toPublicErrorPayload(error).reason).toBe("MERGE_SELF_REFERENCE");
     }
 
     // Nothing was written by either attempt: the bystander is still live, the

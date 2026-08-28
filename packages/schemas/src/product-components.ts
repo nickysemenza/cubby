@@ -40,7 +40,11 @@ export const kitMembershipsInput = z.object({
  * that exist; the cap is a guard, not a paging scheme.
  */
 export const kitComponentRowsInput = z.object({
-  parentProductIds: z.array(productShortcode).min(1).max(200),
+  // The products route constructs this query before its first page arrives and
+  // disables execution while the set is empty. Keep that empty state valid so
+  // operation parsing and the repository's existing empty-result fast path
+  // describe the same contract.
+  parentProductIds: z.array(productShortcode).max(200),
 });
 
 export const productComponentEntryInput = z.object({

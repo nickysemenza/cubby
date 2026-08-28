@@ -5,11 +5,11 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
 
-const roleLabel: Record<ImageAssociation["role"], string> = {
+const roleLabel = {
   attachment: "Attachment",
   cover: "Cover",
   logo: "Logo",
-};
+} satisfies Record<ImageAssociation["role"], string>;
 
 function ImageAssociationLink({
   association,

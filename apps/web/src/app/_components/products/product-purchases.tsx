@@ -34,10 +34,25 @@ const EMPTY_PURCHASES: ProductPurchaseOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 type PurchaseRow = ProductPurchaseOut & { id: string; name: string };
 
-export function ProductPurchases({ productId }: { productId: string }) {
-  const query = useQuery(
-    productOperations.purchases.queryOptions({ productId }),
-  );
+/** Read descriptors the purchase section needs before choosing its empty state. */
+export interface ProductPurchasesOperations {
+  purchases: typeof productOperations.purchases;
+  kitMembership: typeof productOperations.kitMembership;
+}
+
+const productionOperations: ProductPurchasesOperations = {
+  purchases: productOperations.purchases,
+  kitMembership: productOperations.kitMembership,
+};
+
+export function ProductPurchases({
+  productId,
+  operations = productionOperations,
+}: {
+  productId: string;
+  operations?: ProductPurchasesOperations;
+}) {
+  const query = useQuery(operations.purchases.queryOptions({ productId }));
   const items = query.data ?? EMPTY_PURCHASES;
   // Only consulted when `items` is empty (below) — a component of a kit is
   // never itself attached to a purchase, so the generic "attach this
@@ -45,7 +60,7 @@ export function ProductPurchases({ productId }: { productId: string }) {
   // reintroduce the per-component modelling that was deliberately removed in
   // favor of the kit carrying one Expense.
   const membershipQuery = useQuery(
-    productOperations.kitMembership.queryOptions({ productId }),
+    operations.kitMembership.queryOptions({ productId }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const rows = useMemo<PurchaseRow[]>(

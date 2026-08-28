@@ -5,7 +5,7 @@ function mockFetch(impl: () => Promise<Response> | Response) {
   vi.stubGlobal("fetch", vi.fn(impl));
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse<TBody>(body: TBody, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },

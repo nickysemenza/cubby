@@ -3,6 +3,7 @@ import {
   countableEntities,
 } from "@cubby/schemas/entity-manifest";
 import { type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { cookbookListWhere } from "~/server/repo/cookbook";
@@ -69,6 +70,8 @@ const COUNT_WHERE = {
 
 type EntityCounts = Record<CountableEntity, number>;
 
+const entityCountsSchema = z.record(z.enum(countableEntities), z.number());
+
 /**
  * Live row count for every countable entity, as one round-trip of cheap scalar
  * `COUNT(*)` subqueries — NO list fetch and NO USDA enrichment. Driven by the
@@ -82,13 +85,13 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
   // but if one ever starts, 16 concurrent awaits would re-create the pool
   // exhaustion this function exists to avoid. Serial degrades to slow; parallel
   // degrades to 500s.
-  const whereByEntity = {} as Record<CountableEntity, SQL | undefined>;
+  const whereByEntity = new Map<CountableEntity, SQL | undefined>();
   for (const entity of countableEntities) {
-    whereByEntity[entity] = await COUNT_WHERE[entity](db);
+    whereByEntity.set(entity, await COUNT_WHERE[entity](db));
   }
 
   const countCol = (entity: CountableEntity): SQL => {
-    const where = whereByEntity[entity];
+    const where = whereByEntity.get(entity);
     const table = SHORTCODE_TABLE[entity];
     return where
       ? sql`(SELECT count(*)::int FROM ${table} WHERE ${where})`
@@ -104,7 +107,9 @@ export const getEntityCounts = async (db: Database): Promise<EntityCounts> => {
   );
   const row = res.rows[0];
 
-  return Object.fromEntries(
-    countableEntities.map((entity) => [entity, row?.[entity] ?? 0]),
-  ) as EntityCounts;
+  return entityCountsSchema.parse(
+    Object.fromEntries(
+      countableEntities.map((entity) => [entity, row?.[entity] ?? 0]),
+    ),
+  );
 };

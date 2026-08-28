@@ -4,6 +4,7 @@ import type {
   RecipeId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -33,12 +34,14 @@ describe("product mutation recipe-cost staleness", () => {
       }),
     );
 
-  afterEach(() => setCfEnv(undefined as unknown as Env));
+  afterEach(() => setCfEnv(undefined));
 
   const installFakeQueue = () =>
-    setCfEnv({
-      BACKGROUND_QUEUE: { send: async () => {}, sendBatch: async () => {} },
-    } as unknown as Env);
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: { send: async () => {}, sendBatch: async () => {} },
+      }),
+    );
 
   const seedProduct = async (
     name: string,

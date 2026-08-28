@@ -8,7 +8,6 @@ import type { AuthenticatedStartOperationContext } from "~/server/start-operatio
 const createAgentCaller = (context: AuthenticatedStartOperationContext) =>
   createMcpWorkflowCaller({
     ...context,
-    requestOrigin: "agent" as const,
     readDb: context.db,
     readConsistency: {
       consistency: "strong" as const,

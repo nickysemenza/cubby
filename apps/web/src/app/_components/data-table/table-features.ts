@@ -96,7 +96,8 @@ export function cubbyStructuralTableStateSelector(
 type CubbyTableFeatures = typeof cubbyTableFeatures;
 export type CubbyTable<TData extends RowData> = ReactTable<
   CubbyTableFeatures,
-  TData
+  TData,
+  ReturnType<typeof cubbyStructuralTableStateSelector>
 >;
 export type CubbyRow<TData extends RowData> = Row<CubbyTableFeatures, TData>;
 export type CubbyColumn<

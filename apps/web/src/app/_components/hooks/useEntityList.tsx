@@ -5,6 +5,7 @@ import { useSearch } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entities/entities";
 import { entityListFor } from "~/entities/entity-list.functions";
@@ -58,6 +59,11 @@ export interface BaseListRow {
 // oxlint-disable-next-line typescript/no-explicit-any -- intentional
 type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
+const routeSearchSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.array(z.string()), z.undefined()]),
+);
+
 /**
  * Server-backed tree presentation. Filtering and pagination remain manual, so
  * `filterFromLeafRows` and `paginateExpandedRows` would be inert here.
@@ -104,7 +110,7 @@ interface EntityListTreeConfig<TData, TRow> {
 
 export interface UseEntityListOptions<
   TData extends BaseListRow,
-  TFilters,
+  TFilters extends object,
   TRow extends BaseListRow = TData,
 > {
   entity: BrowserRoutedEntity;
@@ -170,7 +176,7 @@ export interface UseEntityListOptions<
 
 export interface UseEntityListReturn<
   TData extends BaseListRow,
-  TFilters = unknown,
+  TFilters extends object = object,
   TRow = TData,
 > {
   workbench: ServerListWorkbenchModel<TData>;
@@ -181,10 +187,39 @@ export interface UseEntityListReturn<
   totalCount: number | undefined;
 }
 
+type FlatEntityListOptions<
+  TData extends BaseListRow,
+  TFilters extends object,
+> = Omit<UseEntityListOptions<TData, TFilters, TData>, "tree"> & {
+  tree?: undefined;
+};
+
+type TreeEntityListOptions<
+  TData extends BaseListRow,
+  TFilters extends object,
+  TRow extends BaseListRow,
+> = Omit<UseEntityListOptions<TData, TFilters, TRow>, "tree"> & {
+  tree: EntityListTreeConfig<TData, TRow>;
+};
+
 export function useEntityList<
   TData extends BaseListRow,
-  TFilters,
-  TRow extends BaseListRow = TData,
+  TFilters extends object,
+>(
+  options: FlatEntityListOptions<TData, TFilters>,
+): UseEntityListReturn<TData, TFilters, TData>;
+export function useEntityList<
+  TData extends BaseListRow,
+  TFilters extends object,
+  TRow extends BaseListRow,
+>(
+  options: TreeEntityListOptions<TData, TFilters, TRow>,
+): UseEntityListReturn<TData, TFilters, TRow>;
+
+export function useEntityList<
+  TData extends BaseListRow,
+  TFilters extends object,
+  TRow extends TData = TData,
 >({
   entity,
   queryOptions,
@@ -224,11 +259,15 @@ export function useEntityList<
     setGrouped(value);
   }, []);
 
+  // SAFETY: `listEntities` is the generated roster of browser-routed entities
+  // that expose the default list operation.
   if (!queryOptions && !listEntities.includes(entity as ListEntity)) {
     throw new Error(`${entity} requires an explicit list transport`);
   }
   const defaultQueryOptions = useCallback(
     (params: Parameters<ListQueryOptionsFn<TFilters>>[0]) =>
+      // SAFETY: the guard above establishes this entity is a generated list
+      // entity; explicit transports bypass this fallback entirely.
       entityListFor(entity as ListEntity).queryOptions(params as never),
     [entity],
   );
@@ -240,6 +279,8 @@ export function useEntityList<
   const hasUnitMappings =
     browserEntityDefinition(entity).list?.hasUnitMappings ?? false;
 
+  // SAFETY: the manifest builder and `scopeFilters` are both typed at this
+  // hook boundary as the caller's TFilters contract.
   const manifestBuildFilters = useCallback(
     (ts: TableStateReturn) =>
       ({
@@ -276,12 +317,18 @@ export function useEntityList<
   });
   const { tableState } = presentationState;
 
+  // SAFETY: presentation state receives `effectiveBuildFilters`, whose return
+  // contract is TFilters, and returns that same selection scope.
   const currentFilters = presentationState.currentSelectionScope as TFilters;
 
-  const routeSearch = useSearch({ strict: false }) as Record<string, unknown>;
+  const routeSearch = routeSearchSchema.parse(useSearch({ strict: false }));
+  const worklistKey = z
+    .string()
+    .optional()
+    .safeParse(routeSearch.worklist).data;
   const worklist = problemWorklistState(
     entity,
-    routeSearch.worklist,
+    worklistKey,
     tableState.columnFilters,
     tableState.sorting,
   );
@@ -384,7 +431,7 @@ export function useEntityList<
   // type there and nothing is being reinterpreted. Only `nest` may return a
   // different row shape, and it is typed to do so.
   const tableData = useMemo(
-    () => (tree ? tree.nest(data) : (data as unknown as TData[])),
+    () => (tree ? tree.nest(data) : data),
     [data, tree],
   );
 
@@ -407,21 +454,21 @@ export function useEntityList<
     // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
   }, [availableRowIds, presentationState.listBulkActions.onRowSelectionChange]);
 
+  const treeTableOptions = tree
+    ? {
+        getSubRows: tree.getSubRows,
+        // Rows churn on every infinite-scroll page and on every mutation
+        // refetch; TanStack's default would collapse the user's expanded rows.
+        autoResetExpanded: false,
+      }
+    : undefined;
   const table = useTableConfig({
     data: tableData,
     columns: allColumns,
     tableState,
     totalCount: tableData.length,
     manualPagination: true,
-    ...(tree
-      ? {
-          getSubRows: tree.getSubRows,
-          // Rows churn on every infinite-scroll page and on every mutation
-          // refetch; TanStack's default would collapse the user's expanded
-          // rows each time.
-          autoResetExpanded: false,
-        }
-      : {}),
+    ...treeTableOptions,
     getRowId,
     enableRowSelection: rowActionsGuard
       ? (row) =>

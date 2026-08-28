@@ -303,7 +303,7 @@ export const getCategoryDistribution = async (
   >();
 
   for (const prod of productsWithInventory) {
-    const cat = prod.category as ProductCategory | null;
+    const cat = prod.category;
 
     if (!categoryMap.has(cat)) {
       categoryMap.set(cat, {

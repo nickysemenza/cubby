@@ -12,8 +12,8 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCallback, useState } from "react";
 import {
+  type FieldPathByValue,
   type FieldValues,
-  type Path,
   type UseFormReturn,
   useForm,
 } from "react-hook-form";
@@ -33,6 +33,13 @@ const destinationFormSchema = z.object({
 });
 
 type DestinationFormValues = z.infer<typeof destinationFormSchema>;
+// Form schemas store picker ids as strings; the destination resolver parses
+// the selected id into a LocationShortcode at the command boundary.
+type LocationPickerValue = ComboboxItem | null | undefined;
+type LocationPickerPath<TFieldValues extends FieldValues> = FieldPathByValue<
+  TFieldValues,
+  LocationPickerValue
+>;
 
 /**
  * Presentational destination field: the location combobox plus the inline
@@ -41,7 +48,10 @@ type DestinationFormValues = z.infer<typeof destinationFormSchema>;
  * Omit `error` when the surrounding surface renders errors elsewhere
  * (e.g. bulk-move's FormWrapper `error` prop).
  */
-export function DestinationLocationField<TFieldValues extends FieldValues>({
+export function DestinationLocationField<
+  TFieldValues extends FieldValues,
+  TName extends LocationPickerPath<TFieldValues>,
+>({
   form,
   name,
   label,
@@ -49,13 +59,11 @@ export function DestinationLocationField<TFieldValues extends FieldValues>({
   sourceLocationIds,
 }: {
   form: UseFormReturn<TFieldValues>;
-  /** Defaults to `"targetLocation"`. */
-  name?: Path<TFieldValues>;
+  name: TName;
   label: string;
   error?: string | null;
   sourceLocationIds?: LocationShortcode | LocationShortcode[];
 }) {
-  const fieldName = name ?? ("targetLocation" as Path<TFieldValues>);
   const sources = sourceLocationIds
     ? Array.isArray(sourceLocationIds)
       ? sourceLocationIds
@@ -68,7 +76,7 @@ export function DestinationLocationField<TFieldValues extends FieldValues>({
     <Stack gap="md">
       <ComboboxFieldWithSearch
         form={form}
-        name={fieldName}
+        name={name}
         label={label}
         searchType="location"
         disabledItemReasons={disabledItemReasons}

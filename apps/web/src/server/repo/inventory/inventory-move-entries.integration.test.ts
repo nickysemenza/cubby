@@ -1,3 +1,4 @@
+import { amount } from "@cubby/schemas/codec";
 import type {
   InventoryId,
   LocationId,
@@ -88,7 +89,7 @@ describe("moveInventoryEntries", () => {
     return rows
       .map((row) => ({
         productId: row.productId,
-        value: (row.amount as { value: number }).value,
+        value: amount.parse(row.amount).value,
       }))
       .sort((a, b) => a.value - b.value);
   };

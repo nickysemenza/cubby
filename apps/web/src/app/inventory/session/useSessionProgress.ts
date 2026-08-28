@@ -79,6 +79,11 @@ const itemResolutionSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
+const sessionExtraSchema = z.object({
+  itemResolutions: z.array(z.tuple([z.string(), itemResolutionSchema])),
+  summary: sessionSummarySchema,
+});
+
 const persistedV3Schema = z.object({
   version: z.literal(3),
   startedAt: z.number(),
@@ -99,13 +104,14 @@ const storedQueuePassSchema = z.object({
   completed: z.array(z.string()),
   skipped: z.array(z.string()),
   totalCount: z.number(),
-  extra: z.object({
-    itemResolutions: z.array(z.tuple([z.string(), itemResolutionSchema])),
-    summary: sessionSummarySchema,
-  }),
+  extra: sessionExtraSchema,
 });
+const storedJsonSchema = z.json();
+type StoredJson = z.output<typeof storedJsonSchema>;
 
-function readLegacyV3(parsed: unknown): StoredQueuePass<SessionExtra> | null {
+function readLegacyV3(
+  parsed: StoredJson,
+): StoredQueuePass<SessionExtra> | null {
   const result = persistedV3Schema.safeParse(parsed);
   if (!result.success) return null;
   const v3 = result.data;
@@ -124,6 +130,7 @@ function readLegacyV3(parsed: unknown): StoredQueuePass<SessionExtra> | null {
 const SESSION_PERSISTENCE: QueuePassPersistence<SessionExtra> = {
   storageKey: (rootId) => `${AUDIT_SESSION_STORAGE_PREFIX}${rootId}`,
   version: SESSION_PROGRESS_VERSION,
+  extraSchema: sessionExtraSchema,
   readLegacy: readLegacyV3,
 };
 
@@ -135,7 +142,7 @@ const SESSION_PERSISTENCE: QueuePassPersistence<SessionExtra> = {
  * started before the migration.
  */
 export function listStoredSessionPasses(): StoredSessionPass[] {
-  if (typeof window === "undefined") return [];
+  if (!("localStorage" in globalThis)) return [];
   const passes: StoredSessionPass[] = [];
   try {
     for (let index = 0; index < localStorage.length; index += 1) {
@@ -144,9 +151,11 @@ export function listStoredSessionPasses(): StoredSessionPass[] {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
 
-      let parsed: unknown;
+      let parsed: StoredJson;
       try {
-        parsed = JSON.parse(raw);
+        const stored = storedJsonSchema.safeParse(JSON.parse(raw));
+        if (!stored.success) continue;
+        parsed = stored.data;
       } catch {
         continue;
       }

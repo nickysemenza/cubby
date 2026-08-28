@@ -1,17 +1,39 @@
+import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-const commit = vi.fn();
+import { entityMutation } from "~/entities/entity-mutation.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { mock } from "~/lib/test/mock-schema";
+import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
-vi.mock("./use-entity-commands", () => ({
-  useEntityCommands: () => ({
-    isPending: false,
-    issues: [],
-    commit,
-  }),
-}));
-
+import { createEntityMutationPort } from "./use-entity-commands";
 import { useEntityEditSession } from "./use-entity-edit-session";
+
+function financialAccountMutationPort() {
+  const item = mock(financialAccountOut, {
+    seed: 41,
+    overrides: {
+      id: "FAC-4K7M",
+      name: "Renamed card",
+      provisional: false,
+      sourceAliases: [
+        { source: "statement", alias: "Primary card", externalAccountId: null },
+      ],
+      notes: null,
+    },
+  });
+  const transport = vi.fn(async () =>
+    entityBrowserMutationResultSchema.parse({
+      action: "update",
+      entity: "financialAccount",
+      item,
+      sideEffects: { backgroundBatches: [] },
+    }),
+  );
+  const mutation = entityMutation.mutate.withTransport(transport);
+  return { mutationPort: createEntityMutationPort({ mutation }), transport };
+}
 
 const request = (name = "saved") => ({
   entity: "task" as const,
@@ -19,7 +41,7 @@ const request = (name = "saved") => ({
   intent: "schedule" as const,
   surface: "calendar" as const,
   record: {
-    id: "TSK-SESSION",
+    id: "TSK-4K7M",
     name,
     status: "not_started" as const,
     dueDate: "2026-08-20",
@@ -28,14 +50,12 @@ const request = (name = "saved") => ({
 });
 
 describe("useEntityEditSession", () => {
-  beforeEach(() => {
-    commit.mockReset();
-  });
-
   it("keeps a draft through an equivalent inline request and resets for record changes", () => {
+    const harness = createBrowserTestHarness();
+    const { mutationPort } = financialAccountMutationPort();
     const { result, rerender } = renderHook(
-      ({ name }) => useEntityEditSession(request(name)),
-      { initialProps: { name: "saved" } },
+      ({ name }) => useEntityEditSession(request(name), { mutationPort }),
+      { initialProps: { name: "saved" }, wrapper: harness.wrapper },
     );
 
     act(() => result.current.set("name", "draft name"));
@@ -46,54 +66,53 @@ describe("useEntityEditSession", () => {
 
     rerender({ name: "server refresh" });
     expect(result.current.values.name).toBe("server refresh");
+    harness.dispose();
   });
 
   it("does not report an untouched array field as changed after RHF clones it", async () => {
-    commit.mockResolvedValue({
-      ok: true,
-      entity: "financialAccount",
-      id: "FAC-SESSION",
-      changed: false,
-    });
+    const harness = createBrowserTestHarness();
+    const { mutationPort, transport } = financialAccountMutationPort();
     const sourceAliases = [
       { source: "statement", alias: "Primary card", externalAccountId: null },
     ];
-    const { result } = renderHook(() =>
-      useEntityEditSession({
-        entity: "financialAccount",
-        operation: "update",
-        intent: "full",
-        surface: "dialog",
-        record: {
-          id: "FAC-SESSION",
-          name: "Household card",
-          provisional: false,
-          sourceAliases,
-          notes: null,
-        },
-      }),
+    const { result } = renderHook(
+      () =>
+        useEntityEditSession(
+          {
+            entity: "financialAccount",
+            operation: "update",
+            intent: "full",
+            surface: "dialog",
+            record: {
+              id: "FAC-4K7M",
+              name: "Household card",
+              provisional: false,
+              sourceAliases,
+              notes: null,
+            },
+          },
+          { mutationPort },
+        ),
+      { wrapper: harness.wrapper },
     );
 
-    await act(() => result.current.submit());
+    const unchanged = await act(() => result.current.submit());
+    expect(unchanged).toMatchObject({ ok: true, changed: false });
+    expect(transport).not.toHaveBeenCalled();
 
-    expect(commit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ok: true,
-        changed: false,
-        command: expect.objectContaining({ data: {} }),
-      }),
-    );
-
-    commit.mockClear();
     act(() => result.current.set("name", "Renamed card"));
     await act(() => result.current.submit());
 
-    expect(commit).toHaveBeenCalledWith(
+    expect(transport).toHaveBeenCalledWith(
       expect.objectContaining({
-        ok: true,
-        changed: true,
-        command: expect.objectContaining({ data: { name: "Renamed card" } }),
+        input: {
+          action: "update",
+          entity: "financialAccount",
+          id: "FAC-4K7M",
+          data: { name: "Renamed card" },
+        },
       }),
     );
+    harness.dispose();
   });
 });

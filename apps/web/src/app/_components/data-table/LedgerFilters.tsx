@@ -3,7 +3,6 @@ import { useCallback, useMemo } from "react";
 
 import { humanize } from "~/entities/filters";
 
-import type { FilterConfig } from "./columnHelpers";
 import {
   barFieldFromConfig,
   type FilterBarField,
@@ -12,6 +11,10 @@ import {
 import { FilterBar } from "./FilterBar";
 import type { CubbyTable as Table } from "./table-features";
 import { useFilterBarDraft } from "./useFilterBarDraft";
+
+function isColumnLabel(value: unknown): value is string {
+  return typeof value === "string";
+}
 
 /**
  * The table-backed manifest filter bar: fields come from the mounted columns'
@@ -23,12 +26,10 @@ function getLedgerFields<TData extends RowData>(
   optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>,
 ): FilterBarField[] {
   return table.getAllLeafColumns().flatMap((column) => {
-    const config = column.columnDef.meta?.filterConfig as
-      | FilterConfig
-      | undefined;
+    const config = column.columnDef.meta?.filterConfig;
     if (!config) return [];
     const header = column.columnDef.header;
-    const label = typeof header === "string" ? header : humanize(column.id);
+    const label = isColumnLabel(header) ? header : humanize(column.id);
     return [
       barFieldFromConfig(column.id, label, config, optionHints?.[column.id]),
     ];

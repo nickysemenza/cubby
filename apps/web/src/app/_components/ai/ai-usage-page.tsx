@@ -49,7 +49,7 @@ interface UsageTotals {
 function isSupportedEntityType(
   value: string | null,
 ): value is SupportedEntityType {
-  return supportedEntityTypes.includes(value as SupportedEntityType);
+  return supportedEntityTypes.some((entityType) => entityType === value);
 }
 
 function formatTokens(value: number | null | undefined): string {

@@ -1,15 +1,12 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
-  ingredientFiltersSchema,
-  ingredientListItemOut,
   ingredientMergeInput,
+  ingredientOut,
   mergeSummary as ingredientMergeSummary,
   ingredientSortableFields,
-  ingredientWithFoodOut,
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
 
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import {
   bindShortcodeResolver,
@@ -27,9 +24,6 @@ const ingredientShortcodes = bindShortcodeResolver("ingredient");
 
 export const ingredientEntityAdapter = defineEntityAdapter({
   entity: "ingredient",
-  filters: ingredientFiltersSchema,
-  detailOutput: ingredientWithFoodOut,
-  listOutput: ingredientListItemOut,
   sort: { fields: ingredientSortableFields, default: "createdAt" },
   lifecycle: {
     delete: INGREDIENT_DELETE_EDGE_POLICY,
@@ -91,13 +85,12 @@ export const ingredientEntityAdapter = defineEntityAdapter({
   merge: {
     input: ingredientMergeInput,
     output: z.object({
-      ingredient: ENTITY_BINDINGS.ingredient.crud!.output,
+      ingredient: ingredientOut,
       mergeSummary: ingredientMergeSummary,
     }),
-    item: (output) => (output as { ingredient: unknown }).ingredient,
-    summary: (output) => (output as { mergeSummary: unknown }).mergeSummary,
-    execute: async (ctx, value) => {
-      const input = ingredientMergeInput.parse(value);
+    item: (output) => output.ingredient,
+    summary: (output) => output.mergeSummary,
+    execute: async (ctx, input) => {
       const summary = await mergeIngredients(ctx.db, input, ctx.actorContext);
       const entityId = await ingredientShortcodes.one(ctx.db, input.keepId);
       const backgroundBatches = [

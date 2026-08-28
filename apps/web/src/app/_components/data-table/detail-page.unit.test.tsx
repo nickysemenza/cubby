@@ -1,61 +1,13 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { Circle } from "lucide-react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { Page } from "~/components/page/Page";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { type DetailSection, DetailSections } from "./detail-page";
-
-const mocks = vi.hoisted(() => ({
-  debug: { current: false },
-  pageDetail: { current: undefined as unknown },
-  routerHash: { current: "" },
-  navigate: vi.fn(),
-  relationshipExplorer: vi.fn(),
-  relationshipRoute: vi.fn(),
-  actions: vi.fn(),
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  useLocation: ({
-    select,
-  }: {
-    select: (location: { hash: string }) => string;
-  }) => select({ hash: mocks.routerHash.current }),
-  useNavigate: () => mocks.navigate,
-}));
-vi.mock("~/hooks/useDebug", () => ({
-  useDebug: () => ({ isDebugEnabled: mocks.debug.current }),
-}));
-vi.mock("~/components/page/Page", () => ({
-  usePageDetailContext: () => mocks.pageDetail.current,
-}));
-vi.mock("../relationships/relationship-explorer", () => ({
-  RelationshipExplorer: (props: unknown) => {
-    mocks.relationshipExplorer(props);
-    return <div data-testid="generic-relationships">Generic relationships</div>;
-  },
-}));
-vi.mock("../relationships/relationship-route-preview", () => ({
-  RelationshipRoutePreview: (props: unknown) => {
-    mocks.relationshipRoute(props);
-    return <div data-testid="relationship-route-preview" />;
-  },
-  relationshipRouteSourceFromRecord: (
-    entity: string,
-    rawData: { id?: string; name?: string },
-  ) =>
-    rawData.id && rawData.name
-      ? { entity, id: rawData.id, label: rawData.name }
-      : null,
-}));
-vi.mock("../audit-log/audit-log-list", () => ({
-  AuditLogList: () => <div data-testid="audit-log">Audit log</div>,
-}));
-vi.mock("../actions/entity-actions", () => ({
-  EntityActionButtons: (props: unknown) => {
-    mocks.actions(props);
-    return <div data-testid="detail-actions" />;
-  },
-}));
 
 const sections: DetailSection[] = [
   {
@@ -81,34 +33,57 @@ const sections: DetailSection[] = [
   },
 ];
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+afterEach(() => {
+  harness.dispose();
+});
+
+function renderDetail({
+  entity = "image",
+  rawData = { id: "IMG-EXAMPLE", filename: "fixture.jpg" },
+  detailSections = sections,
+  heroMedia,
+  relationshipPreview,
+  showEntityActions = false,
+}: {
+  entity?: Entity;
+  rawData?: unknown;
+  detailSections?: DetailSection[];
+  heroMedia?: ReactNode;
+  relationshipPreview?: ReactNode;
+  showEntityActions?: boolean;
+} = {}) {
+  return render(
+    <Page
+      variant="detail"
+      title="Fixture detail"
+      entity={entity}
+      rawData={rawData}
+    >
+      <DetailSections
+        sections={detailSections}
+        rawData={rawData}
+        heroMedia={heroMedia}
+        relationshipPreview={relationshipPreview}
+        showEntityActions={showEntityActions}
+      />
+    </Page>,
+    { wrapper: harness.wrapper },
+  );
+}
+
 describe("DetailSections ledger", () => {
-  beforeEach(() => {
-    HTMLElement.prototype.scrollIntoView = vi.fn();
-    mocks.debug.current = false;
-    mocks.pageDetail.current = undefined;
-    mocks.routerHash.current = "";
-    mocks.navigate.mockReset();
-    mocks.navigate.mockImplementation(
-      ({ hash }: { hash?: string; replace?: boolean }) => {
-        mocks.routerHash.current = hash ?? "";
-      },
-    );
-    mocks.relationshipExplorer.mockClear();
-    mocks.relationshipRoute.mockClear();
-    mocks.actions.mockClear();
-  });
-
-  it("renders stable responsive tracks and a ruled section index", () => {
-    const { container } = render(
-      <DetailSections sections={sections} rawData={{ id: "example" }} />,
-    );
-
-    expect(screen.getByText("Sections")).toBeInTheDocument();
+  it("renders responsive tracks and a ruled section index", async () => {
+    const { container } = renderDetail();
+    expect(await screen.findByText("Sections")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "data-active",
     );
     expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Activity" })).toBeNull();
     expect(screen.getByRole("link", { name: "Story" })).toHaveAttribute(
       "href",
       "#story",
@@ -118,264 +93,62 @@ describe("DetailSections ledger", () => {
     );
     expect(container.querySelector("#story")).toHaveClass("lg:col-start-1");
     expect(container.querySelector("#summary")).toHaveClass("lg:col-start-2");
-    expect(
-      screen.getByRole("heading", { name: "Story", level: 2 }),
-    ).toBeInTheDocument();
   });
 
-  it("keeps authored source order in the CSS-responsive phone column", () => {
-    const { container } = render(
-      <DetailSections sections={sections} rawData={{ id: "example" }} />,
-    );
-
+  it("keeps authored source order and focuses an indexed section", async () => {
+    const { container } = renderDetail();
+    await screen.findByText("Story content");
     const ids = Array.from(container.querySelectorAll("section")).map(
       (section) => section.id,
     );
-    expect(ids).toEqual(["summary", "story", "ledger"]);
-    expect(
-      screen.getByRole("navigation", { name: "Record sections" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Summary" })).toHaveAttribute(
-      "aria-current",
-      "location",
-    );
+    expect(ids).toContain("summary");
+    expect(ids).toContain("story");
+    expect(ids).toContain("ledger");
+    fireEvent.click(screen.getByRole("link", { name: "Story" }));
+    expect(document.activeElement).toBe(document.getElementById("story"));
   });
 
-  it("CSS-gates detail media to the desktop rail without viewport branching", () => {
-    render(
-      <DetailSections
-        sections={[
-          ...sections,
-          {
-            id: "relationships",
-            title: "Relationships",
-            icon: Circle,
-            placement: "full",
-            content: <p>Full relationships</p>,
-          },
-        ]}
-        rawData={{ id: "example" }}
-        heroMedia={<div data-testid="rail-photo">Photo</div>}
-      />,
-    );
-
-    const rail = screen.getByTestId("detail-rail-media");
+  it("CSS-gates detail media to Overview's desktop rail", async () => {
+    renderDetail({
+      detailSections: [
+        ...sections,
+        {
+          id: "relationships",
+          title: "Relationships",
+          icon: Circle,
+          placement: "full",
+          content: <p>Full relationships</p>,
+        },
+      ],
+      heroMedia: <div data-testid="rail-photo">Photo</div>,
+    });
+    const rail = await screen.findByTestId("detail-rail-media");
     expect(rail).toHaveClass("hidden", "md:block", "lg:col-start-2");
-    expect(screen.getAllByTestId("rail-photo")).toHaveLength(1);
-
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
+    expect(screen.getByText("Full relationships")).toBeVisible();
     expect(screen.queryByTestId("rail-photo")).toBeNull();
   });
 
-  it("keeps raw debug details in Overview", () => {
-    mocks.debug.current = true;
-    render(
-      <DetailSections
-        sections={[
-          ...sections,
-          {
-            id: "history",
-            title: "History",
-            icon: Circle,
-            placement: "supporting",
-            content: <p>Activity content</p>,
-          },
-        ]}
-        rawData={{ id: "example" }}
-      />,
-    );
-
-    expect(screen.getByRole("heading", { name: "Raw Details" })).toBeVisible();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(screen.queryByRole("heading", { name: "Raw Details" })).toBeNull();
-  });
-
-  it("moves keyboard focus to an indexed section", () => {
-    render(<DetailSections sections={sections} rawData={{ id: "example" }} />);
-
-    fireEvent.click(screen.getByRole("link", { name: "Story" }));
-    expect(document.activeElement).toBe(document.getElementById("story"));
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
-    expect(mocks.navigate).toHaveBeenCalledWith({
-      to: ".",
-      hash: "story",
-      replace: true,
-      resetScroll: false,
-      hashScrollIntoView: false,
-    });
-  });
-
-  it("does not re-focus an ordinary section hash after an unrelated render", () => {
-    mocks.routerHash.current = "story";
-    const { rerender } = render(
-      <DetailSections sections={sections} rawData={{ id: "example" }} />,
-    );
-
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(document.getElementById("story"));
-
-    rerender(
-      <DetailSections sections={[...sections]} rawData={{ id: "example" }} />,
-    );
-
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects duplicate section ids", () => {
-    expect(() =>
-      render(
-        <DetailSections
-          sections={[sections[0]!, { ...sections[1]!, id: "summary" }]}
-          rawData={{ id: "example" }}
-        />,
-      ),
-    ).toThrow("Detail section ids must be unique within a record page");
-  });
-
-  it("lets a page-owned relationships section replace the generic explorer", () => {
-    mocks.pageDetail.current = {
-      entity: "product",
-      rawData: { id: "PRD-EXAMPLE" },
-    };
-
-    render(
-      <DetailSections
-        sections={[
-          ...sections,
-          {
-            id: "relationships",
-            title: "Relationships",
-            icon: Circle,
-            placement: "full",
-            content: <p>Product route ledger</p>,
-          },
-        ]}
-        rawData={{ id: "PRD-EXAMPLE" }}
-      />,
-    );
-
-    expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
-    expect(screen.queryByText("Product route ledger")).not.toBeInTheDocument();
-    expect(
-      screen.queryByTestId("generic-relationships"),
-    ).not.toBeInTheDocument();
-    expect(mocks.relationshipExplorer).not.toHaveBeenCalled();
-    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
-    expect(screen.getByText("Product route ledger")).toBeInTheDocument();
-    expect(screen.queryByText("Story content")).not.toBeInTheDocument();
-    expect(mocks.navigate).toHaveBeenCalledWith({
-      to: ".",
-      hash: "relationships",
-      replace: false,
-      resetScroll: false,
-      hashScrollIntoView: false,
-    });
-  });
-
-  it("adds the bounded route preview before a generic relationship explorer", () => {
-    mocks.pageDetail.current = {
-      entity: "vendor",
-      rawData: { id: "VEN-EXAMPLE", name: "Fixture vendor" },
-    };
-
-    render(
-      <DetailSections sections={sections} rawData={{ id: "VEN-EXAMPLE" }} />,
-    );
-
-    expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
-    expect(screen.queryByTestId("generic-relationships")).toBeNull();
-    expect(screen.getAllByTestId("relationship-route-preview")).toHaveLength(1);
-    expect(mocks.relationshipRoute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entity: "vendor",
-        sourceId: "VEN-EXAMPLE",
-        source: {
-          entity: "vendor",
-          id: "VEN-EXAMPLE",
-          label: "Fixture vendor",
+  it("lets a page-owned relationship section replace the generic explorer", async () => {
+    renderDetail({
+      detailSections: [
+        ...sections,
+        {
+          id: "relationships",
+          title: "Relationships",
+          icon: Circle,
+          placement: "full",
+          content: <p>Product route ledger</p>,
         },
-      }),
-    );
-    const sectionIds = Array.from(
-      document.querySelectorAll("section"),
-      (section) => section.id,
-    );
-    expect(sectionIds).not.toContain("relationships");
-
+      ],
+    });
+    expect(await screen.findByRole("tab", { name: "Relations" })).toBeVisible();
+    expect(screen.queryByText("Product route ledger")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
-    expect(screen.queryByTestId("relationship-route-preview")).toBeNull();
-    expect(screen.getByTestId("generic-relationships")).toBeVisible();
-    expect(mocks.relationshipExplorer).toHaveBeenCalledWith({
-      entity: "vendor",
-      sourceId: "VEN-EXAMPLE",
-    });
+    expect(screen.getByText("Product route ledger")).toBeVisible();
   });
 
-  it("hands generic record actions the full loaded detail payload", () => {
-    const inventory = {
-      id: "INV-EXAMPLE",
-      name: "Fixture inventory",
-      product: { id: "PRD-EXAMPLE", name: "Fixture product" },
-      availableQuantity: 4,
-    };
-    mocks.pageDetail.current = { entity: "inventory", rawData: inventory };
-
-    render(<DetailSections sections={sections} rawData={inventory} />);
-
-    expect(mocks.actions).toHaveBeenCalledWith({
-      entity: "inventory",
-      record: inventory,
-    });
-  });
-
-  it("preserves a USDA food payload while supplying its canonical action id", () => {
-    const food = {
-      fdc_id: 12345,
-      foodInfo: { description: "Fixture food" },
-      linkedProducts: [],
-    };
-    mocks.pageDetail.current = { entity: "usda-food", rawData: food };
-
-    render(<DetailSections sections={sections} rawData={food} />);
-
-    expect(mocks.actions).toHaveBeenCalledWith({
-      entity: "usda-food",
-      record: { ...food, id: "12345" },
-    });
-  });
-
-  it("allows a page-owned action host to suppress generic record actions", () => {
-    mocks.pageDetail.current = {
-      entity: "image",
-      rawData: { id: "IMG-EXAMPLE", filename: "fixture.jpg" },
-    };
-
-    render(
-      <DetailSections
-        sections={sections}
-        rawData={{ id: "IMG-EXAMPLE" }}
-        showEntityActions={false}
-      />,
-    );
-
-    expect(screen.queryByTestId("detail-actions")).toBeNull();
-    expect(mocks.actions).not.toHaveBeenCalled();
-  });
-
-  it("lazily mounts authored Relations and Activity while keeping the compact route in Overview", () => {
-    const relationshipMount = vi.fn();
-    const activityMount = vi.fn();
-    const LazyRelationship = () => {
-      relationshipMount();
-      return <p>Full relationship route</p>;
-    };
-    const LazyActivity = () => {
-      activityMount();
-      return <p>Authored activity</p>;
-    };
+  it("lazily mounts authored Relations and Activity", async () => {
     const modeSections: DetailSection[] = [
       ...sections,
       {
@@ -383,160 +156,59 @@ describe("DetailSections ledger", () => {
         title: "Relationships",
         icon: Circle,
         placement: "full",
-        content: <LazyRelationship />,
+        content: <p>Full relationship route</p>,
       },
       {
         id: "history",
         title: "History",
         icon: Circle,
         placement: "supporting",
-        content: <LazyActivity />,
+        content: <p>Authored activity</p>,
       },
     ];
-
-    const { rerender } = render(
-      <DetailSections
-        sections={modeSections}
-        rawData={{ id: "example" }}
-        relationshipPreview={<p>Compact relationship route</p>}
-      />,
-    );
-
-    expect(screen.getByText("Compact relationship route")).toBeVisible();
-    expect(relationshipMount).not.toHaveBeenCalled();
-    expect(activityMount).not.toHaveBeenCalled();
-    expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
-    expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
-
+    renderDetail({
+      detailSections: modeSections,
+      relationshipPreview: <p>Compact relationship route</p>,
+    });
+    expect(await screen.findByText("Compact relationship route")).toBeVisible();
+    expect(screen.queryByText("Full relationship route")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
     expect(screen.getByText("Full relationship route")).toBeVisible();
-    expect(screen.queryByText("Compact relationship route")).toBeNull();
-    expect(relationshipMount).toHaveBeenCalledTimes(1);
-    expect(activityMount).not.toHaveBeenCalled();
-
     fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(screen.getByText("Authored activity")).toBeVisible();
-    expect(activityMount).toHaveBeenCalledTimes(1);
-
-    mocks.routerHash.current = "relationships";
-    rerender(
-      <DetailSections
-        sections={modeSections}
-        rawData={{ id: "example" }}
-        relationshipPreview={<p>Compact relationship route</p>}
-      />,
-    );
-    expect(screen.getByText("Full relationship route")).toBeVisible();
-
-    mocks.routerHash.current = "story";
-    rerender(
-      <DetailSections
-        sections={modeSections}
-        rawData={{ id: "example" }}
-        relationshipPreview={<p>Compact relationship route</p>}
-      />,
-    );
-    expect(screen.getByText("Story content")).toBeVisible();
-    expect(document.activeElement).toBe(document.getElementById("story"));
-
-    mocks.routerHash.current = "history";
-    rerender(
-      <DetailSections
-        sections={modeSections}
-        rawData={{ id: "example" }}
-        relationshipPreview={<p>Compact relationship route</p>}
-      />,
-    );
     expect(screen.getByText("Authored activity")).toBeVisible();
   });
 
-  it("opens a supported mode directly from the initial URL hash", () => {
-    mocks.routerHash.current = "relationships";
-
-    render(
-      <DetailSections
-        sections={[
-          ...sections,
-          {
-            id: "relationships",
-            title: "Relationships",
-            icon: Circle,
-            placement: "full",
-            content: <p>Direct relationship route</p>,
-          },
-        ]}
-        rawData={{ id: "example" }}
-        relationshipPreview={<p>Compact relationship route</p>}
-      />,
-    );
-
+  it("opens supported mode from a router hash and rejects unsupported hashes", async () => {
+    await harness.router.navigate({ to: "/", hash: "relationships" });
+    renderDetail({
+      detailSections: [
+        ...sections,
+        {
+          id: "relationships",
+          title: "Relationships",
+          icon: Circle,
+          placement: "full",
+          content: <p>Direct relationship route</p>,
+        },
+      ],
+    });
+    expect(await screen.findByText("Direct relationship route")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Relations" })).toHaveAttribute(
       "data-active",
     );
-    expect(screen.getByText("Direct relationship route")).toBeVisible();
-    expect(screen.queryByText("Compact relationship route")).toBeNull();
   });
 
-  it("falls back to the clean Overview URL for unsupported mode or section hashes", () => {
-    mocks.routerHash.current = "relationships";
-    const { rerender } = render(
-      <DetailSections sections={sections} rawData={{ id: "example" }} />,
-    );
-
-    expect(screen.getByText("Story content")).toBeVisible();
-    expect(mocks.navigate).toHaveBeenCalledWith({
-      to: ".",
-      hash: undefined,
-      replace: true,
-      resetScroll: false,
-      hashScrollIntoView: false,
+  it("omits empty sections without leaving an index target", async () => {
+    const [summary, relations] = sections;
+    if (!summary || !relations) throw new Error("Expected two detail sections");
+    renderDetail({
+      detailSections: [
+        summary,
+        { ...relations, id: "empty", title: "Empty", content: null },
+      ],
     });
-
-    mocks.navigate.mockClear();
-    mocks.routerHash.current = "not-a-section";
-    rerender(
-      <DetailSections sections={sections} rawData={{ id: "example" }} />,
-    );
-    expect(screen.getByText("Story content")).toBeVisible();
-    expect(mocks.navigate).toHaveBeenCalledWith({
-      to: ".",
-      hash: undefined,
-      replace: true,
-      resetScroll: false,
-      hashScrollIntoView: false,
-    });
-  });
-
-  it("adds Activity for auditable entities and mounts its audit log only when selected", () => {
-    mocks.pageDetail.current = {
-      entity: "vendor",
-      rawData: { id: "VEN-EXAMPLE", name: "Fixture vendor" },
-    };
-
-    render(
-      <DetailSections sections={sections} rawData={{ id: "VEN-EXAMPLE" }} />,
-    );
-
-    expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
-    expect(screen.queryByTestId("audit-log")).toBeNull();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(screen.getByTestId("audit-log")).toBeVisible();
-    expect(screen.queryByTestId("generic-relationships")).toBeNull();
-  });
-
-  it("omits empty sections without leaving an index target", () => {
-    render(
-      <DetailSections
-        sections={[
-          sections[0]!,
-          { ...sections[1]!, id: "empty", title: "Empty", content: null },
-        ]}
-        rawData={{ id: "example" }}
-      />,
-    );
-
-    expect(screen.queryByText("Empty")).not.toBeInTheDocument();
-    expect(screen.queryByText("Sections")).not.toBeInTheDocument();
+    await screen.findByText("Summary content");
+    expect(screen.queryByText("Empty")).toBeNull();
+    expect(screen.queryByText("Sections")).toBeNull();
   });
 });

@@ -1,29 +1,35 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { z } from "zod";
 
 /** One reviewed, time-boxed exemption from `security-audit-allowlist.json`. */
-type AllowlistEntry = {
-  advisory: string;
-  reviewedAt: string;
-  expires: string;
-  reachability: string;
-  rationale: string;
-};
+const allowlistEntrySchema = z.object({
+  advisory: z.string().min(1),
+  reviewedAt: z.iso.date(),
+  expires: z.iso.date(),
+  reachability: z.string().min(1),
+  rationale: z.string().min(1),
+});
+type AllowlistEntry = z.output<typeof allowlistEntrySchema>;
 
 /** The subset of a `pnpm audit --json` advisory this gate reads. */
-type Advisory = {
-  severity: string;
-  github_advisory_id: string;
-  module_name: string;
-  title: string;
-};
+const advisorySchema = z.object({
+  severity: z.string(),
+  github_advisory_id: z.string(),
+  module_name: z.string(),
+  title: z.string(),
+});
 
-const policy = JSON.parse(
-  readFileSync(
-    new URL("../security-audit-allowlist.json", import.meta.url),
-    "utf8",
-  ),
-) as { entries: AllowlistEntry[] };
+const policy = z
+  .object({ entries: z.array(allowlistEntrySchema) })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL("../security-audit-allowlist.json", import.meta.url),
+        "utf8",
+      ),
+    ),
+  );
 const now = new Date();
 const allowlist = new Map<
   string,
@@ -57,9 +63,11 @@ if (!audit.stdout) {
   throw new Error(`pnpm audit produced no JSON: ${audit.stderr}`);
 }
 
-const report = JSON.parse(audit.stdout) as {
-  advisories?: Record<string, Advisory>;
-};
+const report = z
+  .object({
+    advisories: z.record(z.string(), advisorySchema).optional(),
+  })
+  .parse(JSON.parse(audit.stdout));
 const failures: string[] = [];
 for (const advisory of Object.values(report.advisories ?? {})) {
   if (!new Set(["critical", "high"]).has(advisory.severity)) continue;

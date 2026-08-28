@@ -2,7 +2,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { TEST_ACTOR } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type { Database } from "~/server/db/database";
+import { Database } from "~/server/db/database";
 
 import { mergeIngredients } from "./merge";
 
@@ -17,26 +17,9 @@ import { mergeIngredients } from "./merge";
  * rejection happens before the database is touched at all, rather than proving
  * only that the rows happened to survive.
  */
-const explodingDb = new Proxy(
-  {},
-  {
-    get(_target, prop) {
-      throw new Error(
-        `mergeIngredients touched the database (property "${String(prop)}") before rejecting a self-merge`,
-      );
-    },
-  },
-) as Database;
-
-/** The typed refusal, read off `cause` — never matched against message text. */
-const reasonOf = async (run: Promise<unknown>): Promise<unknown> => {
-  const error = await run.then(
-    () => undefined,
-    (thrown: unknown) => thrown,
-  );
-  expect(error).toBeInstanceOf(Error);
-  return (error as { cause?: { reason?: unknown } }).cause?.reason;
-};
+const explodingDb = new Database(() => {
+  throw new Error("mergeIngredients touched the database before rejecting");
+});
 
 describe("mergeIngredients self-merge guard", () => {
   const keepId = testShortcode("ingredient", "ING-AAAA");
@@ -44,26 +27,18 @@ describe("mergeIngredients self-merge guard", () => {
 
   it("rejects merging an ingredient into itself without touching the database", async () => {
     await expect(
-      reasonOf(
-        mergeIngredients(
-          explodingDb,
-          { keepId, mergeIds: [keepId, other] },
-          TEST_ACTOR,
-        ),
+      mergeIngredients(
+        explodingDb,
+        { keepId, mergeIds: [keepId, other] },
+        TEST_ACTOR,
       ),
-    ).resolves.toBe("MERGE_SELF_REFERENCE");
+    ).rejects.toMatchObject({ cause: { reason: "MERGE_SELF_REFERENCE" } });
   });
 
   it("rejects even when the keeper is the only id to merge away", async () => {
     await expect(
-      reasonOf(
-        mergeIngredients(
-          explodingDb,
-          { keepId, mergeIds: [keepId] },
-          TEST_ACTOR,
-        ),
-      ),
-    ).resolves.toBe("MERGE_SELF_REFERENCE");
+      mergeIngredients(explodingDb, { keepId, mergeIds: [keepId] }, TEST_ACTOR),
+    ).rejects.toMatchObject({ cause: { reason: "MERGE_SELF_REFERENCE" } });
   });
 
   // Guards the guard. Without this, the two tests above would still pass if

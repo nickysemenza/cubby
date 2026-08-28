@@ -1,7 +1,4 @@
-import {
-  financialTransactionFiltersSchema,
-  financialTransactionSortableFields,
-} from "@cubby/schemas/financial-transaction";
+import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 
@@ -16,7 +13,6 @@ import {
 
 export const financialTransactionEntityAdapter = defineEntityAdapter({
   entity: "financialTransaction",
-  filters: financialTransactionFiltersSchema,
   sort: {
     fields: financialTransactionSortableFields,
     default: "transactionDate",

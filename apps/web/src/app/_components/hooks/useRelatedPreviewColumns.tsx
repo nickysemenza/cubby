@@ -16,12 +16,31 @@ import type {
   CubbyColumnDef as ColumnDef,
   CubbyColumnHelper as ColumnHelper,
 } from "../data-table/table-features";
+import type { FilterConfig, MobileColumnMeta } from "../data-table/table-meta";
 import type { RuntimeFilterOptions } from "./filter-option-types";
 
 export interface RelatedPreviewState {
   byCell: Map<string, RelatedPreviewGroup>;
   loading: boolean;
 }
+
+export interface RelatedPreviewColumnsResult<TData extends { id: string }> {
+  relatedColumns: ColumnDef<TData>[];
+  rowContentVersion: RelatedPreviewState;
+}
+
+interface RelatedPreviewColumnMeta {
+  filterConfig?: FilterConfig;
+  mobile: MobileColumnMeta;
+}
+
+export interface RelatedPreviewOperations {
+  previews: typeof relatedData.previews;
+}
+
+const productionRelatedPreviewOperations: RelatedPreviewOperations = {
+  previews: relatedData.previews,
+};
 
 export function useRelatedPreviewStateRef() {
   return useRef<RelatedPreviewState>({ byCell: new Map(), loading: false });
@@ -49,6 +68,10 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
         const filterConfig = supportsServerSorting
           ? manifestFilterConfig(entity, columnId, filterOptions)
           : undefined;
+        const meta: RelatedPreviewColumnMeta = {
+          mobile: { slot: "meta", priority: 80 },
+        };
+        if (filterConfig) meta.filterConfig = filterConfig;
         return columnHelper.display({
           id: columnId,
           header: view.label,
@@ -56,10 +79,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
           enableSorting:
             supportsServerSorting &&
             getSortableFields(entity).includes(columnId),
-          meta: {
-            mobile: { slot: "meta", priority: 80 },
-            ...(filterConfig ? { filterConfig } : {}),
-          },
+          meta,
           cell: (info) => (
             <RelatedPreviewCell
               group={relatedStateRef.current?.byCell.get(
@@ -86,14 +106,16 @@ export function useRelatedPreviewData({
   sourceIds,
   visibleRelationKeys,
   relatedStateRef,
+  operations = productionRelatedPreviewOperations,
 }: {
   entity: BrowserRoutedEntity;
   sourceIds: string[];
   visibleRelationKeys: RelatedViewKey[];
   relatedStateRef: RefObject<RelatedPreviewState>;
-}): unknown {
+  operations?: RelatedPreviewOperations;
+}): RelatedPreviewState {
   const relatedQuery = useQuery({
-    ...relatedData.previews.queryOptions({
+    ...operations.previews.queryOptions({
       source: entity,
       sourceIds,
       relationKeys: visibleRelationKeys,
@@ -132,6 +154,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   columnHelper,
   filterOptions,
   supportsServerSorting,
+  operations,
 }: {
   entity: BrowserRoutedEntity;
   sourceIds: string[];
@@ -140,11 +163,8 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
   columnHelper: ColumnHelper<TData>;
   filterOptions?: RuntimeFilterOptions;
   supportsServerSorting: boolean;
-}): {
-  // oxlint-disable-next-line typescript/no-explicit-any -- relation display columns are heterogeneous by design.
-  relatedColumns: ColumnDef<TData, any>[];
-  rowContentVersion: unknown;
-} {
+  operations?: RelatedPreviewOperations;
+}): RelatedPreviewColumnsResult<TData> {
   const relatedStateRef = useRelatedPreviewStateRef();
   const relatedColumns = useRelatedPreviewColumnDefs({
     entity,
@@ -159,6 +179,7 @@ export function useRelatedPreviewColumns<TData extends { id: string }>({
     sourceIds,
     visibleRelationKeys,
     relatedStateRef,
+    operations,
   });
 
   return { relatedColumns, rowContentVersion };

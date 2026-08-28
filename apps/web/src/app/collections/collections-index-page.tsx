@@ -84,9 +84,12 @@ export function CollectionsIndexPage() {
             <NativeSelect
               id={subjectId}
               value={subject}
-              onChange={(event) =>
-                setSubject(event.target.value as "product" | "location")
-              }
+              onChange={(event) => {
+                const nextSubject = event.target.value;
+                if (nextSubject === "product" || nextSubject === "location") {
+                  setSubject(nextSubject);
+                }
+              }}
             >
               <option value="product">Product</option>
               <option value="location">Location</option>

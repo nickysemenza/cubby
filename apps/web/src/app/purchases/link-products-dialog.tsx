@@ -44,6 +44,11 @@ import { purchaseLabel } from "~/lib/purchase-label";
 
 import { purchase as purchaseOperations } from "./purchase.functions";
 
+const isRowSelectionUpdater = (
+  value: Updater<RowSelectionState>,
+): value is (previous: RowSelectionState) => RowSelectionState =>
+  typeof value === "function";
+
 const SEARCH_PAGE_SIZE = 50;
 type PickerRow = ProductPickerItemOut & {
   images: Array<{ id: string; url: string; filename: string }>;
@@ -110,8 +115,9 @@ export function LinkProductsDialog({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isRowSelectionUpdater(updater)
+      ? updater(rowSelection)
+      : updater;
     setSelected(
       new Set(
         Object.entries(next)

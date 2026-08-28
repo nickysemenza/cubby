@@ -42,7 +42,11 @@ import {
   type MealMcpOut,
 } from "./meal";
 import { createPaginatedResponseSchema } from "./pagination";
-import { allProblemsSchema, problemsCountSchema } from "./problems";
+import {
+  allProblemsMcpSchema,
+  allProblemsSchema,
+  problemsCountSchema,
+} from "./problems";
 import {
   mcpProductCreateInput,
   mcpProductUpdateInput,
@@ -179,6 +183,7 @@ export {
   deletedCountOut,
   problemsCountSchema,
   allProblemsSchema,
+  allProblemsMcpSchema,
 };
 
 export const globalSearchMcpInputSchema = z.object({

@@ -65,16 +65,23 @@ export const generatePresignedUploadUrl = async ({
  * Map common content types to file extensions
  */
 export const contentTypeToExtension = (contentType: string): string => {
-  const map: Record<string, string> = {
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/png": "png",
-    "image/gif": "gif",
-    "image/webp": "webp",
-    "image/heic": "heic",
-    "image/heif": "heif",
-  };
-  return map[contentType] || "jpg";
+  switch (contentType) {
+    case "image/jpeg":
+    case "image/jpg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/gif":
+      return "gif";
+    case "image/webp":
+      return "webp";
+    case "image/heic":
+      return "heic";
+    case "image/heif":
+      return "heif";
+    default:
+      return "jpg";
+  }
 };
 
 /**

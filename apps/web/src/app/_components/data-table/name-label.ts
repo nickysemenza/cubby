@@ -10,11 +10,21 @@
  * editor has to receive `stored`, or it would prefill with the derived
  * fallback and quietly persist it as a real name on the next save.
  */
+import { z } from "zod";
+
+const nameValueSchema = z.unknown();
+type NameValueInput = z.input<typeof nameValueSchema>;
+
+interface NameLabel {
+  stored: string;
+  label: string;
+}
+
 export const nameLabel = <T>(
-  raw: unknown,
+  raw: NameValueInput,
   row: T,
   emptyLabel?: (row: T) => string,
-): { stored: string; label: string } => {
+): NameLabel => {
   const stored = raw == null ? "" : String(raw);
   return { stored, label: stored || emptyLabel?.(row) || "" };
 };

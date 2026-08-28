@@ -3,7 +3,9 @@ import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
+import { searchableEntitySchema } from "@cubby/schemas/search";
 import { and, eq, type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { entityEmbedding } from "~/server/db/schema";
@@ -68,23 +70,29 @@ const vectorLiteral = (embedding: number[]): SQL => {
   return sql`${`[${embedding.join(",")}]`}::vector`;
 };
 
-const semanticCandidateQueryErrorDetails = (
-  error: unknown,
-): Record<string, unknown> => {
-  const cause = (error as { cause?: unknown } | null)?.cause;
-  const pgError = cause as
-    | {
-        code?: unknown;
-        severity?: unknown;
-        detail?: unknown;
-        hint?: unknown;
-        routine?: unknown;
-      }
-    | null
-    | undefined;
+const unparsedSemanticErrorSchema = z.unknown();
+const postgresErrorDetailsSchema = z.object({
+  code: z.string().optional(),
+  severity: z.string().optional(),
+  detail: z.string().optional(),
+  hint: z.string().optional(),
+  routine: z.string().optional(),
+});
+const semanticErrorCarrierSchema = z.object({
+  name: z.string().optional(),
+  cause: postgresErrorDetailsSchema.optional(),
+});
+type UnparsedSemanticError = z.input<typeof unparsedSemanticErrorSchema>;
+
+const semanticCandidateQueryErrorDetails = (error: UnparsedSemanticError) => {
+  const parsedError = semanticErrorCarrierSchema.safeParse(error);
+  const pgError = parsedError.success ? parsedError.data.cause : undefined;
 
   return {
-    errorName: error instanceof Error ? error.name : typeof error,
+    errorName:
+      parsedError.success && parsedError.data.name
+        ? parsedError.data.name
+        : "UnrecognizedError",
     pgCode: pgError?.code,
     severity: pgError?.severity,
     detail: pgError?.detail,
@@ -93,17 +101,18 @@ const semanticCandidateQueryErrorDetails = (
   };
 };
 
+const semanticCandidateRowSchema = z.object({
+  entityType: searchableEntitySchema,
+  entityId: z.string(),
+  similarity: z.coerce.number(),
+});
+
 export async function findSemanticEntityCandidates(
   db: Database,
   queryEmbedding: number[],
   config: SemanticEmbeddingConfig,
   opts: { entityTypes?: SearchableEntity[]; limit: number },
 ): Promise<EntityEmbeddingCandidate[]> {
-  let rows: Array<{
-    entityType: SearchableEntity;
-    entityId: string;
-    similarity: string | number;
-  }>;
   try {
     const typeFilter =
       opts.entityTypes && opts.entityTypes.length > 0
@@ -143,11 +152,7 @@ export async function findSemanticEntityCandidates(
       ORDER BY ${castEmbedding} <=> ${vector}
       LIMIT ${opts.limit}
     `);
-    rows = result.rows as Array<{
-      entityType: SearchableEntity;
-      entityId: string;
-      similarity: string | number;
-    }>;
+    return semanticCandidateRowSchema.array().parse(result.rows);
   } catch (error) {
     console.error("semantic.entity-candidates.failed", {
       ...semanticCandidateQueryErrorDetails(error),
@@ -163,14 +168,6 @@ export async function findSemanticEntityCandidates(
       { cause: error },
     );
   }
-  return rows.map((row) => ({
-    entityType: row.entityType,
-    entityId: row.entityId,
-    similarity:
-      typeof row.similarity === "number"
-        ? row.similarity
-        : Number.parseFloat(row.similarity),
-  }));
 }
 
 /**

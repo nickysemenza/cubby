@@ -7,7 +7,7 @@
  * Usage:
  *   const { tab } = Route.useSearch();
  *   const navigate = useNavigate();
- *   const tabs = useTabParam(tab, "recipes", (next) =>
+ *   const tabs = useTabParam(tab, "recipes", tabSchema, (next) =>
  *     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
  *   );
  *   <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
@@ -15,12 +15,21 @@
 export function useTabParam<T extends string>(
   current: T | undefined,
   defaultValue: T,
+  schema: z.ZodType<T>,
   setParam: (next: T | undefined) => void,
-): { value: T; onValueChange: (next: string) => void } {
+) {
   return {
     value: current ?? defaultValue,
     // Drop the default from the URL so the base link stays clean.
-    onValueChange: (next) =>
-      setParam(next === defaultValue ? undefined : (next as T)),
+    onValueChange: (next: string) => {
+      const parsed = schema.safeParse(next);
+      if (!parsed.success) return;
+      if (parsed.data === defaultValue) {
+        setParam(undefined);
+        return;
+      }
+      setParam(parsed.data);
+    },
   };
 }
+import type { z } from "zod";

@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { type CSSProperties, type ReactNode, useState } from "react";
+import { z } from "zod";
 
 import {
   domainForEntity,
@@ -84,6 +85,14 @@ interface EyebrowSegment {
   to?: LinkProps["to"];
 }
 
+const detailRawDataSchema = z
+  .object({ createdAt: z.union([z.string(), z.date()]).optional() })
+  .passthrough();
+type DetailRawData = z.infer<typeof detailRawDataSchema>;
+
+const isStringTitle = (value: ReactNode): value is string =>
+  typeof value === "string";
+
 /**
  * Derive an eyebrow path from the entity when none is given explicitly.
  * Detail pages get the full path ("Cook / Recipes"); list pages drop the
@@ -144,12 +153,11 @@ function EyebrowPath({ segments }: { segments: EyebrowSegment[] }) {
 }
 
 /** Pull a created-at date out of the raw entity for the hero's record meta. */
-export function getOnFileSince(rawData: unknown): string | null {
-  if (typeof rawData !== "object" || rawData === null) return null;
-  const createdAt = (rawData as { createdAt?: unknown }).createdAt;
-  if (typeof createdAt !== "string" && !(createdAt instanceof Date)) {
-    return null;
-  }
+export function getOnFileSince(
+  rawData: DetailRawData | undefined,
+): string | null {
+  const createdAt = rawData?.createdAt;
+  if (createdAt === undefined) return null;
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString("en-US", {
@@ -337,7 +345,7 @@ function PageHero({
   // the bare count.
   const countLabel =
     hasCount &&
-    `${formatCount(count)}${typeof title === "string" ? ` ${title}` : ""}`;
+    `${formatCount(count)}${isStringTitle(title) ? ` ${title}` : ""}`;
   // Route-family wayfinding wins; utility entities keep their own accent.
   const domain = entity ? domainForEntity(entity) : null;
   const accent = domain
@@ -345,9 +353,12 @@ function PageHero({
     : entity && isBrowserRoutedEntity(entity)
       ? entities[entity].color.accent
       : null;
-  const accentStyle = accent
-    ? ({ "--page-accent": accent } as CSSProperties)
-    : undefined;
+  let accentStyle: CSSProperties | undefined;
+  if (accent) {
+    // SAFETY: React's CSSProperties omits custom-property keys; this value is
+    // the literal `--page-accent` string consumed by the hero stylesheet.
+    accentStyle = { "--page-accent": accent } as CSSProperties;
+  }
 
   return (
     <div
@@ -462,7 +473,10 @@ function DetailPlate({
   heroImages,
   heroMedia,
 }: DetailPlateProps) {
-  const onFileSince = getOnFileSince(rawData);
+  const parsedRawData = detailRawDataSchema.safeParse(rawData);
+  const onFileSince = getOnFileSince(
+    parsedRawData.success ? parsedRawData.data : undefined,
+  );
   const domain = domainForEntity(entity);
   const domainAccent = domain
     ? `var(${domainWayfinding(domain).accentToken})`

@@ -97,7 +97,7 @@ export function CalendarSubscribeDialog() {
   });
 
   const token = rotated ?? feed.data?.token ?? null;
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const origin = globalThis.window?.location.origin ?? "";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

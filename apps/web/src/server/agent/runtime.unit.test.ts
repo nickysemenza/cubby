@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { JSONType } from "zod";
 
 import { isReadOnlyTool } from "./mcp-bridge";
 import { extractSources } from "./runtime";
 
 describe("extractSources", () => {
-  const record = (tool: string, result: unknown) => ({
+  const record = (tool: string, result: JSONType) => ({
     tool,
     args: {},
     durationMs: 1,

@@ -55,7 +55,8 @@
     "oxc-parser": "0.147.0",
     "oxfmt": "0.65.0",
     "oxlint": "1.80.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "zod": "^4.4.3"
   },
   "packageManager": "pnpm@10.34.1"
 }

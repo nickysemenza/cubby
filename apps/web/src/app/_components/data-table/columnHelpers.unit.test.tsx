@@ -1,10 +1,11 @@
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { formatCurrency } from "~/lib/utils";
 
 import { EntityActionsProvider } from "../actions/entity-actions";
@@ -30,85 +31,25 @@ import {
   useCubbyTable,
 } from "./table-features";
 
-/**
- * The thumbnail itself pulls in the hover-preview popup and the CF image
- * transform helpers — none of which this suite is asking about. Stubbing it to
- * a bare count keeps the assertion on the one thing `createImageColumn` owns:
- * WHICH images reach the cell.
- */
-vi.mock("~/app/_components/table/ImageThumbnail", () => ({
-  ImageThumbnail: ({ images }: { images: unknown[] }) => (
-    <span data-testid="thumb">{images.length}</span>
-  ),
-}));
-
-/**
- * `EntityInlineLink` renders through `EntityPreviewLink`, which is a TanStack
- * `Link` plus a lazily-fetched hovercard — both need a router and a query
- * client this test has no interest in. Stubbing that one leaf keeps the real
- * `EntityInlineLink` (and its per-entity `match`) in the render path while
- * encoding the two things this column is responsible for — the target entity
- * and the id — into an href we can assert on.
- */
-vi.mock("~/app/_components/EntityPreviewLink", () => ({
-  dottedEntityLink: "",
-  EntityPreviewLink: ({
-    entity,
-    id,
-    children,
-  }: {
-    entity: string;
-    id: string;
-    children: ReactNode;
-  }) => <a href={`/${entity}/${id}`}>{children}</a>,
-}));
-
-vi.mock("~/app/projects/project-mark", () => ({
-  ProjectMarkById: () => <span aria-hidden="true">project</span>,
-}));
-
-const clipboardMocks = vi.hoisted(() => ({ copyShortcodes: vi.fn() }));
-vi.mock("~/lib/clipboard", () => ({
-  copyShortcodes: clipboardMocks.copyShortcodes,
-}));
-
-/**
- * The actions menu is a base-ui portal that only mounts its items once opened.
- * Flattening the primitives renders those items inline, which keeps the
- * assertion on what `createActionsColumnBase` decides — which items exist, and
- * with what payload — rather than on base-ui's open/close machinery.
- */
-vi.mock("~/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DropdownMenuContent: ({ children }: { children: ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => (
-    <div>{children}</div>
-  ),
-  DropdownMenuItem: ({
-    children,
-    onClick,
-    render,
-  }: {
-    children: ReactNode;
-    onClick?: () => void;
-    render?: { props: { to: string; params: Record<string, string> } };
-  }) =>
-    render ? (
-      <a href={`${render.props.to}:${Object.values(render.props.params)[0]}`}>
-        {children}
-      </a>
-    ) : (
-      <button type="button" onClick={onClick}>
-        {children}
-      </button>
-    ),
-}));
-
 type ParentValue = { id: string | null; name: string | null };
+
+const activeBrowserHarnesses: Array<
+  ReturnType<typeof createBrowserTestHarness>
+> = [];
+
+afterEach(() => {
+  for (const harness of activeBrowserHarnesses) harness.dispose();
+  activeBrowserHarnesses.length = 0;
+});
+
+function columnForTable<TRow extends RowData, TValue>(
+  column: ColumnDef<TRow, TValue>,
+): ColumnDef<TRow, unknown> {
+  // SAFETY: TanStack's table options fix TValue to unknown, while the column
+  // helper preserves each cell's concrete value. The table only invokes the
+  // column against the same TRow and never reads a value as unknown here.
+  return column as ColumnDef<TRow, unknown>;
+}
 
 type TaskRow = {
   parentTaskId: string | null;
@@ -129,12 +70,13 @@ function renderColumn<TRow extends RowData, TValue = ParentValue>(
   column: ColumnDef<TRow, TValue>,
   row: TRow,
   wrap?: (children: ReactNode) => ReactNode,
+  options?: { browser?: boolean },
 ) {
   function Harness() {
-    const table = useTable({
+    const table = useTable<typeof cubbyTableFeatures, TRow>({
       features: cubbyTableFeatures,
       data: [row],
-      columns: [column] as unknown as ColumnDef<TRow, unknown>[],
+      columns: [columnForTable(column)],
     });
     const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
     if (!cell) throw new Error("expected one row with one cell");
@@ -149,7 +91,15 @@ function renderColumn<TRow extends RowData, TValue = ParentValue>(
     );
     return wrap?.(markup) ?? markup;
   }
-  return render(<Harness />);
+  if (!options?.browser) return render(<Harness />);
+  const browserHarness = createBrowserTestHarness();
+  activeBrowserHarnesses.push(browserHarness);
+  const result = render(
+    <browserHarness.wrapper>
+      <Harness />
+    </browserHarness.wrapper>,
+  );
+  return result;
 }
 
 const taskColumn = (
@@ -172,27 +122,36 @@ const projectColumn = (): ColumnDef<ProjectRow, ParentValue> =>
   );
 
 describe("createParentLinkColumn", () => {
-  it("links the parent through the column's own entity and id", () => {
-    renderColumn(taskColumn(), {
-      parentTaskId: "TSK-9QP2",
-      parentTaskName: "Frame the shed",
-    });
+  it("links the parent through the column's own entity and id", async () => {
+    renderColumn(
+      taskColumn(),
+      {
+        parentTaskId: "TSK-9QP2",
+        parentTaskName: "Frame the shed",
+      },
+      undefined,
+      { browser: true },
+    );
 
-    const link = screen.getByRole("link", { name: /Frame the shed/ });
-    expect(link).toHaveAttribute("href", "/task/TSK-9QP2");
+    const link = await screen.findByRole("link", { name: /Frame the shed/ });
+    expect(link).toHaveAttribute("href", "/tasks/TSK-9QP2");
     expect(screen.getByText("Frame the shed")).toBeInTheDocument();
   });
 
-  it("reads the id and name off the fields it was given", () => {
-    renderColumn(projectColumn(), {
-      parentId: "PRJ-4K7M",
-      parentName: "Backyard",
-    });
-
-    expect(screen.getByRole("link", { name: /Backyard/ })).toHaveAttribute(
-      "href",
-      "/project/PRJ-4K7M",
+  it("reads the id and name off the fields it was given", async () => {
+    renderColumn(
+      projectColumn(),
+      {
+        parentId: "PRJ-4K7M",
+        parentName: "Backyard",
+      },
+      undefined,
+      { browser: true },
     );
+
+    expect(
+      await screen.findByRole("link", { name: /Backyard/ }),
+    ).toHaveAttribute("href", "/projects/PRJ-4K7M");
   });
 
   it.each([
@@ -202,11 +161,11 @@ describe("createParentLinkColumn", () => {
     // nothing to link to, so the guard has to be on both halves, not just the
     // name it would otherwise render.
     ["name missing", { parentTaskId: "TSK-9QP2", parentTaskName: null }],
-  ])("renders NoneValue when %s", (_label, row: TaskRow) => {
-    renderColumn(taskColumn(), row);
+  ])("renders NoneValue when %s", async (_label, row: TaskRow) => {
+    renderColumn(taskColumn(), row, undefined, { browser: true });
 
+    expect(await screen.findByText("—")).toBeInTheDocument();
     expect(screen.queryByRole("link")).toBeNull();
-    expect(screen.getByText("—")).toBeInTheDocument();
   });
 
   it("defaults id, header, and width per entity", () => {
@@ -264,8 +223,20 @@ const treeNameColumns = [
   createNameColumn(createCubbyColumnHelper<TreeNameRow>(), "product", "name", {
     expandable: true,
     rowLink: () => null,
-  }) as ColumnDef<TreeNameRow, unknown>,
+  }),
 ];
+
+describe("createNameColumn header", () => {
+  it("omits an unspecified header so TanStack can derive the accessor id label", () => {
+    const column = createNameColumn(
+      createCubbyColumnHelper<TreeNameRow>(),
+      "product",
+      "name",
+    );
+
+    expect(Object.hasOwn(column, "header")).toBe(false);
+  });
+});
 
 function TreeNameHarness() {
   const table = useCubbyTable({
@@ -277,7 +248,7 @@ function TreeNameHarness() {
         subRows: [{ id: "PRD-PART", name: "Nested component" }],
       },
     ],
-    columns: treeNameColumns,
+    columns: treeNameColumns.map((column) => columnForTable(column)),
     getRowId: (row) => row.id,
     getSubRows: (row) => row.subRows,
     initialState: { expanded: true },
@@ -344,13 +315,13 @@ function ImageHarness({ images }: { images: ImagesByRowId }) {
       createImageColumn(createCubbyColumnHelper<ImageRowFixture>(), {
         entity: "project",
         getImages: (row) => images[row.id] ?? [],
-      }) as ColumnDef<ImageRowFixture, unknown>,
+      }),
     [images],
   );
   const table = useTable({
     features: cubbyTableFeatures,
     data: IMAGE_ROWS,
-    columns: useMemo(() => [column], [column]),
+    columns: useMemo(() => [columnForTable(column)], [column]),
   });
   const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
   if (!cell) throw new Error("expected one row with one cell");
@@ -367,8 +338,8 @@ function ImageHarness({ images }: { images: ImagesByRowId }) {
 
 describe("createImageColumn", () => {
   it("shows images that arrive after the first render", () => {
-    const { rerender } = render(<ImageHarness images={{}} />);
-    expect(screen.getByTestId("thumb")).toHaveTextContent("0");
+    const { rerender, container } = render(<ImageHarness images={{}} />);
+    expect(container.querySelector("img")).toBeNull();
 
     // The query resolves: a NEW column def carries a fresh `getImages`, but
     // `data` is unchanged. TanStack rebuilds its core row model only on `data`,
@@ -382,7 +353,11 @@ describe("createImageColumn", () => {
         }}
       />,
     );
-    expect(screen.getByTestId("thumb")).toHaveTextContent("1");
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("a.png"),
+    );
   });
 
   it("keeps PDFs out of `rowImages` thumbnails", () => {
@@ -401,7 +376,7 @@ describe("createImageColumn", () => {
     const column = createImageColumn(createCubbyColumnHelper<PdfRow>(), {
       entity: "product",
       getImages: rowImages,
-    }) as ColumnDef<PdfRow, unknown>;
+    });
 
     function PdfHarness() {
       const table = useTable({
@@ -425,7 +400,7 @@ describe("createImageColumn", () => {
             ],
           },
         ],
-        columns: [column],
+        columns: [columnForTable(column)],
       });
       const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
       if (!cell) throw new Error("expected one row with one cell");
@@ -442,8 +417,12 @@ describe("createImageColumn", () => {
       );
     }
 
-    render(<PdfHarness />);
-    expect(screen.getByTestId("thumb")).toHaveTextContent("1");
+    const { container } = render(<PdfHarness />);
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("photo.png"),
+    );
   });
 });
 
@@ -453,22 +432,19 @@ describe("createActionsColumn", () => {
   }
 
   const actionsColumn = (entity: "product" | "image") =>
-    createActionsColumn(
-      createCubbyColumnHelper<ActionRow>(),
-      entity,
-    ) as ColumnDef<ActionRow, unknown>;
+    createActionsColumn(createCubbyColumnHelper<ActionRow>(), entity);
 
-  const withCopyActions = (entity: "product" | "image") =>
+  const withCopyActions = (
+    entity: "product" | "image",
+    copiedCodes: string[],
+  ) =>
     function CopyActionsProvider({ children }: { children: ReactNode }) {
       return (
         <EntityActionsProvider
           value={{
             entity,
             rowMenuItems: (row) => (
-              <button
-                type="button"
-                onClick={() => void clipboardMocks.copyShortcodes([row.id])}
-              >
+              <button type="button" onClick={() => copiedCodes.push(row.id)}>
                 Copy {row.id}
               </button>
             ),
@@ -479,36 +455,48 @@ describe("createActionsColumn", () => {
       );
     };
 
-  it("publishes the row's own code to its registered action presenter", () => {
+  it("publishes the row's own code to its registered action presenter", async () => {
+    const copiedCodes: string[] = [];
     renderColumn<ActionRow, unknown>(
       actionsColumn("product"),
       { id: "PRD-4K7M" },
       (children) => {
-        const CopyActionsProvider = withCopyActions("product");
+        const CopyActionsProvider = withCopyActions("product", copiedCodes);
         return <CopyActionsProvider>{children}</CopyActionsProvider>;
       },
+      { browser: true },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Copy PRD-4K7M/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Copy PRD-4K7M/ }),
+    );
 
-    expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M"]);
+    expect(copiedCodes).toEqual(["PRD-4K7M"]);
   });
 
-  it("uses the image action presenter for a shortcode-routed image", () => {
+  it("uses the image action presenter for a shortcode-routed image", async () => {
+    const copiedCodes: string[] = [];
     renderColumn<ActionRow, unknown>(
       actionsColumn("image"),
       { id: "IMG-4K7M" },
       (children) => {
-        const CopyActionsProvider = withCopyActions("image");
+        const CopyActionsProvider = withCopyActions("image", copiedCodes);
         return <CopyActionsProvider>{children}</CopyActionsProvider>;
       },
+      { browser: true },
     );
 
-    expect(screen.getByRole("link", { name: /View details/ })).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    expect(
+      await screen.findByRole("menuitem", { name: /View details/ }),
+    ).toBeVisible();
 
-    fireEvent.click(screen.getByRole("button", { name: /Copy IMG-4K7M/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Copy IMG-4K7M/ }),
+    );
 
-    expect(clipboardMocks.copyShortcodes).toHaveBeenCalledWith(["IMG-4K7M"]);
+    expect(copiedCodes).toEqual(["IMG-4K7M"]);
   });
 });
 
@@ -544,14 +532,28 @@ const TRACKED_OPTIONS = booleanCellOptions({
   false: "Not tracked",
 });
 
+type TrackedBooleanOptions = {
+  trueFalseOptions: typeof TRACKED_OPTIONS;
+  undecided?: { label: string };
+  editable?: {
+    onSave: (newValue: boolean | null, row: TrackedRow) => Promise<void>;
+  };
+};
+
 const trackedColumn = (
   onSave?: (v: boolean | null, row: TrackedRow) => Promise<void>,
-): ColumnDef<TrackedRow, string | null> =>
-  createBooleanColumn(createCubbyColumnHelper<TrackedRow>(), "stockTracked", {
+) => {
+  const options: TrackedBooleanOptions = {
     trueFalseOptions: TRACKED_OPTIONS,
     undecided: { label: "Undecided" },
-    ...(onSave ? { editable: { onSave } } : {}),
-  }) as ColumnDef<TrackedRow, string | null>;
+  };
+  if (onSave) options.editable = { onSave };
+  return createBooleanColumn(
+    createCubbyColumnHelper<TrackedRow>(),
+    "stockTracked",
+    options,
+  );
+};
 
 describe("createBooleanColumn", () => {
   it("renders all three states distinctly, and false is not the dash", () => {
@@ -608,16 +610,18 @@ describe("createBooleanColumn", () => {
   });
 
   it("only offers the clear affordance when an undecided state is named", () => {
-    const boolColumn = (undecided?: { label: string }) =>
-      createBooleanColumn(
+    const boolColumn = (undecided?: { label: string }) => {
+      const options: TrackedBooleanOptions = {
+        trueFalseOptions: TRACKED_OPTIONS,
+        editable: { onSave: async () => {} },
+      };
+      if (undecided) options.undecided = undecided;
+      return createBooleanColumn(
         createCubbyColumnHelper<TrackedRow>(),
         "stockTracked",
-        {
-          trueFalseOptions: TRACKED_OPTIONS,
-          ...(undecided ? { undecided } : {}),
-          editable: { onSave: async () => {} },
-        },
-      ) as ColumnDef<TrackedRow, string | null>;
+        options,
+      );
+    };
 
     const withUndecided = renderColumn<TrackedRow, string | null>(
       boolColumn({ label: "Undecided" }),
@@ -660,10 +664,7 @@ describe("createCurrencyColumn zero handling", () => {
       "amount",
       { zeroAsEmpty: true },
     );
-    renderColumn<MoneyRow, number | null>(
-      opted as ColumnDef<MoneyRow, number | null>,
-      { amount: 0 },
-    );
+    renderColumn(opted, { amount: 0 });
     expect(screen.getByText(DASH)).toBeVisible();
   });
 });
@@ -711,7 +712,7 @@ describe("boolean tones come from the roster, not the factory", () => {
       createCubbyColumnHelper<ProvisionalRow>(),
       "provisional",
       { trueFalseOptions: provisionalOptions },
-    ) as ColumnDef<ProvisionalRow, string | null>;
+    );
 
     // The dot the table cell paints must be the same ink the detail page's
     // `renderOptionCell(…, provisionalOptions)` paints for the same value.
@@ -723,7 +724,8 @@ describe("boolean tones come from the roster, not the factory", () => {
     renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
     const dot = document.querySelector("td span[aria-hidden]");
     expect(dot).not.toBeNull();
-    expect((dot as HTMLElement).style.backgroundColor).toBe("var(--warning)");
+    if (!(dot instanceof HTMLElement)) throw new Error("expected a color dot");
+    expect(dot.style.backgroundColor).toBe("var(--warning)");
   });
 });
 
@@ -805,7 +807,7 @@ describe("Product pricing cell (explicit vs derived legibility)", () => {
     render(
       <EditableCell
         value={null}
-        onSave={vi.fn().mockResolvedValue(undefined)}
+        onSave={async () => {}}
         config={{ type: "currency" }}
         renderValue={() => renderProductPriceValue(derivedPricing)}
       />,

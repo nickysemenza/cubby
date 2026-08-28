@@ -16,7 +16,7 @@ type PendingNavigation = {
  * route component, so cancelled and nested navigations share one clock.
  */
 export function installNavigationTracker(router: AnyRouter): () => void {
-  if (typeof window === "undefined") return () => {};
+  if (globalThis.window === undefined) return () => {};
   let pending: PendingNavigation | undefined;
   let pendingTimer: number | undefined;
 

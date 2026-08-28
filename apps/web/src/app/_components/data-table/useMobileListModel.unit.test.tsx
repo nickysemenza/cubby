@@ -1,4 +1,5 @@
 import { render, renderHook, screen } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import type { CubbyTable as Table } from "./table-features";
@@ -22,8 +23,8 @@ describe("useMobileListModel", () => {
       },
       accessorFn: undefined,
     };
-    const table = {
-      // `mobileListShape` reads this to decide whether the list reserves a
+    const table = fromPartial<Table<TestRow>>({
+      // `mobileListLayout` reads this to decide whether the list reserves a
       // thumbnail gutter, so a row-model-only stub no longer satisfies the hook.
       getVisibleLeafColumns: () => [column],
       getRowModel: () => ({
@@ -41,7 +42,7 @@ describe("useMobileListModel", () => {
           },
         ],
       }),
-    } as unknown as Table<TestRow>;
+    });
 
     const firstVersion = {};
     const { result, rerender } = renderHook(
@@ -66,7 +67,7 @@ describe("useMobileListModel", () => {
       columnDef: { header: "Name", cell: () => "Candidate" },
       accessorFn: () => "Candidate",
     };
-    const table = {
+    const table = fromPartial<Table<TestRow>>({
       getVisibleLeafColumns: () => [column],
       getRowModel: () => ({
         rows: [
@@ -81,7 +82,7 @@ describe("useMobileListModel", () => {
           },
         ],
       }),
-    } as unknown as Table<TestRow>;
+    });
 
     const { result } = renderHook(() =>
       useMobileListModel({

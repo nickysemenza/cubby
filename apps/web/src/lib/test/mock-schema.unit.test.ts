@@ -27,7 +27,7 @@ import { z } from "zod";
 import { mock } from "./mock-schema";
 
 // The load-bearing guarantee: anything we generate must pass its own schema.
-const ROUND_TRIP_CORPUS: Record<string, z.ZodType> = {
+const ROUND_TRIP_CORPUS = {
   amount,
   recipeId,
   productCreateInput,
@@ -45,7 +45,10 @@ const ROUND_TRIP_CORPUS: Record<string, z.ZodType> = {
   productWithIslandedMappingsSchema,
   staleIngredientParseSchema,
   productWithBetterUpcDataSchema,
-};
+} satisfies Readonly<Record<string, z.ZodType>>;
+
+const isShortcodeType = (value: string): value is ShortcodeType =>
+  value in SHORTCODE_PREFIX;
 
 describe("mock() round-trip", () => {
   for (const [name, schema] of Object.entries(ROUND_TRIP_CORPUS)) {
@@ -54,7 +57,7 @@ describe("mock() round-trip", () => {
       const result = schema.safeParse(value);
       if (!result.success) {
         throw new Error(
-          `mock(${name}) failed its own schema: ${JSON.stringify(z.treeifyError(result.error), null, 2)}`,
+          `mock(${name}) failed its own schema: ${JSON.stringify(result.error.issues, null, 2)}`,
         );
       }
       expect(result.success).toBe(true);
@@ -139,7 +142,9 @@ describe("mock() regex-constrained strings", () => {
   it("generates a real shortcode for every entity prefix", () => {
     // The case the cutover actually depends on: `mock(taskOut)` and friends
     // must produce codes their own branded schema accepts.
-    for (const entity of Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]) {
+    for (const entity of Object.keys(SHORTCODE_PREFIX).filter(
+      isShortcodeType,
+    )) {
       const schema = shortcodeSchema(entity);
       const value = mock(z.object({ code: schema }), { seed: 3 }).code;
       expect(schema.safeParse(value).success, `${entity}: ${value}`).toBe(true);

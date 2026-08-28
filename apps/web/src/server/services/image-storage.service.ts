@@ -1,5 +1,9 @@
 import type { ImageId, ImageShortcode } from "@cubby/schemas/identifiers";
-import { parseEntityRef, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseEntityRef,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   AttachFileResponse,
   CreateFileUploadInput,
@@ -22,7 +26,10 @@ import {
 } from "@cubby/shared/external-fetch";
 
 import type { Database } from "~/server/db";
-import { createAppError } from "~/server/errors/app-error";
+import {
+  createAppError,
+  toPublicErrorPayload,
+} from "~/server/errors/app-error";
 import {
   assertAttachableEntityExists,
   createOrReuseAttachedImage,
@@ -57,19 +64,152 @@ import {
   uploadToS3,
 } from "~/server/utils/s3";
 
-const initiatePendingUpload = async (
-  db: Database,
+type WithoutDatabase<TFunction> = TFunction extends (
+  database: Database,
+  ...args: infer Args
+) => infer _Result
+  ? Args
+  : never;
+
+type AttachedImageRecord = {
+  shortcode: string;
+  key: string;
+  filename: string;
+  contentType: string;
+  idempotencyKey: string | null;
+};
+
+type StagedImageRecord = Pick<
+  AttachedImageRecord,
+  "key" | "filename" | "contentType"
+> & {
+  status: string;
+  entityType: string | null;
+};
+
+/** Explicit external seams for image storage; production binds real adapters. */
+export interface ImageStoragePorts<TDatabase> {
+  repository: {
+    assertAttachableEntityExists: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof assertAttachableEntityExists>
+    ) => Promise<void>;
+    createOrReuseAttachedImage: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof createOrReuseAttachedImage>
+    ) => Promise<{ row: AttachedImageRecord; reused: boolean }>;
+    createPendingImageRecord: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof createPendingImageRecord>
+    ) => Promise<{ shortcode: string }>;
+    createUploadedImageRecord: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof createUploadedImageRecord>
+    ) => Promise<{ shortcode: string }>;
+    cullPendingImages: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof cullPendingImages>
+    ) => Promise<Awaited<ReturnType<typeof cullPendingImages>>>;
+    deleteImages: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof deleteImages>
+    ) => Promise<{ deletedIds: string[]; deletedKeys: string[] }>;
+    findAttachmentByIdempotencyKey: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof findAttachmentByIdempotencyKey>
+    ) => Promise<AttachedImageRecord | null>;
+    findUnreferencedImages: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof findUnreferencedImages>
+    ) => Promise<Array<{ id: ImageId }>>;
+    getImageById: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof getImageById>
+    ) => Promise<StagedImageRecord>;
+    getImageByKey: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof getImageByKey>
+    ) => Promise<{ shortcode: string; key: string; url: string } | null>;
+  };
+  objectStorage: {
+    contentTypeToExtension: typeof contentTypeToExtension;
+    deleteObject: typeof deleteS3Object;
+    extractKeyFromUrl: typeof extractKeyFromUrl;
+    fetchAndStoreImage: typeof fetchAndStoreImage;
+    generateDocumentKey: typeof generateDocumentKey;
+    generateImageKey: typeof generateImageKey;
+    generatePresignedUploadUrl: typeof generatePresignedUploadUrl;
+    getObject: typeof getS3Object;
+    getPublicUrl: typeof getR2PublicUrl;
+    isOurBucketUrl: typeof isOurBucketUrl;
+    upload: typeof uploadToS3;
+  };
+  externalFetch: {
+    fetchResponse: typeof fetchExternalResponse;
+    readResponseWithLimit: typeof readResponseWithLimit;
+    sanitizeUrl: typeof sanitizeExternalUrl;
+    validateUrl: typeof validateExternalHttpUrl;
+  };
+  shortcode: {
+    resolveLive: (
+      database: TDatabase,
+      ...args: WithoutDatabase<typeof resolveLiveShortcode>
+    ) => Promise<string | null>;
+  };
+}
+
+const productionImageStoragePorts = {
+  repository: {
+    assertAttachableEntityExists,
+    createOrReuseAttachedImage,
+    createPendingImageRecord,
+    createUploadedImageRecord,
+    cullPendingImages,
+    deleteImages,
+    findAttachmentByIdempotencyKey,
+    findUnreferencedImages,
+    getImageById,
+    getImageByKey,
+  },
+  objectStorage: {
+    contentTypeToExtension,
+    deleteObject: deleteS3Object,
+    extractKeyFromUrl,
+    fetchAndStoreImage,
+    generateDocumentKey,
+    generateImageKey,
+    generatePresignedUploadUrl,
+    getObject: getS3Object,
+    getPublicUrl: getR2PublicUrl,
+    isOurBucketUrl,
+    upload: uploadToS3,
+  },
+  externalFetch: {
+    fetchResponse: fetchExternalResponse,
+    readResponseWithLimit,
+    sanitizeUrl: sanitizeExternalUrl,
+    validateUrl: validateExternalHttpUrl,
+  },
+  shortcode: {
+    resolveLive: (database, code, entity) =>
+      resolveLiveShortcode(database, code, entity),
+  },
+} satisfies ImageStoragePorts<Database>;
+
+const initiatePendingUpload = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   input: { filename: string; contentType: string; size: number },
   key: string,
 ) => {
-  const url = getR2PublicUrl(key);
-  const createdImage = await createPendingImageRecord(db, {
+  const url = ports.objectStorage.getPublicUrl(key);
+  const createdImage = await ports.repository.createPendingImageRecord(db, {
     filename: input.filename,
     contentType: input.contentType,
     size: input.size,
     key,
   });
-  const uploadUrl = await generatePresignedUploadUrl({
+  const uploadUrl = await ports.objectStorage.generatePresignedUploadUrl({
     key,
     contentType: input.contentType,
   });
@@ -86,19 +226,20 @@ const initiatePendingUpload = async (
 // folder is supplied, it is the owning entity's public shortcode. The image
 // table is authoritative for collisions and includes soft-deleted rows, whose
 // R2 objects may still exist.
-const allocateDocumentKey = async (
-  db: Database,
+const allocateDocumentKey = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   filename: string,
   folder?: string,
 ): Promise<string> => {
-  let key = generateDocumentKey(filename, folder);
-  if (await getImageByKey(db, key)) {
+  let key = ports.objectStorage.generateDocumentKey(filename, folder);
+  if (await ports.repository.getImageByKey(db, key)) {
     const dot = filename.lastIndexOf(".");
     const deduped =
       dot > 0
         ? `${filename.slice(0, dot)}-${Date.now()}${filename.slice(dot)}`
         : `${filename}-${Date.now()}`;
-    key = generateDocumentKey(deduped, folder);
+    key = ports.objectStorage.generateDocumentKey(deduped, folder);
   }
   return key;
 };
@@ -106,8 +247,9 @@ const allocateDocumentKey = async (
 // Server-side MCP attempts may race and a losing attempt is required to delete
 // only its own object. Unlike browser document uploads, readable keys are not
 // worth sharing here: append a UUID before allocation to make that guarantee.
-const allocateAttachmentDocumentKey = async (
-  db: Database,
+const allocateAttachmentDocumentKey = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   filename: string,
   folder: string,
 ): Promise<string> => {
@@ -116,32 +258,45 @@ const allocateAttachmentDocumentKey = async (
     dot > 0
       ? `${filename.slice(0, dot)}-${crypto.randomUUID()}${filename.slice(dot)}`
       : `${filename}-${crypto.randomUUID()}`;
-  return await allocateDocumentKey(db, attemptFilename, folder);
+  return await allocateDocumentKey(ports, db, attemptFilename, folder);
 };
 
-export const initiateImageUploadWithoutEntity = async (
-  db: Database,
+const initiateImageUploadWithoutEntityWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   input: InitiateUploadWithoutEntityInput,
 ) => {
-  return initiatePendingUpload(db, input, generateImageKey(input.filename));
+  return initiatePendingUpload(
+    ports,
+    db,
+    input,
+    ports.objectStorage.generateImageKey(input.filename),
+  );
 };
 
-export const initiateDocumentUpload = async (
-  db: Database,
+const initiateDocumentUploadWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   input: InitiateDocumentUploadInput,
 ) => {
-  const key = await allocateDocumentKey(db, input.filename, input.folder);
-  return initiatePendingUpload(db, input, key);
+  const key = await allocateDocumentKey(
+    ports,
+    db,
+    input.filename,
+    input.folder,
+  );
+  return initiatePendingUpload(ports, db, input, key);
 };
 
-export const importImageFromUrl = async (
-  db: Database,
+const importImageFromUrlWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   params: { sourceUrl: string; filenamePrefix: string },
 ): Promise<{ imageId: ImageShortcode; key: string; url: string } | null> => {
-  if (isOurBucketUrl(params.sourceUrl)) {
-    const key = extractKeyFromUrl(params.sourceUrl);
+  if (ports.objectStorage.isOurBucketUrl(params.sourceUrl)) {
+    const key = ports.objectStorage.extractKeyFromUrl(params.sourceUrl);
     if (key) {
-      const existing = await getImageByKey(db, key);
+      const existing = await ports.repository.getImageByKey(db, key);
       if (existing) {
         return {
           imageId: parseShortcodeFor("image", existing.shortcode),
@@ -150,23 +305,26 @@ export const importImageFromUrl = async (
         };
       }
 
-      const createdImage = await createUploadedImageRecord(db, {
-        key,
-        filename: params.filenamePrefix,
-        size: 0,
-        contentType: "application/octet-stream",
-      });
+      const createdImage = await ports.repository.createUploadedImageRecord(
+        db,
+        {
+          key,
+          filename: params.filenamePrefix,
+          size: 0,
+          contentType: "application/octet-stream",
+        },
+      );
       return {
         imageId: parseShortcodeFor("image", createdImage.shortcode),
         key,
-        url: getR2PublicUrl(key),
+        url: ports.objectStorage.getPublicUrl(key),
       };
     }
   }
 
-  validateExternalHttpUrl(params.sourceUrl);
+  ports.externalFetch.validateUrl(params.sourceUrl);
 
-  const stored = await fetchAndStoreImage(
+  const stored = await ports.objectStorage.fetchAndStoreImage(
     params.sourceUrl,
     params.filenamePrefix,
   );
@@ -174,16 +332,16 @@ export const importImageFromUrl = async (
     return null;
   }
 
-  let createdImage: Awaited<ReturnType<typeof createUploadedImageRecord>>;
+  let createdImage: { shortcode: string };
   try {
-    createdImage = await createUploadedImageRecord(db, {
+    createdImage = await ports.repository.createUploadedImageRecord(db, {
       key: stored.key,
-      filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
+      filename: `${params.filenamePrefix}.${ports.objectStorage.contentTypeToExtension(stored.contentType)}`,
       size: stored.size,
       contentType: stored.contentType,
     });
   } catch (error) {
-    await deleteS3Object(stored.key).catch((cleanupError) => {
+    await ports.objectStorage.deleteObject(stored.key).catch((cleanupError) => {
       console.error("Failed to roll back imported image object:", cleanupError);
     });
     throw error;
@@ -200,10 +358,15 @@ export const importImageFromUrl = async (
 // base64 marker, and the payload. Only base64 data: URIs are supported.
 const DATA_URI_RE = /^data:([^;,]*)(;base64)?,([\s\S]*)$/;
 
+interface DecodedBase64File {
+  bytes: Buffer;
+  contentType: string | undefined;
+}
+
 function decodeBase64File(
   data: string,
   fallbackContentType: string | undefined,
-): { bytes: Buffer; contentType: string | undefined } {
+): DecodedBase64File {
   const match = DATA_URI_RE.exec(data.trim());
   if (match) {
     const [, inlineType, base64Flag, payload] = match;
@@ -249,15 +412,16 @@ function decodeBase64File(
  * An abandoned staging row needs no special handling — PENDING with no
  * association is precisely what `findCullablePendingImages` already sweeps.
  */
-export const createFileUpload = async (
-  db: Database,
+const createFileUploadWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   input: CreateFileUploadInput,
 ): Promise<CreateFileUploadResponse> => {
   const contentType = input.contentType.toLowerCase();
   const isDocument = contentType === PDF_CONTENT_TYPE;
   if (
     !isDocument &&
-    !(ALLOWED_IMAGE_TYPES as readonly string[]).includes(contentType)
+    !ALLOWED_IMAGE_TYPES.some((allowedType) => allowedType === contentType)
   ) {
     throw createAppError(
       "IMAGE_UPLOAD_FAILED",
@@ -272,9 +436,15 @@ export const createFileUpload = async (
   }
 
   const key = isDocument
-    ? await allocateAttachmentDocumentKey(db, input.filename, input.entityId)
-    : generateImageKey(input.filename);
+    ? await allocateAttachmentDocumentKey(
+        ports,
+        db,
+        input.filename,
+        input.entityId,
+      )
+    : ports.objectStorage.generateImageKey(input.filename);
   const { uploadUrl, imageId } = await initiatePendingUpload(
+    ports,
     db,
     { filename: input.filename, contentType, size: input.size },
     key,
@@ -297,8 +467,9 @@ export const createFileUpload = async (
  * Returns the resolved uuid so the caller's cleanup can hard-delete the staging
  * row without resolving the code a second time.
  */
-const readStagedUpload = async (
-  db: Database,
+const readStagedUpload = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   uploadId: string,
 ): Promise<{
   bytes: Buffer;
@@ -314,22 +485,24 @@ const readStagedUpload = async (
     );
   // `uploadId` is the staged row's public `IMG-` code; `getImageById` is a raw
   // uuid PK lookup, so the boundary has to be crossed here.
-  const stagedImageId = await resolveLiveShortcode(db, uploadId, "image");
+  const stagedImageId = await ports.shortcode.resolveLive(
+    db,
+    uploadId,
+    "image",
+  );
   if (!stagedImageId) throw notFound();
+  const stagedImageUuid = parseEntityId("image", stagedImageId);
   // Still reachable after a successful resolve: `deleteImages` is a HARD
   // delete, so a concurrent attach of the same uploadId can take the row out
   // between the two reads.
-  const staged = await getImageById(db, stagedImageId).catch(
-    (error: unknown) => {
-      if (
-        (error as { cause?: { reason?: string } })?.cause?.reason !==
-        "IMAGE_NOT_FOUND"
-      ) {
+  const staged = await ports.repository
+    .getImageById(db, stagedImageUuid)
+    .catch((error) => {
+      if (toPublicErrorPayload(error).reason !== "IMAGE_NOT_FOUND") {
         throw error;
       }
       throw notFound(error);
-    },
-  );
+    });
   if (staged.status !== "PENDING" || staged.entityType !== null) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
@@ -337,7 +510,7 @@ const readStagedUpload = async (
         "Pass the uploadId returned by create_file_upload, not an imageId from a previous attach_file.",
     );
   }
-  const response = await getS3Object(staged.key);
+  const response = await ports.objectStorage.getObject(staged.key);
   if (!response.ok) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
@@ -351,7 +524,7 @@ const readStagedUpload = async (
     // whether the bytes are what they claim to be.
     contentType: staged.contentType,
     filename: staged.filename,
-    stagedImageId,
+    stagedImageId: stagedImageUuid,
   };
 };
 
@@ -365,12 +538,13 @@ const readStagedUpload = async (
  * accepts PDFs, so it drives the bytes path directly rather than reusing that
  * helper.
  */
-export const attachFileToEntity = async (
-  db: Database,
+const attachFileToEntityWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   input: McpAttachFileInput,
 ): Promise<AttachFileResponse> => {
   // Fail a bad target id before we touch R2, so we never orphan an object.
-  const entityId = await resolveLiveShortcode(
+  const entityId = await ports.shortcode.resolveLive(
     db,
     input.entityId,
     input.entityType,
@@ -382,12 +556,12 @@ export const attachFileToEntity = async (
     );
   }
   const entity = parseEntityRef(input.entityType, entityId);
-  await assertAttachableEntityExists(db, entity);
+  await ports.repository.assertAttachableEntityExists(db, entity);
 
   // A cheap retry can return before fetching/uploading bytes. The same lookup
   // runs under the target-row lock in the repo to close the upload race.
   if (input.idempotencyKey) {
-    const existing = await findAttachmentByIdempotencyKey(
+    const existing = await ports.repository.findAttachmentByIdempotencyKey(
       db,
       entity,
       input.idempotencyKey,
@@ -395,7 +569,7 @@ export const attachFileToEntity = async (
     if (existing) {
       return {
         imageId: parseShortcodeFor("image", existing.shortcode),
-        url: getR2PublicUrl(existing.key),
+        url: ports.objectStorage.getPublicUrl(existing.key),
         filename: existing.filename,
         contentType: existing.contentType,
         kind: existing.contentType === PDF_CONTENT_TYPE ? "document" : "image",
@@ -418,21 +592,24 @@ export const attachFileToEntity = async (
       contentType,
       filename: sourceFilename,
       stagedImageId,
-    } = await readStagedUpload(db, input.uploadId));
+    } = await readStagedUpload(ports, db, input.uploadId));
   } else if (input.data) {
     ({ bytes, contentType } = decodeBase64File(input.data, input.contentType));
   } else if (input.url) {
     try {
-      const url = validateExternalHttpUrl(input.url);
-      const response = await fetchExternalResponse(url);
+      const url = ports.externalFetch.validateUrl(input.url);
+      const response = await ports.externalFetch.fetchResponse(url);
       if (!response.ok) {
         throw createAppError(
           "IMAGE_ATTACH_FAILED",
-          `Failed to fetch ${sanitizeExternalUrl(url)}: ${response.status}`,
+          `Failed to fetch ${ports.externalFetch.sanitizeUrl(url)}: ${response.status}`,
         );
       }
       bytes = Buffer.from(
-        await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
+        await ports.externalFetch.readResponseWithLimit(
+          response,
+          MAX_IMAGE_UPLOAD_BYTES,
+        ),
       );
       const responseContentTypeHeader = response.headers
         .get("content-type")
@@ -480,7 +657,7 @@ export const attachFileToEntity = async (
   const isDocument = contentType === PDF_CONTENT_TYPE;
   const isAllowed =
     isDocument ||
-    (ALLOWED_IMAGE_TYPES as readonly string[]).includes(contentType);
+    ALLOWED_IMAGE_TYPES.some((allowedType) => allowedType === contentType);
   if (!isAllowed) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
@@ -501,22 +678,24 @@ export const attachFileToEntity = async (
 
   // 3. Store in R2, then record the row — rolling back the object if the DB
   // insert fails (mirrors importImageFromUrl).
-  const extension = isDocument ? "pdf" : contentTypeToExtension(contentType);
+  const extension = isDocument
+    ? "pdf"
+    : ports.objectStorage.contentTypeToExtension(contentType);
   const filename = filenameForContentType(
     input.filename ?? sourceFilename ?? `attachment.${extension}`,
     contentType,
   );
   const key = isDocument
-    ? await allocateAttachmentDocumentKey(db, filename, input.entityId)
-    : generateImageKey(filename);
+    ? await allocateAttachmentDocumentKey(ports, db, filename, input.entityId)
+    : ports.objectStorage.generateImageKey(filename);
 
-  await uploadToS3({ key, body: bytes, contentType });
+  await ports.objectStorage.upload({ key, body: bytes, contentType });
   // 4. Insert the row + associate in one transaction (owned by the repo), so a
   // failure in either step (e.g. the target was deleted since step 0) rolls back
   // the DB write; the catch then removes the now-orphaned R2 object.
-  let created: Awaited<ReturnType<typeof createOrReuseAttachedImage>>;
+  let created: { row: AttachedImageRecord; reused: boolean };
   try {
-    created = await createOrReuseAttachedImage(
+    created = await ports.repository.createOrReuseAttachedImage(
       db,
       {
         key,
@@ -530,14 +709,14 @@ export const attachFileToEntity = async (
       input.documentKind,
     );
   } catch (error) {
-    await deleteS3Object(key).catch((cleanupError) => {
+    await ports.objectStorage.deleteObject(key).catch((cleanupError) => {
       console.error("Failed to roll back attached file object:", cleanupError);
     });
     throw error;
   }
 
   if (created.reused) {
-    await deleteS3Object(key).catch((cleanupError) => {
+    await ports.objectStorage.deleteObject(key).catch((cleanupError) => {
       console.error(
         "Failed to remove losing idempotent attachment object:",
         cleanupError,
@@ -554,8 +733,10 @@ export const attachFileToEntity = async (
       // The uuid `readStagedUpload` already resolved from the `IMG-` code —
       // `deleteImages` writes against the uuid PK, and a shortcode here would
       // silently delete nothing and strand the staged object.
-      const { deletedKeys } = await deleteImages(db, [stagedImageId]);
-      await deleteStoredObjects(deletedKeys);
+      const { deletedKeys } = await ports.repository.deleteImages(db, [
+        stagedImageId,
+      ]);
+      await deleteStoredObjectsWithPorts(ports, deletedKeys);
     } catch (cleanupError) {
       console.error("Failed to clean up staged upload:", cleanupError);
     }
@@ -563,7 +744,7 @@ export const attachFileToEntity = async (
 
   return {
     imageId: parseShortcodeFor("image", created.row.shortcode),
-    url: getR2PublicUrl(created.row.key),
+    url: ports.objectStorage.getPublicUrl(created.row.key),
     filename: created.row.filename,
     contentType: created.row.contentType,
     kind: created.row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
@@ -582,22 +763,26 @@ export const attachFileToEntity = async (
  * reach into `~/server/utils/s3` themselves, so `detachImagesFromEntity` hands
  * its reaped keys up and the router/service drains them here, after the commit.
  */
-export const deleteStoredObjects = async (keys: string[]): Promise<void> => {
+const deleteStoredObjectsWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  keys: string[],
+): Promise<void> => {
   for (const key of keys) {
     try {
-      await deleteS3Object(key);
+      await ports.objectStorage.deleteObject(key);
     } catch (error) {
       console.error("Error deleting image from R2:", error);
     }
   }
 };
 
-export const cullPendingImageStorage = async (
-  db: Database,
+const cullPendingImageStorageWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   olderThanHours: number,
 ) => {
-  const result = await cullPendingImages(db, olderThanHours);
-  await deleteStoredObjects(result.deletedKeys);
+  const result = await ports.repository.cullPendingImages(db, olderThanHours);
+  await deleteStoredObjectsWithPorts(ports, result.deletedKeys);
   return result;
 };
 
@@ -611,19 +796,73 @@ export const cullPendingImageStorage = async (
  * removal path forgets. `findUnreferencedImages` is the detector that finds
  * them.
  */
-export const cleanupUnreferencedImageStorage = async (
-  db: Database,
+const cleanupUnreferencedImageStorageWithPorts = async <TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+  db: TDatabase,
   olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
 ) => {
-  const found = await findUnreferencedImages(db, olderThanHours);
+  const found = await ports.repository.findUnreferencedImages(
+    db,
+    olderThanHours,
+  );
   if (found.length === 0) return { count: 0, deletedIds: [], deletedKeys: [] };
   // Via `deleteImages`, not a bare row delete: these rows can still be FK'd by
   // the tombstoned join rows an entity delete left behind, and only the
   // IMAGE_HARD_DELETE cascade clears every incoming edge first.
-  const result = await deleteImages(
+  const result = await ports.repository.deleteImages(
     db,
     found.map((row) => row.id),
   );
-  await deleteStoredObjects(result.deletedKeys);
+  await deleteStoredObjectsWithPorts(ports, result.deletedKeys);
   return { count: result.deletedIds.length, ...result };
 };
+
+/** Bind image storage to real infrastructure or a local in-memory test port. */
+export function createImageStorageService<TDatabase>(
+  ports: ImageStoragePorts<TDatabase>,
+) {
+  return {
+    attachFileToEntity: (database: TDatabase, input: McpAttachFileInput) =>
+      attachFileToEntityWithPorts(ports, database, input),
+    cleanupUnreferencedImageStorage: (
+      database: TDatabase,
+      olderThanHours?: number,
+    ) =>
+      cleanupUnreferencedImageStorageWithPorts(ports, database, olderThanHours),
+    cullPendingImageStorage: (database: TDatabase, olderThanHours: number) =>
+      cullPendingImageStorageWithPorts(ports, database, olderThanHours),
+    createFileUpload: (database: TDatabase, input: CreateFileUploadInput) =>
+      createFileUploadWithPorts(ports, database, input),
+    deleteStoredObjects: (keys: string[]) =>
+      deleteStoredObjectsWithPorts(ports, keys),
+    importImageFromUrl: (
+      database: TDatabase,
+      params: { sourceUrl: string; filenamePrefix: string },
+    ) => importImageFromUrlWithPorts(ports, database, params),
+    initiateDocumentUpload: (
+      database: TDatabase,
+      input: InitiateDocumentUploadInput,
+    ) => initiateDocumentUploadWithPorts(ports, database, input),
+    initiateImageUploadWithoutEntity: (
+      database: TDatabase,
+      input: InitiateUploadWithoutEntityInput,
+    ) => initiateImageUploadWithoutEntityWithPorts(ports, database, input),
+  };
+}
+
+const productionImageStorage = createImageStorageService(
+  productionImageStoragePorts,
+);
+
+export const attachFileToEntity = productionImageStorage.attachFileToEntity;
+export const cleanupUnreferencedImageStorage =
+  productionImageStorage.cleanupUnreferencedImageStorage;
+export const cullPendingImageStorage =
+  productionImageStorage.cullPendingImageStorage;
+export const createFileUpload = productionImageStorage.createFileUpload;
+export const deleteStoredObjects = productionImageStorage.deleteStoredObjects;
+export const importImageFromUrl = productionImageStorage.importImageFromUrl;
+export const initiateDocumentUpload =
+  productionImageStorage.initiateDocumentUpload;
+export const initiateImageUploadWithoutEntity =
+  productionImageStorage.initiateImageUploadWithoutEntity;

@@ -1,4 +1,9 @@
-const json = (body: unknown, status = 200): Response =>
+import { z } from "zod";
+
+const jsonBodySchema = z.json();
+type JsonBody = z.input<typeof jsonBodySchema>;
+
+const json = (body: JsonBody, status = 200): Response =>
   Response.json(body, { status });
 
 /**

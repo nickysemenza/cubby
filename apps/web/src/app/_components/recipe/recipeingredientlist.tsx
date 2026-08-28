@@ -49,13 +49,15 @@ import { MissingMeasureCell } from "./RecipeCostingCoverage";
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
 // "absorbed" keeps its established meaning for frying oil; the rest read as
 // what the estimate stands in for.
-const ESTIMATE_AMOUNT_LABELS: Partial<Record<IngredientUsage, string>> = {
+const ESTIMATE_AMOUNT_LABELS = {
+  normal: undefined,
   frying_medium: "absorbed",
   seasoning: "to taste",
   pan_grease: "for the pan",
   garnish: "garnish",
   dredging: "coating",
-};
+  marinade: undefined,
+} satisfies Record<IngredientUsage, string | undefined>;
 
 // Stable empties for the loading state (referenced by cell renderers).
 const EMPTY_ESTIMATED = new Map<string, IngredientUsage>();
@@ -491,17 +493,20 @@ export const RecipeIngredientList: React.FC<{
   // Convert totals to RecipeSummaryData format
   const getRecipeSummaryData = (
     t: CalculateTotalsResult,
-  ): RecipeSummaryData => ({
-    price: t.price,
-    ...(t.priceUpper != null ? { priceUpper: t.priceUpper } : {}),
-    weight: t.weight,
-    ...(t.weightUpper != null ? { weightUpper: t.weightUpper } : {}),
-    nutrients: t.nutrients,
-    ...(t.nutrientsUpper ? { nutrientsUpper: t.nutrientsUpper } : {}),
-    totalIngredients: t.totalIngredients,
-    missingByType: t.missingByType,
-    perServing,
-  });
+  ): RecipeSummaryData => {
+    const summary: RecipeSummaryData = {
+      price: t.price,
+      weight: t.weight,
+      nutrients: t.nutrients,
+      totalIngredients: t.totalIngredients,
+      missingByType: t.missingByType,
+      perServing,
+    };
+    if (t.priceUpper != null) summary.priceUpper = t.priceUpper;
+    if (t.weightUpper != null) summary.weightUpper = t.weightUpper;
+    if (t.nutrientsUpper) summary.nutrientsUpper = t.nutrientsUpper;
+    return summary;
+  };
 
   return (
     <div>

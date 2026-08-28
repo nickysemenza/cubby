@@ -81,16 +81,16 @@ export const upsertCookbook = async (
   input: CookbookUpsertInput,
   actor: ActorContext,
 ): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> => {
-  const values = {
+  const values: Omit<typeof cookbook.$inferInsert, "shortcode"> = {
     name: input.name,
     rawJson: input.rawJson,
     author: input.author ?? [],
     subjects: input.subjects ?? [],
     sourceLabel: input.sourceLabel,
     importedAt: new Date(),
-    // Omit when not provided so an update can't null out an existing cover.
-    ...(input.coverImageId ? { coverImageId: input.coverImageId } : {}),
   };
+  // Omit when not provided so an update can't null out an existing cover.
+  if (input.coverImageId) values.coverImageId = input.coverImageId;
 
   const matchWhere = and(eq(cookbook.name, input.name), notDeleted(cookbook));
 

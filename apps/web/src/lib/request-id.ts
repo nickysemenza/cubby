@@ -46,13 +46,14 @@ export async function fetchWithRequestDiagnostics(
       : undefined;
   const response = await fetchImpl(input, init);
   const requestId = response.headers.get(REQUEST_ID_HEADER);
-  if (requestId && typeof window !== "undefined") {
-    requestDiagnostics.push({
-      ...(operation ? { operation } : {}),
+  if (requestId && globalThis.window !== undefined) {
+    const diagnostic: BrowserRequestDiagnostic = {
       requestId,
       status: response.status,
       at: performance.now(),
-    });
+    };
+    if (operation) diagnostic.operation = operation;
+    requestDiagnostics.push(diagnostic);
     if (requestDiagnostics.length > REQUEST_DIAGNOSTIC_LIMIT) {
       requestDiagnostics.shift();
     }

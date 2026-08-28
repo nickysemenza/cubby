@@ -4,26 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DatePickerInput } from "./date-picker-input";
 
-vi.mock("~/components/ui/calendar", () => ({
-  Calendar: ({
-    onSelect,
-    required,
-  }: {
-    onSelect: (day: Date | undefined) => void;
-    required?: boolean;
-  }) => (
-    <>
-      <button type="button" onClick={() => onSelect(new Date(2026, 7, 20))}>
-        Thursday, August 20th, 2026
-      </button>
-      <button type="button" onClick={() => onSelect(undefined)}>
-        Reselect selected day
-      </button>
-      <output data-testid="calendar-required">{String(required)}</output>
-    </>
-  ),
-}));
-
 function ControlledPicker({ initial = null }: { initial?: string | null }) {
   const [value, setValue] = useState(initial);
   return (
@@ -241,6 +221,7 @@ describe("DatePickerInput", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open calendar" }));
+    await vi.dynamicImportSettled();
     const day = await screen.findByRole("button", {
       name: /Thursday, August 20th, 2026/i,
     });
@@ -267,14 +248,13 @@ describe("DatePickerInput", () => {
       screen.queryByRole("button", { name: "Clear date" }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open calendar" }));
-    expect(await screen.findByTestId("calendar-required")).toHaveTextContent(
-      "true",
-    );
     fireEvent.click(
-      screen.getByRole("button", { name: "Reselect selected day" }),
+      await screen.findByRole("button", {
+        name: /Tuesday, August 18th, 2026/i,
+      }),
     );
 
-    expect(onChange).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalledWith(null);
     expect(screen.getByRole("textbox", { name: "Due date" })).toHaveValue(
       "Aug 18, 2026",
     );

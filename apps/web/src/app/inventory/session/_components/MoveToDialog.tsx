@@ -98,6 +98,7 @@ export function MoveToDialog({
       <FormProvider {...form}>
         <DestinationLocationField
           form={form}
+          name="targetLocation"
           label="Destination"
           error={error}
           sourceLocationIds={sourceLocationId}

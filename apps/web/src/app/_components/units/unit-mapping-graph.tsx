@@ -26,16 +26,21 @@ interface ULink extends d3Force.SimulationLinkDatum<UNode> {
   native?: boolean;
 }
 
-const KIND_COLOR: Record<string, string> = {
+const isResolvedUnitNode = (value: string | UNode): value is UNode =>
+  typeof value !== "string";
+
+const KIND_COLOR = {
   weight: "var(--chart-1)",
   volume: "var(--chart-2)",
   money: "var(--warning)",
   calories: "var(--chart-5)",
-};
+} satisfies Record<"weight" | "volume" | "money" | "calories", string>;
 
 const kindColor = (kind: string): string => {
   if (kind.startsWith("nutrient:")) return "var(--muted-foreground)";
-  return KIND_COLOR[kind] ?? "var(--muted-foreground)";
+  const knownKind = (value: string): value is keyof typeof KIND_COLOR =>
+    Object.hasOwn(KIND_COLOR, value);
+  return knownKind(kind) ? KIND_COLOR[kind] : "var(--muted-foreground)";
 };
 
 // Shorten the verbose USDA portion units that clutter the graph — drop the
@@ -212,8 +217,14 @@ export function UnitMappingGraph({
         <svg aria-hidden="true" width={width} height={height}>
           <g>
             {simLinks.map((link) => {
-              const s = link.source as UNode;
-              const t = link.target as UNode;
+              if (
+                !isResolvedUnitNode(link.source) ||
+                !isResolvedUnitNode(link.target)
+              ) {
+                return null;
+              }
+              const s = link.source;
+              const t = link.target;
               if (s.x == null || t.x == null) return null;
               return (
                 <line

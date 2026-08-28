@@ -22,7 +22,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
-import { useActionMutation } from "../hooks/useActionMutation";
+import { useEntityActionMutation } from "../hooks/useActionMutation";
 import { ProductForm } from "../products/product-form";
 
 const productCreateMutationOptions = entityMutationOptionsFactory(
@@ -102,8 +102,9 @@ function LinkFoodToIngredientButton({
     setOpen(next);
   };
 
-  const createProduct = useActionMutation({
+  const createProduct = useEntityActionMutation({
     entity: "product",
+    operation: "create",
     mutationFn: productCreateMutationOptions,
     success: (product) =>
       savedWithBackgroundWork(

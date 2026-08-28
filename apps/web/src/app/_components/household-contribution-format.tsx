@@ -10,17 +10,14 @@ import { entityDetailLink } from "~/entities/entities";
 export const ledgerPartyLabel = (kind: LedgerPartyKind) =>
   kind === "household" ? "Household" : kind === "member" ? "Member" : "Guest";
 
-export const contributionGapLabels: Record<
-  HouseholdContributionGapCode,
-  string
-> = {
+export const contributionGapLabels = {
   missing_beneficiaries: "No beneficiaries recorded",
   missing_funders: "No original funder recorded",
   partial_beneficiaries: "Some beneficiary share is unattributed",
   partial_funders: "Some original funding is unattributed",
   unpriced_expense: "Expense has no price",
   transfer_evidence_one_sided: "Transfer has evidence from only one side",
-};
+} satisfies Record<HouseholdContributionGapCode, string>;
 
 /** EXP- records have a browser detail route; route-less LTR- records remain text. */
 export function ContributionGapTargets({

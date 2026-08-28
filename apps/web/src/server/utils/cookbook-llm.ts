@@ -1,4 +1,6 @@
+import { chunkRequestInput } from "@cubby/schemas/import-recipe";
 import { chat } from "@tanstack/ai";
+import { z } from "zod";
 
 import {
   COOKBOOK_ESCALATION_MODEL,
@@ -49,16 +51,9 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
 }
 
 /** One chunk's LLM request, built by `recipebridge`'s `chunk_epub` (WASM). */
-interface CookbookChunkRequest {
-  system: string;
-  user: string;
-  toolName: string;
-  /** JSON Schema for the `{ recipes: [...] }` output. */
-  toolSchema: Record<string, unknown>;
-  /** Route this chunk to the stronger {@link COOKBOOK_ESCALATION_MODEL} (set by the
-   * browser only after the default model returned unparseable output). */
-  escalate?: boolean;
-}
+type CookbookChunkRequest = z.output<typeof chunkRequestInput>;
+const cookbookChunkOutputSchema = z.record(z.string(), z.json());
+type CookbookChunkOutput = z.output<typeof cookbookChunkOutputSchema>;
 
 // `outputSchema` accepts a raw JSON Schema object; `chunk_epub` builds one but
 // types it loosely, so narrow at the boundary.
@@ -73,7 +68,7 @@ type OutputSchema = Parameters<typeof chat>[0]["outputSchema"];
 export async function extractCookbookChunk(
   req: CookbookChunkRequest,
   opts?: { db?: Database },
-): Promise<Record<string, unknown>> {
+): Promise<CookbookChunkOutput> {
   const t0 = performance.now();
   // Reuse the shared client's adapter (gateway binding in prod / REST in dev).
   // Escalated chunks use the stronger model; the default stays Haiku.
@@ -104,6 +99,9 @@ export async function extractCookbookChunk(
         },
       ],
       messages: [{ role: "user", content: req.user }],
+      // SAFETY: TanStack AI's JSON-Schema input type is nominally narrower
+      // than the JSON value accepted by its adapter; chunkRequestInput has
+      // already parsed this object as JSON at the WASM/server boundary.
       outputSchema: req.toolSchema as OutputSchema,
       modelOptions: { max_tokens: MAX_TOKENS },
     }),
@@ -111,8 +109,6 @@ export async function extractCookbookChunk(
   console.log(
     `[cookbook-llm] ${model} ${Math.round(performance.now() - t0)}ms`,
   );
-  if (out && typeof out === "object" && !Array.isArray(out)) {
-    return out as Record<string, unknown>;
-  }
-  return { recipes: [] };
+  const parsed = cookbookChunkOutputSchema.safeParse(out);
+  return parsed.success ? parsed.data : { recipes: [] };
 }

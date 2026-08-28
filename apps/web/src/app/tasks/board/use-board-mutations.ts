@@ -115,26 +115,25 @@ export function useBoardMutations(target: BoardCacheTarget) {
           : (prev.find((t) => t.projectId === data.projectId)?.projectName ??
             null)
         : undefined;
-    return {
+    const nextTask: TaskOut = {
       ...task,
-      ...(data.status !== undefined ? { status: data.status } : {}),
-      ...(data.trade !== undefined ? { trade: data.trade } : {}),
-      ...(data.sortOrder !== undefined ? { sortOrder: data.sortOrder } : {}),
-      ...("projectId" in data
-        ? {
-            // Re-brand at the string→domain boundary (mutation inputs widen
-            // branded ids to plain `string`).
-            projectId:
-              data.projectId == null
-                ? null
-                : parseShortcodeFor("project", data.projectId),
-            projectName: nextProjectName ?? null,
-          }
-        : {}),
       // Bump so a just-completed task floats to the top of the Done column's
       // most-recently-updated cap.
       updatedAt: new Date(),
     };
+    if (data.status !== undefined) nextTask.status = data.status;
+    if (data.trade !== undefined) nextTask.trade = data.trade;
+    if (data.sortOrder !== undefined) nextTask.sortOrder = data.sortOrder;
+    if ("projectId" in data) {
+      // Re-brand at the string→domain boundary (mutation inputs widen branded
+      // ids to plain strings).
+      nextTask.projectId =
+        data.projectId == null
+          ? null
+          : parseShortcodeFor("project", data.projectId);
+      nextTask.projectName = nextProjectName ?? null;
+    }
+    return nextTask;
   };
 
   const base = entityMutationOptionsFactory("task", "update")();

@@ -1,6 +1,7 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 
@@ -107,12 +108,18 @@ export const buildRecipeParseReport = (recipe: RecipeOut): string => {
  */
 export const buildImportRecipeParseReport = (recipe: ImportRecipe): string => {
   const { recipe_yield } = recipe.meta;
+  const recipeYieldText = z.string().safeParse(recipe_yield);
+  const structuredYield = z
+    .object({ value: z.number(), unit: z.string() })
+    .safeParse(recipe_yield);
   const yieldLabel =
     recipe_yield == null
       ? "(none)"
-      : typeof recipe_yield === "string"
-        ? recipe_yield
-        : `${recipe_yield.value} ${recipe_yield.unit}`;
+      : recipeYieldText.success
+        ? recipeYieldText.data
+        : structuredYield.success
+          ? `${structuredYield.data.value} ${structuredYield.data.unit}`
+          : "(none)";
 
   const header = [
     "Recipe parse from cubby (raw lines + how they parsed):",

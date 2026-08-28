@@ -1,6 +1,7 @@
 import { foodSummary, type FoodSummary } from "@cubby/usda-schemas";
 import { withSpan } from "@cubby/worker-tracing";
 import pMap from "p-map";
+import { z } from "zod";
 import { normalizeDataType } from "./artifact-layout.js";
 import type { EdgeBindings } from "./cloudflare-types.js";
 
@@ -21,35 +22,25 @@ export interface FoodIndexRow {
   byte_length: number;
 }
 
+const legacyFoodPayload = z.looseObject({
+  foodInfo: z.looseObject({ data_type: z.string().optional() }).nullish(),
+  brandedFoodInfo: z.looseObject({ gtin_upc: z.string().optional() }).nullish(),
+});
+
 // The seeded v20260611 artifacts predate build-time normalization and still
 // contain the `market_acquistion` typo in R2 bundles, so this must run at
 // read time until a re-seeded version is activated.
-function normalizeFoodSummaryPayload(payload: unknown): unknown {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "foodInfo" in payload &&
-    payload.foodInfo &&
-    typeof payload.foodInfo === "object" &&
-    "data_type" in payload.foodInfo &&
-    typeof payload.foodInfo.data_type === "string"
-  ) {
+function parseFoodSummaryText(text: string): FoodSummary {
+  const payload = legacyFoodPayload.parse(JSON.parse(text));
+  if (payload.foodInfo?.data_type) {
     payload.foodInfo.data_type = normalizeDataType(payload.foodInfo.data_type);
   }
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "brandedFoodInfo" in payload &&
-    payload.brandedFoodInfo &&
-    typeof payload.brandedFoodInfo === "object" &&
-    "gtin_upc" in payload.brandedFoodInfo &&
-    typeof payload.brandedFoodInfo.gtin_upc === "string"
-  ) {
+  if (payload.brandedFoodInfo?.gtin_upc) {
     payload.brandedFoodInfo.gtin_upc = normalizeUpc(
       payload.brandedFoodInfo.gtin_upc,
     );
   }
-  return payload;
+  return foodSummary.parse(payload);
 }
 
 // USDA branded UPCs are sometimes stored with leading zeros stripped (e.g. an
@@ -78,10 +69,7 @@ export function createFoodBundleLoader(
     // `caches.default` is a Cloudflare extension absent from the DOM
     // CacheStorage type (mirrors the cast in the web USDA client); it's also
     // absent under Node (unit tests), so guard before use and read R2 directly.
-    const cache =
-      typeof caches !== "undefined"
-        ? (caches as unknown as { default: Cache }).default
-        : null;
+    const cache = globalThis.caches?.default ?? null;
     const cacheKey = new Request(
       `https://usda-cache/food/${encodeURIComponent(row.bundle_key)}/${row.byte_offset}/${row.byte_length}`,
     );
@@ -150,9 +138,7 @@ export function createFoodBundleLoader(
       if (fresh === null) return null;
       let freshParsed: FoodSummary;
       try {
-        freshParsed = foodSummary.parse(
-          normalizeFoodSummaryPayload(JSON.parse(fresh.text)),
-        );
+        freshParsed = parseFoodSummaryText(fresh.text);
       } catch (err) {
         console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
         return null;
@@ -171,9 +157,7 @@ export function createFoodBundleLoader(
     // mismatch below still throws: that's index corruption, not data quality.
     let parsed: FoodSummary;
     try {
-      parsed = foodSummary.parse(
-        normalizeFoodSummaryPayload(JSON.parse(bundle.text)),
-      );
+      parsed = parseFoodSummaryText(bundle.text);
     } catch (err) {
       if (bundle.fromCache) {
         console.warn(

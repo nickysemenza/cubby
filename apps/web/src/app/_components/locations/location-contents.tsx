@@ -80,9 +80,7 @@ import { locationChildGroupLabel } from "./location-visual-resolver";
 const GROUP_ORDER = ["surfaces", "storage", "containers", "spaces"] as const;
 
 const groupRank = (loc: InfLocation) => {
-  const idx = GROUP_ORDER.indexOf(
-    getLocationTypeGroup(loc.type) as (typeof GROUP_ORDER)[number],
-  );
+  const idx = GROUP_ORDER.indexOf(getLocationTypeGroup(loc.type));
   return idx === -1 ? GROUP_ORDER.length : idx;
 };
 

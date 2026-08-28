@@ -119,15 +119,13 @@ export const planSlotCollisions = <Row>(args: {
  * for the unslotted edges — aborts the whole transaction the moment the
  * destination already has a row in that slot.
  */
-export const foldAssociation = async <
-  Row extends { id: string } & Record<string, unknown>,
->(
+export const foldAssociation = async <Row extends { id: string }>(
   tx: DrizzleTransaction,
   args: {
     // oxlint-disable-next-line typescript/no-explicit-any -- One helper serves several structurally-identical join tables.
     table: any;
     /** Property name of the FK being re-pointed, e.g. `"productId"`. */
-    column: string;
+    column: keyof Row;
     rows: Row[];
     keepId: string;
     slotKey: (row: Row) => string;

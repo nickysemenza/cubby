@@ -1,8 +1,5 @@
 import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
-import {
-  expenseFiltersSchema,
-  expenseSortableFields,
-} from "@cubby/schemas/project";
+import { expenseSortableFields } from "@cubby/schemas/project";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
@@ -23,7 +20,6 @@ import { expenseList } from "./lookup";
 
 export const expenseEntityAdapter = defineEntityAdapter({
   entity: "expense",
-  filters: expenseFiltersSchema,
   sort: {
     fields: expenseSortableFields,
     default: "date",

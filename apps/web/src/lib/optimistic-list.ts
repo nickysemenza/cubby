@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /** Patch one row in a known list projection; never walks unrelated cache data. */
 export function patchListItem<
   TItem extends { id: string },
@@ -14,66 +16,121 @@ export function patchListItem<
   };
 }
 
-type CachedInfiniteList = { pages?: unknown[]; pageParams?: unknown[] };
-type CachedList<TItem extends { id: string }> = {
-  items?: TItem[];
-  data?: TItem[];
-  count?: number;
-  meta?: { totalCount?: number; [key: string]: unknown };
-};
+type ListIdentity = { id: string };
 
-type ListTransform<TItem> = (items: TItem[]) => TItem[];
+const cachedEnvelopeSchema = z
+  .object({
+    pages: z.array(z.unknown()).optional(),
+    pageParams: z.array(z.unknown()).optional(),
+    items: z.array(z.unknown()).optional(),
+    data: z.array(z.unknown()).optional(),
+    count: z.unknown().optional(),
+    meta: z.unknown().optional(),
+  })
+  .passthrough();
+const listIdentitySchema = z.object({ id: z.string() });
+const listMetadataSchema = z
+  .object({ totalCount: z.number().optional() })
+  .passthrough();
+
+type CachedEnvelope = z.infer<typeof cachedEnvelopeSchema>;
+type CachePrimitive =
+  | bigint
+  | boolean
+  | null
+  | number
+  | string
+  | symbol
+  | undefined;
+type CachedSnapshotResult<TSnapshot, TItem extends ListIdentity> =
+  | CachePrimitive
+  | CachedEnvelope
+  | TItem[]
+  | TSnapshot;
+type ListTransform<TItem extends ListIdentity> = (item: TItem) => TItem | null;
+
+function isListItem<TItem extends ListIdentity, TValue>(
+  value: TValue,
+): value is TValue & TItem {
+  return listIdentitySchema.safeParse(value).success;
+}
+
+function transformList<TItem extends ListIdentity, TValue>(
+  values: TValue[],
+  transform: ListTransform<TItem>,
+): TValue[] | Array<TValue | TItem> {
+  let changed = false;
+  const next: Array<TValue | TItem> = [];
+  for (const value of values) {
+    if (!isListItem<TItem, TValue>(value)) {
+      next.push(value);
+      continue;
+    }
+    const replacement = transform(value);
+    if (replacement === null) {
+      changed = true;
+      continue;
+    }
+    if (replacement !== value) changed = true;
+    next.push(replacement);
+  }
+  return changed ? next : values;
+}
 
 /** Walk the list envelopes stored by finite and infinite entity queries. */
-function walkCachedListEnvelope<TItem extends { id: string }>(
-  old: unknown,
+function walkCachedListEnvelope<
+  TItem extends ListIdentity,
+  TSnapshot = unknown,
+>(
+  old: TSnapshot,
   transform: ListTransform<TItem>,
-): unknown {
-  if (Array.isArray(old)) return transform(old as TItem[]);
-  if (!old || typeof old !== "object") return old;
+): CachedSnapshotResult<TSnapshot, TItem> {
+  const parsed = cachedEnvelopeSchema.safeParse(old);
+  if (!parsed.success) {
+    if (!Array.isArray(old)) return old;
+    return transformList(old, transform);
+  }
 
-  const maybeInfinite = old as CachedInfiniteList;
-  if (Array.isArray(maybeInfinite.pages)) {
-    const pages = maybeInfinite.pages.map((page) =>
-      walkCachedListEnvelope<TItem>(page, transform),
+  const envelope = parsed.data;
+  if (Array.isArray(envelope.pages)) {
+    const pages = envelope.pages.map((page) =>
+      walkCachedListEnvelope<TItem, typeof page>(page, transform),
     );
-    if (pages.every((page, index) => page === maybeInfinite.pages?.[index])) {
+    if (pages.every((page, index) => page === envelope.pages?.[index])) {
       return old;
     }
     return {
-      ...maybeInfinite,
+      ...envelope,
       pages,
     };
   }
 
-  const list = old as CachedList<TItem>;
-  const source = Array.isArray(list.items)
+  const source = Array.isArray(envelope.items)
     ? "items"
-    : Array.isArray(list.data)
+    : Array.isArray(envelope.data)
       ? "data"
       : null;
   if (source === null) return old;
 
-  const current = list[source] ?? [];
-  const next = transform(current);
+  const current = envelope[source] ?? [];
+  const next = transformList(current, transform);
   if (next === current) return old;
 
   const removed = Math.max(0, current.length - next.length);
-  return {
-    ...list,
+  const result = {
+    ...envelope,
     [source]: next,
-    ...(removed > 0 && typeof list.count === "number"
-      ? { count: Math.max(0, list.count - removed) }
-      : null),
-    ...(removed > 0 && list.meta && typeof list.meta.totalCount === "number"
-      ? {
-          meta: {
-            ...list.meta,
-            totalCount: Math.max(0, list.meta.totalCount - removed),
-          },
-        }
-      : null),
   };
+  const count = z.number().safeParse(envelope.count);
+  if (removed > 0 && count.success)
+    result.count = Math.max(0, count.data - removed);
+  const meta = listMetadataSchema.safeParse(envelope.meta);
+  if (removed > 0 && meta.success && meta.data.totalCount !== undefined)
+    result.meta = {
+      ...meta.data,
+      totalCount: Math.max(0, meta.data.totalCount - removed),
+    };
+  return result;
 }
 
 /**
@@ -88,34 +145,25 @@ function walkCachedListEnvelope<TItem extends { id: string }>(
  * when either is really an array, and hands anything else back untouched
  * rather than guessing.
  */
-export function patchCachedListItem<TItem extends { id: string }>(
-  old: unknown,
+export function patchCachedListItem<
+  TItem extends ListIdentity,
+  TSnapshot = unknown,
+>(
+  old: TSnapshot,
   id: string,
   patch: (item: TItem) => TItem,
-): unknown {
-  return walkCachedListEnvelope<TItem>(old, (items) => {
-    let changed = false;
-    const next = items.map((item) => {
-      if (!item || typeof item !== "object" || String(item.id) !== id) {
-        return item;
-      }
-      changed = true;
-      return patch(item);
-    });
-    return changed ? next : items;
-  });
+): CachedSnapshotResult<TSnapshot, TItem> {
+  return walkCachedListEnvelope<TItem, TSnapshot>(old, (item) =>
+    item.id === id ? patch(item) : item,
+  );
 }
 
 /** Remove rows from any supported list envelope and keep totals in sync. */
-export function removeCachedListItems(
-  old: unknown,
+export function removeCachedListItems<TSnapshot = unknown>(
+  old: TSnapshot,
   deletedIds: ReadonlySet<string>,
-): unknown {
-  return walkCachedListEnvelope<{ id: string }>(old, (items) => {
-    const next = items.filter(
-      (item) =>
-        !(item && typeof item === "object" && deletedIds.has(String(item.id))),
-    );
-    return next.length === items.length ? items : next;
-  });
+): CachedSnapshotResult<TSnapshot, ListIdentity> {
+  return walkCachedListEnvelope<ListIdentity, TSnapshot>(old, (item) =>
+    deletedIds.has(item.id) ? null : item,
+  );
 }

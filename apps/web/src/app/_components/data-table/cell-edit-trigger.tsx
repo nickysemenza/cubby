@@ -15,7 +15,9 @@ import {
   CellSelectionContext,
 } from "./cell-selection-context";
 
-interface CellEditTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface CellEditTriggerProps<
+  TSaved,
+> extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** React 19 ref-as-prop (forwardRef is deprecated). */
   ref?: React.Ref<HTMLButtonElement>;
   /**
@@ -24,9 +26,21 @@ interface CellEditTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElem
    */
   onStartEdit: (seedText?: string) => void;
   /** Register for cmd-C / cmd-V while this trigger is focused. */
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<TSaved>;
   /** Hide the trailing hover pencil (e.g. icon-only pencil triggers). */
   hidePencilIcon?: boolean;
+}
+
+function isRefCallback<T>(
+  ref: React.Ref<T> | undefined,
+): ref is React.RefCallback<T> {
+  return typeof ref === "function";
+}
+
+function isCellEditEvent(
+  event: Event,
+): event is CustomEvent<CellEditEventDetail> {
+  return event instanceof CustomEvent;
 }
 
 /**
@@ -40,7 +54,7 @@ interface CellEditTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElem
  * This is a real button. Callers with links or popovers render that rich
  * content beside a pencil-only trigger instead of nesting controls.
  */
-export function CellEditTrigger({
+export function CellEditTrigger<TSaved>({
   ref: forwardedRef,
   onStartEdit,
   clipboard,
@@ -48,11 +62,11 @@ export function CellEditTrigger({
   className,
   children,
   ...rest
-}: CellEditTriggerProps) {
+}: CellEditTriggerProps<TSaved>) {
   const localRef = React.useRef<HTMLButtonElement | null>(null);
   const setRef = (node: HTMLButtonElement | null) => {
     localRef.current = node;
-    if (typeof forwardedRef === "function") forwardedRef(node);
+    if (isRefCallback(forwardedRef)) forwardedRef(node);
     else if (forwardedRef) forwardedRef.current = node;
   };
 
@@ -76,7 +90,8 @@ export function CellEditTrigger({
     const el = localRef.current;
     if (!el) return;
     const handler = (e: Event) => {
-      const seedText = (e as CustomEvent<CellEditEventDetail>).detail?.seedText;
+      if (!isCellEditEvent(e)) return;
+      const seedText = e.detail?.seedText;
       onStartEditRef.current(seedText);
     };
     el.addEventListener(CELL_EDIT_EVENT, handler);
@@ -97,8 +112,9 @@ export function CellEditTrigger({
         return clipboardRef.current?.kindKey ?? "";
       },
       getCopyPayload: () => clipboardRef.current?.getCopyPayload?.() ?? null,
-      onPasteValue: (payload) =>
-        clipboardRef.current?.onPasteValue?.(payload) ?? Promise.resolve(),
+      onPasteValue: async (payload) => {
+        await clipboardRef.current?.onPasteValue?.(payload);
+      },
       isEditing: () => clipboardRef.current?.isEditing?.() ?? false,
     });
   }, [hasClipboard, cellSelectionMode]);

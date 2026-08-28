@@ -1,33 +1,20 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { Fragment, type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { GanttResource } from "~/components/reui/gantt/gantt-types";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CubbyGantt } from "./CubbyGantt";
 import type { GanttRow } from "./gantt-model";
 
-vi.mock("~/components/reui/gantt/gantt", () => ({
-  Gantt: ({
-    columns,
-    resources,
-  }: {
-    columns: Array<{
-      id: string;
-      render?: (context: { resource: GanttResource }) => ReactNode;
-    }>;
-    resources: GanttResource[];
-  }) => {
-    const links = columns.find((column) => column.id === "deps");
-    return (
-      <div>
-        {resources.map((resource) => (
-          <Fragment key={resource.id}>{links?.render?.({ resource })}</Fragment>
-        ))}
-      </div>
-    );
-  },
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 const blocker: GanttRow = {
   kind: "task",
@@ -59,6 +46,7 @@ function renderGantt() {
       rows={[blocker, dependent]}
       window={{ startDay: 19_999, endDay: 20_010 }}
     />,
+    { wrapper: harness.wrapper },
   );
   return screen.getByRole("button", {
     name: "Show 1 dependency relationship for Fit doors",

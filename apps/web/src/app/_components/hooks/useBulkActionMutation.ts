@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { getErrorMessage } from "~/lib/error-utils";
+import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
 
 import { useBulkStream } from "./useBulkStream";
 
@@ -15,6 +15,14 @@ import { useBulkStream } from "./useBulkStream";
  * fresh reference (and a fresh `mutate`) on every render.
  */
 const NO_INVALIDATE_TAGS: readonly OperationCacheTag[] = [];
+
+const isSuccessMessageFactory = <Result>(
+  value: string | ((data: Result) => string),
+): value is (data: Result) => string => typeof value === "function";
+
+const isErrorMessageFactory = (
+  value: string | ((error: UnparsedError) => string),
+): value is (error: UnparsedError) => string => typeof value === "function";
 
 /**
  * Streaming sibling of {@link useActionMutation} for bulk actions whose server
@@ -48,7 +56,7 @@ export function useBulkActionMutation<Vars, Result>({
   /** Side effect after the toast + invalidations. */
   onSuccess?: (data: Result) => void;
   /** Error toast — defaults to `getErrorMessage(err)`. */
-  error?: string | ((err: unknown) => string);
+  error?: string | ((err: UnparsedError) => string);
 }) {
   const queryClient = useQueryClient();
   const { start, running, progress } = useBulkStream<unknown, Result>();
@@ -58,7 +66,7 @@ export function useBulkActionMutation<Vars, Result>({
       void start(() => Promise.resolve(run(vars)), {
         onDone: (data) => {
           toast.success(
-            typeof success === "function" ? success(data) : success,
+            isSuccessMessageFactory(success) ? success(data) : success,
           );
           void invalidateOperationTags(queryClient, invalidateTags);
           onSuccess?.(data);
@@ -66,7 +74,7 @@ export function useBulkActionMutation<Vars, Result>({
         errorToast: (err) =>
           error === undefined
             ? getErrorMessage(err)
-            : typeof error === "function"
+            : isErrorMessageFactory(error)
               ? error(err)
               : error,
       }),

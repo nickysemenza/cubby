@@ -28,6 +28,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Camera, Check, Home, RotateCcw } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
@@ -77,6 +78,7 @@ const EMPTY_ROOTS: InfLocation[] = [];
 const PHOTO_PASS_PERSISTENCE: QueuePassPersistence<undefined> = {
   storageKey: (scopeKey) => `cubby:photo-pass:${scopeKey}`,
   version: 1,
+  extraSchema: z.undefined(),
 };
 
 export function PhotoPassWorkbench(search: PhotoPassSearch) {
@@ -196,7 +198,7 @@ function ScanPass() {
         action: {
           label: "Retake",
           onClick: () => {
-            void discardCapture(stop.id, imageId).catch((error: unknown) =>
+            void discardCapture(stop.id, imageId).catch((error) =>
               toast.error(`Retake failed: ${getErrorMessage(error)}`),
             );
           },
@@ -300,7 +302,7 @@ function QueuePass({ parent, all, type }: PhotoPassSearch) {
   const candidateIds = useMemo(
     () =>
       flattenPhotoStops(roots, { includePhotographed, types: type }).map(
-        (stop) => stop.id as string,
+        (stop) => stop.id,
       ),
     [roots, includePhotographed, type],
   );

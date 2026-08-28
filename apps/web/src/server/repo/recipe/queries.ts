@@ -146,7 +146,10 @@ export const getIngredientCooccurrence = async (
 
   for (const [key, data] of cooccurrence) {
     if (data.count >= minEdgeWeight) {
-      const [source, target] = key.split("|") as [string, string];
+      const [source, target] = key.split("|");
+      if (!source || !target) {
+        throw new Error(`Malformed ingredient edge key: ${key}`);
+      }
       edges.push({
         source: shortcodeForIngredientId(source),
         target: shortcodeForIngredientId(target),

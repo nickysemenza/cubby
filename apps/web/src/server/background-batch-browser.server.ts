@@ -1,4 +1,10 @@
 import {
+  backgroundBatchBrowserJobsOutSchema,
+  backgroundBatchBrowserListOutSchema,
+  backgroundBatchBrowserSummarySchema,
+} from "@cubby/schemas/background-jobs";
+
+import {
   backgroundBatch,
   backgroundJob,
 } from "~/lib/background-batch.functions";
@@ -20,17 +26,24 @@ export const backgroundBatchHandlers = implementOperationDomain(
   {
     list: {
       readPolicy: "strong",
-      run: (context, input) => listBackgroundBatchesWorkflow(context.db, input),
+      run: async (context, input) =>
+        backgroundBatchBrowserListOutSchema.parse(
+          await listBackgroundBatchesWorkflow(context.db, input),
+        ),
     },
     summary: {
       readPolicy: "strong",
-      run: (context, input) =>
-        getBackgroundBatchSummaryWorkflow(context.db, input),
+      run: async (context, input) =>
+        backgroundBatchBrowserSummarySchema.parse(
+          await getBackgroundBatchSummaryWorkflow(context.db, input),
+        ),
     },
     jobs: {
       readPolicy: "strong",
-      run: (context, input) =>
-        listBackgroundBatchJobsWorkflow(context.db, input),
+      run: async (context, input) =>
+        backgroundBatchBrowserJobsOutSchema.parse(
+          await listBackgroundBatchJobsWorkflow(context.db, input),
+        ),
     },
     retry: (context, input) => retryBackgroundBatchWorkflow(context.db, input),
     cancel: (context, input) =>

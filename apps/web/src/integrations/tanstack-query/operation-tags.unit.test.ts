@@ -1,5 +1,6 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
+import { z, type JSONType } from "zod";
 
 import { entityRipple, ripple } from "./cache-tags";
 import type { OperationCacheTag } from "./operation-meta";
@@ -25,15 +26,38 @@ type AnyDescriptor = {
     tags?: readonly OperationCacheTag[];
     invalidates?:
       | readonly OperationCacheTag[]
-      | ((input: never) => readonly OperationCacheTag[]);
+      | ((input: JSONType) => readonly OperationCacheTag[]);
   };
   /**
    * `buildDescriptor` puts a resolved policy on every mutation descriptor —
    * static or dynamic, it is always a function of the input. That is the one
    * handle the replay below can pull on.
    */
-  invalidates?: (input: never) => readonly OperationCacheTag[];
+  invalidates?: (input: JSONType) => readonly OperationCacheTag[];
 };
+
+const moduleExportsSchema = z.record(z.string(), z.unknown());
+
+const isDescriptor = (
+  candidate: z.input<z.ZodUnknown>,
+): candidate is AnyDescriptor => {
+  if (candidate === null || typeof candidate !== "object") return false;
+  if (!("id" in candidate) || typeof candidate.id !== "string") return false;
+  if (!("definition" in candidate)) return false;
+  const { definition } = candidate;
+  return (
+    definition !== null &&
+    typeof definition === "object" &&
+    "kind" in definition &&
+    typeof definition.kind === "string"
+  );
+};
+
+type InvalidationPolicy = (input: JSONType) => readonly OperationCacheTag[];
+
+const isInvalidationPolicy = (
+  policy: readonly OperationCacheTag[] | InvalidationPolicy | undefined,
+): policy is InvalidationPolicy => typeof policy === "function";
 
 /**
  * There is no runtime registry of operation descriptors — `defineOperationDomain`
@@ -44,19 +68,13 @@ const descriptors: ReadonlyArray<{ path: string; descriptor: AnyDescriptor }> =
   Object.entries(
     import.meta.glob("../../**/*.functions.ts", { eager: true }),
   ).flatMap(([path, module]) =>
-    Object.values(module as Record<string, unknown>).flatMap((domain) =>
-      domain && typeof domain === "object"
-        ? Object.values(domain as Record<string, unknown>)
-            .filter(
-              (member): member is AnyDescriptor =>
-                !!member &&
-                typeof member === "object" &&
-                "id" in member &&
-                "definition" in member,
-            )
-            .map((descriptor) => ({ path, descriptor }))
-        : [],
-    ),
+    Object.values(moduleExportsSchema.parse(module)).flatMap((domain) => {
+      const parsed = moduleExportsSchema.safeParse(domain);
+      if (!parsed.success) return [];
+      return Object.values(parsed.data)
+        .filter(isDescriptor)
+        .map((descriptor) => ({ path, descriptor }));
+    }),
   );
 
 /**
@@ -169,7 +187,7 @@ describe("operation cache tags", () => {
     const dead: string[] = [];
     for (const { path, descriptor } of descriptors) {
       const declared = descriptor.definition.invalidates;
-      if (!declared || typeof declared === "function") continue;
+      if (!declared || isInvalidationPolicy(declared)) continue;
       for (const tag of declared)
         if (!invalidatesSomething(tag))
           dead.push(`${descriptor.id} (${path}) -> ${show(tag)}`);
@@ -189,63 +207,66 @@ describe("operation cache tags", () => {
    * two widened branches are the only place in the app where an invalidation is
    * chosen from the mutation's own payload.
    */
-  const dynamicPolicyInputs: Record<string, readonly unknown[]> = {
-    "entity.mutate": [
-      // A product create naming an ingredient link AND an explicit fdc_id.
-      {
-        action: "create",
-        entity: "product",
-        data: {
-          name: "Flour",
-          upc: null,
-          manufacturer: "generic",
-          expectedQuantity: null,
-          ingredientId: "ING-4K7M",
-          fdc_id: 12345,
-          category: "food",
+  const dynamicPolicyInputs = new Map<string, readonly JSONType[]>([
+    [
+      "entity.mutate",
+      [
+        // A product create naming an ingredient link AND an explicit fdc_id.
+        {
+          action: "create",
+          entity: "product",
+          data: {
+            name: "Flour",
+            upc: null,
+            manufacturer: "generic",
+            expectedQuantity: null,
+            ingredientId: "ING-4K7M",
+            fdc_id: 12345,
+            category: "food",
+          },
         },
-      },
-      // The same create with the ingredient link only.
-      {
-        action: "create",
-        entity: "product",
-        data: {
-          name: "Flour",
-          upc: null,
-          manufacturer: "generic",
-          expectedQuantity: null,
-          ingredientId: "ING-4K7M",
-          fdc_id: null,
-          category: null,
+        // The same create with the ingredient link only.
+        {
+          action: "create",
+          entity: "product",
+          data: {
+            name: "Flour",
+            upc: null,
+            manufacturer: "generic",
+            expectedQuantity: null,
+            ingredientId: "ING-4K7M",
+            fdc_id: null,
+            category: null,
+          },
         },
-      },
-      // A plain product create: neither link, so the narrow fan-out.
-      {
-        action: "create",
-        entity: "product",
-        data: {
-          name: "Widget",
-          upc: null,
-          manufacturer: "generic",
-          expectedQuantity: null,
-          ingredientId: null,
-          fdc_id: null,
-          category: null,
+        // A plain product create: neither link, so the narrow fan-out.
+        {
+          action: "create",
+          entity: "product",
+          data: {
+            name: "Widget",
+            upc: null,
+            manufacturer: "generic",
+            expectedQuantity: null,
+            ingredientId: null,
+            fdc_id: null,
+            category: null,
+          },
         },
-      },
-      // A non-product entity, which never reaches `productWriteTags`.
-      { action: "create", entity: "vendor", data: { name: "Acme Supply" } },
+        // A non-product entity, which never reaches `productWriteTags`.
+        { action: "create", entity: "vendor", data: { name: "Acme Supply" } },
+      ],
     ],
-  };
+  ]);
 
-  const dynamicPolicies = descriptors.filter(
-    ({ descriptor }) => typeof descriptor.definition.invalidates === "function",
+  const dynamicPolicies = descriptors.filter(({ descriptor }) =>
+    isInvalidationPolicy(descriptor.definition.invalidates),
   );
 
   it("has a sampled input for every dynamic invalidation policy", () => {
     expect(dynamicPolicies.length).toBeGreaterThan(0);
     const unsampled = dynamicPolicies
-      .filter(({ descriptor }) => !(descriptor.id in dynamicPolicyInputs))
+      .filter(({ descriptor }) => !dynamicPolicyInputs.has(descriptor.id))
       .map(({ path, descriptor }) => `${descriptor.id} (${path})`);
     expect(unsampled).toEqual([]);
   });
@@ -253,16 +274,14 @@ describe("operation cache tags", () => {
   it("only ever invalidates live, non-root tags when a dynamic policy is replayed", () => {
     const dead: string[] = [];
     for (const { path, descriptor } of dynamicPolicies) {
-      const policy = descriptor.invalidates as
-        | ((input: unknown) => readonly OperationCacheTag[])
-        | undefined;
-      if (typeof policy !== "function") {
+      const policy = descriptor.invalidates;
+      if (!policy) {
         dead.push(
           `${descriptor.id} (${path}) exposes no runtime invalidates()`,
         );
         continue;
       }
-      const samples = dynamicPolicyInputs[descriptor.id] ?? [];
+      const samples = dynamicPolicyInputs.get(descriptor.id) ?? [];
       samples.forEach((sample, index) => {
         const at = `${descriptor.id} sample #${index}`;
         const tags = policy(sample);

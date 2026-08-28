@@ -43,6 +43,10 @@ import { EntityReferenceGraph } from "./EntityReferenceGraph";
 
 const mono = "font-mono text-xs tabular-nums";
 const dash = <span className="text-muted-foreground/40">—</span>;
+const contractRow = (label: string, value: ReactNode): [string, ReactNode] => [
+  label,
+  value,
+];
 
 function Bool({ value }: { value: boolean }) {
   return value ? (
@@ -362,21 +366,20 @@ export function EntityInspector({
         <ContractRows
           rows={[
             ...(metadata.sourceRefs
-              ? Object.entries(metadata.sourceRefs).map(
-                  ([name, ref]) =>
-                    [
-                      name,
-                      <span key={name} className={mono}>
-                        {ref} · generated binding
-                      </span>,
-                    ] as [string, ReactNode],
+              ? Object.entries(metadata.sourceRefs).map(([name, ref]) =>
+                  contractRow(
+                    name,
+                    <span key={name} className={mono}>
+                      {ref} · generated binding
+                    </span>,
+                  ),
                 )
-              : ([
-                  [
+              : [
+                  contractRow(
                     "Schema ownership",
                     "Workflow extension; no generic CRUD schema contract",
-                  ],
-                ] as [string, ReactNode][])),
+                  ),
+                ]),
             ["Repository adapter", sourceRef(metadata.ports.repository)],
             ["Reference label", sourceRef(metadata.ports.references.label)],
             [
@@ -651,7 +654,7 @@ export function EntityManifestGrid({
       <EntityInspector
         entity={selected}
         count={countFor(selected, counts)}
-        health={health?.search[selected as keyof typeof health.search]}
+        health={health?.search[selected]}
       />
       <Section title="Reference graph">
         <EntityReferenceGraph />

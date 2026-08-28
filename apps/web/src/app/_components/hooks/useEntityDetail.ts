@@ -4,9 +4,11 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement, useMemo } from "react";
+import { z } from "zod";
 
 import type { EditableEntity } from "~/entities/editing/types";
 import {
+  type EntityDetailUpdateInput,
   type EntityDetailController,
   useEntityDetailController,
 } from "~/entities/editing/use-entity-detail-controller";
@@ -20,6 +22,10 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
   entityManifest[entity].auditable;
 
+const commonSectionTypeList = z.array(
+  z.enum(["images", "unit-mappings", "history"]),
+);
+
 /** Base interface for entities that can have images */
 interface WithImages {
   images?: Array<{ id: string; url: string; filename: string }>;
@@ -30,9 +36,12 @@ interface WithId {
   id: string;
 }
 
-interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
+interface UseEntityDetailOptions<
+  E extends EditableEntity,
+  TData extends WithId,
+> {
   /** The entity type */
-  entity: EditableEntity;
+  entity: E;
   /** The entity data */
   data: TData;
   /** For entities with unit mappings - function to extract mappings (sync or async) */
@@ -60,23 +69,22 @@ interface UseEntityDetailReturn<TUpdateInput> {
  * - Building common sections based on entity config (images, unit-mappings, history)
  */
 export function useEntityDetail<
+  E extends EditableEntity,
   TData extends WithId & Partial<WithImages>,
-  TUpdateInput,
+  TUpdateInput extends EntityDetailUpdateInput<E>,
 >({
   entity,
   data,
   getMappings,
   onSuccess,
-}: UseEntityDetailOptions<
-  TData,
-  unknown
->): UseEntityDetailReturn<TUpdateInput> {
+}: UseEntityDetailOptions<E, TData>): UseEntityDetailReturn<TUpdateInput> {
   const entityConfig = entities[entity];
-  const commonSectionTypes = (entityConfig.detail?.commonSections ??
-    []) as readonly ("images" | "unit-mappings" | "history")[];
+  const commonSectionTypes = commonSectionTypeList.parse(
+    entityConfig.detail?.commonSections ?? [],
+  );
 
   // Set up edit mode
-  const editMode = useEntityDetailController<TUpdateInput>({
+  const editMode = useEntityDetailController<E, TUpdateInput>({
     entity,
     entityId: data.id,
     onSuccess,

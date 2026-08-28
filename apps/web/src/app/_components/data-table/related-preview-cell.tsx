@@ -2,14 +2,46 @@ import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { NoneValue } from "~/components/ui/none-value";
-import type { EntityDetailRoute } from "~/entities/entities";
-import {
-  entities,
-  entityDetailParams,
-  isBrowserRoutedEntity,
-} from "~/entities/entities";
+import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 
 import { TableLink } from "../table/TableLink";
+
+function RelatedEntityLink({
+  item,
+  className,
+}: {
+  item: RelatedPreviewGroup["items"][number];
+  className: string;
+}) {
+  if (item.entity === "usda-food") {
+    return (
+      <TableLink
+        to="/usda/$id"
+        params={{ id: item.id }}
+        className={className}
+        variant="muted"
+      >
+        {item.label}
+      </TableLink>
+    );
+  }
+  if (!isBrowserRoutedEntity(item.entity)) {
+    return (
+      <span className={`${className} text-muted-foreground`}>{item.label}</span>
+    );
+  }
+  const link = entityDetailLink(item.entity, item.id);
+  return (
+    <TableLink
+      to={link.to}
+      params={link.params}
+      className={className}
+      variant="muted"
+    >
+      {item.label}
+    </TableLink>
+  );
+}
 
 export function RelatedPreviewCell({
   group,
@@ -35,20 +67,7 @@ export function RelatedPreviewCell({
             entity={item.entity}
             displayImage={item.displayImage}
           />
-          {isBrowserRoutedEntity(item.entity) ? (
-            <TableLink
-              to={entities[item.entity].routes.detail as EntityDetailRoute}
-              params={entityDetailParams(item.id)}
-              className="max-w-36 truncate"
-              variant="muted"
-            >
-              {item.label}
-            </TableLink>
-          ) : (
-            <span className="max-w-36 truncate text-muted-foreground">
-              {item.label}
-            </span>
-          )}
+          <RelatedEntityLink item={item} className="max-w-36 truncate" />
         </span>
       ))}
       {overflow > 0 && (

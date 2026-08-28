@@ -27,9 +27,9 @@
  *    optional because `mergeIngredients` genuinely has none), there is no
  *    skip-audit arm — that would reintroduce the hole. Callers reach for this
  *    function because they need the audit entries; the cascade rides along.
- *  - **`RemovalAuditEntry` can only be minted here.** Its phantom witness is
- *    module-private to `audit-log.ts` and stamped by the one cast below, which
- *    sits *after* the cascade. A hand-written `{action: "delete"}` no longer
+ *  - **`RemovalAuditEntry` can only be minted here.** Its symbol witness is
+ *    module-private and added by the builder below, which is reachable only
+ *    after the cascade. A hand-written `{action: "delete"}` no longer
  *    typechecks anywhere in the codebase.
  *
  * ## What it deliberately does not do
@@ -60,10 +60,7 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
 
 import type { DrizzleTransaction } from "~/server/db";
-import type {
-  AuditEntryInput,
-  RemovalAuditEntry,
-} from "~/server/repo/audit-log";
+import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
 import { softDeleteSuggestionDismissalsTx } from "~/server/repo/suggestion-dismissal";
@@ -81,6 +78,17 @@ export type RemovableEntity = AuditableEntity & ShortcodeEntity;
  * diff on the parent's delete entry.
  */
 export type CascadeCounts = Record<string, Record<string, number>>;
+
+const removalWitness = Symbol("RemovalAuditEntry");
+
+/** Delete audit entry minted only after this module completes its cascade. */
+export type RemovalAuditEntry = {
+  entityType: RemovableEntity;
+  entityId: string;
+  action: "delete";
+  changes?: Record<string, { from: unknown; to: unknown }>;
+  readonly [removalWitness]: true;
+};
 
 const SEARCHABLE = new Set<string>(searchableEntities);
 
@@ -108,15 +116,13 @@ const buildCascadeAuditEntries = (
       const count = byParent[id] ?? 0;
       if (count > 0) changes[key] = { from: count, to: 0 };
     }
-    // The witness is a declared-only symbol with no runtime value, so it cannot
-    // be written as a property — this assertion is how it gets stamped, and
-    // keeping the single stamp site inside this module is the whole mechanism.
     return {
       entityType,
       entityId: id,
       action: "delete",
       changes: Object.keys(changes).length > 0 ? changes : undefined,
-    } as RemovalAuditEntry;
+      [removalWitness]: true,
+    };
   });
 
 /**

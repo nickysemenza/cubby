@@ -43,8 +43,11 @@ function renderDialog(
 }
 
 const confirmButton = () => screen.getByRole("button", { name: "Update" });
-const rowFor = (name: string) =>
-  screen.getByText(name).closest("li") as HTMLLIElement;
+const rowFor = (name: string) => {
+  const row = screen.getByText(name).closest("li");
+  if (!(row instanceof HTMLLIElement)) throw new Error(`${name} row not found`);
+  return row;
+};
 
 describe("BulkActionDialog effect projection", () => {
   it("renders current → next per row, dims and counts the unchanged ones", () => {

@@ -9,8 +9,7 @@ let currentDensity: TableDensity | null = null;
 
 function getStoredDensity(defaultDensity: TableDensity): TableDensity {
   if (currentDensity !== null) return currentDensity;
-  if (typeof window === "undefined") return defaultDensity;
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
   return stored === "comfortable" || stored === "compact" || stored === "dense"
     ? stored
     : defaultDensity;

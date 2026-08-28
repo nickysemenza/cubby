@@ -15,11 +15,7 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  InventoryId,
-  LocationId,
-  ProductShortcode,
-} from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type {
   ResolveScanStraysInput,
   ResolveScanStraysOut,
@@ -27,8 +23,8 @@ import type {
   ScanAtLocationOut,
 } from "@cubby/schemas/scan";
 
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
+import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
@@ -58,6 +54,10 @@ const OBSERVED_AMOUNT = { value: 1, unit: "each" } as const;
 /** The partial unique index a concurrent create collides with. */
 const SLOT_CONSTRAINT = "InventoryEntry_productId_locationId_key";
 
+type ResolvedMoveItem = Parameters<
+  typeof moveInventoryEntries
+>[1]["items"][number];
+
 const lookupScannedProduct = async (
   db: Database,
   shortcode: ProductShortcode,
@@ -74,8 +74,8 @@ const lookupScannedProduct = async (
 
 export async function scanAtLocation(
   db: Database,
-  usdaClient: USDAClient,
-  upcLookupClient: UPCLookupClient,
+  usdaClient: UsdaFoodLookupPort,
+  upcLookupClient: UpcLookupPort,
   input: ScanAtLocationInput,
   actor: ActorContext,
 ): Promise<ScanAtLocationOut> {
@@ -232,11 +232,7 @@ export async function resolveScanStrays(
   const liveByShortcode = new Map(live.map((row) => [row.id, row]));
 
   const skipped: ResolveScanStraysOut["skipped"] = [];
-  const items: Array<{
-    inventoryEntryId: InventoryId;
-    targetLocationId: LocationId;
-    quantity?: { value: number; unit: string };
-  }> = [];
+  const items: ResolvedMoveItem[] = [];
 
   for (const [entryId, move] of requested) {
     const row = liveByShortcode.get(entryId);
@@ -256,11 +252,12 @@ export async function resolveScanStrays(
       });
       continue;
     }
-    items.push({
+    const item: ResolvedMoveItem = {
       inventoryEntryId: row.entityId,
       targetLocationId,
-      ...(move.quantity ? { quantity: move.quantity } : {}),
-    });
+    };
+    if (move.quantity) item.quantity = move.quantity;
+    items.push(item);
   }
 
   if (items.length === 0) {

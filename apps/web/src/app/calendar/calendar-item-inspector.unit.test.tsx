@@ -1,56 +1,26 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { type ReactNode, useState } from "react";
-import { useForm } from "react-hook-form";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import {
+  createEntityMutationPort,
+  type EntityMutationOperations,
+} from "~/entities/editing/use-entity-commands";
+import { entityMutation } from "~/entities/entity-mutation.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import {
+  entityBrowserMutationCommandSchema,
+  type EntityBrowserMutationInput,
+} from "~/server/entity-kernel/contracts";
 
 import {
   CalendarInspectorBody,
+  type CalendarItemInspectorOperations,
   EditableCalendarItem,
 } from "./calendar-item-inspector";
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
-
-const session = vi.hoisted(() => ({ save: vi.fn() }));
-
-vi.mock("~/entities/editing/use-entity-edit-session", () => ({
-  useEntityEditSession: ({ record }: { record: Record<string, unknown> }) => {
-    const form = useForm<Record<string, unknown>>({ defaultValues: record });
-    const [issues, setIssues] = useState<
-      Array<{ message: string; source: "server" }>
-    >([]);
-    return {
-      form,
-      values: form.watch(),
-      access: { mode: "editable" as const },
-      isPending: false,
-      issues,
-      set: form.setValue,
-      reset: form.reset,
-      submit: async () => {
-        try {
-          await session.save(form.getValues());
-          return {
-            ok: true as const,
-            entity: "expense",
-            id: String(record.id),
-            changed: true,
-          };
-        } catch (cause) {
-          const next = [
-            { message: (cause as Error).message, source: "server" as const },
-          ];
-          setIssues(next);
-          return { ok: false as const, issues: next };
-        }
-      },
-    };
-  },
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children?: ReactNode }) => <a href="/">{children}</a>,
-}));
 
 const expense: Extract<CalendarItem, { kind: "expense" }> = {
   kind: "expense",
@@ -68,49 +38,125 @@ const expense: Extract<CalendarItem, { kind: "expense" }> = {
   coverImageUrl: null,
 };
 
+const savedExpense: ExpenseOut = expenseOut.parse({
+  id: expense.id,
+  name: "Large freezer tray",
+  cost: 79,
+  date: "2026-08-18",
+  lineKind: "principal",
+  costType: "materials",
+  lineBasis: "item_line",
+  trade: "other",
+  future: true,
+  vendor: "Target",
+  vendorId: null,
+  vendorLogo: null,
+  projectId: null,
+  projectName: null,
+  productId: null,
+  productName: "Souper Cubes",
+  productQuantity: null,
+  purchaseId: null,
+  orderId: null,
+  orderUrl: null,
+  notes: null,
+  url: null,
+  purchaseDate: null,
+  purchaseDisplayLabel: null,
+  sourceClaims: [],
+  beneficiaries: [],
+  funders: [],
+  createdAt: new Date("2026-08-18T12:00:00Z"),
+  updatedAt: new Date("2026-08-18T12:00:00Z"),
+});
+
+function editableDescriptor(item: CalendarItem) {
+  const descriptor = calendarItemEditDescriptor(item);
+  if (descriptor.mode !== "editable") {
+    throw new Error("The test item must be editable.");
+  }
+  return descriptor;
+}
+
+function createCalendarOperations() {
+  const requests: EntityBrowserMutationInput[] = [];
+  let refusal: Error | undefined;
+  const mutation = entityMutation.mutate.withTransport(async ({ input }) => {
+    const command = entityBrowserMutationCommandSchema.parse(input);
+    requests.push(command);
+    if (refusal) throw refusal;
+    if (command.action === "update" && command.entity === "expense") {
+      return {
+        action: "update" as const,
+        entity: "expense" as const,
+        item: savedExpense,
+        sideEffects: { backgroundBatches: [] },
+      };
+    }
+    throw new Error("Calendar inspector only issues expense updates.");
+  });
+  const operations: EntityMutationOperations = { mutation };
+  const inspectorOperations: CalendarItemInspectorOperations = {
+    mutationPort: createEntityMutationPort(operations),
+  };
+  return {
+    inspectorOperations,
+    requests,
+    refuse(error: Error) {
+      refusal = error;
+    },
+  };
+}
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
 describe("EditableCalendarItem", () => {
   it("submits one complete atomic update", async () => {
-    session.save.mockResolvedValue(undefined);
+    const calendar = createCalendarOperations();
     render(
       <EditableCalendarItem
         item={expense}
-        edit={
-          calendarItemEditDescriptor(expense) as Extract<
-            ReturnType<typeof calendarItemEditDescriptor>,
-            { mode: "editable" }
-          >
-        }
+        edit={editableDescriptor(expense)}
         onCancel={() => undefined}
+        operations={calendar.inspectorOperations}
       />,
+      { wrapper: harness.wrapper },
     );
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Large freezer tray" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    await waitFor(() => expect(session.save).toHaveBeenCalledTimes(1));
-    expect(session.save).toHaveBeenCalledWith(
-      expect.objectContaining({
+    await waitFor(() => expect(calendar.requests).toHaveLength(1));
+    expect(calendar.requests[0]).toMatchObject({
+      action: "update",
+      entity: "expense",
+      id: expense.id,
+      data: {
         name: "Large freezer tray",
-        date: "2026-08-18",
-        cost: 79,
-      }),
-    );
+      },
+    });
   });
 
   it("retains edited values and shows the inline error when saving fails", async () => {
-    session.save.mockRejectedValue(new Error("Ledger unavailable"));
+    const calendar = createCalendarOperations();
+    calendar.refuse(new Error("Ledger unavailable"));
     render(
       <EditableCalendarItem
         item={expense}
-        edit={
-          calendarItemEditDescriptor(expense) as Extract<
-            ReturnType<typeof calendarItemEditDescriptor>,
-            { mode: "editable" }
-          >
-        }
+        edit={editableDescriptor(expense)}
         onCancel={() => undefined}
+        operations={calendar.inspectorOperations}
       />,
+      { wrapper: harness.wrapper },
     );
     const name = screen.getByLabelText("Name");
     fireEvent.change(name, { target: { value: "Keep this edit" } });
@@ -127,14 +173,15 @@ describe("EditableCalendarItem", () => {
         item={{ ...expense, interaction: "read-only", future: false }}
         onCancel={() => undefined}
       />,
+      { wrapper: harness.wrapper },
     );
 
     expect(
       screen.getByText(/Recorded expenses stay read-only/),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open full record" }),
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: "Open full record" }),
+    ).toHaveAttribute("href", `/expenses/${expense.id}`);
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 });

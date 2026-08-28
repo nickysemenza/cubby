@@ -23,7 +23,7 @@ export function useCookbookOptions() {
   const options = useMemo(
     () =>
       data?.map((cookbook) => ({
-        value: cookbook.id as string,
+        value: cookbook.id,
         label: cookbook.book,
       })) ?? NO_COOKBOOK_OPTIONS,
     [data],

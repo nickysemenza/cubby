@@ -19,6 +19,7 @@ import {
   resolveInvalidationTags,
 } from "./operation-cache";
 import { operationInvalidationTags } from "./operation-catalog";
+import type { OperationCacheTag } from "./operation-meta";
 import { installOperationRecorder } from "./operation-recorder";
 import { persister } from "./persister";
 import { shouldToastQueryError } from "./query-error-policy";
@@ -44,11 +45,39 @@ const Link = ({
 // updates the <Toaster> store mid-mount and triggers React's "Can't perform a
 // state update on a component that hasn't mounted yet" warning. Deferring to a
 // macrotask guarantees the toast fires after the current commit.
-function deferToastError(error: unknown) {
+function deferToastError<Failure>(error: Failure) {
   setTimeout(() => toast.error(getErrorMessage(error)), 0);
 }
 
-export function getContext() {
+export interface RootMutationSuccessRuntime {
+  registeredInvalidations<Variables>(
+    operation: string | undefined,
+    variables: Variables,
+  ): readonly OperationCacheTag[];
+  afterSuccess<Result>(options: {
+    queryClient: QueryClient;
+    result: Result;
+    invalidations: readonly OperationCacheTag[];
+  }): void;
+}
+
+const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
+  registeredInvalidations: (operation, variables) =>
+    operationInvalidationTags(operation, variables) ?? [],
+  afterSuccess: ({ queryClient, result, invalidations }) => {
+    void invalidateOperationTags(queryClient, invalidations);
+    void watchBatchesAndInvalidateTags({
+      queryClient,
+      result,
+      invalidateTags: invalidations,
+      fetchBatchStatus: makeBatchStatusFetcher(queryClient),
+    });
+  },
+};
+
+export function getContext(
+  mutationSuccessRuntime: RootMutationSuccessRuntime = productionMutationSuccessRuntime,
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -82,15 +111,15 @@ export function getContext() {
         const invalidations =
           declared.length > 0
             ? declared
-            : (operationInvalidationTags(mutation.meta?.operation, variables) ??
-              []);
+            : mutationSuccessRuntime.registeredInvalidations(
+                mutation.meta?.operation,
+                variables,
+              );
         if (invalidations.length === 0) return;
-        void invalidateOperationTags(queryClient, invalidations);
-        void watchBatchesAndInvalidateTags({
+        mutationSuccessRuntime.afterSuccess({
           queryClient,
           result: data,
-          invalidateTags: invalidations,
-          fetchBatchStatus: makeBatchStatusFetcher(queryClient),
+          invalidations,
         });
       },
     }),

@@ -885,6 +885,35 @@ export const allProblemsSchema = z.object({
   totalProblems: z.number(),
 });
 
+const orphanedEntityEmbeddingMcpOut = orphanedEntityEmbeddingSchema.omit({
+  id: true,
+  entityId: true,
+});
+const unreferencedImageMcpOut = unreferencedImageSchema.omit({
+  id: true,
+  targetId: true,
+});
+const referentialLivenessViolationMcpOut =
+  referentialLivenessViolationSchema.omit({
+    targetId: true,
+    sourceId: true,
+  });
+
+/** MCP problem catalog with storage-only diagnostic identifiers removed. */
+export const allProblemsMcpSchema = allProblemsSchema.extend({
+  orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingMcpOut),
+  unreferencedImages: z.array(unreferencedImageMcpOut),
+  referentialLivenessViolations: z.array(referentialLivenessViolationMcpOut),
+});
+
+export const orphanedEntityEmbeddingsMcpOut = z.array(
+  orphanedEntityEmbeddingMcpOut,
+);
+export const unreferencedImagesMcpOut = z.array(unreferencedImageMcpOut);
+export const referentialLivenessViolationsMcpOut = z.array(
+  referentialLivenessViolationMcpOut,
+);
+
 export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
 
 /**

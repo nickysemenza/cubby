@@ -48,13 +48,13 @@ export const mealTypeOptions: FilterableComboboxItem[] = buildSelectOptions(
  * left the house), leftovers reads as a reuse, and `other` is the quiet
  * outline.
  */
-export const mealKindBadgeVariant: Record<MealKind, BadgeVariant> = {
+export const mealKindBadgeVariant = {
   cooked: "secondary",
   leftovers: "slate",
   eating_out: "default",
   takeout: "default",
   other: "outline",
-};
+} satisfies Record<MealKind, BadgeVariant>;
 
 /** Declared after the tone map so the roster can carry it as the dot ink — the
  *  table cell renders label + colour straight off these options. */
@@ -93,14 +93,14 @@ export function mealTypeTimeLabel(type: MealType | null): string | null {
  * slots take food glyphs. Monochrome Lucide on `currentColor`, never emoji
  * (same rule as `TRADE_ICONS`).
  */
-const MEAL_TYPE_ICONS: Record<MealType, LucideIcon> = {
+const MEAL_TYPE_ICONS = {
   breakfast: Sunrise,
   brunch: Croissant,
   lunch: Sun,
   dinner: Moon,
   snack: Cookie,
   dessert: IceCreamCone,
-};
+} satisfies Record<MealType, LucideIcon>;
 
 /** What an unslotted meal shows — the generic glyph the calendar used for all meals. */
 const UNSLOTTED_MEAL_ICON: LucideIcon = CookingPot;
@@ -113,12 +113,12 @@ const UNSLOTTED_MEAL_ICON: LucideIcon = CookingPot;
  * Same rule as `mealKindBadgeVariant`'s neutral `cooked` tone and the ICS
  * description, which likewise names the kind only when it isn't `cooked`.
  */
-const MEAL_KIND_ICONS: Record<Exclude<MealKind, "cooked">, LucideIcon> = {
+const MEAL_KIND_ICONS = {
   leftovers: Refrigerator,
   eating_out: UtensilsCrossed,
   takeout: ShoppingBag,
   other: CircleDashed,
-};
+} satisfies Record<Exclude<MealKind, "cooked">, LucideIcon>;
 
 /** The slot glyph, or the generic pot when unslotted. */
 export const mealTypeIcon = (mealType: MealType | null): LucideIcon =>

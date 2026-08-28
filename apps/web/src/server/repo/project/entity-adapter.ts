@@ -1,7 +1,4 @@
-import {
-  projectFiltersSchema,
-  projectSortableFields,
-} from "@cubby/schemas/project";
+import { projectSortableFields } from "@cubby/schemas/project";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 
@@ -16,7 +13,6 @@ import { projectList } from "./lookup";
 
 export const projectEntityAdapter = defineEntityAdapter({
   entity: "project",
-  filters: projectFiltersSchema,
   sort: { fields: projectSortableFields, default: "createdAt" },
   lifecycle: { delete: PROJECT_DELETE_EDGE_POLICY },
   repository: {

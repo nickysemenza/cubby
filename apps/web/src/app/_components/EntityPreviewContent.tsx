@@ -13,8 +13,9 @@ import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useEffect } from "react";
 
+import type { EntityActionRow } from "~/app/_components/actions/entity-actions";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
@@ -65,7 +66,7 @@ type CompactPreviewPresentation = {
   showIdentityHeader?: boolean;
   onNameResolved?: (name: string) => void;
   /** The inspector reuses this successful detail payload for its actions. */
-  onRecordResolved?: (record: object | undefined) => void;
+  onRecordResolved?: (record: EntityActionRow | undefined) => void;
 };
 
 type StandardPreviewPresentation = Required<
@@ -80,7 +81,10 @@ function ResolvedManifestCard({
   showIdentityHeader,
   onNameResolved,
   onRecordResolved,
-}: CompactPreviewPresentation & { card: ManifestCardProps; record: object }) {
+}: CompactPreviewPresentation & {
+  card: ManifestCardProps;
+  record: EntityActionRow;
+}) {
   useEffect(() => {
     onNameResolved?.(card.name);
   }, [card.name, onNameResolved]);
@@ -404,17 +408,13 @@ export function UsdaFoodPreviewContent({
   onRecordResolved,
 }: { fdcId: number } & CompactPreviewPresentation) {
   const query = useQuery(usdaFood.detail.queryOptions({ id: fdcId }));
-  const actionRecord = useMemo(
-    () => (query.data ? { ...query.data, id: String(fdcId) } : undefined),
-    [fdcId, query.data],
-  );
 
   return (
     <PreviewQuery query={query} label="Food" onUnavailable={onRecordResolved}>
       {(data) => (
         <ResolvedManifestCard
           card={toUsdaCard(fdcId, data)}
-          record={actionRecord ?? data}
+          record={{ ...data, id: String(fdcId) }}
           showOpenAction={showOpenAction}
           showIdentityHeader={showIdentityHeader}
           onNameResolved={onNameResolved}
@@ -1057,6 +1057,8 @@ interface PreviewSpec<D> {
 // concrete detail payload at the call site, then widened to `unknown` so the
 // table can hold every entity's spec side by side.
 function defineSpec<D>(spec: PreviewSpec<D>): PreviewSpec<unknown> {
+  // SAFETY: every table entry was checked with its concrete entity detail type
+  // before this one heterogeneous dispatch boundary erases it to `unknown`.
   return spec as PreviewSpec<unknown>;
 }
 
@@ -1065,7 +1067,7 @@ type StandardPreviewEntity = Exclude<
   "usda-food" | "cookbook" | "project" | "image"
 >;
 
-const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
+const PREVIEW_TABLE = {
   recipe: defineSpec({
     label: "Recipe",
     toCard: toRecipeCard,
@@ -1118,7 +1120,7 @@ const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
     label: "Wish",
     toCard: toWishCard,
   }),
-};
+} satisfies Record<StandardPreviewEntity, PreviewSpec<unknown>>;
 
 function GenericPreviewContent({
   entity,
@@ -1137,6 +1139,8 @@ function GenericPreviewContent({
   // options type instead of erasing it — the per-entity checking already
   // happened at each `defineSpec` entry above (see the type-erasure boundary
   // note on `defineSpec`).
+  // SAFETY: `StandardPreviewEntity` is a subset of `DetailEntity`, and every
+  // table entry above accepts its matching generated detail result.
   const query = useQuery(
     entityDetailFor(entity as DetailEntity).queryOptions(id) as ReturnType<
       EntityDetailScoped<DetailEntity>["queryOptions"]

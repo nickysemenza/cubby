@@ -1,10 +1,11 @@
+import type { CellJsonValue } from "./cell-clipboard";
 import type { CellCoord, CellSelection } from "./cell-clipboard-model";
 import { selectionRect } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";
 
 export interface CellClearTarget {
   coord: CellCoord;
-  apply: () => Promise<unknown>;
+  apply: () => Promise<CellJsonValue | null | void>;
 }
 
 /** Resolve one nonempty, capability-bearing selected cell into a clear action. */

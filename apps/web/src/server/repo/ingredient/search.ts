@@ -75,7 +75,7 @@ import { buildIngredientWhere } from "./internal-types";
 import {
   dbIngredientToAPI,
   dbIngredientToListAPI,
-  dbIngredientToTopLevelShape,
+  dbIngredientToTopLevel,
   mapIngredientProducts,
   mapIngredientProductsLean,
 } from "./mappers";
@@ -283,7 +283,7 @@ export const getIngredientsByIDsLean = async (
   return rows.map((row) => {
     const { product: productRel } = row;
     return {
-      ...dbIngredientToTopLevelShape(row),
+      ...dbIngredientToTopLevel(row),
       product: mapIngredientProductsLean(
         productRel.map((product) => ({
           ...product,
@@ -365,7 +365,7 @@ export const enrichmentWorkbenchIngredients = async (
   return rows.map((row) => {
     const { product: productRel, recipeCount, cookbookOnly } = row;
     return {
-      ...dbIngredientToTopLevelShape(row),
+      ...dbIngredientToTopLevel(row),
       product: mapIngredientProducts(
         productRel.map((product) => ({
           ...product,

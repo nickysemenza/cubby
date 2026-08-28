@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
-import type { WorkflowStreamHandler } from "./subscription-domain.server";
-import { dispatchWorkflowStream } from "./workflow-stream-dispatch.server";
+import {
+  dispatchWorkflowStream,
+  type WorkflowStreamLoaderPort,
+} from "./workflow-stream-dispatch.server";
 
 const request = () =>
   new Request("https://cubby.test/api/workflow-stream/agent.askStream", {
@@ -9,27 +12,29 @@ const request = () =>
   });
 
 /** The dispatcher answers a refusal as one NDJSON error frame, not a throw. */
+const refusalSchema = z.object({
+  kind: z.literal("error"),
+  error: z.object({
+    code: z.string(),
+    reason: z.string(),
+    message: z.string(),
+  }),
+});
 const refusal = async (response: Response) =>
-  JSON.parse(await response.text()) as {
-    kind: string;
-    error: { code: string; reason: string; message: string };
-  };
+  refusalSchema.parse(JSON.parse(await response.text()));
 
 describe("workflow stream dispatcher", () => {
   it("loads only the selected stream's handler", async () => {
     const selected = vi.fn(async () => new Response("frames"));
-    const selectedLoader = vi.fn(async () => selected);
-    const unselectedLoader = vi.fn<() => Promise<WorkflowStreamHandler>>();
+    const load = vi.fn<WorkflowStreamLoaderPort["load"]>(async () => selected);
     const sent = request();
 
     const response = await dispatchWorkflowStream("agent.askStream", sent, {
-      "agent.askStream": selectedLoader,
-      "recipe.recomputeStaleDurable": unselectedLoader,
+      load,
     });
 
     expect(await response.text()).toBe("frames");
-    expect(selectedLoader).toHaveBeenCalledOnce();
-    expect(unselectedLoader).not.toHaveBeenCalled();
+    expect(load).toHaveBeenCalledOnce();
     expect(selected).toHaveBeenCalledWith({ request: sent });
   });
 
@@ -39,21 +44,22 @@ describe("workflow stream dispatcher", () => {
    * working stream that never actually invalidates anything.
    */
   it("refuses a unary operation without loading anything", async () => {
-    const loader = vi.fn<() => Promise<WorkflowStreamHandler>>();
+    const load = vi.fn<WorkflowStreamLoaderPort["load"]>();
 
     const response = await dispatchWorkflowStream("calendar.range", request(), {
-      "calendar.range": loader,
-    } as never);
+      load,
+    });
 
     expect((await refusal(response)).error.message).toContain(
       "calendar.range is not a registered workflow stream",
     );
-    expect(loader).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
   });
 
   it("refuses an unregistered id before touching the loader table", async () => {
+    const load = vi.fn<WorkflowStreamLoaderPort["load"]>();
     const response = await dispatchWorkflowStream("not.registered", request(), {
-      "agent.askStream": vi.fn<() => Promise<WorkflowStreamHandler>>(),
+      load,
     });
 
     const frame = await refusal(response);
@@ -62,13 +68,14 @@ describe("workflow stream dispatcher", () => {
     expect(frame.error.message).toContain(
       "not.registered is not a registered workflow stream",
     );
+    expect(load).not.toHaveBeenCalled();
   });
 
   it("refuses a declared stream that has no loader", async () => {
     const response = await dispatchWorkflowStream(
       "agent.askStream",
       request(),
-      {},
+      { load: () => undefined },
     );
 
     expect((await refusal(response)).error.message).toContain(

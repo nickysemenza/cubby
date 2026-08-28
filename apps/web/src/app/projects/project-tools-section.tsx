@@ -60,6 +60,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { formatCurrency } from "~/lib/utils";
 
+const isRowSelectionUpdater = (
+  value: Updater<RowSelectionState>,
+): value is (previous: RowSelectionState) => RowSelectionState =>
+  typeof value === "function";
+
 const EMPTY_RESOURCES: ProjectResourceOut[] = [];
 const EMPTY_SUGGESTIONS: ProjectToolSuggestionOut[] = [];
 
@@ -259,8 +264,9 @@ function SelectableResourceTable({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isRowSelectionUpdater(updater)
+      ? updater(rowSelection)
+      : updater;
     setSelected(
       new Set(
         Object.entries(next)

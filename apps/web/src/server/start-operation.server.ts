@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   isStartOperationEntity,
+  type StartOperationDefinition,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import {
@@ -9,7 +10,12 @@ import {
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
 import { translateDatabaseError } from "~/server/errors/db-errors";
-import { observeOperation } from "~/server/observed-request";
+import {
+  type ObservedFailure,
+  type OperationObservation,
+  observeOperation,
+  parseObservedFailure,
+} from "~/server/observed-request";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import type {
   PublicStartOperationError,
@@ -31,7 +37,19 @@ export type OperationStage = "context" | "input" | "run" | "output";
 
 type ObservedStartResult<Output> = {
   result: StartOperationResult<Output>;
-  observedError?: unknown;
+  observedError?: StartOperationFailureCause;
+};
+
+type StartOperationFailureCause = ObservedFailure;
+
+type NormalizedStartOperationError = {
+  publicError: PublicStartOperationError;
+  observedError: StartOperationFailureCause;
+};
+
+type StartOperationInspection = {
+  error?: StartOperationFailureCause;
+  workload: Workload;
 };
 
 const abortError = (signal: AbortSignal): Error =>
@@ -52,58 +70,67 @@ const validationMessage = (error: z.ZodError): string =>
     )
     .join(", ");
 
-export function normalizeStartOperationError(
-  error: unknown,
+const isValidationPathPrimitive = (
+  part: PropertyKey,
+): part is string | number =>
+  typeof part === "string" || typeof part === "number";
+
+export function normalizeStartOperationError<TError>(
+  error: TError,
   stage: OperationStage,
   requestId?: string,
-): { publicError: PublicStartOperationError; observedError: unknown } {
-  if (stage === "input" && error instanceof z.ZodError) {
-    const publicError = {
+): NormalizedStartOperationError {
+  const failure = parseObservedFailure(error);
+  if (stage === "input" && failure instanceof z.ZodError) {
+    const publicError: PublicStartOperationError = {
       code: "BAD_REQUEST",
       reason: "INVALID_INPUT",
-      message: validationMessage(error),
-      ...(requestId ? { requestId } : {}),
-      validationIssues: error.issues.map((issue) => ({
+      message: validationMessage(failure),
+      validationIssues: failure.issues.map((issue) => ({
         code: issue.code,
         path: issue.path.map((part) =>
-          typeof part === "string" || typeof part === "number"
-            ? part
-            : String(part),
+          isValidationPathPrimitive(part) ? part : String(part),
         ),
         message: issue.message,
       })),
-    } satisfies PublicStartOperationError;
-    return { publicError, observedError: publicError };
+    };
+    if (requestId) publicError.requestId = requestId;
+    return {
+      publicError,
+      observedError: parseObservedFailure(publicError),
+    };
   }
 
   const knownError =
-    translateDatabaseError(error) ?? appErrorFromUnknown(error);
+    translateDatabaseError(failure) ?? appErrorFromUnknown(failure);
   if (knownError) {
     const payload = toPublicErrorPayload(knownError);
     const { code, ...details } = payload;
+    const publicError: PublicStartOperationError = {
+      code:
+        code ??
+        (payload.blockers && payload.blockers.length > 0
+          ? "PRECONDITION_FAILED"
+          : "BAD_REQUEST"),
+      message: knownError.message || "The operation could not be completed",
+      ...details,
+    };
+    if (requestId) publicError.requestId = requestId;
     return {
-      publicError: {
-        code:
-          code ??
-          (payload.blockers && payload.blockers.length > 0
-            ? "PRECONDITION_FAILED"
-            : "BAD_REQUEST"),
-        message: knownError.message || "The operation could not be completed",
-        ...(requestId ? { requestId } : {}),
-        ...details,
-      },
+      publicError,
       observedError: knownError,
     };
   }
 
+  const publicError: PublicStartOperationError = {
+    code: "INTERNAL_SERVER_ERROR",
+    reason: stage === "output" ? "INVALID_OUTPUT" : "UNKNOWN_ERROR",
+    message: "The operation could not be completed",
+  };
+  if (requestId) publicError.requestId = requestId;
   return {
-    publicError: {
-      code: "INTERNAL_SERVER_ERROR",
-      reason: stage === "output" ? "INVALID_OUTPUT" : "UNKNOWN_ERROR",
-      message: "The operation could not be completed",
-      ...(requestId ? { requestId } : {}),
-    },
-    observedError: error,
+    publicError,
+    observedError: failure,
   };
 }
 
@@ -126,110 +153,165 @@ export async function authenticateStartOperation(
   return authenticated;
 }
 
-export async function runStartOperation<
+export interface StartOperationRuntime {
+  authenticate(
+    headers: Headers,
+    span: AppSpan,
+  ): Promise<AuthenticatedStartOperationContext>;
+  observe<Result>(
+    definition: StartOperationDefinition,
+    observation: OperationObservation<Result>,
+    run: (span: AppSpan) => Promise<Result>,
+  ): Promise<Result>;
+}
+
+type OutputSchemaResolver<
   InputSchema extends z.ZodType,
-  Output,
->(options: {
+  OutputSchema extends z.ZodType,
+> = (input: z.output<InputSchema>) => OutputSchema;
+
+function isOutputSchemaResolver<
+  InputSchema extends z.ZodType,
+  OutputSchema extends z.ZodType,
+>(
+  schema: OutputSchema | OutputSchemaResolver<InputSchema, OutputSchema>,
+): schema is OutputSchemaResolver<InputSchema, OutputSchema> {
+  return typeof schema === "function";
+}
+
+const operationEntityInputSchema = z.object({ entity: z.string() });
+
+export type RunStartOperationOptions<
+  InputSchema extends z.ZodType,
+  OutputSchema extends z.ZodType,
+> = {
   operation: string;
   type: "query" | "mutation" | "subscription";
-  input: unknown;
+  input: z.input<z.ZodUnknown>;
   inputSchema: InputSchema;
-  outputSchema:
-    | z.ZodType<Output>
-    | ((input: z.output<InputSchema>) => z.ZodType<Output>);
+  outputSchema: OutputSchema | OutputSchemaResolver<InputSchema, OutputSchema>;
   request: StartOperationRequest;
   readPolicy?: "context" | "strong";
   workload?: Workload;
   run: (
     context: AuthenticatedStartOperationContext,
     input: z.output<InputSchema>,
-  ) => Promise<unknown>;
-}): Promise<StartOperationResult<Output>> {
-  const workload = options.workload ?? "ui";
-  const definition = startOperationDefinitionFor(options.operation);
-  if (!definition || definition.kind !== options.type) {
-    throw new Error(
-      `Unregistered Start operation: ${options.operation} (${options.type})`,
-    );
-  }
-  const observed = await observeOperation<ObservedStartResult<Output>>(
-    definition,
-    {
-      origin: "ui",
-      workload,
-      inspectResult: (result) => ({
-        ...(result.observedError ? { error: result.observedError } : {}),
+  ) => Promise<z.input<OutputSchema>>;
+};
+
+export function createStartOperationRunner(runtime: StartOperationRuntime) {
+  return async function runStartOperation<
+    InputSchema extends z.ZodType,
+    OutputSchema extends z.ZodType,
+  >(
+    options: RunStartOperationOptions<InputSchema, OutputSchema>,
+  ): Promise<StartOperationResult<z.output<OutputSchema>>> {
+    const workload = options.workload ?? "ui";
+    const definition = startOperationDefinitionFor(options.operation);
+    if (!definition || definition.kind !== options.type) {
+      throw new Error(
+        `Unregistered Start operation: ${options.operation} (${options.type})`,
+      );
+    }
+    const observed = await runtime.observe<
+      ObservedStartResult<z.output<OutputSchema>>
+    >(
+      definition,
+      {
+        origin: "ui",
         workload,
-      }),
-    },
-    async (span) => {
-      span.setAttribute("cubby.authenticated", false);
-      let stage: OperationStage = "context";
-      try {
-        throwIfStartOperationAborted(options.request.signal);
-        const authenticated = await authenticateStartOperation(
-          options.request.headers,
-          span,
-        );
-        const readPolicy =
-          options.readPolicy ??
-          (options.type === "mutation" ? "strong" : "context");
-        const context =
-          readPolicy === "strong" && authenticated.readDb !== authenticated.db
-            ? { ...authenticated, readDb: authenticated.db }
-            : authenticated;
-        span.setAttributes({
-          "cubby.request_origin": context.requestOrigin,
-          "cubby.read.consistency":
-            readPolicy === "strong"
-              ? "strong"
-              : context.readConsistency.consistency,
-          "cubby.read.reason":
-            readPolicy === "strong"
-              ? options.type === "mutation"
-                ? "mutation"
-                : "authoritative-operation"
-              : context.readConsistency.reason,
-        });
+        inspectResult: (result) => {
+          const inspection: StartOperationInspection = {
+            workload,
+          };
+          if (result.observedError) inspection.error = result.observedError;
+          return inspection;
+        },
+      },
+      async (span) => {
+        span.setAttribute("cubby.authenticated", false);
+        let stage: OperationStage = "context";
+        try {
+          throwIfStartOperationAborted(options.request.signal);
+          const authenticated = await runtime.authenticate(
+            options.request.headers,
+            span,
+          );
+          const readPolicy =
+            options.readPolicy ??
+            (options.type === "mutation" ? "strong" : "context");
+          const context =
+            readPolicy === "strong" && authenticated.readDb !== authenticated.db
+              ? { ...authenticated, readDb: authenticated.db }
+              : authenticated;
+          span.setAttributes({
+            "cubby.request_origin": context.requestOrigin,
+            "cubby.read.consistency":
+              readPolicy === "strong"
+                ? "strong"
+                : context.readConsistency.consistency,
+            "cubby.read.reason":
+              readPolicy === "strong"
+                ? options.type === "mutation"
+                  ? "mutation"
+                  : "authoritative-operation"
+                : context.readConsistency.reason,
+          });
 
-        stage = "input";
-        const input = options.inputSchema.parse(options.input);
-        const entity =
-          input &&
-          typeof input === "object" &&
-          "entity" in input &&
-          isStartOperationEntity(definition.id, input.entity)
-            ? input.entity
-            : undefined;
-        if (entity) span.setAttribute("cubby.entity", entity);
-        throwIfStartOperationAborted(options.request.signal);
+          stage = "input";
+          const input = options.inputSchema.parse(options.input);
+          const entityInput = operationEntityInputSchema.safeParse(input);
+          const entity =
+            entityInput.success &&
+            isStartOperationEntity(definition.id, entityInput.data.entity)
+              ? entityInput.data.entity
+              : undefined;
+          if (entity) span.setAttribute("cubby.entity", entity);
+          throwIfStartOperationAborted(options.request.signal);
 
-        stage = "run";
-        const rawOutput = await options.run(context, input);
-        throwIfStartOperationAborted(options.request.signal);
+          stage = "run";
+          const rawOutput = await options.run(context, input);
+          throwIfStartOperationAborted(options.request.signal);
 
-        stage = "output";
-        const outputSchema =
-          typeof options.outputSchema === "function"
+          stage = "output";
+          const outputSchema = isOutputSchemaResolver(options.outputSchema)
             ? options.outputSchema(input)
             : options.outputSchema;
-        const data = outputSchema.parse(rawOutput);
-        throwIfStartOperationAborted(options.request.signal);
-        return { result: { ok: true, data } as const };
-      } catch (error) {
-        if (options.request.signal.aborted)
-          throw abortError(options.request.signal);
-        const normalized = normalizeStartOperationError(
-          error,
-          stage,
-          getRequestId(options.request.headers),
-        );
-        return {
-          result: { ok: false, error: normalized.publicError } as const,
-          observedError: normalized.observedError,
-        };
-      }
-    },
-  );
-  return observed.result;
+          const data = outputSchema.parse(rawOutput);
+          throwIfStartOperationAborted(options.request.signal);
+          const result: StartOperationResult<z.output<OutputSchema>> = {
+            ok: true,
+            data,
+          };
+          return { result };
+        } catch (error) {
+          if (options.request.signal.aborted)
+            throw abortError(options.request.signal);
+          const normalized = normalizeStartOperationError(
+            error,
+            stage,
+            getRequestId(options.request.headers),
+          );
+          const result: StartOperationResult<z.output<OutputSchema>> = {
+            ok: false,
+            error: normalized.publicError,
+          };
+          return {
+            result,
+            observedError: normalized.observedError,
+          };
+        }
+      },
+    );
+    return observed.result;
+  };
 }
+
+const productionStartOperationRuntime = {
+  authenticate: authenticateStartOperation,
+  observe: observeOperation,
+} satisfies StartOperationRuntime;
+
+export const runStartOperation = createStartOperationRunner(
+  productionStartOperationRuntime,
+);

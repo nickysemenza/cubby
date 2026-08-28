@@ -25,7 +25,7 @@ import {
 import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import {
-  dbProductToInventoryEmbedShape,
+  mapDbProductToInventoryEmbed,
   primaryGtinOf,
 } from "~/server/repo/product/mappers";
 import type { ProductPricing } from "~/server/repo/product/pricing";
@@ -68,7 +68,7 @@ export const dbLocationToAPI = (
   };
 };
 
-const dbLocationToListRefShape = (
+const dbLocationToListRef = (
   locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect>,
 ): LocationListRefOut => ({
   id: parseShortcodeFor("location", locationData.shortcode),
@@ -86,9 +86,9 @@ export const dbLocationToListAPI = (
   ...dbLocationToAPI(locationData),
   parent:
     locationData.parent && isNotDeleted(locationData.parent)
-      ? dbLocationToListRefShape(locationData.parent)
+      ? dbLocationToListRef(locationData.parent)
       : null,
-  children: mapRelation(locationData.children, dbLocationToListRefShape),
+  children: mapRelation(locationData.children, dbLocationToListRef),
   inventoryEntries: mapRelation(
     locationData.inventoryEntries.filter((entry) =>
       isNotDeleted(entry.product),
@@ -99,7 +99,7 @@ export const dbLocationToListAPI = (
       valuation: entry.valuation,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
-      product: dbProductToInventoryEmbedShape({
+      product: mapDbProductToInventoryEmbed({
         ...entry.product,
         pricing: requireLoadedProductPricing(
           pricingByProductId,

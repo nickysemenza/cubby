@@ -7,7 +7,19 @@ export default literalEntity({
   table: "Image",
   identifiers: { brand: "ImageId", shortcode: "IMG-", legacy: null },
   presentation: { titleField: "filename" },
-  fields: null,
+  fields: {
+    create: null,
+    update: { module: "@cubby/schemas/image", export: "imageUpdateInput" },
+    output: { module: "@cubby/schemas/image", export: "imageOut" },
+    list: {
+      module: "@cubby/schemas/image",
+      export: "imageWithEntitySchema",
+    },
+    detail: {
+      module: "@cubby/schemas/image",
+      export: "imageWithEntitySchema",
+    },
+  },
   filters: {
     schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
     descriptors: [

@@ -1,4 +1,4 @@
-import { type SearchType, searchTypeSchema } from "@cubby/schemas/search";
+import { searchTypeSchema } from "@cubby/schemas/search";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -25,10 +25,7 @@ function SearchPageRoute() {
   const search = Route.useSearch();
   return (
     <Page variant="list" title="Search" compact decoration="none">
-      <SearchPage
-        query={search.q}
-        type={(search.type ?? "all") as SearchType}
-      />
+      <SearchPage query={search.q} type={search.type ?? "all"} />
     </Page>
   );
 }

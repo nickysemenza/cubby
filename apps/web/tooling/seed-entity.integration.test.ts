@@ -22,7 +22,7 @@ describe("seedEntity completeness", () => {
 
   it("seeds one row of every entity with a declared MCP create / kernel create binding", async () => {
     const declaresCreate = (entity: (typeof shortcodeEntities)[number]) =>
-      (entityManifest[entity].mcp as readonly string[]).includes("create");
+      entityManifest[entity].mcp.some((action) => action === "create");
     const hasKernelCreate = (entity: (typeof shortcodeEntities)[number]) =>
       kernelEntities.has(entity) && ENTITY_BINDINGS[entity].crud !== null;
 
@@ -48,21 +48,19 @@ describe("seedEntity completeness", () => {
 
     // Independent prerequisites, seeded first so the few entities with a
     // required cross-entity foreign key have a real id to point at.
-    const vendor = (await seedEntity(ctx.db, "vendor")) as { id: string };
+    const vendor = await seedEntity(ctx.db, "vendor");
     // `kind` is pinned to non-"household" values: createLedgerParty enforces a
     // singleton household party, so letting mock() roll the enum makes the
     // second create (or a template-seeded household) fail intermittently.
-    const partyA = (await seedEntity(ctx.db, "ledgerParty", {
+    const partyA = await seedEntity(ctx.db, "ledgerParty", {
       kind: "member",
-    })) as { id: string };
-    const partyB = (await seedEntity(ctx.db, "ledgerParty", {
+    });
+    const partyB = await seedEntity(ctx.db, "ledgerParty", {
       kind: "guest",
-    })) as { id: string };
-    const account = (await seedEntity(ctx.db, "financialAccount")) as {
-      id: string;
-    };
-    const product = (await seedEntity(ctx.db, "product")) as { id: string };
-    const location = (await seedEntity(ctx.db, "location")) as { id: string };
+    });
+    const account = await seedEntity(ctx.db, "financialAccount");
+    const product = await seedEntity(ctx.db, "product");
+    const location = await seedEntity(ctx.db, "location");
 
     const prereqs = new Set([
       "vendor",
@@ -85,25 +83,28 @@ describe("seedEntity completeness", () => {
     //     regardless of the (nullable) postedDate mock() generates, where a
     //     random `kind` like "refund" would intermittently fail
     //     `validSettlementState`'s sign check.
-    const overridesByEntity: Partial<Record<string, Record<string, unknown>>> =
-      {
-        purchase: { vendorId: vendor.id },
-        inventory: { productId: product.id, locationId: location.id },
-        ledgerTransfer: { fromPartyId: partyA.id, toPartyId: partyB.id },
-        financialTransaction: {
-          accountId: account.id,
-          kind: "other",
-          status: "pending",
-        },
-      };
-
     for (const entity of candidates) {
       if (prereqs.has(entity)) continue;
-      const result = await seedEntity(
-        ctx.db,
-        entity,
-        overridesByEntity[entity],
-      );
+      const result =
+        entity === "purchase"
+          ? await seedEntity(ctx.db, entity, { vendorId: vendor.id })
+          : entity === "inventory"
+            ? await seedEntity(ctx.db, entity, {
+                productId: product.id,
+                locationId: location.id,
+              })
+            : entity === "ledgerTransfer"
+              ? await seedEntity(ctx.db, entity, {
+                  fromPartyId: partyA.id,
+                  toPartyId: partyB.id,
+                })
+              : entity === "financialTransaction"
+                ? await seedEntity(ctx.db, entity, {
+                    accountId: account.id,
+                    kind: "other",
+                    status: "pending",
+                  })
+                : await seedEntity(ctx.db, entity);
       expect(result, `seedEntity(${entity}) returned nothing`).toBeTruthy();
     }
   });

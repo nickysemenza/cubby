@@ -4,6 +4,8 @@ import { Button } from "~/components/ui/button";
 
 import { PreviewDeleted, PreviewLoading } from "./manifest-card";
 
+type PreviewRefetchResult = object;
+
 export function PreviewQuery<T>({
   query,
   label,
@@ -14,7 +16,7 @@ export function PreviewQuery<T>({
     data: T | undefined;
     isLoading: boolean;
     isError: boolean;
-    refetch: () => unknown;
+    refetch: () => Promise<PreviewRefetchResult>;
   };
   label: string;
   children: (data: NonNullable<T>) => ReactNode;
@@ -44,5 +46,5 @@ export function PreviewQuery<T>({
     );
   }
   if (!query.data) return <PreviewDeleted label={label} />;
-  return children(query.data as NonNullable<T>);
+  return children(query.data);
 }

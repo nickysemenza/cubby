@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -155,10 +156,11 @@ describe("amountCellData", () => {
     [{ value: 2.5, unit: "lb" }],
     [{ value: 3, unit: "whole" }],
   ] as const)("survives a text copy→paste round-trip: %j", async (stored) => {
-    const { data } = build(stored as Amount);
+    const { data } = build(fromPartial<Amount>(stored));
     const text = data.getCopyPayload(null)?.text;
     expect(text).toBeTruthy();
-    expect(await pasteText(text as string)).toEqual(stored);
+    if (!text) return;
+    expect(await pasteText(text)).toEqual(stored);
   });
 
   it("prefers the typed payload over the text, range included", async () => {

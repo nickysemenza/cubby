@@ -40,12 +40,17 @@ export const Route = createFileRoute("/oauth/consent")({
 });
 
 /** What each advertised scope actually grants, in plain language. */
-const SCOPE_DESCRIPTIONS: Record<string, string> = {
+const SCOPE_DESCRIPTIONS = {
   openid: "Confirm who you are",
   profile: "Read your name and avatar",
   email: "Read your email address",
   offline_access: "Stay signed in without re-authorizing",
-};
+} satisfies Record<"openid" | "profile" | "email" | "offline_access", string>;
+
+const scopeDescription = (scopeName: string): string =>
+  Object.entries(SCOPE_DESCRIPTIONS).find(
+    ([name]) => name === scopeName,
+  )?.[1] ?? "Additional access";
 
 function ConsentPage() {
   const { client_id: clientId, scope } = Route.useSearch();
@@ -163,7 +168,7 @@ function ConsentPage() {
                     <Row key={s} align="center" gap="sm" as="li">
                       <Badge variant="secondary">{s}</Badge>
                       <span className="text-xs text-muted-foreground">
-                        {SCOPE_DESCRIPTIONS[s] ?? "Additional access"}
+                        {scopeDescription(s)}
                       </span>
                     </Row>
                   ))}

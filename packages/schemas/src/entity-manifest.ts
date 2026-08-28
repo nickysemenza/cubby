@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Entity } from "./entity-core";
+import { type Entity, entitySchema } from "./entity-core";
 export {
   entityInspectorMetadata,
   type EntityInspectorMetadata,
@@ -45,6 +45,12 @@ export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 export const entityManifest = generatedEntityManifest;
 export type EntityManifest = typeof entityManifest;
 
+const parsedEntityManifest = z
+  .record(entitySchema, entityDescriptor)
+  .parse(entityManifest);
+const descriptorFor = (entity: Entity): EntityDescriptor =>
+  parsedEntityManifest[entity];
+
 const snakeCase = (entity: string) =>
   entity
     .replace(/-/g, "_")
@@ -52,21 +58,18 @@ const snakeCase = (entity: string) =>
     .toLowerCase();
 
 export const mcpEntityPlural = (entity: Entity): string => {
-  const names: EntityDescriptor["mcpNames"] = (
-    entityManifest[entity] as EntityDescriptor
-  ).mcpNames;
+  const names = descriptorFor(entity).mcpNames;
   return names?.plural ?? `${names?.singular ?? snakeCase(entity)}s`;
 };
 
 export const mcpEntitySingular = (entity: Entity): string =>
-  (entityManifest[entity] as EntityDescriptor).mcpNames?.singular ??
-  snakeCase(entity);
+  descriptorFor(entity).mcpNames?.singular ?? snakeCase(entity);
 
 export const mcpToolName = (
   entity: Entity,
   operation: z.infer<typeof mcpOp>,
 ): string => {
-  const names = (entityManifest[entity] as EntityDescriptor).mcpNames;
+  const names = descriptorFor(entity).mcpNames;
   return (
     names?.overrides?.[operation] ??
     `${operation}_${operation === "get" ? mcpEntitySingular(entity) : mcpEntityPlural(entity)}`
@@ -81,16 +84,24 @@ export const localRelationshipByKey = (
   source: Entity,
   key: string,
 ): LocalPathRelationship => {
-  const relationship = entityManifest[source].relationships.find(
-    (candidate) => candidate.key === key,
+  const candidate = entityManifest[source].relationships.find(
+    (relationship) => relationship.key === key,
   );
-  if (relationship?.provenance.kind !== "local-path") {
+  if (candidate === undefined) {
     throw new Error(`Unknown local relationship ${source}.${key}`);
   }
-  return relationship as LocalPathRelationship;
+  const relationship = entityRelationshipSchema.parse(candidate);
+  if (relationship.provenance.kind !== "local-path") {
+    throw new Error(`Unknown local relationship ${source}.${key}`);
+  }
+  return { ...relationship, provenance: relationship.provenance };
 };
 
-export const allEntities = Object.keys(entityManifest) as Entity[];
+const isEntity = (value: string): value is Entity =>
+  entitySchema.safeParse(value).success;
+
+export const allEntities: readonly Entity[] =
+  Object.keys(entityManifest).filter(isEntity);
 export const entityReferences = (entity: Entity): readonly Entity[] => [
   ...new Set(
     entityManifest[entity].relationships.map(
@@ -116,7 +127,7 @@ const entitiesWithTrait = <K extends BooleanTrait>(
   Object.freeze(
     allEntities.filter(
       (entity): entity is EntityWithTrait<K> =>
-        (entityManifest[entity] as EntityDescriptor)[trait] === true,
+        descriptorFor(entity)[trait] === true,
     ),
   );
 
@@ -132,7 +143,7 @@ export const browserRoutedEntities: readonly EntityWithBrowserRoute[] =
   Object.freeze(
     allEntities.filter(
       (entity): entity is EntityWithBrowserRoute =>
-        (entityManifest[entity] as EntityDescriptor).browserRoutes !== false,
+        descriptorFor(entity).browserRoutes !== false,
     ),
   );
 
@@ -144,8 +155,7 @@ type EntityWithShortcode = {
 export const shortcodeEntities: readonly EntityWithShortcode[] = Object.freeze(
   allEntities.filter(
     (entity): entity is EntityWithShortcode =>
-      (entityManifest[entity] as EntityDescriptor).shortcodePrefix !==
-      undefined,
+      descriptorFor(entity).shortcodePrefix !== undefined,
   ),
 );
 

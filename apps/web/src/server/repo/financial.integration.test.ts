@@ -1,4 +1,5 @@
 import {
+  type FinancialAccountSourceAlias,
   type FinancialAccountFilters,
   financialAccountCreateInput,
 } from "@cubby/schemas/financial-account";
@@ -51,14 +52,12 @@ import {
 } from "./statement-row";
 import { findOrCreateVendor, getVendorByID, vendorList } from "./vendor";
 
-const account = (
-  name: string,
-  aliases = [] as {
-    source: string;
-    alias: string;
-    externalAccountId: string | null;
-  }[],
-) =>
+function requireTestValue<T>(value: T | null | undefined, message: string): T {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
+}
+
+const account = (name: string, aliases: FinancialAccountSourceAlias[] = []) =>
   financialAccountCreateInput.parse({
     name,
     identity: {
@@ -158,10 +157,11 @@ describe("financial repositories — critical invariants", () => {
       )
     ).output;
     const page = { pageIndex: 0, pageSize: 100 };
-    for (const [kind, amount] of [
-      ["purchase", 42],
-      ["refund", -7],
-    ] as const) {
+    const transactions = [
+      { kind: "purchase", amount: 42 },
+      { kind: "refund", amount: -7 },
+    ] satisfies Array<{ kind: "purchase" | "refund"; amount: number }>;
+    for (const { kind, amount } of transactions) {
       await createFinancialTransaction(
         ctx.db,
         financialTransactionCreateInput.parse({
@@ -455,7 +455,7 @@ describe("financial repositories — critical invariants", () => {
     ).output;
     const row = {
       key: "row-1",
-      source: "monarch" as const,
+      source: "monarch",
       account: "Citi Double Cash (...1702)",
       date: "2026-07-31",
       amount: -54.29,
@@ -463,7 +463,9 @@ describe("financial repositories — critical invariants", () => {
       originalStatement: "AMZN Mktp",
       category: "Shopping",
       notes: null,
-    };
+    } satisfies Parameters<
+      typeof previewFinancialStatementImport
+    >[1]["rows"][number];
     const first = await previewFinancialStatementImport(ctx.db, {
       rows: [row],
     });
@@ -475,7 +477,10 @@ describe("financial repositories — critical invariants", () => {
     });
     expect(first.rows[0]?.existingTransactionIds).toEqual([]);
 
-    const proposed = first.rows[0]!.proposed;
+    const proposed = requireTestValue(
+      first.rows[0],
+      "Expected the first Monarch preview row.",
+    ).proposed;
     const createdEvidence = await createFinancialTransaction(
       ctx.db,
       financialTransactionCreateInput.parse({
@@ -635,7 +640,10 @@ describe("financial repositories — critical invariants", () => {
       {
         sourceRefs: [
           proposed.sourceRef,
-          otherProvider.rows[0]!.proposed.sourceRef,
+          requireTestValue(
+            otherProvider.rows[0],
+            "Expected the Copilot preview row.",
+          ).proposed.sourceRef,
         ],
       },
       ctx.actor,
@@ -742,7 +750,12 @@ describe("financial repositories — critical invariants", () => {
 
     const byExpense = await purchaseList(
       ctx.db,
-      { expenseId: expenses[0]!.id },
+      {
+        expenseId: requireTestValue(
+          expenses[0],
+          "Expected a seeded preview expense.",
+        ).id,
+      },
       [],
       { pageIndex: 0, pageSize: 100 },
     );
@@ -1161,7 +1174,10 @@ describe("financial repositories — critical invariants", () => {
     );
     const p1Uuid = parseEntityId(
       "purchase",
-      (await resolveLiveShortcode(ctx.db, p1.id, "purchase"))!,
+      requireTestValue(
+        await resolveLiveShortcode(ctx.db, p1.id, "purchase"),
+        "Expected the first purchase shortcode to resolve.",
+      ),
     );
     expect(
       (await getPurchaseByID(ctx.db, p1Uuid)).financialReconciliation.status,
@@ -1229,7 +1245,10 @@ describe("financial repositories — critical invariants", () => {
       );
       const uuid = parseEntityId(
         "purchase",
-        (await resolveLiveShortcode(ctx.db, purchase.id, "purchase"))!,
+        requireTestValue(
+          await resolveLiveShortcode(ctx.db, purchase.id, "purchase"),
+          "Expected the purchase shortcode to resolve.",
+        ),
       );
       return { purchase, uuid };
     };
@@ -1351,10 +1370,11 @@ describe("financial repositories — critical invariants", () => {
       }),
       ctx.actor,
     );
-    for (const [postedDate, amount] of [
-      ["2026-01-04", -100],
-      ["2026-01-05", -27.1],
-    ] as const) {
+    const refunds = [
+      { postedDate: "2026-01-04", amount: -100 },
+      { postedDate: "2026-01-05", amount: -27.1 },
+    ];
+    for (const { postedDate, amount } of refunds) {
       await createFinancialTransaction(
         ctx.db,
         financialTransactionCreateInput.parse({
@@ -1503,7 +1523,10 @@ describe("financial repositories — critical invariants", () => {
     );
     const saleUuid = parseEntityId(
       "purchase",
-      (await resolveLiveShortcode(ctx.db, sale.id, "purchase"))!,
+      requireTestValue(
+        await resolveLiveShortcode(ctx.db, sale.id, "purchase"),
+        "Expected the sale purchase shortcode to resolve.",
+      ),
     );
 
     // The payout is an inflow recorded as income, and it may link.

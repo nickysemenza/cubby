@@ -14,6 +14,10 @@ import { Skeleton } from "~/components/ui/skeleton";
 
 import type { HomeAsOfWindow } from "./home-as-of-window";
 
+export interface TodayMealsOperations {
+  upcomingSummary: typeof meal.upcomingSummary;
+}
+
 /**
  * Home-page meals tile: what's planned between today and a week out, read from
  * a bounded projection over the calendar's canonical date ordering.
@@ -21,10 +25,18 @@ import type { HomeAsOfWindow } from "./home-as-of-window";
  * The date window is computed once in the household timezone by the route
  * loader, so SSR and hydration use the same query key and the same "today".
  */
-export function TodayMeals({ asOf }: { asOf: HomeAsOfWindow }) {
+export function TodayMeals({
+  asOf,
+  operations,
+}: {
+  asOf: HomeAsOfWindow;
+  /** Replaces the upcoming-summary transport for a local browser host. */
+  operations?: TodayMealsOperations;
+}) {
   const titleId = useId();
   const today = parseISO(asOf.meals.from);
-  const mealsQuery = useQuery(meal.upcomingSummary.queryOptions(asOf.meals));
+  const upcomingSummary = operations?.upcomingSummary ?? meal.upcomingSummary;
+  const mealsQuery = useQuery(upcomingSummary.queryOptions(asOf.meals));
   const meals = mealsQuery.data ?? [];
 
   return (

@@ -413,7 +413,7 @@ describe("useCubbyTableLayout", () => {
         );
         return layout;
       },
-      { initialProps: { worklist: undefined as string | undefined } },
+      { initialProps: {} },
     );
 
     act(() =>

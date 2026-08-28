@@ -55,7 +55,10 @@ import {
   FormWrapper,
   getSubmitButtonText,
 } from "../form-utils";
-import { ProductFormFields } from "./product-form-fields";
+import {
+  type ProductFormFieldPaths,
+  ProductFormFields,
+} from "./product-form-fields";
 
 // Form schema for product form (simple Zod schema without z.custom)
 const productFormSchema = z
@@ -103,6 +106,35 @@ const productFormSchema = z
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
+const productFormFieldPaths = {
+  name: "name",
+  manufacturer: "manufacturer",
+  model: "model",
+  notes: "notes",
+  category: "category",
+  upc: "upc",
+  isbn: "isbn",
+  fdcId: "fdc_id",
+  expectedQuantity: "expectedQuantity",
+  price: "price",
+  ingredient: "ingredient",
+  unitMappings: "unitMappings",
+  externalIds: "externalIds",
+  unitMapping: (index: number) => ({
+    valueA: `unitMappings.${index}.a.value`,
+    unitA: `unitMappings.${index}.a.unit`,
+    valueB: `unitMappings.${index}.b.value`,
+    unitB: `unitMappings.${index}.b.unit`,
+    source: `unitMappings.${index}.source`,
+  }),
+  externalId: (index: number) => ({
+    kind: `externalIds.${index}.kind`,
+    source: `externalIds.${index}.source`,
+    externalId: `externalIds.${index}.externalId`,
+    url: `externalIds.${index}.url`,
+  }),
+} satisfies ProductFormFieldPaths<ProductFormValues>;
+
 // Live tally for the sticky footer. dirtyFields (not isDirty) — registering
 // nullable inputs materializes their objects and trips isDirty on load.
 const ProductTally: FC<{ control: Control<ProductFormValues> }> = ({
@@ -133,6 +165,8 @@ const ProductTally: FC<{ control: Control<ProductFormValues> }> = ({
 const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
   control,
 }) => {
+  // SAFETY: the form is intentionally observed without a field name for this
+  // display-only preview; its schema owns the partial product draft shape.
   const v = useWatch({ control }) as Partial<ProductFormValues>;
 
   return (
@@ -424,6 +458,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           <Stack>
             <ProductFormFields
               form={form}
+              paths={productFormFieldPaths}
               imageHandlers={imageState}
               existingImages={existingImages}
               existingDocuments={existingDocuments}

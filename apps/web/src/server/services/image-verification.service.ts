@@ -13,19 +13,48 @@ export type ImageVerificationResult = {
   imageId: string;
   storageStatus: "available" | "missing" | "metadata_mismatch";
 };
+export type ImageVerificationRow = Pick<
+  Awaited<ReturnType<typeof getImagesAttachedToEntity>>[number],
+  | "id"
+  | "key"
+  | "contentType"
+  | "size"
+  | "width"
+  | "height"
+  | "detectedContentType"
+  | "sha256"
+>;
+
+export interface ImageVerificationPorts {
+  readonly getImagesAttachedToEntity: (
+    db: Database,
+    entity: AttachableImageRef,
+  ) => Promise<ImageVerificationRow[]>;
+  readonly updateImageIntegrity: typeof updateImageIntegrity;
+  readonly getObject: typeof getS3Object;
+  readonly inspectImageFile: typeof inspectImageFile;
+}
+
+const productionImageVerificationPorts: ImageVerificationPorts = {
+  getImagesAttachedToEntity,
+  updateImageIntegrity,
+  getObject: getS3Object,
+  inspectImageFile,
+};
 
 /** Verify stored bytes only when explicitly requested. This backfills legacy
  * rows without making product/detail reads perform R2 network I/O. */
 const verifyEntityImages = async (
   db: Database,
   entity: AttachableImageRef,
+  ports: ImageVerificationPorts,
 ): Promise<ImageVerificationResult[]> => {
-  const rows = await getImagesAttachedToEntity(db, entity);
+  const rows = await ports.getImagesAttachedToEntity(db, entity);
   const results: ImageVerificationResult[] = [];
   for (const row of rows) {
-    const response = await getS3Object(row.key);
+    const response = await ports.getObject(row.key);
     if (response.status === 404) {
-      await updateImageIntegrity(db, row.id, {
+      await ports.updateImageIntegrity(db, row.id, {
         renderStatus: "failed",
         storageStatus: "missing",
         verifiedAt: new Date(),
@@ -42,7 +71,7 @@ const verifyEntityImages = async (
         ?.split(";", 1)[0]
         ?.trim()
         .toLowerCase();
-      const inspected = await inspectImageFile(bytes, row.contentType);
+      const inspected = await ports.inspectImageFile(bytes, row.contentType);
       const metadataMismatch =
         (storedContentType !== undefined &&
           storedContentType !== row.contentType.toLowerCase()) ||
@@ -53,7 +82,7 @@ const verifyEntityImages = async (
           row.detectedContentType !== inspected.detectedContentType) ||
         (row.sha256 !== null && row.sha256 !== inspected.sha256);
       if (metadataMismatch) {
-        await updateImageIntegrity(db, row.id, {
+        await ports.updateImageIntegrity(db, row.id, {
           renderStatus: "failed",
           storageStatus: "metadata_mismatch",
           verifiedAt: new Date(),
@@ -64,10 +93,10 @@ const verifyEntityImages = async (
         });
         continue;
       }
-      await updateImageIntegrity(db, row.id, inspected);
+      await ports.updateImageIntegrity(db, row.id, inspected);
       results.push({ imageId: row.id, storageStatus: "available" });
     } catch {
-      await updateImageIntegrity(db, row.id, {
+      await ports.updateImageIntegrity(db, row.id, {
         renderStatus: "failed",
         storageStatus: "metadata_mismatch",
         verifiedAt: new Date(),
@@ -81,5 +110,6 @@ const verifyEntityImages = async (
 export const verifyProductImages = async (
   db: Database,
   productId: ProductId,
+  ports: ImageVerificationPorts = productionImageVerificationPorts,
 ): Promise<ImageVerificationResult[]> =>
-  verifyEntityImages(db, { entity: "product", id: productId });
+  verifyEntityImages(db, { entity: "product", id: productId }, ports);

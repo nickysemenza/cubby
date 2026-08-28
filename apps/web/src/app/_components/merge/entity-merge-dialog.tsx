@@ -2,6 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -17,7 +18,7 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
-import type { EntityDefinition, MergeableConfig } from "~/entities/types";
+import type { MergeableConfig } from "~/entities/types";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
@@ -25,10 +26,19 @@ interface MergeRow {
   id: string;
 }
 
+const isCopyFactory = (
+  value: ReactNode | ((keeperLabel: ReactNode) => ReactNode),
+): value is (keeperLabel: ReactNode) => ReactNode =>
+  typeof value === "function";
+
+const mergeCandidatesSchema = z.object({
+  items: z.array(z.object({ id: z.string() })),
+});
+
 const resolveCopyText = (
   value: ReactNode | ((keeperLabel: ReactNode) => ReactNode) | undefined,
   keeperLabel: ReactNode,
-): ReactNode => (typeof value === "function" ? value(keeperLabel) : value);
+): ReactNode => (isCopyFactory(value) ? value(keeperLabel) : value);
 
 function MergeDialogFooter({
   disabled,
@@ -87,9 +97,9 @@ export function EntityMergeDialog<T extends MergeRow>({
   /** Fixed mode: aliases already chosen by a canonical roster selection. */
   initialAliasIds?: string[];
 }) {
-  // Widened: `entities[entity]` is a union of per-entity literal shapes and
-  // only some declare `mergeable`.
-  const config = (entities[entity] as EntityDefinition).mergeable;
+  const definition = entities[entity];
+  if (!("mergeable" in definition)) return null;
+  const config = definition.mergeable;
   if (!config) return null;
 
   if (config.keeperMode === "fixed") {
@@ -236,13 +246,12 @@ function FixedMergeDialog<T extends MergeRow>({
     ...config.candidateQuery?.(keeper),
     enabled: open && !!config.candidateQuery,
   });
-  const candidates = useMemo(
-    () =>
-      (
-        (candidatesQuery.data as { items?: T[] } | undefined)?.items ?? []
-      ).filter((row) => row.id !== keeper.id),
-    [candidatesQuery.data, keeper.id],
-  );
+  const candidates = useMemo(() => {
+    const parsed = mergeCandidatesSchema.safeParse(candidatesQuery.data);
+    return parsed.success
+      ? parsed.data.items.filter((row) => row.id !== keeper.id)
+      : [];
+  }, [candidatesQuery.data, keeper.id]);
   const toggle = (id: string) =>
     setSelected((previous) =>
       previous.includes(id)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
-import { getErrorMessage } from "~/lib/error-utils";
+import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
 
 interface BulkStreamState<Result> {
   /** Latest `{ done, total }`, or null before the first event. */
@@ -23,7 +23,7 @@ interface BulkStreamHandlers<Item, Result> {
   /** Success-toast text built from the final summary; return null/"" to skip the toast. */
   successToast?: (result: Result) => string | null;
   /** Error-toast text; defaults to `getErrorMessage(error)`. */
-  errorToast?: (error: unknown) => string;
+  errorToast?: (error: UnparsedError) => string;
 }
 
 /**

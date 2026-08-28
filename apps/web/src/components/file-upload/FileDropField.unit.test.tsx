@@ -7,9 +7,12 @@ const file = (name: string, type: string, size = 1) =>
   new File([new Uint8Array(size)], name, { type });
 
 function input(label = "Upload") {
-  return screen.getByLabelText(label, {
+  const element = screen.getByLabelText(label, {
     selector: "input",
-  }) as HTMLInputElement;
+  });
+  if (!(element instanceof HTMLInputElement))
+    throw new Error(`${label} is not a file input`);
+  return element;
 }
 
 describe("FileDropField", () => {

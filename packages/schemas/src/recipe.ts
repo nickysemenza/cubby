@@ -103,6 +103,9 @@ export const recipeUsageOut = z.object({
 });
 export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 
+/** Public entity-tool projection; the usage row has no public shortcode. */
+export const recipeUsageMcpEntityOut = recipeUsageOut.omit({ id: true });
+
 export const sectionLineFields = {
   // Declared exception: a recipe section/line id has no shortcode.
   id: z.uuid(),
@@ -114,19 +117,29 @@ export const sectionLineFields = {
   ...timestampedFields,
 };
 
+const ingredientSectionLineOut = z.object({
+  ...sectionLineFields,
+  type: z.literal("ingredient"),
+  recipe: z.null(),
+  ingredient: sectionIngredientIngredientOut,
+});
+
+const recipeSectionLineOut = z.object({
+  ...sectionLineFields,
+  type: z.literal("recipe"),
+  recipe: recipeTopLevel,
+  ingredient: z.null(),
+});
+
 export const sectionIngredientOut = z.discriminatedUnion("type", [
-  z.object({
-    ...sectionLineFields,
-    type: z.literal("ingredient"),
-    recipe: z.null(),
-    ingredient: sectionIngredientIngredientOut,
-  }),
-  z.object({
-    ...sectionLineFields,
-    type: z.literal("recipe"),
-    recipe: recipeTopLevel,
-    ingredient: z.null(),
-  }),
+  ingredientSectionLineOut,
+  recipeSectionLineOut,
+]);
+
+/** Public entity-tool projection; section-line rows have no public shortcode. */
+export const sectionIngredientMcpEntityOut = z.discriminatedUnion("type", [
+  ingredientSectionLineOut.omit({ id: true }),
+  recipeSectionLineOut.omit({ id: true }),
 ]);
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
@@ -143,6 +156,11 @@ export const recipeSectionOut = z.object({
   ...recipeSectionFields,
   ingredients: z.array(sectionIngredientOut),
 });
+
+/** Public entity-tool projection; section rows have no public shortcode. */
+export const recipeSectionMcpEntityOut = recipeSectionOut
+  .omit({ id: true, ingredients: true })
+  .extend({ ingredients: z.array(sectionIngredientMcpEntityOut) });
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
@@ -163,6 +181,11 @@ export const recipeOutFields = {
 };
 
 export const recipeOut = z.object(recipeOutFields);
+
+/** Full recipe output with storage-only section and line identifiers removed. */
+export const recipeMcpEntityOut = recipeOut.extend({
+  sections: z.array(recipeSectionMcpEntityOut),
+});
 
 export const recipeWithSideEffectsOut = z.object({
   ...recipeOutFields,

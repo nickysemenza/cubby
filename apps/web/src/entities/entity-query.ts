@@ -1,4 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { QueryClient } from "@tanstack/react-query";
+
+import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
 
 import { cookbook } from "./cookbook.functions";
 import { entityDetailFor } from "./entity-detail.functions";
@@ -15,7 +18,7 @@ export const usdaRouteId = (fdcId: number): string => String(fdcId);
 const isGeneratedBrowserCrudEntity = (
   entity: Entity,
 ): entity is GeneratedBrowserCrudEntity =>
-  (generatedBrowserCrudEntities as readonly Entity[]).includes(entity);
+  generatedBrowserCrudEntities.some((candidate) => candidate === entity);
 
 /**
  * Map an entity + route id to its detail query options — the single source for
@@ -31,6 +34,46 @@ export function entityPreviewQueryOptions(entity: Entity, id: string) {
     return cookbook.detail.queryOptions({ shortcode: id });
   if (isGeneratedBrowserCrudEntity(entity)) {
     return entityDetailFor(entity).queryOptions(id);
+  }
+  throw new Error(`Entity ${entity} has no browser detail transport`);
+}
+
+const speculativeQueryOptions = <
+  TOptions extends { meta?: CubbyOperationMeta },
+>(
+  options: TOptions,
+) => ({
+  ...options,
+  meta: { ...options.meta, speculative: true },
+});
+
+/** Prefetch one browser detail through its correlated descriptor. */
+export function prefetchEntityPreview(
+  queryClient: QueryClient,
+  entity: Entity,
+  id: string,
+): Promise<void> {
+  if (entity === "image") {
+    return queryClient.prefetchQuery(
+      speculativeQueryOptions(image.detail.queryOptions({ id })),
+    );
+  }
+  if (entity === "usda-food") {
+    return queryClient.prefetchQuery(
+      speculativeQueryOptions(
+        usdaFood.detail.queryOptions({ id: fdcIdFromParam(id) }),
+      ),
+    );
+  }
+  if (entity === "cookbook") {
+    return queryClient.prefetchQuery(
+      speculativeQueryOptions(cookbook.detail.queryOptions({ shortcode: id })),
+    );
+  }
+  if (isGeneratedBrowserCrudEntity(entity)) {
+    return queryClient.prefetchQuery(
+      speculativeQueryOptions(entityDetailFor(entity).queryOptions(id)),
+    );
   }
   throw new Error(`Entity ${entity} has no browser detail transport`);
 }

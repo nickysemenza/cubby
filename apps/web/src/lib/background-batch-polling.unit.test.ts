@@ -1,18 +1,8 @@
+import { backgroundBatchBrowserSummarySchema } from "@cubby/schemas/background-jobs";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { summaryQueryOptions } = vi.hoisted(() => ({
-  summaryQueryOptions: vi.fn((input: { batchId: string }) => ({
-    queryKey: [["background-batch", "summary"], input],
-    queryFn: async () => ({ status: "running" as const }),
-  })),
-}));
-
-vi.mock("~/lib/background-batch.functions", () => ({
-  backgroundBatch: {
-    summary: { queryOptions: summaryQueryOptions },
-  },
-}));
+import { backgroundBatch } from "~/lib/background-batch.functions";
 
 import {
   makeBatchStatusFetcher,
@@ -40,19 +30,48 @@ describe("background batch polling", () => {
 
   it("fetches only the batch summary for status checks", async () => {
     const queryClient = new QueryClient();
-    await expect(makeBatchStatusFetcher(queryClient)("batch-1")).resolves.toBe(
-      "running",
+    const transport = vi.fn(async () =>
+      backgroundBatchBrowserSummarySchema.parse({
+        id: "batch-1",
+        kind: "entity-embedding.refresh",
+        source: "mutation",
+        processor: "queue",
+        status: "running",
+        totalJobs: 1,
+        queuedJobs: 0,
+        runningJobs: 1,
+        succeededJobs: 0,
+        failedJobs: 0,
+        skippedJobs: 0,
+        cancelledJobs: 0,
+        firstEnqueuedAt: new Date("2026-01-01T00:00:00.000Z"),
+        lastEnqueuedAt: new Date("2026-01-01T00:00:00.000Z"),
+        firstJobStartedAt: new Date("2026-01-01T00:00:00.000Z"),
+        lastJobFinishedAt: null,
+        processingDurationMs: null,
+        wallDurationMs: null,
+        activeDurationMs: 0,
+        metadata: null,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
     );
-    expect(summaryQueryOptions).toHaveBeenCalledWith({
-      batchId: "batch-1",
-    });
+    const operations = {
+      summary: backgroundBatch.summary.withTransport(transport),
+    };
+    await expect(
+      makeBatchStatusFetcher(queryClient, operations)("batch-1"),
+    ).resolves.toBe("running");
+    expect(transport).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { batchId: "batch-1" } }),
+    );
   });
 
   it("stops at terminal status and invalidates cached results", async () => {
     const queryClient = new QueryClient();
-    const invalidate = vi
-      .spyOn(queryClient, "invalidateQueries")
-      .mockResolvedValue(undefined);
+    const key = ["operation", "product.summaries", { input: {} }] as const;
+    queryClient.setQueryDefaults(key, { meta: { cacheTags: [["product"]] } });
+    queryClient.setQueryData(key, { items: [] });
     const fetchBatchStatus = vi
       .fn()
       .mockResolvedValueOnce("running")
@@ -68,14 +87,14 @@ describe("background batch polling", () => {
     await watching;
 
     expect(fetchBatchStatus).toHaveBeenCalledTimes(2);
-    expect(invalidate).toHaveBeenCalled();
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
   it("retains the 30-attempt timeout before invalidating", async () => {
     const queryClient = new QueryClient();
-    const invalidate = vi
-      .spyOn(queryClient, "invalidateQueries")
-      .mockResolvedValue(undefined);
+    const key = ["operation", "product.summaries", { input: {} }] as const;
+    queryClient.setQueryDefaults(key, { meta: { cacheTags: [["product"]] } });
+    queryClient.setQueryData(key, { items: [] });
     const fetchBatchStatus = vi.fn().mockResolvedValue("running");
 
     const watching = watchBatchesAndInvalidateTags({
@@ -88,7 +107,7 @@ describe("background batch polling", () => {
     await watching;
 
     expect(fetchBatchStatus).toHaveBeenCalledTimes(30);
-    expect(invalidate).toHaveBeenCalled();
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
   it("re-invalidates descriptor-tagged queries after a batch settles", async () => {

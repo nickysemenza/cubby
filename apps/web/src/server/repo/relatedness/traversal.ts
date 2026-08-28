@@ -1,13 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
-import {
-  INCOMING_EDGES,
-  type IncomingEdge,
-} from "~/server/db/entity-incoming-edges";
+import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
 
 interface EdgeSpec {
@@ -51,9 +48,8 @@ const entityTable = (entity: Entity): string => {
  */
 const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
   const specs = new Map<string, EdgeSpec>();
-  for (const [target, edges] of Object.entries(INCOMING_EDGES) as Array<
-    [Entity, Record<string, IncomingEdge>]
-  >) {
+  for (const target of allEntities) {
+    const edges = INCOMING_EDGES[target];
     for (const [edgeKey, edge] of Object.entries(edges)) {
       const column = edge.column;
       if (!is(column.table, PgTable)) {
@@ -73,9 +69,11 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
       });
     }
   }
-  for (const table of Object.values(schema).filter((value) =>
-    is(value, PgTable),
-  ) as PgTable[]) {
+  type SchemaExport = (typeof schema)[keyof typeof schema];
+  type SchemaTable = Extract<SchemaExport, PgTable>;
+  const isSchemaTable = (value: SchemaExport): value is SchemaTable =>
+    is(value, PgTable);
+  for (const table of Object.values(schema).filter(isSchemaTable)) {
     const config = getTableConfig(table);
     for (const foreignKey of config.foreignKeys) {
       const reference = foreignKey.reference();
@@ -99,6 +97,13 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
 };
 
 const EDGES = edgeIndex();
+
+const softDeleteForTable = (tableName: string): boolean => {
+  const entity = allEntities.find(
+    (candidate) => entityManifest[candidate].dbTable === tableName,
+  );
+  return entity === undefined ? false : entityManifest[entity].softDelete;
+};
 
 export const invertPath = (
   steps: readonly RelationshipPathStep[],
@@ -149,11 +154,7 @@ export const compileTraversal = (
       fromColumn: outgoing ? edge.sourceColumn : "id",
       toColumn: outgoing ? "id" : edge.sourceColumn,
       softDelete: outgoing
-        ? entityManifest[
-            (Object.entries(entityManifest).find(
-              ([, descriptor]) => descriptor.dbTable === nextTable,
-            )?.[0] ?? from) as Entity
-          ].softDelete
+        ? softDeleteForTable(nextTable)
         : edge.sourceSoftDeletable,
     });
     currentTable = nextTable;

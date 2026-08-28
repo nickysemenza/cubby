@@ -19,9 +19,11 @@ export const meta = {
 // one developer's checkout so worktrees and other machines resolve correctly.
 const ROOT = process.cwd();
 const DEFAULT_REPORT_PATH = "/tmp/cubby-repo-audit-report.md";
+const workflowArgs = globalThis.args;
+const workflowArgsTag = Object.prototype.toString.call(workflowArgs);
 const REPORT_PATH =
-  (typeof args === "object" && args && args.reportPath) ||
-  (typeof args === "string" && args.trim()) ||
+  (workflowArgsTag === "[object Object]" && workflowArgs.reportPath) ||
+  (workflowArgsTag === "[object String]" && workflowArgs.trim()) ||
   DEFAULT_REPORT_PATH;
 
 const COMMON = `

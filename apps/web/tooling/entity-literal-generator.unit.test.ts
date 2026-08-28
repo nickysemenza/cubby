@@ -53,7 +53,7 @@ describe("literal entity generator", () => {
     expect(artifact("shortcode-registry.gen.ts")).toContain('alpha:"ALP-"');
     expect(artifact("entity-manifest-data.gen.ts")).toContain("{alpha:{");
     expect(artifact("entity-bindings.gen.ts")).toContain('"alpha": {');
-    expect(artifact("entity-bindings.gen.ts")).not.toContain("mcpOut");
+    expect(artifact("entity-bindings.gen.ts")).toContain("mcpOutput:output");
     expect(artifact("entity-details.gen.ts")).toContain(
       "ENTITY_DETAIL_OUTPUT_SCHEMAS",
     );

@@ -50,7 +50,7 @@ import {
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 
-export type DiagnosticStatus =
+type DiagnosticStatus =
   | { state: "healthy" }
   | { state: "stale"; message: string }
   | { state: "unavailable"; message: string };
@@ -69,8 +69,10 @@ export type DiagnosticSampleResult = DiagnosticMetadata & {
 export type DiagnosticCountResult = DiagnosticMetadata & { count: number };
 export type DiagnosticResult = DiagnosticSampleResult | DiagnosticCountResult;
 
+export type UpcLookupBatchPort = Pick<UPCLookupClient, "lookupBatch">;
+
 export type DiagnosticRunOptions = {
-  upcLookupClient?: UPCLookupClient;
+  upcLookupClient?: UpcLookupBatchPort;
   /** Reuse the tracker lane's complete attention relation; never a page. */
   attentionItems?: readonly ProjectAttentionItem[];
 };
@@ -133,12 +135,24 @@ const healthyCount = (count: number): DiagnosticCountResult => ({
   status: { state: "healthy" },
 });
 
-const runUpcProposals = async (
+function runUpcProposals(
+  db: Database,
+  options: DiagnosticRunOptions,
+  mode: "sample",
+  limit?: number,
+): Promise<DiagnosticSampleResult>;
+function runUpcProposals(
+  db: Database,
+  options: DiagnosticRunOptions,
+  mode: "count",
+  limit?: number,
+): Promise<DiagnosticCountResult>;
+async function runUpcProposals(
   db: Database,
   options: DiagnosticRunOptions,
   mode: "sample" | "count",
   limit = Number.POSITIVE_INFINITY,
-): Promise<DiagnosticSampleResult | DiagnosticCountResult> => {
+): Promise<DiagnosticSampleResult | DiagnosticCountResult> {
   const candidates = await findProductsWithUpcGaps(db);
   const { lookups, freshness } = await readCachedUpcLookups(
     db,
@@ -201,7 +215,7 @@ const runUpcProposals = async (
   return mode === "sample"
     ? { items, count, status, freshness }
     : { count, status, freshness };
-};
+}
 
 /** Exhaustive adapter registry: a new DiagnosticKey cannot be silently raw. */
 export const diagnosticAdapters = {
@@ -295,14 +309,8 @@ export const diagnosticAdapters = {
   },
   "products-with-better-upc-data": {
     sample: (db, options, limit) =>
-      runUpcProposals(
-        db,
-        options,
-        "sample",
-        limit,
-      ) as Promise<DiagnosticSampleResult>,
-    count: (db, options) =>
-      runUpcProposals(db, options, "count") as Promise<DiagnosticCountResult>,
+      runUpcProposals(db, options, "sample", limit),
+    count: (db, options) => runUpcProposals(db, options, "count"),
   },
   "title-derivable-unit-size": {
     sample: (db, _options, limit) =>

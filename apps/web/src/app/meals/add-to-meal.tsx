@@ -4,6 +4,8 @@ import {
   MEAL_KIND_LABELS,
   type MealKind,
   type MealType,
+  mealKindSchema,
+  mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -21,7 +23,8 @@ import { DialogFooter } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityMutation } from "~/entities/entity-mutation.functions";
+import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
 
 import { mealListLabel } from "./meal-format";
 import { mealKindOptions, mealTypeOptions } from "./meal-options";
@@ -29,6 +32,21 @@ import { meal } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 const NEW_MEAL = "new";
+
+/** The remote operations this dialog coordinates. Keeping them together lets a
+ * browser test run the production query/mutation stack with parsed in-memory
+ * transports, rather than replacing React Query or a module at its boundary. */
+export interface AddToMealOperations {
+  existingMeals: typeof meal.getByDateRange;
+  addRecipe: typeof meal.addRecipe;
+  mealMutation: typeof entityMutation.mutate;
+}
+
+const productionOperations: AddToMealOperations = {
+  existingMeals: meal.getByDateRange,
+  addRecipe: meal.addRecipe,
+  mealMutation: entityMutation.mutate,
+};
 
 const today = () => format(new Date(), "yyyy-MM-dd");
 
@@ -56,7 +74,29 @@ const slotForNow = (): MealType => {
  * Plans the current recipe onto a day, either by extending one of that day's
  * existing meals or by creating a new one. Lives on recipe detail pages.
  */
-export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
+function createdMeal(result: EntityBrowserMutationResult): MealOut | undefined {
+  return result.action === "create" && result.entity === "meal"
+    ? result.item
+    : undefined;
+}
+
+function mealTypeFromPicker(value: string | null): MealType | null {
+  const result = mealTypeSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+function mealKindFromPicker(value: string | null): MealKind {
+  const result = mealKindSchema.safeParse(value);
+  return result.success ? result.data : "cooked";
+}
+
+export function AddToMeal({
+  recipeId,
+  operations = productionOperations,
+}: {
+  recipeId: RecipeShortcode;
+  operations?: AddToMealOperations;
+}) {
   const navigate = useNavigate();
   const invalidate = useInvalidateMeals();
   const [open, setOpen] = useState(false);
@@ -69,7 +109,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const switchId = useId();
 
   const existingMeals = useQuery({
-    ...meal.getByDateRange.queryOptions({ from: date, to: date }),
+    ...operations.existingMeals.queryOptions({ from: date, to: date }),
     enabled: open,
   });
 
@@ -119,11 +159,18 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   };
 
   const createMeal = useMutation(
-    entityMutationOptionsFactory("meal", "create")({ onSuccess }),
+    operations.mealMutation.forEntity("meal").mutationOptions({
+      onSuccess: (result) => {
+        const meal = createdMeal(result);
+        if (meal) onSuccess(meal);
+      },
+    }),
   );
-  const addRecipe = useMutation(meal.addRecipe.mutationOptions({ onSuccess }));
+  const addRecipe = useMutation(
+    operations.addRecipe.mutationOptions({ onSuccess }),
+  );
   const updateMeal = useMutation(
-    entityMutationOptionsFactory("meal", "update")(),
+    operations.mealMutation.forEntity("meal").mutationOptions(),
   );
   const isPending =
     createMeal.isPending || addRecipe.isPending || updateMeal.isPending;
@@ -131,10 +178,14 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
   const submit = async () => {
     if (target === NEW_MEAL) {
       createMeal.mutate({
-        date,
-        mealType,
-        mealKind,
-        recipes: [{ recipeId, scale: 1 }],
+        action: "create",
+        entity: "meal",
+        data: {
+          date,
+          mealType,
+          mealKind,
+          recipes: [{ recipeId, scale: 1 }],
+        },
       });
       return;
     }
@@ -142,6 +193,8 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
     // recipe — that intermediate state is the one the shopping list drops.
     if (targetNotCooked && switchToCooked) {
       await updateMeal.mutateAsync({
+        action: "update",
+        entity: "meal",
         id: target,
         data: { mealKind: "cooked" },
       });
@@ -200,7 +253,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
                   items={mealTypeOptions}
                   value={mealType}
                   onValueChange={(value) =>
-                    setMealType(value as MealType | null)
+                    setMealType(mealTypeFromPicker(value))
                   }
                   label="meal type"
                   clearable
@@ -212,7 +265,7 @@ export function AddToMeal({ recipeId }: { recipeId: RecipeShortcode }) {
                   items={mealKindOptions}
                   value={mealKind}
                   onValueChange={(value) =>
-                    setMealKind((value ?? "cooked") as MealKind)
+                    setMealKind(mealKindFromPicker(value))
                   }
                   label="kind"
                 />

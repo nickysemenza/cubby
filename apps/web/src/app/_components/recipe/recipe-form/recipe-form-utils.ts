@@ -1,4 +1,4 @@
-import type { Amount } from "@cubby/schemas/codec";
+import { amount as amountSchema, type Amount } from "@cubby/schemas/codec";
 
 import type { IngItem } from "./types";
 
@@ -8,6 +8,7 @@ type DraftAmount = {
   unit?: string | null;
   upperValue?: number | null;
 };
+type DraftAmountCandidate = Pick<Amount, "value" | "unit" | "upperValue">;
 
 /** True when neither part of an amount is filled — the "no amount" case. */
 const isBlankAmount = (a: DraftAmount): boolean =>
@@ -21,13 +22,18 @@ const isBlankAmount = (a: DraftAmount): boolean =>
  * upperValue also makes a range edit register as a change in the comparison below.
  */
 export const normalizeAmounts = (amounts: DraftAmount[]): Amount[] =>
-  amounts
-    .filter((a) => !isBlankAmount(a))
-    .map((a) => ({
-      value: a.value as number,
-      unit: a.unit as string,
-      ...(a.upperValue != null ? { upperValue: a.upperValue } : {}),
-    }));
+  amounts.flatMap((draft) => {
+    if (isBlankAmount(draft) || draft.value == null || !draft.unit?.trim()) {
+      return [];
+    }
+    const candidate: DraftAmountCandidate = {
+      value: draft.value,
+      unit: draft.unit,
+    };
+    if (draft.upperValue != null) candidate.upperValue = draft.upperValue;
+    const parsed = amountSchema.safeParse(candidate);
+    return parsed.success ? [parsed.data] : [];
+  });
 
 /**
  * Normalize an ingredient for comparison by extracting the comparable properties.

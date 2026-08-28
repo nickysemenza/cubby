@@ -1,17 +1,29 @@
 import { resolveDateRange } from "~/app/expenses/expense-options";
 import { resolveDueRange, taskStatusOptions } from "~/app/tasks/task-options";
+import type { FilterPatch } from "~/entities/filters";
+
+interface ProductPurchaseDateRangeFilters {
+  purchaseDateFrom?: string;
+  purchaseDateTo?: string;
+}
+
+type ProductPurchaseDateFilters = FilterPatch &
+  (
+    | { purchaseDatePresenceFilter: "has" | "none" }
+    | ProductPurchaseDateRangeFilters
+  );
 
 export const resolveProductPurchaseDateFilter = (
   preset: string | undefined,
-) => {
+): ProductPurchaseDateFilters => {
   if (preset === "has" || preset === "none") {
     return { purchaseDatePresenceFilter: preset };
   }
   const { dateFrom, dateTo } = resolveDateRange(preset);
-  return {
-    ...(dateFrom ? { purchaseDateFrom: dateFrom } : {}),
-    ...(dateTo ? { purchaseDateTo: dateTo } : {}),
-  };
+  const filters: FilterPatch & ProductPurchaseDateRangeFilters = {};
+  if (dateFrom) filters.purchaseDateFrom = dateFrom;
+  if (dateTo) filters.purchaseDateTo = dateTo;
+  return filters;
 };
 
 export const resolveExpenseCount = (value: string | undefined) =>

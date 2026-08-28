@@ -53,7 +53,8 @@ function parentForPath(pathname: string): LinkProps["to"] | null {
   if (pathname.startsWith("/account/")) return "/settings";
 
   const activeTo = findActiveTo(pathname);
-  if (activeTo && pathname !== activeTo) return activeTo as LinkProps["to"];
+  const activeItem = completeNavLeaves.find((item) => item.to === activeTo);
+  if (activeItem && pathname !== activeTo) return activeItem.to;
   return "/";
 }
 

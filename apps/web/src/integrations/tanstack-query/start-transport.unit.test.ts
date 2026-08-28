@@ -1,47 +1,40 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { type JSONType, z } from "zod";
 
+import { reset, snapshot } from "~/lib/perf/perf-store";
 import type { StartOperationResult } from "~/server/start-operation.contract";
 
 import {
   StartOperationError,
   startOperation,
+  type StartTransportRuntime,
   unwrapStartOperationResult,
 } from "./start-transport";
 
-vi.mock("~/lib/flags", () => ({ getFlag: () => true }));
-
-const mocks = vi.hoisted(() => ({ dispatch: vi.fn() }));
-
-vi.mock("~/server-functions/start-operation-dispatch.functions", () => ({
-  dispatchStartOperationTransport: mocks.dispatch,
-}));
-
-beforeEach(() => {
-  vi.stubGlobal("window", {});
-  mocks.dispatch.mockReset();
-});
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-});
+beforeEach(reset);
 
 const ok = <T>(data: T): StartOperationResult<T> => ({ ok: true, data });
 
 describe("Start operation binding", () => {
   it("uses the lazy shared dispatcher when no explicit transport is supplied", async () => {
-    mocks.dispatch.mockResolvedValue(ok({ items: ["one"] }));
-    const operation = startOperation<{ entity: string }, { items: string[] }>({
-      operation: "entity.list",
-      parse: (result) => result as { items: string[] },
-    });
+    const dispatch = vi.fn(async () => ok({ items: ["one"] }));
+    const runtime = { dispatch } satisfies StartTransportRuntime;
+    const operation = startOperation<{ entity: string }, { items: string[] }>(
+      {
+        operation: "entity.list",
+        parse: (result) =>
+          z.object({ items: z.array(z.string()) }).parse(result),
+      },
+      runtime,
+    );
 
     await expect(operation.call({ entity: "product" })).resolves.toEqual({
       items: ["one"],
     });
-    expect(mocks.dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { operation: "entity.list", input: { entity: "product" } },
-      }),
+    expect(dispatch).toHaveBeenCalledWith(
+      "entity.list",
+      { entity: "product" },
+      expect.objectContaining({ headers: expect.anything() }),
     );
   });
 
@@ -50,51 +43,56 @@ describe("Start operation binding", () => {
     const operation = startOperation<null, string>({
       operation: "cookbook.list",
       transport,
-      parse: (result) => result as string,
+      parse: (result) => z.string().parse(result),
     });
 
     await expect(operation.call(null)).resolves.toBe("local");
     expect(transport).toHaveBeenCalledOnce();
-    expect(mocks.dispatch).not.toHaveBeenCalled();
   });
 
-  it("keeps the operation id in browser observability without sending it", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
-    const operation = startOperation<{ entity: string }, { items: unknown[] }>({
-      operation: "entity.list",
-      transport: (_input, { headers }) => {
-        expect(new Headers(headers).get("x-cubby-operation-id")).toBeNull();
-        return Promise.resolve(ok({ items: [], meta: { totalCount: 0 } }));
+  it("keeps the entity in observability without sending operation headers", async () => {
+    const operation = startOperation<{ entity: string }, { items: JSONType[] }>(
+      {
+        operation: "entity.list",
+        transport: (_input, { headers }) => {
+          expect(new Headers(headers).get("x-cubby-operation-id")).toBeNull();
+          return Promise.resolve(ok({ items: [], meta: { totalCount: 0 } }));
+        },
+        parse: (result) =>
+          z
+            .object({ items: z.array(z.json()) })
+            .passthrough()
+            .parse(result),
       },
-      parse: (result) => result as { items: unknown[] },
-    });
+    );
 
     const result = await operation
       .forEntity("product")
       .call({ entity: "product" });
 
     expect(result).toMatchObject({ items: [] });
-    expect(log.mock.calls[0]?.[0]).toMatch(/>> op-\d+ entity\.list/u);
-    expect(log.mock.calls[0]?.[1]).toMatchObject({ entity: "product" });
-    expect(log.mock.calls[1]?.[0]).toMatch(/<< op-\d+ entity\.list/u);
+    expect(snapshot().queries["start:entity.list"]).toMatchObject({
+      operation: "entity.list",
+      transport: "start",
+      fetches: 1,
+    });
   });
 
-  it("always logs errors", async () => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("records transport errors", async () => {
     const operation = startOperation<Record<string, never>, never>({
       operation: "entity.filterOptions",
       transport: () => Promise.reject(new Error("broken")),
-      parse: (result) => result as never,
+      parse: z.never().parse,
     });
 
     await expect(operation.call({})).rejects.toThrow("broken");
-    expect(error.mock.calls[0]?.[0]).toMatch(/entity\.filterOptions/u);
+    expect(snapshot().queries["start:entity.filterOptions"]).toMatchObject({
+      operation: "entity.filterOptions",
+      errors: 1,
+    });
   });
 
-  it("marks strong follow-up reads after every registered mutation", async () => {
-    const documentStub = { cookie: "" };
-    vi.stubGlobal("document", documentStub);
+  it("records registered mutations through the mutation channel", async () => {
     const operation = startOperation<null, null>({
       operation: "image.delete",
       kind: "mutation",
@@ -104,7 +102,11 @@ describe("Start operation binding", () => {
 
     await operation.call(null);
 
-    expect(documentStub.cookie).toContain("cubby-fresh-reads=1");
+    expect(snapshot().mutations[0]).toMatchObject({
+      operation: "image.delete",
+      transport: "start",
+      outcome: "success",
+    });
   });
 
   it("derives query metadata from the same declaration the call observes", () => {
@@ -125,8 +127,6 @@ describe("Start operation binding", () => {
   });
 
   it("raises the bound error type for a refused operation", async () => {
-    vi.spyOn(console, "log").mockImplementation(() => {});
-    vi.spyOn(console, "error").mockImplementation(() => {});
     class DetailError extends StartOperationError {}
     const operation = startOperation<null, null>({
       operation: "entity.detail",
@@ -150,7 +150,6 @@ describe("Start operation binding", () => {
   });
 
   it("keeps request ids on their own out-of-order failures", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
     const operation = startOperation<{ id: string; delay: number }, null>({
       operation: "entity.detail",
       transport: ({ id, delay }) =>

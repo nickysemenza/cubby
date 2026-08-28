@@ -8,6 +8,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { createFinancialAccount } from "./financial-account";
 import {
@@ -32,6 +33,10 @@ import { findOrCreateVendor, getVendorByID } from "./vendor";
  */
 
 const page = { pageIndex: 0, pageSize: 100 };
+type TransactionOverrides = Partial<
+  z.input<typeof financialTransactionCreateInput>
+>;
+type TransactionUpdateInput = z.input<typeof financialTransactionUpdateData>;
 
 describe("settlement allocations — write path", () => {
   const ctx = withTestDb();
@@ -62,7 +67,7 @@ describe("settlement allocations — write path", () => {
         purchaseCreateInput.parse({
           vendorId: vendor.id,
           date: "2026-08-10",
-          ...(orderId ? { orderId } : {}),
+          orderId,
         }),
         ctx.actor,
       )
@@ -71,7 +76,7 @@ describe("settlement allocations — write path", () => {
 
   const mkTransaction = async (
     accountId: string,
-    overrides: Record<string, unknown> = {},
+    overrides: TransactionOverrides = {},
   ) =>
     (
       await createFinancialTransaction(
@@ -88,7 +93,10 @@ describe("settlement allocations — write path", () => {
       )
     ).output;
 
-  const update = (id: FinancialTransactionShortcode, data: unknown) =>
+  const update = (
+    id: FinancialTransactionShortcode,
+    data: TransactionUpdateInput,
+  ) =>
     updateFinancialTransaction(
       ctx.db,
       id,

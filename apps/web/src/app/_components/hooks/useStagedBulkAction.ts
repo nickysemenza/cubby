@@ -1,3 +1,4 @@
+import type { UseMutationOptions } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
@@ -5,12 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 import { verbBulkAction } from "../actions/action-verb-ui";
 import type { ActionVerbId } from "../actions/action-verbs";
 import type { BulkAction } from "../data-table/bulk-actions.types";
-import {
-  type DataOf,
-  type MutationOptionsFn,
-  useActionMutation,
-  type VariablesOf,
-} from "./useActionMutation";
+import { useActionMutation } from "./useActionMutation";
 
 /**
  * The stage → dialog → mutate → toast → clear cycle every bulk action runs.
@@ -27,7 +23,8 @@ import {
  */
 export interface StagedBulkAction<
   TRow extends RowData,
-  TFn extends MutationOptionsFn,
+  TData,
+  TValues extends object,
 > {
   /** Rows awaiting the dialog. Empty means the dialog is closed. */
   items: TRow[];
@@ -41,14 +38,15 @@ export interface StagedBulkAction<
    * the value its dialog collected. Rejects on failure, so a caller can
    * sequence its own "and then clear the selection" after it.
    */
-  submit: (
-    values: Omit<VariablesOf<TFn>, "ids">,
-  ) => Promise<DataOf<TFn> | undefined>;
+  submit: (values: TValues) => Promise<TData | undefined>;
 }
 
 export function useStagedBulkAction<
   TRow extends RowData & { id: string },
-  TFn extends MutationOptionsFn,
+  TData,
+  TError extends Error,
+  TValues extends object,
+  TContext,
 >({
   verb,
   id,
@@ -60,9 +58,14 @@ export function useStagedBulkAction<
   /** Override only where an existing bulk-action id is load-bearing. */
   id?: string;
   minSelection?: number;
-  mutationFn: TFn;
-  success?: ReactNode | ((data: DataOf<TFn>) => ReactNode);
-}): StagedBulkAction<TRow, TFn> {
+  mutationFn: () => UseMutationOptions<
+    TData,
+    TError,
+    TValues & { ids: string[] },
+    TContext
+  >;
+  success?: ReactNode | ((data: TData) => ReactNode);
+}): StagedBulkAction<TRow, TData, TValues> {
   const [items, setItems] = useState<TRow[]>([]);
 
   const mutation = useActionMutation({
@@ -71,29 +74,30 @@ export function useStagedBulkAction<
     onSuccess: () => setItems([]),
   });
 
-  const action = useMemo(
-    () =>
-      verbBulkAction<TRow>(verb, {
-        ...(id ? { id } : {}),
-        minSelection,
-        onExecute: async (rows) => {
-          setItems(rows.map((row) => row.original));
-          return { success: true };
-        },
-      }),
-    [verb, id, minSelection],
-  );
+  const action = useMemo(() => {
+    const options: Parameters<typeof verbBulkAction<TRow>>[1] = {
+      minSelection,
+      onExecute: async (rows) => {
+        setItems(rows.map((row) => row.original));
+        return { success: true };
+      },
+    };
+    if (id !== undefined) options.id = id;
+    return verbBulkAction<TRow>(verb, options);
+  }, [verb, id, minSelection]);
 
   const cancel = useCallback(() => setItems([]), []);
 
   // `mutateAsync` is stable; `items` is not, so this closes over the staged
   // rows current at submit time rather than at action-creation time.
   const submit = useCallback(
-    async (values: Omit<VariablesOf<TFn>, "ids">) =>
-      (await mutation.mutateAsync({
+    async (values: TValues) => {
+      const payload = {
         ...values,
         ids: items.map((item) => item.id),
-      } as VariablesOf<TFn>)) as DataOf<TFn>,
+      };
+      return await mutation.mutateAsync(payload);
+    },
     // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members and scalar keys govern this hook.
     [mutation.mutateAsync, items],
   );

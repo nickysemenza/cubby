@@ -5,9 +5,27 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { registerMcpApps } from "./apps";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
+
+const appResourceContentSchema = z.object({
+  mimeType: z.string().optional(),
+  text: z.string(),
+});
+const appToolMetadataSchema = z.object({
+  ui: z.object({ resourceUri: z.string().optional() }).optional(),
+});
+const invocationFixtureSchema = z.object({
+  cases: z.array(
+    z.object({
+      category: z.enum(["direct", "indirect", "negative"]),
+      expectedTool: z.string().nullable(),
+      expectedWidget: z.string().nullable(),
+    }),
+  ),
+});
 
 describe("MCP App resources", () => {
   it("serves the USDA picker as a self-contained MCP App document", async () => {
@@ -27,10 +45,9 @@ describe("MCP App resources", () => {
         USDA_PICKER.uri,
       ]);
       const { contents } = await client.readResource({ uri: USDA_PICKER.uri });
-      const [content] = contents;
-      expect(content?.mimeType).toBe("text/html;profile=mcp-app");
-      expect(content && "text" in content).toBe(true);
-      const html = (content as { text: string }).text;
+      const content = appResourceContentSchema.parse(contents[0]);
+      expect(content.mimeType).toBe("text/html;profile=mcp-app");
+      const html = content.text;
       expect(html.startsWith("<!doctype html>")).toBe(true);
       expect(html).not.toMatch(/<(?:script|link)[^>]+(?:src|href)=/u);
       expect(html).not.toContain("__CUBBY_ORIGIN__");
@@ -46,7 +63,7 @@ describe("MCP App resources", () => {
     ]);
     const pointedAt = new Set(
       tools.flatMap((tool) => {
-        const ui = tool._meta?.ui as { resourceUri?: string } | undefined;
+        const ui = appToolMetadataSchema.safeParse(tool._meta).data?.ui;
         return ui?.resourceUri ? [ui.resourceUri] : [];
       }),
     );
@@ -68,18 +85,14 @@ describe("MCP App resources", () => {
       tools.find((tool) => tool.name === "get_shopping_list")?._meta,
     ).toBeUndefined();
 
-    const fixture = JSON.parse(
-      readFileSync(
-        new URL("./evals/widget-invocation.json", import.meta.url),
-        "utf8",
+    const fixture = invocationFixtureSchema.parse(
+      JSON.parse(
+        readFileSync(
+          new URL("./evals/widget-invocation.json", import.meta.url),
+          "utf8",
+        ),
       ),
-    ) as {
-      cases: Array<{
-        category: "direct" | "indirect" | "negative";
-        expectedTool: string | null;
-        expectedWidget: string | null;
-      }>;
-    };
+    );
     expect(new Set(fixture.cases.map((item) => item.category))).toEqual(
       new Set(["direct", "indirect", "negative"]),
     );
@@ -89,10 +102,8 @@ describe("MCP App resources", () => {
         (candidate) => candidate.name === item.expectedTool,
       );
       expect(tool?.description).toContain("Do not invoke");
-      expect(
-        (tool?._meta?.ui as { resourceUri?: string } | undefined)
-          ?.resourceUri ?? null,
-      ).toBe(item.expectedWidget);
+      const metadata = appToolMetadataSchema.safeParse(tool?._meta).data;
+      expect(metadata?.ui?.resourceUri ?? null).toBe(item.expectedWidget);
     }
   });
 });

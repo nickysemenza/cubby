@@ -1,5 +1,8 @@
 import { problemsCountSchema } from "@cubby/schemas/mcp";
+import { orphanedEntityEmbeddingSchema } from "@cubby/schemas/problems";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
+import { similarEntitiesOut } from "@cubby/schemas/search";
+import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
 import { describe, expect, it, vi } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -21,13 +24,37 @@ describe("MCP workflow tools", () => {
     expect(getCounts).toHaveBeenCalledOnce();
   });
 
+  it("projects internal diagnostic ids out of problem slices", async () => {
+    const diagnostic = mock(orphanedEntityEmbeddingSchema);
+    const result = await callMcpTool(
+      createMcpServer(),
+      "list_problems",
+      { type: "orphanedEntityEmbeddings" },
+      {
+        problems: {
+          getByType: async () => ({
+            type: "orphanedEntityEmbeddings" as const,
+            items: [diagnostic],
+            total: 1,
+          }),
+        },
+      },
+    );
+    const serialized = JSON.stringify(result.structuredContent);
+
+    expect(result.isError).not.toBe(true);
+    expect(serialized).not.toContain(diagnostic.id);
+    expect(serialized).not.toContain(diagnostic.entityId);
+    expect(serialized).toContain(diagnostic.model);
+  });
+
   it("records success, validation failure, and an unregistered tool without payload telemetry", async () => {
     const identity = {
       userId: "user_1",
       clientId: "oauth-client-1",
       surface: "external_mcp" as const,
     };
-    const emit = vi.fn(async (_event: unknown) => undefined);
+    const emit = vi.fn(async (_event: McpToolCallTelemetry) => undefined);
     await callMcpTool(
       createMcpServer(),
       "list_problems",
@@ -71,9 +98,7 @@ describe("MCP workflow tools", () => {
         registeredAtCall: false,
       }),
     );
-    const firstEvent = emit.mock.calls[0]?.[0] as
-      | Record<string, unknown>
-      | undefined;
+    const firstEvent = emit.mock.calls[0]?.[0];
     expect(Object.keys(firstEvent ?? {})).not.toEqual(
       expect.arrayContaining(["arguments", "output", "errorText"]),
     );
@@ -102,11 +127,12 @@ describe("MCP workflow tools", () => {
   });
 
   it("enforces the semantic pair allowlist before it reaches the caller port", async () => {
-    const similar = vi.fn(async () => ({
+    const similarResult = similarEntitiesOut.parse({
       source: { entityType: "product", entityId: "PRD-2222" },
-      status: "uncomputed" as const,
+      status: "uncomputed",
       results: [],
-    }));
+    });
+    const similar = vi.fn(async () => similarResult);
     const allowed = await callMcpTool(
       createMcpServer(),
       "find_similar_entities",
@@ -132,11 +158,13 @@ describe("MCP workflow tools", () => {
 
   it("uses the bounded-stale caller only for MCP search tools", async () => {
     const strongSimilar = vi.fn();
-    const readSimilar = vi.fn(async () => ({
-      source: { entityType: "product", entityId: "PRD-2222" },
-      status: "uncomputed" as const,
-      results: [],
-    }));
+    const readSimilar = vi.fn(async () =>
+      similarEntitiesOut.parse({
+        source: { entityType: "product", entityId: "PRD-2222" },
+        status: "uncomputed",
+        results: [],
+      }),
+    );
 
     const result = await callMcpTool(
       createMcpServer(),

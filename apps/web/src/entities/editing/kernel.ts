@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -5,22 +7,36 @@ import type {
   EntityEditBuildResult,
   EntityEditContext,
   EntityEditDefinition,
-  EntityEditField,
   EntityEditIntentDefinition,
   EntityEditIssue,
+  EntityEditMutationData,
   EntityEditOperationDefinition,
   EntityEditRecord,
+  EntityEditValueBag,
   RuntimeEntityEditRequest,
 } from "./types";
 
 const EMPTY_CONTEXT: EntityEditContext = {};
+const entityEditValueBagSchema = z.record(
+  z.string(),
+  z.union([z.json(), z.date(), z.undefined()]),
+);
+type EntityEditDefaultsFactory = (
+  context: EntityEditContext,
+) => Readonly<EntityEditValueBag>;
+const isDefaultsFactory = (
+  value: EntityEditIntentDefinition<
+    EditableEntity,
+    EntityEditRecord
+  >["defaults"],
+): value is EntityEditDefaultsFactory => typeof value === "function";
 
 export interface ResolvedEntityEdit<E extends EditableEntity = EditableEntity> {
-  definition: EntityEditDefinition<E>;
+  definition: EntityEditDefinition<E, EntityEditRecord>;
   operation: EntityEditOperationDefinition<E, EntityEditRecord>;
   intentDefinition: EntityEditIntentDefinition<E, EntityEditRecord>;
   intent: string;
-  fields: readonly EntityEditField<E, EntityEditRecord, unknown, object>[];
+  fields: EntityEditDefinition<E, EntityEditRecord>["fields"];
   context: EntityEditContext;
 }
 
@@ -78,12 +94,12 @@ export function resolveEntityEdit<E extends EditableEntity>(
     operation,
     intentDefinition,
     intent,
-    fields: fields as readonly EntityEditField<
-      E,
-      EntityEditRecord,
-      unknown,
-      object
-    >[],
+    fields: fields.filter(
+      (
+        field,
+      ): field is EntityEditDefinition<E, EntityEditRecord>["fields"][number] =>
+        field !== undefined,
+    ),
     context: request.context ?? EMPTY_CONTEXT,
   };
 }
@@ -98,13 +114,12 @@ export function isResolvedEntityEdit<E extends EditableEntity>(
 export function initialEntityEditValues<E extends EditableEntity>(
   resolved: ResolvedEntityEdit<E>,
   request: RuntimeEntityEditRequest<E>,
-): Record<string, unknown> {
+): EntityEditValueBag {
   const intent = resolved.intentDefinition;
-  const defaults =
-    typeof intent.defaults === "function"
-      ? intent.defaults(resolved.context)
-      : (intent.defaults ?? {});
-  return {
+  const defaults = isDefaultsFactory(intent.defaults)
+    ? intent.defaults(resolved.context)
+    : (intent.defaults ?? {});
+  const values: EntityEditValueBag = {
     ...Object.fromEntries(
       resolved.fields.map((field) => [
         field.id,
@@ -118,10 +133,11 @@ export function initialEntityEditValues<E extends EditableEntity>(
       ]),
     ),
     ...defaults,
-    ...(request.operation === "create" || intent.acceptsSeed === true
-      ? request.seed
-      : {}),
   };
+  if (request.operation === "create" || intent.acceptsSeed === true) {
+    Object.assign(values, request.seed);
+  }
+  return values;
 }
 
 /**
@@ -131,8 +147,9 @@ export function initialEntityEditValues<E extends EditableEntity>(
 export function buildEntityEdit<E extends EditableEntity>(
   resolved: ResolvedEntityEdit<E>,
   request: RuntimeEntityEditRequest<E>,
-  values: Readonly<Record<string, unknown>>,
+  values: EntityEditMutationData<E>,
 ): EntityEditBuildResult<E> {
+  const parsedValues = entityEditValueBagSchema.parse(values);
   const intent = resolved.intentDefinition;
   const operationAccess = intent.access({
     surface: request.surface,
@@ -143,7 +160,7 @@ export function buildEntityEdit<E extends EditableEntity>(
     return { ok: false, issues: [denied(operationAccess)] };
   }
 
-  const normalized: Record<string, unknown> = {};
+  const normalized: EntityEditValueBag = {};
   const issues: EntityEditIssue[] = [];
   const patches: object[] = [];
   const patchKeys = new Set<string>();
@@ -160,7 +177,7 @@ export function buildEntityEdit<E extends EditableEntity>(
       issues.push({ ...denied(fieldAccess), field: field.id });
       continue;
     }
-    normalized[field.id] = field.normalize(values[field.id]);
+    normalized[field.id] = field.normalize(parsedValues[field.id]);
   }
 
   for (const field of resolved.fields) {

@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import {
   auditLog,
   expenseAttribution,
@@ -888,7 +889,7 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     ).then(
       () => undefined,
-      (error: unknown) => error,
+      (error: UnparsedError) => error,
     );
     expect(toPublicErrorPayload(conflict)).toMatchObject({
       code: "CONFLICT",
@@ -958,7 +959,7 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     ).then(
       () => undefined,
-      (error: unknown) => error,
+      (error: UnparsedError) => error,
     );
     expect(toPublicErrorPayload(conflict)).toMatchObject({
       code: "CONFLICT",

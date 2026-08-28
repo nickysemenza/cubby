@@ -223,6 +223,15 @@ export type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut
 >;
 
+/** Generic MCP entity detail with storage-only product child ids removed. */
+export const inventoryWithLocationAndProductMcpEntityOut =
+  inventoryWithLocationAndProductOut.extend({
+    product: inventoryDetailProductOut.extend({
+      externalIds: z.array(externalIdOut.omit({ id: true })),
+      unitMappings: z.array(unitMappingOut.omit({ id: true })),
+    }),
+  });
+
 export const inventoryWithLocationAndProductAndSideEffectsOut = z.object({
   ...inventoryWithLocationAndProductFields,
   sideEffects: mutationSideEffectsSchema,

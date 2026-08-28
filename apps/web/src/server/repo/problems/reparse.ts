@@ -7,6 +7,7 @@
  * values.
  */
 
+import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -29,6 +30,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const parsedAmountToStored = (parsed: WAmount): Amount => {
+  const amount: Amount = { value: parsed.value, unit: parsed.unit };
+  if (parsed.upper_value != null) amount.upperValue = parsed.upper_value;
+  return amount;
+};
 
 // StaleIngredientParse (staleIngredientParseSchema): a stored ingredient
 // occurrence whose original raw line, re-parsed with the *current* parser, now
@@ -120,11 +127,7 @@ export const findStaleIngredientParses = async (
         // camel) so Re-parse All actually resolves range drift instead of
         // re-flagging the row forever.
         parsedAmounts: drift.amounts
-          ? drift.amounts.map((a) => ({
-              value: a.value,
-              unit: a.unit,
-              ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
-            }))
+          ? drift.amounts.map(parsedAmountToStored)
           : [],
         amountDrift: drift.amounts !== null,
         storedModifier: row.storedModifier,

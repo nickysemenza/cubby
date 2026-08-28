@@ -15,9 +15,10 @@ const between = (source: string, start: string, end: string) => {
 describe("cached-read policy", () => {
   it("uses the selected read database for kernel details, lists, and search", () => {
     const source = read("./entity-kernel/execute.ts");
+    const operations = read("./entity-kernel/entity-operations.ts");
 
-    const get = between(source, 'case "get":', 'case "list":');
-    const list = between(source, 'case "list":', 'case "search":');
+    const get = between(operations, "get: async", "list: async");
+    const list = between(operations, "list: async", "create: async");
     const search = between(source, 'case "search":', 'case "create":');
     const mutations = source.slice(source.indexOf('case "create":'));
 
@@ -129,18 +130,20 @@ describe("cached-read policy", () => {
 
     const dataQualityTools = read("./mcp/tools/data-quality.tools.ts");
     const entityIntegrityTools = read("./mcp/tools/entity-integrity.tools.ts");
-    const sharedTools = read("./mcp/tools/_shared.ts");
+    const registration = read("./mcp/tools/tool-registration.ts");
 
     expect(dataQualityTools).toContain("getCaller(extra)");
     expect(dataQualityTools).not.toContain("getReadCaller(extra)");
     expect(entityIntegrityTools).toContain("registerRouterTool(server");
-    expect(sharedTools).toContain("config.call(\n        getCaller(extra)");
+    expect(registration).toContain(
+      'callerFromExtra(extra, "readCaller") ?? getCaller(extra)',
+    );
   });
 
   it("allows only MCP entity list/search and search tools onto bounded-stale reads", () => {
     const route = read("../routes/api/mcp.ts");
     const searchTools = read("./mcp/tools/search.tools.ts");
-    const sharedTools = read("./mcp/tools/_shared.ts");
+    const registration = read("./mcp/tools/tool-registration.ts");
 
     expect(route).toContain("const caller = createMcpWorkflowCaller(ctx)");
     expect(route).toContain("readDb: boundedStaleDb");
@@ -149,7 +152,7 @@ describe("cached-read policy", () => {
     expect(route).toContain("db: ctx.db");
     expect(searchTools).toContain("getReadCaller(extra)");
     expect(searchTools).not.toContain("getCaller(extra)");
-    expect(sharedTools).toContain("getCaller(extra)");
+    expect(registration).toContain("getCaller(extra)");
   });
 
   it("keeps the published iCalendar feed entirely on bounded-stale reads", () => {

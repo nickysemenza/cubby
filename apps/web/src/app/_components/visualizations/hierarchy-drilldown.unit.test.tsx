@@ -1,28 +1,30 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { ComponentProps, ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   HierarchyDrilldown,
   type HierarchyDrilldownNode,
 } from "./hierarchy-drilldown";
 
-// The drilldown's contract is the location destination, not router setup. The
-// app integration supplies TanStack Router; this keeps the shared UI focused.
-interface MockLinkProps extends Omit<ComponentProps<"a">, "children" | "href"> {
-  to: string;
-  params: { shortcode: string };
-  children: ReactNode;
-}
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ to, params, children, ...props }: MockLinkProps) => (
-    <a href={to.replace("$shortcode", params.shortcode)} {...props}>
-      {children}
-    </a>
-  ),
-}));
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
 
 const workshop = testShortcode("location", "LOC-WRKS");
 const upperZone = testShortcode("location", "LOC-UPPR");
@@ -66,6 +68,7 @@ const tree: HierarchyDrilldownNode = {
 function renderDrilldown(root = tree) {
   return render(
     <HierarchyDrilldown root={root} ariaLabel="Product locations" />,
+    { wrapper: harness.wrapper },
   );
 }
 

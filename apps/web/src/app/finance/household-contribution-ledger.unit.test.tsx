@@ -1,28 +1,21 @@
 import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { HouseholdContributionLedgerReport } from "./household-contribution-ledger";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    className,
-    params,
-    to,
-  }: {
-    children: ReactNode;
-    className?: string;
-    params: { shortcode: string };
-    to: string;
-  }) => (
-    <a className={className} href={to.replace("$shortcode", params.shortcode)}>
-      {children}
-    </a>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 const ledger = {
   asOf: "2026-08-23",
@@ -91,10 +84,12 @@ const ledger = {
 } satisfies HouseholdContributionLedgerOut;
 
 describe("HouseholdContributionLedgerReport", () => {
-  it("keeps the whole-group total, party positions, checks, and gaps distinct", () => {
-    render(<HouseholdContributionLedgerReport data={ledger} />);
+  it("keeps the whole-group total, party positions, checks, and gaps distinct", async () => {
+    render(<HouseholdContributionLedgerReport data={ledger} />, {
+      wrapper: harness.wrapper,
+    });
 
-    expect(screen.getByText("Whole-group cost")).toBeVisible();
+    expect(await screen.findByText("Whole-group cost")).toBeVisible();
     expect(
       screen.getByText("Whole-group cost").parentElement,
     ).toHaveTextContent("$100.00");
@@ -103,13 +98,11 @@ describe("HouseholdContributionLedgerReport", () => {
     ).toBeVisible();
 
     const partyRow = screen.getAllByText("Household")[0]!.closest("tr");
-    expect(partyRow).not.toBeNull();
-    expect(
-      within(partyRow as HTMLTableRowElement).getByText("$60.00"),
-    ).toBeVisible();
-    expect(
-      within(partyRow as HTMLTableRowElement).getAllByText("Household"),
-    ).toHaveLength(2);
+    if (!(partyRow instanceof HTMLTableRowElement)) {
+      throw new Error("Expected the household contribution row");
+    }
+    expect(within(partyRow).getByText("$60.00")).toBeVisible();
+    expect(within(partyRow).getAllByText("Household")).toHaveLength(2);
 
     expect(screen.getByText("Transfer net")).toBeVisible();
     expect(

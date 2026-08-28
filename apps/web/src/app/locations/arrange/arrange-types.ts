@@ -5,6 +5,7 @@ import {
   type LocationShortcode,
   locationShortcode,
 } from "@cubby/schemas/identifiers";
+import type { Data } from "@dnd-kit/core";
 import { z } from "zod";
 
 /**
@@ -53,14 +54,10 @@ const arrangeDropDataSchema = z.object({
   locationId: locationShortcode.nullable(),
 });
 
-export function asDragData(
-  data: Record<string | symbol, unknown>,
-): ArrangeDragData | null {
+export function asDragData(data: Data | undefined): ArrangeDragData | null {
   return arrangeDragDataSchema.safeParse(data).data ?? null;
 }
 
-export function asDropData(
-  data: Record<string | symbol, unknown>,
-): ArrangeDropData | null {
+export function asDropData(data: Data | undefined): ArrangeDropData | null {
   return arrangeDropDataSchema.safeParse(data).data ?? null;
 }

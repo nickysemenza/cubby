@@ -1,5 +1,5 @@
-import type { Entity } from "@cubby/schemas/entity";
-import type { EdgeRole, EdgeSemantics } from "@cubby/schemas/entity-integrity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
@@ -189,9 +189,7 @@ const mkRecipeSection = async (db: Database) => {
 
 /** One live-row factory per entity that appears as a `targetEntity` among the
  * must-target-live edges below. */
-const TARGET_FACTORIES: Partial<
-  Record<Entity, (db: Database) => Promise<{ id: string }>>
-> = {
+const TARGET_FACTORIES = {
   cookbook: mkCookbook,
   expense: mkExpense,
   image: mkImage,
@@ -209,19 +207,16 @@ const TARGET_FACTORIES: Partial<
   financialAccount: mkFinancialAccount,
   financialTransaction: mkFinancialTransaction,
   wish: mkWish,
-};
+} satisfies Partial<Record<Entity, (db: Database) => Promise<{ id: string }>>>;
 
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
-const SOURCE_FACTORIES: Record<
-  string,
-  (db: Database, targetId: string) => Promise<{ id: string }>
-> = {
+const SOURCE_FACTORIES = {
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
     return insertAndReturn(db, expenseAttribution, {
-      expenseId: targetId as never,
+      expenseId: parseEntityId("expense", targetId),
       role: "funder",
       ledgerPartyId: party.id,
       weight: 1,
@@ -231,7 +226,7 @@ const SOURCE_FACTORIES: Record<
     const account = await mkFinancialAccount(db);
     return insertWithShortcode(db, "financialTransaction", {
       accountId: account.id,
-      ledgerTransferId: targetId as never,
+      ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
       kind: "purchase",
       status: "pending",
       amount: 1,
@@ -239,7 +234,7 @@ const SOURCE_FACTORIES: Record<
   },
   "LedgerSourceClaim.expenseId": async (db, targetId) =>
     insertAndReturn(db, ledgerSourceClaim, {
-      expenseId: targetId as never,
+      expenseId: parseEntityId("expense", targetId),
       source: "synthetic-integrity",
       sourceKey: uniq("claim"),
       sourceKeyVersion: 1,
@@ -255,7 +250,7 @@ const SOURCE_FACTORIES: Record<
     }),
   "LedgerSourceClaim.ledgerTransferId": async (db, targetId) =>
     insertAndReturn(db, ledgerSourceClaim, {
-      ledgerTransferId: targetId as never,
+      ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
       source: "synthetic-integrity",
       sourceKey: uniq("claim"),
       sourceKeyVersion: 1,
@@ -724,7 +719,32 @@ const SOURCE_FACTORIES: Record<
       });
     return { id: targetId };
   },
-};
+} satisfies Record<
+  string,
+  (db: Database, targetId: string) => Promise<{ id: string }>
+>;
+
+type TargetFactory = (db: Database) => Promise<{ id: string }>;
+type SourceFactory = (
+  db: Database,
+  targetId: string,
+) => Promise<{ id: string }>;
+
+function targetFactoryFor(entity: Entity): TargetFactory {
+  const factory = Object.entries(TARGET_FACTORIES).find(
+    ([key]) => key === entity,
+  )?.[1];
+  if (!factory) throw new Error(`No target factory for ${entity}`);
+  return factory;
+}
+
+function sourceFactoryFor(edgeKey: string): SourceFactory {
+  const factory = Object.entries(SOURCE_FACTORIES).find(
+    ([key]) => key === edgeKey,
+  )?.[1];
+  if (!factory) throw new Error(`No source factory for ${edgeKey}`);
+  return factory;
+}
 
 // Derive the must-target-live edge list from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS
 // directly (not a hand-copied list), so a newly added/removed/reclassified edge
@@ -743,6 +763,21 @@ interface DerivedEdgeSpec {
   sourceSoftDeletable: boolean;
 }
 
+interface ExpectedViolation {
+  edgeKey: string;
+  role: EdgeRole;
+  targetEntity: Entity;
+  targetId: string;
+  sourceTable: string;
+  sourceId: string;
+}
+
+function entityTableName(entity: Entity): string {
+  const tableName = entityManifest[entity].dbTable;
+  if (!tableName) throw new Error(`Entity ${entity} has no database table`);
+  return tableName;
+}
+
 const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
   "ProjectDependency",
   "ProductConversionCoverage",
@@ -751,23 +786,22 @@ const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
 
 function deriveMustTargetLiveEdges(): DerivedEdgeSpec[] {
   const specs: DerivedEdgeSpec[] = [];
-  for (const [targetEntity, edgeMap] of Object.entries(INCOMING_EDGES) as [
-    Entity,
-    Record<string, unknown>,
-  ][]) {
-    const semanticsMap = ENTITY_EDGE_SEMANTICS[targetEntity] as Record<
-      string,
-      EdgeSemantics
-    >;
+  for (const [rawTargetEntity, edgeMap] of Object.entries(INCOMING_EDGES)) {
+    const targetEntity = entitySchema.parse(rawTargetEntity);
     for (const edgeKey of Object.keys(edgeMap)) {
-      const semantics = semanticsMap[edgeKey];
+      const semantics = Object.entries(
+        ENTITY_EDGE_SEMANTICS[targetEntity],
+      ).find(([key]) => key === edgeKey)?.[1];
       if (!semantics) {
         throw new Error(
           `No ENTITY_EDGE_SEMANTICS entry for "${edgeKey}" (target "${targetEntity}").`,
         );
       }
       if (semantics.liveness.kind !== "must-target-live") continue; // Ingredient.recipeId
-      const sourceTableName = edgeKey.split(".")[0]!;
+      const [sourceTableName] = edgeKey.split(".");
+      if (!sourceTableName) {
+        throw new Error(`Incoming edge is missing a source table: ${edgeKey}`);
+      }
       specs.push({
         edgeKey,
         targetEntity,
@@ -799,9 +833,9 @@ describe("findReferentialLivenessViolations", () => {
     );
     for (const spec of derivedMustTargetLiveEdges) {
       expect(
-        TARGET_FACTORIES[spec.targetEntity],
+        Object.keys(TARGET_FACTORIES).includes(spec.targetEntity),
         `no TARGET_FACTORIES entry for "${spec.targetEntity}" (edge "${spec.edgeKey}")`,
-      ).toBeDefined();
+      ).toBe(true);
     }
   });
 
@@ -825,23 +859,12 @@ describe("findReferentialLivenessViolations", () => {
     // make one violation for every derived edge, then prove the detector returns
     // that complete edge/source/target map in one scan. This retains the exact
     // 50-edge regression guard without paying for 50 database resets and audits.
-    const expected = [] as Array<{
-      edgeKey: string;
-      role: EdgeRole;
-      targetEntity: Entity;
-      targetId: string;
-      sourceTable: string;
-      sourceId: string;
-    }>;
+    const expected: ExpectedViolation[] = [];
 
     for (const spec of derivedMustTargetLiveEdges) {
-      const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
-      const source = await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
-      await softDelete(
-        ctx.db,
-        entityManifest[spec.targetEntity].dbTable!,
-        target.id,
-      );
+      const target = await targetFactoryFor(spec.targetEntity)(ctx.db);
+      const source = await sourceFactoryFor(spec.edgeKey)(ctx.db, target.id);
+      await softDelete(ctx.db, entityTableName(spec.targetEntity), target.id);
       expected.push({
         edgeKey: spec.edgeKey,
         role: spec.role,
@@ -869,13 +892,9 @@ describe("findReferentialLivenessViolations", () => {
     for (const spec of derivedMustTargetLiveEdges.filter(
       (edge) => edge.sourceSoftDeletable,
     )) {
-      const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
-      const source = await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
-      await softDelete(
-        ctx.db,
-        entityManifest[spec.targetEntity].dbTable!,
-        target.id,
-      );
+      const target = await targetFactoryFor(spec.targetEntity)(ctx.db);
+      const source = await sourceFactoryFor(spec.edgeKey)(ctx.db, target.id);
+      await softDelete(ctx.db, entityTableName(spec.targetEntity), target.id);
       await softDelete(ctx.db, spec.sourceTableName, source.id);
     }
 
@@ -884,8 +903,8 @@ describe("findReferentialLivenessViolations", () => {
 
   it("returns no violations for every derived edge while both sides are live", async () => {
     for (const spec of derivedMustTargetLiveEdges) {
-      const target = await TARGET_FACTORIES[spec.targetEntity]!(ctx.db);
-      await SOURCE_FACTORIES[spec.edgeKey]!(ctx.db, target.id);
+      const target = await targetFactoryFor(spec.targetEntity)(ctx.db);
+      await sourceFactoryFor(spec.edgeKey)(ctx.db, target.id);
     }
 
     expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);

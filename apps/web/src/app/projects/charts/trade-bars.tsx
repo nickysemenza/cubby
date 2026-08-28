@@ -26,8 +26,9 @@ type BarDatum = {
   total: number;
 };
 
+const isTrade = (value: string): value is Trade => value in TRADE_LABELS;
 const tradeLabel = (value: string): string =>
-  TRADE_LABELS[value as Trade] ?? value;
+  isTrade(value) ? TRADE_LABELS[value] : value;
 
 export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
   const { data, hiddenCount, expensesByCell } = useMemo(() => {
@@ -69,7 +70,7 @@ export function TradeBars({ expenses }: { expenses: ExpenseOut[] }) {
         indexBy="trade"
         margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
         padding={0.25}
-        colors={(bar) => getCostTypeColor(bar.id as string)}
+        colors={(bar) => getCostTypeColor(String(bar.id))}
         {...nivoBarChrome}
         axisBottom={nivoCurrencyAxis}
         axisLeft={{

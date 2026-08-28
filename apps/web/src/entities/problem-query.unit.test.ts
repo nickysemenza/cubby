@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  defineProblem,
-  type ProblemQuery,
-  validateProblemQueries,
-} from "./problem-query";
+import { defineProblem, validateProblemQueries } from "./problem-query";
 
 const entityProblem = defineProblem({
   key: "productsMissingPrice",
@@ -41,7 +37,7 @@ describe("Problem Query registry", () => {
 
   it("rejects duplicate problem declarations", () => {
     expect(() =>
-      validateProblemQueries([entityProblem, entityProblem] as ProblemQuery[]),
+      validateProblemQueries([entityProblem, entityProblem]),
     ).toThrow('Duplicate Problem declaration "productsMissingPrice"');
   });
 

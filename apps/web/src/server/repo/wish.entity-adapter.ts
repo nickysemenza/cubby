@@ -1,4 +1,4 @@
-import { wishFiltersSchema, wishSortableFields } from "@cubby/schemas/wish";
+import { wishSortableFields } from "@cubby/schemas/wish";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 
@@ -13,7 +13,6 @@ import {
 
 export const wishEntityAdapter = defineEntityAdapter({
   entity: "wish",
-  filters: wishFiltersSchema,
   sort: { fields: wishSortableFields, default: "createdAt" },
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
   repository: {

@@ -9,8 +9,10 @@ import {
 } from "~/entities/filters";
 
 import { calendarFilterSpecs } from "./calendar-filter-specs";
+import { calendarSearchSchema } from "./calendar-search";
 
 export type CalendarFilters = CalendarFiltersInput;
+type CalendarSearch = import("zod").z.output<typeof calendarSearchSchema>;
 
 /**
  * URL search params → the filter half of `calendar.range`'s input.
@@ -18,9 +20,7 @@ export type CalendarFilters = CalendarFiltersInput;
  * Reads through the same `decodeFilters` the chip bar renders from, so the
  * visible chips and the query can't disagree about what the URL says.
  */
-export function buildCalendarFilters(
-  search: Record<string, unknown>,
-): CalendarFilters {
+export function buildCalendarFilters(search: CalendarSearch): CalendarFilters {
   const filters = calendarFiltersInput.parse(
     buildFiltersFromManifest(
       calendarFilterSpecs,

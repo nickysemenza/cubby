@@ -1,12 +1,17 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
+import { z } from "zod";
 
 import type { RuntimeFilterOptions } from "~/app/_components/hooks/filter-option-types";
 import {
   type FilterSpec,
   manifestFilterFields,
 } from "~/entities/filter-manifest";
-import { decodeFilters, encodeFilters } from "~/entities/filters";
+import {
+  decodeFilters,
+  encodeFilters,
+  type FilterSearch,
+} from "~/entities/filters";
 import { cn } from "~/lib/utils";
 
 import { filterStateToBarFilters } from "./filter-bar-core";
@@ -18,7 +23,7 @@ interface ManifestFilterBarProps {
   /** Runtime picklists keyed by each spec's `optionsKey`. */
   filterOptions?: RuntimeFilterOptions;
   /** Current route search params. */
-  search: Record<string, unknown>;
+  search: FilterSearch;
   onSearchChange: (params: Record<string, string | undefined>) => void;
   className?: string;
 }
@@ -55,13 +60,13 @@ export function ManifestFilterBar({
       // `encodeFilters` emits `undefined` (never "") for a cleared key, which
       // is what `stripSearchParams` needs to drop it from the URL entirely.
       onSearchChange(
-        encodeFilters(
-          specs,
-          (columnId) =>
-            columnFilters.find((filter) => filter.id === columnId)?.value as
-              | string
-              | string[]
-              | undefined,
+        encodeFilters(specs, (columnId) =>
+          (() => {
+            const parsed = filterValueSchema.safeParse(
+              columnFilters.find((filter) => filter.id === columnId)?.value,
+            );
+            return parsed.success ? parsed.data : undefined;
+          })(),
         ),
       ),
     [onSearchChange, specs],
@@ -83,3 +88,5 @@ export function ManifestFilterBar({
     />
   );
 }
+
+const filterValueSchema = z.union([z.string(), z.array(z.string())]).optional();

@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { useLocation } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -6,9 +6,10 @@ import { entities } from "~/entities/entities";
 
 /** `/basePath` → entity, e.g. `/products` → "product". */
 const ENTITY_BY_BASEPATH: ReadonlyArray<readonly [string, Entity]> =
-  Object.entries(entities).map(
-    ([entity, def]) => [`/${def.basePath}`, entity as Entity] as const,
-  );
+  Object.entries(entities).flatMap(([rawEntity, def]) => {
+    const entity = entitySchema.safeParse(rawEntity);
+    return entity.success ? [[`/${def.basePath}`, entity.data] as const] : [];
+  });
 
 /**
  * The entity whose `basePath` is the longest matching segment-prefix of the

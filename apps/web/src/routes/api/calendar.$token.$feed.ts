@@ -26,11 +26,11 @@ const PAST_DAYS = 60;
  */
 const FUTURE_DAYS = 305;
 
-const FEEDS: Record<string, IcsFeed> = {
-  "meals.ics": "meals",
-  "tasks.ics": "tasks",
-  "all.ics": "all",
-};
+const FEEDS = new Map<string, IcsFeed>([
+  ["meals.ics", "meals"],
+  ["tasks.ics", "tasks"],
+  ["all.ics", "all"],
+]);
 
 const notFound = () =>
   new Response("Not found", {
@@ -48,7 +48,7 @@ async function handler({ request }: { request: Request }) {
   if (!match) return notFound();
   const [, rawToken, rawFeed] = match;
 
-  const feed = rawFeed ? FEEDS[rawFeed] : undefined;
+  const feed = rawFeed ? FEEDS.get(rawFeed) : undefined;
   if (!feed || !rawToken) return notFound();
 
   let token: string;

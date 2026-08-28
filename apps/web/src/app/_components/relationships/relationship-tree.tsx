@@ -5,12 +5,12 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
 import { Button } from "~/components/ui/button";
-import type { EntityDetailRoute } from "~/entities/entities";
 import {
-  entities,
+  browserEntityDefinition,
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
+import type { EntityDetailRoute } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
 import { TableLink } from "../table/TableLink";
@@ -147,7 +147,13 @@ function EntityRow({
         />
         {isBrowserRoutedEntity(item.entity) ? (
           <TableLink
-            to={entities[item.entity].routes.detail as EntityDetailRoute}
+            to={
+              // SAFETY: `isBrowserRoutedEntity` proves this entity has a detail
+              // route; the generated manifest loses that key correlation when
+              // indexing through the runtime entity union.
+              browserEntityDefinition(item.entity).routes
+                .detail as EntityDetailRoute
+            }
             params={routeParams(item)}
             className="min-w-0 truncate"
             variant="muted"

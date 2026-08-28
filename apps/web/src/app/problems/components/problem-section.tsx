@@ -58,26 +58,26 @@ const routeEntityId = (route: RoutePattern): string =>
  * missed href routes entirely and had no entry for expenses, ingredients, meals
  * or cookbooks, so a large share of the page read "open the full record page".
  */
-const ROUTE_NOUN: Record<string, string> = {
-  products: "product",
-  recipes: "recipe",
-  inventory: "inventory entry",
-  locations: "location",
-  purchases: "purchase",
-  vendors: "vendor",
-  expenses: "expense",
-  ingredients: "ingredient",
-  projects: "project",
-  tasks: "task",
-  meals: "meal",
-  cookbooks: "cookbook",
-  financial: "financial record",
-};
+const ROUTE_NOUN = new Map([
+  ["products", "product"],
+  ["recipes", "recipe"],
+  ["inventory", "inventory entry"],
+  ["locations", "location"],
+  ["purchases", "purchase"],
+  ["vendors", "vendor"],
+  ["expenses", "expense"],
+  ["ingredients", "ingredient"],
+  ["projects", "project"],
+  ["tasks", "task"],
+  ["meals", "meal"],
+  ["cookbooks", "cookbook"],
+  ["financial", "financial record"],
+]);
 
 /** First path segment of either route shape, e.g. `/expenses/EXP-1` → `expenses`. */
 const routeNoun = (route: RoutePattern): string => {
   const path = "href" in route ? route.href : route.to;
-  return ROUTE_NOUN[path.split("/").filter(Boolean)[0] ?? ""] ?? "record";
+  return ROUTE_NOUN.get(path.split("/").filter(Boolean)[0] ?? "") ?? "record";
 };
 
 // Icon can be either a LucideIcon component or an entity key
@@ -143,11 +143,11 @@ type ProblemTone = "critical" | "warning" | "info";
  * Tone → spine class. Static strings, not templated: Tailwind scans source
  * text, so a computed class name would be dropped from the build.
  */
-const TONE_SPINE: Record<ProblemTone, string> = {
+const TONE_SPINE = {
   critical: "border-l-[length:var(--border-spine-card)] border-l-destructive",
   warning: "border-l-[length:var(--border-spine-card)] border-l-warning",
   info: "border-l-[length:var(--border-spine-card)] border-l-slate",
-};
+} satisfies Record<ProblemTone, string>;
 
 /** A coverage section's denominator — the "M" in "N of M photographed". */
 type ProblemSectionMeter = {

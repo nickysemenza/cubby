@@ -36,6 +36,10 @@ const SEARCH_SCOPE_ALIASES = {
   expenses: "expense",
 } as const satisfies Record<string, SearchableEntity>;
 
+const isSearchScopeAlias = (
+  value: string,
+): value is keyof typeof SEARCH_SCOPE_ALIASES => value in SEARCH_SCOPE_ALIASES;
+
 interface CommandSearchScope {
   entityType: SearchableEntity | null;
   query: string;
@@ -51,8 +55,9 @@ export function parseCommandSearchScope(value: string): CommandSearchScope {
   if (separatorIndex < 0) return { entityType: null, query: value };
 
   const alias = value.slice(0, separatorIndex).trim().toLocaleLowerCase();
-  const entityType =
-    SEARCH_SCOPE_ALIASES[alias as keyof typeof SEARCH_SCOPE_ALIASES];
+  const entityType = isSearchScopeAlias(alias)
+    ? SEARCH_SCOPE_ALIASES[alias]
+    : undefined;
 
   return entityType
     ? {

@@ -13,14 +13,14 @@ import { cn } from "~/lib/utils";
 // The ordered key membership is canonical in `@cubby/usda-schemas`
 // (`KEY_NUTRIENT_KEYS`), shared with the unit-mapping macro chips so they can't
 // drift; only these presentation labels live here.
-const SHORT_LABEL: Record<(typeof KEY_NUTRIENT_KEYS)[number], string> = {
+const SHORT_LABEL = {
   kcal: "Cal",
   protein: "Protein",
   fat: "Fat",
   carbs: "Carbs",
   fiber: "Fiber",
   sodium: "Sodium",
-};
+} satisfies Record<(typeof KEY_NUTRIENT_KEYS)[number], string>;
 
 export const KEY_NUTRIENTS = KEY_NUTRIENT_KEYS.map((key) => ({
   code: TIER1_NUTRIENTS[key].code,

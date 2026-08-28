@@ -3,7 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, type FullConfig } from "@playwright/test";
 import { createTestHarness, type TestHarness } from "wrangler";
+import { z } from "zod";
+
 import { createE2EDatabase } from "./e2e-database";
+import "./e2e-runtime-state";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,7 +23,7 @@ async function globalSetup(_config: FullConfig): Promise<void> {
 
   // Install the provider before starting the harness so global teardown can
   // always close the PGlite socket and WASM database after Worker shutdown.
-  (globalThis as Record<string, unknown>).__E2E_DATABASE__ = database;
+  globalThis.__E2E_DATABASE__ = database;
 
   // 2. Start the Cloudflare test harness against the production build.
   const webRoot = path.join(__dirname, "../..");
@@ -31,13 +34,15 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   // server never becomes ready. E2E is hermetic and never invokes AI, so we run
   // against a copy of the build config with the binding removed. This also keeps
   // AI features reported unavailable, matching pre-binding E2E behavior.
-  const e2eConfig = JSON.parse(
-    readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
-  ) as Record<string, unknown>;
+  const e2eConfig = z
+    .object({ compatibility_date: z.string(), ai: z.json().optional() })
+    .loose()
+    .parse(
+      JSON.parse(
+        readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
+      ),
+    );
   const compatibilityDate = e2eConfig.compatibility_date;
-  if (typeof compatibilityDate !== "string") {
-    throw new Error("Built Wrangler config is missing compatibility_date");
-  }
   delete e2eConfig.ai;
   writeFileSync(
     path.join(webRoot, "dist/server/wrangler.e2e.json"),
@@ -108,12 +113,12 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     harness.debug();
     await harness.close();
     await database.close();
-    delete (globalThis as Record<string, unknown>).__E2E_DATABASE__;
+    globalThis.__E2E_DATABASE__ = undefined;
     throw error;
   }
 
   // Store the live harness for the reporter and global teardown.
-  (globalThis as Record<string, unknown>).__E2E_HARNESS__ = harness;
+  globalThis.__E2E_HARNESS__ = harness;
   process.env.E2E_DATABASE_URL = databaseUrl;
   // Playwright resolves project.use before global setup. Its documented global
   // setup environment handoff lets the shared test fixture supply the harness's
@@ -153,27 +158,27 @@ async function globalSetup(_config: FullConfig): Promise<void> {
       },
     },
   );
-
-  if (!signUpResponse.ok()) {
+  let authenticationResponse = signUpResponse;
+  if (signUpResponse.ok()) {
+    console.log("[E2E Setup] Test user created and authenticated");
+  } else {
     console.log("[E2E Setup] User already exists, signing in instead...");
+    authenticationResponse = await page.request.post(
+      `${baseURL}/api/auth/sign-in/email`,
+      {
+        headers: { Origin: baseURL },
+        data: {
+          email: testEmail,
+          password: testPassword,
+        },
+      },
+    );
   }
 
-  // Sign in to get session
-  const signInResponse = await page.request.post(
-    `${baseURL}/api/auth/sign-in/email`,
-    {
-      headers: { Origin: baseURL },
-      data: {
-        email: testEmail,
-        password: testPassword,
-      },
-    },
-  );
-
-  if (!signInResponse.ok()) {
-    const errorText = await signInResponse.text();
+  if (!authenticationResponse.ok()) {
+    const errorText = await authenticationResponse.text();
     throw new Error(
-      `Failed to sign in: ${signInResponse.status()} - ${errorText}`,
+      `Failed to authenticate test user: ${authenticationResponse.status()} - ${errorText}`,
     );
   }
 

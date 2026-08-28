@@ -5,8 +5,8 @@ import type { FoodSummary } from "@cubby/usda-schemas";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
+import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { quickCreateProduct } from "~/server/repo/product";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -18,17 +18,23 @@ import {
 } from "./product-orchestration.service";
 import { createProductWriteActions } from "./product.service";
 import { RecipeCostingService } from "./recipe-costing.service";
+import type { UsdaFoodBatchPort } from "./usda-helpers";
 
 // Fakes never hit the network — `findFood`/`lookup` are the only methods the
 // cascade calls, so a plain object stands in for the concrete client classes.
 const fakeUsdaClient = (
-  findFood: (...args: unknown[]) => Promise<FoodSummary | null> = async () =>
-    null,
-): USDAClient => ({ findFood: vi.fn(findFood) }) as unknown as USDAClient;
+  findFood: UsdaFoodLookupPort["findFood"] = async () => null,
+): UsdaFoodLookupPort & UsdaFoodBatchPort => {
+  const findOne = vi.fn(findFood);
+  return {
+    findFood: findOne,
+    findFoodsBatch: vi.fn(async (lookups) => Promise.all(lookups.map(findOne))),
+  };
+};
 
 const fakeUpcLookupClient = (
   lookup: (upc: string) => Promise<UPCLookupResponse | null> = async () => null,
-): UPCLookupClient => {
+): UpcLookupPort => {
   const single = vi.fn(lookup);
   return {
     lookup: single,
@@ -43,7 +49,7 @@ const fakeUpcLookupClient = (
         ),
       );
     }),
-  } as unknown as UPCLookupClient;
+  };
 };
 
 const upcResponse = (

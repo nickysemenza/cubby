@@ -30,7 +30,7 @@ import {
   type ProductUpdateInput,
   productSortableFields,
 } from "@cubby/schemas/product";
-import type { RelatedViewKey } from "@cubby/schemas/related-view";
+import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
@@ -47,6 +47,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -95,6 +96,7 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  imageJoinBindings,
   insertAndReturn,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -240,12 +242,16 @@ const resolveProductSort = (sort: SortParams) => {
   // expression, and `where` — never a hand copy. See `relatedSortExpression`.
   if (sort.orderBy.startsWith("related:")) {
     const relationKey = sort.orderBy.slice("related:".length);
+    const parsedRelationKey = relatedViewKeySchema.safeParse(relationKey);
+    if (!parsedRelationKey.success) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Unknown related-view sort ${relationKey}`,
+      );
+    }
     return [
-      // Every `related:`-prefixed sortable field IS a registry key — the two
-      // lists are the same closed set — and `sqlRelatedView` throws loudly on
-      // one that is not.
       sql`${relatedSortExpression(
-        relationKey as RelatedViewKey,
+        parsedRelationKey.data,
         '"product"."id"',
       )} ${sql.raw(dirSql)}`,
     ];
@@ -1173,24 +1179,35 @@ export const getProductPickerItemsByIds = async (
  * Drizzle wraps the driver error as "Failed query: …" and hides the real cause,
  * so the raw message never says "duplicate" — we dig it out here.
  */
-function findUniqueViolation(
-  error: unknown,
+const databaseErrorNodeSchema = z
+  .object({
+    code: z.string().optional(),
+    constraint: z.string().optional(),
+    detail: z.string().optional(),
+    cause: z
+      .union([z.instanceof(Error), z.object({}).passthrough()])
+      .optional(),
+  })
+  .passthrough();
+
+function findUniqueViolation<TError>(
+  error: TError,
+  depth = 0,
 ): { constraint: string; detail: string } | null {
-  let current: unknown = error;
-  for (let depth = 0; depth < 6 && current != null; depth++) {
-    if (
-      typeof current === "object" &&
-      (current as { code?: unknown }).code === "23505"
-    ) {
-      const e = current as { constraint?: unknown; detail?: unknown };
-      return {
-        constraint: typeof e.constraint === "string" ? e.constraint : "",
-        detail: typeof e.detail === "string" ? e.detail : "",
-      };
-    }
-    current = (current as { cause?: unknown })?.cause;
+  if (depth >= 6) return null;
+  const parsedError = databaseErrorNodeSchema.safeParse(error);
+  if (!parsedError.success) return null;
+
+  const current = parsedError.data;
+  if (current.code === "23505") {
+    return {
+      constraint: current.constraint ?? "",
+      detail: current.detail ?? "",
+    };
   }
-  return null;
+  return current.cause === undefined
+    ? null
+    : findUniqueViolation(current.cause, depth + 1);
 }
 
 /**
@@ -1198,12 +1215,12 @@ function findUniqueViolation(
  * CONFLICT error (naming the conflicting product/ingredient where possible).
  * No-op if the error isn't a unique violation, so callers can rethrow.
  */
-async function throwIfDuplicateProduct(
+async function throwIfDuplicateProduct<TError>(
   db: Database,
   data: Pick<ProductCreateInput, "name" | "manufacturer"> & {
     upc?: string | null;
   },
-  error: unknown,
+  error: TError,
 ): Promise<void> {
   const violation = findUniqueViolation(error);
   if (!violation) return;
@@ -1396,8 +1413,7 @@ export const createProduct = async (
 
         await associatePendingImages(
           tx,
-          productImage,
-          "productId",
+          imageJoinBindings.product,
           newProduct.id,
           resolvedImageIds,
         );
@@ -1502,18 +1518,9 @@ export const updateProduct = async (
         manufacturer: columnData.manufacturer ?? beforeProduct.manufacturer,
         upc: incomingGtin ?? undefined,
       };
-      const updateData: {
-        name?: string;
-        aliases?: string[];
-        tags?: string[];
-        manufacturer?: string;
-        category?: ProductCategory | null;
-        fdc_id?: number | null;
-        model?: string | null;
-        expectedQuantity?: number | null;
-        ingredientId?: IngredientId | null;
-        price?: number | null;
-      } = { ...columnData };
+      const updateData: Partial<typeof product.$inferInsert> = {
+        ...columnData,
+      };
 
       if (ingredientId !== undefined) {
         updateData.ingredientId = ingredientId;
@@ -2031,13 +2038,12 @@ export const quickCreateProduct = async (
  * shape (a `.query.<table>.findMany` call) a flat disposition string can't
  * express, since each acquisition edge lives on a different table.
  */
-const PRODUCT_RETAINING_DEPENDENTS: Record<
-  ProductRetainingEdgeKey,
-  (
-    tx: DrizzleClient | DrizzleTransaction,
-    ids: ProductId[],
-  ) => Promise<Array<{ productId: ProductId | null }>>
-> = {
+type ProductDependentFetcher = (
+  tx: DrizzleClient | DrizzleTransaction,
+  ids: ProductId[],
+) => Promise<Array<{ productId: ProductId | null }>>;
+
+const PRODUCT_RETAINING_DEPENDENTS = {
   "InventoryEntry.productId": (tx, ids) =>
     tx.query.inventoryEntry.findMany({
       where: and(
@@ -2106,7 +2112,7 @@ const PRODUCT_RETAINING_DEPENDENTS: Record<
       productId: componentProductId,
     }));
   },
-};
+} satisfies Record<ProductRetainingEdgeKey, ProductDependentFetcher>;
 
 /**
  * Soft delete products by setting deletedAt timestamp.
@@ -2132,9 +2138,12 @@ export const deleteProducts = async (
     await lockAndValidateForDelete(tx, product, ids, "Product");
 
     /** Product deletion must reject live acquisition/history evidence through the shared incoming-edge policy. */
+    // SAFETY: Object.keys returns exactly the own keys of this complete,
+    // non-mutated Record<ProductRetainingEdgeKey, ...>; TypeScript erases that
+    // key correlation from its standard-library return type.
     for (const key of Object.keys(
       PRODUCT_RETAINING_DEPENDENTS,
-    ) as Array<ProductRetainingEdgeKey>) {
+    ) as ProductRetainingEdgeKey[]) {
       // Iterate `PRODUCT_RETAINING_DEPENDENTS`'s own keys — typed
       // `Record<ProductRetainingEdgeKey, ...>` (see ./edge-roles) — rather
       // than every policy entry, so `key` is provably in that type with no

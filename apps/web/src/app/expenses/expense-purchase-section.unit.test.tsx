@@ -1,44 +1,19 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import {
+  expenseChargeContextOut,
+  type ExpenseOut,
+} from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
-const useQueryMock = vi.hoisted(() => vi.fn());
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  queryOptions: (options: unknown) => options,
-  useQuery: useQueryMock,
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    params,
-    className,
-    ...props
-  }: {
-    children?: ReactNode;
-    to: string;
-    params?: Record<string, string>;
-    className?: string;
-  }) => {
-    const href = params
-      ? Object.entries(params).reduce(
-          (path, [key, value]) => path.replace(`$${key}`, value),
-          to,
-        )
-      : to;
-    return (
-      <a href={href} className={className} {...props}>
-        {children}
-      </a>
-    );
-  },
-}));
-
-import { ExpensePurchaseSection } from "./expense-purchase-section";
+import {
+  type ExpensePurchaseOperations,
+  ExpensePurchaseSection,
+} from "./expense-purchase-section";
+import { expense as expenseOperations } from "./expense.functions";
 
 const expense: ExpenseOut = {
   id: testShortcode("expense", "EXP-2345"),
@@ -75,21 +50,42 @@ const expense: ExpenseOut = {
 const purchase = {
   id: testShortcode("purchase", "PUR-2345"),
   orderId: "#11325",
+  displayLabel: null,
   date: "2026-07-29",
   vendorId: testShortcode("vendor", "VEN-2345"),
   vendorName: "Tool Nirvana",
 };
 
+const buildOperations = (
+  context: z.input<typeof expenseChargeContextOut>,
+): ExpensePurchaseOperations => {
+  const chargeContext = expenseOperations.chargeContext.withTransport(
+    async () => expenseChargeContextOut.parse(context),
+  );
+  return { chargeContext: chargeContext.queryOptions };
+};
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
 describe("ExpensePurchaseSection", () => {
-  it("renders the canonical purchase label as the only purchase link", () => {
-    useQueryMock.mockReturnValue({
-      data: { purchase, siblings: [] },
-      isPending: false,
-    });
+  it("renders the canonical purchase label as the only purchase link", async () => {
+    render(
+      <ExpensePurchaseSection
+        expense={expense}
+        operations={buildOperations({ purchase, siblings: [] })}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
-    render(<ExpensePurchaseSection expense={expense} />);
-
-    const chargeLink = screen.getByRole("link", { name: /#11325/ });
+    const chargeLink = await screen.findByRole("link", { name: /#11325/ });
     expect(chargeLink).toHaveAttribute("href", "/purchases/PUR-2345");
     expect(within(chargeLink).getByText("#11325")).toHaveClass(
       "decoration-dotted",
@@ -99,18 +95,19 @@ describe("ExpensePurchaseSection", () => {
     expect(screen.getAllByText("#11325")).toHaveLength(1);
   });
 
-  it("uses the canonical purchase date for an orderless purchase label", () => {
-    useQueryMock.mockReturnValue({
-      data: {
-        purchase: { ...purchase, orderId: null },
-        siblings: [],
-      },
-      isPending: false,
-    });
+  it("uses the canonical purchase date for an orderless purchase label", async () => {
+    render(
+      <ExpensePurchaseSection
+        expense={{ ...expense, orderId: null }}
+        operations={buildOperations({
+          purchase: { ...purchase, orderId: null },
+          siblings: [],
+        })}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
-    render(<ExpensePurchaseSection expense={{ ...expense, orderId: null }} />);
-
-    const chargeLink = screen.getByRole("link", {
+    const chargeLink = await screen.findByRole("link", {
       name: /Tool Nirvana.*Jul 29, 2026/,
     });
     expect(chargeLink).toHaveAttribute("href", "/purchases/PUR-2345");

@@ -179,7 +179,6 @@ export async function projectDependencyIds(
 }> {
   return dependencyIdsFor(
     db,
-    projectDependency,
     {
       ownColumn: projectDependency.projectId,
       blockedByColumn: projectDependency.blockedByProjectId,

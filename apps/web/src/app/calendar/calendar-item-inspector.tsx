@@ -22,6 +22,7 @@ import {
   PopoverTitle,
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import type { EntityMutationPort } from "~/entities/editing/types";
 import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
@@ -32,6 +33,10 @@ import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 
 interface CalendarItemInspectorProps {
   handle: PopoverHandle<CalendarItem>;
+}
+
+export interface CalendarItemInspectorOperations {
+  readonly mutationPort?: EntityMutationPort;
 }
 
 function CalendarItemInspector({ handle }: CalendarItemInspectorProps) {
@@ -103,10 +108,12 @@ function CalendarInspectorBody({
   item,
   onCancel,
   onSaved,
+  operations,
 }: {
   item: CalendarItem;
   onCancel: () => void;
   onSaved?: () => void;
+  operations?: CalendarItemInspectorOperations;
 }) {
   const edit = calendarItemEditDescriptor(item);
   if (edit.mode === "read-only") {
@@ -118,6 +125,7 @@ function CalendarInspectorBody({
       edit={edit}
       onCancel={onCancel}
       onSaved={onSaved}
+      operations={operations}
     />
   );
 }
@@ -127,6 +135,7 @@ function EditableCalendarItem({
   edit,
   onCancel,
   onSaved,
+  operations,
 }: {
   item: CalendarItem;
   edit: Extract<
@@ -135,14 +144,18 @@ function EditableCalendarItem({
   >;
   onCancel: () => void;
   onSaved?: () => void;
+  operations?: CalendarItemInspectorOperations;
 }) {
-  const session = useEntityEditSession({
-    entity: edit.entity,
-    operation: "update",
-    intent: edit.intent,
-    surface: "calendar",
-    record: edit.record,
-  });
+  const session = useEntityEditSession(
+    {
+      entity: edit.entity,
+      operation: "update",
+      intent: edit.intent,
+      surface: "calendar",
+      record: edit.record,
+    },
+    operations,
+  );
   const error = session.issues.find((issue) => !issue.field)?.message;
 
   return (

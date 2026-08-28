@@ -2,48 +2,13 @@ import type {
   BackgroundBatchSummary,
   BackgroundJobSummary,
 } from "@cubby/schemas/background-jobs";
-import { flexRender } from "@tanstack/react-table";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CubbyTable } from "~/app/_components/data-table/table-features";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import type { BackgroundJobTableRow } from "./background-job-rows";
 import { buildBackgroundJobRows } from "./background-job-rows";
 import { BackgroundJobsTable } from "./background-jobs-table";
-
-const { renderTable } = vi.hoisted(() => ({
-  renderTable: vi.fn(
-    (props: {
-      additionalToolbarContent?: ReactNode;
-      actions?: ReactNode;
-      emptyState?: ReactNode;
-    }) => (
-      <div data-testid="standard-workbench">
-        {props.additionalToolbarContent}
-        {props.actions}
-        {props.emptyState}
-      </div>
-    ),
-  ),
-}));
-
-vi.mock("~/app/_components/data-table/Table", () => ({
-  default: renderTable,
-}));
-
-vi.mock("~/app/_components/data-table/useTableState", () => ({
-  useTableState: () => ({
-    sorting: [{ id: "createdAt", desc: true }],
-    setSorting: vi.fn(),
-    columnFilters: [],
-    allFilters: [],
-    setColumnFilters: vi.fn(),
-    pagination: { pageIndex: 0, pageSize: 25 },
-    setPagination: vi.fn(),
-  }),
-}));
 
 const batch: BackgroundBatchSummary = {
   id: "batch-1",
@@ -88,19 +53,84 @@ const job: BackgroundJobSummary = {
   updatedAt: batch.updatedAt,
 };
 
+interface BackgroundJobsTableEvents {
+  readonly onRetry: () => void;
+  readonly onExpandedBatchChange: (batchId?: string) => void;
+  readonly onFailedOnlyChange: (batchId: string, failedOnly: boolean) => void;
+  readonly onRetryBatch: (batchId: string) => void;
+  readonly onCancelBatch: (batchId: string) => void;
+  readonly onRetryJob: (jobId: string) => void;
+  readonly onPageChange: (pageIndex: number) => void;
+  readonly retrySelectedSummary: () => void;
+  readonly retryCount: () => number;
+  readonly expandedBatchIds: () => Array<string | undefined>;
+  readonly failedOnlyChanges: () => Array<{
+    batchId: string;
+    failedOnly: boolean;
+  }>;
+  readonly selectedSummaryRetryCount: () => number;
+}
+
+function createBackgroundJobsTableEvents(): BackgroundJobsTableEvents {
+  let retries = 0;
+  let selectedSummaryRetries = 0;
+  const expandedBatchIds: Array<string | undefined> = [];
+  const failedOnlyChanges: Array<{ batchId: string; failedOnly: boolean }> = [];
+
+  return {
+    onRetry: () => {
+      retries += 1;
+    },
+    onExpandedBatchChange: (batchId) => {
+      expandedBatchIds.push(batchId);
+    },
+    onFailedOnlyChange: (batchId, failedOnly) => {
+      failedOnlyChanges.push({ batchId, failedOnly });
+    },
+    onRetryBatch: () => undefined,
+    onCancelBatch: () => undefined,
+    onRetryJob: () => undefined,
+    onPageChange: () => undefined,
+    retrySelectedSummary: () => {
+      selectedSummaryRetries += 1;
+    },
+    retryCount: () => retries,
+    expandedBatchIds: () => expandedBatchIds,
+    failedOnlyChanges: () => failedOnlyChanges,
+    selectedSummaryRetryCount: () => selectedSummaryRetries,
+  };
+}
+
+interface RenderWorkbenchOptions {
+  readonly selectedBatchId?: string;
+  readonly batches?: BackgroundBatchSummary[];
+  readonly error?: Error | null;
+  readonly selectedBatchError?: string;
+}
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(async () => {
+  harness = createBrowserTestHarness();
+  await act(async () => {
+    await harness.loadRouter();
+  });
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
 function renderWorkbench(
-  selectedBatchId?: string,
-  batches: BackgroundBatchSummary[] = [batch],
-  error: unknown = null,
-  onRetry = vi.fn(),
-  selectedBatchError?: string,
-  selectedBatchRetry = vi.fn(),
-) {
+  options: RenderWorkbenchOptions = {},
+): BackgroundJobsTableEvents {
+  const events = createBackgroundJobsTableEvents();
+  const selectedBatchId = options.selectedBatchId;
   const rows = buildBackgroundJobRows({
-    batches,
+    batches: options.batches ?? [batch],
     selectedBatchId,
-    selectedBatchError,
-    selectedBatchRetry,
+    selectedBatchError: options.selectedBatchError,
+    selectedBatchRetry: events.retrySelectedSummary,
     selectedJobs: selectedBatchId
       ? {
           status: "ready",
@@ -112,66 +142,60 @@ function renderWorkbench(
         }
       : undefined,
   });
-  const onExpandedBatchChange = vi.fn();
-  const onFailedOnlyChange = vi.fn();
   render(
     <BackgroundJobsTable
       rows={rows}
       selectedBatchId={selectedBatchId}
       showFailedOnly={false}
       isLoading={false}
-      error={error}
-      onRetry={onRetry}
+      error={options.error ?? null}
+      onRetry={events.onRetry}
       actions={<button type="button">Drain pending</button>}
-      onExpandedBatchChange={onExpandedBatchChange}
-      onFailedOnlyChange={onFailedOnlyChange}
-      onRetryBatch={vi.fn()}
-      onCancelBatch={vi.fn()}
-      onRetryJob={vi.fn()}
-      onPageChange={vi.fn()}
+      onExpandedBatchChange={events.onExpandedBatchChange}
+      onFailedOnlyChange={events.onFailedOnlyChange}
+      onRetryBatch={events.onRetryBatch}
+      onCancelBatch={events.onCancelBatch}
+      onRetryJob={events.onRetryJob}
+      onPageChange={events.onPageChange}
     />,
+    { wrapper: harness.routerWrapper },
   );
-  const props = renderTable.mock.lastCall?.[0] as {
-    table: CubbyTable<BackgroundJobTableRow>;
-    ariaLabel: string;
-    verticalAlign: string;
-  };
-  return { ...props, onExpandedBatchChange, onFailedOnlyChange };
+  return events;
 }
 
 describe("BackgroundJobsTable", () => {
-  it("uses the standard workbench and exposes the selected jobs as subrows", () => {
-    const { table, ariaLabel, verticalAlign } = renderWorkbench(batch.id);
+  it("uses the standard workbench and exposes the selected jobs as subrows", async () => {
+    renderWorkbench({ selectedBatchId: batch.id });
 
-    expect(screen.getByTestId("standard-workbench")).toBeVisible();
+    expect(
+      await screen.findByRole("table", { name: "Background jobs" }),
+    ).toBeVisible();
     expect(screen.getByRole("button", { name: "Drain pending" })).toBeVisible();
-    expect(ariaLabel).toBe("Background jobs");
-    expect(verticalAlign).toBe("top");
-    expect(table.getRowModel().rows.map((row) => row.id)).toEqual([
-      "batch:batch-1",
-      "job:job-1",
-    ]);
-    expect(table.getRow("batch:batch-1").getCanExpand()).toBe(true);
-    expect(table.getRow("job:job-1").getCanExpand()).toBe(false);
+    expect(screen.getByText("batch-1")).toBeVisible();
+    expect(screen.getByText("job-1")).toBeVisible();
   });
 
-  it("maps disclosure changes back to the singular batch id", () => {
-    const { table, onExpandedBatchChange } = renderWorkbench();
+  it("maps disclosure changes back to the singular batch id", async () => {
+    const events = renderWorkbench();
 
-    act(() => table.getRow("batch:batch-1").toggleExpanded(true));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand batch" }),
+    );
 
-    expect(onExpandedBatchChange).toHaveBeenCalledWith("batch-1");
+    expect(events.expandedBatchIds()).toEqual(["batch-1"]);
   });
 
-  it("clears the singular batch id when the selected row collapses", () => {
-    const { table, onExpandedBatchChange } = renderWorkbench(batch.id);
+  it("clears the singular batch id when the selected row collapses", async () => {
+    const events = renderWorkbench({ selectedBatchId: batch.id });
 
-    act(() => table.getRow("batch:batch-1").toggleExpanded(false));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Collapse batch" }),
+    );
 
-    expect(onExpandedBatchChange).toHaveBeenCalledWith(undefined);
+    expect(events.expandedBatchIds()).toEqual([undefined]);
   });
 
-  it("sorts created dates chronologically rather than by their display text", () => {
+  it("sorts created dates chronologically rather than by their display text", async () => {
     const january = {
       ...batch,
       id: "january",
@@ -183,63 +207,42 @@ describe("BackgroundJobsTable", () => {
       createdAt: new Date("2026-06-01T00:00:00.000Z"),
     };
 
-    const { table } = renderWorkbench(undefined, [january, june]);
+    renderWorkbench({ batches: [january, june] });
 
-    expect(table.getRowModel().rows.map((row) => row.id)).toEqual([
-      "batch:june",
-      "batch:january",
+    const records = (await screen.findAllByText(/^(january|june)$/)).map(
+      (element) => element.textContent,
+    );
+    expect(records).toEqual(["june", "january"]);
+  });
+
+  it("carries failed-only intent when its batch is not selected yet", async () => {
+    const events = renderWorkbench();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
+    fireEvent.click(await screen.findByText("Show failed jobs"));
+
+    expect(events.failedOnlyChanges()).toEqual([
+      { batchId: "batch-1", failedOnly: true },
     ]);
   });
 
-  it("carries failed-only intent when its batch is not selected yet", () => {
-    const { table, onFailedOnlyChange } = renderWorkbench();
-    const cell = table
-      .getRow("batch:batch-1")
-      .getAllCells()
-      .find(({ column }) => column.id === "actions");
-    if (!cell) throw new Error("Missing actions cell");
-    render(flexRender(cell.column.columnDef.cell, cell.getContext()));
+  it("keeps cached rows recoverable when the list query errors", async () => {
+    const events = renderWorkbench({ error: new Error("Queue unavailable") });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
-    fireEvent.click(screen.getByText("Show failed jobs"));
-
-    expect(onFailedOnlyChange).toHaveBeenCalledWith("batch-1", true);
-  });
-
-  it("keeps cached rows recoverable when the list query errors", () => {
-    const onRetry = vi.fn();
-    renderWorkbench(
-      undefined,
-      [batch],
-      new Error("Queue unavailable"),
-      onRetry,
-    );
-
-    expect(screen.getByRole("alert")).toBeVisible();
+    expect(await screen.findByRole("alert")).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", { name: "Retry background jobs" }),
     );
-    expect(onRetry).toHaveBeenCalledOnce();
+    expect(events.retryCount()).toBe(1);
   });
 
-  it("renders a retry action for a recent selected-summary error", () => {
-    const selectedBatchRetry = vi.fn();
-    const { table } = renderWorkbench(
-      batch.id,
-      [batch],
-      null,
-      vi.fn(),
-      "Summary unavailable",
-      selectedBatchRetry,
-    );
-    const statusRow = table.getRow("status:batch-1:error");
-    const cell = statusRow
-      .getAllCells()
-      .find(({ column }) => column.id === "record");
-    if (!cell) throw new Error("Missing status cell");
-    render(flexRender(cell.column.columnDef.cell, cell.getContext()));
+  it("renders a retry action for a recent selected-summary error", async () => {
+    const events = renderWorkbench({
+      selectedBatchId: batch.id,
+      selectedBatchError: "Summary unavailable",
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(selectedBatchRetry).toHaveBeenCalledOnce();
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    expect(events.selectedSummaryRetryCount()).toBe(1);
   });
 });

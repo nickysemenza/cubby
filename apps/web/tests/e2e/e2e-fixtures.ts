@@ -7,7 +7,9 @@ import { testUserId } from "@cubby/schemas/testing";
 import type { Page } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import type { Database } from "~/server/db";
+import { z } from "zod";
+
+import { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
@@ -19,6 +21,10 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 type CreatedEntity = { id: string };
+const fixtureSessionSchema = z.object({
+  user: z.object({ id: z.string().min(1) }).optional(),
+});
+const createdEntitySchema = z.object({ id: z.string().min(1) });
 
 let fixtureDb: Database | undefined;
 
@@ -32,7 +38,11 @@ function getFixtureDb(): Database {
     );
   }
   const pool = new Pool({ connectionString, max: 2, allowExitOnIdle: true });
-  fixtureDb = drizzle(pool, { schema }) as unknown as Database;
+  const client = drizzle(pool, { schema });
+  fixtureDb = new Database(() => ({
+    client,
+    withConnection: (run) => run(client),
+  }));
   return fixtureDb;
 }
 
@@ -41,18 +51,16 @@ async function fixtureUserId(page: Page) {
   if (!response.ok()) {
     throw new Error(`Fixture session lookup failed: ${response.status()}`);
   }
-  const session = (await response.json()) as {
-    user?: { id?: string };
-  };
+  const session = fixtureSessionSchema.parse(await response.json());
   const userId = session.user?.id;
   if (!userId) throw new Error("Fixture session has no authenticated user id");
   return testUserId(userId);
 }
 
-async function createFixture(
+async function createFixture<Input>(
   page: Page,
   entity: Extract<EntityBrowserMutationCommand, { action: "create" }>["entity"],
-  input: unknown,
+  input: Input,
 ): Promise<CreatedEntity> {
   const db = getFixtureDb();
   const context = requireActor(
@@ -69,11 +77,7 @@ async function createFixture(
   if (result.action !== "create") {
     throw new Error(`Fixture ${entity}.create returned the wrong action`);
   }
-  const output = result.item;
-  if (!output || typeof output !== "object" || !("id" in output)) {
-    throw new Error(`Fixture ${entity}.create returned no entity id`);
-  }
-  return output;
+  return createdEntitySchema.parse(result.item);
 }
 
 const productFixtureInput = (name: string, manufacturer: string) =>

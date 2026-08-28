@@ -69,13 +69,13 @@ type TraceAttributes = Record<string, string | number | boolean | undefined>;
 export const expenseAnalyzeTraceAttributes = (
   input: z.output<typeof expenseAnalyzeInput>,
   result?: z.output<typeof expenseAnalyzeOut>,
-): TraceAttributes => {
+) => {
   const request = {
     "expense.analyze.shape": input.columnDimension ? "2d" : "1d",
     "expense.analyze.row_dimension": input.rowDimension,
     "expense.analyze.column_dimension": input.columnDimension ?? "none",
     "expense.analyze.comparison": input.comparison,
-  };
+  } satisfies TraceAttributes;
   if (!result) return request;
   return result.status === "ready"
     ? {
@@ -96,19 +96,21 @@ export const expenseAnalyzeTraceAttributes = (
 export const expenseFacetTraceAttributes = (
   input: z.output<typeof expenseFacetCountsInput>,
   result?: z.output<typeof expenseFacetCountsOut>,
-): TraceAttributes => ({
-  "expense.facets.requested_ids": input.facetIds.join(","),
-  "expense.facets.requested_count": input.facetIds.length,
-  ...(result
-    ? {
-        "expense.facets.returned_count": result.facets.length,
-        "expense.facets.option_count": result.facets.reduce(
-          (total, facet) => total + facet.options.length,
-          0,
-        ),
-      }
-    : {}),
-});
+) => {
+  const request = {
+    "expense.facets.requested_ids": input.facetIds.join(","),
+    "expense.facets.requested_count": input.facetIds.length,
+  } satisfies TraceAttributes;
+  if (!result) return request;
+  return {
+    ...request,
+    "expense.facets.returned_count": result.facets.length,
+    "expense.facets.option_count": result.facets.reduce(
+      (total, facet) => total + facet.options.length,
+      0,
+    ),
+  } satisfies TraceAttributes;
+};
 
 export const expenseAnalyzeWorkflow = (
   db: Database,

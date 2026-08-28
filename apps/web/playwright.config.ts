@@ -33,9 +33,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* PGlite multiplexes one database connection. Concurrent mutation-heavy
-     specs can corrupt its socket protocol, so serialize only that local lane;
-     preserve the existing two-worker CI/PostgreSQL behavior. */
+  /* Local PGlite runs share one WASM database and socket server. Keep that
+     resource-constrained lane single-worker for predictable fixture lifetime
+     and memory use; the socket package's protocol-affinity patch itself keeps
+     concurrent query cycles correlated. Preserve CI/PostgreSQL parallelism. */
   workers: localUsesPGlite ? 1 : isCI ? 2 : undefined,
   /* Backstop for a dead dev server, which fails every remaining test
      identically (see the exit handler in e2e-global-setup.ts): uncapped, that

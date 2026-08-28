@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type {
+  FieldPathByValue,
+  FieldValues,
+  UseFormReturn,
+} from "react-hook-form";
 
 import type { ProductPickerIntent } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -24,19 +28,19 @@ interface WithEntitySearchProps {
   }) => ReactNode;
 }
 
-const searchWrapperMap: Record<
-  SearchType,
-  React.ComponentType<WithEntitySearchProps>
-> = {
+const searchWrapperMap = {
   ingredient: WithIngredientSearch,
   product: WithProductSearch,
   location: WithLocationSearch,
   recipe: WithRecipeSearch,
-};
+} satisfies Record<SearchType, React.ComponentType<WithEntitySearchProps>>;
 
-interface ComboboxFieldWithSearchProps<TFieldValues extends FieldValues> {
+interface ComboboxFieldWithSearchProps<
+  TFieldValues extends FieldValues,
+  TName extends FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>,
+> {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: TName;
   label?: string;
   searchType: SearchType;
   productIntent?: ProductPickerIntent;
@@ -47,14 +51,17 @@ interface ComboboxFieldWithSearchProps<TFieldValues extends FieldValues> {
  * A convenience wrapper that combines a search hook with ComboboxField.
  * Eliminates the boilerplate of wrapping ComboboxField in WithXxxSearch components.
  */
-export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
+export function ComboboxFieldWithSearch<
+  TFieldValues extends FieldValues,
+  TName extends FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>,
+>({
   form,
   name,
   label,
   searchType,
   productIntent,
   disabledItemReasons,
-}: ComboboxFieldWithSearchProps<TFieldValues>) {
+}: ComboboxFieldWithSearchProps<TFieldValues, TName>) {
   const SearchWrapper = searchWrapperMap[searchType];
 
   return (

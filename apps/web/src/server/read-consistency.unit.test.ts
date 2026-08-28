@@ -6,12 +6,17 @@ const request = (options?: {
   browserRequest?: boolean;
   boundedStaleAvailable?: boolean;
   cookie?: string;
-}) =>
-  decideReadConsistency({
+  freshReadHeader?: boolean;
+}) => {
+  const headers = new Headers();
+  if (options?.cookie) headers.set("cookie", options.cookie);
+  if (options?.freshReadHeader) headers.set("x-cubby-fresh-read", "1");
+  return decideReadConsistency({
     browserRequest: options?.browserRequest ?? true,
     boundedStaleAvailable: options?.boundedStaleAvailable ?? true,
-    headers: new Headers(options?.cookie ? { cookie: options.cookie } : {}),
+    headers,
   });
+};
 
 describe("read consistency", () => {
   it("recognizes only browser transport and navigation requests", () => {
@@ -33,6 +38,13 @@ describe("read consistency", () => {
 
   it("forces fresh reads during the post-mutation window", () => {
     expect(request({ cookie: "session=abc; cubby-fresh-reads=1" })).toEqual({
+      consistency: "strong",
+      reason: "fresh-after-write",
+    });
+  });
+
+  it("accepts the browser operation marker when a function adapter omits cookies", () => {
+    expect(request({ freshReadHeader: true })).toEqual({
       consistency: "strong",
       reason: "fresh-after-write",
     });

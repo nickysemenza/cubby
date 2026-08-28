@@ -118,15 +118,17 @@ export function notionPageToImportRecipe(
 
 type NotionLintStatus = "ok" | "needs-formatting";
 
+type NotionLintResult = {
+  status: NotionLintStatus;
+  reasons: string[];
+};
+
 /**
  * Lint a mapped recipe for importability: it needs at least one ingredient
  * (a bullet) and one step (a numbered item) somewhere. Returns human-readable
  * reasons so the preview can tell the user what to fix in Notion.
  */
-export function lintImportRecipe(recipe: ImportRecipe): {
-  status: NotionLintStatus;
-  reasons: string[];
-} {
+export function lintImportRecipe(recipe: ImportRecipe): NotionLintResult {
   const reasons: string[] = [];
   const hasIngredients = recipe.sections.some((s) => s.ingredients.length > 0);
   const hasInstructions = recipe.sections.some(

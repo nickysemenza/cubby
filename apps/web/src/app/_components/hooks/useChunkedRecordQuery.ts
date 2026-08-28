@@ -7,7 +7,7 @@ import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 const uniqueSortedIds = (ids: readonly string[]) =>
   uniq(ids.filter(Boolean)).sort();
 
-export function useChunkedRecordQuery<TRecord extends Record<string, unknown>>({
+export function useChunkedRecordQuery<TRecord extends object>({
   ids,
   empty,
   queryOptions,
@@ -36,9 +36,9 @@ export function useChunkedRecordQuery<TRecord extends Record<string, unknown>>({
       }
 
       return Object.assign(
-        {},
+        { ...empty },
         ...results.map((result) => result.data ?? empty),
-      ) as TRecord;
+      );
     },
   });
 }

@@ -110,8 +110,8 @@ export function CellEditorOverlay({
   // clicks inside either to keep the editor open.
   React.useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
-      const target = event.target as Element | null;
-      if (!target) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
       if (overlayRef.current?.contains(target)) return;
       if (
         target.closest?.('[data-combobox-popup], [data-slot="popover-content"]')
@@ -131,7 +131,7 @@ export function CellEditorOverlay({
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [anchorEl, cancelOnOutside, onRequestCancel]);
 
-  if (typeof document === "undefined" || !style) return null;
+  if (!globalThis.document || !style) return null;
 
   return createPortal(
     // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- The table-editor portal guards row events; its nested input controls provide interaction semantics.
@@ -153,6 +153,6 @@ export function CellEditorOverlay({
     >
       {children}
     </div>,
-    document.body,
+    globalThis.document.body,
   );
 }

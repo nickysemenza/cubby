@@ -15,11 +15,11 @@ import { booleanCellOptions, buildSelectOptions } from "~/lib/select-options";
 import { getCostTypeColor } from "~/lib/status-colors";
 
 /** Human labels for the fixed cost-type enum. */
-export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
+export const costTypeLabels = {
   materials: "Materials",
   tools: "Tools",
   services: "Services",
-};
+} satisfies Record<(typeof costTypeValues)[number], string>;
 
 /**
  * Badge tone per cost-type — the chip twin of `COST_TYPE_COLORS`
@@ -29,11 +29,11 @@ export const costTypeLabels: Record<(typeof costTypeValues)[number], string> = {
  * (chart-5, ink 40%) and services (chart-2, ink) → the two neutral chips
  * `slate` and `secondary` — lighter and darker to echo the ink ladder.
  */
-export const costTypeBadgeVariant: Record<CostType, BadgeVariant> = {
+export const costTypeBadgeVariant = {
   materials: "default",
   tools: "slate",
   services: "secondary",
-};
+} satisfies Record<CostType, BadgeVariant>;
 
 /**
  * `{value,label,color}` options for the cost-type filter/inline-edit select.
@@ -49,7 +49,7 @@ export const costTypeOptions: FilterableComboboxItem[] = costTypeValues.map(
   }),
 );
 
-export const expenseLineKindLabels: Record<ExpenseLineKind, string> = {
+export const expenseLineKindLabels = {
   principal: "Item or service",
   tax: "Tax",
   shipping: "Shipping or delivery",
@@ -57,12 +57,9 @@ export const expenseLineKindLabels: Record<ExpenseLineKind, string> = {
   fee: "Fee",
   tip: "Tip",
   other_adjustment: "Other adjustment",
-};
+} satisfies Record<ExpenseLineKind, string>;
 
-export const expenseLineKindBadgeVariant: Record<
-  ExpenseLineKind,
-  BadgeVariant
-> = {
+export const expenseLineKindBadgeVariant = {
   principal: "outline",
   tax: "secondary",
   shipping: "slate",
@@ -70,7 +67,7 @@ export const expenseLineKindBadgeVariant: Record<
   fee: "warning",
   tip: "plum",
   other_adjustment: "secondary",
-};
+} satisfies Record<ExpenseLineKind, BadgeVariant>;
 
 export const expenseLineKindOptions: FilterableComboboxItem[] =
   expenseLineKindValues.map((value) => ({
@@ -85,18 +82,15 @@ export const expenseLineKindOptions: FilterableComboboxItem[] =
  * "Line basis" would read as one taxonomy split across two controls. The
  * control is labelled "Itemization" wherever it renders.
  */
-export const expenseLineBasisLabels: Record<ExpenseLineBasis, string> = {
+export const expenseLineBasisLabels = {
   item_line: "Line item",
   allocation: "Share of a lump sum",
-};
+} satisfies Record<ExpenseLineBasis, string>;
 
-export const expenseLineBasisBadgeVariant: Record<
-  ExpenseLineBasis,
-  BadgeVariant
-> = {
+export const expenseLineBasisBadgeVariant = {
   item_line: "outline",
   allocation: "plum",
-};
+} satisfies Record<ExpenseLineBasis, BadgeVariant>;
 
 export const expenseLineBasisOptions: FilterableComboboxItem[] =
   expenseLineBasisValues.map((value) => ({
@@ -138,12 +132,12 @@ const costRangeValues = ["gte500", "gte200", "gte100", "credits"] as const;
 type CostRangePreset = (typeof costRangeValues)[number];
 
 /** Human labels for the cost-bucket preset enum. */
-const costRangeLabels: Record<CostRangePreset, string> = {
+const costRangeLabels = {
   gte500: "$500 and up",
   gte200: "$200 and up",
   gte100: "$100 and up",
   credits: "Credits (≤ $0)",
-};
+} satisfies Record<CostRangePreset, string>;
 
 /** `{value,label}` options for the amount half of the Cost column filter. */
 export const costRangeOptions = buildSelectOptions(
@@ -189,11 +183,11 @@ export function resolveCostFilter(preset: string | undefined): {
 const productQuantityRangeValues = ["exactly1", "gte2", "gte5"] as const;
 type ProductQuantityRangePreset = (typeof productQuantityRangeValues)[number];
 
-const productQuantityRangeLabels: Record<ProductQuantityRangePreset, string> = {
+const productQuantityRangeLabels = {
   exactly1: "Exactly 1",
   gte2: "2+ units",
   gte5: "5+ units",
-};
+} satisfies Record<ProductQuantityRangePreset, string>;
 
 export const productQuantityRangeOptions = buildSelectOptions(
   productQuantityRangeValues,

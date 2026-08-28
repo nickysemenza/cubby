@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { type JSONType, z } from "zod";
 
 import { listMcpToolCatalog } from "./server";
 
@@ -10,7 +11,7 @@ import { listMcpToolCatalog } from "./server";
 // database. This lived in mcp-shortcode-boundary.integration.test.ts until the
 // test-tier audit; the assertion is unchanged.
 
-type JsonSchemaNode = Record<string, unknown>;
+type JsonSchemaNode = Extract<JSONType, { [key: string]: JSONType }>;
 
 interface UuidFinding {
   tool: string;
@@ -36,53 +37,45 @@ const NOT_YET_CUT_OVER: string[] = [];
  * branded id built on it, see `identifiers.ts`'s `brandedId`) leaves in the
  * advertised schema. */
 function collectUuidFindings(
-  node: unknown,
+  node: JsonSchemaNode,
   defs: Record<string, JsonSchemaNode>,
   toolName: string,
   path: string,
   visited: Set<unknown>,
   out: UuidFinding[],
 ) {
-  if (!node || typeof node !== "object" || Array.isArray(node)) return;
   if (visited.has(node)) return;
   visited.add(node);
-  const schema = node as JsonSchemaNode;
 
-  if (typeof schema.$ref === "string") {
-    const refName = schema.$ref.split("/").pop();
+  const ref = node["$ref"];
+  if (isJsonString(ref)) {
+    const refName = ref.split("/").pop();
     const target = refName ? defs[refName] : undefined;
     if (target) collectUuidFindings(target, defs, toolName, path, visited, out);
     return;
   }
 
   for (const key of ["anyOf", "oneOf", "allOf"] as const) {
-    const branches = schema[key];
-    if (Array.isArray(branches)) {
+    const branches = node[key];
+    if (isJsonArray(branches)) {
       for (const branch of branches) {
-        collectUuidFindings(branch, defs, toolName, path, visited, out);
+        if (isJsonSchemaNode(branch)) {
+          collectUuidFindings(branch, defs, toolName, path, visited, out);
+        }
       }
     }
   }
 
-  if (schema.type === "array" && schema.items) {
-    collectUuidFindings(
-      schema.items,
-      defs,
-      toolName,
-      `${path}[]`,
-      visited,
-      out,
-    );
+  const items = node["items"];
+  if (node["type"] === "array" && isJsonSchemaNode(items)) {
+    collectUuidFindings(items, defs, toolName, `${path}[]`, visited, out);
   }
 
-  const properties = schema.properties as
-    | Record<string, JsonSchemaNode>
-    | undefined;
-  if (properties) {
+  const properties = node["properties"];
+  if (isJsonSchemaMap(properties)) {
     const siblings = Object.keys(properties);
     for (const [field, value] of Object.entries(properties)) {
-      if (!value || typeof value !== "object") continue;
-      if (value.format === "uuid") {
+      if (value["format"] === "uuid") {
         out.push({ tool: toolName, path: `${path}.${field}`, field, siblings });
       }
       collectUuidFindings(
@@ -97,6 +90,29 @@ function collectUuidFindings(
   }
 }
 
+function isJsonString(value: JSONType | undefined): value is string {
+  return typeof value === "string";
+}
+
+function isJsonArray(value: JSONType | undefined): value is JSONType[] {
+  return Array.isArray(value);
+}
+
+function isJsonSchemaNode(
+  value: JSONType | undefined,
+): value is JsonSchemaNode {
+  return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+function isJsonSchemaMap(
+  value: JSONType | undefined,
+): value is Record<string, JsonSchemaNode> {
+  return (
+    isJsonSchemaNode(value) &&
+    Object.values(value).every((entry) => isJsonSchemaNode(entry))
+  );
+}
+
 describe("MCP output schemas expose shortcodes, not uuids, outside declared exceptions", () => {
   it("walks every registered tool's OUTPUT schema off the live catalog", async () => {
     const { tools } = await listMcpToolCatalog();
@@ -105,13 +121,14 @@ describe("MCP output schemas expose shortcodes, not uuids, outside declared exce
     const violations: UuidFinding[] = [];
     const matchedDeclarations = new Set<string>();
     for (const tool of tools) {
-      const outputSchema = tool.outputSchema as JsonSchemaNode | undefined;
-      if (!outputSchema) continue;
+      const parsedOutputSchema = z.json().safeParse(tool.outputSchema);
+      if (!parsedOutputSchema.success) continue;
+      const outputSchema = parsedOutputSchema.data;
+      if (!isJsonSchemaNode(outputSchema)) continue;
       const defs =
-        (outputSchema.$defs as Record<string, JsonSchemaNode> | undefined) ??
-        (outputSchema.definitions as
-          | Record<string, JsonSchemaNode>
-          | undefined) ??
+        (isJsonSchemaMap(outputSchema["$defs"]) && outputSchema["$defs"]) ||
+        (isJsonSchemaMap(outputSchema["definitions"]) &&
+          outputSchema["definitions"]) ||
         {};
       const found: UuidFinding[] = [];
       collectUuidFindings(

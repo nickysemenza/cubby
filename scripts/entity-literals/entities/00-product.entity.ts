@@ -13,6 +13,18 @@ export default literalEntity({
     output: { module: "@cubby/schemas/product", export: "productTopLevelOut" },
     list: { module: "@cubby/schemas/product", export: "productListItemOut" },
     detail: { module: "@cubby/schemas/product", export: "productWithFoodOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/product",
+      export: "productTopLevelMcpEntityOut",
+    },
+    mcpList: {
+      module: "@cubby/schemas/product",
+      export: "productListItemMcpEntityOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/product",
+      export: "productWithFoodMcpEntityOut",
+    },
   },
   filters: {
     audit: true,

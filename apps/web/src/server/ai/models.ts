@@ -87,7 +87,9 @@ export type SupportedAiModelRef = {
 }[SupportedAiModel];
 
 function finiteTokenCount(value: number | null | undefined): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return value !== null && value !== undefined && Number.isFinite(value)
+    ? value
+    : 0;
 }
 
 function isSupportedAiModel(model: string): model is SupportedAiModel {

@@ -437,7 +437,8 @@ export function ExpenseList() {
     const hints: Record<string, Record<string, string>> = {};
     for (const facet of facetCountsQuery.data?.facets ?? []) {
       const columnId =
-        FACET_COLUMN_IDS[facet.id as keyof typeof FACET_COLUMN_IDS] ?? facet.id;
+        Object.entries(FACET_COLUMN_IDS).find(([id]) => id === facet.id)?.[1] ??
+        facet.id;
       hints[columnId] = Object.fromEntries(
         facet.options.map((option) => [option.value, String(option.count)]),
       );

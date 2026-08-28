@@ -1,6 +1,7 @@
 import { auditLogListOut } from "@cubby/schemas/audit";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getAuditLog } from "./audit-log";
 import { createExpense } from "./expense";
@@ -12,6 +13,9 @@ import {
 import { createWish, updateWish, wishList } from "./wish";
 
 const pagination = { pageIndex: 0, pageSize: 50 };
+const acquiredAtAuditChange = z.object({
+  acquiredAt: z.object({ from: z.null(), to: z.string() }),
+});
 
 /**
  * `wishFilterFields` spreads `auditDateFilterFields` and `wishRelatedFilterFields`,
@@ -318,24 +322,18 @@ describe("wish repository — audit log survives a Date-valued (non-FK) diff", (
 
     // The real runtime check `strictOutput`'s type-level pass-through can't
     // give us: this is the same `.parse()` the browser/MCP boundary runs.
-    expect(() => auditLogListOut.parse(audit)).not.toThrow();
+    const parsedAudit = auditLogListOut.parse(audit);
 
-    const updateEntry = audit.entries.find(
+    const updateEntry = parsedAudit.entries.find(
       (e) =>
         e.action === "update" &&
-        (e.changes as { acquiredAt?: { from: unknown; to: unknown } } | null)
-          ?.acquiredAt !== undefined,
+        acquiredAtAuditChange.safeParse(e.changes).success,
     );
-    const acquiredAtChange = (
-      updateEntry?.changes as
-        | { acquiredAt: { from: unknown; to: unknown } }
-        | undefined
-    )?.acquiredAt;
+    const acquiredAtChange = acquiredAtAuditChange.parse(
+      updateEntry?.changes,
+    ).acquiredAt;
 
-    expect(acquiredAtChange?.from).toBeNull();
-    expect(typeof acquiredAtChange?.to).toBe("string");
-    expect(acquiredAtChange?.to).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-    );
+    expect(acquiredAtChange.from).toBeNull();
+    expect(acquiredAtChange.to).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 });

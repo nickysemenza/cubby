@@ -1,47 +1,100 @@
-import { describe, expect, it, vi } from "vitest";
+import { imageWithEntitySchema } from "@cubby/schemas/image";
+import { testUserId } from "@cubby/schemas/testing";
+import { beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod";
 
-import { imageHandlers } from "./image-browser.server";
+import { mock } from "~/lib/test/mock-schema";
+import { createRequestContext, requireActor } from "~/server/request-context";
+import type {
+  AuthenticatedStartOperationContext,
+  StartOperationRequest,
+} from "~/server/start-operation.server";
 
-const mocks = vi.hoisted(() => ({ executeEntity: vi.fn() }));
+import {
+  createImageHandlers,
+  type ImageBrowserPorts,
+} from "./image-browser.server";
+import type {
+  OperationExecutionAdapter,
+  OperationExecutionOptions,
+} from "./operation-domain.server";
 
-vi.mock("~/server/entity-kernel", () => ({
-  executeEntity: mocks.executeEntity,
-}));
+type OutputSchemaResolver<Input, OutputSchema extends z.ZodType> = (
+  input: Input,
+) => OutputSchema;
 
-vi.mock("~/server/start-operation.server", () => ({
-  runStartOperation: async (options: {
-    input: unknown;
-    run: (context: object, input: unknown) => Promise<unknown>;
-  }) => ({ ok: true, data: await options.run({}, options.input) }),
-}));
+function isOutputSchemaResolver<Input, OutputSchema extends z.ZodType>(
+  schema: OutputSchema | OutputSchemaResolver<Input, OutputSchema>,
+): schema is OutputSchemaResolver<Input, OutputSchema> {
+  return typeof schema === "function";
+}
+
+class InMemoryOperationAdapter implements OperationExecutionAdapter {
+  constructor(private readonly context: AuthenticatedStartOperationContext) {}
+
+  async execute<Input, OutputSchema extends z.ZodType>(
+    options: OperationExecutionOptions<Input, OutputSchema>,
+  ) {
+    const input = options.inputSchema.parse(options.input);
+    const rawOutput = await options.run(this.context, input);
+    const outputSchema = isOutputSchemaResolver(options.outputSchema)
+      ? options.outputSchema(input)
+      : options.outputSchema;
+    return { ok: true as const, data: outputSchema.parse(rawOutput) };
+  }
+}
+
+const request: StartOperationRequest = {
+  headers: new Headers(),
+  signal: new AbortController().signal,
+};
+
+const refreshedImage = mock(imageWithEntitySchema, {
+  seed: 8,
+  overrides: {
+    id: "IMG-4K7M",
+    filename: "renamed.jpg",
+    entityType: "PRODUCT",
+    entityId: "PRD-4K7M",
+  },
+});
+
+let context: AuthenticatedStartOperationContext;
+
+beforeAll(async () => {
+  context = requireActor(
+    await createRequestContext({
+      headers: new Headers(),
+      actor: {
+        userId: testUserId("image-browser-user"),
+        sessionId: null,
+        source: "ui",
+      },
+    }),
+  );
+});
 
 describe("Image browser operations", () => {
   it("reloads the enriched projection after updating the row", async () => {
-    mocks.executeEntity
-      .mockResolvedValueOnce({
-        action: "update",
-        entity: "image",
-        item: { id: "IMG-4K7M", filename: "renamed.jpg" },
-        sideEffects: { backgroundBatches: [] },
-      })
-      .mockResolvedValueOnce({
-        action: "get",
-        entity: "image",
-        item: {
-          id: "IMG-4K7M",
-          filename: "renamed.jpg",
-          entityType: "PRODUCT",
-          entityId: "PRD-4K7M",
-        },
-      });
+    const commands: string[] = [];
+    const ports = {
+      async update() {
+        commands.push("update");
+      },
+      async get() {
+        commands.push("get");
+        return refreshedImage;
+      },
+    } satisfies Partial<ImageBrowserPorts>;
+    const handlers = createImageHandlers(
+      ports,
+      new InMemoryOperationAdapter(context),
+    );
 
     await expect(
-      imageHandlers.operations.update({
+      handlers.operations.update({
         data: { id: "IMG-4K7M", data: { filename: "renamed.jpg" } },
-        request: {
-          headers: new Headers(),
-          signal: new AbortController().signal,
-        },
+        request,
       }),
     ).resolves.toEqual({
       ok: true,
@@ -51,16 +104,6 @@ describe("Image browser operations", () => {
       }),
     });
 
-    expect(mocks.executeEntity).toHaveBeenNthCalledWith(
-      2,
-      // The domain wrapper adds the request's abort signal to the context.
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-      expect.objectContaining({
-        action: "get",
-        entity: "image",
-        id: "IMG-4K7M",
-        missing: "error",
-      }),
-    );
+    expect(commands).toEqual(["update", "get"]);
   });
 });

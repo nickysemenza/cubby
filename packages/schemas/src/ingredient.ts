@@ -13,11 +13,18 @@ import {
 import { firstDisplayableImage, type ImageOut } from "./image";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
+  productWithMappingsAndFoodMcpEntityOut,
   productWithMappingsAndFoodOut,
+  productWithMappingsMcpEntityOut,
   productWithMappingsOut,
 } from "./product";
 import { baseKind } from "./problems";
-import { recipeRefOut, recipeTopLevel, recipeUsageOut } from "./recipe";
+import {
+  recipeRefOut,
+  recipeTopLevel,
+  recipeUsageMcpEntityOut,
+  recipeUsageOut,
+} from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 
 export const ingredientBaseFields = {
@@ -158,6 +165,12 @@ export const ingredientWithFoodOut = z.object({
 });
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
+/** Generic MCP entity detail with storage-only child identifiers removed. */
+export const ingredientWithFoodMcpEntityOut = ingredientWithFoodOut.extend({
+  recipeUsages: z.array(recipeUsageMcpEntityOut),
+  product: z.array(productWithMappingsAndFoodMcpEntityOut),
+});
+
 export const ingredientWithFoodAndSideEffectsOut = z.object({
   ...ingredientOutFields,
   recipe: recipeTopLevel.nullable(),
@@ -198,6 +211,11 @@ export const ingredientListItemOut = z.object({
   ownRecipeCount: z.number().int(),
 });
 export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
+
+/** Generic MCP entity list row with storage-only product child ids removed. */
+export const ingredientListItemMcpEntityOut = ingredientListItemOut.extend({
+  product: z.array(productWithMappingsMcpEntityOut),
+});
 
 /**
  * The image that represents an ingredient: the first displayable photo across

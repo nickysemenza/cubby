@@ -17,14 +17,25 @@ const app = {
   input: { query: "butter", pageIndex: 0, pageSize: 6 },
 };
 
-const logEl = document.getElementById("log") as HTMLElement;
-const frame = document.getElementById("frame") as HTMLIFrameElement;
+function requireLogElement(): HTMLElement {
+  const element = document.getElementById("log");
+  if (!(element instanceof HTMLElement)) throw new Error("missing harness log");
+  return element;
+}
 
-function log(label: string, detail?: unknown) {
+function requireFrame(): HTMLIFrameElement {
+  const element = document.getElementById("frame");
+  if (!(element instanceof HTMLIFrameElement))
+    throw new Error("missing harness frame");
+  return element;
+}
+
+const logEl = requireLogElement();
+const frame = requireFrame();
+
+function log(label: string, detail?: string) {
   const line = document.createElement("div");
-  line.textContent = detail
-    ? `${label} ${JSON.stringify(detail).slice(0, 300)}`
-    : label;
+  line.textContent = detail ? `${label} ${detail}` : label;
   logEl.prepend(line);
 }
 
@@ -52,24 +63,24 @@ async function load() {
   );
 
   bridge.oncalltool = async (params) => {
-    log("tools/call →", params);
+    log("tools/call →", JSON.stringify(params).slice(0, 300));
     return { content: [], structuredContent: app.fixture };
   };
   bridge.onopenlink = async (params) => {
-    log("ui/open-link →", params);
+    log("ui/open-link →", JSON.stringify(params).slice(0, 300));
     return {};
   };
   // oxlint-disable-next-line unicorn/prefer-add-event-listener -- AppBridge exposes protocol callback slots rather than DOM events.
   bridge.onmessage = async (params) => {
-    log("ui/message →", params);
+    log("ui/message →", JSON.stringify(params).slice(0, 300));
     return {};
   };
   bridge.onupdatemodelcontext = async (params) => {
-    log("ui/update-model-context →", params);
+    log("ui/update-model-context →", JSON.stringify(params).slice(0, 300));
     return {};
   };
   bridge.onsizechange = (params) => {
-    const height = (params as { height?: number }).height;
+    const { height } = params;
     if (height) frame.style.height = `${height}px`;
   };
   bridge.oninitialized = async () => {
@@ -79,7 +90,10 @@ async function load() {
       locale: "en-US",
       timeZone: "America/Los_Angeles",
     });
-    log("initialized — pushing tool input and result", app.input);
+    log(
+      "initialized — pushing tool input and result",
+      JSON.stringify(app.input).slice(0, 300),
+    );
     await bridge.sendToolInput({ arguments: app.input });
     await bridge.sendToolResult({
       content: [],

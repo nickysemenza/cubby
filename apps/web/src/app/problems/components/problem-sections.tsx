@@ -6,6 +6,7 @@ import {
   type AllProblems,
   type CoverageProblemKey,
   type CoverageTotals,
+  type FinancialTransactionAllocationDefect,
   type KitCountedTwice,
   type LabelVariant,
   type NegativeExpectedQuantity,
@@ -166,6 +167,11 @@ type ProblemSectionEntry<K extends CoverageProblemKey = CoverageProblemKey> = {
   problemKeys?: readonly ProblemKey[];
 };
 
+const isHeaderActionFactory = <T,>(
+  value: ReactNode | ((items: T[], count: number) => ReactNode),
+): value is (items: T[], count: number) => ReactNode =>
+  typeof value === "function";
+
 function section<T, K extends CoverageProblemKey = never>(config: {
   id: string;
   label: string;
@@ -197,7 +203,11 @@ function section<T, K extends CoverageProblemKey = never>(config: {
 }): ProblemSectionEntry<K> {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
-    : { icon: config.icon as LucideIcon };
+    : config.icon
+      ? { icon: config.icon }
+      : (() => {
+          throw new Error(`Problem section "${config.id}" needs an icon`);
+        })();
   const canonicalKey =
     config.problemKeys?.length === 1 ? config.problemKeys[0] : undefined;
   const canonicalPresentation = canonicalKey
@@ -247,9 +257,10 @@ function section<T, K extends CoverageProblemKey = never>(config: {
           )}
           coverage={resolveCoverage(config.coverage, totals)}
           headerAction={
-            typeof config.headerAction === "function"
+            config.headerAction &&
+            (isHeaderActionFactory(config.headerAction)
               ? config.headerAction(items, count)
-              : config.headerAction
+              : config.headerAction)
           }
         />
       );
@@ -457,9 +468,15 @@ const TRACKER_GROUPS: { type: ProjectAttentionType; title: string }[] = [
   { type: "date_window_drift", title: "Date window drift" },
 ];
 
-const TRACKER_GROUP_TITLE = Object.fromEntries(
-  TRACKER_GROUPS.map((g) => [g.type, g.title]),
-) as Record<ProjectAttentionType, string>;
+const TRACKER_GROUP_TITLE = {
+  overdue_task: "Overdue tasks",
+  blocked_work: "Blocked with no next action",
+  stalled_project: "Stalled projects",
+  past_due_planned_expense: "Planned expenses past due",
+  missing_budget: "Missing a cost estimate",
+  unclassified_expense: "Unclassified expenses",
+  date_window_drift: "Date window drift",
+} satisfies Record<ProjectAttentionType, string>;
 
 function missingBudgetDetail(item: ProjectAttentionItem): ReactNode[] {
   if (item.type !== "missing_budget") return [];
@@ -663,13 +680,16 @@ function shortcodeChips(
   );
 }
 
-const ALLOCATION_DEFECT_LABEL: Record<string, string> = {
+const ALLOCATION_DEFECT_LABEL = {
   "sum-mismatch": "allocations don't sum to the transaction",
   "non-settlement-kind": "allocations on a non-settlement kind",
   "kind-sign-violation": "amount sign is wrong for its kind",
   "allocation-sign-mismatch":
     "an allocation's sign differs from the transaction",
-};
+} satisfies Record<
+  FinancialTransactionAllocationDefect["reasons"][number],
+  string
+>;
 
 function unpricedSubtitle(product: ProductMissingPrice): string {
   const qty = product.inventoryQuantity;

@@ -8,7 +8,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { auditLog, projectToolUsage } from "~/server/db/schema";
@@ -868,17 +868,30 @@ describe("repointProjectUses", () => {
     ).rejects.toMatchObject({
       cause: { reason: "PRODUCT_CATEGORY_INELIGIBLE" },
     });
-    const refusal = await repointProjectUses(
-      ctx.db,
-      { fromProductId: kit.entityId, toProductId: consumable.entityId },
-      ctx.actor,
-    ).catch((error: unknown) => error);
+    const refusalSchema = z.object({
+      cause: z.object({
+        blockers: z
+          .array(z.object({ byTargetId: z.record(z.string(), z.number()) }))
+          .optional(),
+      }),
+    });
+    const captureRefusal = async () => {
+      try {
+        await repointProjectUses(
+          ctx.db,
+          { fromProductId: kit.entityId, toProductId: consumable.entityId },
+          ctx.actor,
+        );
+      } catch (error) {
+        return refusalSchema.parse(error);
+      }
+      throw new Error("Expected project tool repoint to be refused");
+    };
+    const refusal = await captureRefusal();
     expect(
-      (
-        refusal as {
-          cause?: { blockers?: Array<{ byTargetId: Record<string, number> }> };
-        }
-      ).cause?.blockers?.flatMap((b) => Object.keys(b.byTargetId)),
+      refusal.cause.blockers?.flatMap((blocker) =>
+        Object.keys(blocker.byTargetId),
+      ),
     ).toEqual([consumable.id]);
   });
 });
@@ -1498,18 +1511,17 @@ describe("project tool matrix", () => {
     // A derived window is only the min/max of dated content, so it routinely
     // stops short of the real last day of work. An explicit date is a
     // statement and is taken literally.
-    const makeProject = async (name: string, explicitEnd: string | null) =>
-      createProject(
-        ctx.db,
-        projectCreateInput.parse({
-          name,
-          status: "done",
-          ...(explicitEnd
-            ? { startDate: "2022-01-01", endDate: explicitEnd }
-            : {}),
-        }),
-        ctx.actor,
-      );
+    const makeProject = async (name: string, explicitEnd: string | null) => {
+      const input = explicitEnd
+        ? {
+            name,
+            status: "done",
+            startDate: "2022-01-01",
+            endDate: explicitEnd,
+          }
+        : { name, status: "done" };
+      return createProject(ctx.db, projectCreateInput.parse(input), ctx.actor);
+    };
 
     const { output: derived, entityId: derivedId } = await makeProject(
       "Derived window",

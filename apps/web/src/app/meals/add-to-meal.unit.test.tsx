@@ -1,188 +1,183 @@
+import {
+  type MealCreateInput,
+  type MealOut,
+  type MealUpdateInput,
+  mealAddRecipeInput,
+  mealOut,
+} from "@cubby/schemas/meal";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { z } from "zod";
 
-const mocks = vi.hoisted(() => ({
-  addRecipe: vi.fn(),
-  createMeal: vi.fn(),
-  updateMeal: vi.fn(),
-  getByDateRange: vi.fn(),
-  invalidate: vi.fn(),
-  navigate: vi.fn(),
-  useQuery: vi.fn(),
-}));
+import { entityMutation } from "~/entities/entity-mutation.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
-vi.mock("@tanstack/react-query", () => ({
-  mutationOptions: (options: unknown) => options,
-  queryOptions: (options: unknown) => options,
-  useMutation: (options: { mutationFn: (input: unknown) => unknown }) => ({
-    mutate: (input: unknown) => options.mutationFn(input),
-    mutateAsync: async (input: unknown) => options.mutationFn(input),
-    isPending: false,
-  }),
-  useQuery: (options: { enabled?: boolean }) => {
-    mocks.useQuery(options);
-    return {
-      data: [
-        {
-          id: testShortcode("meal", "MEL-4K7M"),
-          name: "Tuesday dinner",
-          date: "2026-06-16",
-          mealType: "dinner",
-          mealKind: "cooked",
-          recipes: [{ recipe: { name: "Soup" } }],
-        },
-        {
-          id: testShortcode("meal", "MEL-9Q2X"),
-          name: "Corner Deli",
-          date: "2026-06-16",
-          mealType: "lunch",
-          mealKind: "eating_out",
-          recipes: [],
-        },
-      ],
-      isLoading: false,
-    };
-  },
-}));
-
-vi.mock("./meal.functions", () => ({
-  meal: {
-    getByDateRange: {
-      queryOptions: (input: unknown) => {
-        mocks.getByDateRange(input);
-        return { queryKey: ["meal-range"] };
-      },
-    },
-    addRecipe: {
-      mutationOptions: (options: Record<string, unknown>) => ({
-        ...options,
-        mutationFn: mocks.addRecipe,
-      }),
-    },
-  },
-}));
-
-vi.mock("~/entities/entity-contracts", () => ({
-  entityMutationOptionsFactory:
-    (_entity: string, action: "create" | "update" | "delete") => () => ({
-      mutationFn: async (variables: { id?: string; data?: unknown }) => {
-        if (action === "create") mocks.createMeal(variables);
-        if (action === "update") mocks.updateMeal(variables);
-        return {
-          item: { id: testShortcode("meal", "MEL-4K7M"), date: "2026-06-16" },
-          sideEffects: { backgroundBatches: [] },
-        };
-      },
-    }),
-}));
-
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocks.navigate,
-}));
-
-vi.mock("./use-meal-mutations", () => ({
-  useInvalidateMeals: () => mocks.invalidate,
-}));
-
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
-
-import { AddToMeal } from "./add-to-meal";
+import { type AddToMealOperations, AddToMeal } from "./add-to-meal";
+import { meal } from "./meal.functions";
 
 const recipeId = testShortcode("recipe", "RCP-4K7M");
+const createdMeals: MealCreateInput[] = [];
+const updatedMeals: MealUpdateInput[] = [];
+const addedRecipes: Array<z.output<typeof mealAddRecipeInput>> = [];
+const mutationOrder: string[] = [];
+let mealRequests = 0;
 
-afterEach(() => {
-  vi.clearAllMocks();
+const tuesdayDinner = mealOut.parse({
+  id: testShortcode("meal", "MEL-4K7M"),
+  name: "Tuesday dinner",
+  date: "2026-06-16",
+  sortOrder: null,
+  mealType: "dinner",
+  mealKind: "cooked",
+  recipes: [],
+  totals: { costTotal: 0, caloriesTotal: 0, pending: false },
+  createdAt: new Date("2026-06-16T12:00:00Z"),
+  updatedAt: new Date("2026-06-16T12:00:00Z"),
 });
 
+const cornerDeli = mealOut.parse({
+  id: testShortcode("meal", "MEL-9Q2X"),
+  name: "Corner Deli",
+  date: "2026-06-16",
+  sortOrder: null,
+  mealType: "lunch",
+  mealKind: "eating_out",
+  recipes: [],
+  totals: { costTotal: 0, caloriesTotal: 0, pending: false },
+  createdAt: new Date("2026-06-16T12:00:00Z"),
+  updatedAt: new Date("2026-06-16T12:00:00Z"),
+});
+
+const meals: MealOut[] = [tuesdayDinner, cornerDeli];
+
+/** Real operation descriptors with only their unreachable transport replaced. */
+const testOperations: AddToMealOperations = {
+  existingMeals: meal.getByDateRange.withTransport(async () => {
+    mealRequests += 1;
+    return meals;
+  }),
+  addRecipe: meal.addRecipe.withTransport(async ({ input }) => {
+    const command = meal.addRecipe.definition.input.parse(input);
+    addedRecipes.push(command);
+    mutationOrder.push("add recipe");
+    return tuesdayDinner;
+  }),
+  mealMutation: entityMutation.mutate.withTransport(async ({ input }) => {
+    const command = entityBrowserMutationCommandSchema.parse(input);
+    if (command.action === "create" && command.entity === "meal") {
+      createdMeals.push(command.data);
+      mutationOrder.push("create meal");
+      return {
+        action: "create" as const,
+        entity: "meal" as const,
+        item: tuesdayDinner,
+        sideEffects: { backgroundBatches: [] },
+      };
+    }
+    if (command.action === "update" && command.entity === "meal") {
+      updatedMeals.push({ id: command.id, data: command.data });
+      mutationOrder.push("update meal");
+      return {
+        action: "update" as const,
+        entity: "meal" as const,
+        item: { ...cornerDeli, mealKind: "cooked" as const },
+        sideEffects: { backgroundBatches: [] },
+      };
+    }
+    throw new Error("Add to meal only issues meal create and update commands.");
+  }),
+};
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  createdMeals.length = 0;
+  updatedMeals.length = 0;
+  addedRecipes.length = 0;
+  mutationOrder.length = 0;
+  mealRequests = 0;
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function renderAddToMeal() {
+  return render(<AddToMeal recipeId={recipeId} operations={testOperations} />, {
+    wrapper: harness.wrapper,
+  });
+}
+
+async function openMealPicker() {
+  fireEvent.click(await screen.findByRole("button", { name: "Add to meal" }));
+  const picker = await screen.findByRole("combobox", { name: "meal" });
+  await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
+  return picker;
+}
+
 describe("AddToMeal", () => {
-  it("offers existing meal slots for the selected day and adds to the selected slot", () => {
-    render(<AddToMeal recipeId={recipeId} />);
+  it("offers existing meal slots and adds the recipe to the selected slot", async () => {
+    renderAddToMeal();
+    const picker = await openMealPicker();
 
-    expect(mocks.useQuery).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: false }),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Add to meal" }));
-
-    expect(mocks.useQuery).toHaveBeenLastCalledWith(
-      expect.objectContaining({ enabled: true }),
-    );
-
-    expect(mocks.getByDateRange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        from: expect.any(String),
-        to: expect.any(String),
-      }),
-    );
-    const slot = screen.getByRole("combobox", { name: "meal" });
-    fireEvent.keyDown(slot, { key: "ArrowDown" });
+    expect(mealRequests).toBe(1);
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
     fireEvent.click(
-      screen.getByRole("option", { name: "Tuesday dinner (1 recipe)" }),
+      screen.getByRole("option", { name: "Tuesday dinner (0 recipes)" }),
     );
     fireEvent.click(
       screen.getByRole("button", { name: "Add to selected meal" }),
     );
 
-    expect(mocks.addRecipe).toHaveBeenCalledWith({
-      mealId: "MEL-4K7M",
-      recipeId,
-      scale: 1,
-    });
-    expect(mocks.createMeal).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(addedRecipes).toEqual([
+        { mealId: tuesdayDinner.id, recipeId, scale: 1 },
+      ]),
+    );
+    expect(createdMeals).toEqual([]);
+    await waitFor(() => expect(mealRequests).toBeGreaterThan(1));
   });
 
-  it("retains creating a separate meal as the default", () => {
-    render(<AddToMeal recipeId={recipeId} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Add to meal" }));
+  it("retains creating a separate meal as the default", async () => {
+    renderAddToMeal();
+    await openMealPicker();
     fireEvent.click(screen.getByRole("button", { name: "Create meal" }));
 
-    expect(mocks.createMeal).toHaveBeenCalledWith({
-      date: expect.any(String),
-      // Slot is suggested from the hour of day, so assert its presence rather
-      // than a value that changes depending on when the suite runs.
-      mealType: expect.any(String),
+    await waitFor(() => expect(createdMeals).toHaveLength(1));
+    expect(createdMeals[0]).toMatchObject({
       mealKind: "cooked",
       recipes: [{ recipeId, scale: 1 }],
     });
-    expect(mocks.addRecipe).not.toHaveBeenCalled();
+    expect(createdMeals[0]?.date).toEqual(expect.any(String));
+    expect(createdMeals[0]?.mealType).toEqual(expect.any(String));
+    expect(addedRecipes).toEqual([]);
   });
 
-  it("warns before planning a recipe into a meal that isn't cooked", async () => {
-    // The silent loss this prevents: only `cooked` meals feed the shopping
-    // list, so a recipe planned into an eating-out meal is never shopped for.
-    render(<AddToMeal recipeId={recipeId} />);
-    fireEvent.click(screen.getByRole("button", { name: "Add to meal" }));
+  it("re-kinds a selected eating-out meal before adding its recipe", async () => {
+    renderAddToMeal();
+    const picker = await openMealPicker();
 
-    const picker = screen.getByRole("combobox", { name: "meal" });
     fireEvent.keyDown(picker, { key: "ArrowDown" });
     fireEvent.click(
       screen.getByRole("option", { name: "Corner Deli — Eating out" }),
     );
-
     expect(
       screen.getByText(/aren't added to the shopping list/i),
-    ).toBeInTheDocument();
-
+    ).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", { name: "Add to selected meal" }),
     );
 
-    // Re-kinded FIRST, so the meal is never briefly a non-cooked meal holding
-    // a recipe — that intermediate state is the one the list drops.
-    await vi.waitFor(() =>
-      expect(mocks.updateMeal).toHaveBeenCalledWith({
-        id: "MEL-9Q2X",
-        data: { mealKind: "cooked" },
-      }),
-    );
-    await vi.waitFor(() =>
-      expect(mocks.addRecipe).toHaveBeenCalledWith({
-        mealId: "MEL-9Q2X",
-        recipeId,
-        scale: 1,
-      }),
-    );
+    await waitFor(() => expect(addedRecipes).toHaveLength(1));
+    expect(updatedMeals).toEqual([
+      { id: cornerDeli.id, data: { mealKind: "cooked" } },
+    ]);
+    expect(addedRecipes).toEqual([
+      { mealId: cornerDeli.id, recipeId, scale: 1 },
+    ]);
+    expect(mutationOrder).toEqual(["update meal", "add recipe"]);
   });
 });

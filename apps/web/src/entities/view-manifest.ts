@@ -5,6 +5,7 @@ import {
   LIVE_PROJECT_STATUSES,
   taskStatusValues,
 } from "@cubby/schemas/project";
+import { z } from "zod";
 
 import { FILTER_ANY, FILTER_NONE } from "./filters";
 import {
@@ -108,7 +109,11 @@ export interface ViewDefinition {
  * declaration can't carry. `findOrphanedProducts` is the third kind and says so
  * at its own definition.
  */
-export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
+const defineViewManifest = (
+  manifest: Partial<Record<Entity, ViewDefinition[]>>,
+): Partial<Record<Entity, ViewDefinition[]>> => manifest;
+
+export const viewManifest = defineViewManifest({
   project: [
     {
       id: "active",
@@ -870,6 +875,20 @@ export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> = {
       filters: [{ id: "acquired", value: "false" }],
     },
   ],
+});
+
+const isEntity = (value: string): value is Entity =>
+  Object.prototype.hasOwnProperty.call(viewManifest, value);
+const isManifestEntity = (value: string): value is keyof typeof viewManifest =>
+  Object.prototype.hasOwnProperty.call(viewManifest, value);
+type ViewFilterValue = string | string[] | undefined;
+const viewFilterValue = <T>(value: T): ViewFilterValue => {
+  if (Array.isArray(value)) {
+    return value.every((item): item is string => typeof item === "string")
+      ? value
+      : undefined;
+  }
+  return z.string().safeParse(value).data;
 };
 
 /** A view that also declares a Problems section, paired with its entity. */
@@ -889,35 +908,41 @@ export interface ViewProblemDeclaration {
  * second place to register it and therefore no way for the two to disagree.
  */
 export function viewProblemDeclarations(): ViewProblemDeclaration[] {
-  const declarations = Object.entries(viewManifest).flatMap(([entity, views]) =>
-    (views ?? []).flatMap((view) => {
-      const problem = view.problem;
-      if (!problem) return [];
-      const source: EntityProblemSource = {
-        kind: "entity",
-        entity: entity as Entity,
-        filters: view.filters,
-        ...(view.sort ? { sort: view.sort } : {}),
-        ...(view.layout?.columnVisibility
-          ? { columnVisibility: view.layout.columnVisibility }
-          : {}),
-      };
-      return [
-        {
-          entity: entity as Entity,
-          viewId: view.id,
-          sort: view.sort,
-          problem: defineProblem({
-            ...problem,
-            problemClass: PROBLEM_CLASS[problem.key],
-            executionLane: "views",
-            continuation: { kind: "entity-list" },
-            freshness: { kind: "live" },
-            source,
+  const declarations = Object.entries(viewManifest).flatMap(
+    ([entity, views]) =>
+      !isEntity(entity)
+        ? []
+        : (views ?? []).flatMap((view) => {
+            if (!("problem" in view) || !view.problem) return [];
+            const problem = view.problem;
+            if (!problem) return [];
+            const viewSort = "sort" in view ? view.sort : undefined;
+            const viewLayout = "layout" in view ? view.layout : undefined;
+            const source: EntityProblemSource = {
+              kind: "entity",
+              entity,
+              filters: view.filters,
+            };
+            if (viewSort) source.sort = viewSort;
+            if (viewLayout?.columnVisibility) {
+              source.columnVisibility = viewLayout.columnVisibility;
+            }
+            return [
+              {
+                entity,
+                viewId: view.id,
+                sort: viewSort,
+                problem: defineProblem({
+                  ...problem,
+                  problemClass: PROBLEM_CLASS[problem.key],
+                  executionLane: "views",
+                  continuation: { kind: "entity-list" },
+                  freshness: { kind: "live" },
+                  source,
+                }),
+              },
+            ];
           }),
-        },
-      ];
-    }),
   );
   validateProblemQueries(declarations.map(({ problem }) => problem));
   return declarations;
@@ -1198,7 +1223,7 @@ export function entityProblemDeclarations(): readonly ProblemQuery[] {
 }
 
 export function viewsForEntity(entity: Entity | undefined): ViewDefinition[] {
-  return (entity && viewManifest[entity]) ?? [];
+  return entity && isManifestEntity(entity) ? (viewManifest[entity] ?? []) : [];
 }
 
 /**
@@ -1209,14 +1234,14 @@ export function viewsForEntity(entity: Entity | undefined): ViewDefinition[] {
  * readout — the alternative would keep a view lit while showing different
  * rows.
  */
-export function isViewActive(
+export function isViewActive<T>(
   view: ViewDefinition,
-  columnFilters: ReadonlyArray<{ id: string; value: unknown }>,
+  columnFilters: ReadonlyArray<{ id: string; value: T | ViewFilterValue }>,
   sorting: ReadonlyArray<{ id: string; desc: boolean }>,
 ): boolean {
   if (columnFilters.length !== view.filters.length) return false;
 
-  const sameValue = (a: unknown, b: string | string[]) =>
+  const sameValue = (a: string | string[] | undefined, b: string | string[]) =>
     Array.isArray(b)
       ? Array.isArray(a) &&
         a.length === b.length &&
@@ -1224,7 +1249,10 @@ export function isViewActive(
       : a === b;
 
   const filtersMatch = view.filters.every((f) =>
-    sameValue(columnFilters.find((c) => c.id === f.id)?.value, f.value),
+    sameValue(
+      viewFilterValue(columnFilters.find((c) => c.id === f.id)?.value),
+      f.value,
+    ),
   );
   if (!filtersMatch) return false;
 

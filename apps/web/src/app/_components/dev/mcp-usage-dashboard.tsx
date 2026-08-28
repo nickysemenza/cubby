@@ -1,4 +1,4 @@
-import type { Entity } from "@cubby/schemas/entity-core";
+import { entitySchema, type Entity } from "@cubby/schemas/entity-core";
 import type {
   McpToolUsageStatus,
   McpUsageDashboardOut,
@@ -8,6 +8,7 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { z } from "zod";
 
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
@@ -36,6 +37,8 @@ const windows: Array<{ label: string; value: McpUsageWindow }> = [
   { label: "Lifetime", value: "lifetime" },
 ];
 
+const isNumber = (value: unknown): value is number => typeof value === "number";
+
 function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border border-border bg-card p-4">
@@ -43,7 +46,7 @@ function Metric({ label, value }: { label: string; value: number | string }) {
         {label}
       </div>
       <div className="mt-1 text-2xl font-semibold">
-        {typeof value === "number" ? formatCount(value) : value}
+        {isNumber(value) ? formatCount(value) : value}
       </div>
     </div>
   );
@@ -115,7 +118,7 @@ export function filterAndSortMcpTools(
       const a = left[sort.key];
       const b = right[sort.key];
       return (
-        (typeof a === "number" && typeof b === "number"
+        (isNumber(a) && isNumber(b)
           ? a - b
           : String(a).localeCompare(String(b))) * direction
       );
@@ -295,12 +298,14 @@ function ActivityTable({
     limit: 25,
   };
   const query = useInfiniteQuery(
-    mcp.usageActivity.infiniteQueryOptions<string | null>(activityScope, {
+    mcp.usageActivity.infiniteQueryOptions(activityScope, {
+      pageParamSchema: z.nullable(z.string()),
       initialPageParam: null,
-      page: (input, cursor) => ({
-        ...input,
-        ...(cursor === null ? {} : { cursor }),
-      }),
+      page: (input, cursor) => {
+        const next = { ...input };
+        if (cursor !== null) next.cursor = cursor;
+        return next;
+      },
       getNextPageParam: (page) => page.nextCursor ?? undefined,
     }),
   );
@@ -679,7 +684,10 @@ export function McpUsageDashboard() {
             <Button
               key={row.key}
               variant={entityFilter === row.key ? "secondary" : "outline"}
-              onClick={() => setEntityFilter(row.key as Entity)}
+              onClick={() => {
+                const entity = entitySchema.safeParse(row.key).data;
+                if (entity) setEntityFilter(entity);
+              }}
             >
               {row.label}
             </Button>

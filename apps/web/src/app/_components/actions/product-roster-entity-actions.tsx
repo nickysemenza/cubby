@@ -31,8 +31,19 @@ function asProductRow(row: EntityActionRow): ProductRosterActionRow {
   return {
     ...row,
     name: row.name || row.id,
-    stockTracked: (row as ProductRosterActionRow).stockTracked,
+    stockTracked: isProductRosterActionRow(row) ? row.stockTracked : undefined,
   };
+}
+
+function isProductRosterActionRow(
+  row: EntityActionRow,
+): row is ProductRosterActionRow {
+  return (
+    "stockTracked" in row &&
+    (row.stockTracked === undefined ||
+      row.stockTracked === null ||
+      typeof row.stockTracked === "boolean")
+  );
 }
 
 function usePrintProductLabelsAction(): EntityActionHandles {

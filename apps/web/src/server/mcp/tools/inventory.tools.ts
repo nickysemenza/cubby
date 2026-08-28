@@ -23,7 +23,7 @@ export function registerInventoryTools(server: McpServer) {
     name: "move_inventory_entries",
     description:
       "Move inventory entries to per-item destination locations, in one atomic call. Each item names an entry and where it should end up, so a single call can fan one location out across many, consolidate many into one, or both. Omit an item's quantity to move the whole entry; include it for a partial move, and list one entry twice to split it across destinations. Entries merge into an existing entry for the same product at the destination. The source location is not asked for — an entry already knows where it is.",
-    inputSchema: moveInventoryEntriesPayload.shape,
+    inputSchema: moveInventoryEntriesPayload,
     outputSchema: inventoryMcpBulkMoveOut,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
     handler: async (params, extra) => {

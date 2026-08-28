@@ -51,8 +51,15 @@ import {
 } from "~/server/repo/recipe";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import { importRecipeImageFromUrl } from "~/server/services/image-import";
-import { deleteStoredObjects } from "~/server/services/image-storage.service";
+import {
+  type ImageUrlImportPort,
+  importRecipeImageFromUrl,
+  productionRecipeImageImportPort,
+} from "~/server/services/image-import";
+import {
+  deleteStoredObjects,
+  importImageFromUrl as importStoredImageFromUrl,
+} from "~/server/services/image-storage.service";
 import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -78,9 +85,18 @@ export const parseHtmlWorkflow = (
   input: z.output<typeof parseRecipeHtmlInput>,
 ) => htmlToImportRecipe(input.html, input.url);
 
+export interface RecipeImportWorkflowPorts {
+  importImageFromUrl: ImageUrlImportPort;
+}
+
+const productionRecipeImportWorkflowPorts: RecipeImportWorkflowPorts = {
+  importImageFromUrl: importStoredImageFromUrl,
+};
+
 export const insertImportWorkflow = async (
   context: AuthenticatedStartOperationContext,
   input: z.output<typeof importRecipeSchema>,
+  ports: RecipeImportWorkflowPorts = productionRecipeImportWorkflowPorts,
 ) => {
   const result = await upsertImportRecipe(
     input,
@@ -88,7 +104,10 @@ export const insertImportWorkflow = async (
     context.actorContext,
   );
   if (input.image)
-    await importRecipeImageFromUrl(context.db, result.id, input.image);
+    await importRecipeImageFromUrl(context.db, result.id, input.image, {
+      ...productionRecipeImageImportPort,
+      importFromUrl: ports.importImageFromUrl,
+    });
   await context.services.recipeCosting.dispatchRecompute([result.id], {
     source: "recipe.import",
     entity: { entityType: "recipe", entityId: result.id },

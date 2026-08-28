@@ -7,6 +7,7 @@ import {
 import type { UserId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
+import { type JSONType, z } from "zod";
 
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
@@ -42,21 +43,46 @@ function inferEntityType(toolName: string): SearchableEntity | null {
   return null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+const sourceReferenceSchema = z.object({ name: z.string().optional() }).loose();
+const sourceCandidateSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+    manufacturer: z.string().optional(),
+    product: sourceReferenceSchema.optional(),
+    location: sourceReferenceSchema.optional(),
+    parent: sourceReferenceSchema.optional(),
+  })
+  .loose();
+const sourceCandidatesSchema = z.array(sourceCandidateSchema);
+const sourceEnvelopeSchema = z
+  .object({
+    items: sourceCandidatesSchema.optional(),
+    results: sourceCandidatesSchema.optional(),
+    data: sourceCandidatesSchema.optional(),
+    locations: sourceCandidatesSchema.optional(),
+    products: sourceCandidatesSchema.optional(),
+  })
+  .loose();
+type SourceCandidate = z.output<typeof sourceCandidateSchema>;
 
 /** Pull the list of entity-like objects out of a (varied) tool result. */
-function candidateObjects(result: unknown): Record<string, unknown>[] {
-  if (Array.isArray(result)) return result.filter(isRecord);
-  if (isRecord(result)) {
-    for (const key of ["items", "results", "data", "locations", "products"]) {
-      const value = result[key];
-      if (Array.isArray(value)) return value.filter(isRecord);
-    }
-    return [result];
+function candidateObjects(result: JSONType): SourceCandidate[] {
+  const candidates = sourceCandidatesSchema.safeParse(result);
+  if (candidates.success) return candidates.data;
+  const envelope = sourceEnvelopeSchema.safeParse(result);
+  if (envelope.success) {
+    return (
+      envelope.data.items ??
+      envelope.data.results ??
+      envelope.data.data ??
+      envelope.data.locations ??
+      envelope.data.products ??
+      []
+    );
   }
-  return [];
+  const candidate = sourceCandidateSchema.safeParse(result);
+  return candidate.success ? [candidate.data] : [];
 }
 
 const MAX_SOURCES = 12;
@@ -72,20 +98,15 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
     if (!entityType) continue;
 
     for (const obj of candidateObjects(record.result)) {
-      const product = isRecord(obj.product) ? obj.product : null;
-      const location = isRecord(obj.location) ? obj.location : null;
+      const product = obj.product ?? null;
+      const location = obj.location ?? null;
       // A location row names its parent through a nested `{id,name,type}` ref
       // (`locationMcpOut` picks it straight off the plain shape), not a
       // flattened `parentName`.
-      const parent = isRecord(obj.parent) ? obj.parent : null;
+      const parent = obj.parent ?? null;
 
-      const id = typeof obj.id === "string" ? obj.id : null;
-      const name =
-        typeof obj.name === "string"
-          ? obj.name
-          : typeof product?.name === "string"
-            ? product.name
-            : null;
+      const id = obj.id ?? null;
+      const name = obj.name ?? product?.name ?? null;
       if (!id || !name) continue;
 
       const key = `${entityType}:${id}`;
@@ -93,11 +114,11 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
       seen.add(key);
 
       const detail =
-        entityType === "inventory" && typeof location?.name === "string"
+        entityType === "inventory" && location?.name
           ? location.name
-          : typeof obj.manufacturer === "string"
+          : obj.manufacturer
             ? obj.manufacturer
-            : typeof parent?.name === "string"
+            : parent?.name
               ? parent.name
               : null;
 

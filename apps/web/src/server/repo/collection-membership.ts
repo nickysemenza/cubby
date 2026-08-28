@@ -1,4 +1,4 @@
-import type { CollectionSlug } from "@cubby/schemas/collection";
+import { collectionSlug, type CollectionSlug } from "@cubby/schemas/collection";
 import { collectionSlugsFromTags } from "@cubby/shared/collection-tag";
 
 export interface MembershipLocation {
@@ -16,7 +16,9 @@ export interface MembershipProduct {
 export const directCollectionMembership = (
   tags: readonly string[],
 ): Set<CollectionSlug> =>
-  new Set(collectionSlugsFromTags(tags) as CollectionSlug[]);
+  new Set(
+    collectionSlugsFromTags(tags).map((slug) => collectionSlug.parse(slug)),
+  );
 
 export function deriveCollectionMembership({
   products,

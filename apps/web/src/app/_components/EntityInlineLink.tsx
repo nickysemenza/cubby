@@ -1,4 +1,8 @@
-import { isDisplayableImageFile } from "@cubby/schemas/image";
+import {
+  isDisplayableImageFile,
+  type ImageRenderStatus,
+  type ImageStorageStatus,
+} from "@cubby/schemas/image";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
@@ -30,6 +34,24 @@ import type { HoverPreviewEntity } from "./preview/preview-entities";
 // Minimal data shape - just id and name
 type MinimalEntityData = { id: string; name: string };
 
+interface InlineImageFile extends ImageUrlSummary {
+  contentType?: string;
+  renderStatus?: ImageRenderStatus | null;
+  storageStatus?: ImageStorageStatus | null;
+}
+
+interface InlineImageProjection {
+  displayImage?: InlineImageFile | null;
+  coverImage?: InlineImageFile | null;
+  logo?: InlineImageFile | null;
+  vendorLogo?: InlineImageFile | null;
+  coverImageUrl?: string | null;
+  coverUrl?: string | null;
+  imageUrl?: string | null;
+  images?: ReadonlyArray<InlineImageFile>;
+  product?: { coverImage?: InlineImageFile | null } | null;
+}
+
 // Discriminated union for entity-specific data shapes
 type EntityInlineLinkProps = {
   openInNewTab?: boolean;
@@ -46,6 +68,7 @@ type EntityInlineLinkProps = {
    * undefined derives from an established enriched projection during rollout.
    */
   displayImage: ImageUrlSummary | null | undefined;
+  data: InlineImageProjection;
 } & (
   | { entity: "ingredient"; data: MinimalEntityData }
   | {
@@ -462,21 +485,16 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
  * thumbnails. A candidate with no `contentType` came from a narrow projection
  * that carries only a url, which is displayable by construction.
  */
-function asDisplayableUrl(candidate: unknown): ImageUrlSummary | null {
-  if (!candidate || typeof candidate !== "object") return null;
-  const file = candidate as {
-    url?: unknown;
-    contentType?: unknown;
-    renderStatus?: unknown;
-    storageStatus?: unknown;
-  };
-  if (typeof file.url !== "string") return null;
+function asDisplayableUrl(
+  file: InlineImageFile | null | undefined,
+): ImageUrlSummary | null {
+  if (!file) return null;
   if (
-    typeof file.contentType === "string" &&
+    file.contentType &&
     !isDisplayableImageFile({
       contentType: file.contentType,
-      renderStatus: file.renderStatus as never,
-      storageStatus: file.storageStatus as never,
+      renderStatus: file.renderStatus,
+      storageStatus: file.storageStatus,
     })
   ) {
     return null;
@@ -485,25 +503,24 @@ function asDisplayableUrl(candidate: unknown): ImageUrlSummary | null {
 }
 
 /** Normalize established enriched projections while DTOs converge on one field. */
-function displayImageFromData(data: unknown): ImageUrlSummary | null {
-  if (!data || typeof data !== "object") return null;
-  const value = data as Record<string, unknown>;
+function displayImageFromData(
+  data: InlineImageProjection,
+): ImageUrlSummary | null {
   const direct = [
-    value.displayImage,
-    value.coverImage,
-    value.logo,
-    value.vendorLogo,
+    data.displayImage,
+    data.coverImage,
+    data.logo,
+    data.vendorLogo,
   ];
   for (const candidate of direct) {
     const summary = asDisplayableUrl(candidate);
     if (summary) return summary;
   }
-  for (const key of ["coverImageUrl", "coverUrl", "imageUrl"] as const) {
-    if (typeof value[key] === "string") return { url: value[key] };
+  for (const url of [data.coverImageUrl, data.coverUrl, data.imageUrl]) {
+    if (url) return { url };
   }
-  const images = value.images;
-  if (Array.isArray(images)) {
-    for (const image of images) {
+  if (data.images) {
+    for (const image of data.images) {
       const summary = asDisplayableUrl(image);
       if (summary) return summary;
     }
@@ -512,9 +529,5 @@ function displayImageFromData(data: unknown): ImageUrlSummary | null {
   // half of `locationCoverImage`. Deliberately AFTER the `images` scan rather
   // than in `direct` above, or a photographed bin would render its SKU's stock
   // photo instead of a picture of itself.
-  const identity = value.product;
-  if (identity && typeof identity === "object") {
-    return asDisplayableUrl((identity as Record<string, unknown>).coverImage);
-  }
-  return null;
+  return asDisplayableUrl(data.product?.coverImage);
 }

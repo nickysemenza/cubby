@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -7,7 +7,11 @@ import { describe, expect, it } from "vitest";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
 
-const entities = Object.keys(entityManifest) as Entity[];
+const entities = allEntities;
+type SchemaExport = (typeof schema)[keyof typeof schema];
+type SchemaTable = Extract<SchemaExport, PgTable>;
+const isSchemaTable = (value: SchemaExport): value is SchemaTable =>
+  is(value, PgTable);
 
 // Every real pgTable schema.ts exports — entity tables (Recipe, Product, …)
 // AND join/child tables (RecipeSection, ProductImage, PurchaseImage, …) and
@@ -17,9 +21,7 @@ const entities = Object.keys(entityManifest) as Entity[];
 // `ENTITY_TABLE` iterated only entity tables, so it was structurally blind to
 // `PurchaseImage.imageId` (a join-table column) ever going undeclared. See the
 // file-level doc comment on entity-incoming-edges.ts for the fuller rationale.
-const ALL_TABLES: PgTable[] = Object.values(schema).filter((v) =>
-  is(v, PgTable),
-) as PgTable[];
+const ALL_TABLES = Object.values(schema).filter(isSchemaTable);
 
 // entity -> its own local pgTable, resolved by matching the manifest's
 // declared `dbTable` name against the real exported tables — derived, not
@@ -36,10 +38,9 @@ for (const entity of entities) {
 // FK's target table back to the entity it belongs to (only entities have a
 // local table; join/child tables never appear on the right-hand side here).
 const ENTITY_BY_TABLE = new Map<string, Entity>();
-for (const [entity, table] of Object.entries(ENTITY_TABLE) as [
-  Entity,
-  PgTable,
-][]) {
+for (const entity of entities) {
+  const table = ENTITY_TABLE[entity];
+  if (!table) continue;
   ENTITY_BY_TABLE.set(getTableConfig(table).name, entity);
 }
 
@@ -53,7 +54,7 @@ for (const [entity, table] of Object.entries(ENTITY_TABLE) as [
 // sub-graph too — not just `user` (AuditLog.userId's target). Auth's own
 // internal edges (session -> user, oauth_refresh_token -> oauth_client, etc.)
 // all need an entry here as well, since none of them are app-domain entities.
-const NON_ENTITY_FK_TARGETS: Record<string, string> = {
+const NON_ENTITY_FK_TARGETS = {
   // Owned wholly by its parent recipe (Recipe -> RecipeSection ->
   // RecipeSectionIngredient) — not independently addressable, so it never
   // graduated to its own entity.
@@ -123,12 +124,18 @@ describe("entity manifest FK guard", () => {
   });
 
   it("every FK pointing at an entity's table is declared in INCOMING_EDGES", () => {
-    const edges = introspectFkEdges().filter((e) => e.targetEntity);
+    const edges = introspectFkEdges().filter(
+      (
+        edge,
+      ): edge is IntrospectedEdge & {
+        targetEntity: Entity;
+      } => edge.targetEntity !== undefined,
+    );
     // Introspection actually found FKs targeting entities — an empty result
     // here would mean this test is vacuously (and silently) passing.
     expect(edges.length).toBeGreaterThan(0);
     const missing = edges
-      .filter((e) => !(e.key in INCOMING_EDGES[e.targetEntity as Entity]))
+      .filter((edge) => !(edge.key in INCOMING_EDGES[edge.targetEntity]))
       .map(
         (e) =>
           `\`${e.key}\` references ${e.targetTableName} but is not declared in \`INCOMING_EDGES.${e.targetEntity}\`.`,
@@ -294,10 +301,14 @@ describe("relationship provenance", () => {
           );
           continue;
         }
-        const declared = (
-          INCOMING_EDGES[rel.target] as Record<string, { unconstrained?: true }>
-        )[edge];
-        if (!declared?.unconstrained) {
+        const declared = Object.entries(INCOMING_EDGES[rel.target]).find(
+          ([key]) => key === edge,
+        )?.[1];
+        if (
+          !declared ||
+          !("unconstrained" in declared) ||
+          declared.unconstrained !== true
+        ) {
           failures.push(
             `${entity}.${rel.key}: \`${edge}\` is not marked \`unconstrained\` in INCOMING_EDGES.${rel.target}.`,
           );

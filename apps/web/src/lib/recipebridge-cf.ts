@@ -13,11 +13,19 @@ const instance: WebAssembly.Instance = await initWasm({
   "./recipebridge_bg.js": bg,
 });
 
+const isCallableExport = (
+  value: WebAssembly.ExportValue | undefined,
+): value is CallableFunction => typeof value === "function";
+
 // Close the circular dependency: set the WASM exports ref in the bg module
 bg.__wbg_set_wasm(instance.exports);
 
 // Run the wasm-bindgen start function
-(instance.exports as Record<string, CallableFunction>).__wbindgen_start();
+const start = instance.exports.__wbindgen_start;
+if (!isCallableExport(start)) {
+  throw new Error("recipebridge WASM is missing its start export");
+}
+start();
 
 // Re-export the public API (same exports as @cubby/recipebridge)
 export * from "../../../../packages/wasm/recipebridge_bg.js";

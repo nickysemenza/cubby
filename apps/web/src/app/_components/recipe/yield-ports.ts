@@ -1,4 +1,4 @@
-import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
+import { subRecipeBlockReason } from "@cubby/schemas/availability";
 
 import { wasm } from "~/lib/wasm";
 
@@ -23,7 +23,7 @@ const yieldFraction: YieldFractionPort = (recipeYield, amounts) => {
     // The same verdict the shopping list discloses, so the prep sheet's
     // "batch est." chip can say which fix is needed rather than just that
     // something was guessed.
-    reason: (out.reason as SubRecipeBlockReason | undefined) ?? null,
+    reason: subRecipeBlockReason.nullable().parse(out.reason ?? null),
   };
 };
 

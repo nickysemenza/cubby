@@ -54,21 +54,29 @@ export const ArrayFieldManager = <
   showRemoveButton = true,
   maxItems,
 }: ArrayFieldManagerProps<T, TFieldValues>) => {
-  // Cast required: useFieldArray expects ArrayPath<TFieldValues> but we accept any string
-  // for flexibility. Consumers must pass valid array field names.
   const { fields, append, remove } = useFieldArray({
     control: form.control,
+    // SAFETY: each caller supplies the name of an array field in its
+    // TFieldValues; the reusable component keeps that path open because form
+    // schemas vary.
     name: name as Parameters<typeof useFieldArray<TFieldValues>>["0"]["name"],
   });
 
   const handleAdd = () => {
     if (maxItems && fields.length >= maxItems) return;
-    // Cast required: append expects the exact array element type which varies per form
+    // SAFETY: emptyValue is the exact element contract for the caller's named
+    // array field, even though the generic field path is intentionally open.
     append(emptyValue as Parameters<typeof append>[0]);
   };
 
   const handleRemove = (index: number) => {
     remove(index);
+  };
+
+  const renderField = (field: (typeof fields)[number], index: number) => {
+    // SAFETY: useFieldArray fields preserve the caller-declared row shape and
+    // only add its bookkeeping id.
+    return children(field as T, index, handleRemove);
   };
 
   const canAdd = !maxItems || fields.length < maxItems;
@@ -105,7 +113,7 @@ export const ArrayFieldManager = <
             key={field.id}
             className={cn("flex flex-wrap items-end gap-2 py-2", itemClassName)}
           >
-            {children(field as T, index, handleRemove)}
+            {renderField(field, index)}
             {showRemoveButton && (
               <Button
                 type="button"

@@ -1,14 +1,22 @@
-import type { SearchableEntity } from "@cubby/schemas/search";
+import { searchableEntitySchema } from "@cubby/schemas/search";
+import { z } from "zod";
 
 const KEY = "cubby-recent-jumps";
 const MAX_RECENTS = 6;
 
 interface RecentJump {
-  entityType: SearchableEntity;
+  entityType: z.infer<typeof searchableEntitySchema>;
   /** Canonical public id used as the navigation target. */
   id: string;
   name: string;
 }
+
+const storedRecentJumpSchema = z.object({
+  entityType: searchableEntitySchema.optional(),
+  id: z.string().optional(),
+  shortcode: z.string().optional(),
+  name: z.string().optional(),
+});
 
 /** Last few entities jumped to from the command menu (newest first). */
 export function getRecents(): RecentJump[] {
@@ -16,17 +24,11 @@ export function getRecents(): RecentJump[] {
     const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
     if (!Array.isArray(parsed)) return [];
     return parsed.flatMap((value): RecentJump[] => {
-      if (!value || typeof value !== "object") return [];
-      const legacy = value as Partial<RecentJump> & { shortcode?: unknown };
-      const id =
-        typeof legacy.id === "string"
-          ? legacy.id
-          : typeof legacy.shortcode === "string"
-            ? legacy.shortcode
-            : null;
-      return id && legacy.entityType && typeof legacy.name === "string"
-        ? [{ entityType: legacy.entityType, id, name: legacy.name }]
-        : [];
+      const result = storedRecentJumpSchema.safeParse(value);
+      if (!result.success) return [];
+      const { entityType, name } = result.data;
+      const id = result.data.id ?? result.data.shortcode;
+      return entityType && id && name ? [{ entityType, id, name }] : [];
     });
   } catch {
     return [];

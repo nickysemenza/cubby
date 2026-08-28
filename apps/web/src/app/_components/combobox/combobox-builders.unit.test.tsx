@@ -16,7 +16,7 @@ import {
 } from "./combobox-builders";
 
 function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
-  return {
+  const base: SearchHit = {
     id: "LOC-3ABC",
     entityType: "location",
     title: "Workshop drawer",
@@ -27,8 +27,8 @@ function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
     matchField: "title",
     matchReason: "Text match in title",
     matchTerms: ["workshop"],
-    ...overrides,
-  } as SearchHit;
+  };
+  return { ...base, ...overrides };
 }
 
 describe("entity picker value adapters", () => {

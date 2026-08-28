@@ -6,12 +6,12 @@ import { parsePlainDate } from "~/lib/plain-date";
 
 import { diffDays } from "./charts/gantt/gantt-date";
 
-export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+export const PROJECT_STATUS_LABELS = {
   planning: "Planning",
   not_started: "Not started",
   in_progress: "In progress",
   done: "Done",
-};
+} satisfies Record<ProjectStatus, string>;
 
 export function capitalize(value: string): string {
   return value.length === 0

@@ -1,33 +1,26 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// Mock every dependency so we can assert resolveProductOutcome's branching
-// (the negative-caching rules) without a real D1 database.
-vi.mock("../db/products", () => ({
-  getProduct: vi.fn(),
-  createResolvedProduct: vi.fn(),
-}));
-vi.mock("../db/misses", () => ({
-  getFreshMisses: vi.fn(),
-  recordMiss: vi.fn(),
-  deleteMiss: vi.fn(),
-}));
-vi.mock("../api", () => ({ lookupExternalProduct: vi.fn() }));
-vi.mock("../storage/images", () => ({
-  cleanupImageVariants: vi.fn(),
-  storeImage: vi.fn(),
-}));
-
-import { lookupExternalProduct } from "../api";
-import { createResolvedProduct, getProduct } from "../db/products";
-import { deleteMiss, getFreshMisses, recordMiss } from "../db/misses";
-import { cleanupImageVariants } from "../storage/images";
-import type { Database } from "../db";
-import type { Env } from "../types";
+import { describe, expect, it } from "vitest";
+import type { ExternalLookupResult } from "../api";
 import type { Product } from "../db/schema";
-import { resolveProductOutcome } from "./products";
+import {
+  resolveProductOutcomeWithDependencies,
+  type ProductResolutionDependencies,
+} from "./products";
 
-const db = {} as Database;
-const env = {} as Env;
+type ResolverHarnessState = {
+  productReads: Array<Product | undefined>;
+  products: Map<string, Product>;
+  freshMisses: Set<string>;
+  externalResult: ExternalLookupResult;
+  createdProduct: Product | undefined;
+  calls: {
+    lookup: string[];
+    getFreshMisses: string[][];
+    recordMiss: string[];
+    deleteMiss: string[];
+    createResolvedProduct: string[];
+    cleanupImageVariants: string[];
+  };
+};
 
 const aProduct: Product = {
   upc: "012345678905",
@@ -44,77 +37,143 @@ const aProduct: Product = {
   updatedAt: "2026-06-14 00:00:00",
 };
 
-beforeEach(() => {
-  vi.resetAllMocks();
-  vi.mocked(getFreshMisses).mockResolvedValue(new Set());
-});
+function createResolverHarness() {
+  const state: ResolverHarnessState = {
+    productReads: [],
+    products: new Map<string, Product>(),
+    freshMisses: new Set<string>(),
+    externalResult: { status: "not_found" },
+    createdProduct: undefined,
+    calls: {
+      lookup: [],
+      getFreshMisses: [],
+      recordMiss: [],
+      deleteMiss: [],
+      createResolvedProduct: [],
+      cleanupImageVariants: [],
+    },
+  };
+
+  const dependencies: ProductResolutionDependencies = {
+    getProduct: async (upc) => {
+      state.calls.lookup.push(`getProduct:${upc}`);
+      return state.productReads.length > 0
+        ? state.productReads.shift()
+        : state.products.get(upc);
+    },
+    getFreshMisses: async (upcs) => {
+      state.calls.getFreshMisses.push(upcs);
+      return state.freshMisses;
+    },
+    recordMiss: async (upc) => {
+      state.calls.recordMiss.push(upc);
+      state.freshMisses.add(upc);
+    },
+    deleteMiss: async (upc) => {
+      state.calls.deleteMiss.push(upc);
+      state.freshMisses.delete(upc);
+    },
+    lookupExternalProduct: async (upc) => {
+      state.calls.lookup.push(`external:${upc}`);
+      return state.externalResult;
+    },
+    storeImage: async () => null,
+    createResolvedProduct: async (values) => {
+      state.calls.createResolvedProduct.push(values.upc);
+      return state.createdProduct;
+    },
+    cleanupImageVariants: async (upc) => {
+      state.calls.cleanupImageVariants.push(upc);
+    },
+  };
+
+  return { dependencies, state };
+}
 
 describe("resolveProductOutcome", () => {
   it("returns the cached product without an external call", async () => {
-    vi.mocked(getProduct).mockResolvedValue(aProduct);
+    const { dependencies, state } = createResolverHarness();
+    state.products.set(aProduct.upc, aProduct);
 
-    const outcome = await resolveProductOutcome(db, env, aProduct.upc);
+    const outcome = await resolveProductOutcomeWithDependencies(
+      dependencies,
+      aProduct.upc,
+    );
 
     expect(outcome).toEqual({
       status: "found",
       product: aProduct,
       cached: true,
     });
-    expect(lookupExternalProduct).not.toHaveBeenCalled();
-    expect(getFreshMisses).not.toHaveBeenCalled();
+    expect(state.calls.lookup).toEqual([`getProduct:${aProduct.upc}`]);
+    expect(state.calls.getFreshMisses).toEqual([]);
   });
 
   it("skips the external call when there is a fresh miss", async () => {
-    vi.mocked(getProduct).mockResolvedValue(undefined);
-    vi.mocked(getFreshMisses).mockResolvedValue(new Set(["012345678905"]));
+    const { dependencies, state } = createResolverHarness();
+    state.freshMisses.add("012345678905");
 
-    const outcome = await resolveProductOutcome(db, env, "012345678905");
+    const outcome = await resolveProductOutcomeWithDependencies(
+      dependencies,
+      "012345678905",
+    );
 
     expect(outcome).toEqual({ status: "not_found" });
-    expect(lookupExternalProduct).not.toHaveBeenCalled();
-    expect(recordMiss).not.toHaveBeenCalled();
+    expect(state.calls.lookup).toEqual(["getProduct:012345678905"]);
+    expect(state.calls.recordMiss).toEqual([]);
   });
 
   it("force bypasses the fresh-miss guard and re-hits the API", async () => {
-    vi.mocked(getProduct).mockResolvedValue(undefined);
+    const { dependencies, state } = createResolverHarness();
     // A fresh miss exists, but force must ignore it and call the API anyway.
-    vi.mocked(getFreshMisses).mockResolvedValue(new Set(["012345678905"]));
-    vi.mocked(lookupExternalProduct).mockResolvedValue({ status: "not_found" });
+    state.freshMisses.add("012345678905");
+    state.externalResult = { status: "not_found" };
 
-    const outcome = await resolveProductOutcome(db, env, "012345678905", {
-      force: true,
-    });
+    const outcome = await resolveProductOutcomeWithDependencies(
+      dependencies,
+      "012345678905",
+      { force: true },
+    );
 
     expect(outcome).toEqual({ status: "not_found" });
-    expect(getFreshMisses).not.toHaveBeenCalled();
-    expect(lookupExternalProduct).toHaveBeenCalledWith("012345678905");
-    expect(recordMiss).toHaveBeenCalledWith(db, "012345678905");
+    expect(state.calls.getFreshMisses).toEqual([]);
+    expect(state.calls.lookup).toEqual([
+      "getProduct:012345678905",
+      "external:012345678905",
+    ]);
+    expect(state.calls.recordMiss).toEqual(["012345678905"]);
   });
 
   it("records a miss on a definitive not-found", async () => {
-    vi.mocked(getProduct).mockResolvedValue(undefined);
-    vi.mocked(lookupExternalProduct).mockResolvedValue({ status: "not_found" });
+    const { dependencies, state } = createResolverHarness();
+    state.externalResult = { status: "not_found" };
 
-    const outcome = await resolveProductOutcome(db, env, "012345678905");
+    const outcome = await resolveProductOutcomeWithDependencies(
+      dependencies,
+      "012345678905",
+    );
 
     expect(outcome).toEqual({ status: "not_found" });
-    expect(recordMiss).toHaveBeenCalledWith(db, "012345678905");
+    expect(state.calls.recordMiss).toEqual(["012345678905"]);
   });
 
   it("does NOT record a miss on a transient error", async () => {
-    vi.mocked(getProduct).mockResolvedValue(undefined);
-    vi.mocked(lookupExternalProduct).mockResolvedValue({ status: "error" });
+    const { dependencies, state } = createResolverHarness();
+    state.externalResult = { status: "error" };
 
-    const outcome = await resolveProductOutcome(db, env, "012345678905");
+    const outcome = await resolveProductOutcomeWithDependencies(
+      dependencies,
+      "012345678905",
+    );
 
     expect(outcome).toEqual({ status: "error" });
-    expect(recordMiss).not.toHaveBeenCalled();
-    expect(createResolvedProduct).not.toHaveBeenCalled();
+    expect(state.calls.recordMiss).toEqual([]);
+    expect(state.calls.createResolvedProduct).toEqual([]);
   });
 
   it("creates the product and clears any miss on a hit", async () => {
-    vi.mocked(getProduct).mockResolvedValue(undefined);
-    vi.mocked(lookupExternalProduct).mockResolvedValue({
+    const { dependencies, state } = createResolverHarness();
+    state.externalResult = {
       status: "found",
       data: {
         name: "Test Product",
@@ -127,26 +186,28 @@ describe("resolveProductOutcome", () => {
         source: "upcitemdb",
         sourceData: "{}",
       },
-    });
-    vi.mocked(createResolvedProduct).mockResolvedValue(aProduct);
+    };
+    state.createdProduct = aProduct;
 
-    const outcome = await resolveProductOutcome(db, env, "012345678905");
+    const outcome = await resolveProductOutcomeWithDependencies(
+      dependencies,
+      "012345678905",
+    );
 
     expect(outcome).toEqual({
       status: "found",
       product: aProduct,
       cached: false,
     });
-    expect(createResolvedProduct).toHaveBeenCalledOnce();
-    expect(deleteMiss).toHaveBeenCalledWith(db, "012345678905");
-    expect(recordMiss).not.toHaveBeenCalled();
+    expect(state.calls.createResolvedProduct).toEqual(["012345678905"]);
+    expect(state.calls.deleteMiss).toEqual(["012345678905"]);
+    expect(state.calls.recordMiss).toEqual([]);
   });
 
   it("returns the concurrently cached winner when its cache fill loses", async () => {
-    vi.mocked(getProduct)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(aProduct);
-    vi.mocked(lookupExternalProduct).mockResolvedValue({
+    const { dependencies, state } = createResolverHarness();
+    state.productReads = [undefined, aProduct];
+    state.externalResult = {
       status: "found",
       data: {
         name: "Test Product",
@@ -159,17 +220,16 @@ describe("resolveProductOutcome", () => {
         source: "upcitemdb",
         sourceData: "{}",
       },
-    });
-    vi.mocked(createResolvedProduct).mockResolvedValue(undefined);
+    };
 
-    await expect(resolveProductOutcome(db, env, aProduct.upc)).resolves.toEqual(
-      {
-        status: "found",
-        product: aProduct,
-        cached: true,
-      },
-    );
-    expect(deleteMiss).not.toHaveBeenCalled();
-    expect(cleanupImageVariants).toHaveBeenCalledWith(env, aProduct.upc, null);
+    await expect(
+      resolveProductOutcomeWithDependencies(dependencies, aProduct.upc),
+    ).resolves.toEqual({
+      status: "found",
+      product: aProduct,
+      cached: true,
+    });
+    expect(state.calls.deleteMiss).toEqual([]);
+    expect(state.calls.cleanupImageVariants).toEqual([aProduct.upc]);
   });
 });

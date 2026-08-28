@@ -1,8 +1,11 @@
-import type {
-  CollectionCellState,
-  CollectionMatrixMembership,
-  CollectionMatrixSort,
-  CollectionSlug,
+import {
+  collectionMatrixMembership,
+  collectionMatrixSort,
+  collectionSlug,
+  type CollectionCellState,
+  type CollectionMatrixMembership,
+  type CollectionMatrixSort,
+  type CollectionSlug,
 } from "@cubby/schemas/collection";
 import {
   formatCollectionLabel,
@@ -50,9 +53,30 @@ const MOBILE_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
 const EMPTY_COLLECTIONS: CollectionSlug[] = [];
 type MatrixRow = CollectionMatrixRow;
+type CollectionAssignmentSubject = "product" | "location";
+
+export interface CollectionAssignmentSearch {
+  subject?: CollectionAssignmentSubject;
+  q?: string;
+  page?: number;
+  rows?: number;
+  sort?: CollectionMatrixSort;
+  collection?: CollectionSlug;
+  membership?: CollectionMatrixMembership;
+}
+
+export type CollectionAssignmentOperations = Pick<
+  typeof collectionOperations,
+  "create" | "matrix" | "set"
+>;
 
 const directlyAssigned = (state: CollectionCellState): boolean =>
   state === "direct" || state === "both";
+
+const parseAssignmentSubject = (
+  value: string,
+): CollectionAssignmentSubject | undefined =>
+  value === "product" || value === "location" ? value : undefined;
 
 function MatrixPager({
   page,
@@ -163,9 +187,11 @@ function MatrixLoadError({
 function NewCollectionDialog({
   subject,
   rows,
+  operations,
 }: {
-  subject: "product" | "location";
+  subject: CollectionAssignmentSubject;
   rows: MatrixRow[];
+  operations: CollectionAssignmentOperations;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -175,7 +201,7 @@ function NewCollectionDialog({
   const slug = normalizeCollectionSlug(name);
 
   const create = useMutation({
-    ...collectionOperations.create.mutationOptions(),
+    ...operations.create.mutationOptions(),
     onSuccess: (result) => {
       toast.success(`${formatCollectionLabel(result.slug)} created`);
       setOpen(false);
@@ -275,6 +301,7 @@ export function CollectionAssignmentMatrix({
   collection,
   membership,
   onSearchChange,
+  operations = collectionOperations,
 }: {
   subject: "product" | "location";
   search?: string;
@@ -283,15 +310,9 @@ export function CollectionAssignmentMatrix({
   sort: CollectionMatrixSort;
   collection?: CollectionSlug;
   membership?: CollectionMatrixMembership;
-  onSearchChange: (next: {
-    subject?: "product" | "location";
-    q?: string;
-    page?: number;
-    rows?: number;
-    sort?: CollectionMatrixSort;
-    collection?: CollectionSlug;
-    membership?: CollectionMatrixMembership;
-  }) => void;
+  onSearchChange: (next: CollectionAssignmentSearch) => void;
+  /** Remote collection operations; production uses the shared catalog. */
+  operations?: CollectionAssignmentOperations;
 }) {
   const mobileSubjectId = useId();
   const mobileCollectionId = useId();
@@ -307,7 +328,7 @@ export function CollectionAssignmentMatrix({
     }),
     [collection, membership, page, pageSize, search, sort, subject],
   );
-  const matrix = useQuery(collectionOperations.matrix.queryOptions(input));
+  const matrix = useQuery(operations.matrix.queryOptions(input));
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [mobileCollection, setMobileCollection] = useState<CollectionSlug>();
   const [mobilePage, setMobilePage] = useState(() =>
@@ -316,7 +337,7 @@ export function CollectionAssignmentMatrix({
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const mutation = useMutation({
-    ...collectionOperations.set.mutationOptions(),
+    ...operations.set.mutationOptions(),
     retry: 2,
     onSuccess: (_result, variables) => {
       const key = `${variables.subject}:${variables.id}:${variables.collection}`;
@@ -436,26 +457,26 @@ export function CollectionAssignmentMatrix({
     setMobilePage(nextPage);
     if (nextServerPage !== page) onSearchChange({ page: nextServerPage });
   };
+  const changeSubject = (value: string) => {
+    const nextSubject = parseAssignmentSubject(value);
+    if (nextSubject) onSearchChange({ subject: nextSubject, page: 1 });
+  };
 
   return (
     <Stack gap="xs" className="pb-24">
       <div className="hidden border-y border-border bg-card md:block">
         <div className="flex min-h-9 flex-wrap items-center gap-2 border-b border-border px-2">
-          <Tabs
-            value={subject}
-            onValueChange={(value) =>
-              onSearchChange({
-                subject: value as "product" | "location",
-                page: 1,
-              })
-            }
-          >
+          <Tabs value={subject} onValueChange={changeSubject}>
             <TabsList variant="line" aria-label="Assignment subject">
               <TabsTrigger value="product">Products</TabsTrigger>
               <TabsTrigger value="location">Locations</TabsTrigger>
             </TabsList>
           </Tabs>
-          <NewCollectionDialog subject={subject} rows={matrixRows} />
+          <NewCollectionDialog
+            subject={subject}
+            rows={matrixRows}
+            operations={operations}
+          />
           <div className="ml-auto flex items-center gap-4 font-mono text-2xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <span className="inline-block size-3 border border-primary bg-primary" />
@@ -482,10 +503,10 @@ export function CollectionAssignmentMatrix({
             aria-label="Filter by Collection"
             value={collection ?? ""}
             onChange={(event) => {
-              const selected = event.target.value as CollectionSlug | "";
+              const selected = collectionSlug.safeParse(event.target.value);
               onSearchChange({
-                collection: selected || undefined,
-                membership: selected ? "member" : undefined,
+                collection: selected.success ? selected.data : undefined,
+                membership: selected.success ? "member" : undefined,
                 page: 1,
               });
             }}
@@ -501,14 +522,17 @@ export function CollectionAssignmentMatrix({
             aria-label="Filter by membership"
             value={membership ?? ""}
             disabled={!collection}
-            onChange={(event) =>
+            onChange={(event) => {
+              const nextMembership = collectionMatrixMembership.safeParse(
+                event.target.value,
+              );
               onSearchChange({
-                membership:
-                  (event.target.value as CollectionMatrixMembership) ||
-                  undefined,
+                membership: nextMembership.success
+                  ? nextMembership.data
+                  : undefined,
                 page: 1,
-              })
-            }
+              });
+            }}
           >
             <option value="">Any membership</option>
             <option value="member">Member</option>
@@ -519,12 +543,14 @@ export function CollectionAssignmentMatrix({
           <NativeSelect
             aria-label={`Sort ${subjectLabel.toLocaleLowerCase()}`}
             value={sort}
-            onChange={(event) =>
-              onSearchChange({
-                sort: event.target.value as CollectionMatrixSort,
-                page: 1,
-              })
-            }
+            onChange={(event) => {
+              const nextSort = collectionMatrixSort.safeParse(
+                event.target.value,
+              );
+              if (nextSort.success) {
+                onSearchChange({ sort: nextSort.data, page: 1 });
+              }
+            }}
           >
             <option value="name-asc">Name A–Z</option>
             <option value="name-desc">Name Z–A</option>
@@ -578,12 +604,7 @@ export function CollectionAssignmentMatrix({
                 id={mobileSubjectId}
                 aria-label="Assignment subject"
                 value={subject}
-                onChange={(event) =>
-                  onSearchChange({
-                    subject: event.target.value as "product" | "location",
-                    page: 1,
-                  })
-                }
+                onChange={(event) => changeSubject(event.target.value)}
               >
                 <option value="product">Products</option>
                 <option value="location">Locations</option>
@@ -596,7 +617,11 @@ export function CollectionAssignmentMatrix({
                   Start with one {subject} from this page.
                 </p>
               </div>
-              <NewCollectionDialog subject={subject} rows={matrixRows} />
+              <NewCollectionDialog
+                subject={subject}
+                rows={matrixRows}
+                operations={operations}
+              />
             </div>
           </div>
         ) : (
@@ -611,12 +636,7 @@ export function CollectionAssignmentMatrix({
                   id={mobileSubjectId}
                   aria-label="Assignment subject"
                   value={subject}
-                  onChange={(event) =>
-                    onSearchChange({
-                      subject: event.target.value as "product" | "location",
-                      page: 1,
-                    })
-                  }
+                  onChange={(event) => changeSubject(event.target.value)}
                 >
                   <option value="product">Products</option>
                   <option value="location">Locations</option>
@@ -631,9 +651,14 @@ export function CollectionAssignmentMatrix({
                   id={mobileCollectionId}
                   aria-label="Assign to Collection"
                   value={selectedMobileCollection ?? ""}
-                  onChange={(event) =>
-                    setMobileCollection(event.target.value as CollectionSlug)
-                  }
+                  onChange={(event) => {
+                    const nextCollection = collectionSlug.safeParse(
+                      event.target.value,
+                    );
+                    setMobileCollection(
+                      nextCollection.success ? nextCollection.data : undefined,
+                    );
+                  }}
                 >
                   {availableCollections.map((slug) => (
                     <option key={slug} value={slug}>

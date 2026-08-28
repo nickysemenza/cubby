@@ -299,14 +299,9 @@ export type IncomingEdgePolicy<E extends Entity, Disposition> = IncomingEdgeMap<
  */
 export const EDGE_KEY_TARGET_ENTITY: ReadonlyMap<string, ShortcodeEntity> =
   new Map(
-    (Object.entries(INCOMING_EDGES) as [Entity, Record<string, IncomingEdge>][])
-      .filter(
-        (entry): entry is [ShortcodeEntity, Record<string, IncomingEdge>] =>
-          (shortcodeEntities as readonly Entity[]).includes(entry[0]),
-      )
-      .flatMap(([targetEntity, entityEdges]) =>
-        Object.keys(entityEdges).map(
-          (edgeKey) => [edgeKey, targetEntity] as const,
-        ),
+    shortcodeEntities.flatMap((targetEntity) =>
+      Object.keys(INCOMING_EDGES[targetEntity]).map(
+        (edgeKey) => [edgeKey, targetEntity] as const,
       ),
+    ),
   );

@@ -1,11 +1,12 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import type { UserId } from "@cubby/schemas/identifiers";
+import type { JSONType } from "zod";
 
 import type { Database } from "~/server/db";
 import { buildCrudServices } from "~/server/request-context";
 import type { RequestOrigin } from "~/server/workload";
 
-const jsonResponse = (status: number, body: unknown) =>
+const jsonResponse = (status: number, body: JSONType) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
@@ -20,17 +21,19 @@ export const createTestRequestContext = (
     readDb?: Database;
   } = {},
 ) => {
+  const usdaFetcher: typeof fetch = async (input) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    return url.includes("/search/batch")
+      ? jsonResponse(200, { results: [] })
+      : jsonResponse(404, null);
+  };
   const crudServices = buildCrudServices(db, {
-    usdaFetcher: (async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input.toString();
-      return url.includes("/search/batch")
-        ? jsonResponse(200, { results: [] })
-        : jsonResponse(404, null);
-    }) as typeof fetch,
+    usdaFetcher,
   });
   const auth = opts.auth
     ? { userId: opts.auth.userId, sessionId: "test-session-id" }
     : { userId: null, sessionId: null };
+  const requestOrigin: RequestOrigin = "ui";
   return {
     ...crudServices,
     readDb: opts.readDb ?? db,
@@ -41,7 +44,7 @@ export const createTestRequestContext = (
     auth,
     isSystemRequest: false,
     actorContext: auth.userId ? buildActorContext(auth.userId, "ui") : null,
-    requestOrigin: "ui" as RequestOrigin,
+    requestOrigin,
     headers: opts.headers ?? new Headers(),
   };
 };

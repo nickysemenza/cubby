@@ -38,7 +38,7 @@ describe("resolveCostFilter", () => {
   it("emits a numeric bound, not a string", () => {
     // The URL path goes through `z.coerce.number()`, but this preset path
     // bypasses the URL entirely — `expand` returns the patch directly.
-    expect(typeof resolveCostFilter("gte500").costMin).toBe("number");
+    expect(resolveCostFilter("gte500").costMin).toEqual(expect.any(Number));
   });
 
   it("resolves every declared option, so no preset can render without a bound", () => {

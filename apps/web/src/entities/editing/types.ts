@@ -1,5 +1,15 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
+import type { JSONType } from "zod";
 
+import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
+
+import type {
+  EntityMutationData,
+  EntityMutationVariables,
+  StandardAction,
+  StandardEntity,
+} from "../entity-contracts";
 import type {
   EntityEditDraft,
   EntityEditRecordFor,
@@ -36,7 +46,7 @@ export type EntityEditOperation = "create" | "update" | "delete";
  * Commands also carry the bulk forms, which act on `ids` rather than one
  * record and so have no semantic intent definition of their own.
  */
-type EntityEditCommandOperation = EntityEditOperation | "bulkUpdate";
+type EntityEditCommandOperation = EntityEditOperation;
 
 /**
  * A semantic editing capability such as `full`, `capture`, `schedule`, or
@@ -67,17 +77,26 @@ export interface EntityEditIssue {
   source: "client" | "server";
 }
 
+/** Concrete runtime values accepted by semantic editor fields. */
+export type EntityEditValue = JSONType | Date | undefined;
+export type EntityEditValueBag = Record<string, EntityEditValue>;
+export type EntityEditMutationData<E extends EditableEntity> =
+  | Readonly<Partial<EntityEditDraft<E>>>
+  | EntityEditValueBag;
 /** The minimum identity every update adapter needs. */
 export interface EntityEditRecord {
   id: string;
-  [field: string]: unknown;
+  [field: string]: EntityEditValue;
 }
 
 /**
  * Context belongs to a caller's workflow: a calendar day, a project's quick
  * add button, or a picker. It deliberately does not become a persisted field.
  */
-export type EntityEditContext = Readonly<Record<string, unknown>>;
+export interface EntityEditContext {
+  disposition?: boolean;
+  parentProjectId?: string | null;
+}
 
 interface EntityEditFieldInput<R extends EntityEditRecord> {
   operation: EntityEditOperation;
@@ -90,7 +109,7 @@ interface EntityEditFieldInput<R extends EntityEditRecord> {
 interface EntityEditFieldValidationInput<R extends EntityEditRecord, V> {
   value: V;
   /** Normalized values from every selected field. */
-  values: Readonly<Record<string, unknown>>;
+  values: Readonly<EntityEditValueBag>;
   record?: R;
   context: EntityEditContext;
 }
@@ -122,19 +141,47 @@ export interface EntityEditField<
   }): P | undefined;
 }
 
-export interface EntityEditCommand<E extends EditableEntity> {
-  entity: E;
-  operation: EntityEditCommandOperation;
-  intent: RuntimeEntityEditIntent;
-  /** Present only for updates; server payload construction remains entity-owned. */
-  id?: string;
-  /** Delete operations are atomic across this complete set. */
-  ids?: readonly string[];
-  data: object;
-}
+export type EntityEditCommand<
+  E extends EditableEntity,
+  O extends EntityEditCommandOperation = EntityEditCommandOperation,
+> = O extends "create"
+  ? {
+      entity: E;
+      operation: O;
+      intent: RuntimeEntityEditIntent;
+      data: EntityEditMutationData<E>;
+    }
+  : O extends "update"
+    ? {
+        entity: E;
+        operation: O;
+        intent: RuntimeEntityEditIntent;
+        id: string;
+        data: EntityEditMutationData<E>;
+      }
+    : {
+        entity: E;
+        operation: "delete";
+        intent: RuntimeEntityEditIntent;
+        /** Delete operations are atomic across this complete set. */
+        ids: readonly string[];
+      };
 
-export type EntityEditBuildResult<E extends EditableEntity> =
-  | { ok: true; command: EntityEditCommand<E>; changed: boolean }
+export type EntityEditCommandInput<
+  E extends EditableEntity,
+  O extends EntityEditOperation = EntityEditOperation,
+> =
+  EntityEditCommand<E, O> extends infer Command
+    ? Command extends EntityEditCommand<E>
+      ? Omit<Command, "entity">
+      : never
+    : never;
+
+export type EntityEditBuildResult<
+  E extends EditableEntity,
+  O extends EntityEditOperation = EntityEditOperation,
+> =
+  | { ok: true; command: EntityEditCommand<E, O>; changed: boolean }
   | { ok: false; issues: readonly EntityEditIssue[] };
 
 export interface EntityEditIntentDefinition<
@@ -147,8 +194,8 @@ export interface EntityEditIntentDefinition<
   acceptsSeed?: boolean;
   /** Applied after field defaults and before caller seed/contextual presets. */
   defaults?:
-    | Readonly<Record<string, unknown>>
-    | ((context: EntityEditContext) => Readonly<Record<string, unknown>>);
+    | Readonly<EntityEditValueBag>
+    | ((context: EntityEditContext) => Readonly<EntityEditValueBag>);
   access(input: {
     surface: EntityEditSurface;
     record?: R;
@@ -157,14 +204,14 @@ export interface EntityEditIntentDefinition<
   /** Validate rules that belong to the complete semantic capability, rather
    * than to a field everywhere it appears (for example Calendar-only dates). */
   validate?(input: {
-    values: Readonly<Record<string, unknown>>;
+    values: Readonly<EntityEditValueBag>;
     record?: R;
     context: EntityEditContext;
     surface: EntityEditSurface;
   }): readonly EntityEditIssue[];
   build(input: {
     record?: R;
-    patch: object;
+    patch: EntityEditValueBag;
     context: EntityEditContext;
   }): EntityEditBuildResult<E>;
 }
@@ -186,7 +233,12 @@ export interface EntityEditDefinition<
   R extends EntityEditRecord = EntityEditRecord,
 > {
   readonly entity: E;
-  readonly fields: readonly EntityEditField<E, R, unknown, object>[];
+  readonly fields: readonly EntityEditField<
+    E,
+    R,
+    EntityEditValue,
+    EntityEditValueBag
+  >[];
   readonly operations: Partial<{
     [O in EntityEditOperation]: EntityEditOperationDefinition<E, R>;
   }>;
@@ -199,14 +251,17 @@ export interface EntityEditDefinition<
 export interface EntityMutationPort {
   execute<E extends EditableEntity>(
     command: EntityEditCommand<E>,
-  ): Promise<{ id: string; result: unknown }>;
+  ): Promise<EntityMutationExecution<E>>;
+  executeBulk<E extends EditableEntity>(
+    command: EntityBulkUpdateCommand<E>,
+  ): Promise<EntityBulkUpdateResult>;
 }
 
 export interface EntityEditRequest<
   E extends EditableEntity,
   O extends EntityEditOperation = TypedEntityEditOperation<E>,
   I extends TypedEntityEditIntent<E, O> = TypedEntityEditIntent<E, O>,
-  R extends EntityEditRecord = EntityEditRecordFor<E>,
+  R extends { id: string } = EntityEditRecordFor<E>,
 > {
   entity: E;
   operation: O;
@@ -227,7 +282,7 @@ export interface RuntimeEntityEditRequest<E extends EditableEntity> {
   surface: EntityEditSurface;
   record?: EntityEditRecord;
   context?: EntityEditContext;
-  seed?: Readonly<Record<string, unknown>>;
+  seed?: Readonly<EntityEditValueBag>;
 }
 
 export type EntityEditResult<E extends EditableEntity> =
@@ -237,7 +292,9 @@ export type EntityEditResult<E extends EditableEntity> =
       id: string;
       changed: boolean;
       /** Raw mutation result for compatibility adapters and success callbacks. */
-      result?: EntityEditResultFor<E>;
+      result?: EntityEditResultFor<E> & {
+        sideEffects: MutationSideEffects;
+      };
     }
   | { ok: false; issues: readonly EntityEditIssue[] };
 
@@ -247,12 +304,46 @@ export type EntityEditResult<E extends EditableEntity> =
  * than widening {@link EntityEditResult}: every other consumer of that type
  * reads an entity-shaped `result`.
  */
-export interface EntityBulkUpdateResult {
-  updated: number;
-  updatedIds: readonly string[];
-  sideEffects: { backgroundBatches: readonly unknown[] };
+export type EntityMutationExecution<E extends EditableEntity> =
+  | {
+      operation: "create" | "update";
+      id: string;
+      result: EntityEditResultFor<E> & {
+        sideEffects: MutationSideEffects;
+      };
+    }
+  | {
+      operation: "delete";
+      id: string;
+      result: Extract<EntityBrowserMutationResult, { action: "delete" }>;
+    };
+
+export interface EntityBulkUpdateCommand<E extends EditableEntity> {
+  entity: E;
+  operation: "bulkUpdate";
+  intent: RuntimeEntityEditIntent;
+  ids: readonly string[];
+  data: EntityEditMutationData<E>;
 }
 
+type EntityBulkUpdateResult = Extract<
+  EntityBrowserMutationResult,
+  { action: "bulkUpdate" }
+>;
+
 export type EntityBulkUpdateOutcome =
-  | { ok: true; entity: EditableEntity; result: EntityBulkUpdateResult }
+  | {
+      ok: true;
+      entity: EditableEntity;
+      result: EntityBulkUpdateResult;
+    }
   | { ok: false; issues: readonly EntityEditIssue[] };
+
+export type EntityActionVariables<
+  E extends StandardEntity,
+  A extends StandardAction,
+> = EntityMutationVariables<E, A>;
+export type EntityActionData<
+  E extends StandardEntity,
+  A extends StandardAction,
+> = EntityMutationData<E, A>;

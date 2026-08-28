@@ -5,9 +5,18 @@ import { persistTelemetryMessages } from "~/server/repo/telemetry";
 
 import type { TelemetryQueueBatch } from "./telemetry-queue-types";
 
+export interface TelemetryQueuePorts {
+  readonly persistTelemetryMessages: typeof persistTelemetryMessages;
+}
+
+const productionTelemetryQueuePorts: TelemetryQueuePorts = {
+  persistTelemetryMessages,
+};
+
 export async function processTelemetryQueueBatch(
   db: Database,
   batch: TelemetryQueueBatch,
+  ports: TelemetryQueuePorts = productionTelemetryQueuePorts,
 ): Promise<void> {
   const valid: Array<{
     event: ReturnType<typeof telemetryMessageV1Schema.parse>;
@@ -28,7 +37,7 @@ export async function processTelemetryQueueBatch(
 
   if (valid.length === 0) return;
   try {
-    await persistTelemetryMessages(
+    await ports.persistTelemetryMessages(
       db,
       valid.map(({ event }) => event),
     );

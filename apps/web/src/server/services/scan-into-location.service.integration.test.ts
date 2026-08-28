@@ -9,8 +9,8 @@ import type { FoodSummary } from "@cubby/usda-schemas";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
+import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import {
   createInventoryEntry,
   getInventoryByLocationIds,
@@ -30,17 +30,16 @@ import {
 // these. They exist to satisfy the signature, and asserting they stay unused
 // is itself part of the contract: a sweep of a stocked shelf must not fan out
 // to USDA or the UPC worker on every read.
-const fakeUsdaClient = (): USDAClient =>
-  ({
-    findFood: vi.fn(async (): Promise<FoodSummary | null> => null),
-  }) as unknown as USDAClient;
+const fakeUsdaClient = (): UsdaFoodLookupPort => ({
+  findFood: vi.fn(async (): Promise<FoodSummary | null> => null),
+});
 
-const fakeUpcLookupClient = (): UPCLookupClient => {
+const fakeUpcLookupClient = (): UpcLookupPort => {
   const single = vi.fn(async (): Promise<UPCLookupResponse | null> => null);
   return {
     lookup: single,
     lookupBatch: vi.fn(async () => new Map()),
-  } as unknown as UPCLookupClient;
+  };
 };
 
 describe("scanAtLocation", () => {

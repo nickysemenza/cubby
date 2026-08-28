@@ -54,7 +54,10 @@ import {
   productImage,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { isUniqueViolation } from "~/server/errors/db-errors";
+import {
+  isUniqueViolation,
+  type UnparsedDatabaseError,
+} from "~/server/errors/db-errors";
 import {
   computeChanges,
   logAuditEntries,
@@ -75,6 +78,7 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  imageJoinBindings,
   imageOrder,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -164,7 +168,7 @@ const findLocationsWithLiveInventory = (
 const throwIfDuplicateLocation = async (
   db: Database,
   name: string,
-  error: unknown,
+  error: UnparsedDatabaseError,
 ): Promise<void> => {
   if (!isUniqueViolation(error, "Location_name_key")) return;
   // `lower(name) = lower($1)` rather than ilike, so the planner uses the same
@@ -262,8 +266,7 @@ const createLocationTx = async (
       );
       await associatePendingImages(
         tx,
-        locationImage,
-        "locationId",
+        imageJoinBindings.location,
         newLocation.id,
         resolvedImageIds,
       );
@@ -424,8 +427,7 @@ export const updateLocation = async (
       const orderedIds = await resolveAllPresent(tx, "image", data.imageOrder);
       await applyImageOrder(
         tx,
-        locationImage,
-        locationImage.locationId,
+        imageJoinBindings.location,
         updated.id,
         orderedIds,
       );
@@ -452,14 +454,12 @@ export const updateLocation = async (
       );
       const startSortOrder = await nextImageSortOrder(
         tx,
-        locationImage,
-        locationImage.locationId,
+        imageJoinBindings.location,
         updated.id,
       );
       await associatePendingImages(
         tx,
-        locationImage,
-        "locationId",
+        imageJoinBindings.location,
         updated.id,
         resolvedPendingImageIds,
         startSortOrder,
@@ -803,11 +803,7 @@ export const buildLocationWhere = async (
     [],
     [
       ...auditDateWhereConditions(location, filters),
-      ...relatedWhereConditions(
-        "location",
-        filters as unknown as Record<string, unknown>,
-        location.id,
-      ),
+      ...relatedWhereConditions("location", filters, location.id),
       locationNameSearchCondition(filters.nameFilter),
       eqAny(location.type, filters.itemTypeFilter),
       parentCondition,

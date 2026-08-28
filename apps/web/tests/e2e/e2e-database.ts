@@ -12,6 +12,7 @@ import { drizzle as drizzlePGlite } from "drizzle-orm/pglite";
 import { Pool } from "pg";
 import * as schema from "../../src/server/db/schema";
 import { ensureDbExtensions } from "../../tooling/db-extensions";
+import { toPushSchemaDatabase } from "../../tooling/drizzle-kit-interop";
 
 export type E2EDatabaseKind = "pglite" | "postgres";
 
@@ -22,11 +23,16 @@ export interface E2EDatabase {
 }
 
 interface SchemaDatabase {
-  execute(query: SQL): Promise<unknown>;
+  readonly _: unknown;
+  execute(query: SQL): Promise<object>;
 }
 
 const PGLITE_HOST = "127.0.0.1";
-const PGLITE_MAX_CONNECTIONS = 16;
+// The patched socket server preserves complete extended-protocol query cycles,
+// while concurrent request pools can still acquire several idle clients before
+// their SQL reaches that gate. This ceiling prevents those waiting clients from
+// being rejected; client-side pools retain responsibility for idle retirement.
+const PGLITE_MAX_CONNECTIONS = 512;
 
 function resolveE2EDatabaseKind(
   env: NodeJS.ProcessEnv = process.env,
@@ -49,11 +55,9 @@ async function pushE2ESchema(db: SchemaDatabase): Promise<void> {
   const { pushSchema } = await import("drizzle-kit/api");
 
   await ensureDbExtensions(db);
-  const { apply } = await pushSchema(
-    schema,
-    db as unknown as Parameters<typeof pushSchema>[1],
-    ["public"],
-  );
+  const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
+    "public",
+  ]);
   await apply();
 }
 
@@ -140,9 +144,6 @@ async function createPGliteE2EDatabase(): Promise<E2EDatabase> {
       db: pg,
       host: PGLITE_HOST,
       port: 0,
-      // The Worker, Hyperdrive bindings, and server-side fixtures each retain
-      // pools. PGlite still serializes their queries internally; this limit
-      // only prevents those retained clients from being rejected.
       maxConnections: PGLITE_MAX_CONNECTIONS,
     });
     await socketServer.start();

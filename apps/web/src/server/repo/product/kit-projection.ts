@@ -43,6 +43,7 @@
 
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { uuidArrayParam } from "~/server/repo/database-helpers";
 
@@ -182,10 +183,10 @@ export const unitWeighted = (column: string) =>
 export const ownOnly = (column: string) =>
   `sum(ko.${column}) FILTER (WHERE ka.depth = 0)`;
 
-export const projectionRows = <T>(result: unknown): T[] => {
-  if (Array.isArray(result)) return result as T[];
-  if (result && typeof result === "object" && "rows" in result) {
-    return (result as { rows: T[] }).rows;
-  }
-  return [];
-};
+type UnparsedProjectionRow = z.input<z.ZodUnknown>;
+
+/** Parse raw-driver rows at the shared projection ingress. */
+export const projectionRows = <Schema extends z.ZodType>(
+  result: { rows: readonly UnparsedProjectionRow[] },
+  rowSchema: Schema,
+): Array<z.output<Schema>> => z.array(rowSchema).parse(result.rows);

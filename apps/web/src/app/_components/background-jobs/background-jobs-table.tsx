@@ -60,13 +60,13 @@ import {
 } from "./background-job-rows";
 import {
   batchFilterText,
-  isRecord,
   parseBackgroundEntityRef,
+  parseBackgroundMetadata,
 } from "./batch-metadata";
 import { formatDate } from "./format";
 
 type QueueStatus = BackgroundBatchStatus | BackgroundJobStatus;
-const STATUS_TONE: Record<QueueStatus, BadgeVariant> = {
+const STATUS_TONE = {
   pending: "slate",
   queued: "slate",
   running: "default",
@@ -75,7 +75,7 @@ const STATUS_TONE: Record<QueueStatus, BadgeVariant> = {
   partial: "warning",
   failed: "destructive",
   cancelled: "outline",
-};
+} satisfies Record<QueueStatus, BadgeVariant>;
 const COLUMN_DEFAULTS = {
   sortUndefined: "last" as const,
   enableCellSelection: false,
@@ -86,12 +86,17 @@ const SELECT_FILTERS = [
   ["batchProcessor", "processor", "Processor", backgroundBatchProcessors],
   ["batchStatus", "status", "Status", backgroundBatchStatuses],
 ] as const;
-const JOB_LABEL: Partial<Record<BackgroundJobKind, string>> = {
+const JOB_LABEL = {
   "entity-embedding.backfill.coordinator": "Continue semantic backfill",
   "search-document.repair.coordinator": "Continue document repair",
   "location-valuation.recompute": "All locations",
   "problems.counts.refresh": "Problem counts",
-};
+} satisfies Partial<Record<BackgroundJobKind, string>>;
+
+const isExpandedUpdater = (
+  value: ExpandedState | ((previous: ExpandedState) => ExpandedState),
+): value is (previous: ExpandedState) => ExpandedState =>
+  typeof value === "function";
 
 interface BackgroundJobsTableProps {
   rows: BackgroundJobTableRow[];
@@ -144,8 +149,8 @@ function EntityTarget({
 }
 
 function OriginLink({ batch }: { batch: BackgroundBatchRow["batch"] }) {
-  const metadata = isRecord(batch.metadata) ? batch.metadata : null;
-  const source = typeof metadata?.source === "string" ? metadata.source : null;
+  const metadata = parseBackgroundMetadata(batch.metadata);
+  const source = metadata?.source ?? null;
   const entity = parseBackgroundEntityRef(metadata?.entity);
   if (entity) return <EntityTarget {...entity} />;
   if (source) return source;
@@ -184,12 +189,11 @@ function JobTarget({ row }: { row: BackgroundJobRow }) {
       `${payload.recipeIds.length} recipes`
     );
   }
-  return JOB_LABEL[kind];
+  return Object.entries(JOB_LABEL).find(([label]) => label === kind)?.[1];
 }
 
-async function copyJson(value: unknown, label: string) {
-  if (!(await copyText(JSON.stringify(value, null, 2))))
-    return toast.error("Copy failed");
+async function copyJson(serialized: string, label: string) {
+  if (!(await copyText(serialized))) return toast.error("Copy failed");
   toast.success(`Copied ${label}`);
 }
 
@@ -234,7 +238,11 @@ function RowActions({
   add(
     `Copy ${copyLabel}`,
     ClipboardCopy,
-    () => void copyJson(batch?.metadata ?? job?.payload, copyLabel),
+    () =>
+      void copyJson(
+        JSON.stringify(batch?.metadata ?? job?.payload, null, 2) ?? "null",
+        copyLabel,
+      ),
   );
   if (batch) {
     const failedOnly = row.id === props.selectedBatchId && props.showFailedOnly;
@@ -258,7 +266,8 @@ function RowActions({
       add(
         "Copy error",
         ClipboardCopy,
-        () => void copyJson(job.lastError, "job error"),
+        () =>
+          void copyJson(JSON.stringify(job.lastError, null, 2), "job error"),
       );
     add(
       "Retry job",
@@ -522,7 +531,7 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     [props.selectedBatchId],
   );
   const onExpandedChange: OnChangeFn<ExpandedState> = (updater) => {
-    const next = typeof updater === "function" ? updater(expanded) : updater;
+    const next = isExpandedUpdater(updater) ? updater(expanded) : updater;
     if (next === true) return;
     const current = props.selectedBatchId
       ? `batch:${props.selectedBatchId}`

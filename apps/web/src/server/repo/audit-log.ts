@@ -3,7 +3,11 @@ import type {
   AuditJsonValue,
   AuditLogListOut,
 } from "@cubby/schemas/audit";
-import type { ActorContext, AuditSource } from "@cubby/schemas/context";
+import {
+  auditSourceSchema,
+  type ActorContext,
+  type AuditSource,
+} from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   entityManifest,
@@ -11,12 +15,14 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { and, desc, eq, gte, lt, lte, or, type SQL } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { auditLog } from "~/server/db/schema";
 import { eqAny, unwrapDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import type { RemovalAuditEntry } from "~/server/repo/removal/core";
 import {
   type EntityRef,
   lookupEntityLabels,
@@ -24,22 +30,44 @@ import {
 } from "~/server/repo/shortcode-resolver";
 
 type AuditAction = "create" | "update" | "delete";
+const auditActionSchema = z.enum(["create", "update", "delete"]);
 
-/**
- * Phantom key that only `repo/removal` can mint. Declared (never defined), so
- * it costs nothing at runtime and never reaches a row — {@link logAuditEntries}
- * copies explicit fields rather than spreading, which is what makes carrying an
- * un-insertable key on the type safe.
- *
- * Not exported: naming it is how you'd forge one.
- */
-declare const removalWitness: unique symbol;
+const auditJsonValueSchema: z.ZodType<AuditJsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(auditJsonValueSchema),
+    z.record(z.string(), auditJsonValueSchema),
+  ]),
+);
+const auditChangeSchema = z.object({
+  from: auditJsonValueSchema.optional(),
+  to: auditJsonValueSchema.optional(),
+});
+type AuditChanges = Record<string, z.output<typeof auditChangeSchema>>;
+const auditChangesSchema: z.ZodType<AuditChanges> = z.record(
+  z.string(),
+  auditChangeSchema,
+);
+const auditCursorPayloadSchema = z.object({
+  createdAt: z.string(),
+  id: z.string().min(1),
+});
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
 
 type AuditEntryFields = {
   entityType: AuditEntityType;
   entityId: string;
-  changes?: Record<string, { from: unknown; to: unknown }>;
+  changes?: AuditChangeMap;
 };
+
+type AuditChange = { from: unknown; to: unknown };
+export type AuditChangeMap = { [field: string]: AuditChange };
 
 /** A create/update entry — anyone may write one; nothing cascades. */
 type MutationAuditEntry = AuditEntryFields & {
@@ -61,11 +89,6 @@ type MutationAuditEntry = AuditEntryFields & {
  * Runtime detection stays: types can't see out-of-band SQL, migrations, or a
  * removal that writes no audit row at all.
  */
-export type RemovalAuditEntry = AuditEntryFields & {
-  action: "delete";
-  readonly [removalWitness]: true;
-};
-
 export type AuditEntryInput = MutationAuditEntry | RemovalAuditEntry;
 
 type AuditLogUser = {
@@ -80,7 +103,7 @@ type AuditLogRow = Omit<
   "action" | "changes" | "source"
 > & {
   action: AuditAction;
-  changes: Record<string, { from: unknown; to: unknown }> | null;
+  changes: AuditChanges | null;
   source: AuditSource;
   user: AuditLogUser;
 };
@@ -121,18 +144,9 @@ export function decodeAuditCursor(cursor: string): DecodedAuditCursor {
     const encoded = cursor.slice(AUDIT_CURSOR_PREFIX.length);
     const base64 = encoded.replaceAll("-", "+").replaceAll("_", "/");
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-    const payload = JSON.parse(atob(padded)) as {
-      createdAt?: unknown;
-      id?: unknown;
-    };
-    if (
-      typeof payload.createdAt !== "string" ||
-      typeof payload.id !== "string"
-    ) {
-      throw new Error("Malformed audit log cursor");
-    }
+    const payload = auditCursorPayloadSchema.parse(JSON.parse(atob(padded)));
     const createdAt = new Date(payload.createdAt);
-    if (Number.isNaN(createdAt.getTime()) || payload.id.length === 0) {
+    if (Number.isNaN(createdAt.getTime())) {
       throw new Error("Malformed audit log cursor");
     }
     return { createdAt, id: payload.id };
@@ -145,12 +159,12 @@ export function decodeAuditCursor(cursor: string): DecodedAuditCursor {
  * Compute changes between before and after objects for specific fields.
  * Returns undefined if no changes detected.
  */
-export function computeChanges<T extends Record<string, unknown>>(
+export function computeChanges<T extends object>(
   before: T,
   after: T,
   fields: (keyof T)[],
-): Record<string, { from: unknown; to: unknown }> | undefined {
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
+): AuditChangeMap | undefined {
+  const changes: AuditChangeMap = {};
 
   for (const field of fields) {
     const fromVal = before[field];
@@ -161,7 +175,7 @@ export function computeChanges<T extends Record<string, unknown>>(
     const toStr = JSON.stringify(toVal);
 
     if (fromStr !== toStr) {
-      changes[field as string] = { from: fromVal, to: toVal };
+      changes[String(field)] = { from: fromVal, to: toVal };
     }
   }
 
@@ -238,7 +252,7 @@ export async function logAuditEntries(
  */
 function collectChangeRefs(
   entityType: AuditEntityType,
-  changes: Record<string, { from: unknown; to: unknown }> | null,
+  changes: AuditChanges | null,
 ): EntityRef[] {
   if (!changes) return [];
   const dbTable = entityManifest[entityType].dbTable;
@@ -249,9 +263,8 @@ function collectChangeRefs(
     const targetEntity = EDGE_KEY_TARGET_ENTITY.get(`${dbTable}.${field}`);
     if (!targetEntity) continue;
     for (const value of [diff.from, diff.to]) {
-      if (typeof value === "string" && value.length > 0) {
+      if (isNonEmptyString(value))
         refs.push(parseEntityRef(targetEntity, value));
-      }
     }
   }
   return refs;
@@ -266,24 +279,19 @@ function collectChangeRefs(
  */
 function remapChangeShortcodes(
   entityType: AuditEntityType,
-  changes: Record<string, { from: unknown; to: unknown }> | null,
+  changes: AuditChanges | null,
   shortcodeByRef: Map<string, string>,
 ): Record<string, { from?: AuditJsonValue; to?: AuditJsonValue }> | null {
   if (!changes) return null;
   const dbTable = entityManifest[entityType].dbTable;
 
-  // Every value here already round-tripped through the `changes` jsonb
-  // column, so it is guaranteed to be plain JSON by the time it's read back
-  // (see `AuditJsonValue`'s doc comment) — this cast is the trust boundary,
-  // not a runtime check.
-  const asJson = (value: unknown) => value as AuditJsonValue | undefined;
   const resolveValue = (
     targetEntity: ShortcodeEntity,
-    value: unknown,
+    value: AuditJsonValue | undefined,
   ): AuditJsonValue | undefined =>
-    typeof value === "string" && value.length > 0
-      ? asJson(shortcodeByRef.get(entityRefKey(targetEntity, value)) ?? value)
-      : asJson(value);
+    isNonEmptyString(value)
+      ? (shortcodeByRef.get(entityRefKey(targetEntity, value)) ?? value)
+      : value;
 
   const remapped: Record<
     string,
@@ -298,7 +306,7 @@ function remapChangeShortcodes(
           from: resolveValue(targetEntity, diff.from),
           to: resolveValue(targetEntity, diff.to),
         }
-      : { from: asJson(diff.from), to: asJson(diff.to) };
+      : { from: diff.from, to: diff.to };
   }
   return remapped;
 }
@@ -349,17 +357,18 @@ export async function getAuditLog(
   // and simply narrows the window further.
   if (params.cursor) {
     const cursor = decodeAuditCursor(params.cursor);
-    conditions.push(
-      cursor.id
-        ? (or(
-            lt(auditLog.createdAt, cursor.createdAt),
-            and(
-              eq(auditLog.createdAt, cursor.createdAt),
-              lt(auditLog.id, cursor.id),
-            ),
-          ) as SQL)
-        : lt(auditLog.createdAt, cursor.createdAt),
-    );
+    if (cursor.id) {
+      const cursorCondition = or(
+        lt(auditLog.createdAt, cursor.createdAt),
+        and(
+          eq(auditLog.createdAt, cursor.createdAt),
+          lt(auditLog.id, cursor.id),
+        ),
+      );
+      if (cursorCondition) conditions.push(cursorCondition);
+    } else {
+      conditions.push(lt(auditLog.createdAt, cursor.createdAt));
+    }
   }
 
   const entries = await unwrapDb(db).query.auditLog.findMany({
@@ -384,15 +393,14 @@ export async function getAuditLog(
     hasMore ? entries.slice(0, params.limit) : entries
   ).map((entry) => ({
     ...entry,
-    action: entry.action as AuditAction,
-    source: entry.source as AuditSource,
-    changes: entry.changes ?? null,
+    action: auditActionSchema.parse(entry.action),
+    source: auditSourceSchema.parse(entry.source),
+    changes:
+      entry.changes == null ? null : auditChangesSchema.parse(entry.changes),
   }));
-  const nextCursor = hasMore
-    ? returnEntries[returnEntries.length - 1]
-      ? encodeAuditCursor(returnEntries[returnEntries.length - 1]!)
-      : undefined
-    : undefined;
+  const lastEntry = returnEntries.at(-1);
+  const nextCursor =
+    hasMore && lastEntry ? encodeAuditCursor(lastEntry) : undefined;
 
   const entryRefs: EntityRef[] = returnEntries.map((entry) =>
     parseEntityRef(entry.entityType, entry.entityId),

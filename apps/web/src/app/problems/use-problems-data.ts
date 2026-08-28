@@ -12,6 +12,28 @@ import { problems } from "~/lib/problems.functions";
 import type { ProblemLaneState } from "./problem-lane-state";
 import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";
 
+export type ProblemsDataOptions = {
+  staleTime?: number;
+  enabled?: boolean;
+};
+
+/** The five independently budgeted operations that make up the Problems page. */
+export function createProblemGroupQueries(opts: ProblemsDataOptions = {}) {
+  const staleTime = opts.staleTime ?? PROBLEMS_QUERY_STALE_TIME;
+  const { enabled } = opts;
+  return {
+    getFast: { ...problems.getFast.queryOptions(), staleTime, enabled },
+    getViews: { ...problems.getViews.queryOptions(), staleTime, enabled },
+    getCoverage: {
+      ...problems.getCoverage.queryOptions(),
+      staleTime,
+      enabled,
+    },
+    getUpc: { ...problems.getUpc.queryOptions(), staleTime, enabled },
+    getTracker: { ...problems.getTracker.queryOptions(), staleTime, enabled },
+  };
+}
+
 /**
  * Loads the Problems page data as five cost-grouped Start operations instead of
  * one `getAllProblems` scan. Each operation runs in its own Worker invocation /
@@ -29,27 +51,12 @@ import { PROBLEMS_QUERY_STALE_TIME } from "./problem-query-freshness";
  * `useQueries` + `combine` for a referentially-stable result (per the repo's
  * hook-stability rule — a raw `useQueries` array is a new ref every render).
  */
-export function useProblemsData(opts?: {
-  staleTime?: number;
-  enabled?: boolean;
-}) {
+export function useProblemsData(opts?: ProblemsDataOptions) {
   // `staleTime` lets embedded Problems consumers choose their own freshness;
   // the page revalidates on entry. `enabled` lets the homepage card gate the
   // fetch (SSR-idle, then enable on the client) to avoid a hydration mismatch,
   // like the sibling stat cards. The navbar badge now uses getCounts directly.
-  const staleTime = opts?.staleTime ?? PROBLEMS_QUERY_STALE_TIME;
-  const enabled = opts?.enabled;
-  const problemGroupQueries = {
-    getFast: { ...problems.getFast.queryOptions(), staleTime, enabled },
-    getViews: { ...problems.getViews.queryOptions(), staleTime, enabled },
-    getCoverage: {
-      ...problems.getCoverage.queryOptions(),
-      staleTime,
-      enabled,
-    },
-    getUpc: { ...problems.getUpc.queryOptions(), staleTime, enabled },
-    getTracker: { ...problems.getTracker.queryOptions(), staleTime, enabled },
-  };
+  const problemGroupQueries = createProblemGroupQueries(opts);
   return useQueries({
     queries: [
       problemGroupQueries.getFast,
@@ -96,16 +103,20 @@ export function useProblemsData(opts?: {
         upc,
         tracker,
       } satisfies Record<ProblemExecutionLane, (typeof results)[number]>;
-      const laneStates = Object.fromEntries(
-        Object.entries(laneResults).map(([lane, result]) => [
-          lane,
-          {
-            loaded: result.data != null,
-            isLoading: result.isLoading,
-            error: result.error ?? null,
-          },
-        ]),
-      ) as Record<ProblemExecutionLane, ProblemLaneState>;
+      const toLaneState = (
+        result: (typeof results)[number],
+      ): ProblemLaneState => ({
+        loaded: result.data != null,
+        isLoading: result.isLoading,
+        error: result.error ?? null,
+      });
+      const laneStates = {
+        fast: toLaneState(laneResults.fast),
+        views: toLaneState(laneResults.views),
+        coverage: toLaneState(laneResults.coverage),
+        upc: toLaneState(laneResults.upc),
+        tracker: toLaneState(laneResults.tracker),
+      } satisfies Record<ProblemExecutionLane, ProblemLaneState>;
       // A view-backed section renders a PAGE, so its `items.length` is the page
       // size. Every count below has to read the declared total instead, or a
       // 212-row backlog reports as 12. Falls back to the shared frozen empty

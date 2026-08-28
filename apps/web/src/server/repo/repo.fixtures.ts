@@ -213,27 +213,30 @@ export const createInventoryFixture = retainEntityId(
  * unchanged input shape is the point of the split. */
 export const makeExpenseInput = (
   overrides: Partial<ExpenseCreateInput> = {},
-): ExpenseCreateInput => ({
-  name: "Test Expense",
-  cost: 100,
-  date: "2024-01-15",
-  lineBasis: "item_line",
-  costType: "materials",
-  trade: "other",
-  url: null,
-  notes: null,
-  future: false,
-  beneficiaries: [],
-  funders: [],
-  sourceClaims: [],
-  projectId: null,
-  productId: null,
-  productQuantity: null,
-  purchaseId: null,
-  vendor: null,
-  orderId: null,
-  ...overrides,
-});
+): ExpenseCreateInput => {
+  const input: ExpenseCreateInput = {
+    name: "Test Expense",
+    cost: 100,
+    date: "2024-01-15",
+    lineBasis: "item_line",
+    costType: "materials",
+    trade: "other",
+    url: null,
+    notes: null,
+    future: false,
+    beneficiaries: [],
+    funders: [],
+    sourceClaims: [],
+    projectId: null,
+    productId: null,
+    productQuantity: null,
+    purchaseId: null,
+    vendor: null,
+    orderId: null,
+    ...overrides,
+  };
+  return input;
+};
 
 /** A location create input; `mock()` fills the scaffolding (parentId/images) so a
  * call site need only spell out the name (and type, when it matters). */
@@ -252,14 +255,17 @@ export const makeLocationInput = (
 export const ingredientRef = (
   id: string,
   opts: { amounts?: Amount[]; modifier?: string; rawLine?: string } = {},
-): RecipeIngredientInput => ({
-  type: "ingredient" as const,
-  ingredientId: parseShortcodeFor("ingredient", id),
-  recipeId: null,
-  amounts: opts.amounts ?? [{ value: 1, unit: "cup" }],
-  ...(opts.modifier !== undefined ? { modifier: opts.modifier } : {}),
-  ...(opts.rawLine !== undefined ? { rawLine: opts.rawLine } : {}),
-});
+): RecipeIngredientInput => {
+  const input: RecipeIngredientInput = {
+    type: "ingredient",
+    ingredientId: parseShortcodeFor("ingredient", id),
+    recipeId: null,
+    amounts: opts.amounts ?? [{ value: 1, unit: "cup" }],
+  };
+  if (opts.modifier !== undefined) input.modifier = opts.modifier;
+  if (opts.rawLine !== undefined) input.rawLine = opts.rawLine;
+  return input;
+};
 
 export const makeRecipeInput = (
   opts: {
@@ -268,14 +274,17 @@ export const makeRecipeInput = (
     sections?: RecipeCreateInput["sections"];
     tags?: RecipeCreateInput["tags"];
   } = {},
-): RecipeCreateInput => ({
-  name: opts.name ?? "Test Recipe",
-  meta: { url: opts.url ?? null },
-  sections: opts.sections ?? [],
+): RecipeCreateInput => {
+  const input: RecipeCreateInput = {
+    name: opts.name ?? "Test Recipe",
+    meta: { url: opts.url ?? null },
+    sections: opts.sections ?? [],
+  };
   // Passed through only when the caller opts in, so the default stays a
   // tags-absent input rather than an explicit null.
-  ...("tags" in opts ? { tags: opts.tags } : {}),
-});
+  if ("tags" in opts) input.tags = opts.tags;
+  return input;
+};
 
 export const createRecipeFixture = retainEntityId("recipe", createRecipe);
 

@@ -147,7 +147,7 @@ export function cellTasks(
   column: BoardColumnKey,
   lane: BoardLaneKey | null,
   expanded = false,
-): { cards: TaskOut[]; totalCount: number; hiddenDoneCount: number } {
+): BoardCellTasks {
   const cell = tasks.filter(
     (t) => matchesColumn(t, column) && (lane == null || matchesLane(t, lane)),
   );
@@ -178,6 +178,12 @@ export function cellTasks(
     totalCount,
     hiddenDoneCount: totalCount - active.length,
   };
+}
+
+interface BoardCellTasks {
+  cards: TaskOut[];
+  totalCount: number;
+  hiddenDoneCount: number;
 }
 
 function laneReassign(

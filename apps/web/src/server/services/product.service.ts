@@ -18,7 +18,7 @@ import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { Database } from "~/server/db";
 import { observeOperationPhase } from "~/server/observed-request";
 
-import type { USDAClient } from "../clients/usda";
+import type { UsdaFoodLookupPort } from "../clients/usda";
 import { getRecipeUsagesForIngredient } from "../repo/ingredient";
 import {
   createProduct as createProductRepo,
@@ -36,7 +36,7 @@ import {
   resolveOrThrow,
 } from "../repo/shortcode-resolver";
 import { deleteStoredObjects } from "./image-storage.service";
-import { batchEnrichWithFood } from "./usda-helpers";
+import { batchEnrichWithFood, type UsdaFoodBatchPort } from "./usda-helpers";
 
 export type ProductWriteResult = {
   output: ProductWithFoodOut;
@@ -58,7 +58,7 @@ export type ProductWriteActions = {
 
 export const getProductWithFood = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodLookupPort,
   id: ProductId,
 ): Promise<ProductWithFoodOut> => {
   const product = await getProductByIDRepo(db, id);
@@ -94,7 +94,7 @@ export const getProductWithFood = async (
 
 const getProductFoodSummaries = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   ids: ProductId[],
 ): Promise<Record<string, FoodSummary | null>> => {
   const uniqueIds = uniq(ids);
@@ -119,7 +119,7 @@ const getProductFoodSummaries = async (
 
 export const getProductSummaries = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   shortcodes: ProductShortcode[],
   include: ProductSummariesInput["include"],
 ): Promise<ProductSummariesOut> => {
@@ -180,7 +180,7 @@ export const getProductSummaries = async (
 
 export const createProductWithFood = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodLookupPort,
   data: ProductCreateInput,
   actor: ActorContext,
 ): Promise<ProductWriteResult> => {
@@ -204,7 +204,7 @@ export const createProductWithFood = async (
 
 export const updateProductWithFood = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodLookupPort,
   id: ProductId,
   data: ProductUpdateInput["data"],
   actor: ActorContext,
@@ -241,7 +241,7 @@ export const updateProductWithFood = async (
 
 export const createProductWriteActions = (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodLookupPort,
 ): ProductWriteActions => ({
   getProductByID: (id) => getProductWithFood(db, usdaClient, id),
   createProduct: (data, actor) =>

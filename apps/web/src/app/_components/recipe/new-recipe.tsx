@@ -21,8 +21,7 @@ export default function NewRecipeForm({
 }: NewRecipeFormProps = {}) {
   const { error, isPending, submit } = useEntityCreateController<
     "recipe",
-    RecipeCreateInput,
-    { id: string }
+    RecipeCreateInput
   >("recipe", {
     onSuccess: () => {
       toast.success("Recipe added to your book.");

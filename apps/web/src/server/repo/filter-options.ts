@@ -15,6 +15,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
@@ -44,6 +45,13 @@ type OptionRow = {
  * `LocationId` — the same brand `spec.internalId` (`location.id`) carries.
  */
 type DecorableRow = OptionRow & { internalId: LocationId };
+
+type FilterOptionSelection = {
+  id: PgColumn;
+  label: PgColumn;
+  detail?: PgColumn;
+  internalId?: PgColumn;
+};
 
 /**
  * How one dropdown roster is read. Every kind is the same query — scan a table,
@@ -148,16 +156,22 @@ const FILTER_OPTION_SPECS = {
 const searchCondition = (column: AnyColumn, search: string) =>
   search === "" ? undefined : ilike(column, `%${search}%`);
 
-const parseOptionRow = (row: Record<string, unknown>): OptionRow => {
-  if (typeof row.id !== "string" || typeof row.label !== "string") {
-    throw new Error("Filter option query returned an invalid row");
-  }
-  return {
-    id: row.id,
-    label: row.label,
-    detail: typeof row.detail === "string" ? row.detail : null,
-  };
-};
+const optionQueryRowSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  detail: z.string().nullable().optional(),
+  internalId: z.string().optional(),
+});
+type OptionQueryRow = z.output<typeof optionQueryRowSchema>;
+
+const parseOptionQueryRow = <Row>(row: Row): OptionQueryRow =>
+  optionQueryRowSchema.parse(row);
+
+const toOptionRow = (row: OptionQueryRow): OptionRow => ({
+  id: row.id,
+  label: row.label,
+  detail: row.detail ?? null,
+});
 
 /**
  * Minimal option rows for high-cardinality list filters. This deliberately
@@ -175,7 +189,7 @@ async function loadRows(
   const limit = selectedOnly ? undefined : input.limit + 1;
   const selected = selectedOnly ? input.selectedIds : [];
 
-  const selection: Record<string, PgColumn> = {
+  const selection: FilterOptionSelection = {
     id: spec.id,
     label: spec.label,
   };
@@ -193,9 +207,8 @@ async function loadRows(
     query = query.innerJoin(join.table, join.on);
   }
 
-  // The projection is assembled at runtime, so Drizzle can only infer
-  // `Record<string, unknown>`. Parse the dynamic result once at this raw-query
-  // seam; `internalId` exists only for the location decorator.
+  // Parse this dynamic projection once at the raw-query seam. `internalId`
+  // exists only for the location decorator.
   const rows = await query
     .where(
       and(
@@ -212,13 +225,19 @@ async function loadRows(
     .limit(limit ?? 50)
     .offset(offset);
 
-  if (!spec.decorate) return rows.map(parseOptionRow);
+  const parsedRows = rows.map(parseOptionQueryRow);
+  if (!spec.decorate) return parsedRows.map(toOptionRow);
   return spec.decorate(
     db,
-    rows.map((row) => ({
-      ...parseOptionRow(row),
-      internalId: parseEntityId("location", row.internalId),
-    })),
+    parsedRows.map((row) => {
+      if (row.internalId === undefined) {
+        throw new Error("Decorated filter option row omitted its internal id");
+      }
+      return {
+        ...toOptionRow(row),
+        internalId: parseEntityId("location", row.internalId),
+      };
+    }),
   );
 }
 
@@ -235,12 +254,13 @@ export async function getFilterOptions(
   const byId = new Map(page.map((row) => [row.id, row]));
   for (const row of selectedRows) byId.set(row.id, row);
 
+  const items = [...byId.values()].map(({ id, label, detail }) => {
+    const item: FilterOptionsOut["items"][number] = { id, label };
+    if (detail) item.detail = detail;
+    return item;
+  });
   return {
-    items: [...byId.values()].map(({ id, label, detail }) => ({
-      id,
-      label,
-      ...(detail ? { detail } : {}),
-    })),
+    items,
     nextCursor: hasNextPage
       ? String(Number(input.cursor ?? "0") + input.limit)
       : null,

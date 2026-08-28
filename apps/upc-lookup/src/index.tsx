@@ -21,6 +21,7 @@ import { stats } from "./routes/stats";
 import { admin } from "./routes/admin";
 import { renderer } from "./renderer";
 import { openApiDocument } from "./openapi";
+import { z } from "zod";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -134,7 +135,8 @@ app.get("/admin/login", (c) => {
 
 app.post("/admin/login", async (c) => {
   const body = await c.req.parseBody();
-  const apiKey = body.apiKey as string;
+  const parsedApiKey = z.string().safeParse(body.apiKey);
+  const apiKey = parsedApiKey.success ? parsedApiKey.data : "";
 
   if (!(await secretsMatch(apiKey, c.env.API_KEY))) {
     return c.redirect("/admin/login?error=1");

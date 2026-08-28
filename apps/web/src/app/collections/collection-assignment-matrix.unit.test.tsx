@@ -1,111 +1,74 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CollectionMatrixOut } from "@cubby/schemas/collection";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  matrix: {
-    data: {
-      collections: ["painting", "kitchen"],
-      rows: [
-        {
-          id: "PRD-PAINT",
-          name: "Primer",
-          secondary: "Example paint",
-          imageUrl: null,
-          placements: [],
-          purchases: [],
-          states: { painting: "direct", kitchen: "inherited" },
-        },
-      ],
-      totalCount: 1,
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import {
+  type CollectionAssignmentSearch,
+  CollectionAssignmentMatrix,
+} from "./collection-assignment-matrix";
+import { collection } from "./collection.functions";
+
+const baseMatrix: CollectionMatrixOut = {
+  collections: ["painting", "kitchen"],
+  rows: [
+    {
+      id: "PRD-PA77",
+      name: "Primer",
+      secondary: "Example paint",
+      imageUrl: null,
+      placements: [],
+      purchases: [],
+      states: { painting: "direct", kitchen: "inherited" },
     },
-    error: null as Error | null,
-    isLoading: false,
-    refetch: vi.fn(),
-  },
-  mutate: vi.fn(),
-  onSearchChange: vi.fn(),
-  queryOptions: vi.fn(() => ({ queryKey: ["collection", "matrix"] })),
-}));
+  ],
+  totalCount: 1,
+};
 
-vi.mock("@tanstack/react-query", () => ({
-  useMutation: () => ({ isPending: false, mutate: mocks.mutate }),
-  useQuery: () => mocks.matrix,
-  useQueryClient: () => ({}),
-}));
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, ...props }: { children: ReactNode }) => (
-    <a {...props} href="/collections">
-      {children}
-    </a>
-  ),
-}));
-vi.mock("~/components/layout", () => ({
-  Stack: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("~/components/matrix/cross-tab-table", () => ({
-  CrossTabTable: () => <div data-testid="desktop-matrix" />,
-}));
-vi.mock("~/components/ui/button", () => ({
-  Button: ({
-    children,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props}>{children}</button>
-  ),
-}));
-vi.mock("~/components/ui/dialog", () => ({
-  Dialog: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DialogContent: () => null,
-  DialogDescription: () => null,
-  DialogFooter: () => null,
-  DialogHeader: () => null,
-  DialogTitle: () => null,
-  DialogTrigger: ({ render }: { render: ReactNode }) => <>{render}</>,
-}));
-vi.mock("~/components/ui/image", () => ({
-  Image: ({ alt }: { alt: string }) => <img src="/test-image.png" alt={alt} />,
-}));
-vi.mock("~/components/ui/input", () => ({
-  Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} />
-  ),
-}));
-vi.mock("~/components/ui/label", () => ({
-  Label: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("~/components/ui/native-select", () => ({
-  NativeSelect: (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-    <select {...props} />
-  ),
-}));
-vi.mock("~/components/ui/tabs", () => ({
-  Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TabsTrigger: ({ children }: { children: ReactNode }) => (
-    <button type="button">{children}</button>
-  ),
-}));
-vi.mock("~/entities/entities", () => ({
-  EntityIcon: () => <span />,
-  entityDetailLink: () => ({ to: "/collections" }),
-}));
-vi.mock("~/lib/error-utils", () => ({
-  getErrorMessage: (error: Error) => error.message,
-}));
-vi.mock("./collection.functions", () => ({
-  collection: {
-    create: { mutationOptions: () => ({}) },
-    matrix: { queryOptions: mocks.queryOptions },
-    set: { mutationOptions: () => ({}) },
-  },
-}));
-vi.mock("./collection-product-context", () => ({
-  CopyableShortcode: () => null,
-  ProductContextLine: () => null,
-}));
+let matrixData: CollectionMatrixOut = baseMatrix;
+let matrixError: Error | null = null;
+let matrixRequests = 0;
+const searchChanges: CollectionAssignmentSearch[] = [];
 
-import { CollectionAssignmentMatrix } from "./collection-assignment-matrix";
+// The production catalog and schemas stay in use. This adapter is only the
+// remote behavior the browser cannot provide in a UI test.
+const testOperations = {
+  matrix: collection.matrix.withTransport(async () => {
+    matrixRequests += 1;
+    if (matrixError) throw matrixError;
+    return matrixData;
+  }),
+  set: collection.set.withTransport(async () => ({
+    collection: "painting",
+    assigned: true,
+  })),
+  create: collection.create.withTransport(async () => ({
+    slug: "painting",
+    productCount: 1,
+    rootLocationCount: 0,
+  })),
+};
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  matrixData = baseMatrix;
+  matrixError = null;
+  matrixRequests = 0;
+  searchChanges.length = 0;
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 function renderMatrix() {
   return render(
@@ -114,45 +77,33 @@ function renderMatrix() {
       page={1}
       pageSize={100}
       sort="name-asc"
-      onSearchChange={mocks.onSearchChange}
+      onSearchChange={(next) => searchChanges.push(next)}
+      operations={testOperations}
     />,
+    { wrapper: harness.wrapper },
   );
 }
 
-describe("CollectionAssignmentMatrix mobile projection", () => {
-  beforeEach(() => {
-    mocks.matrix.data = {
-      collections: ["painting", "kitchen"],
-      rows: [
-        {
-          id: "PRD-PAINT",
-          name: "Primer",
-          secondary: "Example paint",
-          imageUrl: null,
-          placements: [],
-          purchases: [],
-          states: { painting: "direct", kitchen: "inherited" },
-        },
-      ],
-      totalCount: 1,
-    };
-    mocks.matrix.error = null;
-    mocks.matrix.isLoading = false;
-    mocks.matrix.refetch.mockReset();
-    mocks.mutate.mockReset();
-    mocks.onSearchChange.mockReset();
-    mocks.queryOptions.mockClear();
-  });
+async function mobileRows() {
+  const section = (
+    await screen.findByRole("heading", { name: "Products" })
+  ).closest("section");
+  if (!section) throw new Error("Expected the mobile assignment rows section");
+  return within(section);
+}
 
-  it("keeps a phone assignment target separate from the matrix filter", () => {
+describe("CollectionAssignmentMatrix mobile projection", () => {
+  it("keeps a phone assignment target separate from the matrix filter", async () => {
     renderMatrix();
 
+    await screen.findByRole("combobox", { name: "Assign to Collection" });
     const collectionTarget = screen.getByRole("combobox", {
       name: "Assign to Collection",
     });
     expect(collectionTarget).toHaveValue("painting");
+    const mobile = await mobileRows();
     expect(
-      screen.getByRole("button", {
+      mobile.getByRole("button", {
         name: "Remove direct Painting assignment for Primer",
       }),
     ).toBeVisible();
@@ -161,17 +112,18 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
 
     expect(collectionTarget).toHaveValue("kitchen");
     expect(
-      screen.getByRole("button", {
+      mobile.getByRole("button", {
         name: "Add direct Kitchen assignment for Primer; inherited membership remains",
       }),
     ).toBeVisible();
-    expect(mocks.onSearchChange).not.toHaveBeenCalled();
+    expect(searchChanges).toEqual([]);
   });
 
-  it("optimistically changes a direct assignment on the selected target", () => {
+  it("optimistically changes a direct assignment on the selected target", async () => {
     renderMatrix();
 
-    const assignment = screen.getByRole("button", {
+    const mobile = await mobileRows();
+    const assignment = mobile.getByRole("button", {
       name: "Remove direct Painting assignment for Primer",
     });
     fireEvent.click(assignment);
@@ -180,35 +132,22 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
     expect(assignment).toHaveTextContent("Assign");
   });
 
-  it("keeps a thumb-sized detail link beside the assignment control", () => {
+  it("keeps a thumb-sized detail link beside the assignment control", async () => {
     renderMatrix();
 
-    expect(screen.getByRole("link", { name: "Primer" })).toHaveClass(
+    const mobile = await mobileRows();
+    expect(mobile.getByRole("link", { name: "Primer" })).toHaveClass(
       "min-h-11",
     );
   });
 
-  it("keeps the mobile subject selector and valid creation path when empty", () => {
-    mocks.matrix.data = {
-      collections: [],
-      rows: [
-        {
-          id: "PRD-PAINT",
-          name: "Primer",
-          secondary: "Example paint",
-          imageUrl: null,
-          placements: [],
-          purchases: [],
-          states: { painting: "empty", kitchen: "empty" },
-        },
-      ],
-      totalCount: 1,
-    };
+  it("keeps the mobile subject selector and valid creation path when empty", async () => {
+    matrixData = { ...baseMatrix, collections: [] };
 
     renderMatrix();
 
     expect(
-      screen.getByRole("combobox", { name: "Assignment subject" }),
+      await screen.findByRole("combobox", { name: "Assignment subject" }),
     ).toHaveValue("product");
     expect(screen.getByText("No Collections yet")).toBeVisible();
     expect(
@@ -218,45 +157,47 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
     ).toBe(true);
   });
 
-  it("keeps the phone ledger to 25 rows while paging within the fetched batch", () => {
-    mocks.matrix.data = {
+  it("keeps the phone ledger to 25 rows while paging within the fetched batch", async () => {
+    matrixData = {
       collections: ["painting"],
       rows: Array.from({ length: 26 }, (_, index) => ({
-        id: `PRD-${index + 1}`,
+        id: `PRD-P${String(index + 10).padStart(3, "0")}`,
         name: `Product ${index + 1}`,
         secondary: "Example paint",
         imageUrl: null,
         placements: [],
         purchases: [],
-        states: { painting: "empty", kitchen: "empty" },
+        states: { painting: "empty" },
       })),
       totalCount: 26,
     };
 
     renderMatrix();
 
-    expect(screen.getByText("Product 25")).toBeVisible();
-    expect(screen.queryByText("Product 26")).not.toBeInTheDocument();
+    const mobile = await mobileRows();
+    expect(mobile.getByText("Product 25")).toBeVisible();
+    expect(mobile.queryByText("Product 26")).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Next 25 assignments" }),
     );
 
-    expect(screen.getByText("Product 26")).toBeVisible();
-    expect(mocks.onSearchChange).not.toHaveBeenCalled();
+    expect(await mobile.findByText("Product 26")).toBeVisible();
+    expect(searchChanges).toEqual([]);
   });
 
-  it("distinguishes a failed matrix load and offers retry", () => {
-    mocks.matrix.data = undefined as unknown as typeof mocks.matrix.data;
-    mocks.matrix.error = new Error("Collection service unavailable");
+  it("distinguishes a failed matrix load and offers retry", async () => {
+    matrixError = new Error("Collection service unavailable");
 
     renderMatrix();
 
-    expect(screen.getAllByText("Couldn’t load assignments")).toHaveLength(2);
+    await waitFor(() =>
+      expect(screen.getAllByText("Couldn’t load assignments")).toHaveLength(2),
+    );
     expect(screen.getAllByText("Collection service unavailable")).toHaveLength(
       2,
     );
     fireEvent.click(screen.getAllByRole("button", { name: "Retry" })[0]!);
-    expect(mocks.matrix.refetch).toHaveBeenCalledOnce();
+    await waitFor(() => expect(matrixRequests).toBe(2));
   });
 });

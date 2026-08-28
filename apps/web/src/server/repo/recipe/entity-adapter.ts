@@ -1,8 +1,4 @@
-import {
-  recipeFiltersSchema,
-  recipeListItemOut,
-  recipeSortableFields,
-} from "@cubby/schemas/recipe";
+import { recipeSortableFields } from "@cubby/schemas/recipe";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
@@ -22,8 +18,6 @@ const recipeShortcodes = bindShortcodeResolver("recipe");
 
 export const recipeEntityAdapter = defineEntityAdapter({
   entity: "recipe",
-  filters: recipeFiltersSchema,
-  listOutput: recipeListItemOut,
   sort: {
     fields: recipeSortableFields,
     default: "createdAt",

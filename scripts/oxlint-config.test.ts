@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -19,12 +20,18 @@ test("service files retain the repository import boundary", () => {
   );
 
   assert.equal(result.status, 0, result.stderr);
-  const config = JSON.parse(result.stdout) as {
-    overrides?: Array<{
-      files?: string[];
-      rules?: Record<string, unknown>;
-    }>;
-  };
+  const config = z
+    .object({
+      overrides: z
+        .array(
+          z.object({
+            files: z.array(z.string()).optional(),
+            rules: z.record(z.string(), z.json()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .parse(JSON.parse(result.stdout));
   const serviceOverride = config.overrides?.find((override) =>
     override.files?.includes("apps/web/src/server/services/**/*.ts"),
   );

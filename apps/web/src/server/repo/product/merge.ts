@@ -7,7 +7,10 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import type { ExternalIdKind } from "@cubby/schemas/external-id";
+import {
+  type ExternalIdKind,
+  externalIdKind,
+} from "@cubby/schemas/external-id";
 import {
   type InventoryId,
   type ProductId,
@@ -176,7 +179,7 @@ const CARRIED_COLUMNS = [
 ] as const;
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
 
-const CARRIED_FIELD_LABELS: Record<CarriedColumn, string> = {
+const CARRIED_FIELD_LABELS = {
   fdc_id: "USDA food identity",
   model: "model",
   price: "price",
@@ -185,15 +188,17 @@ const CARRIED_FIELD_LABELS: Record<CarriedColumn, string> = {
   ingredientId: "linked ingredient",
   expectedQuantity: "expected quantity",
   stockTracked: "stock-tracking decision",
-};
+} satisfies Record<CarriedColumn, string>;
 
-type ProductMergeRow = {
+type ProductMergeSource = Pick<
+  typeof product.$inferSelect,
+  "id" | "shortcode" | "name" | "aliases" | "tags" | CarriedColumn
+>;
+type ProductMergeRow = Omit<ProductMergeSource, "id" | "shortcode"> & {
   id: ProductId;
-  shortcode: string;
-  name: string;
-  aliases: string[];
-  tags: string[];
-} & { [K in CarriedColumn]: unknown };
+  shortcode: ProductShortcode;
+};
+type ProductCarriedValues = Partial<Pick<ProductMergeRow, CarriedColumn>>;
 
 interface ProductMergeSummary {
   /** The survivor, as a public shortcode. */
@@ -577,7 +582,7 @@ type ExternalIdRow = {
   id: string;
   productId: ProductId;
   source: string;
-  kind: string;
+  kind: ExternalIdKind;
   externalId: string;
   url: string | null;
   isPrimary: boolean;
@@ -636,7 +641,8 @@ interface ProductMergePlan {
   aliases: string[];
   aliasesAdded: string[];
   tags: string[];
-  carried: Record<string, unknown>;
+  carried: ProductCarriedValues;
+  carriedFields: CarriedColumn[];
 }
 
 const planAssociation = <Row extends ProductAssociationRow>(args: {
@@ -777,6 +783,7 @@ async function buildProductMergePlan(
   ).map((row): ExternalIdRow => ({
     ...row,
     productId: parseEntityId("product", row.productId),
+    kind: externalIdKind.parse(row.kind),
   }));
   const imageRows = (
     await db.query.productImage.findMany({
@@ -893,11 +900,18 @@ async function buildProductMergePlan(
     ...losers.flatMap((row) => row.aliases ?? []),
   ]).filter((alias) => alias !== keeper.name);
   const existingAliases = new Set(keeper.aliases);
-  const carried: Record<string, unknown> = {};
-  for (const column of CARRIED_COLUMNS) {
-    if (keeper[column] != null) continue;
+  const carried: ProductCarriedValues = {};
+  const carriedFields: CarriedColumn[] = [];
+  const carryColumn = <K extends CarriedColumn>(column: K): void => {
+    if (keeper[column] != null) return;
     const donor = losers.find((row) => row[column] != null);
-    if (donor) carried[column] = donor[column];
+    if (donor) {
+      carried[column] = donor[column];
+      carriedFields.push(column);
+    }
+  };
+  for (const column of CARRIED_COLUMNS) {
+    carryColumn(column);
   }
 
   return {
@@ -972,6 +986,7 @@ async function buildProductMergePlan(
     aliasesAdded: aliases.filter((alias) => !existingAliases.has(alias)),
     tags: uniq([...keeper.tags, ...losers.flatMap((row) => row.tags)]),
     carried,
+    carriedFields,
   };
 }
 
@@ -1112,7 +1127,7 @@ export const mergeProducts = async (
       for (const row of rows) {
         summary.externalIdsDemoted.push({
           source: row.source,
-          kind: row.kind as ExternalIdKind,
+          kind: row.kind,
           externalId: row.externalId,
         });
         demotedExternalIds.push(
@@ -1396,7 +1411,7 @@ export const mergeProducts = async (
     const tags = plan.tags;
 
     const carried = plan.carried;
-    summary.carriedFields = Object.keys(carried);
+    summary.carriedFields = plan.carriedFields;
 
     await tx
       .update(product)
@@ -1418,6 +1433,31 @@ export const mergeProducts = async (
       );
     }
 
+    type ProductMergeSurvivorChanges = {
+      mergedFrom: { from: null; to: ProductId[] };
+      carriedOver?: { from: null; to: ProductCarriedValues };
+      demotedExternalIds?: { from: null; to: string[] };
+      discardedUnitMappings?: { from: null; to: string[] };
+    };
+    const survivorChanges: ProductMergeSurvivorChanges = {
+      mergedFrom: { from: null, to: loserIds },
+    };
+    if (summary.carriedFields.length > 0) {
+      survivorChanges.carriedOver = { from: null, to: carried };
+    }
+    if (demotedExternalIds.length > 0) {
+      survivorChanges.demotedExternalIds = {
+        from: null,
+        to: demotedExternalIds,
+      };
+    }
+    if (discardedUnitMappings.length > 0) {
+      survivorChanges.discardedUnitMappings = {
+        from: null,
+        to: discardedUnitMappings,
+      };
+    }
+
     const { removed } = await finalizeMerge(tx, {
       entity: "product",
       table: product,
@@ -1425,18 +1465,7 @@ export const mergeProducts = async (
       loserIds,
       removal: "soft",
       actor,
-      survivorChanges: {
-        mergedFrom: { from: null, to: loserIds },
-        ...(summary.carriedFields.length > 0
-          ? { carriedOver: { from: null, to: carried } }
-          : {}),
-        ...(demotedExternalIds.length > 0
-          ? { demotedExternalIds: { from: null, to: demotedExternalIds } }
-          : {}),
-        ...(discardedUnitMappings.length > 0
-          ? { discardedUnitMappings: { from: null, to: discardedUnitMappings } }
-          : {}),
-      },
+      survivorChanges,
     });
     summary.merged = removed;
 
@@ -1636,15 +1665,15 @@ export const previewMergeProducts = async (
         code: "carry-product-fields",
         effect: "preserve",
         description: `Empty survivor fields filled without overwriting existing values: ${
-          Object.keys(plan.carried)
-            .map((field) => CARRIED_FIELD_LABELS[field as CarriedColumn])
+          plan.carriedFields
+            .map((field) => CARRIED_FIELD_LABELS[field])
             .join(", ") || "none"
         }.`,
       },
       label: "empty survivor fields filled",
       byTargetId:
-        Object.keys(plan.carried).length > 0
-          ? { [keepId]: Object.keys(plan.carried).length }
+        plan.carriedFields.length > 0
+          ? { [keepId]: plan.carriedFields.length }
           : {},
     }),
     impact({

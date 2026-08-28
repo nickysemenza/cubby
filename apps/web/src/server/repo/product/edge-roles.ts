@@ -111,10 +111,16 @@ export type ProductRetainingEdgeKey = {
   ]: (typeof PRODUCT_EDGE_ROLES)[K]["role"] extends RetainingRole ? K : never;
 }[keyof typeof PRODUCT_EDGE_ROLES];
 
+const isProductEdgeKey = (
+  key: string,
+): key is keyof typeof PRODUCT_EDGE_ROLES =>
+  Object.hasOwn(PRODUCT_EDGE_ROLES, key);
+
 export const isRetainingEdgeKey = (
-  key: keyof typeof PRODUCT_EDGE_ROLES,
+  key: string,
 ): key is ProductRetainingEdgeKey =>
-  (RETAINING_ROLES as readonly string[]).includes(PRODUCT_EDGE_ROLES[key].role);
+  isProductEdgeKey(key) &&
+  RETAINING_ROLES.some((role) => role === PRODUCT_EDGE_ROLES[key].role);
 
 export type ProductDeleteDisposition =
   | (OperationDisposition & {

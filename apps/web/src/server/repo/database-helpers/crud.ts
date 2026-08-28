@@ -6,15 +6,31 @@
 import type { ImageId } from "@cubby/schemas/identifiers";
 import type {
   AnyColumn,
+  GetColumnData,
   InferInsertModel,
   InferSelectModel,
   SQL,
 } from "drizzle-orm";
-import { and, eq, getTableName, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  getTableName,
+  inArray,
+  sql,
+} from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { type JSONType, z } from "zod";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { image } from "~/server/db/schema";
+import {
+  image,
+  locationImage,
+  productImage,
+  projectImage,
+  purchaseImage,
+  recipeImage,
+} from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
@@ -67,32 +83,37 @@ export const findOrCreate = async <T extends PgTable>(
     /** Predicate to find an existing row (and to re-find the winner on conflict). */
     where: SQL | undefined;
     /** Row to insert when none is found; a thunk defers prep to the create path. */
-    values:
-      | InferInsertModel<T>
-      | (() => InferInsertModel<T> | Promise<InferInsertModel<T>>);
+    values: () => InferInsertModel<T> | Promise<InferInsertModel<T>>;
   },
 ): Promise<{ row: InferSelectModel<T>; created: boolean }> => {
   return withTrace(TraceNames.db("findOrCreate"), async (span) => {
     span.setAttribute("db.table", getTableName(table));
     const client = unwrapDb(db);
 
-    const [existing] = (await client
-      .select()
+    // SAFETY: Drizzle's generic `from` conditional cannot prove a caller's
+    // concrete PgTable has a selection, while every PgTable accepted here does.
+    const existingResult = await client
+      .select(getTableColumns(table))
       .from(table as PgTable)
       .where(opts.where)
-      .limit(1)) as InferSelectModel<T>[];
+      .limit(1);
+    // SAFETY: Both supported Pg query-result HKTs execute an explicit full
+    // column projection as a row array; their union hides that shared result.
+    const [existing] = existingResult as InferSelectModel<T>[];
     if (existing) {
       return { row: existing, created: false };
     }
 
-    const values =
-      typeof opts.values === "function" ? await opts.values() : opts.values;
+    const values = await opts.values();
 
-    const [created] = (await client
+    const createdResult = await client
       .insert(table)
       .values(values)
       .onConflictDoNothing()
-      .returning()) as InferSelectModel<T>[];
+      .returning(getTableColumns(table));
+    // SAFETY: Both supported Pg query-result HKTs return the explicitly named
+    // columns as rows; the HKT union erases only that common array container.
+    const [created] = createdResult as InferSelectModel<T>[];
     if (created) {
       span.setAttribute("db.created", true);
       return { row: created, created: true };
@@ -100,11 +121,14 @@ export const findOrCreate = async <T extends PgTable>(
 
     // Lost the create race: the winner is committed, so re-SELECT finds it.
     span.setAttribute("db.conflict", true);
-    const [winner] = (await client
-      .select()
+    // SAFETY: See the first select above; the same concrete table T is queried.
+    const winnerResult = await client
+      .select(getTableColumns(table))
       .from(table as PgTable)
       .where(opts.where)
-      .limit(1)) as InferSelectModel<T>[];
+      .limit(1);
+    // SAFETY: This is the same explicit full projection from the unchanged T.
+    const [winner] = winnerResult as InferSelectModel<T>[];
     if (!winner) {
       throw new FindOrCreateConflictError(getTableName(table));
     }
@@ -125,7 +149,12 @@ export const insertAndReturn = async <T extends PgTable>(
   return withTrace(TraceNames.db("insert"), async (span) => {
     span.setAttribute("db.table", getTableName(table));
     const client = unwrapDb(db);
-    const result = await client.insert(table).values(values).returning();
+    const result = await client
+      .insert(table)
+      .values(values)
+      .returning(getTableColumns(table));
+    // SAFETY: Both Pg drivers return an explicit returning projection as rows;
+    // the query-result HKT union cannot retain the shared array container.
     const [created] = result as InferSelectModel<T>[];
     if (!created) {
       throw new Error("Failed to insert record");
@@ -152,10 +181,14 @@ export const updateAndReturn = async <T extends PgTable>(
     // This handles cases like image-only updates where the main table doesn't change
     if (Object.keys(values).length === 0) {
       span.setAttribute("db.noop", true);
+      // SAFETY: Drizzle's generic `from` conditional cannot see that every
+      // PgTable accepted here has a full selectable projection.
       const result = await client
-        .select()
+        .select(getTableColumns(table))
         .from(table as PgTable)
         .where(where);
+      // SAFETY: Both Pg drivers execute this explicit full projection as rows;
+      // the query-result HKT union cannot retain the shared array container.
       const [existing] = result as InferSelectModel<T>[];
       if (!existing) {
         throw new Error("Failed to update record");
@@ -167,7 +200,9 @@ export const updateAndReturn = async <T extends PgTable>(
       .update(table)
       .set(values)
       .where(where)
-      .returning();
+      .returning(getTableColumns(table));
+    // SAFETY: Both Pg drivers return the explicit columns from this same T as
+    // rows; only the query-result HKT union obscures their common container.
     const [updated] = result as InferSelectModel<T>[];
     if (!updated) {
       throw new Error("Failed to update record");
@@ -220,11 +255,93 @@ export const updateLiveAndReturn = async <
  * `repo/location/crud.ts`'s two `pendingImageIds` call sites shipped without
  * the resolve step and only surfaced via a failing integration test.
  */
-export async function associatePendingImages<T extends PgTable>(
+type ImageJoinTable = PgTable & {
+  imageId: AnyColumn;
+  sortOrder: AnyColumn;
+  deletedAt: AnyColumn;
+};
+
+interface ImageJoinBinding<
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+> {
+  table: TTable;
+  parentIdColumn: TParentColumn;
+  insertRow: (
+    parentId: GetColumnData<TParentColumn>,
+    imageId: ImageId,
+    sortOrder: number,
+  ) => InferInsertModel<TTable>;
+  sortOrderUpdate: (sortOrder: number) => PgUpdateSetSource<TTable>;
+}
+
+const defineImageJoinBinding = <
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+>(
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+) => binding;
+
+export const imageJoinBindings = {
+  product: defineImageJoinBinding({
+    table: productImage,
+    parentIdColumn: productImage.productId,
+    insertRow: (productId, imageId, sortOrder) => ({
+      productId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  location: defineImageJoinBinding({
+    table: locationImage,
+    parentIdColumn: locationImage.locationId,
+    insertRow: (locationId, imageId, sortOrder) => ({
+      locationId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  recipe: defineImageJoinBinding({
+    table: recipeImage,
+    parentIdColumn: recipeImage.recipeId,
+    insertRow: (recipeId, imageId, sortOrder) => ({
+      recipeId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  project: defineImageJoinBinding({
+    table: projectImage,
+    parentIdColumn: projectImage.projectId,
+    insertRow: (projectId, imageId, sortOrder) => ({
+      projectId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  purchase: defineImageJoinBinding({
+    table: purchaseImage,
+    parentIdColumn: purchaseImage.purchaseId,
+    insertRow: (purchaseId, imageId, sortOrder) => ({
+      purchaseId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+} as const;
+
+export async function associatePendingImages<
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
-  joinTable: T,
-  parentIdField: string,
-  parentId: string,
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+  parentId: GetColumnData<TParentColumn>,
   pendingImageIds: ImageId[],
   startSortOrder = 0,
 ): Promise<void> {
@@ -232,26 +349,19 @@ export async function associatePendingImages<T extends PgTable>(
     return;
   }
 
-  await dbOrTx.insert(joinTable).values(
-    pendingImageIds.map((imageId, i) => ({
-      [parentIdField]: parentId,
-      imageId,
-      sortOrder: startSortOrder + i,
-    })) as InferInsertModel<T>[],
-  );
+  await dbOrTx
+    .insert(binding.table)
+    .values(
+      pendingImageIds.map((imageId, index) =>
+        binding.insertRow(parentId, imageId, startSortOrder + index),
+      ),
+    );
 
   await dbOrTx
     .update(image)
     .set({ status: "UPLOADED" })
     .where(inArray(image.id, pendingImageIds));
 }
-
-/** Shape shared by the productImage/locationImage/recipeImage join tables. */
-type ImageJoinTable = PgTable & {
-  imageId: AnyColumn;
-  sortOrder: AnyColumn;
-  deletedAt: AnyColumn;
-};
 
 /**
  * Persist an explicit display order for an entity's images: each id in
@@ -264,22 +374,24 @@ type ImageJoinTable = PgTable & {
  * The brand turns a future caller that forgets that resolution into a compile
  * error instead of a silent `invalid input syntax for type uuid` at runtime.
  */
-export async function applyImageOrder<T extends ImageJoinTable>(
+export async function applyImageOrder<
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
-  joinTable: T,
-  parentIdColumn: AnyColumn,
-  parentId: string,
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+  parentId: GetColumnData<TParentColumn>,
   orderedImageIds: ImageId[],
 ): Promise<void> {
-  for (const [i, imageId] of orderedImageIds.entries()) {
+  for (const [sortOrder, imageId] of orderedImageIds.entries()) {
     await dbOrTx
-      .update(joinTable)
-      .set({ sortOrder: i } as PgUpdateSetSource<T>)
+      .update(binding.table)
+      .set(binding.sortOrderUpdate(sortOrder))
       .where(
         and(
-          eq(parentIdColumn, parentId),
-          eq(joinTable.imageId, imageId),
-          notDeleted(joinTable),
+          eq(binding.parentIdColumn, parentId),
+          eq(binding.table.imageId, imageId),
+          notDeleted(binding.table),
         ),
       );
   }
@@ -289,16 +401,19 @@ export async function applyImageOrder<T extends ImageJoinTable>(
  * Next free sortOrder for an entity's images — used so newly associated
  * images append after the existing ones instead of colliding at 0.
  */
-export async function nextImageSortOrder(
+export async function nextImageSortOrder<
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
-  joinTable: ImageJoinTable,
-  parentIdColumn: AnyColumn,
-  parentId: string,
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+  parentId: GetColumnData<TParentColumn>,
 ): Promise<number> {
+  const joinTable: ImageJoinTable = binding.table;
   const [row] = await dbOrTx
     .select({ max: sql<number | null>`max(${joinTable.sortOrder})` })
     .from(joinTable)
-    .where(and(eq(parentIdColumn, parentId), notDeleted(joinTable)));
+    .where(and(eq(binding.parentIdColumn, parentId), notDeleted(joinTable)));
   return (row?.max ?? -1) + 1;
 }
 
@@ -309,9 +424,25 @@ export async function nextImageSortOrder(
  * Automatically chunks large batches to avoid query size limits.
  * Updates all specified fields plus updatedAt timestamp.
  */
-export async function batchUpdateWithCaseWhen<
-  TUpdate extends { id: string; [key: string]: unknown },
->(
+const batchUpdateValueSchema = z.json().optional();
+
+const updateValueAt = <TUpdate extends { id: string }>(
+  update: TUpdate,
+  columnName: string,
+): JSONType | undefined => {
+  const entry = Object.entries(update).find(([key]) => key === columnName);
+  return batchUpdateValueSchema.parse(entry?.[1]);
+};
+
+const isNumericUpdateValue = (value: JSONType | undefined): value is number =>
+  typeof value === "number";
+
+type JsonContainer = Extract<JSONType, readonly JSONType[] | object>;
+
+const isJsonContainer = (value: JSONType | undefined): value is JsonContainer =>
+  value !== null && typeof value === "object";
+
+export async function batchUpdateWithCaseWhen<TUpdate extends { id: string }>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
   table: PgTable,
   updates: TUpdate[],
@@ -336,7 +467,9 @@ export async function batchUpdateWithCaseWhen<
         // When all values are NULL, use simple SET column = NULL.
         // CASE WHEN with only NULL branches produces an untyped expression
         // that can fail type resolution for typed columns like real/float4.
-        const allNull = batch.every((update) => update[columnName] === null);
+        const allNull = batch.every(
+          (update) => updateValueAt(update, columnName) === null,
+        );
 
         if (allNull) {
           caseStatements.push(sql`${sql.identifier(columnName)} = NULL`);
@@ -346,21 +479,20 @@ export async function batchUpdateWithCaseWhen<
         const cases: SQL[] = [];
 
         for (const update of batch) {
-          const value = update[columnName];
+          const value = updateValueAt(update, columnName);
           // Cast values to head off Postgres type inference issues inside CASE:
           //   - numbers → ::real (float4 columns)
           //   - objects/arrays → JSON-encoded ::jsonb (jsonb columns, e.g.
           //     location.valuation). node-postgres would bind a bare object as
           //     untyped text, which Postgres can't coerce inside a CASE branch.
           //   - strings/other → bound as-is (text).
-          const typedValue =
-            typeof value === "number"
-              ? sql`${value}::real`
-              : value === null
-                ? sql`NULL`
-                : typeof value === "object"
-                  ? sql`${JSON.stringify(value)}::jsonb`
-                  : sql`${value}`;
+          const typedValue = isNumericUpdateValue(value)
+            ? sql`${value}::real`
+            : value === null
+              ? sql`NULL`
+              : isJsonContainer(value)
+                ? sql`${JSON.stringify(value)}::jsonb`
+                : sql`${value}`;
           cases.push(
             sql`WHEN ${sql.identifier("id")} = ${update.id} THEN ${typedValue}`,
           );

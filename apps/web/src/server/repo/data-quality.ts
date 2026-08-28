@@ -16,7 +16,7 @@ import {
   purchaseDataCheck,
   type SetDataExceptionInput,
 } from "@cubby/schemas/data-quality";
-import type { ExternalIdKind } from "@cubby/schemas/external-id";
+import { externalIdKind } from "@cubby/schemas/external-id";
 import type {
   ProductId,
   ProductShortcode,
@@ -40,6 +40,7 @@ import {
 import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { groupBy, sumBy, uniq, uniqBy } from "es-toolkit";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -96,6 +97,12 @@ const PRODUCT_FACETS = [
   "integrity",
 ] as const satisfies readonly DataQualityFacetName[];
 
+const productDetailQualityEvidenceSchema = z.object({
+  expenseLinked: z.boolean(),
+  amazonLinked: z.boolean(),
+  duplicateExternalId: z.boolean(),
+});
+
 /**
  * Exceptions snapshot the facts that justified them. Evidence also lives on
  * child rows, so child mutations advance the owning target's clock and make
@@ -125,9 +132,7 @@ export const touchDataQualityTargets = async (
   }
 };
 
-const EXCEPTION_REASONS: Partial<
-  Record<DataCheck, readonly DataExceptionReason[]>
-> = {
+const EXCEPTION_REASONS = {
   order_id: ["not_issued", "unavailable"],
   stated_total: ["not_issued", "unavailable"],
   primary_document: ["not_issued", "unavailable"],
@@ -150,7 +155,7 @@ const EXCEPTION_REASONS: Partial<
   // dead ends. `not_applicable` covers a `misc:` bucket row, which is a
   // stocked pseudo-product that no single photograph describes.
   product_image: ["unavailable", "not_applicable"],
-};
+} satisfies Partial<Record<DataCheck, readonly DataExceptionReason[]>>;
 
 const externalIdCollisionKey = (value: {
   source: string;
@@ -470,12 +475,14 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
   return `(${settlementReferenceAbsentSql('"Purchase"')} AND ${exceptionAbsent})`;
 };
 
-export const purchaseDataGapCondition = (check: DataCheck): SQL =>
-  sql.raw(
-    purchaseDataCheck.safeParse(check).success
-      ? purchaseGapRaw(check as PurchaseDataCheck)
-      : purchaseProductGapRaw(check as ProductDataCheck),
+export const purchaseDataGapCondition = (check: DataCheck): SQL => {
+  const purchaseCheck = purchaseDataCheck.safeParse(check);
+  return sql.raw(
+    purchaseCheck.success
+      ? purchaseGapRaw(purchaseCheck.data)
+      : purchaseProductGapRaw(productDataCheck.parse(check)),
   );
+};
 
 const purchaseMissingDataCondition = (): SQL =>
   sql.raw(
@@ -609,9 +616,7 @@ const buildProductDataQuality = (
     }
     if (
       row.category !== null &&
-      MODEL_REQUIRED_CATEGORIES.includes(
-        row.category as (typeof MODEL_REQUIRED_CATEGORIES)[number],
-      ) &&
+      MODEL_REQUIRED_CATEGORIES.some((category) => category === row.category) &&
       (row.model === null || row.model.trim() === "")
     ) {
       add("product_model", "Manufacturer model is not recorded.");
@@ -701,14 +706,7 @@ export const loadProductDetailDataQuality = async (
       WHERE own."productId" = ${row.id} AND own."deletedAt" IS NULL
     ) AS "duplicateExternalId"`;
   const result = await unwrapDb(db).execute(query);
-  const evidence = result.rows[0] as
-    | {
-        expenseLinked: boolean;
-        amazonLinked: boolean;
-        duplicateExternalId: boolean;
-      }
-    | undefined;
-  if (!evidence) throw new Error("Product detail quality evidence was empty");
+  const evidence = productDetailQualityEvidenceSchema.parse(result.rows[0]);
 
   const externalIds = row.externalIds
     .filter((externalId) => externalId.deletedAt === null)
@@ -927,10 +925,13 @@ export const enrichProductRowsWithDataQuality = async <
     db,
     products.map((product) => product.id),
   );
-  return products.map((product) => ({
-    ...product,
-    dataQuality: qualities.get(product.id)!,
-  }));
+  return products.map((product) => {
+    const dataQuality = qualities.get(product.id);
+    if (!dataQuality) {
+      throw new Error(`Data quality was not loaded for product ${product.id}`);
+    }
+    return { ...product, dataQuality };
+  });
 };
 
 export const loadPurchaseDataQualities = async (
@@ -1172,8 +1173,12 @@ const mutateException = async (
   const entityType: "purchase" | "product" = parsed.type;
   assertCheckApplies(entityType, input.check);
   if ("reason" in input) {
-    const allowed = EXCEPTION_REASONS[input.check];
-    if (!allowed?.includes(input.reason)) {
+    const reasonAllowed = Object.entries(EXCEPTION_REASONS).some(
+      ([check, reasons]) =>
+        check === input.check &&
+        reasons.some((reason) => reason === input.reason),
+    );
+    if (!reasonAllowed) {
       throw createAppError(
         "CONSTRAINT_VIOLATION",
         `${input.reason} is not allowed for ${input.check}.`,
@@ -1257,7 +1262,7 @@ const mutateException = async (
                 await tx
                   .select({
                     value: productDataGapCondition(
-                      input.check as ProductDataCheck,
+                      productDataCheck.parse(input.check),
                     ),
                   })
                   .from(product)
@@ -1331,15 +1336,20 @@ const mutateException = async (
     }
   });
 
-  return parsed.type === "purchase"
-    ? (
-        await loadPurchaseDataQualities(db, [
-          parseEntityId("purchase", resolved),
-        ])
-      ).get(parseEntityId("purchase", resolved))!
-    : (
-        await loadProductDataQualities(db, [parseEntityId("product", resolved)])
-      ).get(parseEntityId("product", resolved))!;
+  if (parsed.type === "purchase") {
+    const id = parseEntityId("purchase", resolved);
+    const quality = (await loadPurchaseDataQualities(db, [id])).get(id);
+    if (!quality) {
+      throw new Error(`Data quality was not loaded for ${input.entityId}`);
+    }
+    return quality;
+  }
+  const id = parseEntityId("product", resolved);
+  const quality = (await loadProductDataQualities(db, [id])).get(id);
+  if (!quality) {
+    throw new Error(`Data quality was not loaded for ${input.entityId}`);
+  }
+  return quality;
 };
 
 export const setDataException = (
@@ -1403,21 +1413,21 @@ export const findProductExternalIdCollisions = async (
       ),
     );
   const grouped = groupBy(rows, externalIdCollisionKey);
-  const items = Object.entries(grouped).flatMap(([, matches]) =>
-    matches.length > 1
-      ? [
-          {
-            source: matches[0]!.source.trim().toLowerCase(),
-            kind: matches[0]!.kind as ExternalIdKind,
-            externalId: matches[0]!.externalId,
-            products: matches.map((row) => ({
-              id: parseShortcodeFor("product", row.productShortcode),
-              name: row.productName,
-            })),
-          },
-        ]
-      : [],
-  );
+  const items = Object.entries(grouped).flatMap(([, matches]) => {
+    const first = matches[0];
+    if (!first || matches.length <= 1) return [];
+    return [
+      {
+        source: first.source.trim().toLowerCase(),
+        kind: externalIdKind.parse(first.kind),
+        externalId: first.externalId,
+        products: matches.map((row) => ({
+          id: parseShortcodeFor("product", row.productShortcode),
+          name: row.productName,
+        })),
+      },
+    ];
+  });
   return {
     items,
     results: (identifiers ?? []).map((identifier) => {

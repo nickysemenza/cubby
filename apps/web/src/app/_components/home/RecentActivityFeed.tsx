@@ -7,6 +7,39 @@ import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 
 import { AuditLogList } from "../audit-log/audit-log-list";
+import type {
+  AuditLogListOperations,
+  AuditLogSession,
+} from "../audit-log/audit-log-list";
+
+export interface RecentActivityFeedOperations {
+  readonly auditLog: AuditLogListOperations;
+  readonly session: AuditLogSession;
+}
+
+export interface ViewportObservationPort {
+  observe(host: Element, onEnter: () => void): () => void;
+}
+
+const browserViewportObservation: ViewportObservationPort = {
+  observe(host, onEnter) {
+    const Observer = globalThis.IntersectionObserver;
+    if (Observer === undefined) {
+      onEnter();
+      return () => undefined;
+    }
+    const observer = new Observer(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        onEnter();
+        observer.disconnect();
+      },
+      { rootMargin: "500px" },
+    );
+    observer.observe(host);
+    return () => observer.disconnect();
+  },
+};
 
 interface RecentActivityFeedProps {
   /** Maximum number of entries to show */
@@ -17,27 +50,23 @@ interface RecentActivityFeedProps {
  * Compact recent activity feed for the home page.
  * Shows the latest actions with a link to full activity history.
  */
-export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
+export function RecentActivityFeed({
+  limit = 5,
+  operations,
+  viewport = browserViewportObservation,
+}: RecentActivityFeedProps & {
+  /** Audit operation/auth boundaries for browser tests. */
+  operations?: RecentActivityFeedOperations;
+  /** Browser viewport observation, injected only where the DOM API is absent. */
+  viewport?: ViewportObservationPort;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setEnabled(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        setEnabled(true);
-        observer.disconnect();
-      },
-      { rootMargin: "500px" },
-    );
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, []);
+    return viewport.observe(host, () => setEnabled(true));
+  }, [viewport]);
 
   return (
     <div ref={hostRef}>
@@ -60,7 +89,13 @@ export function RecentActivityFeed({ limit = 5 }: RecentActivityFeedProps) {
         }
       >
         {enabled ? (
-          <AuditLogList limit={limit} showEntityLink variant="ledger" />
+          <AuditLogList
+            limit={limit}
+            showEntityLink
+            variant="ledger"
+            operations={operations?.auditLog}
+            session={operations?.session}
+          />
         ) : (
           <div className="space-y-2" data-testid="activity-placeholder">
             {Array.from(

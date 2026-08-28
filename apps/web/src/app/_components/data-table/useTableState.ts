@@ -1,7 +1,9 @@
 import type { SortParams } from "@cubby/schemas/pagination";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import type {
+import {
+  type ColumnFilter,
   ColumnFiltersState,
+  functionalUpdate,
   PaginationState,
   SortingState,
 } from "@tanstack/react-table";
@@ -13,11 +15,13 @@ import {
   useState,
   useTransition,
 } from "react";
+import { z } from "zod";
 
 import {
   decodeFilters,
   encodeFilters,
   type FilterSpecCore,
+  type FilterValue,
   paramToSort,
   partitionFilterSpecs,
   sortToParam,
@@ -57,8 +61,18 @@ interface TableStateOptions {
 }
 
 const NO_SPECS: readonly FilterSpecCore[] = [];
-const NO_URL_STATE: Record<string, unknown> = {};
+// Route validators intentionally retain optional keys with `undefined` values.
+// They are valid router state even though JSON serialization later omits them.
+const routerSearchSchema = z.record(z.string(), z.json().optional());
+type RouterSearchState = z.output<typeof routerSearchSchema>;
+const NO_URL_STATE: RouterSearchState = {};
 const NO_INITIAL_FILTER: ColumnFiltersState = [];
+const filterValueSchema = z.union([z.string(), z.array(z.string())]).optional();
+
+function parseFilterValue(value: ColumnFilter["value"]): FilterValue {
+  const parsed = filterValueSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
 
 const SORT_KEY = "sort";
 const PAGE_KEY = "page";
@@ -75,13 +89,10 @@ function serializeUrlState(
 ): string {
   const sort = sortToParam(sorting);
   return JSON.stringify({
-    ...encodeFilters(
-      columnSpecs,
-      (columnId) =>
-        columnFilters.find((filter) => filter.id === columnId)?.value as
-          | string
-          | string[]
-          | undefined,
+    ...encodeFilters(columnSpecs, (columnId) =>
+      parseFilterValue(
+        columnFilters.find((filter) => filter.id === columnId)?.value,
+      ),
     ),
     // The default sort stays implicit in the URL - only a departure from it is
     // written, so a freshly opened list keeps a clean query string.
@@ -150,7 +161,7 @@ export function useTableState(
     [filterSpecs],
   );
 
-  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const search = routerSearchSchema.parse(useSearch({ strict: false }));
   const navigate = useNavigate();
   const urlStateSource = urlSync || readUrlState ? search : NO_URL_STATE;
 
@@ -329,7 +340,7 @@ export function useTableState(
     (value: SortingState | ((old: SortingState) => SortingState)) =>
       startTransition(() => {
         setSortingRaw((old) => {
-          const next = typeof value === "function" ? value(old) : value;
+          const next = functionalUpdate(value, old);
           if (JSON.stringify(next) !== JSON.stringify(old)) {
             pendingLocalWrite.current = true;
           }
@@ -354,7 +365,7 @@ export function useTableState(
     ) =>
       startTransition(() => {
         const old = columnFiltersRef.current;
-        const next = typeof value === "function" ? value(old) : value;
+        const next = functionalUpdate(value, old);
         setColumnFiltersRaw(next);
         // Reset to page 1 whenever the filters actually change. These tables
         // run manualPagination:true (see useTableConfig's default, ~L112),
@@ -384,7 +395,7 @@ export function useTableState(
     (value: PaginationState | ((old: PaginationState) => PaginationState)) =>
       startTransition(() => {
         setPaginationRaw((old) => {
-          const next = typeof value === "function" ? value(old) : value;
+          const next = functionalUpdate(value, old);
           if (JSON.stringify(next) !== JSON.stringify(old)) {
             pendingLocalWrite.current = true;
           }
@@ -396,9 +407,9 @@ export function useTableState(
 
   const getColumnFilter = useCallback(
     (columnId: string): string | undefined => {
-      const value = columnFilters.find(
-        (filter) => filter.id === columnId,
-      )?.value;
+      const value = parseFilterValue(
+        columnFilters.find((filter) => filter.id === columnId)?.value,
+      );
       // A multiselect column holds `string[]`. Returning it typed as `string`
       // would send an array to a scalar zod field and blow up at the transport
       // boundary at runtime instead of here — fail loudly at the call site
@@ -408,19 +419,18 @@ export function useTableState(
           `Column "${columnId}" holds a multi-value filter; use getColumnFilterValues.`,
         );
       }
-      return value as string | undefined;
+      return value;
     },
     [columnFilters],
   );
 
   const getColumnFilterValues = useCallback(
     (columnId: string): string[] | undefined => {
-      const value = columnFilters.find(
-        (filter) => filter.id === columnId,
-      )?.value;
-      if (Array.isArray(value))
-        return value.length ? (value as string[]) : undefined;
-      return typeof value === "string" && value ? [value] : undefined;
+      const value = parseFilterValue(
+        columnFilters.find((filter) => filter.id === columnId)?.value,
+      );
+      if (Array.isArray(value)) return value.length ? value : undefined;
+      return value ? [value] : undefined;
     },
     [columnFilters],
   );
@@ -483,11 +493,11 @@ export function useTableState(
     }
     if (pendingLocalWrite.current === serializedUrlState) return;
     pendingLocalWrite.current = serializedUrlState;
-    const next = JSON.parse(serializedUrlState) as Record<string, unknown>;
+    const next = routerSearchSchema.parse(JSON.parse(serializedUrlState));
     void navigate({
       to: ".",
-      search: (prev: Record<string, unknown>) => {
-        const merged = { ...prev };
+      search: (prev) => {
+        const merged = routerSearchSchema.parse(prev);
         for (const key of managedKeys) {
           if (next[key] === undefined) delete merged[key];
           else merged[key] = next[key];

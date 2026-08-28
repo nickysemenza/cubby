@@ -2,8 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getErrorMessage } from "~/lib/error-utils";
 
-import type { EditableEntity } from "./types";
+import type { EntityEditResultFor } from "./intent-types";
+import type { EditableEntity, EntityEditMutationData } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
+
+export interface EntityDetailUpdateInput<E extends EditableEntity> {
+  id?: string;
+  data: EntityEditMutationData<E>;
+}
 
 export interface EntityDetailController<TData> {
   isEditing: boolean;
@@ -16,14 +22,17 @@ export interface EntityDetailController<TData> {
 
 /** Detail-page lifecycle adapter. Rich forms keep their field layout, while
  * the final ordinary update crosses one semantic command seam. */
-export function useEntityDetailController<TData, TResult = unknown>({
+export function useEntityDetailController<
+  E extends EditableEntity,
+  TData extends EntityDetailUpdateInput<E>,
+>({
   entity,
   entityId,
   onSuccess,
 }: {
-  entity: EditableEntity;
+  entity: E;
   entityId: string;
-  onSuccess?: (result?: TResult) => void;
+  onSuccess?: (result: EntityEditResultFor<E>) => void;
 }): EntityDetailController<TData> {
   const commands = useEntityCommands(entity);
   const [isEditing, setIsEditing] = useState(false);
@@ -36,22 +45,26 @@ export function useEntityDetailController<TData, TResult = unknown>({
 
   const submit = useCallback(
     (data: TData) => {
-      const variables = data as { id?: string; data?: object };
       setError(undefined);
       void commands
         .submit({
           operation: "update",
           intent: "full",
-          id: variables.id ?? entityId,
-          data: variables.data ?? (data as object),
+          id: data.id ?? entityId,
+          data: data.data,
         })
-        .then(({ result }) => {
+        .then((execution) => {
+          if (execution.operation !== "update") {
+            throw new Error(
+              `${entity} update returned ${execution.operation}.`,
+            );
+          }
           setIsEditing(false);
-          onSuccess?.(result as TResult);
+          onSuccess?.(execution.result);
         })
         .catch((cause: unknown) => setError(getErrorMessage(cause)));
     },
-    [commands, entityId, onSuccess],
+    [commands, entity, entityId, onSuccess],
   );
 
   return {

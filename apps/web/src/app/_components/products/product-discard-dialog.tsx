@@ -167,26 +167,28 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
     tone: "warning" | "destructive";
     message: string;
   } | null => {
-    if (!selectedEntry || typeof quantity !== "number" || quantity <= 0) {
+    const parsedQuantity = z.number().positive().safeParse(quantity);
+    if (!selectedEntry || !parsedQuantity.success) {
       return null;
     }
+    const validQuantity = parsedQuantity.data;
     const { value: held, unit } = selectedEntry.amount;
     const where = selectedEntry.location.name;
     if (!adjustInventory) {
-      return quantity >= held
+      return validQuantity >= held
         ? {
             tone: "warning",
             message: `${where} will still show ${held} ${unit} even though you are recording these as gone.`,
           }
         : null;
     }
-    if (quantity > held) {
+    if (validQuantity > held) {
       return {
         tone: "destructive",
-        message: `That is more than ${where} holds (${held} ${unit}). The whole entry will be removed, and the ledger will still record −${quantity}.`,
+        message: `That is more than ${where} holds (${held} ${unit}). The whole entry will be removed, and the ledger will still record −${validQuantity}.`,
       };
     }
-    if (quantity === held) {
+    if (validQuantity === held) {
       return {
         tone: "warning",
         message: `This empties ${where} — the entry is removed from that shelf, not just reduced.`,

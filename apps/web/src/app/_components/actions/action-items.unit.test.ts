@@ -1,4 +1,5 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
+import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 
 import { entities } from "~/entities/entities";
@@ -60,11 +61,16 @@ describe("createActionFor", () => {
  */
 describe("empty-state call-to-actions are reachable", () => {
   it.each(
-    Object.entries(entityEmptyConfigForTest)
-      .filter(([, config]) => config.actionLabel)
-      .map(([entity, config]) => [entity, config.actionLabel] as const),
+    Object.entries(entityEmptyConfigForTest).flatMap(([entity, config]) =>
+      "actionLabel" in config ? [[entity, config.actionLabel] as const] : [],
+    ),
   )("%s (%s) resolves a create target", (entity) => {
-    expect(createActionFor(entity as never)).not.toBeNull();
+    const browserEntity = browserRoutedEntities.find(
+      (candidate) => candidate === entity,
+    );
+    expect(browserEntity).toBeDefined();
+    if (!browserEntity) throw new Error(`${entity} has no browser route`);
+    expect(createActionFor(browserEntity)).not.toBeNull();
   });
 });
 

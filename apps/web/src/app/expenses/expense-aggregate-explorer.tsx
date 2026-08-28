@@ -19,7 +19,6 @@ import { toast } from "sonner";
 
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -75,12 +74,63 @@ const COLUMN_DIMENSIONS: readonly {
   { value: "month", label: "Month" },
 ];
 
+const PROJECTIONS: readonly {
+  value: ExpenseAnalyzeProjection;
+  label: string;
+}[] = [
+  { value: "current", label: "Current" },
+  { value: "previous", label: "Previous" },
+  { value: "delta", label: "Delta" },
+  { value: "percent", label: "Delta %" },
+];
+
 const EMPTY_AGGREGATE: ExpenseAnalyzeAggregate = {
   actual: 0,
   committed: 0,
   credits: 0,
   net: 0,
   count: 0,
+};
+
+function selectedOptionValue<TValue extends string>(
+  value: string,
+  options: readonly { value: TValue }[],
+): TValue | undefined {
+  return options.find((option) => option.value === value)?.value;
+}
+
+type ExpenseAnalyzeRequest = Parameters<typeof expense.analyze.queryOptions>[0];
+type ExpenseAnalyzeQuery = ReturnType<typeof expense.analyze.queryOptions>;
+
+interface ExpenseAnalysisDownload {
+  filename: string;
+  content: string;
+}
+
+export interface ExpenseAggregateExplorerOperations {
+  analyze: (request: ExpenseAnalyzeRequest) => ExpenseAnalyzeQuery;
+  browser: {
+    copyText: (value: string) => Promise<boolean>;
+    downloadCsv: (download: ExpenseAnalysisDownload) => void;
+  };
+}
+
+function downloadExpenseAnalysisCsv({
+  filename,
+  content,
+}: ExpenseAnalysisDownload) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+const productionOperations: ExpenseAggregateExplorerOperations = {
+  analyze: expense.analyze.queryOptions,
+  browser: { copyText, downloadCsv: downloadExpenseAnalysisCsv },
 };
 
 export interface ExpenseAnalyzeTableRow {
@@ -381,32 +431,31 @@ function ExpenseAnalyzeOneDimension({
   const columns = useMemo(() => {
     const numericMeta = { numeric: true, mono: true } as const;
     const tail = data.reconciliation.tail;
-    const regularColumns: CubbyColumnDef<ExpenseAnalyzeTableRow>[] =
-      METRICS.map(({ value: accessor, label }) =>
-        helper.accessor((row) => row.current[accessor], {
-          id: accessor,
-          header: label,
-          size: accessor === "count" ? 88 : 128,
-          minSize: accessor === "count" ? 72 : 104,
-          meta: numericMeta,
-          cell: (info) => (
-            <AnalyzeLedgerValue
-              filter={expenseAnalyzeDrilldownFilter(
-                data,
-                "current",
-                info.row.original.filter,
-              )}
-              label={`Open current-period Ledger rows for ${info.row.original.label}`}
-              onOpenLedger={onOpenLedger}
-              className="w-full text-right"
-            >
-              {formatMetric(info.getValue(), accessor)}
-            </AnalyzeLedgerValue>
-          ),
-          footer: () => formatMetric(tail.current[accessor], accessor),
-          enableCellSelection: false,
-        }),
-      );
+    const regularColumns = METRICS.map(({ value: accessor, label }) =>
+      helper.accessor((row) => row.current[accessor], {
+        id: accessor,
+        header: label,
+        size: accessor === "count" ? 88 : 128,
+        minSize: accessor === "count" ? 72 : 104,
+        meta: numericMeta,
+        cell: (info) => (
+          <AnalyzeLedgerValue
+            filter={expenseAnalyzeDrilldownFilter(
+              data,
+              "current",
+              info.row.original.filter,
+            )}
+            label={`Open current-period Ledger rows for ${info.row.original.label}`}
+            onOpenLedger={onOpenLedger}
+            className="w-full text-right"
+          >
+            {formatMetric(info.getValue(), accessor)}
+          </AnalyzeLedgerValue>
+        ),
+        footer: () => formatMetric(tail.current[accessor], accessor),
+        enableCellSelection: false,
+      }),
+    );
     const compareColumn = (
       id: string,
       header: string,
@@ -460,23 +509,22 @@ function ExpenseAnalyzeOneDimension({
           enableCellSelection: false,
         },
       );
-    return [
-      helper.accessor("label", {
-        header: "Label",
-        size: 260,
-        minSize: 160,
-        footer: () => tailLabel(data),
-        enableCellSelection: false,
-      }),
-      ...(comparison === "none"
-        ? regularColumns
-        : [
-            compareColumn("current", "Current", "current"),
-            compareColumn("previous", "Previous", "previous"),
-            compareColumn("delta", "Delta", "delta"),
-            compareColumn("percent", "Delta %", "percent"),
-          ]),
-    ] as CubbyColumnDef<ExpenseAnalyzeTableRow>[];
+    const labelColumn = helper.accessor("label", {
+      header: "Label",
+      size: 260,
+      minSize: 160,
+      footer: () => tailLabel(data),
+      enableCellSelection: false,
+    });
+    if (comparison === "none")
+      return helper.columns([labelColumn, ...regularColumns]);
+    return helper.columns([
+      labelColumn,
+      compareColumn("current", "Current", "current"),
+      compareColumn("previous", "Previous", "previous"),
+      compareColumn("delta", "Delta", "delta"),
+      compareColumn("percent", "Delta %", "percent"),
+    ]);
   }, [comparison, data, metric, onOpenLedger]);
   const layout = useCubbyTableLayout({ key: "expense:analyze", columns });
   const table = useCubbyTable({
@@ -522,7 +570,10 @@ function aggregateCells(
     previous: ExpenseAnalyzeAggregate | null;
   }[],
 ) {
-  return cells.reduce(
+  return cells.reduce<{
+    current: ExpenseAnalyzeAggregate;
+    previous: ExpenseAnalyzeAggregate | null;
+  }>(
     (result, cell) => ({
       current: addAggregate(result.current, cell.current),
       previous: cell.previous
@@ -531,7 +582,7 @@ function aggregateCells(
     }),
     {
       current: EMPTY_AGGREGATE,
-      previous: null as ExpenseAnalyzeAggregate | null,
+      previous: null,
     },
   );
 }
@@ -752,11 +803,13 @@ export function ExpenseAggregateExplorer({
   config,
   onConfigChange,
   onOpenLedger,
+  operations = productionOperations,
 }: {
   filters: ExpenseFilters;
   config: ExpenseAnalyzeConfig;
   onConfigChange: (config: ExpenseAnalyzeConfig) => void;
   onOpenLedger: (filter: Record<string, string>) => void;
+  operations?: ExpenseAggregateExplorerOperations;
 }) {
   const { rowDimension, columnDimension, comparison, metric, projection } =
     config;
@@ -771,7 +824,7 @@ export function ExpenseAggregateExplorer({
     columnDimension,
   );
   const query = useQuery({
-    ...expense.analyze.queryOptions({
+    ...operations.analyze({
       filters,
       rowDimension,
       columnDimension,
@@ -792,7 +845,8 @@ export function ExpenseAggregateExplorer({
 
   const handleColumnDimension = (value: string) => {
     const next =
-      value === "none" ? null : (value as ExpenseAnalyzeColumnDimension);
+      value === "none" ? null : selectedOptionValue(value, COLUMN_DIMENSIONS);
+    if (next === undefined) return;
     onConfigChange(
       normalizeExpenseAnalyzeConfig(
         { ...config, columnDimension: next },
@@ -811,18 +865,13 @@ export function ExpenseAggregateExplorer({
   const downloadReady = query.data?.status === "ready";
   const handleDownload = () => {
     if (!downloadReady || query.data?.status !== "ready") return;
-    const blob = new Blob([expenseAnalyzeCsv(query.data)], {
-      type: "text/csv;charset=utf-8;",
+    operations.browser.downloadCsv({
+      filename: expenseAnalyzeCsvFilename(query.data),
+      content: expenseAnalyzeCsv(query.data),
     });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = expenseAnalyzeCsvFilename(query.data);
-    anchor.click();
-    URL.revokeObjectURL(url);
   };
   const handleCopyLink = async () => {
-    if (await copyText(window.location.href)) {
+    if (await operations.browser.copyText(window.location.href)) {
       toast.success("Analysis link copied");
       return;
     }
@@ -838,9 +887,13 @@ export function ExpenseAggregateExplorer({
         <NativeSelect
           id={rowsId}
           value={rowDimension}
-          onChange={(event) =>
-            handleRowDimension(event.target.value as ExpenseAnalyzeRowDimension)
-          }
+          onChange={(event) => {
+            const next = selectedOptionValue(
+              event.target.value,
+              ROW_DIMENSIONS,
+            );
+            if (next) handleRowDimension(next);
+          }}
         >
           {ROW_DIMENSIONS.map((dimension) => (
             <option key={dimension.value} value={dimension.value}>
@@ -875,12 +928,10 @@ export function ExpenseAggregateExplorer({
             <NativeSelect
               id={metricId}
               value={metric}
-              onChange={(event) =>
-                onConfigChange({
-                  ...config,
-                  metric: event.target.value as ExpenseAnalyzeMetric,
-                })
-              }
+              onChange={(event) => {
+                const next = selectedOptionValue(event.target.value, METRICS);
+                if (next) onConfigChange({ ...config, metric: next });
+              }}
             >
               {METRICS.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -898,17 +949,19 @@ export function ExpenseAggregateExplorer({
             <NativeSelect
               id={projectionId}
               value={projection}
-              onChange={(event) =>
-                onConfigChange({
-                  ...config,
-                  projection: event.target.value as ExpenseAnalyzeProjection,
-                })
-              }
+              onChange={(event) => {
+                const next = selectedOptionValue(
+                  event.target.value,
+                  PROJECTIONS,
+                );
+                if (next) onConfigChange({ ...config, projection: next });
+              }}
             >
-              <option value="current">Current</option>
-              <option value="previous">Previous</option>
-              <option value="delta">Delta</option>
-              <option value="percent">Delta %</option>
+              {PROJECTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </NativeSelect>
           </>
         )}

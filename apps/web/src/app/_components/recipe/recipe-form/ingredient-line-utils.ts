@@ -1,5 +1,5 @@
 import type { WIngredient } from "@cubby/recipebridge";
-import type { Amount } from "@cubby/schemas/codec";
+import { amount as amountSchema } from "@cubby/schemas/codec";
 import { uniq } from "es-toolkit";
 import type { ReadonlyDeep } from "type-fest";
 
@@ -58,10 +58,9 @@ export const parsedIngredientToFormItem = (
   type: "ingredient",
   ingredient: { id: match.id, name: match.name },
   recipe: null,
-  amounts: item.parsed.amounts.map((a) => ({
-    value: a.value,
-    unit: a.unit,
-  })) as Amount[],
+  amounts: item.parsed.amounts.map((a) =>
+    amountSchema.parse({ value: a.value, unit: a.unit }),
+  ),
   rawLine: item.raw,
   modifier: item.parsed.modifier ?? null,
   aliases: match.aliases ?? [],

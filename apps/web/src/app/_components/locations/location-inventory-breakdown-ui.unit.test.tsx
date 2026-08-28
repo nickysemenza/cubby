@@ -1,131 +1,124 @@
+import type { LocationInventoryBreakdownOut } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  queryOptions: vi.fn(),
-  useQuery: vi.fn(),
-  drilldown: vi.fn(),
-  refetch: vi.fn(),
-  query: {
-    isPending: false,
-    isError: false,
-    data: undefined as unknown,
-    refetch: vi.fn(),
-  },
-}));
+import { location } from "~/app/locations/location.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: unknown) => {
-    mocks.useQuery(options);
-    return mocks.query;
-  },
-}));
-vi.mock("~/app/locations/location.functions", () => ({
-  location: {
-    inventoryBreakdown: { queryOptions: mocks.queryOptions },
-  },
-}));
-vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
-  HierarchyDrilldown: (props: unknown) => {
-    mocks.drilldown(props);
-    return <div data-testid="drilldown" />;
-  },
-}));
-
-import { LocationInventoryBreakdown } from "./location-inventory-breakdown";
+import {
+  LocationInventoryBreakdown,
+  type LocationInventoryBreakdownOperations,
+} from "./location-inventory-breakdown";
 
 const rootId = testShortcode("location", "LOC-ROOT");
+const descendantTree: LocationInventoryBreakdownOut = {
+  id: rootId,
+  name: "Workshop",
+  type: "room",
+  directItemCount: 1,
+  totalItemCount: 3,
+  children: [
+    {
+      id: testShortcode("location", "LOC-CHLD"),
+      name: "Shelf",
+      type: "shelf",
+      directItemCount: 2,
+      totalItemCount: 2,
+      children: [],
+    },
+  ],
+};
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
-  mocks.queryOptions.mockReset();
-  mocks.useQuery.mockReset();
-  mocks.drilldown.mockReset();
-  mocks.refetch.mockReset();
-  mocks.query = {
-    isPending: false,
-    isError: false,
-    data: undefined,
-    refetch: mocks.refetch,
-  };
+  harness = createBrowserTestHarness();
 });
 
-describe("LocationInventoryBreakdown", () => {
-  it("disables the query and renders nothing for a leaf location", () => {
-    const { container } = render(
-      <LocationInventoryBreakdown shortcode={rootId} hasChildren={false} />,
-    );
+afterEach(() => {
+  harness.dispose();
+});
 
-    expect(mocks.queryOptions).toHaveBeenCalledWith({ shortcode: rootId });
-    expect(mocks.useQuery).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: false }),
-    );
+function renderBreakdown(
+  hasChildren: boolean,
+  operations: LocationInventoryBreakdownOperations,
+) {
+  return render(
+    <LocationInventoryBreakdown
+      shortcode={rootId}
+      hasChildren={hasChildren}
+      operations={operations}
+    />,
+    { wrapper: harness.routerWrapper },
+  );
+}
+
+describe("LocationInventoryBreakdown", () => {
+  it("does not request or render a breakdown for a leaf location", () => {
+    let requests = 0;
+    const operations = {
+      inventoryBreakdown: location.inventoryBreakdown.withTransport(
+        async () => {
+          requests += 1;
+          return descendantTree;
+        },
+      ),
+    } satisfies LocationInventoryBreakdownOperations;
+
+    const { container } = renderBreakdown(false, operations);
+
     expect(container).toBeEmptyDOMElement();
+    expect(requests).toBe(0);
   });
 
-  it("renders a compact loading state while the descendant tree loads", () => {
-    mocks.query.isPending = true;
-    render(
-      <LocationInventoryBreakdown shortcode={rootId} hasChildren={true} />,
-    );
+  it("renders a compact loading state while the descendant tree loads", async () => {
+    const operations = {
+      inventoryBreakdown: location.inventoryBreakdown.withTransport(
+        async () =>
+          await new Promise<LocationInventoryBreakdownOut | null>(() => {}),
+      ),
+    } satisfies LocationInventoryBreakdownOperations;
+
+    renderBreakdown(true, operations);
 
     expect(
-      screen.getByLabelText("Loading contents breakdown"),
+      await screen.findByLabelText("Loading contents breakdown"),
     ).toBeInTheDocument();
   });
 
-  it("offers a retry when the count tree fails", () => {
-    mocks.query.isError = true;
-    render(
-      <LocationInventoryBreakdown shortcode={rootId} hasChildren={true} />,
-    );
+  it("offers a retry when the count tree fails", async () => {
+    let requests = 0;
+    const operations = {
+      inventoryBreakdown: location.inventoryBreakdown.withTransport(
+        async () => {
+          requests += 1;
+          throw new Error("unavailable");
+        },
+      ),
+    } satisfies LocationInventoryBreakdownOperations;
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(mocks.refetch).toHaveBeenCalledOnce();
+    renderBreakdown(true, operations);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(requests).toBe(2));
   });
 
-  it("renders only when stock exists below the current location", () => {
-    const descendantTree = {
-      id: rootId,
-      name: "Workshop",
-      type: "room",
-      directItemCount: 1,
-      totalItemCount: 3,
-      children: [
-        {
-          id: testShortcode("location", "LOC-CHLD"),
-          name: "Shelf",
-          type: "shelf",
-          directItemCount: 2,
-          totalItemCount: 2,
-          children: [],
-        },
-      ],
-    };
-    mocks.query.data = descendantTree;
-    const { rerender } = render(
-      <LocationInventoryBreakdown shortcode={rootId} hasChildren={true} />,
-    );
+  it("renders a drill-down only when stock exists below the current location", async () => {
+    const operations = {
+      inventoryBreakdown: location.inventoryBreakdown.withTransport(
+        async () => descendantTree,
+      ),
+    } satisfies LocationInventoryBreakdownOperations;
 
-    expect(screen.getByTestId("drilldown")).toBeInTheDocument();
-    expect(mocks.drilldown).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ariaLabel: "Contents breakdown",
-        root: expect.objectContaining({
-          label: "Workshop",
-          metricLabel: "3 items",
-        }),
-      }),
-    );
+    renderBreakdown(true, operations);
 
-    mocks.query.data = {
-      ...descendantTree,
-      totalItemCount: 1,
-      children: [],
-    };
-    rerender(
-      <LocationInventoryBreakdown shortcode={rootId} hasChildren={true} />,
-    );
-    expect(screen.queryByTestId("drilldown")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Contents breakdown" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Workshop")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Open location Shelf: 2 items/ }),
+    ).toBeVisible();
   });
 });

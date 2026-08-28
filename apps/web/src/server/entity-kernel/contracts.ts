@@ -1,7 +1,6 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import { relationMutationOut } from "@cubby/schemas/common";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
-import { imageOut, imageUpdateInput } from "@cubby/schemas/image";
 import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";
 import {
   relatedSearchOutSchema,
@@ -13,6 +12,9 @@ import { z } from "zod";
 import {
   generatedEntityBulkUpdateCommandSchema,
   generatedEntityCreateCommandSchema,
+  generatedEntityGetResultSchema,
+  generatedEntityListResultSchema,
+  generatedEntityMergeResultSchema,
   generatedEntityMutationCreateResultSchema,
   generatedEntityMutationUpdateResultSchema,
   generatedEntityUpdateCommandSchema,
@@ -133,12 +135,6 @@ const attachCommandSchema = z
 const detachCommandSchema = z
   .object({ action: z.literal("detach"), ...relationCommandFields })
   .superRefine(validateRelationCommand);
-const imageUpdateCommandSchema = z.object({
-  action: z.literal("update"),
-  entity: z.literal("image"),
-  id: z.string().min(1),
-  data: imageUpdateInput,
-});
 const deleteCommandSchema = z.object({
   action: z.literal("delete"),
   entity: entityKernelEntitySchema,
@@ -158,7 +154,6 @@ const bulkUpdateCommandSchema = generatedEntityBulkUpdateCommandSchema(
 export const entityBrowserMutationCommandSchema = z.union([
   generatedEntityCreateCommandSchema,
   generatedEntityUpdateCommandSchema,
-  imageUpdateCommandSchema,
   deleteCommandSchema,
   bulkUpdateCommandSchema,
   attachCommandSchema,
@@ -189,38 +184,20 @@ export type EntityBrowserMutationInput = z.input<
 >;
 export type EntityCommand = z.infer<typeof entityCommandSchema>;
 
+export const entitySearchResultSchema = z.object({
+  action: z.literal("search"),
+  entity: searchableEntitySchema,
+  lexical: z.array(searchHitSchema),
+  semantic: relatedSearchOutSchema,
+});
+
 export const entityQueryResultSchema = z.discriminatedUnion("action", [
-  z.object({
-    action: z.literal("get"),
-    entity: entityKernelEntitySchema,
-    item: z.unknown(),
-  }),
-  z.object({
-    action: z.literal("list"),
-    entity: entityKernelEntitySchema,
-    items: z.array(z.unknown()),
-    meta: z.object({
-      pageIndex: z.number().int().nonnegative(),
-      pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
-      totalCount: z.number().int().nonnegative(),
-      sums: z.record(z.string(), z.number()).optional(),
-    }),
-  }),
-  z.object({
-    action: z.literal("search"),
-    entity: searchableEntitySchema,
-    lexical: z.array(searchHitSchema),
-    semantic: relatedSearchOutSchema,
-  }),
+  generatedEntityGetResultSchema,
+  generatedEntityListResultSchema,
+  entitySearchResultSchema,
 ]);
 
-const imageUpdateResultSchema = z.object({
-  action: z.literal("update"),
-  entity: z.literal("image"),
-  item: imageOut,
-  sideEffects: mutationSideEffectsSchema,
-});
-const deleteResultSchema = z.object({
+export const entityDeleteResultSchema = z.object({
   action: z.literal("delete"),
   entity: entityKernelEntitySchema,
   deleted: z.number().int().nonnegative(),
@@ -236,14 +213,14 @@ const deleteResultSchema = z.object({
   ),
   sideEffects: mutationSideEffectsSchema,
 });
-const bulkUpdateResultSchema = z.object({
+export const entityBulkUpdateResultSchema = z.object({
   action: z.literal("bulkUpdate"),
   entity: entityKernelEntitySchema,
   updated: z.number().int().nonnegative(),
   updatedIds: z.array(z.string().min(1)),
   sideEffects: mutationSideEffectsSchema,
 });
-const relationMutationResultSchema = z.object({
+export const entityRelationMutationResultSchema = z.object({
   action: z.enum(["attach", "detach"]),
   entity: z.enum(["product", "project", "purchase"]),
   relation: z.enum(["components", "resources", "products"]),
@@ -254,22 +231,34 @@ const relationMutationResultSchema = z.object({
 export const entityBrowserMutationResultSchema = z.union([
   generatedEntityMutationCreateResultSchema,
   generatedEntityMutationUpdateResultSchema,
-  imageUpdateResultSchema,
-  deleteResultSchema,
-  bulkUpdateResultSchema,
-  relationMutationResultSchema,
+  entityDeleteResultSchema,
+  entityBulkUpdateResultSchema,
+  entityRelationMutationResultSchema,
 ]);
 
 export const entityMutationResultSchema = z.union([
   entityBrowserMutationResultSchema,
-  z.object({
-    action: z.literal("merge"),
-    entity: mergeableEntitySchema,
-    item: z.unknown(),
-    mergeSummary: z.unknown(),
-    sideEffects: mutationSideEffectsSchema,
-  }),
+  generatedEntityMergeResultSchema,
 ]);
+
+type EntityKernelResult =
+  | z.infer<typeof entityQueryResultSchema>
+  | z.infer<typeof entityMutationResultSchema>;
+
+type ResultForCommand<Command extends EntityCommand> =
+  EntityKernelResult extends infer Result
+    ? Result extends { action: string; entity: EntityKernelEntity }
+      ? [Extract<Result["action"], Command["action"]>] extends [never]
+        ? never
+        : [Extract<Result["entity"], Command["entity"]>] extends [never]
+          ? never
+          : Result
+      : never
+    : never;
+
+/** Preserve action/entity correlation through the small executeEntity seam. */
+export type EntityResultFor<Command extends EntityCommand> =
+  Command extends EntityCommand ? ResultForCommand<Command> : never;
 export type EntityBrowserMutationResult = z.infer<
   typeof entityBrowserMutationResultSchema
 >;

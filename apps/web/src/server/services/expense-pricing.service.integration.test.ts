@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,9 +31,9 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       ctx.actor,
     );
     const recomputeForIngredients = vi.fn().mockResolvedValue([]);
-    const service = {
+    const service = fromPartial<RecipeCostingService>({
       recomputeForIngredients,
-    } as unknown as RecipeCostingService;
+    });
 
     const result = await recomputeRecipesForPriceAffectedProducts(
       ctx.db,

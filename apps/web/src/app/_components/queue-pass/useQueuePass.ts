@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
 import {
   advanceToOutstanding,
@@ -41,6 +42,8 @@ export interface QueuePassPersistence<TExtra> {
   /** Full localStorage key for a scope, e.g. `cubby:audit-session:LOC-4K7M`. */
   storageKey: (scopeKey: string) => string;
   version: number;
+  /** Parses the flow-owned payload before persisted state reaches the caller. */
+  extraSchema: z.ZodType<TExtra>;
   /**
    * Read a stored blob this flow wrote under an older shape.
    *
@@ -49,8 +52,27 @@ export interface QueuePassPersistence<TExtra> {
    * Bumping a version without one silently discards every in-flight pass on the
    * device.
    */
-  readLegacy?: (parsed: unknown) => StoredQueuePass<TExtra> | null;
+  readLegacy?: (parsed: JsonValue) => StoredQueuePass<TExtra> | null;
 }
+
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+const storedPassSchema = z.object({
+  version: z.number(),
+  startedAt: z.number(),
+  updatedAt: z.number().optional(),
+  currentIndex: z.number(),
+  completed: z.array(z.string()),
+  skipped: z.array(z.string()),
+  totalCount: z.number().optional(),
+  extra: z.json().optional(),
+});
 
 export interface QueuePassResumeCandidate<TExtra> {
   startedAt: number;
@@ -94,34 +116,32 @@ interface UseQueuePassOptions<TStop extends QueueStop, TExtra> {
   extra?: TExtra;
 }
 
-function parseStoredPass<TExtra>(
+export function parseStoredQueuePass<TExtra>(
   raw: string,
   persistence: QueuePassPersistence<TExtra>,
 ): StoredQueuePass<TExtra> | null {
-  let parsed: unknown;
+  let parsed: JsonValue;
   try {
-    parsed = JSON.parse(raw);
+    const storedJson = z.json().safeParse(JSON.parse(raw));
+    if (!storedJson.success) return null;
+    parsed = storedJson.data;
   } catch {
     return null;
   }
 
-  const candidate = parsed as Partial<StoredQueuePass<TExtra>>;
-  if (
-    candidate.version === persistence.version &&
-    typeof candidate.startedAt === "number" &&
-    typeof candidate.currentIndex === "number" &&
-    Array.isArray(candidate.completed) &&
-    Array.isArray(candidate.skipped)
-  ) {
+  const candidate = storedPassSchema.safeParse(parsed);
+  if (candidate.success && candidate.data.version === persistence.version) {
+    const extra = persistence.extraSchema.safeParse(candidate.data.extra);
+    if (!extra.success) return null;
     return {
-      version: candidate.version,
-      startedAt: candidate.startedAt,
-      updatedAt: candidate.updatedAt ?? candidate.startedAt,
-      currentIndex: candidate.currentIndex,
-      completed: candidate.completed,
-      skipped: candidate.skipped,
-      totalCount: candidate.totalCount ?? 0,
-      extra: candidate.extra,
+      version: candidate.data.version,
+      startedAt: candidate.data.startedAt,
+      updatedAt: candidate.data.updatedAt ?? candidate.data.startedAt,
+      currentIndex: candidate.data.currentIndex,
+      completed: candidate.data.completed,
+      skipped: candidate.data.skipped,
+      totalCount: candidate.data.totalCount ?? 0,
+      extra: extra.data,
     };
   }
 
@@ -207,7 +227,7 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
     } catch {
       // Private mode / quota failures must not block starting a pass.
     }
-    const restored = raw ? parseStoredPass(raw, config) : null;
+    const restored = raw ? parseStoredQueuePass(raw, config) : null;
     if (!restored) {
       setStartedAt(Date.now());
       return;

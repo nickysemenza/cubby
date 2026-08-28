@@ -1,9 +1,10 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { edgeForDrop } from "./use-board-dnd";
 
 function event(translatedTop: number, targetTop = 100) {
-  return {
+  return fromPartial<Parameters<typeof edgeForDrop>[0]>({
     active: {
       rect: {
         current: {
@@ -28,7 +29,7 @@ function event(translatedTop: number, targetTop = 100) {
         bottom: targetTop + 40,
       },
     },
-  } as Parameters<typeof edgeForDrop>[0];
+  });
 }
 
 describe("edgeForDrop", () => {

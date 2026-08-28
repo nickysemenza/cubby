@@ -16,6 +16,10 @@ const DEFAULT_TIMEOUT_MS = 5000;
 // Matches bulkLookupRequestSchema.upcs.max(200) on the worker.
 const BULK_MAX_UPCS = 200;
 
+interface UpcRequestHeaders extends Record<string, string> {
+  "user-agent": string;
+}
+
 export class UPCLookupClient {
   private timeoutMs: number;
   private fetcher: typeof fetch;
@@ -30,8 +34,8 @@ export class UPCLookupClient {
     this.fetcher = options?.fetcher ?? fetch;
   }
 
-  private getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
+  private getHeaders(): UpcRequestHeaders {
+    const headers: UpcRequestHeaders = {
       "user-agent": "cubby",
     };
 
@@ -228,6 +232,8 @@ export class UPCLookupClient {
     });
   }
 }
+
+export type UpcLookupPort = Pick<UPCLookupClient, "lookup" | "lookupBatch">;
 
 /** Production service-binding adapter with the public HTTP fallback for Node. */
 export const createUpcLookupClient = (): UPCLookupClient =>

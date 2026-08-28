@@ -20,14 +20,14 @@ import {
 // `entityType` is derived from the shortcode's prefix, so it is not asked for.
 const { entityType: _entityType, ...attachFileEntityless } = attachFileFields;
 
-const attachFileInputShape = {
+const attachFileInputFields = {
   ...attachFileEntityless,
   entityId: attachFileEntityless.entityId.describe(
     `Shortcode of the target — its prefix picks the entity (${attachableImageEntity.options.join(", ")}).`,
   ),
 };
 
-const attachFileItem = z.object(attachFileInputShape);
+const attachFileItem = z.object(attachFileInputFields);
 type AttachFileItem = z.infer<typeof attachFileItem>;
 
 const ATTACH_FILE_SOURCE_PROSE =
@@ -79,7 +79,7 @@ export function registerImageTools(server: McpServer) {
       "Stage a LOCAL file for attachment and get a presigned PUT URL back. This is how a file on disk reaches Cubby: the server is remote, so `url` cannot name a local path, and base64 `data` costs tens of thousands of tokens per photo. Three steps: call this, upload the bytes with " +
       "`curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, " +
       "then call attach_file with the returned uploadId. No R2 staging, wrangler, or manual cleanup — the staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, application/pdf.",
-    inputSchema: createFileUploadInput.shape,
+    inputSchema: createFileUploadInput,
     outputSchema: createFileUploadResponse,
     annotations: WRITE_CLOSED,
     handler: async (params, extra) =>
@@ -101,7 +101,7 @@ export function registerImageTools(server: McpServer) {
     // `entityType` is dropped on purpose: a shortcode's prefix already names
     // the entity, so asking for both invites a mismatched pair. The handler
     // derives the type from the code and rejects a non-attachable one.
-    inputSchema: attachFileInputShape,
+    inputSchema: attachFileItem,
     outputSchema: attachFileResponse,
     annotations: WRITE_CLOSED,
     // The attachment target, for `McpToolCall.entity`. Derived from the
@@ -120,8 +120,9 @@ export function registerImageTools(server: McpServer) {
       `pass of an enrichment sweep. ${ATTACH_FILE_SOURCE_PROSE} A failed item does not roll back ` +
       "successful items; set idempotencyKey per item so a retry of a partially-failed batch cannot " +
       "double-attach the files that already landed.",
-    itemInput: attachFileItem,
-    itemOutput: attachFileResponse,
+    itemInputSchema: attachFileItem,
+    itemOutputSchema: attachFileResponse,
+    projectReference: (item) => item.imageId,
     // `full` rather than the compact default: an attach response is seven short
     // fields, not a hydrated entity, and `reused` exists precisely so a caller
     // can tell a replay from an upload — summarizing it away would undo that.

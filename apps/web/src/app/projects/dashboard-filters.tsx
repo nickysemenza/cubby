@@ -1,5 +1,7 @@
-import type { ProjectStatus } from "@cubby/schemas/project";
-import { projectStatusValues } from "@cubby/schemas/project";
+import {
+  projectStatusSchema,
+  projectStatusValues,
+} from "@cubby/schemas/project";
 import { ListFilter } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
@@ -102,7 +104,10 @@ function DashboardFilterControls({
           options={[...projectStatusValues]}
           selected={filters.statuses}
           onToggle={(v) => toggle("statuses", v)}
-          formatLabel={(v) => PROJECT_STATUS_LABELS[v as ProjectStatus] ?? v}
+          formatLabel={(v) => {
+            const status = projectStatusSchema.safeParse(v);
+            return status.success ? PROJECT_STATUS_LABELS[status.data] : v;
+          }}
         />
         <FilterChipGroup
           label="Kind"
