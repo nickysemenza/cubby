@@ -39,6 +39,7 @@ import {
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
+import { parseShortcode } from "@cubby/shared";
 import {
   and,
   asc,
@@ -969,8 +970,14 @@ export const linkExpensesToPurchase = async (
   // skip a selection with no live lines silently (see `before.length === 0`
   // below) — only a code that names nothing at all is an error.
   const resolvedExpenses = await resolveShortcodes(db, input.expenseIds);
+  const resolvedExpense = (code: string) => {
+    const parsed = parseShortcode(code);
+    return parsed?.type === "expense"
+      ? resolvedExpenses.get(parsed.shortcode)
+      : undefined;
+  };
   const missingExpenses = input.expenseIds.filter(
-    (code) => resolvedExpenses.get(code)?.entity !== "expense",
+    (code) => resolvedExpense(code)?.entity !== "expense",
   );
   if (missingExpenses.length > 0) {
     throw createAppError(
@@ -979,7 +986,7 @@ export const linkExpensesToPurchase = async (
     );
   }
   const expenseIds = input.expenseIds.map((code) => {
-    const ref = resolvedExpenses.get(code);
+    const ref = resolvedExpense(code);
     if (ref?.entity !== "expense") {
       throw createAppError("EXPENSE_NOT_FOUND", `Expense not found: ${code}`);
     }

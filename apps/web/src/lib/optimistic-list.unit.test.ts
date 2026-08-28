@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { patchCachedListItem, patchListItem } from "./optimistic-list";
+import {
+  patchCachedListItem,
+  patchListItem,
+  removeCachedListItems,
+} from "./optimistic-list";
 
 type Row = { id: string; name: string; acquiredAt: Date | null };
 
@@ -55,7 +59,9 @@ describe("patchCachedListItem", () => {
 
   it("leaves every non-matching row untouched by identity", () => {
     const keep = row("a");
-    const patched = patchCachedListItem<Row>({ items: [keep] }, "zzz", acquire);
+    const list = { items: [keep] };
+    const patched = patchCachedListItem<Row>(list, "zzz", acquire);
+    expect(patched).toBe(list);
     expect((patched as { items: Row[] }).items[0]).toBe(keep);
   });
 });
@@ -65,5 +71,50 @@ describe("patchListItem", () => {
     expect(patchListItem({ items: [row("a")] }, "a", acquire)).toEqual({
       items: [{ ...row("a"), acquiredAt: new Date(0) }],
     });
+  });
+});
+
+describe("removeCachedListItems", () => {
+  it("removes matching rows from a raw array", () => {
+    expect(removeCachedListItems([row("a"), row("b")], new Set(["a"]))).toEqual(
+      [row("b")],
+    );
+  });
+
+  it("removes rows through infinite envelopes and decrements both totals", () => {
+    const cached = {
+      pages: [
+        {
+          items: [row("a"), row("b")],
+          count: 5,
+          meta: { totalCount: 5, cursor: "next" },
+        },
+        { data: [row("c")], count: 5, meta: { totalCount: 5 } },
+      ],
+      pageParams: [0, 1],
+    };
+
+    expect(removeCachedListItems(cached, new Set(["b", "c"]))).toEqual({
+      pages: [
+        {
+          items: [row("a")],
+          count: 4,
+          meta: { totalCount: 4, cursor: "next" },
+        },
+        { data: [], count: 4, meta: { totalCount: 4 } },
+      ],
+      pageParams: [0, 1],
+    });
+  });
+
+  it("preserves identity when no row matches and safely ignores unrelated arrays", () => {
+    const list = { items: [row("a")], count: 1 };
+    const infinite = { pages: [list], pageParams: [0] };
+    expect(removeCachedListItems(list, new Set(["zzz"]))).toBe(list);
+    expect(removeCachedListItems(infinite, new Set(["zzz"]))).toBe(infinite);
+    expect(removeCachedListItems([null, "text"], new Set(["a"]))).toEqual([
+      null,
+      "text",
+    ]);
   });
 });

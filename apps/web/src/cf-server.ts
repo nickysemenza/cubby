@@ -95,7 +95,6 @@ const handler = {
     process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
     process.env.ALLOW_SIGNUP ??= env.ALLOW_SIGNUP;
     process.env.E2E_AUTH_TEST_MODE = env.E2E_AUTH_TEST_MODE;
-    process.env.PRODUCT_DETAIL_READER = env.PRODUCT_DETAIL_READER;
 
     // Expose service bindings to server code (clients pick binding fetch
     // over public URLs when present).

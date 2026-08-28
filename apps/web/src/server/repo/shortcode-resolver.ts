@@ -81,26 +81,31 @@ export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
   codes: readonly string[],
   entity: E,
 ): Promise<Map<string, EntityId<E>>> {
-  const canonical = new Map<string, string>(); // canonical code -> original code
+  const originalsByCanonical = new Map<string, string[]>();
   for (const code of codes) {
     const parsed = parseShortcode(code);
-    if (parsed && parsed.type === entity) canonical.set(parsed.shortcode, code);
+    if (!parsed || parsed.type !== entity) continue;
+    const originals = originalsByCanonical.get(parsed.shortcode);
+    if (originals) originals.push(code);
+    else originalsByCanonical.set(parsed.shortcode, [code]);
   }
-  if (canonical.size === 0) return new Map();
+  if (originalsByCanonical.size === 0) return new Map();
 
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
   const rows = await unwrapDb(db)
     .select({ id: table.id, shortcode: table.shortcode })
     .from(table)
     .where(
-      and(inArray(table.shortcode, [...canonical.keys()]), notDeleted(table)),
+      and(
+        inArray(table.shortcode, [...originalsByCanonical.keys()]),
+        notDeleted(table),
+      ),
     );
 
   const resolved = new Map<string, EntityId<E>>();
   for (const row of rows) {
     const shortcode = parseShortcodeFor(entity, row.shortcode);
-    const originalCode = canonical.get(shortcode);
-    if (originalCode !== undefined) {
+    for (const originalCode of originalsByCanonical.get(shortcode) ?? []) {
       resolved.set(originalCode, parseEntityId(entity, row.id));
     }
   }

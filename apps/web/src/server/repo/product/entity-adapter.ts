@@ -30,11 +30,7 @@ import {
   productList,
   setProductsStockTracked,
 } from "./crud";
-import {
-  PRODUCT_DETAIL_READER,
-  readLegacyProductDetail,
-  readProductDetail,
-} from "./detail";
+import { readProductDetail } from "./detail";
 import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
 import { mergeProducts, PRODUCT_MERGE_EDGE_POLICY } from "./merge";
 
@@ -67,18 +63,8 @@ export const productEntityAdapter = defineEntityAdapter({
     merge: PRODUCT_MERGE_EDGE_POLICY,
   },
   repository: {
-    get: async (ctx, shortcode) => {
-      if (PRODUCT_DETAIL_READER === "optimized") {
-        return readProductDetail(
-          { db: ctx.db, usdaClient: ctx.usdaClient },
-          shortcode,
-        );
-      }
-      return readLegacyProductDetail(
-        { db: ctx.db, usdaClient: ctx.usdaClient },
-        shortcode,
-      );
-    },
+    get: (ctx, shortcode) =>
+      readProductDetail({ db: ctx.db, usdaClient: ctx.usdaClient }, shortcode),
     list: (ctx, filters, sorts, pagination, groupBy) =>
       productList(ctx.db, filters, sorts, pagination, groupBy),
     create: async (ctx, data) => {
