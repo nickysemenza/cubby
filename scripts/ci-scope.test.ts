@@ -63,7 +63,12 @@ test("Rust and generated WASM paths have distinct scopes", () => {
 });
 
 test("dependency and CI configuration changes fail safe across JS workspaces", () => {
-  for (const path of ["pnpm-lock.yaml", ".github/workflows/ci.yaml"]) {
+  for (const path of [
+    "pnpm-lock.yaml",
+    ".github/workflows/ci.yaml",
+    ".oxlintrc.json",
+    ".oxfmtrc.json",
+  ]) {
     const scope = classifyPaths([path]);
     assert.equal(scope.web, true, path);
     assert.equal(scope.aux, true, path);

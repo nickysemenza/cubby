@@ -125,7 +125,7 @@ Look for: N+1 query patterns in repos (loop of awaited queries where one IN quer
 LANE: Convention drift.
 Read CLAUDE.md "Required Helpers" table and its caveats/carve-outs FIRST — the carve-outs are extensive and re-flagging them is the #1 failure mode of this lane.
 Scope: apps/web/src.
-Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Also run: node scripts/check-conventions.ts from repo root if it exists and report its output; run pnpm -w exec biome check --reporter=summary 2>&1 | tail -20 if quick. Cross-check every candidate against the carve-out list before reporting.`,
+Look for genuinely NEW drift: inline patterns from the "avoid" column (manual insert+returning, error instanceof Error ladders, inline ilike, isNull(deletedAt), hand-rolled keyBy/groupBy, [...new Set()], switch-ladders on discriminated unions, inline query keys); hardcoded hex/oklch colors outside the exempt files (design-gallery.tsx, design.tsx, IsometricPantry.tsx, theme-color fallbacks); raw flex/grid/space-y div soup where Row/Stack/Grid/Section primitives should be used (only where the layout repeats or encodes a real decision — do NOT flag lone one-off flex divs, flex-col columns, responsive switches, inline-flex, or classNames on shadcn primitives); spacing-scale violations. Also run: node scripts/check-conventions.ts from repo root if it exists and report its output; run pnpm lint and pnpm format:check if quick. Cross-check every candidate against the carve-out list before reporting.`,
   },
   {
     key: 'gates',
@@ -133,7 +133,7 @@ Look for genuinely NEW drift: inline patterns from the "avoid" column (manual in
     prompt: `${COMMON}
 LANE: Mechanical gates — run the repo's own quality commands and report ground truth. From ${ROOT}:
 1. pnpm run typecheck (or the workspace equivalent — check package.json scripts first)
-2. pnpm run format:check or biome check
+2. pnpm run lint && pnpm run format:check
 3. node scripts/check-conventions.ts
 4. cd apps/web && npx knip 2>&1 | tail -40
 5. In recipebridge/: cargo fmt --check

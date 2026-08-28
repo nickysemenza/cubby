@@ -7,7 +7,7 @@
     // `ensure-*` imports, so knip should keep proving that.
     ".": {
       "entry": [
-        "scripts/format-changed.ts!",
+        "scripts/check-invalidation-authority.ts!",
         "scripts/check-sql-safety.ts!",
         "scripts/check-soft-delete-filters.ts!",
         "scripts/check-unsafe-identifiers.unit.test.ts!",

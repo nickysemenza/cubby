@@ -517,7 +517,7 @@ export const renderStartOperationHandlers = (): string => {
 const format = (path: string, source: string): string => {
   const formatted = spawnSync(
     "pnpm",
-    ["exec", "biome", "format", "--stdin-file-path", path],
+    ["exec", "oxfmt", "--stdin-filepath", path],
     { input: source, encoding: "utf8" },
   );
   if (formatted.status !== 0) {

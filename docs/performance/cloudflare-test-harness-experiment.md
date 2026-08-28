@@ -21,7 +21,7 @@ reintroducing the old dead-port fallback noise.
 Local validation on macOS:
 
 - `pnpm --filter @cubby/web run build:cf`: passed.
-- `pnpm typecheck:web` and `pnpm format:changed`: passed.
+- `pnpm typecheck:web` and the now-retired `pnpm format:changed`: passed.
 - Focused unauthenticated Chromium, authenticated Chromium, and iPhone WebKit
   runs: passed without retries.
 - The verified Playwright inventory is 69 tests across 26 files and the

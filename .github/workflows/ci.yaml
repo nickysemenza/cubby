@@ -442,12 +442,6 @@ jobs:
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm -r --no-sort --workspace-concurrency=4 --no-bail \
             --filter '!@cubby/web' --if-present run test "${args[@]}"
-      - name: Build USDA worker
-        if: needs.scope.outputs.coverage != 'true' && needs.scope.outputs.usda == 'true'
-        run: pnpm --filter @cubby/usda-api run build
-      - name: Build UPC worker
-        if: needs.scope.outputs.coverage != 'true' && needs.scope.outputs.upc == 'true'
-        run: pnpm --filter @cubby/upc-lookup run build
       - name: Save auxiliary coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

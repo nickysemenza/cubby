@@ -54,11 +54,12 @@ list of the failing tests, and writes the same list to
 `apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
 it. 24% of all test runs used to be a re-run of one that had just failed.
 
-Narrow the other gates too: `pnpm format:changed` (~1s) over `pnpm format:write`
-(~18s), and `pnpm typecheck:web` when only the web app is touched. `pnpm check`
-runs changed-file Biome, TypeScript, entity freshness, script types, and the
-high-risk SQL/soft-delete guards concurrently. `pnpm check:all` adds full-tree
-Biome, Knip, bindings, OpenAPI, security, and CI-scope validation. Dependency
+Narrow the other gates too: `pnpm check:staged` checks only staged JavaScript
+and TypeScript plus formattable files, and `pnpm typecheck:web` is useful when
+only the web app is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
+entity freshness, Knip, script types, and the high-risk SQL/soft-delete guards
+concurrently. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
+and security validation. Dependency
 deduplication runs separately when a package manifest, workspace file, patch, or
 lockfile changed; CI and pre-PR validation run the applicable superset.
 
