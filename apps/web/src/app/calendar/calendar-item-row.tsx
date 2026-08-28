@@ -9,6 +9,24 @@ import { itemSpanLabel } from "./calendar-span";
 
 type CalendarItemPresentationVariant = "month" | "detail" | "rich";
 
+function calendarItemCost(item: CalendarItem) {
+  if (item.kind === "expense" && item.cost != null) return item.cost;
+  if (item.kind === "meal" && item.cost > 0) return item.cost;
+  return null;
+}
+
+function MealCalories({ item }: { item: CalendarItem }) {
+  if (item.kind !== "meal" || (item.calories <= 0 && !item.nutritionPending)) {
+    return null;
+  }
+  return (
+    <span>
+      {Math.round(item.calories).toLocaleString()}
+      {item.nutritionPending ? "+" : ""} cal
+    </span>
+  );
+}
+
 function CalendarItemPresentation({
   item,
   variant,
@@ -71,12 +89,7 @@ function CalendarItemRich({
   const presentation = calendarItemPresentation(item);
   const Icon = presentation.icon;
   const { cover, metadata } = presentation;
-  const cost =
-    item.kind === "expense" && item.cost != null
-      ? item.cost
-      : item.kind === "meal" && item.cost > 0
-        ? item.cost
-        : null;
+  const cost = calendarItemCost(item);
   const costLabel = cost == null ? null : formatCurrency(cost, 0);
   return (
     <div
@@ -127,13 +140,7 @@ function CalendarItemRich({
             {metadata}
           </span>
           <span className="flex shrink-0 items-center gap-1 font-mono tabular-nums">
-            {item.kind === "meal" &&
-              (item.calories > 0 || item.nutritionPending) && (
-                <span>
-                  {Math.round(item.calories).toLocaleString()}
-                  {item.nutritionPending ? "+" : ""} cal
-                </span>
-              )}
+            <MealCalories item={item} />
             {compact && costLabel && (
               <span className="text-foreground">{costLabel}</span>
             )}

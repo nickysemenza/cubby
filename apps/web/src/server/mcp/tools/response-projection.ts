@@ -141,23 +141,33 @@ function orderNutrientSummary<T extends { name: string; unit: string }>(
     .map((entry) => entry.entry);
 }
 
+type UsdaProjectionInput = z.output<typeof usdaProjectionInput>;
+
+const usdaIdentityProjection = (food: UsdaProjectionInput) => ({
+  description: food.foodInfo?.description ?? null,
+  data_type: food.foodInfo?.data_type ?? null,
+  brand_owner: food.brandedFoodInfo?.brand_owner ?? null,
+  brand_name: food.brandedFoodInfo?.brand_name ?? null,
+  gtin_upc: food.brandedFoodInfo?.gtin_upc ?? null,
+  ndb_number: food.legacyFoodInfo?.ndb_number ?? null,
+  ingredients: food.brandedFoodInfo?.ingredients ?? null,
+  serving: food.brandedFoodInfo?.serving ?? null,
+});
+
+const usdaNutritionProjection = (food: UsdaProjectionInput) => ({
+  nutrientsPer100: food.nutritionInfo?.nutrientsPer100 ?? null,
+  nutrientSummary: orderNutrientSummary(
+    food.nutritionInfo?.nutrientSummary ?? [],
+  ),
+  portionInfoRaw: food.portionInfoRaw ?? [],
+});
+
 export function slimUsdaFood<TInput>(row: TInput) {
   const food = parseAs(usdaProjectionInput, row);
   return mcpUsdaFoodOut.parse({
     fdc_id: food.fdc_id,
-    description: food.foodInfo?.description ?? null,
-    data_type: food.foodInfo?.data_type ?? null,
-    brand_owner: food.brandedFoodInfo?.brand_owner ?? null,
-    brand_name: food.brandedFoodInfo?.brand_name ?? null,
-    gtin_upc: food.brandedFoodInfo?.gtin_upc ?? null,
-    ndb_number: food.legacyFoodInfo?.ndb_number ?? null,
-    ingredients: food.brandedFoodInfo?.ingredients ?? null,
-    serving: food.brandedFoodInfo?.serving ?? null,
-    nutrientsPer100: food.nutritionInfo?.nutrientsPer100 ?? null,
-    nutrientSummary: orderNutrientSummary(
-      food.nutritionInfo?.nutrientSummary ?? [],
-    ),
-    portionInfoRaw: food.portionInfoRaw ?? [],
+    ...usdaIdentityProjection(food),
+    ...usdaNutritionProjection(food),
     linkedProducts: (food.linkedProducts ?? []).map((product) => ({
       id: product.id,
       name: product.name,

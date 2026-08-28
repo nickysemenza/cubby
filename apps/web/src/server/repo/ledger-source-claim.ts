@@ -74,6 +74,30 @@ const sameAmount = (left: number | null, right: number | null) =>
     ? left === right
     : Math.round(left * 100) === Math.round(right * 100);
 
+const assertClaimAmounts = (
+  targetAmount: number | null,
+  claims: readonly LedgerSourceClaimInput[],
+): void => {
+  if (targetAmount === null && claims.length > 0) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "An Expense needs a cost before it can claim normalized source evidence.",
+    );
+  }
+  for (const claim of claims) {
+    const matches = sameAmount(claim.normalizedEvidence.amount, targetAmount);
+    if ((claim.reconciliation.decision === "amounts_match") === matches) {
+      continue;
+    }
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      matches
+        ? "Matching source and target amounts require the amounts_match decision."
+        : "A source/target amount mismatch requires accept_target_amount with a note.",
+    );
+  }
+};
+
 /**
  * A claim's reconciliation decision is about the target amount captured when
  * the claim was made. Once that amount changes, omission cannot mean "leave
@@ -114,23 +138,7 @@ export async function replaceLedgerSourceClaims(
 ): Promise<void> {
   const { targetAmount } = owner;
   const keys = await Promise.all(claims.map(ledgerSourceKey));
-  if (targetAmount === null && claims.length > 0)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "An Expense needs a cost before it can claim normalized source evidence.",
-    );
-  for (const claim of claims) {
-    const matches =
-      Math.round(claim.normalizedEvidence.amount * 100) ===
-      Math.round((targetAmount ?? 0) * 100);
-    if ((claim.reconciliation.decision === "amounts_match") !== matches)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        matches
-          ? "Matching source and target amounts require the amounts_match decision."
-          : "A source/target amount mismatch requires accept_target_amount with a note.",
-      );
-  }
+  assertClaimAmounts(targetAmount, claims);
   const valuesFor = (claim: LedgerSourceClaimInput, key: string) => ({
     expenseId: isExpenseOwner(owner) ? owner.expenseId : null,
     ledgerTransferId: isExpenseOwner(owner) ? null : owner.ledgerTransferId,

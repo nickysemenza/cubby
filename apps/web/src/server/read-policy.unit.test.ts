@@ -19,7 +19,7 @@ describe("cached-read policy", () => {
 
     const get = between(operations, "get: async", "list: async");
     const list = between(operations, "list: async", "create: async");
-    const search = between(source, 'case "search":', 'case "create":');
+    const search = between(source, "const executeSearch", "const executeMerge");
     const mutations = source.slice(source.indexOf('case "create":'));
 
     expect(list).toMatch(/readDb/u);

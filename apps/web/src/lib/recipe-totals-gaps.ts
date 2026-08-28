@@ -120,6 +120,94 @@ interface GapAccumulator {
   missing: MissingTotals;
 }
 
+type CostingRow = RecipeCosting["rows"][number];
+type CostingRecipeRow = Extract<CostingRow, { type: "recipe" }>;
+type CostingIngredientRow = Exclude<CostingRow, CostingRecipeRow>;
+
+const missingTotalsFor = (row: CostingRow): MissingTotals => ({
+  price: row.totalsMissing.price,
+  weight: row.totalsMissing.weight,
+  nutrients: row.totalsMissing.nutrients,
+  volume: false,
+});
+
+const recipeGapFor = (
+  row: CostingRecipeRow,
+  missing: MissingTotals,
+): RecipeTotalsGap | null => {
+  if (!missing.price && !missing.weight && !missing.nutrients) return null;
+  const lineUnit = row.amounts[0]?.unit ?? null;
+  const kind =
+    row.amounts.length === 0
+      ? "set-subrecipe-amount"
+      : !row.recipe.yield
+        ? "set-subrecipe-yield"
+        : "fix-subrecipe-totals";
+  return {
+    source: "recipe",
+    rowId: row.id,
+    recipeId: row.recipe.id,
+    recipeShortcode: row.recipe.id,
+    name: row.recipe.name,
+    lineUnit,
+    lineKind: classifyLine(lineUnit),
+    missing,
+    kind,
+  };
+};
+
+const accumulateIngredientGap = (
+  row: CostingIngredientRow,
+  missing: MissingTotals,
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  byIngredientId: Map<string, GapAccumulator>,
+) => {
+  if (row.amounts.length === 0) return;
+  if (!missing.price && !missing.weight) return;
+
+  const id = row.ingredient.id;
+  const existing = byIngredientId.get(id);
+  if (existing) {
+    existing.missing.price ||= missing.price;
+    existing.missing.weight ||= missing.weight;
+    existing.missing.nutrients ||= missing.nutrients;
+    return;
+  }
+
+  const products = ingMap[id]?.product ?? [];
+  const lineUnit = row.amounts[0]?.unit ?? null;
+  byIngredientId.set(id, {
+    name: row.ingredient.name,
+    ingredientShortcode: row.ingredient.id,
+    productId: products.length === 1 ? products[0]!.id : null,
+    productShortcode: products.length === 1 ? products[0]!.id : null,
+    lineUnit,
+    lineKind: classifyLine(lineUnit),
+    products,
+    missing,
+  });
+};
+
+const ingredientGapFor = (
+  ingredientId: string,
+  acc: GapAccumulator,
+): RecipeTotalsGap | null => {
+  const kind = classifyKind(acc);
+  if (kind === "done" || kind === "add-volume-mapping") return null;
+  return {
+    source: "ingredient",
+    ingredientId,
+    ingredientShortcode: acc.ingredientShortcode,
+    name: acc.name,
+    productId: acc.productId,
+    productShortcode: acc.productShortcode,
+    lineUnit: acc.lineUnit,
+    lineKind: acc.lineKind,
+    missing: acc.missing,
+    kind,
+  };
+};
+
 /**
  * The shared classifier inputs — just the signals the fix decision needs, so the
  * per-recipe path (deriveRecipeTotalsGaps) and the global workbench path
@@ -222,84 +310,21 @@ export const deriveRecipeTotalsGaps = (
   const recipeGaps: RecipeTotalsGap[] = [];
 
   for (const row of costing.rows) {
-    const missing = {
-      price: row.totalsMissing.price,
-      weight: row.totalsMissing.weight,
-      nutrients: row.totalsMissing.nutrients,
-      volume: false,
-    };
+    const missing = missingTotalsFor(row);
 
     if (row.type === "recipe") {
-      if (!missing.price && !missing.weight && !missing.nutrients) continue;
-      const lineUnit = row.amounts[0]?.unit ?? null;
-      const kind =
-        row.amounts.length === 0
-          ? "set-subrecipe-amount"
-          : !row.recipe.yield
-            ? "set-subrecipe-yield"
-            : "fix-subrecipe-totals";
-      recipeGaps.push({
-        source: "recipe",
-        rowId: row.id,
-        recipeId: row.recipe.id,
-        recipeShortcode: row.recipe.id,
-        name: row.recipe.name,
-        lineUnit,
-        lineKind: classifyLine(lineUnit),
-        missing,
-        kind,
-      });
+      const gap = recipeGapFor(row, missing);
+      if (gap) recipeGaps.push(gap);
       continue;
     }
 
-    // Skip unmeasured ingredient lines (salt "to taste", garnish, etc.). No
-    // mapping can cost a quantity that was never given, so suggesting one is
-    // noise; the engine may already apply an estimate for recognized usages.
-    if (row.amounts.length === 0) continue;
-    if (!missing.price && !missing.weight) continue;
-
-    const id = row.ingredient.id;
-    const existing = byIngredientId.get(id);
-    if (existing) {
-      // Same ingredient on multiple lines: a gap in any line is a gap overall.
-      existing.missing.price ||= missing.price;
-      existing.missing.weight ||= missing.weight;
-      existing.missing.nutrients ||= missing.nutrients;
-      continue;
-    }
-
-    const products = ingMap[id]?.product ?? [];
-    const lineUnit = row.amounts[0]?.unit ?? null;
-    byIngredientId.set(id, {
-      name: row.ingredient.name,
-      ingredientShortcode: row.ingredient.id,
-      productId: products.length === 1 ? products[0]!.id : null,
-      productShortcode: products.length === 1 ? products[0]!.id : null,
-      lineUnit,
-      lineKind: classifyLine(lineUnit),
-      products,
-      missing,
-    });
+    accumulateIngredientGap(row, missing, ingMap, byIngredientId);
   }
 
   const gaps: RecipeTotalsGap[] = [...recipeGaps];
   for (const [ingredientId, acc] of byIngredientId) {
-    const kind = classifyKind(acc);
-    // Rows here are pre-filtered to a missing price or weight, so classifyKind
-    // never returns "done"/"add-volume-mapping"; the guard just satisfies types.
-    if (kind === "done" || kind === "add-volume-mapping") continue;
-    gaps.push({
-      source: "ingredient",
-      ingredientId,
-      ingredientShortcode: acc.ingredientShortcode,
-      name: acc.name,
-      productId: acc.productId,
-      productShortcode: acc.productShortcode,
-      lineUnit: acc.lineUnit,
-      lineKind: acc.lineKind,
-      missing: acc.missing,
-      kind,
-    });
+    const gap = ingredientGapFor(ingredientId, acc);
+    if (gap) gaps.push(gap);
   }
 
   // Highest-leverage fixes first; ties keep input order (stable name grouping).

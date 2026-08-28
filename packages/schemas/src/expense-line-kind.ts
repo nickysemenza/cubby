@@ -53,6 +53,56 @@ export type ExpenseLineKindInspection = {
   confidence: "high" | "ambiguous" | "none";
 };
 
+type HintedExpenseLineKind = Exclude<
+  ExpenseLineKind,
+  "principal" | "other_adjustment"
+>;
+
+const LINE_KIND_MARKERS = [
+  { kind: "tax", pattern: /\b(?:sales tax|estimated tax|tax)\b/ },
+  { kind: "shipping", pattern: /\b(?:shipping|delivery|freight)\b/ },
+  { kind: "discount", pattern: /\b(?:discount|coupon)\b/ },
+  { kind: "fee", pattern: /\b(?:fee|processing|assessment)\b/ },
+  { kind: "tip", pattern: /\b(?:tip|gratuity)\b/ },
+] satisfies readonly { kind: HintedExpenseLineKind; pattern: RegExp }[];
+
+const EXACT_LINE_KIND_PATTERNS = [
+  {
+    kind: "shipping",
+    pattern:
+      /^(?:shipping(?: and handling)?|delivery(?: charge)?|freight(?: charge)?|liftgate shipping|ups ground shipping)$/,
+  },
+  {
+    kind: "discount",
+    pattern:
+      /^(?:discount|coupon(?: discount)?|(?:order|shipping|volume|promotional) discount)$/,
+  },
+  {
+    kind: "fee",
+    pattern:
+      /^(?:fee|(?:handling|processing|service|delivery) (?:charge|fee))$/,
+  },
+  { kind: "tip", pattern: /^(?:tip|gratuity)$/ },
+] satisfies readonly { kind: HintedExpenseLineKind; pattern: RegExp }[];
+
+const classifyExactLineKind = (head: string): ExpenseLineKind => {
+  const isTax =
+    head === "tax" ||
+    head === "sales tax" ||
+    head === "estimated tax" ||
+    /^(?:[\p{L}\p{N}&.'-]+\s+){1,4}sales tax$/u.test(head);
+  if (isTax) return "tax";
+  return (
+    EXACT_LINE_KIND_PATTERNS.find(({ pattern }) => pattern.test(head))?.kind ??
+    "principal"
+  );
+};
+
+const hintedLineKinds = (normalized: string): HintedExpenseLineKind[] =>
+  LINE_KIND_MARKERS.filter(({ pattern }) => pattern.test(normalized)).map(
+    ({ kind }) => kind,
+  );
+
 /**
  * Infer a receipt role only when the Expense name itself is unambiguous.
  * Product identity, notes, totals, and tax-rate arithmetic are deliberately
@@ -77,90 +127,34 @@ export function inspectExpenseLineKind(input: {
     .join(" ");
   const head = normalized.split(/ [—–] /u, 1)[0]?.trim() ?? normalized;
 
-  const markers = new Set<Exclude<ExpenseLineKind, "principal">>();
-  if (/\b(?:sales tax|estimated tax|tax)\b/.test(normalized))
-    markers.add("tax");
-  if (/\b(?:shipping|delivery|freight)\b/.test(normalized))
-    markers.add("shipping");
-  if (/\b(?:discount|coupon)\b/.test(normalized)) markers.add("discount");
-  if (/\b(?:fee|processing|assessment)\b/.test(normalized)) markers.add("fee");
-  if (/\b(?:tip|gratuity)\b/.test(normalized)) markers.add("tip");
+  const hintedKinds = hintedLineKinds(normalized);
 
   const explicitlyCombined =
     /^(?:sales tax|estimated tax|tax|shipping|delivery|freight|discount|fee|tip)\b.*(?:,|\s(?:and|&|\+|\/)\s)/.test(
       normalized,
     );
   if (
-    markers.size > 1 &&
+    hintedKinds.length > 1 &&
     (/\border\b/.test(normalized) ||
       /\bcharge\b/.test(normalized) ||
       explicitlyCombined)
   ) {
     return {
       lineKind: "other_adjustment",
-      hintedKinds: [...markers].filter(
-        (
-          kind,
-        ): kind is Exclude<ExpenseLineKind, "principal" | "other_adjustment"> =>
-          kind !== "other_adjustment",
-      ),
+      hintedKinds,
       confidence: "high",
     };
   }
 
-  let lineKind: ExpenseLineKind = "principal";
-  if (
-    head === "tax" ||
-    head === "sales tax" ||
-    head === "estimated tax" ||
-    /^(?:[\p{L}\p{N}&.'-]+\s+){1,4}sales tax$/u.test(head)
-  ) {
-    lineKind = "tax";
-  }
-
-  if (
-    lineKind === "principal" &&
-    /^(?:shipping(?: and handling)?|delivery(?: charge)?|freight(?: charge)?|liftgate shipping|ups ground shipping)$/.test(
-      head,
-    )
-  ) {
-    lineKind = "shipping";
-  }
-
-  if (
-    lineKind === "principal" &&
-    /^(?:discount|coupon(?: discount)?|(?:order|shipping|volume|promotional) discount)$/.test(
-      head,
-    )
-  ) {
-    lineKind = "discount";
-  }
-
-  if (
-    lineKind === "principal" &&
-    /^(?:fee|(?:handling|processing|service|delivery) (?:charge|fee))$/.test(
-      head,
-    )
-  ) {
-    lineKind = "fee";
-  }
-
-  if (lineKind === "principal" && /^(?:tip|gratuity)$/.test(head)) {
-    lineKind = "tip";
-  }
+  const lineKind = classifyExactLineKind(head);
 
   return {
     lineKind,
-    hintedKinds: [...markers].filter(
-      (
-        kind,
-      ): kind is Exclude<ExpenseLineKind, "principal" | "other_adjustment"> =>
-        kind !== "other_adjustment",
-    ),
+    hintedKinds,
     confidence:
       lineKind !== "principal"
         ? "high"
-        : markers.size > 0
+        : hintedKinds.length > 0
           ? "ambiguous"
           : "none",
   };

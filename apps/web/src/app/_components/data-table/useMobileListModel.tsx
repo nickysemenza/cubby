@@ -215,6 +215,111 @@ function getPriority(
   return meta?.mobile?.priority ?? fallback;
 }
 
+function collectMobileSlots<TItem extends RowData>(
+  row: Row<TItem>,
+  entity: Entity | undefined,
+) {
+  let title = extractEntityTitle(row.original);
+  if (entity === "inventory") {
+    title = inventoryProductName(row.original) ?? title;
+  }
+  let imageSlot: ReactNode | undefined;
+  let actionsContent: ReactNode | undefined;
+  const subtitleCandidates: SlotValue[] = [];
+  const trailingValues: SlotValue[] = [];
+  const metaValues: SlotValue[] = [];
+
+  for (const cell of row.getVisibleCells()) {
+    const colId = cell.column.id;
+    if (colId === "select") continue;
+    const meta = cell.column.columnDef.meta;
+    const slot = resolveSlot(colId, meta);
+    if (slot === "hidden") continue;
+    if (cell.column.accessorFn && isEmptyCellValue(cell.getValue())) continue;
+    const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
+    if (!hasRenderableContent(rendered)) continue;
+
+    if (slot === "actions") {
+      actionsContent = rendered;
+      continue;
+    }
+    if (slot === "image") {
+      if (rowHasImage(row.original)) imageSlot = rendered;
+      continue;
+    }
+    if (slot === "title") {
+      if (isTextNode(rendered) && rendered.trim().length > 0) title = rendered;
+      continue;
+    }
+
+    const entry: SlotValue = {
+      priority: getPriority(meta, 50),
+      value: rendered,
+      interactive: meta?.mobile?.interactive,
+      id: colId,
+      label: mobileColumnLabel(cell.column),
+    };
+    if (slot === "subtitle") subtitleCandidates.push(entry);
+    else if (slot === "trailing") trailingValues.push(entry);
+    else metaValues.push(entry);
+  }
+
+  return {
+    title,
+    imageSlot,
+    actionsContent,
+    subtitleCandidates,
+    trailingValues,
+    metaValues,
+  };
+}
+
+function projectMobileRow<TItem extends RowData>({
+  row,
+  entity,
+  basePath,
+  getDetailsHref,
+  reserveImageSlot,
+}: {
+  row: Row<TItem>;
+  entity: Entity | undefined;
+  basePath: string | undefined;
+  getDetailsHref: ((item: TItem) => string | undefined) | undefined;
+  reserveImageSlot: boolean;
+}): MobileListRowModel<TItem> {
+  const slots = collectMobileSlots(row, entity);
+  slots.subtitleCandidates.sort((a, b) => a.priority - b.priority);
+  slots.trailingValues.sort((a, b) => a.priority - b.priority);
+  slots.metaValues.sort((a, b) => a.priority - b.priority);
+  const [leadingSubtitle, ...extraSubtitles] = slots.subtitleCandidates;
+  const shortcode = mobileShortcode(row.original);
+  const detailsHref =
+    getDetailsHref?.(row.original) ??
+    (basePath && shortcode ? `/${basePath}/${shortcode}` : undefined);
+
+  return {
+    row,
+    title: slots.title,
+    subtitle: leadingSubtitle?.value,
+    imageSlot: slots.imageSlot,
+    actionsContent: slots.actionsContent,
+    rightValues: slots.trailingValues.map((item) => item.value),
+    rightValueInteractive: slots.trailingValues.map(
+      (item) => !!item.interactive,
+    ),
+    metaValues: [...extraSubtitles, ...slots.metaValues].map(
+      ({ id, label, value, interactive }) => ({
+        id,
+        label,
+        value,
+        interactive,
+      }),
+    ),
+    detailsHref,
+    reserveImageSlot,
+  };
+}
+
 export function useMobileListModel<TItem extends RowData>({
   table,
   entity,
@@ -236,154 +341,28 @@ export function useMobileListModel<TItem extends RowData>({
   // Per-list, not per-row: see `MobileListRowModel.reserveImageSlot`.
   const reserveImageSlot = mobileListLayout(table).hasImage;
 
-  return useMemo(
-    () =>
-      rows.map((row) => {
-        let title = extractEntityTitle(row.original);
-        // Mobile: drop the redundant " @ Location" suffix — the location is
-        // already rendered as the row subtitle, and the suffix forces the
-        // product name to truncate mid-word.
-        if (entity === "inventory") {
-          const productName = inventoryProductName(row.original);
-          if (productName) title = productName;
-        }
-        let imageSlot: ReactNode | undefined;
-        let actionsContent: ReactNode | undefined;
-        const subtitleCandidates: SlotValue[] = [];
-        const trailingValues: SlotValue[] = [];
-        const metaValues: SlotValue[] = [];
-
-        for (const cell of row.getVisibleCells()) {
-          const colId = cell.column.id;
-          if (colId === "select") continue;
-
-          const meta = cell.column.columnDef.meta;
-          const slot = resolveSlot(colId, meta);
-          if (slot === "hidden") continue;
-
-          // Skip empty raw values quickly to avoid rendering inert wrappers.
-          // Only applies to accessor columns — `columnHelper.display()`
-          // columns (the actions menu, the USDA-food cell) have no
-          // accessorFn, so `getValue()` always resolves undefined and would
-          // otherwise get skipped unconditionally, before ever rendering.
-          // Those fall through to the post-render `hasRenderableContent`
-          // check instead.
-          if (cell.column.accessorFn) {
-            const rawValue = cell.getValue();
-            if (isEmptyCellValue(rawValue)) continue;
-          }
-
-          const rendered = flexRender(
-            cell.column.columnDef.cell,
-            cell.getContext(),
-          );
-          if (!hasRenderableContent(rendered)) continue;
-
-          if (slot === "actions") {
-            actionsContent = rendered;
-            continue;
-          }
-          if (slot === "image") {
-            // Only when the row HAS an image. The image cell renders a
-            // placeholder glyph otherwise, which read as content while being
-            // none — a 44px gutter of noise on every image-less row.
-            if (rowHasImage(row.original)) imageSlot = rendered;
-            continue;
-          }
-          if (slot === "title") {
-            if (isTextNode(rendered) && rendered.trim().length > 0) {
-              title = rendered;
-            }
-            continue;
-          }
-
-          const priority = getPriority(meta, 50);
-          const interactive = meta?.mobile?.interactive;
-          const label = mobileColumnLabel(cell.column);
-          const entry: SlotValue = {
-            priority,
-            value: rendered,
-            interactive,
-            id: colId,
-            label,
-          };
-          if (slot === "subtitle") {
-            subtitleCandidates.push(entry);
-            continue;
-          }
-          if (slot === "trailing") {
-            trailingValues.push(entry);
-            continue;
-          }
-          metaValues.push(entry);
-        }
-
-        subtitleCandidates.sort((a, b) => a.priority - b.priority);
-        trailingValues.sort((a, b) => a.priority - b.priority);
-        metaValues.sort((a, b) => a.priority - b.priority);
-
-        // Nothing is capped — the row grows to fit instead. A fixed budget of
-        // two meant expenses declared six values and rendered two, with no
-        // way to tell which four were missing.
-        //
-        // The leading subtitle keeps its own prop (it reads as prose, not a
-        // labeled spec value). ADDITIONAL subtitle candidates fall through to
-        // the spec grid rather than being dropped — five entities declare two
-        // and showed one, a drop nobody had counted.
-        const [leadingSubtitle, ...extraSubtitles] = subtitleCandidates;
-        const subtitle = leadingSubtitle?.value;
-
-        // `trailing` stays on the identity line: it's the row's headline
-        // number, and right-aligned tabular-nums is what makes it scan as a
-        // column down the list. Everything else gets a label.
-        const rightValues = trailingValues.map((item) => item.value);
-        const rightValueInteractive = trailingValues.map(
-          (item) => !!item.interactive,
-        );
-        const specValues: MobileMetaValue[] = [
-          ...extraSubtitles,
-          ...metaValues,
-        ].map(({ id, label, value, interactive }) => ({
-          id,
-          label,
-          value,
-          interactive,
-        }));
-
-        // Detail routes are keyed on the PUBLIC id. A row without a shortcode
-        // (image, usda-food) simply gets no details link rather than a uuid URL
-        // that no longer resolves.
-        const shortcode = mobileShortcode(row.original);
-        const detailsHref =
-          getDetailsHref?.(row.original) ??
-          (basePath && shortcode ? `/${basePath}/${shortcode}` : undefined);
-
-        return {
-          row,
-          // Keep the external render dependency in the memoized model itself:
-          // mobile cards store ReactNodes, so they must be rebuilt even when
-          // TanStack keeps the same rows reference.
-          rowContentVersion,
-          title,
-          subtitle,
-          imageSlot,
-          actionsContent,
-          rightValues,
-          rightValueInteractive,
-          metaValues: specValues,
-          detailsHref,
-          reserveImageSlot,
-        };
+  return useMemo(() => {
+    // Mobile models store rendered ReactNodes. Reading the external version in
+    // this memo makes stateful cell renderers rebuild even when TanStack keeps
+    // the same row objects.
+    void rowContentVersion;
+    return rows.map((row) =>
+      projectMobileRow({
+        row,
+        entity,
+        basePath,
+        getDetailsHref,
+        reserveImageSlot,
       }),
-    [
-      basePath,
-      entity,
-      getDetailsHref,
-      reserveImageSlot,
-      rowContentVersion,
-      rows,
-    ],
-  );
+    );
+  }, [
+    basePath,
+    entity,
+    getDetailsHref,
+    reserveImageSlot,
+    rowContentVersion,
+    rows,
+  ]);
 }
 
 //

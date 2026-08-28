@@ -213,40 +213,12 @@ type Seeded = {
   codes: Record<ProbeableTarget, string>;
 };
 
-/**
- * Two rows of every entity, deliberately UNRELATED to each other. Two rows make
- * "returned everything" distinguishable from "returned one match"; keeping them
- * unrelated means a filter naming a real id of another entity must match nothing,
- * which is what makes the lowercase/uppercase comparison below meaningful.
- */
-const seedWorld = async (ctx: {
+type SeedContext = {
   db: Database;
   actor: Parameters<typeof createVendor>[2];
-}): Promise<Seeded> => {
-  const { db, actor } = ctx;
+};
 
-  const vendors = [];
-  for (const name of ["Guard Vendor Alpha", "Guard Vendor Beta"]) {
-    const { entityId } = await createVendor(
-      db,
-      vendorCreateInput.parse({ name }),
-      actor,
-    );
-    vendors.push((await getVendorByID(db, entityId)).id);
-  }
-  const vendorCode = vendors[0];
-  if (!vendorCode) throw new Error("seed: vendor not created");
-
-  const purchases = [];
-  for (const date of ["2024-03-01", "2024-03-02"]) {
-    const { output } = await createPurchase(
-      db,
-      purchaseCreateInput.parse({ vendorId: vendorCode, date }),
-      actor,
-    );
-    purchases.push(output.id);
-  }
-
+const seedCatalogRows = async ({ db, actor }: SeedContext) => {
   const ingredients = [];
   for (const name of ["guard ingredient alpha", "guard ingredient beta"]) {
     ingredients.push(await createIngredient(db, { name, aliases: [] }, actor));
@@ -254,15 +226,8 @@ const seedWorld = async (ctx: {
   const ingredientAlpha = ingredients[0];
   if (!ingredientAlpha) throw new Error("seed: ingredient not created");
 
-  // Alpha is "tools" so it's a legal wish candidate below (createWish rejects
-  // any non-tool product) — `wishFilterFields.candidateProductId` non-vacuity.
-  // NOT linked to an ingredient: `hasFoodIndicators` force-overrides category
-  // to "food" the moment ingredientId is set, which would make Alpha fail the
-  // wish's tools-only check — the two links are mutually exclusive on one
-  // row, so `productFilterFields.ingredientIdFilter` stays in
-  // VACUOUS_ID_FIELDS instead.
-  // Alpha carries a tag and a unit mapping — `productFilterFields.
-  // {tagsPresenceFilter,unitMappingPresenceFilter}` non-vacuity.
+  // Alpha remains a tool so it can be a Wish candidate. That is mutually
+  // exclusive with an Ingredient link because food indicators own category.
   const products = [];
   for (const name of ["Guard Product Alpha", "Guard Product Beta"]) {
     const isAlpha = name === "Guard Product Alpha";
@@ -310,29 +275,21 @@ const seedWorld = async (ctx: {
 
   const inventories = [];
   for (const [index, product] of products.entries()) {
-    const location = locations[index];
-    if (!location) throw new Error("seed: location missing");
+    const targetLocation = locations[index];
+    if (!targetLocation) throw new Error("seed: location missing");
     inventories.push(
       await createInventoryFixture(
         db,
         {
           productId: product.id,
-          locationId: location.id,
+          locationId: targetLocation.id,
           amount: { value: 1, unit: "each" },
         },
         actor,
       ),
     );
   }
-  // One INSTALLED fixture, so the populations `stockOnly()` separates are not
-  // identical here. Without it the dashboard-count guard below is vacuous:
-  // dropping `stockOnly()` from `COUNT_SOURCES.inventory` changes nothing when
-  // every seeded row is stock, and the check passes against the very drift it
-  // exists to catch. The slot is (product, location, placement), so this
-  // coexists with Alpha's stock row above.
-  if (!productAlpha || !locationAlpha) {
-    throw new Error("seed: alpha product/location missing");
-  }
+  // An installed row makes the stock-only dashboard/list comparison non-vacuous.
   await createInventoryFixture(
     db,
     {
@@ -343,18 +300,29 @@ const seedWorld = async (ctx: {
     },
     actor,
   );
+  return {
+    ingredients,
+    ingredientAlpha,
+    products,
+    productAlpha,
+    locations,
+    inventories,
+  };
+};
 
+const seedRecipeRows = async (
+  { db, actor }: SeedContext,
+  ingredientId: string,
+) => {
   const recipes = [];
   for (const name of ["Guard Recipe Alpha", "Guard Recipe Beta"]) {
-    const recipeOptions: Parameters<typeof makeRecipeInput>[0] = { name };
+    const options: Parameters<typeof makeRecipeInput>[0] = { name };
     if (name === "Guard Recipe Alpha") {
-      recipeOptions.tags = ["guard-recipe-tag"];
-      recipeOptions.sections = [
-        { ingredients: [ingredientRef(ingredientAlpha.id)] },
-      ];
+      options.tags = ["guard-recipe-tag"];
+      options.sections = [{ ingredients: [ingredientRef(ingredientId)] }];
     }
     recipes.push(
-      await createRecipeFixture(db, makeRecipeInput(recipeOptions), actor),
+      await createRecipeFixture(db, makeRecipeInput(options), actor),
     );
   }
   const recipeAlpha = recipes[0];
@@ -374,6 +342,136 @@ const seedWorld = async (ctx: {
       ),
     );
   }
+  return { recipes, meals };
+};
+
+const seedFinancialRows = async (
+  { db, actor }: SeedContext,
+  purchases: string[],
+) => {
+  const accounts = [];
+  for (const [index, name] of [
+    "Guard Card Alpha",
+    "Guard Card Beta",
+  ].entries()) {
+    const { output } = await createFinancialAccount(
+      db,
+      financialAccountCreateInput.parse({
+        name,
+        identity: {
+          kind: "credit_card",
+          issuer: null,
+          network: "visa",
+          last4: `100${index}`,
+        },
+      }),
+      actor,
+    );
+    accounts.push(output);
+  }
+  const accountCode = accounts[0];
+  if (!accountCode) throw new Error("seed: financial account not created");
+
+  const transactions = [];
+  for (const [index, date] of ["2024-04-01", "2024-04-02"].entries()) {
+    const { output } = await createFinancialTransaction(
+      db,
+      financialTransactionCreateInput.parse({
+        accountId: accountCode.id,
+        purchaseId: index === 0 ? purchases[0] : null,
+        kind: "purchase",
+        status: "posted",
+        amount: 5 + index,
+        postedDate: date,
+        rawDescription: `GUARD LINE ${index}`,
+      }),
+      actor,
+    );
+    transactions.push(output);
+  }
+  return { accountCode, transactions };
+};
+
+const seedLedgerRows = async ({ db, actor }: SeedContext) => {
+  const ledgerParties = [];
+  for (const name of ["Guard ledger member", "Guard ledger guest"]) {
+    const { output } = await createLedgerParty(
+      db,
+      ledgerPartyCreateInput.parse({
+        name,
+        kind: name.endsWith("member") ? "member" : "guest",
+      }),
+      actor,
+    );
+    ledgerParties.push(output);
+  }
+  const [firstLedgerParty, secondLedgerParty] = ledgerParties;
+  if (!firstLedgerParty || !secondLedgerParty) {
+    throw new Error("seed: ledger parties not created");
+  }
+
+  // Reverse the second pair so Alpha appears on both sides of the relation.
+  const ledgerTransfers = [];
+  for (const [index, date] of ["2024-06-01", "2024-06-02"].entries()) {
+    const reversed = index % 2 === 1;
+    const { output } = await createLedgerTransfer(
+      db,
+      ledgerTransferCreateInput.parse({
+        fromPartyId: reversed ? secondLedgerParty.id : firstLedgerParty.id,
+        toPartyId: reversed ? firstLedgerParty.id : secondLedgerParty.id,
+        amount: 10,
+        date,
+      }),
+      actor,
+    );
+    ledgerTransfers.push(output);
+  }
+  return { firstLedgerParty, ledgerTransfers };
+};
+
+/**
+ * Two rows of every entity, deliberately UNRELATED to each other. Two rows make
+ * "returned everything" distinguishable from "returned one match"; keeping them
+ * unrelated means a filter naming a real id of another entity must match nothing,
+ * which is what makes the lowercase/uppercase comparison below meaningful.
+ */
+const seedWorld = async (ctx: {
+  db: Database;
+  actor: Parameters<typeof createVendor>[2];
+}): Promise<Seeded> => {
+  const { db, actor } = ctx;
+
+  const vendors = [];
+  for (const name of ["Guard Vendor Alpha", "Guard Vendor Beta"]) {
+    const { entityId } = await createVendor(
+      db,
+      vendorCreateInput.parse({ name }),
+      actor,
+    );
+    vendors.push((await getVendorByID(db, entityId)).id);
+  }
+  const vendorCode = vendors[0];
+  if (!vendorCode) throw new Error("seed: vendor not created");
+
+  const purchases = [];
+  for (const date of ["2024-03-01", "2024-03-02"]) {
+    const { output } = await createPurchase(
+      db,
+      purchaseCreateInput.parse({ vendorId: vendorCode, date }),
+      actor,
+    );
+    purchases.push(output.id);
+  }
+
+  const {
+    ingredients,
+    ingredientAlpha,
+    products,
+    productAlpha,
+    locations,
+    inventories,
+  } = await seedCatalogRows(ctx);
+  const { recipes, meals } = await seedRecipeRows(ctx, ingredientAlpha.id);
 
   const { output: projectAlpha } = await createProject(
     db,
@@ -448,81 +546,8 @@ const seedWorld = async (ctx: {
   );
   const expenses = [expenseAlpha, expenseBeta];
 
-  const accounts = [];
-  for (const [index, name] of [
-    "Guard Card Alpha",
-    "Guard Card Beta",
-  ].entries()) {
-    const { output } = await createFinancialAccount(
-      db,
-      financialAccountCreateInput.parse({
-        name,
-        identity: {
-          kind: "credit_card",
-          issuer: null,
-          network: "visa",
-          last4: `100${index}`,
-        },
-      }),
-      actor,
-    );
-    accounts.push(output);
-  }
-  const accountCode = accounts[0];
-  if (!accountCode) throw new Error("seed: financial account not created");
-
-  const ledgerParties = [];
-  for (const name of ["Guard ledger member", "Guard ledger guest"]) {
-    const { output } = await createLedgerParty(
-      db,
-      ledgerPartyCreateInput.parse({
-        name,
-        kind: name.endsWith("member") ? "member" : "guest",
-      }),
-      actor,
-    );
-    ledgerParties.push(output);
-  }
-  const [firstLedgerParty, secondLedgerParty] = ledgerParties;
-  if (!firstLedgerParty || !secondLedgerParty)
-    throw new Error("seed: ledger parties not created");
-  // The second transfer runs the pair in REVERSE — so Alpha (`firstLedgerParty`)
-  // appears as both a `fromPartyId` and a `toPartyId` across the two rows,
-  // which `ledgerTransferFilterFields.{fromPartyId,toPartyId}` non-vacuity
-  // needs (a same-direction pair only ever puts Alpha on one side).
-  const ledgerTransfers = [];
-  for (const [index, date] of ["2024-06-01", "2024-06-02"].entries()) {
-    const reversed = index % 2 === 1;
-    const { output } = await createLedgerTransfer(
-      db,
-      ledgerTransferCreateInput.parse({
-        fromPartyId: reversed ? secondLedgerParty.id : firstLedgerParty.id,
-        toPartyId: reversed ? firstLedgerParty.id : secondLedgerParty.id,
-        amount: 10,
-        date,
-      }),
-      actor,
-    );
-    ledgerTransfers.push(output);
-  }
-
-  const transactions = [];
-  for (const [index, date] of ["2024-04-01", "2024-04-02"].entries()) {
-    const { output } = await createFinancialTransaction(
-      db,
-      financialTransactionCreateInput.parse({
-        accountId: accountCode.id,
-        purchaseId: index === 0 ? purchases[0] : null,
-        kind: "purchase",
-        status: "posted",
-        amount: 5 + index,
-        postedDate: date,
-        rawDescription: `GUARD LINE ${index}`,
-      }),
-      actor,
-    );
-    transactions.push(output);
-  }
+  const { accountCode, transactions } = await seedFinancialRows(ctx, purchases);
+  const { firstLedgerParty, ledgerTransfers } = await seedLedgerRows(ctx);
 
   const wishes = [];
   for (const name of ["guard wish alpha", "guard wish beta"]) {
@@ -758,6 +783,159 @@ const VACUOUS_ID_FIELDS = {
     "Recipe.cookbookId is set by the EPUB/URL importer, not createRecipe — no create-time field exists to link it",
 } satisfies Record<string, string>;
 
+type RecordViolation = (field: string, message: string) => void;
+
+const verifyIdFilterProbe = async (args: {
+  db: Database;
+  entity: GuardedEntity;
+  field: string;
+  probe: Extract<Probe, { kind: "id" }>;
+  fields: Record<string, z.ZodType>;
+  list: ListProbe;
+  world: Seeded;
+  baselineCount: number;
+  record: RecordViolation;
+  passingVacuousIdFields: string[];
+}) => {
+  const { db, field, probe, fields, list, world, record } = args;
+  const key = `${args.entity}.${field}`;
+  const unresolvable = await list(db, {
+    [field]: `${SHORTCODE_PREFIX[probe.target]}${UNRESOLVABLE_BODY}`,
+  });
+  if (unresolvable.count !== 0) {
+    record(
+      field,
+      `an unresolvable ${probe.target} code returned ${unresolvable.count} rows (baseline ${args.baselineCount}); it must match nothing`,
+    );
+  }
+
+  const real = world.codes[probe.target];
+  const upper = await list(db, { [field]: real });
+  if (upper.count === 0) {
+    if (!(key in VACUOUS_ID_FIELDS)) {
+      record(
+        field,
+        `no seeded row carries a real ${probe.target} id — the canonical form matched 0 rows, so the lowercase comparison would be vacuous. Link a row in seedWorld, or add "${key}" to VACUOUS_ID_FIELDS if it genuinely can't be linked`,
+      );
+    }
+  } else {
+    if (key in VACUOUS_ID_FIELDS) args.passingVacuousIdFields.push(key);
+    const lower = await list(db, { [field]: real.toLowerCase() });
+    if (lower.count !== upper.count) {
+      record(
+        field,
+        `a lowercase ${real} matched ${lower.count} rows but its canonical form matched ${upper.count}`,
+      );
+    }
+  }
+
+  const otherTarget = PROBEABLE_TARGETS.find(
+    (candidate) => candidate !== probe.target,
+  );
+  if (!otherTarget) return;
+  const wrongPrefixInput = { [field]: world.codes[otherTarget] };
+  if (!z.object(fields).safeParse(wrongPrefixInput).success) return;
+  const wrongPrefix = await list(db, wrongPrefixInput);
+  if (wrongPrefix.count !== 0) {
+    record(
+      field,
+      `a ${otherTarget} code returned ${wrongPrefix.count} rows; a wrong-prefix code must match nothing`,
+    );
+  }
+};
+
+const verifyDeclaredFilterFields = async (args: {
+  db: Database;
+  entity: GuardedEntity;
+  fields: Record<string, z.ZodType>;
+  list: ListProbe;
+  world: Seeded;
+  baselineCount: number;
+}) => {
+  const violations: string[] = [];
+  const passingKnownGaps: string[] = [];
+  const passingVacuousIdFields: string[] = [];
+  const record: RecordViolation = (field, message) => {
+    const key = `${args.entity}.${field}`;
+    if (!(key in KNOWN_GAPS)) violations.push(`${key}: ${message}`);
+  };
+
+  for (const [field, schema] of Object.entries(args.fields)) {
+    const probe = classify(field, schema);
+    const key = `${args.entity}.${field}`;
+    const before = violations.length;
+    if (probe.kind === "id") {
+      await verifyIdFilterProbe({
+        ...args,
+        field,
+        probe,
+        record,
+        passingVacuousIdFields,
+      });
+    } else if (
+      probe.kind === "text" ||
+      probe.kind === "date" ||
+      probe.kind === "number"
+    ) {
+      const filtered = await args.list(args.db, { [field]: probe.value });
+      if (filtered.count !== 0) {
+        record(
+          field,
+          `an impossible ${probe.kind} value (${JSON.stringify(probe.value)}) returned ${filtered.count} rows (baseline ${args.baselineCount}); it must match nothing`,
+        );
+      }
+    }
+    if (
+      key in KNOWN_GAPS &&
+      violations.length === before &&
+      (probe.kind === "id" || !probe.kind.startsWith("skip:"))
+    ) {
+      passingKnownGaps.push(key);
+    }
+  }
+  return { violations, passingKnownGaps, passingVacuousIdFields };
+};
+
+const verifyPresencePartitions = async (
+  db: Database,
+  entity: GuardedEntity,
+  fields: Record<string, z.ZodType>,
+  list: ListProbe,
+) => {
+  const baseline = new Set((await list(db, {})).ids);
+  const violations: string[] = [];
+  for (const [field, schema] of Object.entries(fields)) {
+    if (!isPresenceField(field, schema)) continue;
+    const has = new Set((await list(db, { [field]: "has" })).ids);
+    const none = new Set((await list(db, { [field]: "none" })).ids);
+    const overlap = [...has].filter((id) => none.has(id));
+    const union = new Set([...has, ...none]);
+    const missing = [...baseline].filter((id) => !union.has(id));
+    const extra = [...union].filter((id) => !baseline.has(id));
+    if (overlap.length > 0 || missing.length > 0 || extra.length > 0) {
+      violations.push(
+        `${entity}.${field}: overlap=${overlap.length}, missing=${missing.length}, extra=${extra.length}`,
+      );
+    }
+  }
+  return violations;
+};
+
+const verifyRouteEmptySentinels = async (
+  db: Database,
+  entity: GuardedEntity,
+  list: ListProbe,
+) => {
+  for (const [sentinelEntity, sentinelField] of ROUTE_EMPTY_SENTINELS) {
+    if (entity !== sentinelEntity) continue;
+    const filtered = await list(db, {
+      [sentinelField]: UNRESOLVABLE_ENTITY_FILTER,
+    });
+    expect(filtered.ids, `${entity}.${sentinelField}`).toEqual([]);
+    expect(filtered.count, `${entity}.${sentinelField}`).toBe(0);
+  }
+};
+
 describe("every declared filter field is applied by its repo", () => {
   const ctx = withTestDb();
 
@@ -766,147 +944,22 @@ describe("every declared filter field is applied by its repo", () => {
     const { fields, list } = GUARDS[entity];
     const baseline = await list(ctx.db, {});
     expect(baseline.count).toBeGreaterThanOrEqual(2);
-
-    const violations: string[] = [];
-    const passingKnownGaps: string[] = [];
-    // Roster entries that turned out non-vacuous — stale, must be deleted.
-    const passingVacuousIdFields: string[] = [];
-
-    const record = (field: string, message: string) => {
-      const key = `${entity}.${field}`;
-      if (key in KNOWN_GAPS) return;
-      violations.push(`${key}: ${message}`);
-    };
-
-    for (const [field, schema] of Object.entries(fields)) {
-      const probe = classify(field, schema);
-      const key = `${entity}.${field}`;
-      const before = violations.length;
-
-      if (probe.kind === "id") {
-        // Bug 1: a well-formed code that resolves to no live row must match
-        // nothing. `eqAny([])` is "no constraint", so an unapplied guard here
-        // returns the whole table.
-        const unresolvable = await list(ctx.db, {
-          [field]: `${SHORTCODE_PREFIX[probe.target]}${UNRESOLVABLE_BODY}`,
-        });
-        if (unresolvable.count !== 0) {
-          record(
-            field,
-            `an unresolvable ${probe.target} code returned ${unresolvable.count} rows (baseline ${baseline.count}); it must match nothing`,
-          );
-        }
-
-        const real = world.codes[probe.target];
-        // Bug 2: `resolveShortcodes` keys its Map by the CANONICAL code. A
-        // lowercase code that isn't canonicalized resolves to nothing and widens
-        // to the whole table, so the two forms must agree row-for-row.
-        const upper = await list(ctx.db, { [field]: real });
-        if (upper.count === 0) {
-          // Comparing lower against upper here would be 0-vs-0 — vacuously
-          // equal regardless of whether canonicalization works. That is
-          // exactly how #591 hid: skip the comparison, but only for a field
-          // this suite has DECIDED can't be linked (see VACUOUS_ID_FIELDS'
-          // header) — anywhere else, a field with no live match is itself the
-          // violation.
-          if (key in VACUOUS_ID_FIELDS) {
-          } else {
-            record(
-              field,
-              `no seeded row carries a real ${probe.target} id — the canonical form matched 0 rows, so the lowercase comparison below would be vacuous. Link a row in seedWorld, or add "${key}" to VACUOUS_ID_FIELDS if it genuinely can't be linked`,
-            );
-          }
-        } else {
-          if (key in VACUOUS_ID_FIELDS) {
-            passingVacuousIdFields.push(key);
-          }
-          const lower = await list(ctx.db, { [field]: real.toLowerCase() });
-          if (lower.count !== upper.count) {
-            record(
-              field,
-              `a lowercase ${real} matched ${lower.count} rows but its canonical form matched ${upper.count}`,
-            );
-          }
-        }
-
-        // The entity guard: a code of the wrong entity must resolve to nothing,
-        // never widen. Picks any other seeded entity's live code.
-        const otherTarget = PROBEABLE_TARGETS.find(
-          (candidate) => candidate !== probe.target,
-        );
-        if (otherTarget) {
-          const wrongPrefixInput = {
-            [field]: world.codes[otherTarget],
-          };
-          const parsedWrongPrefix = z
-            .object(fields)
-            .safeParse(wrongPrefixInput);
-          if (parsedWrongPrefix.success) {
-            const wrongPrefix = await list(ctx.db, wrongPrefixInput);
-            if (wrongPrefix.count !== 0) {
-              record(
-                field,
-                `a ${otherTarget} code returned ${wrongPrefix.count} rows; a wrong-prefix code must match nothing`,
-              );
-            }
-          }
-        }
-      } else if (
-        probe.kind === "text" ||
-        probe.kind === "date" ||
-        probe.kind === "number"
-      ) {
-        // Bug 3: the field is declared (and the manifest renders a control for
-        // it), but the where-builder never reads it. An impossible value that
-        // still returns the unfiltered list is that bug.
-        const filtered = await list(ctx.db, { [field]: probe.value });
-        if (filtered.count !== 0) {
-          record(
-            field,
-            `an impossible ${probe.kind} value (${JSON.stringify(probe.value)}) returned ${filtered.count} rows (baseline ${baseline.count}); it must match nothing`,
-          );
-        }
-      }
-
-      if (key in KNOWN_GAPS && violations.length === before) {
-        // Only meaningful for probed kinds — a skipped kind never records
-        // anything, so it can't "start passing".
-        if (probe.kind === "id" || !probe.kind.startsWith("skip:")) {
-          passingKnownGaps.push(key);
-        }
-      }
-    }
-
+    const { violations, passingKnownGaps, passingVacuousIdFields } =
+      await verifyDeclaredFilterFields({
+        db: ctx.db,
+        entity,
+        fields,
+        list,
+        world,
+        baselineCount: baseline.count,
+      });
     expect(violations).toEqual([]);
     expect(passingKnownGaps).toEqual([]);
     expect(passingVacuousIdFields).toEqual([]);
-
-    const presenceBaseline = new Set((await list(ctx.db, {})).ids);
-    const presenceViolations: string[] = [];
-    for (const [field, schema] of Object.entries(fields)) {
-      if (!isPresenceField(field, schema)) continue;
-      const has = new Set((await list(ctx.db, { [field]: "has" })).ids);
-      const none = new Set((await list(ctx.db, { [field]: "none" })).ids);
-      const overlap = [...has].filter((id) => none.has(id));
-      const union = new Set([...has, ...none]);
-      const missing = [...presenceBaseline].filter((id) => !union.has(id));
-      const extra = [...union].filter((id) => !presenceBaseline.has(id));
-      if (overlap.length > 0 || missing.length > 0 || extra.length > 0) {
-        presenceViolations.push(
-          `${entity}.${field}: overlap=${overlap.length}, missing=${missing.length}, extra=${extra.length}`,
-        );
-      }
-    }
-    expect(presenceViolations).toEqual([]);
-
-    for (const [sentinelEntity, sentinelField] of ROUTE_EMPTY_SENTINELS) {
-      if (entity !== sentinelEntity) continue;
-      const filtered = await list(ctx.db, {
-        [sentinelField]: UNRESOLVABLE_ENTITY_FILTER,
-      });
-      expect(filtered.ids, `${entity}.${sentinelField}`).toEqual([]);
-      expect(filtered.count, `${entity}.${sentinelField}`).toBe(0);
-    }
+    expect(
+      await verifyPresencePartitions(ctx.db, entity, fields, list),
+    ).toEqual([]);
+    await verifyRouteEmptySentinels(ctx.db, entity, list);
   });
 });
 

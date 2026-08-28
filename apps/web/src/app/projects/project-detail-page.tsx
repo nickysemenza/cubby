@@ -1,6 +1,7 @@
 import {
   type ExpenseOut,
   type ProjectOut,
+  type ProjectUpdateData,
   type TaskOut,
   type Trade,
   taskStatusValues,
@@ -22,7 +23,14 @@ import {
   Wallet,
   Wrench,
 } from "lucide-react";
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
@@ -443,54 +451,404 @@ function SubProjectsList({
   );
 }
 
-export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
-  // One subtree fetch (project + every live descendant) feeds the Gantt, the
-  // Task Timeline, and the Board view — all of which need the whole (incl.
-  // done) picture. The default List view uses the separate scoped
-  // `openTasks`/`doneTasks` queries below instead (see their comment).
+type SaveProject = (data: ProjectUpdateData) => Promise<void>;
+type ParentProjectOption = {
+  value: string;
+  label: string;
+  icon: ReactNode;
+};
+
+const projectProgress = (project: ProjectOut, hasSubtree: boolean) => {
+  const rollup = hasSubtree ? project.rollup.subtree : project.rollup;
+  return rollup.taskCount > 0
+    ? `${rollup.doneTaskCount}/${rollup.taskCount} tasks`
+    : undefined;
+};
+
+const buildProjectOverviewFields = (args: {
+  project: ProjectOut;
+  hasSubtree: boolean;
+  parentProjectOptions: ParentProjectOption[];
+  saveProject: SaveProject;
+}): BasicInfoField[] => {
+  const { project, hasSubtree, parentProjectOptions, saveProject } = args;
+  return [
+    {
+      label: "Name",
+      value: (
+        <EditableCell
+          value={project.name}
+          config={{ type: "text" }}
+          onSave={async (name) => {
+            if (name) await saveProject({ name });
+          }}
+          renderValue={(value) => value ?? <NoneValue />}
+        />
+      ),
+    },
+    {
+      label: "Icon",
+      value: (
+        <EditableCell
+          value={project.icon}
+          config={{ type: "text", placeholder: "e.g. 🔧" }}
+          onSave={async (icon) => saveProject({ icon })}
+          renderValue={(value) => value ?? <NoneValue />}
+        />
+      ),
+    },
+    {
+      label: "Status",
+      value: (
+        <EditableCell
+          value={project.status}
+          config={{ type: "select", options: PROJECT_STATUS_OPTIONS }}
+          onSave={async (status) => {
+            if (status) await saveProject({ status });
+          }}
+          renderValue={(status) =>
+            status ? (
+              <Row as="span" align="center" gap="xs">
+                <StatusIcon status={status} />
+                {PROJECT_STATUS_LABELS[status]}
+              </Row>
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+      filterAction: (
+        <EntityFilterLink
+          to="/projects"
+          search={{ view: "data", statuses: [project.status] }}
+          label={`Show all ${PROJECT_STATUS_LABELS[project.status].toLowerCase()} projects`}
+        />
+      ),
+    },
+    {
+      label: "Kind",
+      value: (
+        <EditableCell
+          value={project.kind}
+          config={{ type: "select", options: projectKindOptions }}
+          onSave={async (kind) => saveProject({ kind })}
+          renderValue={(value) => renderOptionCell(value, projectKindOptions)}
+        />
+      ),
+      filterAction: project.kind ? (
+        <EntityFilterLink
+          to="/projects"
+          search={{ view: "data", kinds: [project.kind] }}
+          label={`Show all projects of kind ${project.kind}`}
+        />
+      ) : undefined,
+    },
+    {
+      // The field displays the effective start but edits only the raw override.
+      label: "Start date",
+      value: (
+        <ProjectDateField
+          side="start"
+          rawOverride={project.startDate}
+          effective={project.dates.effectiveStart}
+          derived={project.dates.derivedStart}
+          source={project.dates.startSource}
+          onSave={async (startDate) => saveProject({ startDate })}
+        />
+      ),
+    },
+    {
+      label: "End date",
+      value: (
+        <ProjectDateField
+          side="end"
+          rawOverride={project.endDate}
+          effective={project.dates.effectiveEnd}
+          derived={project.dates.derivedEnd}
+          source={project.dates.endSource}
+          onSave={async (endDate) => saveProject({ endDate })}
+        />
+      ),
+    },
+    {
+      label: "Estimate",
+      value: (
+        <EditableCell
+          value={project.costEstimate}
+          config={{ type: "currency" }}
+          onSave={async (costEstimate) => saveProject({ costEstimate })}
+          renderValue={(value) =>
+            value != null ? formatCurrency(value, 0) : <NoneValue />
+          }
+        />
+      ),
+    },
+    {
+      label: "Progress",
+      value: projectProgress(project, hasSubtree),
+    },
+    {
+      label: "Parent project",
+      value: (
+        <EditableCell
+          value={project.parentProjectId}
+          config={{
+            type: "select",
+            options: parentProjectOptions,
+            placeholder: "No parent — top-level project",
+          }}
+          onSave={async (parentProjectId) => saveProject({ parentProjectId })}
+          renderValue={(value) =>
+            value && project.parentProjectName && project.parentProjectId ? (
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="project"
+                data={{
+                  id: project.parentProjectId,
+                  name: project.parentProjectName,
+                }}
+                compact
+              />
+            ) : (
+              <NoneValue />
+            )
+          }
+        />
+      ),
+      filterAction: project.parentProjectId ? (
+        <EntityFilterLink
+          to="/projects"
+          search={{ view: "data", parent: project.parentProjectId }}
+          label={`Show all projects inside ${project.parentProjectName ?? "this project"}`}
+        />
+      ) : undefined,
+    },
+    {
+      label: "Locations",
+      value: (
+        <EditableLocations
+          locations={project.locations}
+          onSave={async (locations) => saveProject({ locations })}
+        />
+      ),
+    },
+    {
+      label: "Last updated",
+      // UTC ISO date keeps this SSR output deterministic across time zones.
+      value: (
+        <span className="font-mono">
+          {project.updatedAt.toISOString().slice(0, 10)}
+        </span>
+      ),
+    },
+  ];
+};
+
+type ProjectNotesSection = {
+  section: DetailSection;
+  hasContent: boolean;
+};
+
+const buildProjectNotesSection = (args: {
+  project: ProjectOut;
+  isEditing: boolean;
+  draft: string;
+  pending: boolean;
+  onStartEditing: () => void;
+  onDraftChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}): ProjectNotesSection => {
+  const hasContent = args.isEditing || Boolean(args.project.notes?.trim());
+  return {
+    hasContent,
+    section: {
+      id: "notes",
+      title: "Notes",
+      icon: FileText,
+      placement: hasContent ? "primary" : "supporting",
+      headerAction: args.isEditing ? undefined : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={args.onStartEditing}
+        >
+          <Pencil className="size-3.5" />
+          Edit
+        </Button>
+      ),
+      content: args.isEditing ? (
+        <Stack gap="sm">
+          <Textarea
+            value={args.draft}
+            onChange={(event) => args.onDraftChange(event.target.value)}
+            rows={8}
+            placeholder="Freeform markdown notes..."
+            disabled={args.pending}
+            ref={focusOnMount}
+          />
+          <Row gap="xs">
+            <Button
+              type="button"
+              size="sm"
+              onClick={args.onSave}
+              disabled={args.pending}
+            >
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={args.onCancel}
+              disabled={args.pending}
+            >
+              Cancel
+            </Button>
+          </Row>
+        </Stack>
+      ) : (
+        <ProjectNotes notes={args.project.notes} />
+      ),
+    },
+  };
+};
+
+const orderProjectSections = (args: {
+  hasNotesContent: boolean;
+  showBudget: boolean;
+  hasSubtree: boolean;
+  notes: DetailSection;
+  budget: DetailSection;
+  contribution: DetailSection;
+  tasks: DetailSection;
+  reusableResources: DetailSection;
+  expenses: DetailSection;
+  purchases: DetailSection;
+  purchasedProducts: DetailSection;
+  overview: DetailSection;
+  resources: DetailSection;
+  dependencies: DetailSection;
+  subProjects: DetailSection;
+  vendors: DetailSection;
+}): DetailSection[] => [
+  ...(args.hasNotesContent ? [args.notes] : []),
+  ...(args.showBudget ? [args.budget] : []),
+  args.contribution,
+  args.tasks,
+  args.reusableResources,
+  ...(args.hasSubtree
+    ? []
+    : [args.expenses, args.purchases, args.purchasedProducts]),
+  args.overview,
+  args.resources,
+  args.dependencies,
+  args.subProjects,
+  args.vendors,
+  ...(args.hasNotesContent ? [] : [args.notes]),
+  ...(args.hasSubtree
+    ? [args.expenses, args.purchases, args.purchasedProducts]
+    : []),
+];
+
+type ProjectSpendSplit = ReturnType<typeof splitExpenseSpend>;
+
+const buildProjectHeroStats = (
+  project: ProjectOut,
+  ownSpend: ProjectSpendSplit,
+  hasSubtree: boolean,
+): DetailHeroStat[] => [
+  ...(project.parentProjectId && project.parentProjectName
+    ? [
+        {
+          label: "Sub-project of",
+          value: (
+            <EntityInlineLink
+              displayImage={undefined}
+              entity="project"
+              data={{
+                id: project.parentProjectId,
+                name: project.parentProjectName,
+              }}
+              truncate
+            />
+          ),
+        } satisfies DetailHeroStat,
+      ]
+    : []),
+  { label: "Actual", value: formatCurrency(ownSpend.actual, 0) },
+  ...(ownSpend.committed > 0
+    ? [
+        {
+          label: "Committed",
+          value: formatCurrency(ownSpend.committed, 0),
+        } satisfies DetailHeroStat,
+      ]
+    : []),
+  ...(hasSubtree
+    ? [
+        {
+          label: "Spent (incl. sub-projects)",
+          value: formatCurrency(project.rollup.subtree.spent, 0),
+        } satisfies DetailHeroStat,
+        {
+          label: "Tasks (incl. sub-projects)",
+          value: `${project.rollup.subtree.doneTaskCount}/${project.rollup.subtree.taskCount}`,
+        } satisfies DetailHeroStat,
+        {
+          label: "Expenses (incl. sub-projects)",
+          value: project.rollup.subtree.expenseCount,
+        } satisfies DetailHeroStat,
+      ]
+    : [
+        {
+          label: "Tasks",
+          value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,
+        } satisfies DetailHeroStat,
+        {
+          label: "Expenses",
+          value: project.rollup.expenseCount,
+        } satisfies DetailHeroStat,
+      ]),
+  ...(hasSubtree && project.rollup.subtree.costEstimate !== null
+    ? [
+        {
+          label: "Estimate (incl. sub-projects)",
+          value: formatCurrency(project.rollup.subtree.costEstimate, 0),
+        } satisfies DetailHeroStat,
+      ]
+    : []),
+];
+
+function useProjectWorkReadModel(project: ProjectOut) {
   const { data: subtreeTasks = NO_TASKS } = useQuery(
     task.chartData.queryOptions(projectSubtreeTasksFilters(project.id)),
   );
-  // Task Timeline shows top-level tasks only — checklist subtasks roll up to
-  // their parent everywhere (N/M chip); surfacing them here would
-  // double-count the work. The Gantt keeps the full result (dated subtasks
-  // render as their parent's indented children).
   const topLevelTasks = useMemo(
-    () => subtreeTasks.filter((t) => t.parentTaskId == null),
+    () => subtreeTasks.filter((candidate) => candidate.parentTaskId == null),
     [subtreeTasks],
   );
-  const hasSubtree = project.rollup.subtree.projectCount > 0;
-  const [tasksView, setTasksView] = useState<"list" | "board">("list");
-
-  // Full subtree expense history — feeds the Budget card + the spend charts
-  // below, AND (as of the column-filter default below) the embedded Expenses
-  // section table, so there's a single subtree fetch instead of a separate
-  // scoped `expense.list` round-trip just to bound what that table renders.
   const { data: chartExpenses = NO_EXPENSES } = useQuery(
     expense.chartData.queryOptions(projectSubtreeExpensesFilters(project.id)),
   );
-
-  // The embedded ExpenseList holds no sorting state, and `chartData` returns
-  // rows date-ASCENDING — so feeding `chartExpenses` straight through would
-  // make page 1 the OLDEST rows. Flip to newest-first, nulls-last (matching
-  // the old scoped-query default) before handing it to the table. Do NOT
-  // replace this with `initialState.sorting` instead — the date column has
-  // no `sortFn` and nulls-handling there is unverified.
+  // chartData is date-ascending. The embedded table preserves its historical
+  // newest-first, nulls-last order without relying on an unverified sortFn.
   const sortedSubtreeExpenses = useMemo(
     () =>
-      [...chartExpenses].sort((a, b) => {
-        if (!a.date && !b.date) return 0;
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-        return b.date.localeCompare(a.date);
+      [...chartExpenses].sort((left, right) => {
+        if (!left.date && !right.date) return 0;
+        if (!left.date) return 1;
+        if (!right.date) return -1;
+        return right.date.localeCompare(left.date);
       }),
     [chartExpenses],
   );
-
   const ownSpendSplit = useMemo(
     () =>
       splitExpenseSpend(
-        chartExpenses.filter((p) => p.projectId === project.id),
+        chartExpenses.filter((candidate) => candidate.projectId === project.id),
       ),
     [chartExpenses, project.id],
   );
@@ -500,14 +858,23 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   );
   const budgetEstimate =
     project.rollup.subtree.costEstimate ?? project.costEstimate;
-  const showBudget = budgetEstimate != null || chartExpenses.length > 0;
+  return {
+    subtreeTasks,
+    topLevelTasks,
+    chartExpenses,
+    sortedSubtreeExpenses,
+    ownSpendSplit,
+    subtreeSpendSplit,
+    budgetEstimate,
+    showBudget: budgetEstimate != null || chartExpenses.length > 0,
+  };
+}
 
+function useProjectStructureReadModel(project: ProjectOut) {
   const { data: imageMap } = useQuery({
     ...image.projectSummaries.queryOptions({ projectIds: [project.id] }),
     staleTime: 5 * 60 * 1000,
   });
-  const images = imageMap?.[project.id] ?? NO_IMAGES;
-
   const { data: childProjectsPage } = useQuery(
     entityListFor("project").queryOptions({
       filters: { parentProjectId: project.id },
@@ -515,36 +882,25 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
       pagination: { pageIndex: 0, pageSize: 200 },
     }),
   );
-  const childProjects = childProjectsPage?.items ?? NO_CHILD_PROJECTS;
-  const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
-
   const { data: ganttSubtreePage } = useQuery(
     entityListFor("project").queryOptions(
       projectGanttSubtreeQueryParams(project.id),
     ),
   );
-  const ganttSubtreeProjects = ganttSubtreePage?.items ?? NO_CHILD_PROJECTS;
-
-  const updateMutation = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("project", "update"),
-    entity: "project",
-  });
-
   const { data: projectOptions } = useQuery(
     projectOperations.options.queryOptions(),
   );
-  const projectNamesById = useMemo(() => {
-    const map = new Map<string, { name: string; icon: string | null }>();
-    for (const p of projectOptions ?? [])
-      map.set(p.id, { name: p.name, icon: p.icon });
-    return map;
+  const namesById = useMemo(() => {
+    const names = new Map<string, { name: string; icon: string | null }>();
+    for (const option of projectOptions ?? []) {
+      names.set(option.id, { name: option.name, icon: option.icon });
+    }
+    return names;
   }, [projectOptions]);
-  const resolveDependencyNames = (ids: ProjectOut["blockedByIds"]) =>
+  const resolveDependencies = (ids: ProjectOut["blockedByIds"]) =>
     ids
       .map((id) => {
-        const found = projectNamesById.get(id);
+        const found = namesById.get(id);
         return found
           ? {
               id,
@@ -553,21 +909,60 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             }
           : null;
       })
-      .filter((p): p is NonNullable<typeof p> => p != null);
-  const blockedBy = resolveDependencyNames(project.blockedByIds);
-  const blocking = resolveDependencyNames(project.blockingIds);
-
+      .filter((candidate): candidate is NonNullable<typeof candidate> =>
+        Boolean(candidate),
+      );
   const parentProjectOptions = useMemo(
     () =>
       (projectOptions ?? [])
-        .filter((p) => p.id !== project.id)
-        .map((p) => ({
-          value: p.id,
-          label: p.name,
-          icon: <ProjectMark icon={p.icon} size={12} />,
+        .filter((option) => option.id !== project.id)
+        .map((option) => ({
+          value: option.id,
+          label: option.name,
+          icon: <ProjectMark icon={option.icon} size={12} />,
         })),
     [projectOptions, project.id],
   );
+  return {
+    images: imageMap?.[project.id] ?? NO_IMAGES,
+    childProjects: childProjectsPage?.items ?? NO_CHILD_PROJECTS,
+    ganttSubtreeProjects: ganttSubtreePage?.items ?? NO_CHILD_PROJECTS,
+    projectNamesById: namesById,
+    blockedBy: resolveDependencies(project.blockedByIds),
+    blocking: resolveDependencies(project.blockingIds),
+    parentProjectOptions,
+  };
+}
+
+export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
+  const {
+    subtreeTasks,
+    topLevelTasks,
+    chartExpenses,
+    sortedSubtreeExpenses,
+    ownSpendSplit,
+    subtreeSpendSplit,
+    budgetEstimate,
+    showBudget,
+  } = useProjectWorkReadModel(project);
+  const {
+    images,
+    childProjects,
+    ganttSubtreeProjects,
+    projectNamesById,
+    blockedBy,
+    blocking,
+    parentProjectOptions,
+  } = useProjectStructureReadModel(project);
+  const hasSubtree = project.rollup.subtree.projectCount > 0;
+  const [tasksView, setTasksView] = useState<"list" | "board">("list");
+  const [isCreatingSubProject, setIsCreatingSubProject] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [isCreatingExpense, setIsCreatingExpense] = useState(false);
+  const updateMutation = useUpdateMutation({
+    mutationFn: entityMutationOptionsFactory("project", "update"),
+    entity: "project",
+  });
 
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(project.notes ?? "");
@@ -607,285 +1002,30 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     });
   };
 
-  const fields: BasicInfoField[] = [
-    {
-      label: "Name",
-      value: (
-        <EditableCell
-          value={project.name}
-          config={{ type: "text" }}
-          onSave={async (name) => {
-            if (!name) return;
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { name },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    },
-    {
-      label: "Icon",
-      value: (
-        <EditableCell
-          value={project.icon}
-          config={{ type: "text", placeholder: "e.g. 🔧" }}
-          onSave={async (icon) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { icon },
-            });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    },
-    {
-      label: "Status",
-      value: (
-        <EditableCell
-          value={project.status}
-          config={{ type: "select", options: PROJECT_STATUS_OPTIONS }}
-          onSave={async (status) => {
-            if (!status) return;
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { status },
-            });
-          }}
-          renderValue={(status) =>
-            status ? (
-              <Row as="span" align="center" gap="xs">
-                <StatusIcon status={status} />
-                {PROJECT_STATUS_LABELS[status]}
-              </Row>
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-      filterAction: (
-        <EntityFilterLink
-          to="/projects"
-          search={{ view: "data", statuses: [project.status] }}
-          label={`Show all ${PROJECT_STATUS_LABELS[project.status].toLowerCase()} projects`}
-        />
-      ),
-    },
-    {
-      label: "Kind",
-      value: (
-        <EditableCell
-          value={project.kind}
-          config={{ type: "select", options: projectKindOptions }}
-          onSave={async (kind) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { kind },
-            });
-          }}
-          renderValue={(v) => renderOptionCell(v, projectKindOptions)}
-        />
-      ),
-      filterAction: project.kind ? (
-        <EntityFilterLink
-          to="/projects"
-          search={{ view: "data", kinds: [project.kind] }}
-          label={`Show all projects of kind ${project.kind}`}
-        />
-      ) : undefined,
-    },
-    {
-      // Displays the EFFECTIVE start (rolled up from tasks/expenses/live
-      // sub-projects, or the override when set); the editor still opens on
-      // and saves to the raw `startDate` override column, never the derived
-      // value — see `projectDateWindow`'s doc comment in
-      // packages/schemas/src/project.ts.
-      label: "Start date",
-      value: (
-        <ProjectDateField
-          side="start"
-          rawOverride={project.startDate}
-          effective={project.dates.effectiveStart}
-          derived={project.dates.derivedStart}
-          source={project.dates.startSource}
-          onSave={async (startDate) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { startDate },
-            });
-          }}
-        />
-      ),
-    },
-    {
-      label: "End date",
-      value: (
-        <ProjectDateField
-          side="end"
-          rawOverride={project.endDate}
-          effective={project.dates.effectiveEnd}
-          derived={project.dates.derivedEnd}
-          source={project.dates.endSource}
-          onSave={async (endDate) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { endDate },
-            });
-          }}
-        />
-      ),
-    },
-    {
-      label: "Estimate",
-      value: (
-        <EditableCell
-          value={project.costEstimate}
-          config={{ type: "currency" }}
-          onSave={async (costEstimate) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { costEstimate },
-            });
-          }}
-          renderValue={(v) =>
-            v != null ? formatCurrency(v, 0) : <NoneValue />
-          }
-        />
-      ),
-    },
-    {
-      label: "Progress",
-      value: (() => {
-        const r = hasSubtree ? project.rollup.subtree : project.rollup;
-        return r.taskCount > 0
-          ? `${r.doneTaskCount}/${r.taskCount} tasks`
-          : undefined;
-      })(),
-    },
-    {
-      label: "Parent project",
-      value: (
-        <EditableCell
-          value={project.parentProjectId}
-          config={{
-            type: "select",
-            options: parentProjectOptions,
-            placeholder: "No parent — top-level project",
-          }}
-          onSave={async (parentProjectId) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { parentProjectId },
-            });
-          }}
-          renderValue={(v) =>
-            v && project.parentProjectName && project.parentProjectId ? (
-              <EntityInlineLink
-                displayImage={undefined}
-                entity="project"
-                data={{
-                  id: project.parentProjectId,
-                  name: project.parentProjectName,
-                }}
-                compact
-              />
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-      filterAction: project.parentProjectId ? (
-        <EntityFilterLink
-          to="/projects"
-          search={{ view: "data", parent: project.parentProjectId }}
-          label={`Show all projects inside ${project.parentProjectName ?? "this project"}`}
-        />
-      ) : undefined,
-    },
-    {
-      label: "Locations",
-      value: (
-        <EditableLocations
-          locations={project.locations}
-          onSave={async (locations) => {
-            await updateMutation.mutateAsync({
-              id: project.id,
-              data: { locations },
-            });
-          }}
-        />
-      ),
-    },
-    {
-      label: "Last updated",
-      // UTC ISO date — deterministic across server/client render (a locale/tz
-      // format here would risk a hydration mismatch on this SSR'd page).
-      value: (
-        <span className="font-mono">
-          {project.updatedAt.toISOString().slice(0, 10)}
-        </span>
-      ),
-    },
-  ];
-
-  const hasNotesContent = isEditingNotes || !!project.notes?.trim();
-  const notesSection: DetailSection = {
-    id: "notes",
-    title: "Notes",
-    icon: FileText,
-    placement: hasNotesContent ? "primary" : "supporting",
-    headerAction: isEditingNotes ? undefined : (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => {
-          setNotesDraft(project.notes ?? "");
-          setIsEditingNotes(true);
-        }}
-      >
-        <Pencil className="size-3.5" />
-        Edit
-      </Button>
-    ),
-    content: isEditingNotes ? (
-      <Stack gap="sm">
-        <Textarea
-          value={notesDraft}
-          onChange={(e) => setNotesDraft(e.target.value)}
-          rows={8}
-          placeholder="Freeform markdown notes..."
-          disabled={notesPending}
-          ref={focusOnMount}
-        />
-        <Row gap="xs">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void saveNotes()}
-            disabled={notesPending}
-          >
-            Save
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsEditingNotes(false)}
-            disabled={notesPending}
-          >
-            Cancel
-          </Button>
-        </Row>
-      </Stack>
-    ) : (
-      <ProjectNotes notes={project.notes} />
-    ),
+  const saveProject: SaveProject = async (data) => {
+    await updateMutation.mutateAsync({ id: project.id, data });
   };
+  const fields = buildProjectOverviewFields({
+    project,
+    hasSubtree,
+    parentProjectOptions,
+    saveProject,
+  });
+
+  const { hasContent: hasNotesContent, section: notesSection } =
+    buildProjectNotesSection({
+      project,
+      isEditing: isEditingNotes,
+      draft: notesDraft,
+      pending: notesPending,
+      onStartEditing: () => {
+        setNotesDraft(project.notes ?? "");
+        setIsEditingNotes(true);
+      },
+      onDraftChange: setNotesDraft,
+      onSave: () => void saveNotes(),
+      onCancel: () => setIsEditingNotes(false),
+    });
 
   const budgetSection: DetailSection = {
     id: "budget",
@@ -1192,96 +1332,25 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   // come from the separate project-image projection and already ride the
   // hero), so it would render an always-empty Images card).
 
-  const sections: DetailSection[] = [
-    ...(hasNotesContent ? [notesSection] : []),
-    ...(showBudget ? [budgetSection] : []),
-    contributionSection,
-    tasksSection,
-    reusableResourcesSection,
-    ...(hasSubtree ? [] : [expensesSection]),
-    ...(hasSubtree ? [] : [purchasesSection]),
-    ...(hasSubtree ? [] : [purchasedProductsSection]),
-    overviewSection,
-    resourcesSection,
-    dependenciesSection,
-    subProjectsSection,
-    vendorsSection,
-    ...(hasNotesContent ? [] : [notesSection]),
-    ...(hasSubtree ? [expensesSection] : []),
-    ...(hasSubtree ? [purchasesSection] : []),
-    ...(hasSubtree ? [purchasedProductsSection] : []),
-  ];
-
-  const heroStats: DetailHeroStat[] = [
-    ...(project.parentProjectId &&
-    project.parentProjectName &&
-    project.parentProjectId
-      ? [
-          {
-            label: "Sub-project of",
-            value: (
-              <EntityInlineLink
-                displayImage={undefined}
-                entity="project"
-                data={{
-                  id: project.parentProjectId,
-                  name: project.parentProjectName,
-                }}
-                truncate
-              />
-            ),
-          } satisfies DetailHeroStat,
-        ]
-      : []),
-    { label: "Actual", value: formatCurrency(ownSpendSplit.actual, 0) },
-    ...(ownSpendSplit.committed > 0
-      ? [
-          {
-            label: "Committed",
-            value: formatCurrency(ownSpendSplit.committed, 0),
-          } satisfies DetailHeroStat,
-        ]
-      : []),
-    // Own Tasks/Expenses only when this is a leaf — a subtree project shows
-    // the fuller "(incl. sub-projects)" versions below instead, keeping the
-    // spec-plate to ~6 stats so the mono values aren't truncated.
-    ...(hasSubtree
-      ? []
-      : [
-          {
-            label: "Tasks",
-            value: `${project.rollup.doneTaskCount}/${project.rollup.taskCount}`,
-          } satisfies DetailHeroStat,
-          {
-            label: "Expenses",
-            value: project.rollup.expenseCount,
-          } satisfies DetailHeroStat,
-        ]),
-    ...(hasSubtree
-      ? [
-          {
-            label: "Spent (incl. sub-projects)",
-            value: formatCurrency(project.rollup.subtree.spent, 0),
-          } satisfies DetailHeroStat,
-          {
-            label: "Tasks (incl. sub-projects)",
-            value: `${project.rollup.subtree.doneTaskCount}/${project.rollup.subtree.taskCount}`,
-          } satisfies DetailHeroStat,
-          {
-            label: "Expenses (incl. sub-projects)",
-            value: project.rollup.subtree.expenseCount,
-          } satisfies DetailHeroStat,
-        ]
-      : []),
-    ...(hasSubtree && project.rollup.subtree.costEstimate !== null
-      ? [
-          {
-            label: "Estimate (incl. sub-projects)",
-            value: formatCurrency(project.rollup.subtree.costEstimate, 0),
-          } satisfies DetailHeroStat,
-        ]
-      : []),
-  ];
+  const sections = orderProjectSections({
+    hasNotesContent,
+    showBudget,
+    hasSubtree,
+    notes: notesSection,
+    budget: budgetSection,
+    contribution: contributionSection,
+    tasks: tasksSection,
+    reusableResources: reusableResourcesSection,
+    expenses: expensesSection,
+    purchases: purchasesSection,
+    purchasedProducts: purchasedProductsSection,
+    overview: overviewSection,
+    resources: resourcesSection,
+    dependencies: dependenciesSection,
+    subProjects: subProjectsSection,
+    vendors: vendorsSection,
+  });
+  const heroStats = buildProjectHeroStats(project, ownSpendSplit, hasSubtree);
 
   return (
     <Page

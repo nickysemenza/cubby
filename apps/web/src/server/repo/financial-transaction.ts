@@ -487,6 +487,154 @@ export async function createFinancialTransaction(
   return { output: await getFinancialTransactionByID(db, id), entityId: id };
 }
 
+type FinancialTransactionDbRow = typeof financialTransaction.$inferSelect;
+
+const lockUpdatePurchases = async (
+  tx: DrizzleTransaction,
+  id: FinancialTransactionId,
+  data: FinancialTransactionUpdateData,
+) => {
+  const incomingCodes = [
+    ...(data.allocations?.map((row) => row.purchaseId) ?? []),
+    ...(data.purchaseId ? [data.purchaseId] : []),
+  ];
+  const current = (await readAllocations(tx, [id])).get(id) ?? [];
+  const incoming =
+    incomingCodes.length > 0
+      ? await resolveAllOrThrow(tx, "purchase", incomingCodes)
+      : [];
+  await assertPurchasesLive(
+    tx,
+    uniq([...current.map((row) => row.purchaseId), ...incoming]),
+  );
+};
+
+const assertLedgerTransferUpdateAllowed = (
+  before: FinancialTransactionDbRow,
+  data: FinancialTransactionUpdateData,
+) => {
+  if (before.ledgerTransferId === null) return;
+  const changesEvidence =
+    data.accountId !== undefined ||
+    data.status !== undefined ||
+    data.amount !== undefined ||
+    data.allocations !== undefined ||
+    data.purchaseId !== undefined;
+  if (changesEvidence) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A financial transaction linked as ledger-transfer evidence cannot be changed in a way that could invalidate that evidence. Update the transfer evidence set first.",
+    );
+  }
+};
+
+const assertAllocationShorthandAgrees = (
+  data: FinancialTransactionUpdateData,
+) => {
+  if (data.purchaseId === undefined || data.allocations === undefined) return;
+  const single = data.allocations.length === 1 ? data.allocations[0] : null;
+  const agrees =
+    data.purchaseId === null
+      ? data.allocations.length === 0
+      : single?.purchaseId === data.purchaseId;
+  if (!agrees) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "purchaseId and allocations disagree. purchaseId is shorthand for one allocation of the full amount — supply one or the other.",
+    );
+  }
+};
+
+const deriveUpdatedTransactionState = async (
+  tx: DrizzleTransaction,
+  id: FinancialTransactionId,
+  before: FinancialTransactionDbRow,
+  data: FinancialTransactionUpdateData,
+) => {
+  const nextStatus = data.status ?? before.status;
+  const nextKind = data.kind ?? before.kind;
+  const nextAmount = data.amount ?? before.amount;
+  const nextPostedDate =
+    data.postedDate === undefined ? before.postedDate : data.postedDate;
+  if (nextStatus === "posted" && nextPostedDate === null) {
+    throw createAppError(
+      "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED",
+      "Posted financial transactions require a posted date.",
+    );
+  }
+  const allocationCount = await countLiveAllocations(tx, id);
+  const linked =
+    data.allocations !== undefined
+      ? data.allocations.length > 0
+      : data.purchaseId !== undefined
+        ? data.purchaseId !== null
+        : allocationCount > 0;
+  const settlementViolation = financialTransactionSettlementViolation({
+    linked,
+    kind: financialTransactionKind.parse(nextKind),
+    amount: nextAmount,
+  });
+  if (settlementViolation) {
+    throw createAppError("CONSTRAINT_VIOLATION", settlementViolation.message);
+  }
+  const amountChanged = cents(nextAmount) !== cents(before.amount);
+  if (amountChanged && allocationCount >= 2) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `This transaction's amount is split across ${allocationCount} purchases. Re-allocate it first, then the amount will follow.`,
+    );
+  }
+  return { nextKind, nextAmount, allocationCount, amountChanged };
+};
+
+const requestedUpdateAllocations = async (
+  tx: DrizzleTransaction,
+  id: FinancialTransactionId,
+  data: FinancialTransactionUpdateData,
+  state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
+  before: Awaited<ReturnType<typeof readAllocations>>,
+): Promise<AllocationInput[] | null> => {
+  if (data.allocations !== undefined) {
+    return resolveAllocationInputs(tx, data.allocations);
+  }
+  if (data.purchaseId !== undefined) {
+    return data.purchaseId
+      ? resolveAllocationInputs(tx, [
+          { purchaseId: data.purchaseId, amount: state.nextAmount },
+        ])
+      : [];
+  }
+  if (!state.amountChanged || state.allocationCount !== 1) return null;
+  const sole = before.get(id)?.[0];
+  return sole
+    ? [{ purchaseId: sole.purchaseId, amount: state.nextAmount }]
+    : null;
+};
+
+const applyUpdatedAllocations = async (
+  tx: DrizzleTransaction,
+  id: FinancialTransactionId,
+  data: FinancialTransactionUpdateData,
+  state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
+  actor: ActorContext,
+) => {
+  const before = await readAllocations(tx, [id]);
+  const next = await requestedUpdateAllocations(tx, id, data, state, before);
+  if (next !== null) {
+    await assertPurchasesLive(
+      tx,
+      next.map((row) => row.purchaseId),
+    );
+    assertAllocationSetValid({
+      transactionAmount: state.nextAmount,
+      kind: financialTransactionKind.parse(state.nextKind),
+      next,
+    });
+    await writeAllocationSet(tx, id, next, before);
+  }
+  await applyAllocationChanges(tx, { transactionIds: [id], before, actor });
+};
+
 export async function updateFinancialTransaction(
   db: Database,
   shortcode: FinancialTransactionShortcode,
@@ -514,21 +662,7 @@ export async function updateFinancialTransaction(
     // an allocation to this transaction without holding its FOR UPDATE lock,
     // which is taken below, and the set is re-read under that lock before
     // anything is written.
-    const incomingPurchaseCodes = [
-      ...(data.allocations?.map((row) => row.purchaseId) ?? []),
-      ...(data.purchaseId ? [data.purchaseId] : []),
-    ];
-    await assertPurchasesLive(
-      tx,
-      uniq([
-        ...((await readAllocations(tx, [id]))
-          .get(id)
-          ?.map((row) => row.purchaseId) ?? []),
-        ...(incomingPurchaseCodes.length > 0
-          ? await resolveAllOrThrow(tx, "purchase", incomingPurchaseCodes)
-          : []),
-      ]),
-    );
+    await lockUpdatePurchases(tx, id, data);
     await tx
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
@@ -547,18 +681,7 @@ export async function updateFinancialTransaction(
         "FINANCIAL_TRANSACTION_NOT_FOUND",
         `Financial transaction not found: ${shortcode}`,
       );
-    if (
-      before.ledgerTransferId !== null &&
-      (data.accountId !== undefined ||
-        data.status !== undefined ||
-        data.amount !== undefined ||
-        data.allocations !== undefined ||
-        data.purchaseId !== undefined)
-    )
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A financial transaction linked as ledger-transfer evidence cannot be changed in a way that could invalidate that evidence. Update the transfer evidence set first.",
-      );
+    assertLedgerTransferUpdateAllowed(before, data);
     const accountId =
       data.accountId === undefined
         ? before.accountId
@@ -579,56 +702,8 @@ export async function updateFinancialTransaction(
     // The create input rejects a purchaseId/allocations pair that disagrees;
     // deriveUpdateData drops that refinement, so the same check belongs here
     // rather than silently letting one field win.
-    if (data.purchaseId !== undefined && data.allocations !== undefined) {
-      const single = data.allocations.length === 1 ? data.allocations[0] : null;
-      const agrees =
-        data.purchaseId === null
-          ? data.allocations.length === 0
-          : single?.purchaseId === data.purchaseId;
-      if (!agrees)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "purchaseId and allocations disagree. purchaseId is shorthand for one allocation of the full amount — supply one or the other.",
-        );
-    }
-    const nextStatus = data.status ?? before.status;
-    const nextKind = data.kind ?? before.kind;
-    const nextAmount = data.amount ?? before.amount;
-    const nextPostedDate =
-      data.postedDate === undefined ? before.postedDate : data.postedDate;
-    if (nextStatus === "posted" && nextPostedDate === null)
-      throw createAppError(
-        "FINANCIAL_TRANSACTION_POSTED_DATE_REQUIRED",
-        "Posted financial transactions require a posted date.",
-      );
-    const allocationCount = await countLiveAllocations(tx, id);
-    const settlementViolation = financialTransactionSettlementViolation({
-      // Linkage is the allocation count, full stop — there is no mirror column
-      // left to infer it from, and inferring it was always the weaker signal.
-      linked:
-        data.allocations !== undefined
-          ? data.allocations.length > 0
-          : data.purchaseId !== undefined
-            ? data.purchaseId !== null
-            : allocationCount > 0,
-      kind: financialTransactionKind.parse(nextKind),
-      amount: nextAmount,
-    });
-    if (settlementViolation)
-      throw createAppError("CONSTRAINT_VIOLATION", settlementViolation.message);
-
-    // The amount and its allocations must stay in agreement. With one allocation
-    // the invariant admits exactly one legal value, so writing it is forced
-    // rather than fabricated — that keeps the ordinary "fix the amount typo"
-    // flow working. With two or more there is no defensible way to redistribute
-    // the difference: proportional rescaling would silently rewrite an evidence
-    // split, which is precisely the fabrication this table exists to end.
-    const amountChanged = cents(nextAmount) !== cents(before.amount);
-    if (amountChanged && allocationCount >= 2)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `This transaction's amount is split across ${allocationCount} purchases. Re-allocate it first, then the amount will follow.`,
-      );
+    assertAllocationShorthandAgrees(data);
+    const state = await deriveUpdatedTransactionState(tx, id, before, data);
     await tx
       .update(financialTransaction)
       .set(values)
@@ -667,38 +742,7 @@ export async function updateFinancialTransaction(
     //     slice for the whole amount", or clear it;
     //   • an amount change on a singly-allocated transaction, where the sole
     //     legal allocation value is the new amount.
-    const allocationsBefore = await readAllocations(tx, [id]);
-    let nextAllocations: AllocationInput[] | null = null;
-    if (data.allocations !== undefined) {
-      nextAllocations = await resolveAllocationInputs(tx, data.allocations);
-    } else if (data.purchaseId !== undefined) {
-      nextAllocations = data.purchaseId
-        ? await resolveAllocationInputs(tx, [
-            { purchaseId: data.purchaseId, amount: nextAmount },
-          ])
-        : [];
-    } else if (amountChanged && allocationCount === 1) {
-      const sole = allocationsBefore.get(id)?.[0];
-      if (sole)
-        nextAllocations = [{ purchaseId: sole.purchaseId, amount: nextAmount }];
-    }
-    if (nextAllocations !== null) {
-      await assertPurchasesLive(
-        tx,
-        nextAllocations.map((row) => row.purchaseId),
-      );
-      assertAllocationSetValid({
-        transactionAmount: nextAmount,
-        kind: financialTransactionKind.parse(nextKind),
-        next: nextAllocations,
-      });
-      await writeAllocationSet(tx, id, nextAllocations, allocationsBefore);
-    }
-    await applyAllocationChanges(tx, {
-      transactionIds: [id],
-      before: allocationsBefore,
-      actor,
-    });
+    await applyUpdatedAllocations(tx, id, data, state, actor);
 
     // Data-quality targets come from applyAllocationChanges, which knows the
     // union of before/after purchases; nothing else here can name one.

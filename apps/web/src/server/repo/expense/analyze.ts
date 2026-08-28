@@ -472,194 +472,247 @@ async function presenceFacetOptions(
   ];
 }
 
-export async function expenseAnalyze(
+type AnalysisPeriod = {
+  rows: BucketRow[];
+  columns: BucketRow[];
+  cells: CellRow[];
+  scope: ExpenseAnalyzeAggregate;
+};
+
+const asOneDimensionCells = (rows: BucketRow[]): CellRow[] =>
+  rows.map(({ key, ...row }) => ({
+    ...row,
+    rowKey: key,
+    columnKey: null,
+  }));
+
+const loadAnalysisPeriod = async (
   db: Database,
-  input: ExpenseAnalyzeInput,
-): Promise<ExpenseAnalyzeOut> {
-  const currentWhere = await buildExpenseWhereClause(db, input.filters);
-  const analyzedCurrentWhere = analysisWhere(currentWhere, input);
-  const comparison =
-    input.comparison === "previousPeriod"
-      ? previousFilters(input.filters)
-      : null;
-  const previousWhere = comparison
-    ? await buildExpenseWhereClause(db, comparison.filters)
-    : undefined;
-  const analyzedPreviousWhere = comparison
-    ? analysisWhere(previousWhere, input)
-    : undefined;
-  const currentGridWhere = analyzedCurrentWhere;
-  const previousGridWhere = analyzedPreviousWhere;
-
-  const currentRowsPromise = groupedDimension(
-    db,
-    currentGridWhere,
-    input.rowDimension,
-  );
-  const previousRowsPromise = comparison
-    ? groupedDimension(db, previousGridWhere, input.rowDimension)
-    : Promise.resolve([]);
-  const asOneDimensionCells = (rows: BucketRow[]): CellRow[] =>
-    rows.map(({ key, ...row }) => ({
-      ...row,
-      rowKey: key,
-      columnKey: null,
-    }));
-
-  const [
-    currentRows,
-    currentColumns,
-    currentCells,
-    currentScope,
-    previousRows,
-    previousColumns,
-    previousCells,
-    previousScope,
-  ] = await Promise.all([
-    currentRowsPromise,
-    input.columnDimension
-      ? groupedDimension(db, currentGridWhere, input.columnDimension)
+  gridWhere: SQL | undefined,
+  scopeWhere: SQL | undefined,
+  rowDimension: ExpenseAnalyzeRowDimension,
+  columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+): Promise<AnalysisPeriod> => {
+  const rowsPromise = groupedDimension(db, gridWhere, rowDimension);
+  const [rows, columns, cells, scope] = await Promise.all([
+    rowsPromise,
+    columnDimension
+      ? groupedDimension(db, gridWhere, columnDimension)
       : Promise.resolve([]),
-    input.columnDimension
-      ? groupedCells(
-          db,
-          currentGridWhere,
-          input.rowDimension,
-          input.columnDimension,
-        )
-      : currentRowsPromise.then(asOneDimensionCells),
-    scopeAggregate(db, currentWhere),
-    previousRowsPromise,
-    comparison && input.columnDimension
-      ? groupedDimension(db, previousGridWhere, input.columnDimension)
-      : Promise.resolve([]),
-    comparison && input.columnDimension
-      ? groupedCells(
-          db,
-          previousGridWhere,
-          input.rowDimension,
-          input.columnDimension,
-        )
-      : comparison
-        ? previousRowsPromise.then(asOneDimensionCells)
-        : Promise.resolve([]),
-    comparison ? scopeAggregate(db, previousWhere) : Promise.resolve(null),
+    columnDimension
+      ? groupedCells(db, gridWhere, rowDimension, columnDimension)
+      : rowsPromise.then(asOneDimensionCells),
+    scopeAggregate(db, scopeWhere),
   ]);
+  return { rows, columns, cells, scope };
+};
 
-  const rowMap = new Map(
-    [...currentRows, ...previousRows].map((row) => [row.key, row]),
-  );
-  const columnMap = new Map(
-    [...currentColumns, ...previousColumns].map((row) => [row.key, row]),
-  );
-  if (rowMap.size > ROW_LIMIT)
+const analysisLimitResult = (
+  rowCount: number,
+  columnCount: number,
+  cellCount: number,
+  columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+): ExpenseAnalyzeOut | null => {
+  if (rowCount > ROW_LIMIT) {
     return {
       status: "too_large",
       reason: "row_limit",
       limit: ROW_LIMIT,
-      observedAtLeast: rowMap.size,
+      observedAtLeast: rowCount,
     };
-  if (input.columnDimension === "month" && columnMap.size > MONTH_COLUMN_LIMIT)
+  }
+  if (columnDimension === "month" && columnCount > MONTH_COLUMN_LIMIT) {
     return {
       status: "too_large",
       reason: "month_column_limit",
       limit: MONTH_COLUMN_LIMIT,
-      observedAtLeast: columnMap.size,
+      observedAtLeast: columnCount,
     };
-
-  const currentCellMap = new Map(
-    currentCells.map((cell) => [
-      `${cell.rowKey}\u0000${cell.columnKey ?? ""}`,
-      cell,
-    ]),
-  );
-  const previousCellMap = new Map(
-    previousCells.map((cell) => [
-      `${cell.rowKey}\u0000${cell.columnKey ?? ""}`,
-      cell,
-    ]),
-  );
-  const cellKeys = new Set([
-    ...currentCellMap.keys(),
-    ...previousCellMap.keys(),
-  ]);
-  if (cellKeys.size > CELL_LIMIT)
+  }
+  if (cellCount > CELL_LIMIT) {
     return {
       status: "too_large",
       reason: "cell_limit",
       limit: CELL_LIMIT,
-      observedAtLeast: cellKeys.size,
+      observedAtLeast: cellCount,
     };
+  }
+  return null;
+};
 
-  const cells = [...cellKeys].map((key) => {
-    const current = currentCellMap.get(key);
-    const previous = previousCellMap.get(key);
-    const exemplar = current ?? previous!;
+const mergeAnalysisCells = (
+  currentRows: CellRow[],
+  previousRows: CellRow[],
+  hasComparison: boolean,
+) => {
+  const keyFor = (cell: CellRow) =>
+    `${cell.rowKey}\u0000${cell.columnKey ?? ""}`;
+  const current = new Map(currentRows.map((cell) => [keyFor(cell), cell]));
+  const previous = new Map(previousRows.map((cell) => [keyFor(cell), cell]));
+  const keys = new Set([...current.keys(), ...previous.keys()]);
+  const cells = [...keys].map((key) => {
+    const currentCell = current.get(key);
+    const previousCell = previous.get(key);
+    const exemplar = currentCell ?? previousCell;
+    if (!exemplar) {
+      throw new Error(`Expense analysis cell ${key} has no source row`);
+    }
     return {
       rowKey: exemplar.rowKey,
       columnKey: exemplar.columnKey,
-      current: aggregate(current),
-      previous: comparison ? aggregate(previous) : null,
+      current: aggregate(currentCell),
+      previous: hasComparison ? aggregate(previousCell) : null,
     };
   });
+  return { cells, count: keys.size };
+};
+
+const analysisCauses = async (
+  db: Database,
+  input: ExpenseAnalyzeInput,
+  where: SQL | undefined,
+) => {
+  const principalAxis = hasPrincipalAxis(input);
+  const projectAxis = input.rowDimension === "project";
+  const vendorAxis = input.rowDimension === "vendor";
+  const missingProject = notExists(
+    getDb(db)
+      .select({ id: project.id })
+      .from(project)
+      .where(and(eq(project.id, expense.projectId), notDeleted(project))),
+  );
+  const liveCharge = alias(purchase, "analyzeLiveCharge");
+  const missingVendor = notExists(
+    getDb(db)
+      .select({ id: liveCharge.id })
+      .from(liveCharge)
+      .innerJoin(
+        vendor,
+        and(eq(liveCharge.vendorId, vendor.id), notDeleted(vendor)),
+      )
+      .where(
+        and(eq(liveCharge.id, expense.purchaseId), notDeleted(liveCharge)),
+      ),
+  );
+  const [adjustments, unattributedProject, unattributedVendor] =
+    await Promise.all([
+      principalAxis
+        ? scopeAggregate(db, and(where, ne(expense.lineKind, "principal")))
+        : Promise.resolve(zeroAggregate()),
+      projectAxis
+        ? scopeAggregate(db, and(where, missingProject))
+        : Promise.resolve(zeroAggregate()),
+      vendorAxis
+        ? scopeAggregate(db, and(where, missingVendor))
+        : Promise.resolve(zeroAggregate()),
+    ]);
+  return { adjustments, unattributedProject, unattributedVendor };
+};
+
+const projectAnalysisBuckets = (
+  rows: Map<string, BucketRow>,
+  dimension: Dimension,
+  principalOnly: boolean,
+) =>
+  [...rows.values()].map((row) => ({
+    key: row.key,
+    label: row.label,
+    filter: bucketFilter(dimension, row.key, principalOnly),
+  }));
+
+type AnalysisCauses = Awaited<ReturnType<typeof analysisCauses>>;
+type AnalysisComparison = ReturnType<typeof previousFilters> | null;
+
+const buildAnalysisGrid = (
+  current: AnalysisPeriod,
+  previous: AnalysisPeriod | null,
+  comparison: AnalysisComparison,
+  columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+) => {
+  const rowMap = new Map(
+    [...current.rows, ...(previous?.rows ?? [])].map((row) => [row.key, row]),
+  );
+  const columnMap = new Map(
+    [...current.columns, ...(previous?.columns ?? [])].map((row) => [
+      row.key,
+      row,
+    ]),
+  );
+  const mergedCells = mergeAnalysisCells(
+    current.cells,
+    previous?.cells ?? [],
+    comparison !== null,
+  );
+  const cells = mergedCells.cells;
   const gridCurrent = cells.reduce(
     (total, cell) => addAggregate(total, cell.current),
     zeroAggregate(),
   );
   const gridPrevious = comparison
     ? cells.reduce(
-        (total, cell) => addAggregate(total, cell.previous!),
+        (total, cell) => addAggregate(total, cell.previous ?? zeroAggregate()),
         zeroAggregate(),
       )
     : null;
-
-  const causesFor = async (where: SQL | undefined) => {
-    const principalAxis = hasPrincipalAxis(input);
-    const projectAxis = input.rowDimension === "project";
-    const vendorAxis = input.rowDimension === "vendor";
-    const missingProject = notExists(
-      getDb(db)
-        .select({ id: project.id })
-        .from(project)
-        .where(and(eq(project.id, expense.projectId), notDeleted(project))),
-    );
-    const liveCharge = alias(purchase, "analyzeLiveCharge");
-    const missingVendor = notExists(
-      getDb(db)
-        .select({ id: liveCharge.id })
-        .from(liveCharge)
-        .innerJoin(
-          vendor,
-          and(eq(liveCharge.vendorId, vendor.id), notDeleted(vendor)),
-        )
-        .where(
-          and(eq(liveCharge.id, expense.purchaseId), notDeleted(liveCharge)),
-        ),
-    );
-    const [adjustments, unattributedProject, unattributedVendor] =
-      await Promise.all([
-        principalAxis
-          ? scopeAggregate(db, and(where, ne(expense.lineKind, "principal")))
-          : Promise.resolve(zeroAggregate()),
-        projectAxis
-          ? scopeAggregate(db, and(where, missingProject))
-          : Promise.resolve(zeroAggregate()),
-        vendorAxis
-          ? scopeAggregate(db, and(where, missingVendor))
-          : Promise.resolve(zeroAggregate()),
-      ]);
-    return { adjustments, unattributedProject, unattributedVendor };
+  return {
+    rowMap,
+    columnMap,
+    cells,
+    gridCurrent,
+    gridPrevious,
+    limitResult: analysisLimitResult(
+      rowMap.size,
+      columnMap.size,
+      mergedCells.count,
+      columnDimension,
+    ),
   };
-  const [currentCauses, previousCauses] = await Promise.all([
-    causesFor(currentWhere),
-    comparison ? causesFor(previousWhere) : Promise.resolve(null),
-  ]);
-  const pair = (
-    current: ExpenseAnalyzeAggregate,
-    previous: ExpenseAnalyzeAggregate | null,
-  ) => ({ current, previous });
-  const principalOnly = hasPrincipalAxis(input);
+};
 
+const analysisPair = (
+  current: ExpenseAnalyzeAggregate,
+  previous: ExpenseAnalyzeAggregate | null,
+) => ({ current, previous });
+
+const buildAnalysisReconciliation = (
+  current: AnalysisPeriod,
+  previous: AnalysisPeriod | null,
+  grid: ReturnType<typeof buildAnalysisGrid>,
+  currentCauses: AnalysisCauses,
+  previousCauses: AnalysisCauses | null,
+) => ({
+  tail: analysisPair(
+    subtractAggregate(current.scope, grid.gridCurrent),
+    previous?.scope && grid.gridPrevious
+      ? subtractAggregate(previous.scope, grid.gridPrevious)
+      : null,
+  ),
+  causes: {
+    adjustments: analysisPair(
+      currentCauses.adjustments,
+      previousCauses?.adjustments ?? null,
+    ),
+    unattributedProject: analysisPair(
+      currentCauses.unattributedProject,
+      previousCauses?.unattributedProject ?? null,
+    ),
+    unattributedVendor: analysisPair(
+      currentCauses.unattributedVendor,
+      previousCauses?.unattributedVendor ?? null,
+    ),
+  },
+});
+
+const readyAnalysisOutput = (
+  input: ExpenseAnalyzeInput,
+  comparison: AnalysisComparison,
+  current: AnalysisPeriod,
+  previous: AnalysisPeriod | null,
+  grid: ReturnType<typeof buildAnalysisGrid>,
+  currentCauses: AnalysisCauses,
+  previousCauses: AnalysisCauses | null,
+): ExpenseAnalyzeOut => {
+  const principalOnly = hasPrincipalAxis(input);
   return {
     status: "ready",
     rowDimension: input.rowDimension,
@@ -668,50 +721,86 @@ export async function expenseAnalyze(
       mode: input.comparison,
       previousRange: comparison?.range ?? null,
     },
-    rows: [...rowMap.values()].map((row) => ({
-      key: row.key,
-      label: row.label,
-      filter: bucketFilter(input.rowDimension, row.key, principalOnly),
-    })),
+    rows: projectAnalysisBuckets(
+      grid.rowMap,
+      input.rowDimension,
+      principalOnly,
+    ),
     columns: input.columnDimension
-      ? [...columnMap.values()].map((column) => ({
-          key: column.key,
-          label: column.label,
-          filter: bucketFilter(
-            input.columnDimension!,
-            column.key,
-            principalOnly,
-          ),
-        }))
+      ? projectAnalysisBuckets(
+          grid.columnMap,
+          input.columnDimension,
+          principalOnly,
+        )
       : [],
-    cells,
+    cells: grid.cells,
     totals: {
-      scope: pair(currentScope, previousScope),
-      grid: pair(gridCurrent, gridPrevious),
+      scope: analysisPair(current.scope, previous?.scope ?? null),
+      grid: analysisPair(grid.gridCurrent, grid.gridPrevious),
     },
-    reconciliation: {
-      tail: pair(
-        subtractAggregate(currentScope, gridCurrent),
-        previousScope && gridPrevious
-          ? subtractAggregate(previousScope, gridPrevious)
-          : null,
-      ),
-      causes: {
-        adjustments: pair(
-          currentCauses.adjustments,
-          previousCauses?.adjustments ?? null,
-        ),
-        unattributedProject: pair(
-          currentCauses.unattributedProject,
-          previousCauses?.unattributedProject ?? null,
-        ),
-        unattributedVendor: pair(
-          currentCauses.unattributedVendor,
-          previousCauses?.unattributedVendor ?? null,
-        ),
-      },
-    },
+    reconciliation: buildAnalysisReconciliation(
+      current,
+      previous,
+      grid,
+      currentCauses,
+      previousCauses,
+    ),
   };
+};
+
+export async function expenseAnalyze(
+  db: Database,
+  input: ExpenseAnalyzeInput,
+): Promise<ExpenseAnalyzeOut> {
+  const currentWhere = await buildExpenseWhereClause(db, input.filters);
+  const comparison =
+    input.comparison === "previousPeriod"
+      ? previousFilters(input.filters)
+      : null;
+  const previousWhere = comparison
+    ? await buildExpenseWhereClause(db, comparison.filters)
+    : undefined;
+  const [current, previous] = await Promise.all([
+    loadAnalysisPeriod(
+      db,
+      analysisWhere(currentWhere, input),
+      currentWhere,
+      input.rowDimension,
+      input.columnDimension,
+    ),
+    comparison
+      ? loadAnalysisPeriod(
+          db,
+          analysisWhere(previousWhere, input),
+          previousWhere,
+          input.rowDimension,
+          input.columnDimension,
+        )
+      : Promise.resolve(null),
+  ]);
+
+  const grid = buildAnalysisGrid(
+    current,
+    previous,
+    comparison,
+    input.columnDimension,
+  );
+  if (grid.limitResult) return grid.limitResult;
+  const [currentCauses, previousCauses] = await Promise.all([
+    analysisCauses(db, input, currentWhere),
+    comparison
+      ? analysisCauses(db, input, previousWhere)
+      : Promise.resolve(null),
+  ]);
+  return readyAnalysisOutput(
+    input,
+    comparison,
+    current,
+    previous,
+    grid,
+    currentCauses,
+    previousCauses,
+  );
 }
 
 export async function expenseFacetCounts(

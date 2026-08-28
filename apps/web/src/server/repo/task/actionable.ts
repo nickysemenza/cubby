@@ -419,31 +419,11 @@ export async function listActionableTasks(
   const blocked: BlockedTaskOut[] = [];
   const today = householdLocalDate();
 
-  for (const row of openTaskRows) {
-    // Checklist items are represented via their parent, not surfaced as
-    // independent actionable/blocked rows (they can still appear inside a
-    // why-chain below, via `tasksById`/`taskEdgesByOwner` — those stay
-    // unfiltered).
-    if (row.parentTaskId) continue;
-    if (!matchingShortcodes.has(row.shortcode)) continue;
-
-    const counts = subtaskCounts.get(row.id);
-    const taskOutRow = dbTaskToAPI(
-      row,
-      toTaskShortcodes(blockedByIds.get(row.id) ?? []),
-      toTaskShortcodes(blockingIds.get(row.id) ?? []),
-      counts?.count ?? 0,
-      counts?.doneCount ?? 0,
-    );
-
+  const blockedReasonsFor = (row: (typeof openTaskRows)[number]) => {
     const reasons: BlockedReason[] = [];
-
-    if (row.status === "blocked") {
-      reasons.push({ kind: "manual", chain: [] });
-    }
-
+    if (row.status === "blocked") reasons.push({ kind: "manual", chain: [] });
     for (const blockerId of taskEdgesByOwner.get(row.id) ?? []) {
-      if (!tasksById.has(blockerId)) continue; // not live/non-done -> not open
+      if (!tasksById.has(blockerId)) continue;
       reasons.push({
         kind: "task",
         chain: buildChain(
@@ -457,39 +437,54 @@ export async function listActionableTasks(
         ),
       });
     }
-
-    if (row.projectId) {
-      // The task's own project, plus every live ancestor walking
-      // `parentProjectId` up (arbitrary depth) — a blocked-by edge on ANY of
-      // them blocks the task, not just the immediate project. Reusing
-      // `projectsById` (live, non-done) as the per-candidate membership test
-      // means a `done` ancestor's own edges are skipped entirely, while the
-      // walk still continues past it to check further-up ancestors.
-      const candidateProjectIds = [
-        row.projectId,
-        ...ancestorProjectIds(row.projectId, parentProjectById),
-      ];
-      for (const candidateProjectId of candidateProjectIds) {
-        if (!projectsById.has(candidateProjectId)) continue;
-        for (const blockerProjectId of projectEdgesByOwner.get(
-          candidateProjectId,
-        ) ?? []) {
-          if (!projectsById.has(blockerProjectId)) continue;
-          reasons.push({
-            kind: "project",
-            chain: buildChain(
-              blockerProjectId,
-              "project",
-              `project:${candidateProjectId}`,
-              tasksById,
-              projectsById,
-              taskEdgesByOwner,
-              projectEdgesByOwner,
-            ),
-          });
-        }
+    if (!row.projectId) return reasons;
+    // A task inherits blockers from every live ancestor. Done ancestors are
+    // skipped as blockers, but traversal continues through them.
+    const candidateProjectIds = [
+      row.projectId,
+      ...ancestorProjectIds(row.projectId, parentProjectById),
+    ];
+    for (const candidateProjectId of candidateProjectIds) {
+      if (!projectsById.has(candidateProjectId)) continue;
+      for (const blockerProjectId of projectEdgesByOwner.get(
+        candidateProjectId,
+      ) ?? []) {
+        if (!projectsById.has(blockerProjectId)) continue;
+        reasons.push({
+          kind: "project",
+          chain: buildChain(
+            blockerProjectId,
+            "project",
+            `project:${candidateProjectId}`,
+            tasksById,
+            projectsById,
+            taskEdgesByOwner,
+            projectEdgesByOwner,
+          ),
+        });
       }
     }
+    return reasons;
+  };
+
+  const appendActionableRow = (row: (typeof openTaskRows)[number]) => {
+    // Checklist items are represented via their parent, not surfaced as
+    // independent actionable/blocked rows (they can still appear inside a
+    // why-chain below, via `tasksById`/`taskEdgesByOwner` — those stay
+    // unfiltered).
+    if (row.parentTaskId) return;
+    if (!matchingShortcodes.has(row.shortcode)) return;
+
+    const counts = subtaskCounts.get(row.id);
+    const taskOutRow = dbTaskToAPI(
+      row,
+      toTaskShortcodes(blockedByIds.get(row.id) ?? []),
+      toTaskShortcodes(blockingIds.get(row.id) ?? []),
+      counts?.count ?? 0,
+      counts?.doneCount ?? 0,
+    );
+
+    const reasons = blockedReasonsFor(row);
 
     if (reasons.length === 0) {
       if (row.status === "later") {
@@ -500,7 +495,8 @@ export async function listActionableTasks(
     } else {
       blocked.push({ task: taskOutRow, reasons });
     }
-  }
+  };
+  for (const row of openTaskRows) appendActionableRow(row);
 
   next.sort((a, b) => compareNext(a, b, today));
   later.sort(compareLater);

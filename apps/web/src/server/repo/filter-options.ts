@@ -10,7 +10,6 @@ import {
   asc,
   eq,
   exists,
-  ilike,
   inArray,
   type SQL,
 } from "drizzle-orm";
@@ -27,7 +26,11 @@ import {
   task,
   vendor,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import {
+  formatSearchTerm,
+  getDb,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 
@@ -153,9 +156,6 @@ const FILTER_OPTION_SPECS = {
   },
 } satisfies Record<FilterOptionKind, FilterOptionSpec>;
 
-const searchCondition = (column: AnyColumn, search: string) =>
-  search === "" ? undefined : ilike(column, `%${search}%`);
-
 const optionQueryRowSchema = z.object({
   id: z.string(),
   label: z.string(),
@@ -218,7 +218,7 @@ async function loadRows(
           ? selected.length > 0
             ? inArray(spec.id, selected)
             : undefined
-          : searchCondition(spec.label, input.search),
+          : formatSearchTerm(spec.label, input.search),
       ),
     )
     .orderBy(asc(spec.label), asc(spec.id))

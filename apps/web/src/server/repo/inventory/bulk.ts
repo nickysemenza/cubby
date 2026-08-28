@@ -111,6 +111,139 @@ const loadInventoryEntryPricing = async (
     })),
   );
 
+const validateBulkInventoryTargets = async (
+  tx: DrizzleTransaction,
+  locationId: LocationId,
+  items: ResolvedInventoryBulkOperationItem[],
+  loadedAt?: Date,
+) => {
+  await assertLiveTargets(tx, { locationId });
+  if (loadedAt) {
+    const [staleRow] = await tx
+      .select({ latest: max(inventoryEntry.updatedAt) })
+      .from(inventoryEntry)
+      .where(eq(inventoryEntry.locationId, locationId));
+    if (staleRow?.latest && staleRow.latest > loadedAt) {
+      throw createAppError(
+        "INVENTORY_STALE",
+        "Inventory at this location changed since you loaded it — refresh and try again.",
+      );
+    }
+  }
+  const productIds = uniq(
+    items.flatMap((item) => (item.productId ? [item.productId] : [])),
+  );
+  if (productIds.length === 0) return;
+  const liveProducts = await tx
+    .select({ id: product.id })
+    .from(product)
+    .where(and(inArray(product.id, productIds), notDeleted(product)));
+  const liveIds = new Set(liveProducts.map((row) => row.id));
+  const missing = productIds.find((id) => !liveIds.has(id));
+  if (missing) {
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `Product ${missing} does not exist or has been deleted`,
+    );
+  }
+};
+
+const deleteOmittedBulkInventory = async (
+  tx: DrizzleTransaction,
+  existing: InventoryEntryDeepDB[],
+  items: ResolvedInventoryBulkOperationItem[],
+  actor: ActorContext,
+) => {
+  const submittedIds = new Set(
+    items.flatMap((item) => (item.id ? [item.id] : [])),
+  );
+  const ids = existing
+    .filter((item) => !submittedIds.has(item.id))
+    .map((item) => item.id);
+  if (ids.length === 0) return;
+  await tx
+    .update(inventoryEntry)
+    .set({ deletedAt: new Date() })
+    .where(and(inArray(inventoryEntry.id, ids), notDeleted(inventoryEntry)));
+  await cascadeRemoval(tx, {
+    entity: "inventory",
+    ids,
+    audit: { actor },
+  });
+};
+
+const processBulkInventoryItem = async (
+  tx: DrizzleTransaction,
+  locationId: LocationId,
+  item: ResolvedInventoryBulkOperationItem,
+  existingById: Map<string, InventoryEntryDeepDB>,
+  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
+): Promise<{ id: string; audit?: AuditEntryInput }> => {
+  if (!item.id) {
+    if (!item.productId || !item.amount) {
+      throw createAppError(
+        "REQUIRED_FIELD_MISSING",
+        "productId and amount are required for new items",
+      );
+    }
+    const created = await insertWithShortcode(tx, "inventory", {
+      productId: item.productId,
+      locationId,
+      amount: item.amount,
+      valuation: computeInventoryValuation(
+        item.amount,
+        valuationGraphs.get(item.productId) ?? [],
+      ),
+    });
+    return {
+      id: created.id,
+      audit: {
+        entityType: "inventory",
+        entityId: created.id,
+        action: "create",
+      },
+    };
+  }
+  const before = existingById.get(item.id);
+  const effectiveProductId = item.productId ?? before?.productId;
+  const effectiveAmount = item.amount ?? before?.amount;
+  const valuation =
+    (item.amount !== undefined || item.productId !== undefined) &&
+    effectiveProductId &&
+    effectiveAmount
+      ? computeInventoryValuation(
+          effectiveAmount,
+          valuationGraphs.get(effectiveProductId) ?? [],
+        )
+      : undefined;
+  const values = buildPartialUpdateValues({
+    amount: item.amount,
+    productId: item.productId,
+    valuation,
+  });
+  if (Object.keys(values).length === 0) return { id: item.id };
+  const updated = await updateAndReturn(
+    tx,
+    inventoryEntry,
+    values,
+    eq(inventoryEntry.id, item.id),
+  );
+  const changes = before
+    ? computeChanges(before, updated, ["amount", "productId"])
+    : null;
+  return {
+    id: updated.id,
+    audit: changes
+      ? {
+          entityType: "inventory",
+          entityId: item.id,
+          action: "update",
+          changes,
+        }
+      : undefined,
+  };
+};
+
 export const bulkProcessInventoryEntries = async (
   db: Database,
   locationId: LocationId,
@@ -128,47 +261,7 @@ export const bulkProcessInventoryEntries = async (
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
-      // Guard: never create/re-point entries at a soft-deleted target. Validate
-      // the shelf location once, then batch-validate every submitted product id
-      // (the UI filters deleted options, but the workflow is callable directly).
-      await assertLiveTargets(tx, { locationId });
-
-      // Staleness guard: max(updatedAt) over ALL rows at the location (including
-      // soft-deleted — a delete bumps updatedAt too), so this single scalar
-      // catches an add / edit / delete that landed after the client loaded.
-      if (loadedAt) {
-        const staleRows = await tx
-          .select({ latest: max(inventoryEntry.updatedAt) })
-          .from(inventoryEntry)
-          .where(eq(inventoryEntry.locationId, locationId));
-        const latest = staleRows[0]?.latest ?? null;
-        if (latest && latest > loadedAt) {
-          throw createAppError(
-            "INVENTORY_STALE",
-            "Inventory at this location changed since you loaded it — refresh and try again.",
-          );
-        }
-      }
-
-      const submittedProductIds = uniq(
-        items.filter((i) => i.productId).map((i) => i.productId),
-      );
-      if (submittedProductIds.length > 0) {
-        const liveProducts = await tx
-          .select({ id: product.id })
-          .from(product)
-          .where(
-            and(inArray(product.id, submittedProductIds), notDeleted(product)),
-          );
-        const liveIds = new Set(liveProducts.map((p) => p.id));
-        const missing = submittedProductIds.find((id) => !liveIds.has(id));
-        if (missing) {
-          throw createAppError(
-            "PRODUCT_NOT_FOUND",
-            `Product ${missing} does not exist or has been deleted`,
-          );
-        }
-      }
+      await validateBulkInventoryTargets(tx, locationId, items, loadedAt);
 
       // Stock only, because this reconcile is DELETE-ON-OMIT: anything at the
       // location that the caller did not resubmit gets removed. A fixture is
@@ -197,20 +290,6 @@ export const bulkProcessInventoryEntries = async (
       ]);
       const valuationGraphs = await loadValuationGraphs(tx, allProductIds);
 
-      const submittedIds = items
-        .filter(
-          (
-            item,
-          ): item is ResolvedInventoryBulkOperationItem & {
-            id: InventoryId;
-          } => item.id !== undefined,
-        )
-        .map((item) => item.id);
-
-      const itemsToDelete = existingItems.filter(
-        (item) => !submittedIds.includes(item.id),
-      );
-
       // Soft-delete items not in the submitted array. This is a delete-on-omit
       // reconcile, so it MUST honor the repo-wide soft-delete invariant (set
       // deletedAt, keep the row + audit trail) — a hard delete here makes an
@@ -219,111 +298,21 @@ export const bulkProcessInventoryEntries = async (
       // collapse below intentionally stays a hard delete — soft-deleting a
       // fully-moved source would leave a zero-qty ghost that notDeleted() hides
       // but valuation/duplicate scans resurface.
-      if (itemsToDelete.length > 0) {
-        const idsToDelete = itemsToDelete.map((item) => item.id);
-        await tx
-          .update(inventoryEntry)
-          .set({ deletedAt: new Date() })
-          .where(
-            and(
-              inArray(inventoryEntry.id, idsToDelete),
-              notDeleted(inventoryEntry),
-            ),
-          );
-
-        // The inventory manifest has onDelete: [], so this delete-on-omit
-        // reconcile is the only cleanup site for these entries' embeddings.
-        await cascadeRemoval(tx, {
-          entity: "inventory",
-          ids: idsToDelete,
-          audit: { actor },
-        });
-      }
+      await deleteOmittedBulkInventory(tx, existingItems, items, actor);
 
       const resultIds: string[] = [];
       const auditEntries: AuditEntryInput[] = [];
 
       for (const item of items) {
-        if (!item.id) {
-          if (!item.productId || !item.amount) {
-            throw createAppError(
-              "REQUIRED_FIELD_MISSING",
-              "productId and amount are required for new items",
-            );
-          }
-
-          const valuation = computeInventoryValuation(
-            item.amount,
-            valuationGraphs.get(item.productId) ?? [],
-          );
-
-          const created = await insertWithShortcode(tx, "inventory", {
-            productId: item.productId,
-            locationId: locationId,
-            amount: item.amount,
-            valuation,
-          });
-
-          resultIds.push(created.id);
-          auditEntries.push({
-            entityType: "inventory",
-            entityId: created.id,
-            action: "create",
-          });
-        } else {
-          const updateValues = buildPartialUpdateValues({
-            amount: item.amount,
-            productId: item.productId,
-          });
-
-          let valuation: number | null | undefined;
-          if (item.amount !== undefined || item.productId !== undefined) {
-            const before = existingItemsMap.get(item.id);
-            const effectiveProductId = item.productId ?? before?.productId;
-            const effectiveAmount = item.amount ?? before?.amount;
-
-            if (effectiveProductId && effectiveAmount) {
-              valuation = computeInventoryValuation(
-                effectiveAmount,
-                valuationGraphs.get(effectiveProductId) ?? [],
-              );
-            }
-          }
-
-          const finalUpdateValues = buildPartialUpdateValues({
-            ...updateValues,
-            valuation,
-          });
-
-          if (Object.keys(finalUpdateValues).length > 0) {
-            const before = existingItemsMap.get(item.id);
-            const updated = await updateAndReturn(
-              tx,
-              inventoryEntry,
-              finalUpdateValues,
-              eq(inventoryEntry.id, item.id),
-            );
-
-            if (before) {
-              const changes = computeChanges(before, updated, [
-                "amount",
-                "productId",
-              ]);
-              if (changes) {
-                auditEntries.push({
-                  entityType: "inventory",
-                  entityId: item.id,
-                  action: "update",
-                  changes,
-                });
-              }
-            }
-
-            resultIds.push(updated.id);
-          } else {
-            resultIds.push(item.id);
-          }
-        }
+        const result = await processBulkInventoryItem(
+          tx,
+          locationId,
+          item,
+          existingItemsMap,
+          valuationGraphs,
+        );
+        resultIds.push(result.id);
+        if (result.audit) auditEntries.push(result.audit);
       }
 
       if (auditEntries.length > 0) {
@@ -601,6 +590,237 @@ type PlannedRow = {
   original: InventoryEntryDeepDB | null;
 };
 
+type InventoryMovePlan = {
+  plannedBySlot: Map<string, PlannedRow>;
+  slotByEntryId: Map<InventoryId, string>;
+};
+
+const buildInventoryMovePlan = (
+  sourceEntries: InventoryEntryDeepDB[],
+  destinationEntries: InventoryEntryDeepDB[],
+): InventoryMovePlan => {
+  const plannedBySlot = new Map<string, PlannedRow>();
+  for (const entry of [...sourceEntries, ...destinationEntries]) {
+    const key = slotKey(entry.productId, entry.locationId, entry.placement);
+    if (plannedBySlot.has(key)) continue;
+    const parsed = parseInventoryAmount(entry.amount, entry.id);
+    plannedBySlot.set(key, {
+      id: entry.id,
+      productId: entry.productId,
+      locationId: entry.locationId,
+      placement: entry.placement,
+      value: parsed.value,
+      unit: parsed.unit,
+      original: entry,
+    });
+  }
+  return {
+    plannedBySlot,
+    slotByEntryId: new Map(
+      sourceEntries.map((entry) => [
+        entry.id,
+        slotKey(entry.productId, entry.locationId, entry.placement),
+      ]),
+    ),
+  };
+};
+
+const assertMoveUnitsMatch = (
+  movingUnit: string,
+  source: PlannedRow,
+  target: PlannedRow | undefined,
+) => {
+  for (const [label, unit] of [
+    ["the entry", source.unit],
+    ["the destination", target?.unit],
+  ] as const) {
+    if (unit !== undefined && unit !== movingUnit) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Cannot move ${movingUnit} into ${unit}: ${label} carries a different unit. Reconcile the units before moving.`,
+      );
+    }
+  }
+};
+
+const applyInventoryMoveItem = (
+  plan: InventoryMovePlan,
+  item: ResolvedMoveInventoryEntriesPayload["items"][number],
+): string => {
+  const sourceSlot = plan.slotByEntryId.get(item.inventoryEntryId);
+  const source = sourceSlot ? plan.plannedBySlot.get(sourceSlot) : undefined;
+  if (!sourceSlot || !source) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Inventory entry ${item.inventoryEntryId} was already fully moved earlier in this request`,
+    );
+  }
+  if (source.locationId === item.targetLocationId) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Source and target locations must be different",
+    );
+  }
+  const moveQuantity = item.quantity?.value ?? source.value;
+  if (moveQuantity > source.value) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Cannot move ${moveQuantity} ${item.quantity?.unit ?? source.unit} - only ${source.value} available`,
+    );
+  }
+  const targetSlot = slotKey(
+    source.productId,
+    item.targetLocationId,
+    source.placement,
+  );
+  const target = plan.plannedBySlot.get(targetSlot);
+  const movingUnit = item.quantity?.unit ?? source.unit;
+  assertMoveUnitsMatch(movingUnit, source, target);
+  const remaining = source.value - moveQuantity;
+  if (remaining === 0 && target) {
+    target.value += moveQuantity;
+    plan.plannedBySlot.delete(sourceSlot);
+    plan.slotByEntryId.delete(item.inventoryEntryId);
+  } else if (remaining === 0) {
+    plan.plannedBySlot.delete(sourceSlot);
+    source.locationId = item.targetLocationId;
+    plan.plannedBySlot.set(targetSlot, source);
+    plan.slotByEntryId.set(item.inventoryEntryId, targetSlot);
+  } else {
+    source.value = remaining;
+    if (target) target.value += moveQuantity;
+    else {
+      plan.plannedBySlot.set(targetSlot, {
+        id: null,
+        productId: source.productId,
+        locationId: item.targetLocationId,
+        placement: source.placement,
+        value: moveQuantity,
+        unit: movingUnit,
+        original: null,
+      });
+    }
+  }
+  return targetSlot;
+};
+
+const persistInventoryMovePlan = async (
+  tx: DrizzleTransaction,
+  payload: ResolvedMoveInventoryEntriesPayload,
+  sourceEntries: InventoryEntryDeepDB[],
+  destinationEntries: InventoryEntryDeepDB[],
+  plan: InventoryMovePlan,
+  resultSlots: string[],
+  valuationGraphs: Awaited<ReturnType<typeof loadValuationGraphs>>,
+  actor: ActorContext,
+) => {
+  const auditEntries: AuditEntryInput[] = [];
+  const hardDeletedSourceIds: InventoryId[] = [];
+  const idBySlot = new Map<string, InventoryId>();
+  const sourceById = new Map(sourceEntries.map((entry) => [entry.id, entry]));
+  const occupantBySlot = new Map<string, InventoryId>(
+    [...sourceEntries, ...destinationEntries].map((entry) => [
+      slotKey(entry.productId, entry.locationId, entry.placement),
+      entry.id,
+    ]),
+  );
+  for (const item of payload.items) {
+    if (plan.slotByEntryId.has(item.inventoryEntryId)) continue;
+    const entry = sourceById.get(item.inventoryEntryId);
+    if (!entry || hardDeletedSourceIds.includes(entry.id)) continue;
+    await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, entry.id));
+    hardDeletedSourceIds.push(entry.id);
+    occupantBySlot.delete(
+      slotKey(entry.productId, entry.locationId, entry.placement),
+    );
+  }
+  const pending = [...plan.plannedBySlot];
+  while (pending.length > 0) {
+    const ready = pending.filter(([key, row]) => {
+      const occupant = occupantBySlot.get(key);
+      return occupant === undefined || occupant === row.id;
+    });
+    if (ready.length === 0) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "This move swaps a product between locations in a single request, which cannot be applied without an intermediate state. Split it into two calls.",
+      );
+    }
+    for (const [key, row] of ready) {
+      const valuation = computeInventoryValuation(
+        { value: row.value, unit: row.unit },
+        valuationGraphs.get(row.productId) ?? [],
+      );
+      if (row.id === null) {
+        const created = await insertWithShortcode(tx, "inventory", {
+          productId: row.productId,
+          locationId: row.locationId,
+          placement: row.placement,
+          amount: { value: row.value, unit: row.unit },
+          valuation,
+        });
+        idBySlot.set(key, created.id);
+        occupantBySlot.set(key, created.id);
+        auditEntries.push({
+          entityType: "inventory",
+          entityId: created.id,
+          action: "create",
+        });
+        continue;
+      }
+      if (!row.original) {
+        throw new Error(`Planned inventory row ${row.id} has no original`);
+      }
+      idBySlot.set(key, row.id);
+      const updated = await updateAndReturn(
+        tx,
+        inventoryEntry,
+        {
+          amount: { value: row.value, unit: row.unit },
+          locationId: row.locationId,
+          valuation,
+        },
+        eq(inventoryEntry.id, row.id),
+      );
+      occupantBySlot.delete(
+        slotKey(
+          row.original.productId,
+          row.original.locationId,
+          row.original.placement,
+        ),
+      );
+      occupantBySlot.set(key, row.id);
+      const changes = computeChanges(row.original, updated, [
+        "amount",
+        "locationId",
+      ]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "inventory",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    pending.splice(
+      0,
+      pending.length,
+      ...pending.filter((entry) => !ready.includes(entry)),
+    );
+  }
+  await cascadeRemoval(tx, {
+    entity: "inventory",
+    ids: hardDeletedSourceIds,
+    audit: { into: auditEntries },
+  });
+  if (auditEntries.length > 0) await logAuditEntries(tx, actor, auditEntries);
+  return resultSlots.flatMap((key) => {
+    const id = idBySlot.get(key);
+    return id ? [id] : [];
+  });
+};
+
 /**
  * Move inventory entries to per-item destinations, in one transaction.
  *
@@ -675,273 +895,28 @@ export const moveInventoryEntries = async (
 
       const valuationGraphs = await loadValuationGraphs(tx, productIds);
 
-      const plannedBySlot = new Map<string, PlannedRow>();
-      const plan = (entry: InventoryEntryDeepDB) => {
-        const parsed = parseInventoryAmount(entry.amount, entry.id);
-        const key = slotKey(entry.productId, entry.locationId, entry.placement);
-        if (plannedBySlot.has(key)) return;
-        plannedBySlot.set(key, {
-          id: entry.id,
-          productId: entry.productId,
-          locationId: entry.locationId,
-          placement: entry.placement,
-          value: parsed.value,
-          unit: parsed.unit,
-          original: entry,
-        });
-      };
-      for (const entry of [...sourceEntries, ...destinationEntries])
-        plan(entry);
-
-      // Where each source entry currently sits in the plan. A full move re-keys
-      // its row to the destination slot, so a later item naming the same entry
-      // has to follow it rather than look at where it started.
-      const slotByEntryId = new Map<InventoryId, string>(
-        sourceEntries.map((e) => [
-          e.id,
-          slotKey(e.productId, e.locationId, e.placement),
-        ]),
-      );
+      const plan = buildInventoryMovePlan(sourceEntries, destinationEntries);
       // Destination slots in request order — the response echoes the rows the
       // caller asked to fill, deduped, not every row the plan touched.
       const resultSlots: string[] = [];
 
       for (const item of payload.items) {
-        const sourceSlot = slotByEntryId.get(item.inventoryEntryId);
-        const source = sourceSlot ? plannedBySlot.get(sourceSlot) : undefined;
-        if (!sourceSlot || !source) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            `Inventory entry ${item.inventoryEntryId} was already fully moved earlier in this request`,
-          );
-        }
-
-        if (source.locationId === item.targetLocationId) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Source and target locations must be different",
-          );
-        }
-
-        const moveQuantity = item.quantity?.value ?? source.value;
-        if (moveQuantity > source.value) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            `Cannot move ${moveQuantity} ${item.quantity?.unit ?? source.unit} - only ${source.value} available`,
-          );
-        }
-
-        // A move carries its placement with it: relocating the kitchen dimmer
-        // to the garage leaves it an installed fixture, and it must not merge
-        // into a stock row of the same product sitting there.
-        const targetSlot = slotKey(
-          source.productId,
-          item.targetLocationId,
-          source.placement,
-        );
-        const existingAtTarget = plannedBySlot.get(targetSlot);
-
-        // Summing `each` into `lb` produces a number that means nothing.
-        // `mergeProducts` refuses the same collision outright
-        // (PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH) rather than picking a unit;
-        // so does this. The single-source version could not reach the case in
-        // practice, since one shelf holds one row per product.
-        const movingUnit = item.quantity?.unit ?? source.unit;
-        for (const [label, unit] of [
-          ["the entry", source.unit],
-          ["the destination", existingAtTarget?.unit],
-        ] as const) {
-          if (unit !== undefined && unit !== movingUnit) {
-            throw createAppError(
-              "CONSTRAINT_VIOLATION",
-              `Cannot move ${movingUnit} into ${unit}: ${label} carries a different unit. Reconcile the units before moving.`,
-            );
-          }
-        }
-
-        // Computed, not applied, until the branch is chosen: a full move leaves
-        // the row carrying `moveQuantity` at its new slot, so decrementing up
-        // front would relocate a zeroed row.
-        const remaining = source.value - moveQuantity;
-
-        if (remaining === 0 && existingAtTarget) {
-          // Full move onto an occupied slot: the destination absorbs the
-          // quantity and the emptied source row goes away entirely.
-          existingAtTarget.value += moveQuantity;
-          plannedBySlot.delete(sourceSlot);
-          slotByEntryId.delete(item.inventoryEntryId);
-        } else if (remaining === 0) {
-          // Full move to an empty slot: the row itself relocates, keeping its
-          // id, shortcode, and history — and its quantity, untouched.
-          plannedBySlot.delete(sourceSlot);
-          source.locationId = item.targetLocationId;
-          plannedBySlot.set(targetSlot, source);
-          slotByEntryId.set(item.inventoryEntryId, targetSlot);
-        } else {
-          source.value = remaining;
-          if (existingAtTarget) {
-            existingAtTarget.value += moveQuantity;
-          } else {
-            plannedBySlot.set(targetSlot, {
-              id: null,
-              productId: source.productId,
-              locationId: item.targetLocationId,
-              // A partial move mints a row of the SAME placement as its source:
-              // splitting a box of spare dimmers off the shelf yields more
-              // stock, never a fixture.
-              placement: source.placement,
-              value: moveQuantity,
-              unit: movingUnit,
-              original: null,
-            });
-          }
-        }
-
+        const targetSlot = applyInventoryMoveItem(plan, item);
         if (!resultSlots.includes(targetSlot)) resultSlots.push(targetSlot);
       }
 
-      const resultIds: string[] = [];
-      const auditEntries: AuditEntryInput[] = [];
-      const hardDeletedSourceIds: InventoryId[] = [];
-      const idBySlot = new Map<string, InventoryId>();
-
-      // Which row physically occupies each slot right now. The PLAN is always
-      // consistent — it is keyed by final slot, so no two rows can end up in
-      // one — but `InventoryEntry_productId_locationId_key` is a plain unique
-      // index, checked per statement rather than at commit. So the order the
-      // writes go out in still matters: moving a row into a slot whose previous
-      // occupant has not moved out yet is a 23505 even though the end state is
-      // fine.
-      const occupantBySlot = new Map<string, InventoryId>();
-      for (const entry of [...sourceEntries, ...destinationEntries]) {
-        occupantBySlot.set(
-          slotKey(entry.productId, entry.locationId, entry.placement),
-          entry.id,
-        );
-      }
-
-      // Emptied source rows go first: a delete only ever frees a slot, and
-      // freeing them up front is what lets a row move into a slot the same
-      // request just vacated.
-      for (const item of payload.items) {
-        const entry = sourceById.get(item.inventoryEntryId)!;
-        if (slotByEntryId.has(item.inventoryEntryId)) continue;
-        if (hardDeletedSourceIds.includes(entry.id)) continue;
-        await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, entry.id));
-        hardDeletedSourceIds.push(entry.id);
-        occupantBySlot.delete(
-          slotKey(entry.productId, entry.locationId, entry.placement),
-        );
-      }
-
-      // One write and one audit entry per affected row, regardless of how many
-      // items touched it — a shelf consolidating four drawers is one update to
-      // the destination, not four. Rows whose destination is still occupied are
-      // deferred to a later pass.
-      const pending = [...plannedBySlot];
-      while (pending.length > 0) {
-        const ready = pending.filter(([key, row]) => {
-          const occupant = occupantBySlot.get(key);
-          return occupant === undefined || occupant === row.id;
-        });
-        if (ready.length === 0) {
-          // Every remaining row is blocked by another remaining row — a cycle,
-          // which needs one product to swap between locations inside a single
-          // request. Breaking it would mean parking a row somewhere it does not
-          // belong, so refuse instead of inventing an intermediate state.
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "This move swaps a product between locations in a single request, which cannot be applied without an intermediate state. Split it into two calls.",
-          );
-        }
-
-        for (const [key, row] of ready) {
-          const valuation = computeInventoryValuation(
-            { value: row.value, unit: row.unit },
-            valuationGraphs.get(row.productId) ?? [],
-          );
-
-          if (row.id === null) {
-            const created = await insertWithShortcode(tx, "inventory", {
-              productId: row.productId,
-              locationId: row.locationId,
-              placement: row.placement,
-              amount: { value: row.value, unit: row.unit },
-              valuation,
-            });
-            idBySlot.set(key, created.id);
-            occupantBySlot.set(key, created.id);
-            auditEntries.push({
-              entityType: "inventory",
-              entityId: created.id,
-              action: "create",
-            });
-            continue;
-          }
-
-          const original = row.original!;
-          idBySlot.set(key, row.id);
-          const updated = await updateAndReturn(
-            tx,
-            inventoryEntry,
-            {
-              amount: { value: row.value, unit: row.unit },
-              locationId: row.locationId,
-              valuation,
-            },
-            eq(inventoryEntry.id, row.id),
-          );
-          occupantBySlot.delete(
-            slotKey(
-              original.productId,
-              original.locationId,
-              original.placement,
-            ),
-          );
-          occupantBySlot.set(key, row.id);
-          const changes = computeChanges(original, updated, [
-            "amount",
-            "locationId",
-          ]);
-          if (changes) {
-            auditEntries.push({
-              entityType: "inventory",
-              entityId: row.id,
-              action: "update",
-              changes,
-            });
-          }
-        }
-        pending.splice(
-          0,
-          pending.length,
-          ...pending.filter((entry) => !ready.includes(entry)),
-        );
-      }
-
-      for (const key of resultSlots) {
-        const id = idBySlot.get(key);
-        if (id) resultIds.push(id);
-      }
-
-      // Once, over every id the loop above accumulated — NOT interleaved into
-      // it: those deletes run up front to free unique-index slots, and pulling
-      // the cascade in with them would re-order the statements that vacate
-      // `InventoryEntry_productId_locationId_key`. The source rows are HARD
-      // deleted; their embeddings are still soft-deleted (see `cascadeRemoval`).
-      await cascadeRemoval(tx, {
-        entity: "inventory",
-        ids: hardDeletedSourceIds,
-        audit: { into: auditEntries },
-      });
-
-      if (auditEntries.length > 0) {
-        await logAuditEntries(tx, actor, auditEntries);
-      }
-
-      // NOTE: a move no longer stamps `lastBulkInventory` — only an explicit
-      // audit completion (`completeLocationAudit`) marks a location audited, so
-      // relocating one item can't make a bin read "audited" with zero recount.
+      // Persist only after the complete in-memory plan is valid. Consumed rows
+      // are deleted first to free unique slots, then the remaining DAG writes.
+      const resultIds = await persistInventoryMovePlan(
+        tx,
+        payload,
+        sourceEntries,
+        destinationEntries,
+        plan,
+        resultSlots,
+        valuationGraphs,
+        actor,
+      );
       return await batchFetchResults(tx, resultIds);
     },
   );

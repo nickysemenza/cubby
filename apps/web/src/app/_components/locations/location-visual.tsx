@@ -147,6 +147,60 @@ function ChildContactSheet({
   );
 }
 
+function LocationVisualMedia({
+  location,
+  variant,
+  interactive,
+}: Pick<LocationVisualProps, "location" | "variant" | "interactive">) {
+  const visual = resolveLocationVisual(location);
+  const hasIdentity =
+    visual.primarySource === "location" || visual.primarySource === "product";
+  const hasChildren = visual.childVisuals.length > 0;
+  const ownImageCount = location.images.filter(isDisplayableImageFile).length;
+  const primaryImage = (
+    <PrimaryImage
+      location={location}
+      displayWidth={variant === "hero" ? 640 : 320}
+    />
+  );
+  return (
+    <div
+      className={cn(
+        "grid size-full min-h-0 overflow-hidden bg-card",
+        hasIdentity && hasChildren
+          ? "grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
+          : "grid-cols-1",
+      )}
+    >
+      {hasIdentity && (
+        <div className="relative min-h-0 overflow-hidden border-r border-border">
+          {interactive ? (
+            <SourceLink location={location}>{primaryImage}</SourceLink>
+          ) : (
+            primaryImage
+          )}
+          {interactive && ownImageCount > 1 && (
+            <Link
+              to="/images"
+              className="absolute bottom-1 left-1 bg-foreground px-1 font-mono text-2xs text-background focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            >
+              +{ownImageCount - 1} photos
+            </Link>
+          )}
+        </div>
+      )}
+      {hasChildren ? (
+        <ChildContactSheet
+          location={location}
+          interactive={interactive ?? false}
+        />
+      ) : (
+        !hasIdentity && <PrimaryImage location={location} displayWidth={320} />
+      )}
+    </div>
+  );
+}
+
 /**
  * One location visual grammar at three scales. Large surfaces separate the
  * vessel from its photographed compartments; dense rows keep one legible
@@ -183,50 +237,12 @@ export function LocationVisual({
     );
   }
 
-  const hasIdentity =
-    visual.primarySource === "location" || visual.primarySource === "product";
-  const hasChildren = visual.childVisuals.length > 0;
-  const ownImageCount = location.images.filter(isDisplayableImageFile).length;
   const media = (
-    <div
-      className={cn(
-        "grid size-full min-h-0 overflow-hidden bg-card",
-        hasIdentity && hasChildren
-          ? "grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
-          : "grid-cols-1",
-      )}
-    >
-      {hasIdentity && (
-        <div className="relative min-h-0 overflow-hidden border-r border-border">
-          {interactive ? (
-            <SourceLink location={location}>
-              <PrimaryImage
-                location={location}
-                displayWidth={variant === "hero" ? 640 : 320}
-              />
-            </SourceLink>
-          ) : (
-            <PrimaryImage
-              location={location}
-              displayWidth={variant === "hero" ? 640 : 320}
-            />
-          )}
-          {interactive && ownImageCount > 1 && (
-            <Link
-              to="/images"
-              className="absolute bottom-1 left-1 bg-foreground px-1 font-mono text-2xs text-background focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-            >
-              +{ownImageCount - 1} photos
-            </Link>
-          )}
-        </div>
-      )}
-      {hasChildren ? (
-        <ChildContactSheet location={location} interactive={interactive} />
-      ) : (
-        !hasIdentity && <PrimaryImage location={location} displayWidth={320} />
-      )}
-    </div>
+    <LocationVisualMedia
+      location={location}
+      variant={variant}
+      interactive={interactive}
+    />
   );
 
   if (variant === "card") {

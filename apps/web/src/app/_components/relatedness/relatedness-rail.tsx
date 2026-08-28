@@ -35,6 +35,65 @@ const productionOperations: RelatednessRailOperations = {
   batchSummary: backgroundBatch.summary,
 };
 
+function RelatednessIndexPrompt({
+  status,
+  indexing,
+  refreshing,
+  onRefresh,
+}: {
+  status: RelatednessOut["status"] | undefined;
+  indexing: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  if (status !== "uncomputed" && status !== "stale") return null;
+  return (
+    <Row
+      align="center"
+      justify="between"
+      gap="sm"
+      className="border-b border-border pb-2"
+    >
+      <span className="text-xs text-muted-foreground">
+        {status === "stale"
+          ? "Similarity index is stale."
+          : "Similarity index has not been computed."}
+      </span>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={refreshing || indexing}
+        onClick={onRefresh}
+      >
+        <Sparkles className="size-3" />
+        {indexing ? "Indexing…" : "Index now"}
+      </Button>
+    </Row>
+  );
+}
+
+function ReadyRelatednessLinks({ productId }: { productId: ProductShortcode }) {
+  return (
+    <Row gap="sm">
+      <Link
+        to="/recommendations/workbench"
+        search={{ kind: "product-related", source: productId }}
+        className="text-xs underline underline-offset-2"
+      >
+        Review recommendations
+      </Link>
+      <Link
+        to="/recommendations/workbench"
+        search={{ kind: "tag-propagation", source: productId }}
+        className="text-xs underline underline-offset-2"
+      >
+        Review tag proposals
+      </Link>
+    </Row>
+  );
+}
+
 /**
  * Product's compact relationship ledger. Tags remain compatibility evidence;
  * semantic neighbours add discovery without pretending an unavailable index is
@@ -87,32 +146,14 @@ export function RelatednessRail({
 
   return (
     <Stack gap="sm">
-      {(status === "uncomputed" || status === "stale") && (
-        <Row
-          align="center"
-          justify="between"
-          gap="sm"
-          className="border-b border-border pb-2"
-        >
-          <span className="text-xs text-muted-foreground">
-            {status === "stale"
-              ? "Similarity index is stale."
-              : "Similarity index has not been computed."}
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={refresh.isPending || indexing}
-            onClick={() =>
-              refresh.mutate({ entityType: "product", entityId: product.id })
-            }
-          >
-            <Sparkles className="size-3" />
-            {indexing ? "Indexing…" : "Index now"}
-          </Button>
-        </Row>
-      )}
+      <RelatednessIndexPrompt
+        status={status}
+        indexing={indexing}
+        refreshing={refresh.isPending}
+        onRefresh={() =>
+          refresh.mutate({ entityType: "product", entityId: product.id })
+        }
+      />
 
       {status === "unavailable" && (
         <p className="text-xs text-muted-foreground">
@@ -135,24 +176,7 @@ export function RelatednessRail({
         </p>
       )}
 
-      {status === "ready" && (
-        <Row gap="sm">
-          <Link
-            to="/recommendations/workbench"
-            search={{ kind: "product-related", source: product.id }}
-            className="text-xs underline underline-offset-2"
-          >
-            Review recommendations
-          </Link>
-          <Link
-            to="/recommendations/workbench"
-            search={{ kind: "tag-propagation", source: product.id }}
-            className="text-xs underline underline-offset-2"
-          >
-            Review tag proposals
-          </Link>
-        </Row>
-      )}
+      {status === "ready" && <ReadyRelatednessLinks productId={product.id} />}
     </Stack>
   );
 }

@@ -77,9 +77,8 @@ export const getIngredientCooccurrence = async (
   const ingredientShortcodes = new Map<string, string>();
   const recipeIngredients = new Map<string, Set<string>>();
 
-  for (const r of recipes) {
+  const collectRecipeIngredients = (r: (typeof recipes)[number]) => {
     const ingredientIds = new Set<string>();
-
     for (const section of r.sections) {
       for (const si of section.ingredients) {
         if (si.ingredient && !si.ingredient.recipeId) {
@@ -100,7 +99,8 @@ export const getIngredientCooccurrence = async (
     if (ingredientIds.size > 0) {
       recipeIngredients.set(r.id, ingredientIds);
     }
-  }
+  };
+  for (const r of recipes) collectRecipeIngredients(r);
 
   const cooccurrence = new Map<
     string,
@@ -117,7 +117,10 @@ export const getIngredientCooccurrence = async (
     recipeShortcodes.set(r.id, r.shortcode);
   }
 
-  for (const [recipeId, ingredientIds] of recipeIngredients) {
+  const recordRecipeCooccurrence = (
+    recipeId: string,
+    ingredientIds: Set<string>,
+  ) => {
     const ids = Array.from(ingredientIds);
     const recipeName = recipeNames.get(recipeId) ?? "Unknown";
     const recipeShortcode = recipeShortcodes.get(recipeId);
@@ -139,32 +142,14 @@ export const getIngredientCooccurrence = async (
         cooccurrence.set(key, existing);
       }
     }
+  };
+  for (const [recipeId, ingredientIds] of recipeIngredients) {
+    recordRecipeCooccurrence(recipeId, ingredientIds);
   }
 
   const ingredientsWithEdges = new Set<string>();
   const edges: IngredientEdge[] = [];
 
-  for (const [key, data] of cooccurrence) {
-    if (data.count >= minEdgeWeight) {
-      const [source, target] = key.split("|");
-      if (!source || !target) {
-        throw new Error(`Malformed ingredient edge key: ${key}`);
-      }
-      edges.push({
-        source: shortcodeForIngredientId(source),
-        target: shortcodeForIngredientId(target),
-        weight: data.count,
-        recipes: data.recipes.map((r) => ({
-          id: parseShortcodeFor("recipe", r.shortcode),
-          name: r.name,
-        })),
-      });
-      ingredientsWithEdges.add(source);
-      ingredientsWithEdges.add(target);
-    }
-  }
-
-  const nodes: IngredientNode[] = [];
   function shortcodeForIngredientId(id: string) {
     const shortcode = ingredientShortcodes.get(id);
     if (!shortcode) {
@@ -172,6 +157,31 @@ export const getIngredientCooccurrence = async (
     }
     return parseShortcodeFor("ingredient", shortcode);
   }
+
+  const appendEdge = (
+    key: string,
+    data: typeof cooccurrence extends Map<string, infer T> ? T : never,
+  ) => {
+    if (data.count < minEdgeWeight) return;
+    const [source, target] = key.split("|");
+    if (!source || !target) {
+      throw new Error(`Malformed ingredient edge key: ${key}`);
+    }
+    edges.push({
+      source: shortcodeForIngredientId(source),
+      target: shortcodeForIngredientId(target),
+      weight: data.count,
+      recipes: data.recipes.map((r) => ({
+        id: parseShortcodeFor("recipe", r.shortcode),
+        name: r.name,
+      })),
+    });
+    ingredientsWithEdges.add(source);
+    ingredientsWithEdges.add(target);
+  };
+  for (const [key, data] of cooccurrence) appendEdge(key, data);
+
+  const nodes: IngredientNode[] = [];
   for (const id of ingredientsWithEdges) {
     nodes.push({
       id: shortcodeForIngredientId(id),

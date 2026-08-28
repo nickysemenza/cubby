@@ -145,6 +145,50 @@ const page = (pageIndex = 0, pageSize = 50): PaginationParams => ({
 });
 
 describe("USDAService listLinkedProductFoods (via listFoods)", () => {
+  it("loads linked products for a USDA page through one batch port call", async () => {
+    const usdaClient: USDAServiceClient = {
+      findFood: vi.fn(async () => null),
+      findFoodsBatch: vi.fn(async () => []),
+      getFoodSummaryByID: vi.fn(async () => null),
+      listFoods: vi.fn(async () => ({ data: FOODS, count: FOODS.length })),
+    };
+    const getLinkedProducts = vi.fn(async () => dummyProducts(0));
+    const getLinkedProductsBatch = vi.fn(async (lookups: FoodLookupParam[]) =>
+      lookups.map((lookup) =>
+        dummyProducts(
+          lookup.kind === "upc"
+            ? (LINKED_COUNTS_BY_UPC.get(lookup.gtin_upc) ?? 0)
+            : 0,
+        ),
+      ),
+    );
+    const service = new USDAService(
+      usdaClient,
+      getLinkedProducts,
+      undefined,
+      getLinkedProductsBatch,
+    );
+
+    const result = await service.listFoods(
+      undefined,
+      undefined,
+      sort("fdc_id"),
+      page(),
+    );
+
+    expect(getLinkedProductsBatch).toHaveBeenCalledOnce();
+    expect(getLinkedProductsBatch).toHaveBeenCalledWith(
+      FOODS.map((food) => ({
+        kind: "upc",
+        gtin_upc: food.brandedFoodInfo?.gtin_upc,
+      })),
+    );
+    expect(getLinkedProducts).not.toHaveBeenCalled();
+    expect(result.data.map((food) => food.linkedProducts.length)).toEqual([
+      2, 0, 1, 3, 0,
+    ]);
+  });
+
   it("filters by name (case-insensitive substring)", async () => {
     const service = makeService();
     const result = await service.listFoods(

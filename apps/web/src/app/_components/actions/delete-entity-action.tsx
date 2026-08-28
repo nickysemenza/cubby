@@ -7,7 +7,10 @@ import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import type { EntityCommands } from "~/entities/editing/use-entity-commands";
 import { entities, entityDialogLabel } from "~/entities/entities";
-import type { GeneratedBrowserCrudEntity } from "~/entities/generated/entity-routes.gen";
+import {
+  generatedBrowserCrudEntities,
+  type GeneratedBrowserCrudEntity,
+} from "~/entities/generated/entity-routes.gen";
 
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
@@ -125,22 +128,7 @@ export function useDeleteEntityAction(
 
 export const deleteEntityActionDefinition = defineEntityAction({
   verb: "delete",
-  entities: [
-    "product",
-    "recipe",
-    "ingredient",
-    "location",
-    "inventory",
-    "meal",
-    "project",
-    "task",
-    "vendor",
-    "purchase",
-    "financialAccount",
-    "financialTransaction",
-    "wish",
-    "expense",
-  ] as const satisfies readonly GeneratedBrowserCrudEntity[],
+  entities: generatedBrowserCrudEntities,
   arity: "single",
   surfaces: ["inspector", "detail"],
   group: "destructive",

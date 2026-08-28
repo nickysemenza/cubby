@@ -248,6 +248,108 @@ const dynamicPolicies: string[] = [];
 const invalidationTags: Array<{ file: string; line: number; tag: string[] }> =
   [];
 
+type SourceAudit = {
+  readonly file: string;
+  readonly source: string;
+  readonly isTest: boolean;
+  readonly where: (node: AstNode) => string;
+};
+
+const recordRetiredInvalidation = (node: AstNode, audit: SourceAudit): void => {
+  if (node.type === "Identifier" && node.name && RETIRED.has(node.name)) {
+    violations.push(
+      `${audit.where(node)} references \`${node.name}\` — the legacy query-key invalidation path is gone; declare tags on the operation descriptor instead.`,
+    );
+  }
+  if (
+    node.type === "MemberExpression" &&
+    isNode(node.object) &&
+    node.object.type === "Identifier" &&
+    node.object.name === "queryKeys"
+  ) {
+    violations.push(
+      `${audit.where(node)} references \`queryKeys\` — deleted; a query's identity is its operation descriptor.`,
+    );
+  }
+};
+
+const recordDirectInvalidation = (node: AstNode, audit: SourceAudit): void => {
+  if (
+    node.type !== "CallExpression" ||
+    !isNode(node.callee) ||
+    node.callee.type !== "MemberExpression" ||
+    !isNode(node.callee.property) ||
+    node.callee.property.type !== "Identifier" ||
+    node.callee.property.name !== "invalidateQueries" ||
+    resolve(audit.file) === cacheModule ||
+    audit.isTest
+  ) {
+    return;
+  }
+  violations.push(
+    `${audit.where(node)} calls \`invalidateQueries\` directly — go through \`invalidateOperationTags\` so every invalidation is a tag.`,
+  );
+};
+
+const recordDeclaredTags = (node: AstNode): void => {
+  if (node.type !== "Property" || propertyName(node) !== "tags") return;
+  for (const tag of tagListLiteral(node.value) ?? []) declaredTags.push(tag);
+};
+
+const invalidationDeclaration = (
+  node: AstNode,
+  parent: AstNode | undefined,
+): { name: string; value: AstValue | undefined } | null => {
+  const isObjectProperty =
+    node.type === "Property" && parent?.type === "ObjectExpression";
+  if (!isObjectProperty && node.type !== "JSXAttribute") return null;
+  const name =
+    node.type === "JSXAttribute"
+      ? isNode(node.name) && node.name.type === "JSXIdentifier"
+        ? node.name.name
+        : undefined
+      : propertyName(node);
+  if (name !== "invalidates" && name !== "invalidateTags") return null;
+  const value =
+    node.type === "JSXAttribute" &&
+    isNode(node.value) &&
+    node.value.type === "JSXExpressionContainer"
+      ? node.value.expression
+      : node.value;
+  return { name, value };
+};
+
+const recordInvalidationDeclaration = (
+  node: AstNode,
+  parent: AstNode | undefined,
+  audit: SourceAudit,
+): void => {
+  const declaration = invalidationDeclaration(node, parent);
+  if (declaration === null) return;
+  const tags =
+    tagListLiteral(declaration.value) ?? rippleReference(declaration.value);
+  if (tags) {
+    for (const tag of tags)
+      invalidationTags.push({
+        file: relative(root, audit.file),
+        line: lineAt(audit.source, node.start ?? 0),
+        tag,
+      });
+    return;
+  }
+  if (isEntityRippleCall(declaration.value)) return;
+  if (isPolicyFunction(declaration.value)) {
+    if (!audit.isTest) dynamicPolicies.push(audit.where(node));
+    return;
+  }
+  if (audit.isTest || INVALIDATION_ENGINE.has(resolve(audit.file))) return;
+  throw new Error(
+    `${audit.where(node)}: \`${declaration.name}\` is not readable by check-invalidation-authority (got a ${isNode(declaration.value) ? declaration.value.type : "missing value"}). ` +
+      'Write it as a literal tag list (`[["product"]]`), a `ripple.<row>` reference, or a function — ' +
+      "a function is deferred to operation-tags.unit.test.ts, which replays it against a declared sample input.",
+  );
+};
+
 for (const file of sourceFiles(webSource).sort()) {
   const source = readFileSync(file, "utf8");
   const parsed = parseSync(file, source, {
@@ -261,92 +363,12 @@ for (const file of sourceFiles(webSource).sort()) {
 
   const isTest = /\.(unit|integration)\.test\.tsx?$/u.test(file);
 
+  const audit = { file, source, isTest, where };
   walk(parsed.program, (node, parent) => {
-    // (a) the retired key path
-    if (node.type === "Identifier" && node.name && RETIRED.has(node.name)) {
-      violations.push(
-        `${where(node)} references \`${node.name}\` — the legacy query-key invalidation path is gone; declare tags on the operation descriptor instead.`,
-      );
-    }
-    if (
-      node.type === "MemberExpression" &&
-      isNode(node.object) &&
-      node.object.type === "Identifier" &&
-      node.object.name === "queryKeys"
-    ) {
-      violations.push(
-        `${where(node)} references \`queryKeys\` — deleted; a query's identity is its operation descriptor.`,
-      );
-    }
-    // (b) one module owns invalidateQueries
-    if (
-      node.type === "CallExpression" &&
-      isNode(node.callee) &&
-      node.callee.type === "MemberExpression" &&
-      isNode(node.callee.property) &&
-      node.callee.property.type === "Identifier" &&
-      node.callee.property.name === "invalidateQueries" &&
-      resolve(file) !== cacheModule &&
-      // A test may drive a bare QueryClient to assert React Query's own
-      // semantics; that is not an app invalidation policy.
-      !isTest
-    ) {
-      violations.push(
-        `${where(node)} calls \`invalidateQueries\` directly — go through \`invalidateOperationTags\` so every invalidation is a tag.`,
-      );
-    }
-    // (c) collect both sides of the tag contract
-    if (node.type === "Property" && propertyName(node) === "tags") {
-      for (const tag of tagListLiteral(node.value) ?? [])
-        declaredTags.push(tag);
-    }
-
-    // A DECLARATION position is an object-literal property or a JSX attribute.
-    // A `Property` under an ObjectPattern is a destructuring binding — a
-    // parameter name, not a policy — and a `TSPropertySignature` is a type
-    // member; neither reaches this branch.
-    const declaresInvalidation =
-      (node.type === "Property" && parent?.type === "ObjectExpression") ||
-      node.type === "JSXAttribute";
-    if (!declaresInvalidation) return;
-    const name =
-      node.type === "JSXAttribute"
-        ? isNode(node.name) && node.name.type === "JSXIdentifier"
-          ? node.name.name
-          : undefined
-        : propertyName(node);
-    if (name !== "invalidates" && name !== "invalidateTags") return;
-    const value =
-      node.type === "JSXAttribute" &&
-      isNode(node.value) &&
-      node.value.type === "JSXExpressionContainer"
-        ? node.value.expression
-        : node.value;
-
-    const tags = tagListLiteral(value) ?? rippleReference(value);
-    if (tags) {
-      for (const tag of tags)
-        invalidationTags.push({
-          file: relative(root, file),
-          line: lineAt(source, node.start ?? 0),
-          tag,
-        });
-      return;
-    }
-    if (isEntityRippleCall(value)) return; // swept over the whole manifest below
-    if (isPolicyFunction(value)) {
-      if (!isTest) dynamicPolicies.push(where(node));
-      return;
-    }
-    // A fixture may hand a policy any shape it likes, and the tag machinery
-    // itself only forwards values; everywhere else, an unreadable declaration
-    // is uncounted tags hiding behind an OK line, so it stops the sweep.
-    if (isTest || INVALIDATION_ENGINE.has(resolve(file))) return;
-    throw new Error(
-      `${where(node)}: \`${name}\` is not readable by check-invalidation-authority (got a ${isNode(value) ? value.type : "missing value"}). ` +
-        'Write it as a literal tag list (`[["product"]]`), a `ripple.<row>` reference, or a function — ' +
-        "a function is deferred to operation-tags.unit.test.ts, which replays it against a declared sample input.",
-    );
+    recordRetiredInvalidation(node, audit);
+    recordDirectInvalidation(node, audit);
+    recordDeclaredTags(node);
+    recordInvalidationDeclaration(node, parent, audit);
   });
 }
 

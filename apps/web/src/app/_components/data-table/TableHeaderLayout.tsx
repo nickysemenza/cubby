@@ -26,6 +26,29 @@ import { columnWidthValue, isLockedColumnId } from "./table-layout";
 
 type HeaderStyles = { header: string; sortIcon: string };
 
+const sortIcon = (
+  direction: false | "asc" | "desc",
+  canSort: boolean,
+  styles: HeaderStyles,
+) => {
+  if (direction === "desc")
+    return <ArrowDown className={styles.sortIcon} aria-hidden="true" />;
+  if (direction === "asc")
+    return <ArrowUp className={styles.sortIcon} aria-hidden="true" />;
+  return canSort ? (
+    <ArrowUpDown
+      className={cn(styles.sortIcon, "opacity-40 group-hover:opacity-100")}
+      aria-hidden="true"
+    />
+  ) : null;
+};
+
+const ariaSort = (direction: false | "asc" | "desc") => {
+  if (direction === "asc") return "ascending";
+  if (direction === "desc") return "descending";
+  return "none";
+};
+
 function pinBoundaryClass<TData extends RowData>(
   header: Header<typeof cubbyTableFeatures, TData, unknown>,
 ) {
@@ -66,17 +89,7 @@ function SortableHeader<TData extends RowData>({
   const numeric = header.column.columnDef.meta?.numeric ?? false;
   const pinned = header.column.getIsPinned();
   const width = columnWidthValue(header.column.id);
-  const sortingArrows =
-    sortDirection === "desc" ? (
-      <ArrowDown className={styles.sortIcon} aria-hidden="true" />
-    ) : sortDirection === "asc" ? (
-      <ArrowUp className={styles.sortIcon} aria-hidden="true" />
-    ) : canSort ? (
-      <ArrowUpDown
-        className={cn(styles.sortIcon, "opacity-40 group-hover:opacity-100")}
-        aria-hidden="true"
-      />
-    ) : null;
+  const sortingArrows = sortIcon(sortDirection, canSort, styles);
 
   const title = (
     <>
@@ -97,13 +110,7 @@ function SortableHeader<TData extends RowData>({
       ref={setNodeRef}
       key={header.id}
       colSpan={header.colSpan}
-      aria-sort={
-        sortDirection === "asc"
-          ? "ascending"
-          : sortDirection === "desc"
-            ? "descending"
-            : "none"
-      }
+      aria-sort={ariaSort(sortDirection)}
       className={cn(
         "group/th relative",
         styles.header,

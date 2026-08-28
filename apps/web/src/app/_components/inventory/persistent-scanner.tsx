@@ -99,6 +99,52 @@ export const productionPersistentScannerPort: PersistentScannerPort = {
   formats: UNIVERSAL_SCAN_FORMATS,
 };
 
+const reticleClassName = (
+  hasQr: boolean,
+  hasLinearBarcode: boolean,
+  scanFlash: boolean,
+): string => {
+  const size =
+    hasQr && hasLinearBarcode
+      ? "h-44 w-[85%]"
+      : hasQr
+        ? "size-48"
+        : "h-28 w-[85%]";
+  return cn(
+    "rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150",
+    size,
+    scanFlash
+      ? "border-positive shadow-[var(--shadow-scan-flash)]"
+      : "border-white/60",
+  );
+};
+
+const ScannerStatus = ({
+  status,
+  errorMessage,
+  retry,
+}: Pick<
+  ReturnType<typeof useBarcodeScanner>,
+  "status" | "errorMessage" | "retry"
+>) => {
+  if (status === "loading")
+    return (
+      <ScannerStatusOverlay status="loading" message="Starting camera..." />
+    );
+  if (status === "error")
+    return (
+      <ScannerStatusOverlay
+        status="error"
+        errorMessage={errorMessage}
+        onRetry={retry}
+        retryLabel="Try Again"
+      />
+    );
+  return status === "permission_denied" ? (
+    <ScannerStatusOverlay status="permission-denied" onRetry={retry} />
+  ) : null;
+};
+
 export function PersistentScanner({
   onScan,
   onError,
@@ -172,25 +218,11 @@ export function PersistentScanner({
           muted
         />
 
-        {/* Loading overlay */}
-        {status === "loading" && (
-          <ScannerStatusOverlay status="loading" message="Starting camera..." />
-        )}
-
-        {/* Error state */}
-        {status === "error" && (
-          <ScannerStatusOverlay
-            status="error"
-            errorMessage={errorMessage}
-            onRetry={retry}
-            retryLabel="Try Again"
-          />
-        )}
-
-        {/* Permission denied state */}
-        {status === "permission_denied" && (
-          <ScannerStatusOverlay status="permission-denied" onRetry={retry} />
-        )}
+        <ScannerStatus
+          status={status}
+          errorMessage={errorMessage}
+          retry={retry}
+        />
 
         {/*
           Viewfinder overlay — only when scanning. The guide element is also the
@@ -206,19 +238,7 @@ export function PersistentScanner({
             {/* Darkened edges around the guide */}
             <div
               ref={reticleRef}
-              className={cn(
-                "rounded-lg border-2 shadow-[var(--shadow-scan-scrim)] transition-colors duration-150",
-                // Mixed mode needs enough height for a QR while retaining the
-                // width a product barcode needs to decode cleanly.
-                hasQr && hasLinearBarcode
-                  ? "h-44 w-[85%]"
-                  : hasQr
-                    ? "size-48"
-                    : "h-28 w-[85%]",
-                scanFlash
-                  ? "border-positive shadow-[var(--shadow-scan-flash)]"
-                  : "border-white/60",
-              )}
+              className={reticleClassName(hasQr, hasLinearBarcode, scanFlash)}
             />
           </Row>
         )}

@@ -1,9 +1,9 @@
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { suggestionDismissal } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 const toHex = (buffer: ArrayBuffer) =>
   [...new Uint8Array(buffer)]
@@ -45,7 +45,7 @@ export async function dismissSuggestion(
         suggestionDismissal.suggestionKind,
         suggestionDismissal.candidateKey,
       ],
-      targetWhere: isNull(suggestionDismissal.deletedAt),
+      targetWhere: notDeleted(suggestionDismissal),
       set: { deletedAt: null, updatedAt: now },
     });
 }
@@ -66,7 +66,7 @@ export async function getActiveSuggestionDismissalKeys(
         eq(suggestionDismissal.sourceEntityType, input.sourceEntityType),
         eq(suggestionDismissal.sourceEntityId, input.sourceEntityId),
         eq(suggestionDismissal.suggestionKind, input.suggestionKind),
-        isNull(suggestionDismissal.deletedAt),
+        notDeleted(suggestionDismissal),
       ),
     );
   return new Set(rows.map((row) => row.candidateKey));
@@ -85,7 +85,7 @@ export async function softDeleteSuggestionDismissalsTx(
       and(
         eq(suggestionDismissal.sourceEntityType, sourceEntityType),
         inArray(suggestionDismissal.sourceEntityId, [...sourceEntityIds]),
-        isNull(suggestionDismissal.deletedAt),
+        notDeleted(suggestionDismissal),
       ),
     );
 }

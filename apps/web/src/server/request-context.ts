@@ -19,6 +19,7 @@ import {
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
 } from "~/server/repo/product";
+import { findProductsByFoodIdentifiers } from "~/server/repo/product/lookup";
 import { AvailabilityService } from "~/server/services/availability.service";
 import { LocationValuationService } from "~/server/services/location-valuation.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
@@ -42,6 +43,7 @@ export const buildCrudServices = (
     usdaClient,
     async (lookup) => await findProductsByFoodIdentifier(database, lookup),
     async () => await getFoodLookupsForLinkedProducts(database),
+    async (lookups) => await findProductsByFoodIdentifiers(database, lookups),
   );
   const services = {
     availability: new AvailabilityService(database, usdaClient),

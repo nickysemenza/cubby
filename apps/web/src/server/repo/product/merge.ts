@@ -990,6 +990,142 @@ async function buildProductMergePlan(
   };
 }
 
+const validateProductMergePlan = async (
+  tx: DrizzleTransaction,
+  plan: ProductMergePlan,
+): Promise<void> => {
+  const isbns = distinctIsbns(plan.externalIds.rows);
+  if (isbns.length > 1) {
+    throw createAppError(
+      "PRODUCT_MERGE_DISTINCT_ISBNS",
+      `Cannot merge Products with different ISBN editions (${isbns.join(", ")}). Correct or remove an ISBN first.`,
+    );
+  }
+  if (plan.inventory.mismatches.length > 0) {
+    const detail = plan.inventory.mismatches
+      .map(({ row, into }) => `${row.amount.unit} vs ${into.amount.unit}`)
+      .join(", ");
+    throw createAppError(
+      "PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH",
+      `Cannot merge products stocked in the same location under different units (${detail}). Convert one entry first.`,
+    );
+  }
+
+  // Both component refusals are computed before anything is written so
+  // preview and mutation reject the same plan at the same boundary.
+  if (plan.components.cycle) {
+    throw createAppError(
+      "PRODUCT_MERGE_COMPONENT_CYCLE",
+      `Cannot merge: the result would contain itself (${await describeProductPath(tx, plan.components.cycle)}). Detach the kit link first.`,
+    );
+  }
+  if (plan.components.kit.conflicts.length > 0) {
+    const detail = await Promise.all(
+      plan.components.kit.conflicts.map(async ({ into, rows }) => {
+        const part = await describeProductPath(tx, [into.componentProductId]);
+        const quantities = uniq([
+          into.quantity,
+          ...rows.map((row) => row.quantity),
+        ]).join(" vs ");
+        return `${part} (${quantities})`;
+      }),
+    );
+    throw createAppError(
+      "PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH",
+      `Cannot merge kits that list the same component in different quantities: ${detail.join(", ")}. Correct one list first.`,
+    );
+  }
+};
+
+const foldProductExternalIds = async (
+  tx: DrizzleTransaction,
+  keepId: ProductId,
+  plan: ProductMergePlan,
+  summary: ProductMergeSummary,
+): Promise<string[]> => {
+  const externalIdPlan = plan.externalIds.collision;
+  if (externalIdPlan.repoint.length > 0) {
+    await tx
+      .update(productExternalId)
+      .set({ productId: keepId })
+      .where(
+        inArray(
+          productExternalId.id,
+          externalIdPlan.repoint.map((row) => row.id),
+        ),
+      );
+    summary.externalIdsMoved = externalIdPlan.repoint.length;
+  }
+
+  const demoted: string[] = [];
+  for (const { into, rows } of externalIdPlan.absorb) {
+    // Fill-never-overwrite across the whole collision group.
+    const filledUrl =
+      into.url ?? rows.find((row) => row.url != null)?.url ?? null;
+    if (into.url == null && filledUrl != null) {
+      await tx
+        .update(productExternalId)
+        .set({ url: filledUrl })
+        .where(eq(productExternalId.id, into.id));
+    }
+    // A slot holds one primary. Conflicting loser identities survive as
+    // secondaries and are named in both the response and audit trail.
+    await tx
+      .update(productExternalId)
+      .set({ productId: keepId, isPrimary: false })
+      .where(
+        inArray(
+          productExternalId.id,
+          rows.map((row) => row.id),
+        ),
+      );
+    for (const row of rows) {
+      summary.externalIdsDemoted.push({
+        source: row.source,
+        kind: row.kind,
+        externalId: row.externalId,
+      });
+      demoted.push(
+        `${row.source}/${row.kind}=${row.externalId} (secondary; ${into.externalId} stays primary)`,
+      );
+    }
+  }
+  await ensureSlotPrimaries(tx, keepId, plan.externalIds.rows);
+  return demoted;
+};
+
+type ProductMergeSurvivorChanges = {
+  mergedFrom: { from: null; to: ProductId[] };
+  carriedOver?: { from: null; to: ProductCarriedValues };
+  demotedExternalIds?: { from: null; to: string[] };
+  discardedUnitMappings?: { from: null; to: string[] };
+};
+
+const productMergeSurvivorChanges = (
+  plan: ProductMergePlan,
+  mergedFrom: ProductId[],
+  summary: ProductMergeSummary,
+  demotedExternalIds: string[],
+  discardedUnitMappings: string[],
+): ProductMergeSurvivorChanges => {
+  const changes: ProductMergeSurvivorChanges = {
+    mergedFrom: { from: null, to: mergedFrom },
+  };
+  if (summary.carriedFields.length > 0) {
+    changes.carriedOver = { from: null, to: plan.carried };
+  }
+  if (demotedExternalIds.length > 0) {
+    changes.demotedExternalIds = { from: null, to: demotedExternalIds };
+  }
+  if (discardedUnitMappings.length > 0) {
+    changes.discardedUnitMappings = {
+      from: null,
+      to: discardedUnitMappings,
+    };
+  }
+  return changes;
+};
+
 /**
  * Merge `mergeIds` into `keepId`.
  *
@@ -1034,113 +1170,17 @@ export const mergeProducts = async (
     );
     summary.deletedEntityIds = losers.map((row) => row.id);
 
+    await validateProductMergePlan(tx, plan);
+
     const inventoryPlan = plan.inventory;
-    const isbns = distinctIsbns(plan.externalIds.rows);
-    if (isbns.length > 1) {
-      throw createAppError(
-        "PRODUCT_MERGE_DISTINCT_ISBNS",
-        `Cannot merge Products with different ISBN editions (${isbns.join(", ")}). Correct or remove an ISBN first.`,
-      );
-    }
-    if (inventoryPlan.mismatches.length > 0) {
-      const detail = inventoryPlan.mismatches
-        .map(({ row, into }) => `${row.amount.unit} vs ${into.amount.unit}`)
-        .join(", ");
-      throw createAppError(
-        "PRODUCT_MERGE_INVENTORY_UNIT_MISMATCH",
-        `Cannot merge products stocked in the same location under different units (${detail}). Convert one entry first.`,
-      );
-    }
-
-    // Both component refusals are computed BEFORE anything is written. The
-    // transaction would roll back either way, but a preview and a mutation that
-    // refuse for the same reason at the same point are much easier to keep
-    // honest than one that discovers it halfway through.
     const componentPlan = plan.components;
-    if (componentPlan.cycle) {
-      throw createAppError(
-        "PRODUCT_MERGE_COMPONENT_CYCLE",
-        `Cannot merge: the result would contain itself (${await describeProductPath(tx, componentPlan.cycle)}). Detach the kit link first.`,
-      );
-    }
-    if (componentPlan.kit.conflicts.length > 0) {
-      const detail = await Promise.all(
-        componentPlan.kit.conflicts.map(async ({ into, rows }) => {
-          const part = await describeProductPath(tx, [into.componentProductId]);
-          const quantities = uniq([
-            into.quantity,
-            ...rows.map((row) => row.quantity),
-          ]).join(" vs ");
-          return `${part} (${quantities})`;
-        }),
-      );
-      throw createAppError(
-        "PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH",
-        `Cannot merge kits that list the same component in different quantities: ${detail.join(", ")}. Correct one list first.`,
-      );
-    }
-
-    const externalIdRows = plan.externalIds.rows;
-    const externalIdPlan = plan.externalIds.collision;
-
-    if (externalIdPlan.repoint.length > 0) {
-      await tx
-        .update(productExternalId)
-        .set({ productId: keepId })
-        .where(
-          inArray(
-            productExternalId.id,
-            externalIdPlan.repoint.map((row) => row.id),
-          ),
-        );
-      summary.externalIdsMoved = externalIdPlan.repoint.length;
-    }
-    const demotedExternalIds: string[] = [];
     const discardedUnitMappings: string[] = [];
-    for (const { into, rows } of externalIdPlan.absorb) {
-      // Fill-never-overwrite, resolved across the WHOLE group: with two losers
-      // on one slot, checking `into.url` per row would let the last one win.
-      const filledUrl =
-        into.url ?? rows.find((row) => row.url != null)?.url ?? null;
-      if (into.url == null && filledUrl != null) {
-        await tx
-          .update(productExternalId)
-          .set({ url: filledUrl })
-          .where(eq(productExternalId.id, into.id));
-      }
-      // A slot holds one PRIMARY, not one row, so a colliding loser moves onto
-      // the survivor as a secondary instead of being destroyed.
-      //
-      // Every row here necessarily carries a DIFFERENT value from `into`: the
-      // global unique on (source, kind, externalId) forbids two live rows
-      // sharing one, so "the keeper already has this exact id" cannot occur and
-      // there is no redundant case to drop.
-      await tx
-        .update(productExternalId)
-        .set({ productId: keepId, isPrimary: false })
-        .where(
-          inArray(
-            productExternalId.id,
-            rows.map((row) => row.id),
-          ),
-        );
-      for (const row of rows) {
-        summary.externalIdsDemoted.push({
-          source: row.source,
-          kind: row.kind,
-          externalId: row.externalId,
-        });
-        demotedExternalIds.push(
-          `${row.source}/${row.kind}=${row.externalId} (secondary; ${into.externalId} stays primary)`,
-        );
-      }
-    }
-    // Same repair the patch path ends with: a slot the merge touched must not
-    // be left with rows but no primary. Reachable here because the loser's own
-    // primary can be demoted on the way in — and the `contract` migration
-    // created exactly that shape (primary + secondary in one amazon/asin slot)
-    // on the five products this change was written for.
-    await ensureSlotPrimaries(tx, keepId, externalIdRows);
+    const demotedExternalIds = await foldProductExternalIds(
+      tx,
+      keepId,
+      plan,
+      summary,
+    );
 
     if (inventoryPlan.repoint.length > 0) {
       await tx
@@ -1441,30 +1481,13 @@ export const mergeProducts = async (
       );
     }
 
-    type ProductMergeSurvivorChanges = {
-      mergedFrom: { from: null; to: ProductId[] };
-      carriedOver?: { from: null; to: ProductCarriedValues };
-      demotedExternalIds?: { from: null; to: string[] };
-      discardedUnitMappings?: { from: null; to: string[] };
-    };
-    const survivorChanges: ProductMergeSurvivorChanges = {
-      mergedFrom: { from: null, to: loserIds },
-    };
-    if (summary.carriedFields.length > 0) {
-      survivorChanges.carriedOver = { from: null, to: carried };
-    }
-    if (demotedExternalIds.length > 0) {
-      survivorChanges.demotedExternalIds = {
-        from: null,
-        to: demotedExternalIds,
-      };
-    }
-    if (discardedUnitMappings.length > 0) {
-      survivorChanges.discardedUnitMappings = {
-        from: null,
-        to: discardedUnitMappings,
-      };
-    }
+    const survivorChanges = productMergeSurvivorChanges(
+      plan,
+      loserIds,
+      summary,
+      demotedExternalIds,
+      discardedUnitMappings,
+    );
 
     const { removed } = await finalizeMerge(tx, {
       entity: "product",

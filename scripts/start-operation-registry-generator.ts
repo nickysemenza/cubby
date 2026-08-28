@@ -144,56 +144,106 @@ export const collectDomainDeclarations = (): DomainDeclarations => {
   const auditedModules = new Set<string>();
   for (const path of sourceFiles(SOURCE_ROOT)) {
     const program = parseFile(path);
-    for (const { exportName, init } of topLevelVariableDeclarators(program)) {
-      if (
-        init.type !== "CallExpression" ||
-        calledName(init.callee) !== "defineOperationDomain"
-      ) {
-        continue;
-      }
-      if (!auditedModules.has(path)) {
-        auditedModules.add(path);
-        assertClientSafeImports(path, program.body);
-      }
-      const [domainArg, definitionsArg] = init.arguments;
-      if (
-        !domainArg ||
-        domainArg.type === "SpreadElement" ||
-        !isStringLiteral(domainArg) ||
-        definitionsArg?.type !== "ObjectExpression"
-      ) {
-        continue;
-      }
-      const members = new Map<string, DomainMember>();
-      for (const property of definitionsArg.properties) {
-        if (property.type !== "Property") continue;
-        const memberName = propertyName(property.key);
-        if (!memberName || property.value.type !== "CallExpression") continue;
-        const kind = calledName(property.value.callee);
-        if (kind !== "query" && kind !== "mutation" && kind !== "subscription")
-          continue;
-        const operation = `${domainArg.value}.${memberName}`;
-        const existing = byOperation.get(operation);
-        if (existing) {
-          throw new Error(
-            `${operation} is declared more than once: ${relative(ROOT, existing.path)} and ${relative(ROOT, path)}. Each Start operation id may have exactly one client declaration; whichever schema the single handler used would win silently.`,
-          );
-        }
-        byOperation.set(operation, { kind, path, exportName });
-        members.set(memberName, { operation, kind });
-      }
-      if (members.size > 0) {
-        byBinding.set(`${path}#${exportName}`, {
-          path,
-          domain: domainArg.value,
-          members,
-        });
-      }
-    }
+    collectDomainsFromProgram(
+      path,
+      program,
+      auditedModules,
+      byOperation,
+      byBinding,
+    );
   }
   cachedDomainDeclarations = { byOperation, byBinding };
   return cachedDomainDeclarations;
 };
+
+function collectDomainsFromProgram(
+  path: string,
+  program: Program,
+  auditedModules: Set<string>,
+  byOperation: DomainDeclarations["byOperation"],
+  byBinding: DomainDeclarations["byBinding"],
+): void {
+  for (const declarator of topLevelVariableDeclarators(program)) {
+    const domain = declaredDomain(declarator.init);
+    if (domain === null) continue;
+    if (!auditedModules.has(path)) {
+      auditedModules.add(path);
+      assertClientSafeImports(path, program.body);
+    }
+    const members = collectDomainMembers(
+      path,
+      declarator.exportName,
+      domain.name,
+      domain.definitions,
+      byOperation,
+    );
+    if (members.size > 0)
+      byBinding.set(`${path}#${declarator.exportName}`, {
+        path,
+        domain: domain.name,
+        members,
+      });
+  }
+}
+
+function declaredDomain(expression: Expression): {
+  name: string;
+  definitions: Extract<Expression, { type: "ObjectExpression" }>;
+} | null {
+  if (
+    expression.type !== "CallExpression" ||
+    calledName(expression.callee) !== "defineOperationDomain"
+  ) {
+    return null;
+  }
+  const [name, definitions] = expression.arguments;
+  return name !== undefined &&
+    name.type !== "SpreadElement" &&
+    isStringLiteral(name) &&
+    definitions?.type === "ObjectExpression"
+    ? { name: name.value, definitions }
+    : null;
+}
+
+function collectDomainMembers(
+  path: string,
+  exportName: string,
+  domain: string,
+  definitions: Extract<Expression, { type: "ObjectExpression" }>,
+  byOperation: DomainDeclarations["byOperation"],
+): Map<string, DomainMember> {
+  const members = new Map<string, DomainMember>();
+  for (const property of definitions.properties) {
+    const member = declaredDomainMember(property);
+    if (member === null) continue;
+    const operation = `${domain}.${member.name}`;
+    const existing = byOperation.get(operation);
+    if (existing) {
+      throw new Error(
+        `${operation} is declared more than once: ${relative(ROOT, existing.path)} and ${relative(ROOT, path)}. Each Start operation id may have exactly one client declaration; whichever schema the single handler used would win silently.`,
+      );
+    }
+    byOperation.set(operation, { kind: member.kind, path, exportName });
+    members.set(member.name, { operation, kind: member.kind });
+  }
+  return members;
+}
+
+function declaredDomainMember(
+  property: Extract<
+    Expression,
+    { type: "ObjectExpression" }
+  >["properties"][number],
+): { name: string; kind: Kind } | null {
+  if (property.type !== "Property" || property.value.type !== "CallExpression")
+    return null;
+  const name = propertyName(property.key);
+  const kind = calledName(property.value.callee);
+  return name !== undefined &&
+    (kind === "query" || kind === "mutation" || kind === "subscription")
+    ? { name, kind }
+    : null;
+}
 
 /** Named-import bindings of a module: local name -> imported name + source. */
 const importBindings = (
@@ -249,11 +299,15 @@ const resolveDomainBinding = (
 const IMPLEMENTERS = {
   implementOperationDomain: {
     table: "operations",
-    kinds: ["query", "mutation"],
   },
-  implementSubscriptionDomain: { table: "streams", kinds: ["subscription"] },
-} as const satisfies Record<string, { table: string; kinds: readonly Kind[] }>;
+  implementSubscriptionDomain: { table: "streams" },
+} as const satisfies Record<string, { table: string }>;
 type ImplementerName = keyof typeof IMPLEMENTERS;
+
+const implementerForKind = (kind: Kind): ImplementerName =>
+  kind === "subscription"
+    ? "implementSubscriptionDomain"
+    : "implementOperationDomain";
 
 const isImplementer = (name: string | undefined): name is ImplementerName =>
   name !== undefined && Object.hasOwn(IMPLEMENTERS, name);
@@ -280,82 +334,116 @@ export const collectStartOperationHandlers = (): CollectedHandlers => {
     operations: new Map(),
     subscriptions: new Map(),
   };
-  const register = (
-    kind: Kind,
-    operation: string,
-    definition: HandlerDefinition,
-  ) => {
-    const handlers =
-      kind === "subscription" ? collected.subscriptions : collected.operations;
-    const existing =
-      collected.operations.get(operation) ??
-      collected.subscriptions.get(operation);
-    if (existing) {
-      throw new Error(
-        `Duplicate browser operation ${operation}: ${existing.module}.${existing.exportName} and ${definition.module}.${definition.exportName}`,
-      );
-    }
-    handlers.set(operation, definition);
-  };
   for (const path of sourceFiles(SERVER_ROOT)) {
     const program = parseFile(path);
     const bindings = importBindings(program.body);
-    for (const statement of program.body) {
-      const declaration =
-        statement.type === "ExportNamedDeclaration"
-          ? statement.declaration
-          : undefined;
-      if (declaration?.type !== "VariableDeclaration") continue;
-      for (const variable of declaration.declarations) {
-        const id = variable.id;
-        const implementation = variable.init;
-        if (id.type !== "Identifier") continue;
-        if (implementation?.type !== "CallExpression") continue;
-        const implementer = calledName(implementation.callee);
-        if (!isImplementer(implementer)) continue;
-        const [domainArg, tableArg] = implementation.arguments;
-        if (
-          domainArg?.type !== "Identifier" ||
-          tableArg?.type !== "ObjectExpression"
-        ) {
-          throw new Error(
-            `Unable to compile ${relative(ROOT, path)}:${id.name} — ${implementer} takes an imported domain identifier and an inline handler table.`,
-          );
-        }
-        const domain = resolveDomainBinding(
-          path,
-          implementer,
-          bindings,
-          domainArg.name,
-        );
-        const allowed: readonly Kind[] = IMPLEMENTERS[implementer].kinds;
-        for (const property of tableArg.properties) {
-          if (property.type !== "Property") continue;
-          const memberName = propertyName(property.key);
-          if (!memberName) continue;
-          const member = domain.members.get(memberName);
-          if (!member) {
-            throw new Error(
-              `${relative(ROOT, path)}:${id.name} implements ${domain.domain}.${memberName}, which is not declared in ${relative(ROOT, domain.path)}.`,
-            );
-          }
-          if (!allowed.includes(member.kind)) {
-            throw new Error(
-              `${relative(ROOT, path)}:${id.name} implements ${member.operation} with ${implementer}, but ${relative(ROOT, domain.path)} declares it as a ${member.kind}.`,
-            );
-          }
-          register(member.kind, member.operation, {
-            module: moduleSpecifier(path),
-            exportName: id.name,
-            member: memberName,
-          });
-        }
-      }
-    }
+    collectHandlersFromProgram(path, program, bindings, collected);
   }
   cachedHandlers = collected;
   return collected;
 };
+
+function registerHandler(
+  collected: CollectedHandlers,
+  kind: Kind,
+  operation: string,
+  definition: HandlerDefinition,
+): void {
+  const handlers =
+    kind === "subscription" ? collected.subscriptions : collected.operations;
+  const existing =
+    collected.operations.get(operation) ??
+    collected.subscriptions.get(operation);
+  if (existing)
+    throw new Error(
+      `Duplicate browser operation ${operation}: ${existing.module}.${existing.exportName} and ${definition.module}.${definition.exportName}`,
+    );
+  handlers.set(operation, definition);
+}
+
+function collectHandlersFromProgram(
+  path: string,
+  program: Program,
+  bindings: Map<string, { source: string; imported: string }>,
+  collected: CollectedHandlers,
+): void {
+  for (const statement of program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : undefined;
+    if (declaration?.type !== "VariableDeclaration") continue;
+    for (const variable of declaration.declarations)
+      collectHandlerVariable(path, variable, bindings, collected);
+  }
+}
+
+function collectHandlerVariable(
+  path: string,
+  variable: Extract<
+    Program["body"][number],
+    { type: "VariableDeclaration" }
+  >["declarations"][number],
+  bindings: Map<string, { source: string; imported: string }>,
+  collected: CollectedHandlers,
+): void {
+  const id = variable.id;
+  const implementation = variable.init;
+  if (id.type !== "Identifier" || implementation?.type !== "CallExpression")
+    return;
+  const implementer = calledName(implementation.callee);
+  if (!isImplementer(implementer)) return;
+  const [domainArg, tableArg] = implementation.arguments;
+  if (domainArg?.type !== "Identifier" || tableArg?.type !== "ObjectExpression")
+    throw new Error(
+      `Unable to compile ${relative(ROOT, path)}:${id.name} — ${implementer} takes an imported domain identifier and an inline handler table.`,
+    );
+  const domain = resolveDomainBinding(
+    path,
+    implementer,
+    bindings,
+    domainArg.name,
+  );
+  for (const property of tableArg.properties)
+    collectHandlerProperty(
+      path,
+      id.name,
+      implementer,
+      domain,
+      property,
+      collected,
+    );
+}
+
+function collectHandlerProperty(
+  path: string,
+  exportName: string,
+  implementer: ImplementerName,
+  domain: DomainDeclaration,
+  property: Extract<
+    Expression,
+    { type: "ObjectExpression" }
+  >["properties"][number],
+  collected: CollectedHandlers,
+): void {
+  if (property.type !== "Property") return;
+  const memberName = propertyName(property.key);
+  if (memberName === undefined) return;
+  const member = domain.members.get(memberName);
+  if (!member)
+    throw new Error(
+      `${relative(ROOT, path)}:${exportName} implements ${domain.domain}.${memberName}, which is not declared in ${relative(ROOT, domain.path)}.`,
+    );
+  if (implementerForKind(member.kind) !== implementer)
+    throw new Error(
+      `${relative(ROOT, path)}:${exportName} implements ${member.operation} with ${implementer}, but ${relative(ROOT, domain.path)} declares it as a ${member.kind}.`,
+    );
+  registerHandler(collected, member.kind, member.operation, {
+    module: moduleSpecifier(path),
+    exportName,
+    member: memberName,
+  });
+}
 
 /**
  * The registry: every client-declared operation, with the kind its declaration

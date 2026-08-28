@@ -256,6 +256,131 @@ interface EditProductFormProps extends EditModeProps<
 // Combined props type using discriminated union
 type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
+type ProductFormInitialValues = {
+  initialName?: string;
+  initialExpectedQuantity?: number | null;
+  initialIngredient?: ProductWithIngredient["ingredient"];
+  initialManufacturer?: string;
+  initialUpc?: string | null;
+  initialFdcId?: number | null;
+};
+
+function createProductFormDefaults({
+  initialName,
+  initialExpectedQuantity,
+  initialIngredient,
+  initialManufacturer,
+  initialUpc,
+  initialFdcId,
+}: ProductFormInitialValues) {
+  return {
+    name: initialName ?? "",
+    aliases: [],
+    tags: [],
+    collections: [],
+    manufacturer: initialManufacturer ?? UNSPECIFIED_MANUFACTURER,
+    model: null,
+    notes: null,
+    category: null,
+    upc: initialUpc ?? null,
+    isbn: null,
+    fdc_id: initialFdcId ?? null,
+    expectedQuantity: initialExpectedQuantity ?? null,
+    price: null,
+    ingredient: initialIngredient ?? null,
+    unitMappings: [],
+    externalIds: [],
+  };
+}
+
+function editProductFormDefaults(
+  product: ProductWithIngredient,
+  productIsbn: ReturnType<typeof isbnFromGtin>,
+) {
+  return {
+    name: product.name,
+    aliases: product.aliases,
+    tags: product.tags.filter((tag) => !isCollectionTag(tag)),
+    collections: collectionSlugsFromTags(product.tags),
+    manufacturer: product.manufacturer,
+    model: product.model,
+    notes: product.notes,
+    category: product.category,
+    upc:
+      product.primaryGtin && !productIsbn
+        ? displayGtin(product.primaryGtin)
+        : null,
+    isbn: productIsbn?.isbn13 ?? null,
+    fdc_id: product.fdc_id,
+    expectedQuantity: product.expectedQuantity,
+    price: product.price,
+    ingredient: product.ingredient ?? null,
+    unitMappings: product.unitMappings,
+    externalIds: product.externalIds,
+  };
+}
+
+function productFormDefaults({
+  product,
+  initialName,
+  initialExpectedQuantity,
+  initialIngredient,
+  initialManufacturer,
+  initialUpc,
+  initialFdcId,
+  productIsbn,
+}: ProductFormInitialValues & {
+  product?: ProductWithIngredient;
+  productIsbn: ReturnType<typeof isbnFromGtin>;
+}) {
+  return product
+    ? editProductFormDefaults(product, productIsbn)
+    : createProductFormDefaults({
+        initialName,
+        initialExpectedQuantity,
+        initialIngredient,
+        initialManufacturer,
+        initialUpc,
+        initialFdcId,
+      });
+}
+
+function productTags(values: ProductFormValues) {
+  return [
+    ...filterAliases(values.tags),
+    ...filterAliases(values.collections)
+      .map(normalizeCollectionSlug)
+      .filter(Boolean)
+      .map(collectionTagFromSlug),
+  ];
+}
+
+function createProductInput(
+  values: ProductFormValues,
+  aliases: string[],
+  tags: string[],
+  imageData: ReturnType<ReturnType<typeof useImageState>["getImageData"]>,
+): ProductCreateInput {
+  return {
+    name: values.name,
+    aliases,
+    tags,
+    manufacturer: values.manufacturer,
+    model: values.model,
+    notes: values.notes,
+    category: values.category,
+    upc: values.upc,
+    isbn: values.isbn,
+    fdc_id: values.fdc_id,
+    expectedQuantity: values.expectedQuantity,
+    price: values.price,
+    ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
+    unitMappings: values.unitMappings,
+    externalIds: values.externalIds,
+    ...imageData,
+  };
+}
+
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel, embedded } = props;
   const imageState = useImageState();
@@ -288,70 +413,28 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
-    defaultValues: {
-      name: product ? product.name : (initialName ?? ""),
-      aliases: product?.aliases ?? [],
-      tags: (product?.tags ?? []).filter((tag) => !isCollectionTag(tag)),
-      collections: collectionSlugsFromTags(product?.tags ?? []),
-      manufacturer: product
-        ? product.manufacturer
-        : (initialManufacturer ?? UNSPECIFIED_MANUFACTURER),
-      model: product ? product.model : null,
-      notes: product ? product.notes : null,
-      category: product?.category ?? null,
-      // The form edits the PRINTED barcode; the write boundary normalizes it
-      // back to GTIN-14, so a round-trip cannot mint a second row for the same
-      // barcode in another encoding.
-      upc: product
-        ? product.primaryGtin && !productIsbn
-          ? displayGtin(product.primaryGtin)
-          : null
-        : (initialUpc ?? null),
-      isbn: productIsbn?.isbn13 ?? null,
-      fdc_id: product ? product.fdc_id : (initialFdcId ?? null),
-      expectedQuantity: product
-        ? product.expectedQuantity
-        : (initialExpectedQuantity ?? null),
-      price: product?.price ?? null,
-      ingredient: product?.ingredient || initialIngredient || null,
-      unitMappings: product?.unitMappings ?? [],
-      externalIds: product?.externalIds ?? [],
-    },
+    defaultValues: productFormDefaults({
+      product,
+      initialName,
+      initialExpectedQuantity,
+      initialIngredient,
+      initialManufacturer,
+      initialUpc,
+      initialFdcId,
+      productIsbn,
+    }),
   });
 
   const handleSubmit = (values: ProductFormValues) => {
     const aliases = filterAliases(values.aliases);
     // Same blank-stripping as aliases — an empty row in the editor is not a tag.
-    const tags = [
-      ...filterAliases(values.tags),
-      ...filterAliases(values.collections)
-        .map(normalizeCollectionSlug)
-        .filter(Boolean)
-        .map(collectionTagFromSlug),
-    ];
+    const tags = productTags(values);
 
     if (mode === "create") {
       // For creation, pass all fields
-      const createData: ProductCreateInput = {
-        name: values.name,
-        aliases,
-        tags,
-        manufacturer: values.manufacturer,
-        model: values.model,
-        notes: values.notes,
-        category: values.category,
-        upc: values.upc,
-        isbn: values.isbn,
-        fdc_id: values.fdc_id,
-        expectedQuantity: values.expectedQuantity,
-        price: values.price,
-        ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
-        unitMappings: values.unitMappings,
-        externalIds: values.externalIds,
-        ...getImageData(true), // Apply pending images for creation
-      };
-
-      props.onCreate(createData);
+      props.onCreate(
+        createProductInput(values, aliases, tags, getImageData(true)),
+      );
     } else if (mode === "edit" && product) {
       // In edit mode, determine which fields have changed
       const updates: Partial<ProductCreateInput> = buildUpdateObject(

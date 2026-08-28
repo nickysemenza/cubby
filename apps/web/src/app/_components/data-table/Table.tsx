@@ -55,6 +55,32 @@ type DesktopPaneStyle = React.CSSProperties & {
   "--row-accent"?: string;
 };
 
+function desktopPaneStyle({
+  embedded,
+  paneMaxHeight,
+  desktopInspector,
+  entity,
+}: {
+  embedded: boolean;
+  paneMaxHeight: number | null;
+  desktopInspector?: ReactNode;
+  entity?: Entity;
+}): DesktopPaneStyle {
+  const style: DesktopPaneStyle = {};
+  if (embedded) {
+    style.maxHeight = "60vh";
+  } else if (paneMaxHeight != null) {
+    style.maxHeight = `${paneMaxHeight}px`;
+  }
+  if (desktopInspector && !embedded && paneMaxHeight != null) {
+    style.height = `${paneMaxHeight}px`;
+  }
+  if (entity && isBrowserRoutedEntity(entity)) {
+    style["--row-accent"] = entities[entity].color.accent;
+  }
+  return style;
+}
+
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
 // instead of stark white. Uses the table's border token at low alpha; no
@@ -184,6 +210,345 @@ export interface RTableProps<TItem extends RowData> {
   >;
 }
 
+/** Page state belongs beside the scroll pane, rather than in its wide table. */
+function TableStatus<TItem extends RowData>({
+  table,
+  entity,
+  isLoading,
+  hydrated,
+  error,
+  rows,
+  emptyState,
+}: Pick<
+  RTableProps<TItem>,
+  "table" | "entity" | "isLoading" | "error" | "emptyState"
+> & {
+  hydrated: boolean;
+  rows: readonly Row<TItem>[];
+}): ReactNode {
+  if (isLoading || !hydrated) return <SimpleLoading />;
+  if (error) return <ErrorDisplay error={error} />;
+  if (rows.length) return null;
+  if (emptyState) return emptyState;
+
+  const state = table.state;
+  const isFiltered = isNarrowed(table);
+  const onClearFilters = hasActiveFilters(state.columnFilters)
+    ? () => table.resetColumnFilters()
+    : undefined;
+  return entity && isBrowserRoutedEntity(entity) ? (
+    <EntityEmptyState
+      entity={entity}
+      isFiltered={isFiltered}
+      onClearFilters={onClearFilters}
+    />
+  ) : (
+    <FilteredEmptyState
+      isFiltered={isFiltered}
+      onClearFilters={onClearFilters}
+    />
+  );
+}
+
+function DesktopTableToolbar<TItem extends RowData>({
+  table,
+  defaultDensity,
+  entity,
+  filterOptionHints,
+  inspectorToggle,
+  additionalToolbarContent,
+  groupConfig,
+  grouped,
+  onGroupedChange,
+  infiniteScroll,
+  actions,
+  bulkActionBar,
+  externalToolbar,
+  isTransitioning,
+}: Pick<
+  RTableProps<TItem>,
+  | "table"
+  | "defaultDensity"
+  | "entity"
+  | "filterOptionHints"
+  | "inspectorToggle"
+  | "additionalToolbarContent"
+  | "groupConfig"
+  | "grouped"
+  | "onGroupedChange"
+  | "infiniteScroll"
+  | "actions"
+  | "bulkActionBar"
+> & {
+  externalToolbar: boolean;
+  isTransitioning: boolean;
+}) {
+  return (
+    <DataTableToolbar
+      table={table}
+      defaultDensity={defaultDensity}
+      entity={entity}
+      filterOptionHints={filterOptionHints}
+      additionalContent={
+        <div className="flex flex-wrap items-center gap-2">
+          {inspectorToggle}
+          {additionalToolbarContent}
+          <GroupToggle
+            groupConfig={groupConfig}
+            grouped={grouped}
+            onGroupedChange={onGroupedChange}
+          />
+          {!infiniteScroll && (
+            <RowsPerPageSelect table={table} className="h-7 w-16" />
+          )}
+        </div>
+      }
+      actions={actions}
+      bulkActionBar={bulkActionBar}
+      portalWorkbenchUtilities={externalToolbar}
+      workbenchUtilityViewport="desktop"
+      isTransitioning={isTransitioning}
+      className="px-4 py-1"
+    />
+  );
+}
+
+function GroupToggle<TItem extends RowData>({
+  groupConfig,
+  grouped,
+  onGroupedChange,
+}: Pick<RTableProps<TItem>, "groupConfig" | "grouped" | "onGroupedChange">) {
+  if (!groupConfig || !onGroupedChange) return null;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-lg"
+      className="shrink-0"
+      onClick={() => onGroupedChange(!grouped)}
+      aria-label={grouped ? "Show flat list" : "Show grouped list"}
+    >
+      {grouped ? (
+        <List className="size-4" />
+      ) : (
+        <LayoutList className="size-4" />
+      )}
+    </Button>
+  );
+}
+
+/**
+ * Keeps footer geometry in the same coordinate system as the pinned headers.
+ * Server totals can render before every infinite row is loaded, so this is
+ * deliberately driven by footer definitions, not the loaded-row count.
+ */
+function PinnedTableFooter<TItem extends RowData>({
+  table,
+  hasRows,
+}: {
+  table: ITable<TItem>;
+  hasRows: boolean;
+}) {
+  if (!hasRows) return null;
+  const startGroups = table.getStartFooterGroups();
+  const centerGroups = table.getCenterFooterGroups();
+  const endGroups = table.getEndFooterGroups();
+  const footerGroups = Array.from(
+    {
+      length: Math.max(
+        startGroups.length,
+        centerGroups.length,
+        endGroups.length,
+      ),
+    },
+    (_, index) => ({
+      id: `footer-${index}`,
+      headers: [
+        ...(startGroups[index]?.headers ?? []),
+        ...(centerGroups[index]?.headers ?? []),
+        ...(endGroups[index]?.headers ?? []),
+      ],
+    }),
+  );
+  if (
+    !footerGroups.some((group) =>
+      group.headers.some((header) => header.column.columnDef.footer),
+    )
+  )
+    return null;
+  return (
+    <TableFooter className="border-t bg-card text-sm font-medium">
+      {footerGroups.map((group) => (
+        <TableRow key={group.id} className="hover:bg-muted/50">
+          {group.headers.map((header) => (
+            <PinnedFooterCell key={header.id} header={header} table={table} />
+          ))}
+          <TableCell data-spacer aria-hidden />
+        </TableRow>
+      ))}
+    </TableFooter>
+  );
+}
+
+function PinnedFooterCell<TItem extends RowData>({
+  header,
+  table,
+}: {
+  header: ReturnType<
+    ITable<TItem>["getStartFooterGroups"]
+  >[number]["headers"][number];
+  table: ITable<TItem>;
+}) {
+  const pinned = header.column.getIsPinned();
+  const width = columnWidthValue(header.column.id);
+  const pinnedColumns =
+    pinned === "start"
+      ? table.getStartVisibleLeafColumns()
+      : pinned === "end"
+        ? table.getEndVisibleLeafColumns()
+        : [];
+  const index = pinnedColumns.findIndex(
+    (column) => column.id === header.column.id,
+  );
+  const boundaryClass =
+    pinned === "start" && index === pinnedColumns.length - 1
+      ? "border-r-2 border-r-foreground"
+      : pinned === "end" && index === 0
+        ? "border-l-2 border-l-foreground"
+        : undefined;
+  const inset =
+    pinned === "start"
+      ? { insetInlineStart: header.column.getStart("start") }
+      : pinned === "end"
+        ? { insetInlineEnd: header.column.getAfter("end") }
+        : {};
+  return (
+    <TableCell
+      colSpan={header.colSpan}
+      className={cn(
+        "px-2 py-1",
+        header.column.columnDef.meta?.className,
+        pinned && "sticky z-20 bg-card",
+        boundaryClass,
+      )}
+      style={{ width, minWidth: width, maxWidth: width, ...inset }}
+    >
+      {header.isPlaceholder
+        ? null
+        : flexRender(header.column.columnDef.footer, header.getContext())}
+    </TableCell>
+  );
+}
+
+type RowSelectionProjection = { focused: boolean; version: string };
+
+/**
+ * A row subscribes only to the ranges that cover it. The string version keeps
+ * DataRow memoization honest when a column operation changes without moving
+ * focus, while avoiding whole-table selection subscriptions during scrolling.
+ */
+function projectRowSelection<TItem extends RowData>(
+  rows: readonly Row<TItem>[],
+  rowId: string,
+  rowIndex: number,
+): (ranges: CellSelectionState) => RowSelectionProjection {
+  return (ranges) => ({
+    focused: ranges.at(-1)?.focusRowId === rowId,
+    version: ranges
+      .filter((range) => {
+        const anchor = rows.findIndex((row) => row.id === range.anchorRowId);
+        const focus = rows.findIndex((row) => row.id === range.focusRowId);
+        return (
+          anchor >= 0 &&
+          focus >= 0 &&
+          rowIndex >= Math.min(anchor, focus) &&
+          rowIndex <= Math.max(anchor, focus)
+        );
+      })
+      .map(
+        (range) =>
+          `${range.anchorColumnId}:${range.focusColumnId}:${range.operation ?? "include"}`,
+      )
+      .join("|"),
+  });
+}
+
+function VirtualSelectionRow<TItem extends RowData>({
+  table,
+  rows,
+  row,
+  rowIndex,
+  groupRowIndex,
+  height,
+  currentRowId,
+  isDebugEnabled,
+  onRowClick,
+  onRowHover,
+  onRowHoverEnd,
+  suppressCellRowClick,
+  rowClassName,
+  cellClassName,
+  columnsKey,
+  rowContentVersion,
+}: {
+  table: ITable<TItem>;
+  rows: readonly Row<TItem>[];
+  row: Row<TItem>;
+  rowIndex: number;
+  groupRowIndex?: number;
+  height: string;
+  currentRowId?: string;
+  isDebugEnabled: boolean;
+  onRowClick?: (row: Row<TItem>) => void;
+  onRowHover?: (row: Row<TItem>) => void;
+  onRowHoverEnd?: (row: Row<TItem>) => void;
+  suppressCellRowClick: boolean;
+  rowClassName?: (row: Row<TItem>) => string | undefined;
+  cellClassName: string;
+  columnsKey: string;
+  rowContentVersion: unknown;
+}) {
+  const selectionProjection = projectRowSelection(rows, row.id, rowIndex);
+  const classes = cn(
+    rowClassName?.(row),
+    (groupRowIndex ?? rowIndex) % 2 === 1 && "table-row-zebra",
+  );
+  return (
+    <table.Subscribe
+      source={table.atoms.cellSelection!}
+      selector={selectionProjection}
+    >
+      {(selection) => (
+        <table.Subscribe
+          source={table.atoms.rowSelection!}
+          selector={(selected) => selected[row.id] === true}
+        >
+          {(isSelected) => (
+            <DataRow
+              row={row}
+              rowIndex={rowIndex}
+              isSelected={isSelected}
+              isCurrent={currentRowId === row.id}
+              isExpanded={row.getIsExpanded()}
+              isFocused={selection.focused}
+              isDebugEnabled={isDebugEnabled}
+              onRowClick={onRowClick}
+              onRowHover={onRowHover}
+              onRowHoverEnd={onRowHoverEnd}
+              suppressCellRowClick={suppressCellRowClick}
+              rowClassName={classes}
+              cellClassName={cellClassName}
+              columnsKey={columnsKey}
+              rowContentVersion={rowContentVersion}
+              selectionVersion={selection.version}
+              height={height}
+            />
+          )}
+        </table.Subscribe>
+      )}
+    </table.Subscribe>
+  );
+}
+
 /**
  * Publishes the table's entity actions so its actions column can reach them,
  * and mounts their dialogs.
@@ -268,6 +633,200 @@ export default function RTable<TItem extends RowData>(
   return content;
 }
 
+function DesktopTableView<TItem extends RowData>({
+  table,
+  controller,
+  entity,
+  embedded = false,
+  desktopInspector,
+  externalToolbar,
+  desktopToolbar,
+  showToolbar,
+  infiniteScroll,
+  showPagination,
+  showCellSelectionStats,
+  timing,
+  ariaLabel,
+  cellSelectionEnabled,
+  statusContent,
+  hasStatusContent,
+  tableBody,
+}: Pick<
+  RTableProps<TItem>,
+  | "table"
+  | "entity"
+  | "embedded"
+  | "desktopInspector"
+  | "infiniteScroll"
+  | "showCellSelectionStats"
+  | "timing"
+  | "ariaLabel"
+> & {
+  controller: ReturnType<typeof useDataTableController<TItem>>;
+  externalToolbar: boolean;
+  desktopToolbar: ReactNode;
+  showToolbar: boolean;
+  showPagination: boolean;
+  cellSelectionEnabled: boolean;
+  statusContent: ReactNode;
+  hasStatusContent: boolean;
+  tableBody: ReactNode;
+}) {
+  const {
+    cellSelectionContainerProps,
+    columnSizeVars,
+    isDebugEnabled,
+    isTransitioning,
+    isMobile,
+    paneWrapperRef,
+    paneMaxHeight,
+    rows,
+    scrollRestorationId,
+    styles,
+    tableContainerRef,
+  } = controller;
+  if (isMobile) return null;
+
+  const paneStyle = desktopPaneStyle({
+    embedded,
+    paneMaxHeight,
+    desktopInspector,
+    entity,
+  });
+  const showFooter =
+    (!infiniteScroll && showPagination) || showCellSelectionStats;
+
+  return (
+    <>
+      {externalToolbar && desktopToolbar ? (
+        <div className="hidden shrink-0 border-b border-border bg-background md:block">
+          {desktopToolbar}
+        </div>
+      ) : null}
+      <CellSelectionContext.Provider value={cellSelectionEnabled}>
+        <div
+          ref={paneWrapperRef}
+          className={cn(
+            "relative hidden flex-col border-[var(--border)] md:flex",
+            embedded ? "border" : "border-r border-b",
+            desktopInspector && !embedded && "xl:pr-[25rem]",
+          )}
+          style={paneStyle}
+        >
+          {showToolbar && !externalToolbar ? (
+            <div className="shrink-0 border-b border-border bg-background">
+              {desktopToolbar}
+            </div>
+          ) : null}
+          <section
+            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The keyboard-navigable grid and horizontal scroll pane must be directly focusable.
+            tabIndex={0}
+            ref={tableContainerRef}
+            data-scroll-restoration-id={scrollRestorationId}
+            aria-label={`${ariaLabel} keyboard navigation`}
+            className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
+            {...cellSelectionContainerProps}
+          >
+            <Table
+              aria-label={ariaLabel}
+              aria-busy={isTransitioning}
+              className={cn(styles.table)}
+              containerClassName="overflow-visible"
+              style={columnSizeVars}
+            >
+              <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
+                <TableHeaderLayout
+                  table={table}
+                  styles={styles}
+                  isDebugEnabled={isDebugEnabled}
+                />
+              </TableHeader>
+              <TableBody
+                inert={isTransitioning ? true : undefined}
+                aria-disabled={isTransitioning || undefined}
+              >
+                {tableBody}
+              </TableBody>
+              <PinnedTableFooter table={table} hasRows={rows.length > 0} />
+            </Table>
+            {hasStatusContent ? (
+              <div className="sticky left-0 flex min-h-24 w-full items-center justify-center overflow-hidden px-2 py-4">
+                {statusContent}
+              </div>
+            ) : null}
+          </section>
+          {showFooter ? (
+            <div className="shrink-0 border-t border-[var(--border)] bg-background px-2 py-1">
+              <DataTablePagination
+                table={table}
+                timing={timing}
+                showPaginationControls={!infiniteScroll && showPagination}
+                showCellSelectionStats={showCellSelectionStats}
+              />
+            </div>
+          ) : null}
+          {desktopInspector && !embedded ? (
+            <div
+              className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
+              data-desktop-inspector
+            >
+              {desktopInspector}
+            </div>
+          ) : null}
+        </div>
+      </CellSelectionContext.Provider>
+    </>
+  );
+}
+
+function tableChrome<TItem extends RowData>({
+  table,
+  embedded,
+  showColumnMenu,
+  actions,
+  bulkActionBar,
+  additionalToolbarContent,
+  groupConfig,
+  inspectorToggle,
+  toolbarMode,
+  hasPageIdentity,
+  hasWorkbenchTarget,
+}: Pick<
+  RTableProps<TItem>,
+  | "table"
+  | "embedded"
+  | "showColumnMenu"
+  | "actions"
+  | "bulkActionBar"
+  | "additionalToolbarContent"
+  | "groupConfig"
+  | "inspectorToggle"
+  | "toolbarMode"
+> & {
+  hasPageIdentity: boolean;
+  hasWorkbenchTarget: boolean;
+}) {
+  const hasFilterConfig = table
+    .getAllLeafColumns()
+    .some((column) => column.columnDef.meta?.filterConfig);
+  const hasToolbarContent = Boolean(
+    actions ??
+    bulkActionBar ??
+    additionalToolbarContent ??
+    groupConfig ??
+    hasFilterConfig,
+  );
+  return {
+    showToolbar: !embedded || showColumnMenu || hasToolbarContent,
+    showPagination: !embedded || table.getPageCount() > 1,
+    topLevelInspectorToggle: embedded ? null : inspectorToggle,
+    externalToolbar:
+      !embedded &&
+      (toolbarMode === "external" ||
+        (toolbarMode === "auto" && (hasPageIdentity || hasWorkbenchTarget))),
+  };
+}
+
 function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const {
     table,
@@ -301,31 +860,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     desktopInspector,
     filterOptionHints,
   } = props;
-  const pageIdentity = usePageIdentity();
-  const workbenchTarget = usePageWorkbenchTarget();
-  const {
-    cellSelectionContainerProps,
-    colSpan,
-    columnSizeVars,
-    columnsKey,
-    dConfig,
-    hydrated,
-    isDebugEnabled,
-    isFetchingNextPage,
-    isTransitioning,
-    isMobile,
-    paneWrapperRef,
-    paneMaxHeight,
-    resolveIndex,
-    rows,
-    rowContentVersion,
-    setDesktopInfiniteSentinel,
-    styles,
-    scrollRestorationId,
-    tableContainerRef,
-    totalSize,
-    virtualRows,
-  } = useDataTableController({
+  const controller = useDataTableController({
     table,
     infiniteScroll,
     groupConfig,
@@ -334,6 +869,25 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     onRowClick,
     defaultDensity,
   });
+  const pageIdentity = usePageIdentity();
+  const workbenchTarget = usePageWorkbenchTarget();
+  const {
+    colSpan,
+    columnsKey,
+    dConfig,
+    hydrated,
+    isDebugEnabled,
+    isFetchingNextPage,
+    isTransitioning,
+    isMobile,
+    resolveIndex,
+    rows,
+    rowContentVersion,
+    setDesktopInfiniteSentinel,
+    styles,
+    totalSize,
+    virtualRows,
+  } = controller;
 
   // Desktop tables get spreadsheet-style cell selection; mobile does not.
   //
@@ -356,118 +910,64 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   // fits on one page (the rule mobile already applies to its inline pager).
   // A table with optional columns or filters needs its toolbar at rest, not
   // only once rows are selected (`bulkActionBar` is null until then).
-  const hasFilterConfig = table
-    .getAllLeafColumns()
-    .some((column) => column.columnDef.meta?.filterConfig);
-  const showToolbar =
-    !embedded ||
-    showColumnMenu ||
-    Boolean(
-      actions ??
-      bulkActionBar ??
-      additionalToolbarContent ??
-      groupConfig ??
-      hasFilterConfig,
-    );
-  const showPagination = !embedded || table.getPageCount() > 1;
-  // The control is a page-workbench affordance. Embedded relationship ledgers
-  // may reuse RTable but never acquire an inspector of their own.
-  const topLevelInspectorToggle = embedded ? null : inspectorToggle;
-  const externalToolbar =
-    !embedded &&
-    (toolbarMode === "external" ||
-      (toolbarMode === "auto" &&
-        (pageIdentity !== null || workbenchTarget !== null)));
+  const {
+    showToolbar,
+    showPagination,
+    topLevelInspectorToggle,
+    externalToolbar,
+  } = tableChrome({
+    table,
+    embedded,
+    showColumnMenu,
+    actions,
+    bulkActionBar,
+    additionalToolbarContent,
+    groupConfig,
+    inspectorToggle,
+    toolbarMode,
+    hasPageIdentity: pageIdentity !== null,
+    hasWorkbenchTarget: workbenchTarget !== null,
+  });
 
-  // Loading / error / empty content, or null when real rows should render.
-  //
-  // This deliberately does NOT render inside a `<td colSpan>`. A full-width
-  // cell is as wide as the table's SCROLL width, so `text-center` centres
-  // against ~2288px on a wide list and lands the headline — and the only
-  // "Clear filters" escape from a zero-result dead end — past the right edge
-  // of a 1280px viewport. Status is page state, not row data, so it renders as
-  // a block outside the table where the container's width bounds it.
-  const renderStatusContent = (): ReactNode => {
-    if (isLoading || !hydrated) return <SimpleLoading />;
-
-    if (error) return <ErrorDisplay error={error} />;
-
-    if (!rows.length) {
-      if (emptyState) return emptyState;
-      const state = table.state;
-      // Narrowed-ness and clearability part ways when a URL-only scope is on:
-      // the copy must say "no matches", but only column filters are resettable
-      // from here (see `isNarrowed`).
-      const isFiltered = isNarrowed(table);
-      const clearFilters = hasActiveFilters(state.columnFilters)
-        ? () => {
-            table.resetColumnFilters();
-          }
-        : undefined;
-      return entity && isBrowserRoutedEntity(entity) ? (
-        <EntityEmptyState
-          entity={entity}
-          isFiltered={isFiltered}
-          onClearFilters={clearFilters}
-        />
-      ) : (
-        // No entity known: render an honest generic empty state with the real
-        // filter flag, rather than masquerading as a filtered product table.
-        <FilteredEmptyState
-          isFiltered={isFiltered}
-          onClearFilters={clearFilters}
-        />
-      );
-    }
-
-    return null;
-  };
-
-  const statusContent = renderStatusContent();
+  // This deliberately stays outside a full-width table cell: page status is
+  // bounded by the scroll pane, not by the table's total scroll width.
+  const statusContent = (
+    <TableStatus
+      table={table}
+      entity={entity}
+      isLoading={isLoading}
+      hydrated={hydrated}
+      error={error}
+      rows={rows}
+      emptyState={emptyState}
+    />
+  );
+  const hasStatusContent =
+    isLoading || !hydrated || Boolean(error) || rows.length === 0;
 
   const desktopToolbar = showToolbar ? (
-    <DataTableToolbar
+    <DesktopTableToolbar
       table={table}
       defaultDensity={defaultDensity}
       entity={entity}
       filterOptionHints={filterOptionHints}
-      additionalContent={
-        <div className="flex flex-wrap items-center gap-2">
-          {topLevelInspectorToggle}
-          {additionalToolbarContent}
-          {groupConfig && onGroupedChange && (
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              className="shrink-0"
-              onClick={() => onGroupedChange(!grouped)}
-              aria-label={grouped ? "Show flat list" : "Show grouped list"}
-            >
-              {grouped ? (
-                <List className="size-4" />
-              ) : (
-                <LayoutList className="size-4" />
-              )}
-            </Button>
-          )}
-          {!infiniteScroll && (
-            <RowsPerPageSelect table={table} className="h-7 w-16" />
-          )}
-        </div>
-      }
+      inspectorToggle={topLevelInspectorToggle}
+      additionalToolbarContent={additionalToolbarContent}
+      groupConfig={groupConfig}
+      grouped={grouped}
+      onGroupedChange={onGroupedChange}
+      infiniteScroll={infiniteScroll}
       actions={actions}
       bulkActionBar={bulkActionBar}
-      portalWorkbenchUtilities={externalToolbar}
-      workbenchUtilityViewport="desktop"
+      externalToolbar={externalToolbar}
       isTransitioning={isTransitioning}
-      className="px-4 py-1"
     />
   ) : null;
 
   const renderTableBody = () => {
     // Status is rendered as a block below the table (see renderStatusContent),
     // so the body stays empty rather than holding a full-scroll-width cell.
-    if (statusContent !== null) return null;
+    if (hasStatusContent) return null;
 
     // Always use virtualized rendering for consistent behavior
     const topSpacerHeight = virtualRows.length > 0 ? virtualRows[0]!.start : 0;
@@ -540,76 +1040,28 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           // rowIndex is a valid position into the rows array (flat index when
           // ungrouped, or the row's flat index when grouped).
           const row = rows[item.rowIndex]!;
-          const rowSelectionProjection = (ranges: CellSelectionState) => {
-            const focused = ranges.at(-1)?.focusRowId === row.id;
-            const version = ranges
-              .filter((range) => {
-                const anchor = rows.findIndex(
-                  (candidate) => candidate.id === range.anchorRowId,
-                );
-                const focus = rows.findIndex(
-                  (candidate) => candidate.id === range.focusRowId,
-                );
-                return (
-                  anchor >= 0 &&
-                  focus >= 0 &&
-                  item.rowIndex >= Math.min(anchor, focus) &&
-                  item.rowIndex <= Math.max(anchor, focus)
-                );
-              })
-              .map(
-                (range) =>
-                  `${range.anchorColumnId}:${range.focusColumnId}:${range.operation ?? "include"}`,
-              )
-              .join("|");
-            return { focused, version };
-          };
           return (
-            <table.Subscribe
+            <VirtualSelectionRow
               key={row.id}
-              source={table.atoms.cellSelection!}
-              selector={rowSelectionProjection}
-            >
-              {(selection) => (
-                <table.Subscribe
-                  source={table.atoms.rowSelection!}
-                  selector={(selection) => selection[row.id] === true}
-                >
-                  {(isSelected) => (
-                    <DataRow
-                      row={row}
-                      rowIndex={item.rowIndex}
-                      isSelected={isSelected}
-                      isCurrent={currentRowId === row.id}
-                      isExpanded={row.getIsExpanded()}
-                      // Focus follows v9's durable focus corner and is subscribed at the
-                      // row, not the virtualized body owner.
-                      isFocused={selection.focused}
-                      isDebugEnabled={isDebugEnabled}
-                      onRowClick={onRowClick}
-                      onRowHover={onRowHover}
-                      onRowHoverEnd={onRowHoverEnd}
-                      suppressCellRowClick={cellSelectionEnabled}
-                      rowClassName={cn(
-                        styles.row,
-                        // Zebra keyed off the flat row index, not nth-child: the body
-                        // is window-virtualized behind a spacer <tr>, so DOM-child
-                        // parity shifts as the window scrolls. In grouped mode the
-                        // within-group index restarts stripes at each section header.
-                        (item.groupRowIndex ?? item.rowIndex) % 2 === 1 &&
-                          "table-row-zebra",
-                        getRowClassName?.(row),
-                      )}
-                      cellClassName={styles.cell}
-                      columnsKey={columnsKey}
-                      rowContentVersion={rowContentVersion}
-                      selectionVersion={selection.version}
-                      height={`${virtualRow.size}px`}
-                    />
-                  )}
-                </table.Subscribe>
-              )}
-            </table.Subscribe>
+              table={table}
+              rows={rows}
+              row={row}
+              rowIndex={item.rowIndex}
+              groupRowIndex={item.groupRowIndex}
+              height={`${virtualRow.size}px`}
+              currentRowId={currentRowId}
+              isDebugEnabled={isDebugEnabled}
+              onRowClick={onRowClick}
+              onRowHover={onRowHover}
+              onRowHoverEnd={onRowHoverEnd}
+              suppressCellRowClick={cellSelectionEnabled}
+              rowClassName={(candidate) =>
+                cn(styles.row, getRowClassName?.(candidate))
+              }
+              cellClassName={styles.cell}
+              columnsKey={columnsKey}
+              rowContentVersion={rowContentVersion}
+            />
           );
         })}
 
@@ -631,257 +1083,31 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     );
   };
 
-  const desktopPaneStyle: DesktopPaneStyle = {
-    // Embedded tables sit in a scrolling detail page, so they take a fixed
-    // ceiling instead of claiming the rest of the viewport.
-    maxHeight: embedded
-      ? "60vh"
-      : paneMaxHeight != null
-        ? `${paneMaxHeight}px`
-        : undefined,
-    // A docked record inspector is a workbench pane, not a table footer. Keep
-    // it at the available viewport height even with only one or two rows.
-    height:
-      desktopInspector && !embedded && paneMaxHeight != null
-        ? `${paneMaxHeight}px`
-        : undefined,
-  };
-  if (entity && isBrowserRoutedEntity(entity)) {
-    desktopPaneStyle["--row-accent"] = entities[entity].color.accent;
-  }
-
   return (
     // max-w-[90rem]: self-cap at the 2xl page width. Most list pages are
     // already capped by Page, but wide hosts (locations' tabbed
     // page, sized for its gallery view) would otherwise stretch the table to
     // the viewport and the width-slack spacer into an absurd gutter.
     <Stack className="max-w-[90rem]">
-      {!isMobile && externalToolbar && desktopToolbar && (
-        <div className="hidden shrink-0 border-b border-border bg-background md:block">
-          {desktopToolbar}
-        </div>
-      )}
-      {/* Desktop Table View - Unified wrapper. Sets the entity-inked
-          --row-accent so hover/selected bars match the section's color. The
-          provider tells editable cells (CellEditTrigger) to select-then-edit
-          rather than click-to-edit. */}
-      {!isMobile && (
-        <CellSelectionContext.Provider value={cellSelectionEnabled}>
-          <div
-            ref={paneWrapperRef}
-            // `hidden md:flex` rather than JS alone: before hydration
-            // `useIsMobile` must report false (the server has no viewport), so
-            // both branches render on that first pass and the breakpoint — not
-            // JS — decides. Without it a phone paints the clipped desktop
-            // table under the mobile skeleton until hydration flips.
-            //
-            // A bounded flex column: toolbar and pager are fixed-height ends and
-            // the pane between them takes the rest, so both stay on screen
-            // without `position: sticky` and the rows scroll inside the table.
-            className={cn(
-              "relative hidden flex-col border-[var(--border)] md:flex",
-              // A page-level table now sits flush against the rail and the
-              // command header (the shell spends no gutter), so its own left
-              // and top borders would double the rail's border and the
-              // header separator. Drop them and let the page chrome be
-              // the table's edge; an embedded table floats in a section and
-              // still needs all four.
-              embedded ? "border" : "border-r border-b",
-              desktopInspector && !embedded && "xl:pr-[25rem]",
-            )}
-            style={desktopPaneStyle}
-          >
-            {/* Toolbar — the column's fixed top end. Holds view options,
-              filters reset, the bulk-action bar, and a page-size control. */}
-            {showToolbar && !externalToolbar && (
-              <div className="shrink-0 border-b border-border bg-background">
-                {desktopToolbar}
-              </div>
-            )}
-
-            {/* The scroll pane: the virtualizer's scroll element, the focus
-              target for keyboard cell nav, and the box the rows scroll inside
-              on BOTH axes. Scrolling here rather than on the window is what
-              keeps the nav rail, page header, toolbar and column header in
-              place when a wide table is scrolled sideways.
-              `min-h-0` is required — a flex child's default `min-height: auto`
-              refuses to shrink below its content, which would push the pane
-              past the wrapper's ceiling and hand the scroll back to the page.
-              Cell selection (keyboard + mouse) is wired via containerProps;
-              data-[cell-dragging] suppresses native text selection mid-drag. */}
-            <section
-              // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The keyboard-navigable grid and horizontal scroll pane must be directly focusable.
-              tabIndex={0}
-              ref={tableContainerRef}
-              // Names the pane for the router's scroll restoration, which
-              // otherwise addresses it by a positional nth-child path that
-              // changes as chrome above it renders. See useTableVirtualizer.
-              data-scroll-restoration-id={scrollRestorationId}
-              aria-label={`${ariaLabel} keyboard navigation`}
-              className="min-h-0 flex-1 overflow-auto outline-none data-[cell-dragging]:select-none"
-              {...cellSelectionContainerProps}
-            >
-              <Table
-                aria-label={ariaLabel}
-                aria-busy={isTransitioning}
-                className={cn(styles.table)}
-                // The pane above owns scrolling for both axes; the primitive's
-                // own `overflow-x-auto` here would nest a second scroller and
-                // re-bind the sticky header to it.
-                containerClassName="overflow-visible"
-                style={columnSizeVars}
-              >
-                {/* Sticks to the pane's own top, so there is no offset to keep
-                  in sync with the nav and toolbar heights. */}
-                <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
-                  <TableHeaderLayout
-                    table={table}
-                    styles={styles}
-                    isDebugEnabled={isDebugEnabled}
-                  />
-                </TableHeader>
-                <TableBody
-                  inert={isTransitioning ? true : undefined}
-                  aria-disabled={isTransitioning || undefined}
-                >
-                  {renderTableBody()}
-                </TableBody>
-                {/* Footer aggregation row — only when data is loaded. Renders in
-                  infinite mode too: footers read server totals from table meta
-                  (see serverTotals), so they no longer depend on having every
-                  row loaded client-side. */}
-                {rows.length > 0 &&
-                  (() => {
-                    const startFooterGroups = table.getStartFooterGroups();
-                    const centerFooterGroups = table.getCenterFooterGroups();
-                    const endFooterGroups = table.getEndFooterGroups();
-                    const footerGroups = Array.from(
-                      {
-                        length: Math.max(
-                          startFooterGroups.length,
-                          centerFooterGroups.length,
-                          endFooterGroups.length,
-                        ),
-                      },
-                      (_, index) => ({
-                        id: `footer-${index}`,
-                        headers: [
-                          ...(startFooterGroups[index]?.headers ?? []),
-                          ...(centerFooterGroups[index]?.headers ?? []),
-                          ...(endFooterGroups[index]?.headers ?? []),
-                        ],
-                      }),
-                    );
-                    const hasFooter = footerGroups.some((fg) =>
-                      fg.headers.some((h) => h.column.columnDef.footer),
-                    );
-                    if (!hasFooter) return null;
-                    return (
-                      <TableFooter className="border-t bg-card text-sm font-medium">
-                        {footerGroups.map((footerGroup) => (
-                          <TableRow
-                            key={footerGroup.id}
-                            className="hover:bg-muted/50"
-                          >
-                            {footerGroup.headers.map((header) => {
-                              const pinned = header.column.getIsPinned();
-                              const width = columnWidthValue(header.column.id);
-                              const pinnedColumns =
-                                pinned === "start"
-                                  ? table.getStartVisibleLeafColumns()
-                                  : pinned === "end"
-                                    ? table.getEndVisibleLeafColumns()
-                                    : [];
-                              const pinnedIndex = pinnedColumns.findIndex(
-                                (column) => column.id === header.column.id,
-                              );
-                              const boundaryClass =
-                                pinned === "start" &&
-                                pinnedIndex === pinnedColumns.length - 1
-                                  ? "border-r-2 border-r-foreground"
-                                  : pinned === "end" && pinnedIndex === 0
-                                    ? "border-l-2 border-l-foreground"
-                                    : undefined;
-                              return (
-                                <TableCell
-                                  key={header.id}
-                                  colSpan={header.colSpan}
-                                  className={cn(
-                                    "px-2 py-1",
-                                    header.column.columnDef.meta?.className,
-                                    pinned && "sticky z-20 bg-card",
-                                    boundaryClass,
-                                  )}
-                                  style={{
-                                    width,
-                                    minWidth: width,
-                                    maxWidth: width,
-                                    ...(pinned === "start"
-                                      ? {
-                                          insetInlineStart:
-                                            header.column.getStart("start"),
-                                        }
-                                      : pinned === "end"
-                                        ? {
-                                            insetInlineEnd:
-                                              header.column.getAfter("end"),
-                                          }
-                                        : {}),
-                                  }}
-                                >
-                                  {header.isPlaceholder
-                                    ? null
-                                    : flexRender(
-                                        header.column.columnDef.footer,
-                                        header.getContext(),
-                                      )}
-                                </TableCell>
-                              );
-                            })}
-                            <TableCell data-spacer aria-hidden />
-                          </TableRow>
-                        ))}
-                      </TableFooter>
-                    );
-                  })()}
-              </Table>
-              {/* Status block. Sits outside <table> so its width is the
-                container's, not the table's scroll width — that is what keeps
-                the empty state's "Clear filters" reachable on a list wide
-                enough to scroll. `sticky left-0` holds it in view if the page
-                is already scrolled right when the rows empty out. */}
-              {statusContent !== null && (
-                <div className="sticky left-0 flex min-h-24 w-full items-center justify-center overflow-hidden px-2 py-4">
-                  {statusContent}
-                </div>
-              )}
-            </section>
-
-            {/* The column's fixed bottom end. Page-size and page nav stay put
-              while the pane scrolls between the two ends, so neither needs
-              `position: sticky` to stay reachable. */}
-            {((!infiniteScroll && showPagination) ||
-              showCellSelectionStats) && (
-              <div className="shrink-0 border-t border-[var(--border)] bg-background px-2 py-1">
-                <DataTablePagination
-                  table={table}
-                  timing={timing}
-                  showPaginationControls={!infiniteScroll && showPagination}
-                  showCellSelectionStats={showCellSelectionStats}
-                />
-              </div>
-            )}
-            {desktopInspector && !embedded && (
-              <div
-                className="absolute inset-y-0 right-0 hidden w-[25rem] overflow-y-auto border-l border-border bg-card xl:block"
-                data-desktop-inspector
-              >
-                {desktopInspector}
-              </div>
-            )}
-          </div>
-        </CellSelectionContext.Provider>
-      )}
+      <DesktopTableView
+        table={table}
+        controller={controller}
+        entity={entity}
+        embedded={embedded}
+        desktopInspector={desktopInspector}
+        externalToolbar={externalToolbar}
+        desktopToolbar={desktopToolbar}
+        showToolbar={showToolbar}
+        infiniteScroll={infiniteScroll}
+        showPagination={showPagination}
+        showCellSelectionStats={showCellSelectionStats}
+        timing={timing}
+        ariaLabel={ariaLabel}
+        cellSelectionEnabled={cellSelectionEnabled}
+        statusContent={statusContent}
+        hasStatusContent={hasStatusContent}
+        tableBody={renderTableBody()}
+      />
 
       {/* Mobile List View. Also rendered pre-hydration (see the desktop
           wrapper's breakpoint comment) so a phone's first paint is the

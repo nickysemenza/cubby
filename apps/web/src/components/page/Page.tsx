@@ -16,6 +16,7 @@ import {
   PageHeader,
 } from "~/components/layouts/page-hero";
 import { useRouteEntity } from "~/hooks/useRouteEntity";
+import { cn } from "~/lib/utils";
 
 // Lets a list component (which owns the query) report its loaded record
 // count up to the enclosing <Page> (which owns the header) without threading
@@ -170,93 +171,107 @@ type PageProps = PageBareProps | PageListProps | PageDetailProps;
  * `bare` preserves the same width contract without inventing route identity.
  */
 export function Page(props: PageProps) {
-  if (props.variant === "bare") {
+  if (props.variant === "bare")
     return <PageWrapper layout={props.layout}>{props.children}</PageWrapper>;
-  }
-
-  return <PageWithHeader {...props} />;
+  return props.variant === "detail" ? (
+    <DetailPageShell {...props} />
+  ) : (
+    <ListPageShell {...props} />
+  );
 }
 
-function PageWithHeader(props: PageListProps | PageDetailProps) {
+function ListPageShell(props: PageListProps) {
   const { title, eyebrow, layout, children } = props;
-  const variant = props.variant ?? "list";
-  // List pages can omit `entity` — derive it from the route so the eyebrow/accent
-  // still render. Detail pages always pass it explicitly (TS-required).
   const autoEntity = useRouteEntity();
   const entity = props.entity ?? autoEntity;
-  // Detail-only spec-plate extras, narrowed off the union.
-  const detail = props.variant === "detail" ? props : undefined;
-  // List-only header options, narrowed off the union.
-  const list = props.variant !== "detail" ? props : undefined;
-  const actions = list?.actions;
-  // Reported by a descendant list via usePageCount; undefined until a client
-  // effect fires (or on pages with no list, or non-list variants).
   const [count, setCount] = useState<number | undefined>(undefined);
-  const listChrome = list?.listChrome ?? "hero";
-  const bodyGutter = list?.bodyGutter ?? "none";
+  const listChrome = props.listChrome ?? "hero";
+  const bodyGutter = props.bodyGutter ?? "none";
   const loadingLabel = isTextTitle(title)
-    ? `Loading ${title.toLocaleLowerCase()}${variant === "detail" ? " details" : " records"}…`
+    ? `Loading ${title.toLocaleLowerCase()} records…`
     : "Loading records…";
   const identity: PageIdentity | null =
     listChrome === "workbench"
-      ? { title, eyebrow, entity, count, actions }
+      ? { title, eyebrow, entity, count, actions: props.actions }
       : null;
   return (
     <PageWrapper layout={layout}>
-      <div className={variant === "detail" ? "space-y-2" : undefined}>
+      <div>
         <PageHeader
-          variant={variant}
+          variant="list"
           title={title}
           eyebrow={eyebrow}
           entity={entity}
-          actions={actions}
-          heroActions={detail?.heroActions}
-          compact={list?.compact}
-          decoration={list?.decoration}
+          actions={props.actions}
+          compact={props.compact}
+          decoration={props.decoration}
           listChrome={listChrome}
-          workbenchControls={list?.workbenchControls}
-          mobileTitleVisible={list?.mobileTitleVisible}
-          heroStamp={detail?.heroStamp}
-          heroStats={detail?.heroStats}
-          heroNo={detail?.heroNo}
-          heroImages={detail?.heroImages}
-          heroMedia={detail?.heroMedia}
-          rawData={detail?.rawData}
-          count={variant === "list" ? count : undefined}
+          workbenchControls={props.workbenchControls}
+          mobileTitleVisible={props.mobileTitleVisible}
+          count={count}
         />
         <PageIdentityContext.Provider value={identity}>
-          <PageDetailContext.Provider
-            value={
-              detail
-                ? {
-                    entity: detail.entity,
-                    rawData: detail.rawData,
-                    heroMedia: detail.heroMedia,
-                  }
-                : undefined
-            }
+          <ListPageBody
+            bodyGutter={bodyGutter}
+            loadingLabel={loadingLabel}
+            setCount={setCount}
           >
-            <PageCountContext.Provider value={setCount}>
+            {children}
+          </ListPageBody>
+        </PageIdentityContext.Provider>
+      </div>
+    </PageWrapper>
+  );
+}
+
+function ListPageBody({
+  bodyGutter,
+  children,
+  loadingLabel,
+  setCount,
+}: {
+  bodyGutter: PageListProps["bodyGutter"];
+  children: ReactNode;
+  loadingLabel: string;
+  setCount: React.Dispatch<React.SetStateAction<number | undefined>>;
+}) {
+  return (
+    <PageDetailContext.Provider value={undefined}>
+      <PageCountContext.Provider value={setCount}>
+        <Suspense fallback={<ListLoadingSkeleton label={loadingLabel} />}>
+          <div
+            className={cn(
+              "space-y-2 md:space-y-8",
+              bodyGutter === "standard" && "px-2 md:px-6",
+            )}
+          >
+            {children}
+          </div>
+        </Suspense>
+      </PageCountContext.Provider>
+    </PageDetailContext.Provider>
+  );
+}
+
+function DetailPageShell(props: PageDetailProps) {
+  const loadingLabel = isTextTitle(props.title)
+    ? `Loading ${props.title.toLocaleLowerCase()} details…`
+    : "Loading records…";
+  return (
+    <PageWrapper layout={props.layout}>
+      <div className="space-y-2">
+        <PageHeader {...props} variant="detail" count={undefined} />
+        <PageIdentityContext.Provider value={null}>
+          <PageDetailContext.Provider
+            value={{
+              entity: props.entity,
+              rawData: props.rawData,
+              heroMedia: props.heroMedia,
+            }}
+          >
+            <PageCountContext.Provider value={() => undefined}>
               <Suspense fallback={<ListLoadingSkeleton label={loadingLabel} />}>
-                {/* List pages that render several top-level regions (the home
-                  dashboard) previously stacked them flush — every region
-                  boundary measured 0px, so five separate arguments read as one
-                  run-on sentence. DESIGN.md reserves the 2rem step for major
-                  region clearance. A no-op for the usual single-child list
-                  page, which is why this sits on the children and not on the
-                  wrapper the header shares. */}
-                <div
-                  className={[
-                    variant === "list" ? "space-y-2 md:space-y-8" : undefined,
-                    variant === "list" && bodyGutter === "standard"
-                      ? "px-2 md:px-6"
-                      : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  {children}
-                </div>
+                {props.children}
               </Suspense>
             </PageCountContext.Provider>
           </PageDetailContext.Provider>

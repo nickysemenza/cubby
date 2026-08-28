@@ -20,6 +20,73 @@ import { columnWidthValue } from "./table-layout";
 const NUMERIC_CELL = "text-right font-mono tabular-nums";
 const MONO_CELL = "font-mono";
 
+function cellPresentation<TItem extends RowData>(
+  cell: ReturnType<Row<TItem>["getVisibleCells"]>[number],
+) {
+  const selectable =
+    cell.getCanSelect() && !NON_SELECTABLE_COLUMN_IDS.has(cell.column.id);
+  const selected = selectable && cell.getIsSelected();
+  const anchor = selected && cell.getIsFocused();
+  const pinned = cell.column.getIsPinned();
+  const columns =
+    pinned === "start"
+      ? cell.getContext().table.getStartVisibleLeafColumns()
+      : pinned === "end"
+        ? cell.getContext().table.getEndVisibleLeafColumns()
+        : [];
+  const index = columns.findIndex((column) => column.id === cell.column.id);
+  const boundary =
+    pinned === "start" && index === columns.length - 1
+      ? "border-r-2 border-r-foreground"
+      : pinned === "end" && index === 0
+        ? "border-l-2 border-l-foreground"
+        : undefined;
+  const width = columnWidthValue(cell.column.id);
+  return { selectable, selected, anchor, pinned, boundary, width };
+}
+
+function DesktopDataCell<TItem extends RowData>({
+  cell,
+  cellClassName,
+}: {
+  cell: ReturnType<Row<TItem>["getVisibleCells"]>[number];
+  cellClassName: string;
+}) {
+  const presentation = cellPresentation(cell);
+  const { selectable, selected, anchor, pinned, boundary, width } =
+    presentation;
+  const inset =
+    pinned === "start"
+      ? { insetInlineStart: cell.column.getStart("start") }
+      : pinned === "end"
+        ? { insetInlineEnd: cell.column.getAfter("end") }
+        : {};
+  return (
+    <TableCell
+      key={cell.id}
+      data-cell-col={selectable ? cell.column.id : undefined}
+      data-cell-selected={selected ? "" : undefined}
+      data-cell-anchor={anchor ? "" : undefined}
+      tabIndex={selectable ? cell.getTabIndex() : undefined}
+      onMouseDown={selectable ? cell.getSelectionStartHandler() : undefined}
+      onMouseEnter={selectable ? cell.getSelectionExtendHandler() : undefined}
+      className={cn(
+        cellClassName,
+        cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
+        cell.column.columnDef.meta?.mono && MONO_CELL,
+        cell.column.columnDef.meta?.className,
+        selected && "bg-primary/10",
+        anchor && "ring-2 ring-ring ring-inset",
+        pinned && "sticky z-10 bg-background",
+        boundary,
+      )}
+      style={{ width, minWidth: width, maxWidth: width, ...inset }}
+    >
+      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+    </TableCell>
+  );
+}
+
 export interface DesktopDataRowProps<TItem extends RowData> {
   row: Row<TItem>;
   /**
@@ -137,66 +204,13 @@ function DesktopDataRowInner<TItem extends RowData>({
         ...row.getStartVisibleCells(),
         ...row.getCenterVisibleCells(),
         ...row.getEndVisibleCells(),
-      ].map((cell) => {
-        const selectable =
-          cell.getCanSelect() && !NON_SELECTABLE_COLUMN_IDS.has(cell.column.id);
-        const cellSelected = selectable && cell.getIsSelected();
-        const cellAnchor = cellSelected && cell.getIsFocused();
-        const pinned = cell.column.getIsPinned();
-        const pinnedColumns =
-          pinned === "start"
-            ? cell.getContext().table.getStartVisibleLeafColumns()
-            : pinned === "end"
-              ? cell.getContext().table.getEndVisibleLeafColumns()
-              : [];
-        const pinnedIndex = pinnedColumns.findIndex(
-          (column) => column.id === cell.column.id,
-        );
-        const boundaryClass =
-          pinned === "start" && pinnedIndex === pinnedColumns.length - 1
-            ? "border-r-2 border-r-foreground"
-            : pinned === "end" && pinnedIndex === 0
-              ? "border-l-2 border-l-foreground"
-              : undefined;
-        const width = columnWidthValue(cell.column.id);
-        return (
-          <TableCell
-            key={cell.id}
-            data-cell-col={selectable ? cell.column.id : undefined}
-            data-cell-selected={cellSelected ? "" : undefined}
-            data-cell-anchor={cellAnchor ? "" : undefined}
-            tabIndex={selectable ? cell.getTabIndex() : undefined}
-            onMouseDown={
-              selectable ? cell.getSelectionStartHandler() : undefined
-            }
-            onMouseEnter={
-              selectable ? cell.getSelectionExtendHandler() : undefined
-            }
-            className={cn(
-              cellClassName,
-              cell.column.columnDef.meta?.numeric && NUMERIC_CELL,
-              cell.column.columnDef.meta?.mono && MONO_CELL,
-              cell.column.columnDef.meta?.className,
-              cellSelected && "bg-primary/10",
-              cellAnchor && "ring-2 ring-ring ring-inset",
-              pinned && "sticky z-10 bg-background",
-              boundaryClass,
-            )}
-            style={{
-              width,
-              minWidth: width,
-              maxWidth: width,
-              ...(pinned === "start"
-                ? { insetInlineStart: cell.column.getStart("start") }
-                : pinned === "end"
-                  ? { insetInlineEnd: cell.column.getAfter("end") }
-                  : {}),
-            }}
-          >
-            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-          </TableCell>
-        );
-      })}
+      ].map((cell) => (
+        <DesktopDataCell
+          key={cell.id}
+          cell={cell}
+          cellClassName={cellClassName}
+        />
+      ))}
       {isDebugEnabled && (
         <TableCell className={cellClassName}>
           <DebugDialog

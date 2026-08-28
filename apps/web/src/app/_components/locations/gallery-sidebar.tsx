@@ -185,7 +185,6 @@ export function GallerySidebar({
               activeLocationId={activeLocationId}
               searchMatchingIds={searchMatchingIds}
               fadedIds={fadedIds}
-              searchTerm={searchTerm}
               activeItemRef={activeItemRef}
             />
           ))}
@@ -204,8 +203,73 @@ interface SidebarTreeNodeProps {
   activeLocationId?: string;
   searchMatchingIds: Set<string>;
   fadedIds: Set<string>;
-  searchTerm: string;
   activeItemRef: React.RefObject<HTMLDivElement | null>;
+}
+
+function SidebarDisclosure({
+  hasChildren,
+  isExpanded,
+  name,
+  onToggle,
+}: {
+  hasChildren: boolean;
+  isExpanded: boolean;
+  name: string;
+  onToggle: (event: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={
+        hasChildren
+          ? `${isExpanded ? "Collapse" : "Expand"} ${name}`
+          : undefined
+      }
+      aria-expanded={hasChildren ? isExpanded : undefined}
+      className={cn(
+        "flex size-5 items-center justify-center transition-transform duration-150 hover:bg-muted-foreground/20",
+        !hasChildren && "invisible",
+        isExpanded && "rotate-0",
+      )}
+    >
+      {hasChildren && (
+        <ChevronRight
+          className={cn(
+            "size-3.5 transition-transform duration-150",
+            isExpanded && "rotate-90",
+          )}
+        />
+      )}
+    </button>
+  );
+}
+
+function SidebarItemCount({
+  hasChildren,
+  active,
+  directCount,
+  totalCount,
+}: {
+  hasChildren: boolean;
+  active: boolean;
+  directCount: number;
+  totalCount: number;
+}) {
+  if (totalCount <= 0) return null;
+  return (
+    <Badge variant={active ? "secondary" : "outline"}>
+      {hasChildren ? (
+        <>
+          <span>{directCount}</span>
+          <span className="opacity-50">/</span>
+          <span className="opacity-50">{totalCount}</span>
+        </>
+      ) : (
+        <span>{directCount}</span>
+      )}
+    </Badge>
+  );
 }
 
 function SidebarTreeNode({
@@ -217,7 +281,6 @@ function SidebarTreeNode({
   activeLocationId,
   searchMatchingIds,
   fadedIds,
-  searchTerm,
   activeItemRef,
 }: SidebarTreeNodeProps) {
   const hasChildren = location.children && location.children.length > 0;
@@ -239,11 +302,7 @@ function SidebarTreeNode({
     onLocationClick(location.id);
   };
 
-  // Filter children based on search
-  const visibleChildren = useMemo(() => {
-    if (!searchTerm || !location.children) return location.children;
-    return location.children;
-  }, [location.children, searchTerm]);
+  const visibleChildren = location.children;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -262,49 +321,20 @@ function SidebarTreeNode({
         depth={level}
         primaryMeta={locationTypeNoun(location.type)}
         leading={
-          <button
-            type="button"
-            onClick={handleExpandClick}
-            // Only real toggles (hasChildren) get a name/state; leaf-node
-            // buttons stay unlabeled — they're `invisible` (visibility:
-            // hidden), which already drops them from the tab order, so
-            // labeling them would just add noise to the a11y tree.
-            aria-label={
-              hasChildren
-                ? `${isExpanded ? "Collapse" : "Expand"} ${location.name}`
-                : undefined
-            }
-            aria-expanded={hasChildren ? isExpanded : undefined}
-            className={cn(
-              "flex size-5 items-center justify-center transition-transform duration-150 hover:bg-muted-foreground/20",
-              !hasChildren && "invisible",
-              isExpanded && "rotate-0",
-            )}
-          >
-            {hasChildren && (
-              <ChevronRight
-                className={cn(
-                  "size-3.5 transition-transform duration-150",
-                  isExpanded && "rotate-90",
-                )}
-              />
-            )}
-          </button>
+          <SidebarDisclosure
+            hasChildren={Boolean(hasChildren)}
+            isExpanded={isExpanded}
+            name={location.name}
+            onToggle={handleExpandClick}
+          />
         }
         trailing={
-          (location.totalItemCount ?? 0) > 0 && (
-            <Badge variant={isActive ? "secondary" : "outline"}>
-              {hasChildren ? (
-                <>
-                  <span>{itemCount}</span>
-                  <span className="opacity-50">/</span>
-                  <span className="opacity-50">{location.totalItemCount}</span>
-                </>
-              ) : (
-                <span>{itemCount}</span>
-              )}
-            </Badge>
-          )
+          <SidebarItemCount
+            hasChildren={Boolean(hasChildren)}
+            active={isActive}
+            directCount={itemCount}
+            totalCount={location.totalItemCount ?? 0}
+          />
         }
         tabIndex={0}
         onKeyDown={handleKeyDown}
@@ -338,7 +368,6 @@ function SidebarTreeNode({
               activeLocationId={activeLocationId}
               searchMatchingIds={searchMatchingIds}
               fadedIds={fadedIds}
-              searchTerm={searchTerm}
               activeItemRef={activeItemRef}
             />
           ))}

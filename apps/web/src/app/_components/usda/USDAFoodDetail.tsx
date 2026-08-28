@@ -33,6 +33,41 @@ import { NutritionLabel } from "../nutrition/NutritionLabel";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { UsdaFoodActions } from "./usda-food-actions";
 
+function FoodNutrientDensity({
+  food,
+  linkedProducts,
+  pricedProduct,
+  mappings,
+}: {
+  food: FoodSummaryWithLinkedProducts;
+  linkedProducts: FoodSummaryWithLinkedProducts["linkedProducts"];
+  pricedProduct:
+    | FoodSummaryWithLinkedProducts["linkedProducts"][number]
+    | undefined;
+  mappings: ReturnType<typeof getAllUnitMappingsFromProduct>;
+}) {
+  if (linkedProducts.length === 0) return null;
+  const mappingProduct = pricedProduct ?? linkedProducts[0];
+  if (!mappingProduct) return null;
+  return (
+    <NutrientDensityStats
+      canSeeStoredMappings={false}
+      nutrients={food.nutritionInfo.nutrientsPer100}
+      mappings={mappings}
+      price={
+        pricedProduct
+          ? (pricedProduct.pricing.effectivePrice ?? pricedProduct.price)
+          : null
+      }
+      mappingProduct={{
+        id: mappingProduct.id,
+        name: mappingProduct.name,
+        manufacturer: mappingProduct.manufacturer,
+      }}
+    />
+  );
+}
+
 export const USDAFoodDetail: React.FC<{
   id: number;
   food: FoodSummaryWithLinkedProducts;
@@ -172,27 +207,12 @@ export const USDAFoodDetail: React.FC<{
       />
       {/* An unlinked food has no price — gate on a linked product existing at
           all, per the linkedProducts.length check below. */}
-      {linkedProducts.length > 0 && (
-        <NutrientDensityStats
-          // This page builds mappings with `unitMappings: []` (see below), so an
-          // unresolved basis here does not mean the product lacks a mapping.
-          canSeeStoredMappings={false}
-          nutrients={nutritionInfo.nutrientsPer100}
-          mappings={nutrientDensityMappings}
-          price={
-            pricedProduct
-              ? (pricedProduct.pricing.effectivePrice ?? pricedProduct.price)
-              : null
-          }
-          mappingProduct={
-            pricedProduct ?? {
-              id: linkedProducts[0]!.id,
-              name: linkedProducts[0]!.name,
-              manufacturer: linkedProducts[0]!.manufacturer,
-            }
-          }
-        />
-      )}
+      <FoodNutrientDensity
+        food={food}
+        linkedProducts={linkedProducts}
+        pricedProduct={pricedProduct}
+        mappings={nutrientDensityMappings}
+      />
       <FullNutrientBreakdown nutritionInfo={nutritionInfo} />
     </Stack>
   );

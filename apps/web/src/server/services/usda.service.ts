@@ -9,7 +9,6 @@ import type {
   FoodLookupParam,
   FoodSummary,
 } from "@cubby/usda-schemas";
-import { uniq } from "es-toolkit";
 
 import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -35,6 +34,9 @@ export class USDAService {
       lookup?: FoodLookupParam,
     ) => Promise<ProductTopLevelOut[]>,
     private getLinkedProductLookups?: () => Promise<FoodLookupParam[]>,
+    private getLinkedProductsBatch?: (
+      lookups: FoodLookupParam[],
+    ) => Promise<ProductTopLevelOut[][]>,
   ) {}
 
   async findFood(
@@ -95,11 +97,7 @@ export class USDAService {
       dataTypes,
     );
 
-    // Load linked products + inferred unit mappings for each food (the UPC-first
-    // / fdc-fallback enrichment lives in one place — enrichWithLinkedProducts).
-    const enhancedData: FoodSummaryWithLinkedProducts[] = await Promise.all(
-      result.data.map((food) => this.enrichWithLinkedProducts(food)),
-    );
+    const enhancedData = await this.enrichFoodsWithLinkedProducts(result.data);
 
     return {
       data: enhancedData,
@@ -150,20 +148,6 @@ export class USDAService {
     );
   }
 
-  async getFoodEnrichmentsByID(
-    fdcIds: number[],
-  ): Promise<Record<string, FoodSummaryEnrichment>> {
-    const uniqueIds = uniq(fdcIds);
-    const entries = await Promise.all(
-      uniqueIds.map(async (fdcId) => {
-        const food = await this.usdaClient.getFoodSummaryByID(fdcId);
-        if (!food) return null;
-        return [String(fdcId), await this.getFoodEnrichment(food)] as const;
-      }),
-    );
-    return Object.fromEntries(entries.filter((entry) => entry !== null));
-  }
-
   private async enrichWithLinkedProducts(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryWithLinkedProducts> {
@@ -171,6 +155,32 @@ export class USDAService {
       ...foodSummary,
       ...(await this.getFoodEnrichment(foodSummary)),
     };
+  }
+
+  private foodLookup(foodSummary: FoodSummary): FoodLookupParam {
+    const upc = foodSummary.brandedFoodInfo?.gtin_upc;
+    return upc !== undefined
+      ? { kind: "upc", gtin_upc: upc }
+      : { kind: "fdc", fdc_id: foodSummary.fdc_id };
+  }
+
+  private async enrichFoodsWithLinkedProducts(
+    foods: FoodSummary[],
+  ): Promise<FoodSummaryWithLinkedProducts[]> {
+    const lookups = foods.map((food) => this.foodLookup(food));
+    const linkedByFood = this.getLinkedProductsBatch
+      ? await this.getLinkedProductsBatch(lookups)
+      : await Promise.all(
+          lookups.map((lookup) => this.getLinkedProducts(lookup)),
+        );
+    if (linkedByFood.length !== foods.length) {
+      throw new Error("USDA product batch result cardinality mismatch");
+    }
+    return foods.map((food, index) => ({
+      ...food,
+      inferredUnitMappings: unitMappingsFromFood(food),
+      linkedProducts: linkedByFood[index] ?? [],
+    }));
   }
 
   private async listLinkedProductFoods(
@@ -217,9 +227,7 @@ export class USDAService {
       return true;
     });
 
-    const enriched = await Promise.all(
-      filtered.map((food) => this.enrichWithLinkedProducts(food)),
-    );
+    const enriched = await this.enrichFoodsWithLinkedProducts(filtered);
 
     const direction = sort.direction === "asc" ? 1 : -1;
     const sorted = enriched.sort((a, b) => {
@@ -246,12 +254,8 @@ export class USDAService {
   private async getFoodEnrichment(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryEnrichment> {
-    const upc = foodSummary.brandedFoodInfo?.gtin_upc;
-
     const linkedProducts: ProductTopLevelOut[] = await this.getLinkedProducts(
-      upc !== undefined
-        ? { kind: "upc", gtin_upc: upc }
-        : { kind: "fdc", fdc_id: foodSummary.fdc_id },
+      this.foodLookup(foodSummary),
     );
 
     // Get all inferred unit mappings from the food

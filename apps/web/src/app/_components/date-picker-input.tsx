@@ -60,6 +60,35 @@ interface DatePickerInputProps {
 const displayValue = (value: string | null) =>
   value ? format(parsePlainDate(value), "MMM d, yyyy") : "";
 
+const displayedDraftDate = (draft: string, value: string | null) => {
+  const parsed = parsePlainDateInput(draft);
+  if (parsed.ok && parsed.value) return parsePlainDate(parsed.value);
+  return value ? parsePlainDate(value) : undefined;
+};
+
+const DateClearButton = ({
+  visible,
+  disabled,
+  onClear,
+}: {
+  visible: boolean;
+  disabled: boolean;
+  onClear: () => void;
+}) => {
+  if (!visible) return null;
+  return (
+    <button
+      type="button"
+      aria-label="Clear date"
+      disabled={disabled}
+      className="inline-flex h-full w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
+      onClick={onClear}
+    >
+      <X className="size-3.5" />
+    </button>
+  );
+};
+
 /**
  * A dual-mode plain-date field: type or paste an English-US date expression,
  * or use the calendar button. Dates only leave the component as canonical
@@ -107,14 +136,10 @@ export function DatePickerInput({
     if (focusOnMount) inputRef.current?.focus();
   }, [focusOnMount]);
 
-  const draftDate = useMemo(() => {
-    const parsed = parsePlainDateInput(draft);
-    return parsed.ok && parsed.value
-      ? parsePlainDate(parsed.value)
-      : value
-        ? parsePlainDate(value)
-        : undefined;
-  }, [draft, value]);
+  const draftDate = useMemo(
+    () => displayedDraftDate(draft, value),
+    [draft, value],
+  );
 
   const clearError = () => {
     setError(null);
@@ -240,17 +265,11 @@ export function DatePickerInput({
               }
             }}
           />
-          {clearable && !required && draft !== "" && (
-            <button
-              type="button"
-              aria-label="Clear date"
-              disabled={disabled}
-              className="inline-flex h-full w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 max-sm:w-10"
-              onClick={() => applyValue(null)}
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
+          <DateClearButton
+            visible={clearable && !required && draft !== ""}
+            disabled={disabled}
+            onClear={() => applyValue(null)}
+          />
           <PopoverTrigger
             aria-label="Open calendar"
             disabled={disabled}

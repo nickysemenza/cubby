@@ -68,64 +68,71 @@ function serverSources() {
  * argument doesn't unbalance its parens) and the template-range finder (so a
  * nested `${sql\`...\`}` doesn't prematurely close the outer template).
  */
-function skipOpaque(text: string, i: number) {
+function isOpaqueStart(text: string, i: number): boolean {
   const ch = text[i];
-  if (ch === '"' || ch === "'") {
-    const quote = ch;
-    i++;
-    while (i < text.length && text[i] !== quote) {
-      i += text[i] === "\\" ? 2 : 1;
+  return (
+    ch === '"' ||
+    ch === "'" ||
+    ch === "`" ||
+    (ch === "/" && (text[i + 1] === "/" || text[i + 1] === "*"))
+  );
+}
+
+function skipQuoted(text: string, i: number): number {
+  const quote = text[i];
+  i++;
+  while (i < text.length && text[i] !== quote) i += text[i] === "\\" ? 2 : 1;
+  return i < text.length ? i + 1 : -1;
+}
+
+function skipComment(text: string, i: number): number | undefined {
+  if (text[i] !== "/") return undefined;
+  if (text[i + 1] === "/") {
+    const newline = text.indexOf("\n", i);
+    return newline < 0 ? text.length : newline + 1;
+  }
+  if (text[i + 1] !== "*") return undefined;
+  const close = text.indexOf("*/", i + 2);
+  return close < 0 ? -1 : close + 2;
+}
+
+function skipTemplateInterpolation(text: string, i: number): number {
+  let depth = 1;
+  while (i < text.length && depth > 0) {
+    const ch = text[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+    else if (isOpaqueStart(text, i)) {
+      const next = skipOpaque(text, i);
+      if (next < 0) return -1;
+      i = next;
+      continue;
     }
-    return i < text.length ? i + 1 : -1;
-  }
-  if (ch === "/" && text[i + 1] === "/") {
-    const nl = text.indexOf("\n", i);
-    return nl < 0 ? text.length : nl + 1;
-  }
-  if (ch === "/" && text[i + 1] === "*") {
-    const close = text.indexOf("*/", i);
-    return close < 0 ? -1 : close + 2;
-  }
-  if (ch === "`") {
     i++;
-    while (i < text.length) {
-      const c = text[i];
-      if (c === "\\") {
-        i += 2;
-        continue;
-      }
-      if (c === "`") return i + 1;
-      if (c === "$" && text[i + 1] === "{") {
-        i += 2;
-        let depth = 1;
-        while (i < text.length && depth > 0) {
-          const cc = text[i];
-          if (cc === "{") {
-            depth++;
-            i++;
-          } else if (cc === "}") {
-            depth--;
-            i++;
-          } else if (
-            cc === '"' ||
-            cc === "'" ||
-            cc === "`" ||
-            (cc === "/" && (text[i + 1] === "/" || text[i + 1] === "*"))
-          ) {
-            const nextI = skipOpaque(text, i);
-            if (nextI < 0) return -1;
-            i = nextI;
-          } else {
-            i++;
-          }
-        }
-        continue;
-      }
+  }
+  return depth === 0 ? i : -1;
+}
+
+function skipTemplate(text: string, i: number): number {
+  for (i++; i < text.length; i++) {
+    if (text[i] === "\\") {
       i++;
+      continue;
     }
-    return -1;
+    if (text[i] === "`") return i + 1;
+    if (text[i] !== "$" || text[i + 1] !== "{") continue;
+    i = skipTemplateInterpolation(text, i + 2);
+    if (i < 0) return -1;
+    i--;
   }
-  return i + 1;
+  return -1;
+}
+
+function skipOpaque(text: string, i: number): number {
+  if (text[i] === "`") return skipTemplate(text, i);
+  const comment = skipComment(text, i);
+  if (comment !== undefined) return comment;
+  return text[i] === '"' || text[i] === "'" ? skipQuoted(text, i) : i + 1;
 }
 
 /**

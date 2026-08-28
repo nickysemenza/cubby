@@ -1042,9 +1042,8 @@ export const loadPurchaseDataQualities = async (
     expenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
   const productQualities = await loadProductDataQualities(db, productIds);
-  const result = new Map<PurchaseId, DataQuality>();
 
-  for (const row of purchases) {
+  const qualityForPurchase = (row: (typeof purchases)[number]): DataQuality => {
     const purchaseExpenses = expensesByPurchase[row.id] ?? [];
     const gaps: FingerprintedGap[] = [];
     const targetId = parseShortcodeFor("purchase", row.shortcode);
@@ -1120,7 +1119,7 @@ export const loadPurchaseDataQualities = async (
       relatedGaps.push(...(productQuality?.gaps ?? []));
       relatedExceptions.push(...(productQuality?.exceptions ?? []));
     }
-    result.set(row.id, {
+    return {
       ...evaluateTargetQuality(
         gaps,
         row.dataExceptions,
@@ -1133,9 +1132,11 @@ export const loadPurchaseDataQualities = async (
         (gap) => `${gap.targetId}\u0000${gap.check}`,
       ),
       relatedExceptions: uniqueTargetExceptions(relatedExceptions),
-    });
-  }
-  return result;
+    };
+  };
+  return new Map(
+    purchases.map((row) => [row.id, qualityForPurchase(row)] as const),
+  );
 };
 
 const assertCheckApplies = (

@@ -87,6 +87,32 @@ function candidateObjects(result: JSONType): SourceCandidate[] {
 
 const MAX_SOURCES = 12;
 
+const sourceDetail = (
+  entityType: SearchableEntity,
+  candidate: SourceCandidate,
+): string | null => {
+  if (entityType === "inventory" && candidate.location?.name) {
+    return candidate.location.name;
+  }
+  return candidate.manufacturer ?? candidate.parent?.name ?? null;
+};
+
+const sourceForCandidate = (
+  entityType: SearchableEntity,
+  candidate: SourceCandidate,
+): AgentSource | null => {
+  const id = candidate.id ?? null;
+  const name = candidate.name ?? candidate.product?.name ?? null;
+  if (!id || !name) return null;
+  const parsed = agentSourceSchema.safeParse({
+    entityType,
+    id,
+    name,
+    detail: sourceDetail(entityType, candidate),
+  });
+  return parsed.success ? parsed.data : null;
+};
+
 /** Best-effort extraction of cited entities from the tools the agent ran. */
 export function extractSources(records: ToolCallRecord[]): AgentSource[] {
   const sources: AgentSource[] = [];
@@ -97,39 +123,13 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
     const entityType = inferEntityType(record.tool);
     if (!entityType) continue;
 
-    for (const obj of candidateObjects(record.result)) {
-      const product = obj.product ?? null;
-      const location = obj.location ?? null;
-      // A location row names its parent through a nested `{id,name,type}` ref
-      // (`locationMcpOut` picks it straight off the plain shape), not a
-      // flattened `parentName`.
-      const parent = obj.parent ?? null;
-
-      const id = obj.id ?? null;
-      const name = obj.name ?? product?.name ?? null;
-      if (!id || !name) continue;
-
-      const key = `${entityType}:${id}`;
+    for (const candidate of candidateObjects(record.result)) {
+      const source = sourceForCandidate(entityType, candidate);
+      if (!source) continue;
+      const key = `${source.entityType}:${source.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
-
-      const detail =
-        entityType === "inventory" && location?.name
-          ? location.name
-          : obj.manufacturer
-            ? obj.manufacturer
-            : parent?.name
-              ? parent.name
-              : null;
-
-      const parsed = agentSourceSchema.safeParse({
-        entityType,
-        id,
-        name,
-        detail,
-      });
-      if (!parsed.success) continue;
-      sources.push(parsed.data);
+      sources.push(source);
       if (sources.length >= MAX_SOURCES) return sources;
     }
   }

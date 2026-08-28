@@ -91,6 +91,118 @@ const ARROW_DIRECTION = new Map<string, CellMoveDirection>([
   ["ArrowRight", "right"],
 ] as const);
 
+interface CellKeyContext<TItem extends RowData> {
+  rows: Row<TItem>[];
+  table: ITable<TItem>;
+  selectableColumnIds: React.RefObject<string[]>;
+  fallbackPasteTimer: React.RefObject<number | null>;
+  getSelection: () => CellSelection | null;
+  scrollToFlatRow: (rowIndex: number) => void;
+  onOpenRow?: (row: Row<TItem>) => void;
+  openEditorAt: (
+    container: HTMLElement,
+    row: number,
+    col: number,
+    seedText?: string,
+  ) => void;
+  doCopy: (container: HTMLElement) => void;
+  doPaste: (container: HTMLElement, clipboardText: string) => Promise<void>;
+  doClear: (container: HTMLElement) => boolean;
+}
+
+function handleClipboardKey<TItem extends RowData>(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  context: CellKeyContext<TItem>,
+) {
+  if (event.key === "Delete" || event.key === "Backspace") {
+    if (context.doClear(event.currentTarget)) event.preventDefault();
+    return true;
+  }
+  const isMod = event.metaKey || event.ctrlKey;
+  if (isMod && (event.key === "c" || event.key === "C")) {
+    if (!context.getSelection()) return true;
+    event.preventDefault();
+    context.doCopy(event.currentTarget);
+    return true;
+  }
+  if (!isMod || (event.key !== "v" && event.key !== "V")) return false;
+  if (!context.getSelection()) return true;
+  const container = event.currentTarget;
+  if (context.fallbackPasteTimer.current !== null) {
+    window.clearTimeout(context.fallbackPasteTimer.current);
+  }
+  context.fallbackPasteTimer.current = window.setTimeout(() => {
+    context.fallbackPasteTimer.current = null;
+    const buffer = getCopyBuffer();
+    if (buffer) void context.doPaste(container, buffer.tsv);
+  }, FIREFOX_PASTE_FALLBACK_MS);
+  return true;
+}
+
+function handleArrowKey<TItem extends RowData>(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  context: CellKeyContext<TItem>,
+) {
+  const direction = ARROW_DIRECTION.get(event.key);
+  if (!direction || event.metaKey || event.ctrlKey) return false;
+  event.preventDefault();
+  if (!context.getSelection()) {
+    const firstRow = context.rows[0];
+    const firstColumnId = context.selectableColumnIds.current[0];
+    if (firstRow && firstColumnId) {
+      context.table.setFocusedCell(firstRow.id, firstColumnId);
+    }
+  } else if (event.shiftKey) {
+    context.table.extendCellSelection(direction);
+  } else {
+    context.table.moveCellSelection(direction);
+  }
+  const focused = context.table.getFocusedCell();
+  if (focused) {
+    const nextRow = context.rows.findIndex((row) => row.id === focused.row.id);
+    if (nextRow >= 0) context.scrollToFlatRow(nextRow);
+  }
+  return true;
+}
+
+function handleEditKey<TItem extends RowData>(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  context: CellKeyContext<TItem>,
+) {
+  if (event.key === "Escape") {
+    if (context.getSelection()) {
+      event.preventDefault();
+      context.table.resetCellSelection(true);
+    }
+    return true;
+  }
+  const selection = context.getSelection();
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (!selection) return true;
+    if (event.metaKey || event.ctrlKey) {
+      const row = context.rows[selection.anchor.row];
+      if (row) context.onOpenRow?.(row);
+    } else {
+      context.openEditorAt(
+        event.currentTarget,
+        selection.anchor.row,
+        selection.anchor.col,
+      );
+    }
+    return true;
+  }
+  if (selection && event.key.length === 1 && !event.metaKey && !event.ctrlKey) {
+    event.preventDefault();
+    context.openEditorAt(
+      event.currentTarget,
+      selection.anchor.row,
+      selection.anchor.col,
+      event.key,
+    );
+  }
+}
+
 function emitPasteToast(summary: PasteSummary): void {
   match(summary.variant)
     .with("success", () => toast.success(summary.message))
@@ -465,109 +577,30 @@ export function useCellSelection<TItem extends RowData>({
   );
 
   const onKeyDown = React.useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
       // The container has focusable children (header filter inputs, cell
       // trigger buttons); key events bubble up here. Never hijack typing in an
       // input/textarea/select/contenteditable (an open editor or a filter).
       if (isTypingTarget(document.activeElement)) return;
       if (rowCount === 0 || colCount === 0) return;
 
-      // Copy/paste. Capture the container so the document paste listener (which
-      // has no target) and the flash queries can reach the cells.
-      containerElRef.current = e.currentTarget;
-      const isMod = e.metaKey || e.ctrlKey;
-
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (doClear(e.currentTarget)) e.preventDefault();
-        return;
-      }
-
-      if (isMod && (e.key === "c" || e.key === "C")) {
-        if (!getSelection()) return;
-        // preventDefault suppresses the native copy so the legacy document copy
-        // listener never fires (no double handling).
-        e.preventDefault();
-        doCopy(e.currentTarget);
-        return;
-      }
-
-      if (isMod && (e.key === "v" || e.key === "V")) {
-        if (!getSelection()) return;
-        // Firefox fallback ONLY: don't preventDefault. Chrome/Safari fire a
-        // document `paste` event (handled above) which cancels this timer
-        // synchronously. If none comes (Firefox skips non-editable focus), the
-        // timer replays the typed in-app buffer. External TSV isn't recoverable
-        // here, so a buffer-less Firefox paste is a no-op (documented v1 gap).
-        const container = e.currentTarget;
-        if (fallbackPasteTimerRef.current !== null) {
-          window.clearTimeout(fallbackPasteTimerRef.current);
-        }
-        fallbackPasteTimerRef.current = window.setTimeout(() => {
-          fallbackPasteTimerRef.current = null;
-          const buf = getCopyBuffer();
-          if (!buf) return;
-          void doPaste(container, buf.tsv);
-        }, FIREFOX_PASTE_FALLBACK_MS);
-        return;
-      }
-
-      const dir = ARROW_DIRECTION.get(e.key) ?? null;
-
-      if (dir && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        if (!getSelection()) {
-          const firstRow = rows[0];
-          const firstColumnId = selectableColumnIdsRef.current[0];
-          if (firstRow && firstColumnId) {
-            table.setFocusedCell(firstRow.id, firstColumnId);
-          }
-        } else if (e.shiftKey) {
-          table.extendCellSelection(dir);
-        } else {
-          table.moveCellSelection(dir);
-        }
-        const focused = table.getFocusedCell();
-        if (focused) {
-          const nextRow = rows.findIndex((row) => row.id === focused.row.id);
-          if (nextRow >= 0) scrollToFlatRow(nextRow);
-        }
-        return;
-      }
-
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const sel = getSelection();
-        if (!sel) return;
-        if (e.metaKey || e.ctrlKey) {
-          // Old Enter behavior: open the anchor row (detail/preview).
-          const row = rows[sel.anchor.row];
-          if (row) onOpenRow?.(row);
-          return;
-        }
-        openEditorAt(e.currentTarget, sel.anchor.row, sel.anchor.col);
-        return;
-      }
-
-      if (e.key === "Escape") {
-        if (getSelection()) {
-          e.preventDefault();
-          table.resetCellSelection(true);
-        }
-        return;
-      }
-
-      // Type-to-edit: a printable character with a cell selected opens the
-      // anchor cell's editor seeded with that character (Google Sheets). Placed
-      // last so every shortcut above (mod+C/V, arrows, Enter, Escape) wins.
-      // `key.length === 1` matches a single printable char (letters, digits,
-      // punctuation, space) and excludes named keys (Tab, Backspace, F-keys).
-      // Shift/Alt are allowed — they produce printable characters.
-      const sel = getSelection();
-      if (sel && e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault();
-        openEditorAt(e.currentTarget, sel.anchor.row, sel.anchor.col, e.key);
-        return;
-      }
+      containerElRef.current = event.currentTarget;
+      const context: CellKeyContext<TItem> = {
+        rows,
+        table,
+        selectableColumnIds: selectableColumnIdsRef,
+        fallbackPasteTimer: fallbackPasteTimerRef,
+        getSelection,
+        scrollToFlatRow,
+        onOpenRow,
+        openEditorAt,
+        doCopy,
+        doPaste,
+        doClear,
+      };
+      if (handleClipboardKey(event, context)) return;
+      if (handleArrowKey(event, context)) return;
+      handleEditKey(event, context);
     },
     [
       rowCount,

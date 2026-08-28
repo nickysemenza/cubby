@@ -26,6 +26,22 @@ interface ArrangeTreeProps {
   onSelect: (at: LocationShortcode | undefined) => void;
 }
 
+function resolveZoomPath(
+  roots: InfLocation[],
+  at: LocationShortcode | undefined,
+  home: InfLocation | null,
+) {
+  const ancestors: InfLocation[] = [];
+  let level = roots;
+  for (const id of at ? pathToNode(roots, at) : []) {
+    const node = level.find((candidate) => candidate.id === id);
+    if (!node) break;
+    if (node.id !== home?.id) ancestors.push(node);
+    level = node.children ?? [];
+  }
+  return ancestors;
+}
+
 /**
  * The Tree view of the arrange surface: a zoomable, indented location tree
  * (as opposed to the Board's Miller columns) with a breadcrumb trail and a
@@ -46,16 +62,7 @@ export function ArrangeTree({
   // live tree says they are, so a location moved underneath us stays zoomed
   // (under its new parent) and a deleted one resolves to Home.
   const home = roots[0] ?? null;
-  const ancestors: InfLocation[] = [];
-  {
-    let level = roots;
-    for (const id of at ? pathToNode(roots, at) : []) {
-      const node = level.find((n) => n.id === id);
-      if (!node) break;
-      if (node.id !== home?.id) ancestors.push(node);
-      level = node.children ?? [];
-    }
-  }
+  const ancestors = resolveZoomPath(roots, at, home);
   const resolvedZoom = ancestors.map((n) => n.id);
   const zoomRoot = ancestors[ancestors.length - 1] ?? home;
 

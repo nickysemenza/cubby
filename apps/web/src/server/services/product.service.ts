@@ -65,14 +65,11 @@ export const getProductWithFood = async (
 
   const lookupParam = foodLookupParamFromProduct(product);
   const operation = startOperationDefinition("entity.detail");
-  const food = await observeOperationPhase(operation, "food", () =>
-    lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
-  );
-
-  const { recipeUsages } = await observeOperationPhase(
-    operation,
-    "recipe_usages",
-    async () => {
+  const [food, { recipeUsages }] = await Promise.all([
+    observeOperationPhase(operation, "food", () =>
+      lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
+    ),
+    observeOperationPhase(operation, "recipe_usages", async () => {
       const ingredientEntityId = product.ingredient
         ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
         : null;
@@ -82,8 +79,8 @@ export const getProductWithFood = async (
             parseEntityId("ingredient", ingredientEntityId),
           )
         : { recipeUsages: [], appearsInRecipes: [] };
-    },
-  );
+    }),
+  ]);
 
   return {
     ...product,

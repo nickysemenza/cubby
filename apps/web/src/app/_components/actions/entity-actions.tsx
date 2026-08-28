@@ -620,9 +620,15 @@ export function useEntityActions<TRow extends EntityActionRow>(
       </Fragment>
     ));
 
-  const dialogs = resolved.map(({ definition, handles }) => (
-    <Fragment key={definition.id ?? definition.verb}>{handles.dialog}</Fragment>
-  ));
+  const dialogs = resolved.flatMap(({ definition, handles }) =>
+    handles.dialog == null
+      ? []
+      : [
+          <Fragment key={definition.id ?? definition.verb}>
+            {handles.dialog}
+          </Fragment>,
+        ],
+  );
 
   const singleRecordActions = resolved.flatMap(({ definition, handles }) => {
     if (definition.arity === "multi") return [];

@@ -53,6 +53,9 @@ export function PendingImageUpload({
 }: PendingImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const pendingImagesRef = useRef<PendingImage[]>([]);
+  const onImagesChangeRef = useRef(onImagesChange);
+  onImagesChangeRef.current = onImagesChange;
   // Must seed from the prop: the sync guard below also starts at the prop, so
   // an empty initial value here would never be replaced until the prop's
   // IDENTITY changes (a refetch) — existing images would render as none.
@@ -66,6 +69,20 @@ export function PendingImageUpload({
   const [importing, setImporting] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Every asynchronous source (scraper, URL, camera, file drop, paste) meets
+  // at this one append/remove seam. Reading the ref before publishing the
+  // state keeps completions composable instead of letting the last closure win.
+  const replacePendingImages = useCallback(
+    (update: (current: PendingImage[]) => PendingImage[]) => {
+      const next = update(pendingImagesRef.current);
+      pendingImagesRef.current = next;
+      setPendingImages(next);
+      onImagesChangeRef.current?.(next);
+      return next;
+    },
+    [],
+  );
 
   // Sync state from prop during render (React recommended pattern). A new
   // prop reference means the parent refetched — drop stale local removals too.
@@ -121,9 +138,7 @@ export function PendingImageUpload({
           key: result.key,
         };
 
-        const updatedImages = [...pendingImages, newImage];
-        setPendingImages(updatedImages);
-        onImagesChange?.(updatedImages);
+        replacePendingImages((current) => [...current, newImage]);
         setImageUrl("");
         toast.success("Photo added.");
       } catch (error) {
@@ -132,7 +147,7 @@ export function PendingImageUpload({
         setImporting(false);
       }
     },
-    [entityType, importFromUrlMutation, pendingImages, onImagesChange],
+    [entityType, importFromUrlMutation, replacePendingImages],
   );
 
   const handleImportFromUrl = useCallback(
@@ -199,12 +214,7 @@ export function PendingImageUpload({
           key: initResult.key,
         };
 
-        const updatedImages = [...pendingImages, newImage];
-        setPendingImages(updatedImages);
-
-        if (onImagesChange) {
-          onImagesChange(updatedImages);
-        }
+        replacePendingImages((current) => [...current, newImage]);
 
         toast.success("Photo added.");
 
@@ -217,7 +227,7 @@ export function PendingImageUpload({
         setUploading(false);
       }
     },
-    [entityType, uploadImageMutation, pendingImages, onImagesChange],
+    [entityType, uploadImageMutation, replacePendingImages],
   );
 
   useEffect(() => {
@@ -278,14 +288,11 @@ export function PendingImageUpload({
 
   const removeImage = useCallback(
     (imageId: string) => {
-      const updatedImages = pendingImages.filter((img) => img.id !== imageId);
-      setPendingImages(updatedImages);
-
-      if (onImagesChange) {
-        onImagesChange(updatedImages);
-      }
+      replacePendingImages((current) =>
+        current.filter((image) => image.id !== imageId),
+      );
     },
-    [pendingImages, onImagesChange],
+    [replacePendingImages],
   );
 
   const removeExistingImage = useCallback(
@@ -345,13 +352,13 @@ export function PendingImageUpload({
             accept="image/*"
             capture="environment"
             onChange={handleFileUpload}
-            disabled={uploading}
+            disabled={uploading || importing}
             hidden
           />
           <Button
             type="button"
             onClick={() => cameraInputRef.current?.click()}
-            disabled={uploading}
+            disabled={uploading || importing}
           >
             <Camera className="mr-2 size-4" />
             Camera

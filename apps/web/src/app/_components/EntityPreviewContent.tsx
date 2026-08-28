@@ -271,24 +271,9 @@ export function toIngredientCard(
 
 // ── Product ─────────────────────────────────────────────────────────────────
 
-export function toProductCard(
-  data: EntityDetailByEntity["product"],
-): ManifestCardProps {
-  const isMisc = isMiscProduct(data.name);
-  const manufacturer =
-    !isMisc &&
-    data.manufacturer &&
-    !isUnspecifiedManufacturer(data.manufacturer)
-      ? data.manufacturer
-      : null;
-  const identity =
-    [isMisc ? "misc" : manufacturer, data.category]
-      .filter(Boolean)
-      .join(" · ") || undefined;
-  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
-  const usdaFdcId = data.food?.fdc_id ?? data.fdc_id ?? undefined;
-
+function productCardBody(data: EntityDetailByEntity["product"]): BodyBlock[] {
   const body: BodyBlock[] = [];
+  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
   if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
   if (data.food?.nutritionInfo.nutrientsPer100)
     body.push({
@@ -310,14 +295,8 @@ export function toProductCard(
         </span>
       ),
     });
-  // "How many, and where" is the question a product hover is usually asking —
-  // and the detail read behind this card already carries both, so showing them
-  // costs nothing. Omitted entirely for a product that isn't stocked, rather
-  // than shown as a zero it never counted.
   if (data.onHandUnits != null)
     stats.push({ label: "On hand", value: data.onHandUnits });
-  // Stock entries plus the bins that ARE this product — a tote in service is
-  // just as much an answer to "where is it".
   const locationNames = [
     ...data.inventoryEntry.map((entry) => entry.location.name),
     ...data.servingAsLocations.map((location) => location.name),
@@ -331,6 +310,30 @@ export function toProductCard(
           : locationNames.join(", "),
     });
   if (stats.length > 0) body.push({ kind: "stats", stats });
+  return body;
+}
+
+export function toProductCard(
+  data: EntityDetailByEntity["product"],
+): ManifestCardProps {
+  const isMisc = isMiscProduct(data.name);
+  const manufacturer =
+    !isMisc &&
+    data.manufacturer &&
+    !isUnspecifiedManufacturer(data.manufacturer)
+      ? data.manufacturer
+      : null;
+  const identity =
+    [isMisc ? "misc" : manufacturer, data.category]
+      .filter(Boolean)
+      .join(" · ") || undefined;
+  const usdaFdcId = data.food?.fdc_id ?? data.fdc_id ?? undefined;
+  // "How many, and where" is the question a product hover is usually asking —
+  // and the detail read behind this card already carries both, so showing them
+  // costs nothing. Omitted entirely for a product that isn't stocked, rather
+  // than shown as a zero it never counted.
+  // Stock entries plus the bins that ARE this product — a tote in service is
+  // just as much an answer to "where is it".
 
   return {
     entity: "product",
@@ -340,7 +343,7 @@ export function toProductCard(
     tag: "product",
     identity,
     crossLinks: usdaFdcId != null ? [usdaCrossLink(usdaFdcId)] : undefined,
-    body,
+    body: productCardBody(data),
   };
 }
 

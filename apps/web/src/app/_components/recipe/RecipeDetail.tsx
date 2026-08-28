@@ -30,7 +30,9 @@ import { useDebug } from "~/hooks/useDebug";
 import { useWakeLock } from "~/hooks/useWakeLock";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
+  type CalculateTotalsResult,
   type CostingRow,
+  type RecipeCosting,
   computeRecipeCosting,
   flattenSections,
 } from "~/lib/recipe-costing";
@@ -97,6 +99,436 @@ export function remapLegacyView(view: string | undefined): RecipeViewMode {
     .with("nested", () => "spec" as const)
     .with("matrix", () => "prep" as const)
     .otherwise(() => "read" as const);
+}
+
+function RecipeViewContent({
+  viewMode,
+  recipe,
+  scaledRecipe,
+  tree,
+  totals,
+  costing,
+  flowLayout,
+  onFlowLayoutChange,
+  ingredientDataItems,
+  recipeImages,
+  ingredients,
+  ingMap,
+  totalsGaps,
+}: {
+  viewMode: RecipeViewMode;
+  recipe: RecipeOut;
+  scaledRecipe: RecipeOut;
+  tree: React.ComponentProps<typeof RecipeSpecView>["tree"] | null;
+  totals: CalculateTotalsResult | null;
+  costing: RecipeCosting | null;
+  flowLayout?: RecipeFlowLayoutMode;
+  onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
+  ingredientDataItems: RecipeCosting["rows"];
+  recipeImages: RecipeOut["images"];
+  ingredients: CostingRow[];
+  ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
+  totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
+}) {
+  if (viewMode === "read")
+    return (
+      <RecipeMagazineView
+        recipe={scaledRecipe}
+        totals={totals}
+        costing={costing}
+      />
+    );
+  if (viewMode === "spec" || viewMode === "prep") {
+    if (!tree) return <LoadingRecipeView />;
+    return viewMode === "spec" ? (
+      <RecipeSpecView tree={tree} />
+    ) : (
+      <RecipePrepSheetView tree={tree} />
+    );
+  }
+  if (viewMode === "flow")
+    return (
+      <RecipeFlowView
+        recipe={recipe}
+        scaledRecipe={scaledRecipe}
+        layout={flowLayout}
+        onLayoutChange={onFlowLayoutChange}
+      />
+    );
+  return (
+    <RecipeDataView
+      totals={totals}
+      ingredientDataItems={ingredientDataItems}
+      recipeImages={recipeImages}
+      ingredients={ingredients}
+      ingMap={ingMap}
+      costing={costing}
+      scaledRecipe={scaledRecipe}
+      totalsGaps={totalsGaps}
+      recipeShortcode={recipe.id}
+    />
+  );
+}
+
+function LoadingRecipeView() {
+  return (
+    <div className="h-[300px]">
+      <SimpleLoading />
+    </div>
+  );
+}
+
+function RecipeDataView({
+  totals,
+  ingredientDataItems,
+  recipeImages,
+  ingredients,
+  ingMap,
+  costing,
+  scaledRecipe,
+  totalsGaps,
+  recipeShortcode,
+}: {
+  totals: CalculateTotalsResult | null;
+  ingredientDataItems: RecipeCosting["rows"];
+  recipeImages: RecipeOut["images"];
+  ingredients: CostingRow[];
+  ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
+  costing: RecipeCosting | null;
+  scaledRecipe: RecipeOut;
+  totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
+  recipeShortcode: RecipeOut["id"];
+}) {
+  return (
+    <Stack gap="lg">
+      <RecipeSummary totals={totals} recipe={scaledRecipe} />
+      <RecipeDataCharts ingredients={ingredientDataItems} totals={totals} />
+      {recipeImages.length > 0 ? (
+        <EntityImageList images={recipeImages} />
+      ) : null}
+      <RecipeIngredientList
+        ingredients={ingredients}
+        ingMap={ingMap ?? undefined}
+        costing={costing}
+        perServing={getServingBasis(scaledRecipe)}
+        hideSummary
+        gaps={totalsGaps}
+        recipeShortcode={recipeShortcode}
+      />
+    </Stack>
+  );
+}
+
+function RecipeSummary({
+  totals,
+  recipe,
+}: {
+  totals: CalculateTotalsResult | null;
+  recipe: RecipeOut;
+}) {
+  if (!totals) return null;
+  const summary: RecipeSummaryData = {
+    price: totals.price,
+    weight: totals.weight,
+    nutrients: totals.nutrients,
+    totalIngredients: totals.totalIngredients,
+    missingByType: totals.missingByType,
+    perServing: getServingBasis(recipe),
+  };
+  if (totals.priceUpper != null) summary.priceUpper = totals.priceUpper;
+  if (totals.weightUpper != null) summary.weightUpper = totals.weightUpper;
+  if (totals.nutrientsUpper) summary.nutrientsUpper = totals.nutrientsUpper;
+  return (
+    <EntitySummaryCard
+      title="Recipe Summary"
+      summaryData={{ type: "recipe", data: summary }}
+    />
+  );
+}
+
+function RecipeDataCharts({
+  ingredients,
+  totals,
+}: {
+  ingredients: RecipeCosting["rows"];
+  totals: CalculateTotalsResult | null;
+}) {
+  const chart =
+    ingredients.length > 0 ? (
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>Cost Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecipeCostTreemap
+              ingredients={ingredients}
+              totalCost={totals?.price ?? 0}
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>Nutrition Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NutritionBars ingredients={ingredients} totals={totals} />
+          </CardContent>
+        </Card>
+      </div>
+    ) : (
+      <LoadingRecipeView />
+    );
+  return <Suspense fallback={<LoadingRecipeView />}>{chart}</Suspense>;
+}
+
+function RecipeWorkflowContent({
+  recipe,
+  scaledRecipe,
+  viewMode,
+  setViewMode,
+  factor,
+  setFactor,
+  totals,
+  missingWeightLinks,
+  totalsGaps,
+  wakeLock,
+  tree,
+  costing,
+  flowLayout,
+  onFlowLayoutChange,
+  ingredientDataItems,
+  ingredients,
+  ingMap,
+  nutritionNutrients,
+  nutritionServingLabel,
+  recipeImages,
+  isDebugEnabled,
+}: {
+  recipe: RecipeOut;
+  scaledRecipe: RecipeOut;
+  viewMode: RecipeViewMode;
+  setViewMode: (view: RecipeViewMode) => void;
+  factor: number;
+  setFactor: (factor: number) => void;
+  totals: CalculateTotalsResult | null;
+  missingWeightLinks: MissingWeightLink[];
+  totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
+  wakeLock: ReturnType<typeof useWakeLock>;
+  tree: React.ComponentProps<typeof RecipeSpecView>["tree"] | null;
+  costing: RecipeCosting | null;
+  flowLayout?: RecipeFlowLayoutMode;
+  onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
+  ingredientDataItems: RecipeCosting["rows"];
+  ingredients: CostingRow[];
+  ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
+  nutritionNutrients:
+    | React.ComponentProps<typeof NutritionLabel>["nutrients"]
+    | null;
+  nutritionServingLabel: string;
+  recipeImages: RecipeOut["images"];
+  isDebugEnabled: boolean;
+}) {
+  const exportFormat =
+    viewMode === "spec" ? "nested" : viewMode === "flow" ? "flow" : undefined;
+  return (
+    <Stack gap="lg">
+      <RecipeWorkflowControls
+        recipe={recipe}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        factor={factor}
+        setFactor={setFactor}
+        totals={totals}
+        missingWeightLinks={missingWeightLinks}
+        totalsGaps={totalsGaps}
+        wakeLock={wakeLock}
+        exportFormat={exportFormat}
+      />
+      <RecipeViewContent
+        viewMode={viewMode}
+        recipe={recipe}
+        scaledRecipe={scaledRecipe}
+        tree={tree}
+        totals={totals}
+        costing={costing}
+        flowLayout={flowLayout}
+        onFlowLayoutChange={onFlowLayoutChange}
+        ingredientDataItems={ingredientDataItems}
+        recipeImages={recipeImages}
+        ingredients={ingredients}
+        ingMap={ingMap}
+        totalsGaps={totalsGaps}
+      />
+      <RecipeWorkflowSupplemental
+        viewMode={viewMode}
+        recipeImages={recipeImages}
+        nutritionNutrients={nutritionNutrients}
+        nutritionServingLabel={nutritionServingLabel}
+        recipeId={recipe.id}
+        isDebugEnabled={isDebugEnabled}
+      />
+    </Stack>
+  );
+}
+
+function RecipeWorkflowControls({
+  recipe,
+  viewMode,
+  setViewMode,
+  factor,
+  setFactor,
+  totals,
+  missingWeightLinks,
+  totalsGaps,
+  wakeLock,
+  exportFormat,
+}: {
+  recipe: RecipeOut;
+  viewMode: RecipeViewMode;
+  setViewMode: (view: RecipeViewMode) => void;
+  factor: number;
+  setFactor: (factor: number) => void;
+  totals: CalculateTotalsResult | null;
+  missingWeightLinks: MissingWeightLink[];
+  totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
+  wakeLock: ReturnType<typeof useWakeLock>;
+  exportFormat: "nested" | "flow" | undefined;
+}) {
+  return (
+    <Row
+      align="center"
+      justify="between"
+      wrap
+      gap="sm"
+      className="print:hidden"
+    >
+      {recipe.tags?.length ? (
+        <RecipeTagList tags={recipe.tags} filterable />
+      ) : null}
+      <Row align="center" wrap gap="sm" className="ml-auto">
+        <WakeLockButton wakeLock={wakeLock} />
+        <RecipeTotalsCoverageButton
+          gaps={totalsGaps}
+          currentRecipeId={recipe.id}
+          currentRecipeShortcode={recipe.id}
+        />
+        <RecipeScaleControl
+          recipe={recipe}
+          totals={totals}
+          missingWeightLinks={missingWeightLinks}
+          factor={factor}
+          onFactorChange={setFactor}
+        />
+        <ViewSwitcher
+          ariaLabel="Recipe view"
+          options={RECIPE_VIEW_OPTIONS}
+          value={viewMode}
+          onValueChange={setViewMode}
+        />
+        <Link
+          to="/recipes/$shortcode/export"
+          params={{ shortcode: recipe.id }}
+          search={{
+            format: exportFormat,
+            scale: factor === 1 ? undefined : factor,
+          }}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          title="Open the print / export sheet"
+        >
+          <Printer className="size-3" />
+          Print / export
+        </Link>
+      </Row>
+    </Row>
+  );
+}
+
+function WakeLockButton({
+  wakeLock,
+}: {
+  wakeLock: ReturnType<typeof useWakeLock>;
+}) {
+  if (!wakeLock.supported) return null;
+  const label = wakeLock.enabled
+    ? "Screen stays awake while cooking — tap to allow sleep"
+    : "Keep screen awake while cooking";
+  return (
+    <button
+      type="button"
+      onClick={wakeLock.toggle}
+      aria-pressed={wakeLock.enabled}
+      title={label}
+      className={cn(
+        "inline-flex items-center gap-1 border px-2 py-1 text-xs",
+        wakeLock.enabled
+          ? "border-primary/40 bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <Coffee className="size-3.5" />
+      {wakeLock.enabled ? "Awake" : "Keep awake"}
+    </button>
+  );
+}
+
+function RecipeWorkflowSupplemental({
+  viewMode,
+  recipeImages,
+  nutritionNutrients,
+  nutritionServingLabel,
+  recipeId,
+  isDebugEnabled,
+}: {
+  viewMode: RecipeViewMode;
+  recipeImages: RecipeOut["images"];
+  nutritionNutrients:
+    | React.ComponentProps<typeof NutritionLabel>["nutrients"]
+    | null;
+  nutritionServingLabel: string;
+  recipeId: RecipeOut["id"];
+  isDebugEnabled: boolean;
+}) {
+  return (
+    <>
+      <RecipeReaderImages viewMode={viewMode} images={recipeImages} />
+      {nutritionNutrients ? (
+        <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
+          <summary className="cursor-pointer eyebrow marker:content-none">
+            <Apple className="mr-2 inline size-3 align-[-2px]" />
+            Nutrition
+          </summary>
+          <div className="mt-4">
+            <NutritionLabel
+              nutrients={nutritionNutrients}
+              servingLabel={nutritionServingLabel}
+            />
+          </div>
+        </details>
+      ) : null}
+      {isDebugEnabled ? <RecipeCostingDebugCard recipeId={recipeId} /> : null}
+    </>
+  );
+}
+
+function RecipeReaderImages({
+  viewMode,
+  images,
+}: {
+  viewMode: RecipeViewMode;
+  images: RecipeOut["images"];
+}) {
+  if (viewMode !== "read" || images.length <= 1) return null;
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle icon={ImageIcon}>More Images</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <EntityImageList images={images.slice(1)} />
+      </CardContent>
+    </Card>
+  );
 }
 
 const RecipeDetailInner: React.FC<{
@@ -232,15 +664,6 @@ const RecipeDetailInner: React.FC<{
     [totalsGaps],
   );
 
-  // Export format: spec ⇒ the "nested" markdown flavor; everything else uses the
-  // export sheet's own format picker (which still offers prep / nested / matrix).
-  const exportFormat =
-    viewMode === "spec"
-      ? ("nested" as const)
-      : viewMode === "flow"
-        ? ("flow" as const)
-        : undefined;
-
   const sections: DetailSection[] = [
     ...leadingSections,
     {
@@ -250,234 +673,29 @@ const RecipeDetailInner: React.FC<{
       placement: "full",
       surface: "plain",
       content: (
-        <Stack gap="lg">
-          {/* Tags, Scale control, and View Toggle */}
-          <Row
-            align="center"
-            justify="between"
-            wrap
-            gap="sm"
-            className="print:hidden"
-          >
-            {recipe.tags && recipe.tags.length > 0 && (
-              <RecipeTagList tags={recipe.tags} filterable />
-            )}
-            <Row align="center" wrap gap="sm" className="ml-auto">
-              {/* Kitchen mode: hold the screen awake while cooking. Feature-detected —
-              hidden on browsers without the Wake Lock API. */}
-              {wakeLock.supported && (
-                <button
-                  type="button"
-                  onClick={wakeLock.toggle}
-                  aria-pressed={wakeLock.enabled}
-                  title={
-                    wakeLock.enabled
-                      ? "Screen stays awake while cooking — tap to allow sleep"
-                      : "Keep screen awake while cooking"
-                  }
-                  className={cn(
-                    "inline-flex items-center gap-1 border px-2 py-1 text-xs",
-                    wakeLock.enabled
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <Coffee className="size-3.5" />
-                  {wakeLock.enabled ? "Awake" : "Keep awake"}
-                </button>
-              )}
-              {/* "Why aren't these totals complete?" — one compact popover on every view, so the
-              affordance is always one click away without the bulky inline card. */}
-              <RecipeTotalsCoverageButton
-                gaps={totalsGaps}
-                currentRecipeId={recipe.id}
-                currentRecipeShortcode={recipe.id}
-              />
-              <RecipeScaleControl
-                recipe={recipe}
-                totals={totals}
-                missingWeightLinks={missingWeightLinks}
-                factor={factor}
-                onFactorChange={setFactor}
-              />
-              <ViewSwitcher
-                ariaLabel="Recipe view"
-                options={RECIPE_VIEW_OPTIONS}
-                value={viewMode}
-                onValueChange={setViewMode}
-              />
-              <Link
-                to="/recipes/$shortcode/export"
-                params={{ shortcode: recipe.id }}
-                search={{
-                  format: exportFormat,
-                  scale: factor === 1 ? undefined : factor,
-                }}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                title="Open the print / export sheet"
-              >
-                <Printer className="size-3" />
-                Print / export
-              </Link>
-            </Row>
-          </Row>
-
-          {/* View Components */}
-          {viewMode === "read" && (
-            <RecipeMagazineView
-              recipe={scaledRecipe}
-              totals={totals}
-              costing={costing}
-            />
-          )}
-          {viewMode === "spec" &&
-            (tree ? (
-              <RecipeSpecView tree={tree} />
-            ) : (
-              <div className="h-[300px]">
-                <SimpleLoading />
-              </div>
-            ))}
-          {viewMode === "prep" &&
-            (tree ? (
-              <RecipePrepSheetView tree={tree} />
-            ) : (
-              <div className="h-[300px]">
-                <SimpleLoading />
-              </div>
-            ))}
-          {viewMode === "flow" && (
-            <RecipeFlowView
-              recipe={recipe}
-              scaledRecipe={scaledRecipe}
-              layout={flowLayout}
-              onLayoutChange={onFlowLayoutChange}
-            />
-          )}
-          {viewMode === "data" && (
-            <Stack gap="lg">
-              {/* Recipe Summary — rendered once here; the table below omits its own. */}
-              {totals && (
-                <EntitySummaryCard
-                  title="Recipe Summary"
-                  summaryData={{
-                    type: "recipe",
-                    data: (() => {
-                      const summary: RecipeSummaryData = {
-                        price: totals.price,
-                        // Carry the range upper bounds (ranged amounts like "1–2 cups")
-                        // so the card shows "$4.50–$6.20", matching the table's own card.
-                        weight: totals.weight,
-                        nutrients: totals.nutrients,
-                        totalIngredients: totals.totalIngredients,
-                        missingByType: totals.missingByType,
-                        perServing: getServingBasis(scaledRecipe),
-                      };
-                      if (totals.priceUpper != null)
-                        summary.priceUpper = totals.priceUpper;
-                      if (totals.weightUpper != null)
-                        summary.weightUpper = totals.weightUpper;
-                      if (totals.nutrientsUpper)
-                        summary.nutrientsUpper = totals.nutrientsUpper;
-                      return summary;
-                    })(),
-                  }}
-                />
-              )}
-
-              {/* Charts overview, stacked above the table (d3 stays lazy-loaded). */}
-              <Suspense
-                fallback={
-                  <div className="h-[300px]">
-                    <SimpleLoading />
-                  </div>
-                }
-              >
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle>Cost Breakdown</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {ingredientDataItems.length > 0 ? (
-                        <RecipeCostTreemap
-                          ingredients={ingredientDataItems}
-                          totalCost={totals?.price ?? 0}
-                        />
-                      ) : (
-                        <div className="h-[300px]">
-                          <SimpleLoading />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle>Nutrition Breakdown</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {ingredientDataItems.length > 0 ? (
-                        <NutritionBars
-                          ingredients={ingredientDataItems}
-                          totals={totals}
-                        />
-                      ) : (
-                        <div className="h-[300px]">
-                          <SimpleLoading />
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              </Suspense>
-
-              {recipeImages.length > 0 && (
-                <EntityImageList images={recipeImages} />
-              )}
-              <RecipeIngredientList
-                ingredients={ingredients}
-                ingMap={ingMap ?? undefined}
-                costing={costing}
-                perServing={getServingBasis(scaledRecipe)}
-                hideSummary
-                gaps={totalsGaps}
-                recipeShortcode={recipe.id}
-              />
-            </Stack>
-          )}
-
-          {/* Additional Images (for the reader view, if more than hero) */}
-          {viewMode === "read" && recipeImages.length > 1 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle icon={ImageIcon}>More Images</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <EntityImageList images={recipeImages.slice(1)} />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Nutrition Facts — collapsed by default, same details/summary pattern as
-          the prep sheet's shopping list. Independent of view mode: shows
-          whenever the costing engine has produced nutrient totals. */}
-          {nutritionNutrients && (
-            <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
-              <summary className="cursor-pointer eyebrow marker:content-none">
-                <Apple className="mr-2 inline size-3 align-[-2px]" />
-                Nutrition
-              </summary>
-              <div className="mt-4">
-                <NutritionLabel
-                  nutrients={nutritionNutrients}
-                  servingLabel={nutritionServingLabel}
-                />
-              </div>
-            </details>
-          )}
-
-          {isDebugEnabled && <RecipeCostingDebugCard recipeId={recipe.id} />}
-        </Stack>
+        <RecipeWorkflowContent
+          recipe={recipe}
+          scaledRecipe={scaledRecipe}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          factor={factor}
+          setFactor={setFactor}
+          totals={totals}
+          missingWeightLinks={missingWeightLinks}
+          totalsGaps={totalsGaps}
+          wakeLock={wakeLock}
+          tree={tree}
+          costing={costing}
+          flowLayout={flowLayout}
+          onFlowLayoutChange={onFlowLayoutChange}
+          ingredientDataItems={ingredientDataItems}
+          ingredients={ingredients}
+          ingMap={ingMap ?? undefined}
+          nutritionNutrients={nutritionNutrients}
+          nutritionServingLabel={nutritionServingLabel}
+          recipeImages={recipeImages}
+          isDebugEnabled={isDebugEnabled}
+        />
       ),
     },
   ];
