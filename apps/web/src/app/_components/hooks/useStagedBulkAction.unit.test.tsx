@@ -1,37 +1,71 @@
+import type { UseMutationOptions } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  mutateAsync: vi.fn(),
-  onSuccess: vi.fn(),
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("./useActionMutation", () => ({
-  useActionMutation: (options: { onSuccess: () => void }) => {
-    mocks.onSuccess.mockImplementation(options.onSuccess);
-    return { isPending: false, mutateAsync: mocks.mutateAsync };
-  },
-}));
-
+import type { CubbyRow as TableRow } from "../data-table/table-features";
 import { useStagedBulkAction } from "./useStagedBulkAction";
 
-type Row = { id: string; name: string };
+interface Row {
+  id: string;
+  name: string;
+}
+
+interface TradeValues {
+  trade: string;
+}
+
+interface MutationResult {
+  updated: number;
+}
+
+interface MutationContext {
+  source: "test";
+}
+
+type Payload = TradeValues & { ids: string[] };
 
 const rows = (...items: Row[]) =>
-  items.map((original) => ({ original })) as never;
+  items.map((original) => fromPartial<TableRow<Row>>({ original }));
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+const mutate = vi.fn(async (_payload: Payload): Promise<MutationResult> => ({
+  updated: 2,
+}));
+
+const mutationOptions = (): UseMutationOptions<
+  MutationResult,
+  Error,
+  Payload,
+  MutationContext
+> => ({ mutationFn: mutate });
 
 const setup = () =>
-  renderHook(() =>
-    useStagedBulkAction<Row, () => { mutationFn: () => Promise<unknown> }>({
-      verb: "setTrade",
-      // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-      mutationFn: (() => ({})) as any,
-    }),
+  renderHook(
+    () =>
+      useStagedBulkAction<
+        Row,
+        MutationResult,
+        Error,
+        TradeValues,
+        MutationContext
+      >({
+        verb: "setTrade",
+        mutationFn: mutationOptions,
+      }),
+    { wrapper: harness.wrapper },
   );
 
 describe("useStagedBulkAction", () => {
   beforeEach(() => {
-    mocks.mutateAsync.mockClear();
+    harness = createBrowserTestHarness();
+    mutate.mockClear();
+  });
+
+  afterEach(() => {
+    harness.dispose();
   });
 
   it("takes its label and icon from the verb registry", () => {
@@ -51,11 +85,10 @@ describe("useStagedBulkAction", () => {
       { id: "TSK-1", name: "a" },
       { id: "TSK-2", name: "b" },
     ]);
-    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
   });
 
-  // The derivation each of the seven hand-written blocks used to repeat.
-  it("derives ids from the staged rows and merges the dialog's value", async () => {
+  it("derives ids from the staged rows and merges the dialog value", async () => {
     const { result } = setup();
     await act(async () => {
       await result.current.action.onExecute(
@@ -65,19 +98,17 @@ describe("useStagedBulkAction", () => {
     await act(async () => {
       await result.current.submit({ trade: "electrical" });
     });
-    expect(mocks.mutateAsync).toHaveBeenCalledWith({
-      trade: "electrical",
-      ids: ["TSK-1", "TSK-2"],
-    });
+    expect(mutate).toHaveBeenCalledWith(
+      { trade: "electrical", ids: ["TSK-1", "TSK-2"] },
+      expect.any(Object),
+    );
   });
 
-  it("clears the staged rows on success", async () => {
+  it("clears the staged rows after a successful mutation", async () => {
     const { result } = setup();
     await act(async () => {
       await result.current.action.onExecute(rows({ id: "TSK-1", name: "a" }));
-    });
-    act(() => {
-      mocks.onSuccess();
+      await result.current.submit({ trade: "electrical" });
     });
     expect(result.current.items).toEqual([]);
   });
@@ -87,10 +118,8 @@ describe("useStagedBulkAction", () => {
     await act(async () => {
       await result.current.action.onExecute(rows({ id: "TSK-1", name: "a" }));
     });
-    act(() => {
-      result.current.cancel();
-    });
+    act(() => result.current.cancel());
     expect(result.current.items).toEqual([]);
-    expect(mocks.mutateAsync).not.toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
   });
 });

@@ -28,17 +28,31 @@
  */
 
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
 
-interface CellCopyPayload {
+const cellJsonValueSchema = z.json();
+const cellClipboardEnvelopeSchema = z.object({
+  kind: z.string(),
+  value: cellJsonValueSchema,
+});
+
+export type CellJsonValue = z.output<typeof cellJsonValueSchema>;
+
+export interface CellCopyPayload {
   /** Human-readable value for the system clipboard. */
   text: string;
   /** Typed value for in-app paste (must round-trip through JSON). */
-  json: unknown;
+  json: CellJsonValue;
 }
 
-export interface CellClipboardSpec<TSaved = unknown> {
+export interface CellPastePayload {
+  json?: CellJsonValue;
+  text?: string;
+}
+
+export interface CellClipboardSpec<TSaved = CellJsonValue | null | void> {
   kindKey: string;
   /** Omit (or return null) to disable copy for this cell. */
   getCopyPayload?: () => CellCopyPayload | null;
@@ -47,12 +61,11 @@ export interface CellClipboardSpec<TSaved = unknown> {
    * uses it for its optimistic display); reject to surface a toast — both
    * validation failures ("not a number") and save errors.
    */
-  onPasteValue?: (payload: {
-    json?: unknown;
-    text?: string;
-  }) => Promise<TSaved>;
+  onPasteValue?: (payload: CellPastePayload) => Promise<TSaved>;
   /** Paste is ignored while the cell is mid-edit. */
   isEditing?: () => boolean;
+  /** Optional presentation port for hosts that own paste-error reporting. */
+  onError?: (message: string) => void;
 }
 
 export const CELL_CLIPBOARD_MIME = "application/x-cubby-cell";
@@ -76,12 +89,16 @@ export function flashElement(el: HTMLElement, kind: "copied" | "pasted") {
   }, FLASH_MS);
 }
 
-const registry = new Map<HTMLElement, CellClipboardSpec>();
+type RegisteredCellClipboardSpec = Omit<CellClipboardSpec, "onPasteValue"> & {
+  onPasteValue?: (payload: CellPastePayload) => Promise<void>;
+};
+
+const registry = new Map<HTMLElement, RegisteredCellClipboardSpec>();
 let listenersInstalled = false;
 
 function specForActiveElement(): {
   el: HTMLElement;
-  spec: CellClipboardSpec;
+  spec: RegisteredCellClipboardSpec;
 } | null {
   const el = document.activeElement;
   if (!(el instanceof HTMLElement)) return null;
@@ -107,17 +124,11 @@ function handleCopy(event: ClipboardEvent) {
 
 function safeParsePayload(
   raw: string | undefined,
-): { kind: string; value: unknown } | null {
+): z.output<typeof cellClipboardEnvelopeSchema> | null {
   if (!raw) return null;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof (parsed as { kind?: unknown }).kind === "string"
-    ) {
-      return parsed as { kind: string; value: unknown };
-    }
+    const parsed = cellClipboardEnvelopeSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
   } catch {
     // fall through to text paste
   }
@@ -132,10 +143,10 @@ function handlePaste(event: ClipboardEvent) {
   if (!active || !onPasteValue || active.spec.isEditing?.()) return;
   const { el, spec } = active;
 
-  const runPaste = (payload: { json?: unknown; text?: string }) => {
+  const runPaste = (payload: CellPastePayload) => {
     onPasteValue(payload).then(
       () => flashElement(el, "pasted"),
-      (err: unknown) => toast.error(getErrorMessage(err)),
+      (err) => (spec.onError ?? toast.error)(getErrorMessage(err)),
     );
   };
 
@@ -160,11 +171,19 @@ function handlePaste(event: ClipboardEvent) {
  * first registration and removed at zero, so pages without editable cells
  * (and jsdom tests) pay nothing.
  */
-export function registerCellClipboard(
+export function registerCellClipboard<TSaved>(
   el: HTMLElement,
-  spec: CellClipboardSpec,
+  spec: CellClipboardSpec<TSaved>,
 ): () => void {
-  registry.set(el, spec);
+  const registered: RegisteredCellClipboardSpec = {
+    ...spec,
+    onPasteValue: spec.onPasteValue
+      ? async (payload) => {
+          await spec.onPasteValue?.(payload);
+        }
+      : undefined,
+  };
+  registry.set(el, registered);
   if (!listenersInstalled) {
     document.addEventListener("copy", handleCopy);
     document.addEventListener("paste", handlePaste);

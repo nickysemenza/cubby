@@ -18,9 +18,10 @@ describe("LabelSheet", () => {
       name: "Label sheet preview",
     });
     expect(preview).toHaveClass("max-w-full", "overflow-x-auto");
-    expect((preview.firstElementChild as HTMLElement).style.width).toBe(
-      SHEET_LAYOUTS.pls134.sheetWidth,
-    );
+    const paper = preview.firstElementChild;
+    expect(paper).toBeInstanceOf(HTMLElement);
+    if (!(paper instanceof HTMLElement)) return;
+    expect(paper.style.width).toBe(SHEET_LAYOUTS.pls134.sheetWidth);
   });
 
   it("keeps the print-only sheet outside the interactive preview wrapper", () => {

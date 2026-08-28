@@ -1,7 +1,8 @@
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
+import type { ProductId, ProductShortcode } from "@cubby/schemas/identifiers";
 import type { TagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
+import type { SimilarEntitiesOut } from "@cubby/schemas/search";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 
 import type { Database } from "~/server/db";
@@ -18,6 +19,40 @@ import {
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
 import { findSimilarEntitiesForPair } from "./semantic-search.service";
 
+export interface RelatednessDependencies {
+  resolveSourceId: (
+    db: Database,
+    entity: "product",
+    sourceId: ProductShortcode,
+  ) => Promise<ProductId>;
+  findSimilarEntities: (
+    db: Database,
+    input: Parameters<typeof findSimilarEntitiesForPair>[1],
+  ) => Promise<SimilarEntitiesOut>;
+  getProductsSharingTags: (
+    db: Database,
+    entityId: ProductId,
+  ) => Promise<Array<{ shortcode: string; name: string; tags: string[] }>>;
+  getProductsByShortcodes: (
+    db: Database,
+    shortcodes: string[],
+  ) => Promise<Array<{ id: string; tags: string[] }>>;
+  getActiveDismissalKeys: (
+    db: Database,
+    input: Parameters<typeof getActiveSuggestionDismissalKeys>[1],
+  ) => Promise<Set<string>>;
+  makeCandidateKey: typeof suggestionCandidateKey;
+}
+
+const productionDependencies: RelatednessDependencies = {
+  resolveSourceId: resolveOrThrow,
+  findSimilarEntities: findSimilarEntitiesForPair,
+  getProductsSharingTags,
+  getProductsByShortcodes,
+  getActiveDismissalKeys: getActiveSuggestionDismissalKeys,
+  makeCandidateKey: suggestionCandidateKey,
+};
+
 /**
  * Product's one active relatedness slice. Compatibility tags are intentionally
  * display-only evidence while the stored-vector candidates contribute a score.
@@ -25,6 +60,7 @@ import { findSimilarEntitiesForPair } from "./semantic-search.service";
 export async function getProductRelatedness(
   db: Database,
   sourceId: ProductShortcode,
+  dependencies: RelatednessDependencies = productionDependencies,
 ): Promise<RelatednessOut> {
   const signals = entityManifest.product.relatednessSignals ?? [];
   const semanticSignal = signals.find((signal) => signal.kind === "semantic");
@@ -37,15 +73,19 @@ export async function getProductRelatedness(
       "Product relatedness signals are not declared in the manifest",
     );
   }
-  const sourceEntityId = await resolveOrThrow(db, "product", sourceId);
+  const sourceEntityId = await dependencies.resolveSourceId(
+    db,
+    "product",
+    sourceId,
+  );
   const [semantic, siblings, dismissals] = await Promise.all([
-    findSimilarEntitiesForPair(db, {
+    dependencies.findSimilarEntities(db, {
       pair: "product_to_product",
       sourceId,
       limit: semanticSignal.limit,
     }),
-    getProductsSharingTags(db, sourceEntityId),
-    getActiveSuggestionDismissalKeys(db, {
+    dependencies.getProductsSharingTags(db, sourceEntityId),
+    dependencies.getActiveDismissalKeys(db, {
       sourceEntityType: "product",
       sourceEntityId,
       suggestionKind: "product.related",
@@ -61,7 +101,7 @@ export async function getProductRelatedness(
         async (shortcode) =>
           [
             shortcode,
-            await suggestionCandidateKey("product.related", [shortcode]),
+            await dependencies.makeCandidateKey("product.related", [shortcode]),
           ] as const,
       ),
     ),
@@ -96,6 +136,7 @@ export async function getProductRelatedness(
 export async function getProductTagPropagation(
   db: Database,
   sourceId: ProductShortcode,
+  dependencies: RelatednessDependencies = productionDependencies,
 ): Promise<TagPropagationRecommendationOut> {
   const semanticSignal = (entityManifest.product.relatednessSignals ?? []).find(
     (signal) => signal.kind === "semantic",
@@ -104,19 +145,19 @@ export async function getProductTagPropagation(
     throw new Error("Product semantic relatedness signal is not declared");
   }
   const [sourceEntityId, semantic] = await Promise.all([
-    resolveOrThrow(db, "product", sourceId),
-    findSimilarEntitiesForPair(db, {
+    dependencies.resolveSourceId(db, "product", sourceId),
+    dependencies.findSimilarEntities(db, {
       pair: "product_to_product",
       sourceId,
       limit: semanticSignal.limit,
     }),
   ]);
   const [rows, dismissals] = await Promise.all([
-    getProductsByShortcodes(db, [
+    dependencies.getProductsByShortcodes(db, [
       sourceId,
       ...semantic.results.map((result) => result.entity.id),
     ]),
-    getActiveSuggestionDismissalKeys(db, {
+    dependencies.getActiveDismissalKeys(db, {
       sourceEntityType: "product",
       sourceEntityId,
       suggestionKind: "product.tag-propagation",
@@ -151,7 +192,9 @@ export async function getProductTagPropagation(
         async ({ tag }) =>
           [
             tag,
-            await suggestionCandidateKey("product.tag-propagation", [tag]),
+            await dependencies.makeCandidateKey("product.tag-propagation", [
+              tag,
+            ]),
           ] as const,
       ),
     ),

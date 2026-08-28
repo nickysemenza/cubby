@@ -1,5 +1,5 @@
 import type { LocationType } from "@cubby/schemas/location";
-import type React from "react";
+import React from "react";
 
 import { Stack } from "~/components/layout";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
@@ -41,6 +41,80 @@ type EntityInlineLinkListProps = BaseProps &
       }
   );
 
+type InlineLinkItem =
+  | { name: string; id: string }
+  | { name: string; id: string; manufacturer: string }
+  | { name: string; id: string; type: LocationType | null }
+  | { foodInfo: { description: string | null }; fdc_id: number };
+
+function renderInlineLink(
+  entity: "ingredient" | "recipe",
+  item: { name: string; id: string },
+  compact: boolean | undefined,
+): React.ReactElement;
+function renderInlineLink(
+  entity: "product",
+  item: { name: string; id: string; manufacturer: string },
+  compact: boolean | undefined,
+): React.ReactElement;
+function renderInlineLink(
+  entity: "location",
+  item: { name: string; id: string; type: LocationType | null },
+  compact: boolean | undefined,
+): React.ReactElement;
+function renderInlineLink(
+  entity: "usda-food",
+  item: { foodInfo: { description: string | null }; fdc_id: number },
+  compact: boolean | undefined,
+): React.ReactElement;
+function renderInlineLink(
+  entity: EntityInlineLinkListProps["entity"],
+  item: InlineLinkItem,
+  compact: boolean | undefined,
+) {
+  if (entity === "usda-food" && "fdc_id" in item) {
+    return (
+      <EntityInlineLink
+        displayImage={undefined}
+        entity={entity}
+        data={item}
+        compact={compact}
+      />
+    );
+  }
+  if (entity === "location" && "type" in item) {
+    return (
+      <EntityInlineLink
+        displayImage={undefined}
+        entity={entity}
+        data={item}
+        compact={compact}
+      />
+    );
+  }
+  if (entity === "product" && "manufacturer" in item) {
+    return (
+      <EntityInlineLink
+        displayImage={undefined}
+        entity={entity}
+        data={item}
+        compact={compact}
+      />
+    );
+  }
+  if ((entity === "ingredient" || entity === "recipe") && "name" in item) {
+    return (
+      <EntityInlineLink
+        displayImage={undefined}
+        entity={entity}
+        data={item}
+        compact={compact}
+      />
+    );
+  }
+  throw new Error(`Unexpected ${entity} inline-link item shape`);
+}
+
 export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
   props,
 ) => {
@@ -66,15 +140,17 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
     return index;
   };
 
-  const renderItem = (item: (typeof items)[number], index: number) => (
-    <EntityInlineLink
-      displayImage={undefined}
-      key={getKey(item, index)}
-      entity={props.entity}
-      data={item as never}
-      compact={compact}
-    />
-  );
+  const renderItem = (item: (typeof items)[number], index: number) => {
+    let link: React.ReactElement;
+    if ("fdc_id" in item) link = renderInlineLink("usda-food", item, compact);
+    else if ("type" in item) link = renderInlineLink("location", item, compact);
+    else if ("manufacturer" in item)
+      link = renderInlineLink("product", item, compact);
+    else if (props.entity === "ingredient" || props.entity === "recipe")
+      link = renderInlineLink(props.entity, item, compact);
+    else throw new Error(`Unexpected ${props.entity} inline-link item shape`);
+    return React.cloneElement(link, { key: getKey(item, index) });
+  };
 
   // When maxItems is set, use TruncatedList for horizontal truncation
   if (maxItems !== undefined) {

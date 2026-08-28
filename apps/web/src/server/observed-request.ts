@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/tanstackstart-react";
+import { type JSONType, z } from "zod";
 
 import type {
   ProductDetailPhase,
@@ -12,11 +13,27 @@ import { isExpectedAppError } from "~/server/errors/app-error";
 import { type AppSpan, withTrace } from "~/server/tracing";
 import type { RequestOrigin, Workload } from "~/server/workload";
 
-type ObservedResult = { error?: unknown; workload?: Workload };
+export type ObservedFailure = Error | JSONType;
+export type ObservedResult = {
+  error?: ObservedFailure;
+  workload?: Workload;
+};
 
-const databaseMetricAttributes = (
-  metrics: DatabaseOperationMetrics,
-): Record<string, number> => ({
+export type OperationObservation<Result> = {
+  origin: RequestOrigin;
+  workload: Workload;
+  inspectResult?: (result: Result) => ObservedResult;
+};
+
+export function parseObservedFailure<TError>(error: TError): ObservedFailure {
+  if (error instanceof Error) return error;
+  const serializable = z.json().safeParse(error);
+  return serializable.success
+    ? serializable.data
+    : new Error("A non-serializable value was thrown");
+}
+
+const databaseMetricAttributes = (metrics: DatabaseOperationMetrics) => ({
   "db.query.count": metrics.queryCount,
   "db.query.duration_sum_ms": Math.round(metrics.queryDurationSumMs),
   "db.query.active_wall_ms": Math.round(metrics.queryActiveWallMs),
@@ -29,11 +46,12 @@ const databaseMetricAttributes = (
   "db.acquire.max_concurrency": metrics.acquireMaxConcurrency,
 });
 
-export function isObservedCancellation(error: unknown): boolean {
+export function isObservedCancellation<TError>(error: TError): boolean {
+  const failure = parseObservedFailure(error);
   return (
-    (error instanceof DOMException && error.name === "AbortError") ||
-    (error instanceof Error &&
-      (error.name === "AbortError" || error.name === "CancelledError"))
+    (failure instanceof DOMException && failure.name === "AbortError") ||
+    (failure instanceof Error &&
+      (failure.name === "AbortError" || failure.name === "CancelledError"))
   );
 }
 
@@ -81,12 +99,13 @@ async function observeRequest<T>(options: {
         }
         return result;
       } catch (error) {
-        if (isObservedCancellation(error)) {
+        const failure = parseObservedFailure(error);
+        if (isObservedCancellation(failure)) {
           span.setAttribute("cubby.cancelled", true);
           throw error;
         }
-        if (!isExpectedAppError(error)) {
-          Sentry.captureException(error, {
+        if (!isExpectedAppError(failure)) {
+          Sentry.captureException(failure, {
             extra: {
               rpcMethod: options.method,
               rpcSystem: options.system,
@@ -104,11 +123,7 @@ async function observeRequest<T>(options: {
 
 export function observeOperation<T>(
   definition: StartOperationDefinition,
-  context: {
-    origin: RequestOrigin;
-    workload: Workload;
-    inspectResult?: (result: T) => ObservedResult;
-  },
+  context: OperationObservation<T>,
   run: (span: AppSpan) => Promise<T>,
 ): Promise<T> {
   return observeRequest({

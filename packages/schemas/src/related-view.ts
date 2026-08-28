@@ -17,6 +17,7 @@ import {
   taskShortcode,
   vendorShortcode,
   wishShortcode,
+  nonEmptyTuple,
 } from "./identifiers";
 
 interface RelatedViewPresentationDefinition {
@@ -392,26 +393,31 @@ const relatedViewRelationshipKeys = {
   (typeof relatedViewPresentationRegistry)[number]["key"],
   string
 >;
+type RelatedViewRelationshipKey = keyof typeof relatedViewRelationshipKeys;
+const isRelatedViewRelationshipKey = (
+  key: string,
+): key is RelatedViewRelationshipKey =>
+  Object.hasOwn(relatedViewRelationshipKeys, key);
 
 export const relatedViewRegistry = relatedViewPresentationRegistry.map(
   (view) => {
     const relationship = localRelationshipByKey(view.source, view.relationship);
     return { ...view, target: relationship.target, label: relationship.label };
   },
-) as readonly (RelatedViewPresentation & {
+) satisfies readonly (RelatedViewPresentation & {
   target: Entity;
   label: string;
 })[];
 
 export const relatedViewPath = (
   view: Pick<RelatedViewDefinition, "source" | "key">,
-) =>
-  localRelationshipByKey(
-    view.source,
-    relatedViewRelationshipKeys[
-      view.key as keyof typeof relatedViewRelationshipKeys
-    ],
-  ).provenance.steps;
+) => {
+  if (!isRelatedViewRelationshipKey(view.key)) {
+    throw new Error(`Unknown related view key: ${view.key}`);
+  }
+  const relationshipKey = relatedViewRelationshipKeys[view.key];
+  return localRelationshipByKey(view.source, relationshipKey).provenance.steps;
+};
 
 type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
 
@@ -448,10 +454,9 @@ export const relatedViewsFor = (
     ? NO_RELATED_VIEWS
     : relatedViewRegistry.filter((view) => view.source === entity);
 
-export const relatedViewKeys = relatedViewRegistry.map((view) => view.key) as [
-  (typeof relatedViewRegistry)[number]["key"],
-  ...(typeof relatedViewRegistry)[number]["key"][],
-];
+export const relatedViewKeys = nonEmptyTuple(
+  relatedViewRegistry.map((view) => view.key),
+);
 export const relatedViewKeySchema = z.enum(relatedViewKeys);
 export type RelatedViewKey = z.infer<typeof relatedViewKeySchema>;
 
@@ -628,6 +633,8 @@ const trio = <Prefix extends string, IdSchema extends z.ZodType>(
   idSchema: IdSchema,
 ) => {
   const ids = z.union([idSchema, z.array(idSchema)]).optional();
+  // SAFETY: each computed key is formed from Prefix, and all three values are
+  // the schemas represented by RelatedTrio for that same prefix.
   return {
     [`${prefix}Id`]: ids,
     [`${prefix}PresenceFilter`]: relatedPresence,

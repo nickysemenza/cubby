@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { FinancialSettlementBadge } from "./financial-settlement";
@@ -49,14 +50,14 @@ describe("purchase reconciliation badges", () => {
   it("keeps a matched financial settlement green", () => {
     render(
       <FinancialSettlementBadge
-        purchase={
-          {
-            financialReconciliation: {
-              status: "match",
-              transactionCount: 2,
-            },
-          } as never
-        }
+        purchase={fromPartial<
+          Parameters<typeof FinancialSettlementBadge>[0]["purchase"]
+        >({
+          financialReconciliation: {
+            status: "match",
+            transactionCount: 2,
+          },
+        })}
       />,
     );
 

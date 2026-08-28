@@ -125,22 +125,21 @@ export function ExpenseAnalyticsView() {
   const handleOpenLedger = useCallback(
     (filter: Record<string, string>) => {
       void navigate({
-        search: (prev) => ({
-          ...prev,
-          // A project bucket is one exact project, while this URL-only scope
-          // deliberately widens the Ledger to its descendants. Carrying it
-          // through would make the drilldown no longer equal the aggregate.
-          subprojects: filter.project ? undefined : prev.subprojects,
-          // The date preset is a second way of describing the date range.
-          // A Month bucket supplies exact bounds, so leave no stale preset
-          // behind to expand differently when the Ledger restores URL state.
-          date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
-          ...(filter.dateFrom || filter.dateTo
-            ? { dateRelative: undefined }
-            : {}),
-          ...filter,
-          view: "ledger" as const,
-        }),
+        search: (prev) => {
+          const nextSearch = {
+            ...prev,
+            // A project bucket is one exact project, while this URL-only scope
+            // deliberately widens the Ledger to its descendants.
+            subprojects: filter.project ? undefined : prev.subprojects,
+            // Exact month bounds supersede a relative date preset.
+            date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
+            ...filter,
+            view: "ledger" as const,
+          };
+          return filter.dateFrom || filter.dateTo
+            ? { ...nextSearch, dateRelative: undefined }
+            : nextSearch;
+        },
       });
     },
     [navigate],

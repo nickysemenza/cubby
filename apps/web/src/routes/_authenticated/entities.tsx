@@ -15,11 +15,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
 import { pageTitle } from "~/lib/page-title";
 
+const tabSchema = z.enum(["recipes", "schema", "integrity"]);
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
   // it preserves the pre-merge /entities content (and its zero-query cost);
   // the recipe graph is opt-in via ?tab=recipes (the recipes-list Graph button).
-  tab: z.enum(["recipes", "schema", "integrity"]).optional().catch(undefined),
+  tab: tabSchema.optional().catch(undefined),
   // Recipe-graph filters (migrated from the old /recipes/graph route). Branded
   // at the route boundary so garbage ?cookbookId= values are rejected here.
   cookbookId: cookbookShortcode.optional().catch(undefined),
@@ -37,7 +38,7 @@ function EntitiesRoute() {
   const { tab, entity } = Route.useSearch();
   const navigate = useNavigate();
 
-  const tabs = useTabParam(tab, "schema", (next) =>
+  const tabs = useTabParam(tab, "schema", tabSchema, (next) =>
     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
   );
 

@@ -1,3 +1,4 @@
+import { amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
@@ -69,13 +70,16 @@ describe("addInventoryEntries", () => {
       columns: { id: true, productId: true, amount: true, placement: true },
     });
     return rows
-      .map((row) => ({
-        id: row.id,
-        productId: row.productId,
-        value: (row.amount as { value: number; unit: string }).value,
-        unit: (row.amount as { value: number; unit: string }).unit,
-        placement: row.placement,
-      }))
+      .map((row) => {
+        const parsedAmount = amount.parse(row.amount);
+        return {
+          id: row.id,
+          productId: row.productId,
+          value: parsedAmount.value,
+          unit: parsedAmount.unit,
+          placement: row.placement,
+        };
+      })
       .sort((a, b) => a.value - b.value);
   };
 

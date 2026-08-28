@@ -30,7 +30,7 @@ import { WISH_DELETE_EDGE_POLICY } from "~/server/repo/wish";
 
 interface PolicyCase {
   entity: Entity;
-  policy: Record<string, unknown>;
+  policy: object;
 }
 
 const POLICY_CASES = {
@@ -116,13 +116,7 @@ describe("product retaining edges", () => {
 
   it("retains exactly the acquisition, history, association, reference and usage edges", () => {
     expect(
-      (
-        Object.keys(PRODUCT_EDGE_ROLES) as Array<
-          keyof typeof PRODUCT_EDGE_ROLES
-        >
-      )
-        .filter(isRetainingEdgeKey)
-        .sort(),
+      Object.keys(PRODUCT_EDGE_ROLES).filter(isRetainingEdgeKey).sort(),
     ).toEqual(RETAINING);
   });
 

@@ -1,8 +1,5 @@
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import type {
-  RecipeCostingExplain,
-  RowDiagnosticOut,
-} from "@cubby/schemas/recipe-shared";
+import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
 import { useQuery } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 
@@ -98,7 +95,7 @@ export const RecipeCostingDebugCard: React.FC<{
   }
   if (!data) return null;
 
-  const { persisted, computed, drift } = data as RecipeCostingExplain;
+  const { persisted, computed, drift } = data;
   // When the live compute is known-degraded (USDA misses), drift against it is
   // expected and meaningless — don't shout about it.
   const showDrift = computed.complete && (drift.cost || drift.calories);

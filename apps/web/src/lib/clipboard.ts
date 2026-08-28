@@ -1,5 +1,38 @@
 import { toast } from "sonner";
 
+interface ClipboardNotifications {
+  readonly success: (message: string) => void;
+  readonly error: (message: string) => void;
+}
+
+export interface ClipboardPort {
+  readonly writeText: (text: string) => Promise<void>;
+  readonly fallbackCopy: (text: string) => boolean;
+  readonly notifications: ClipboardNotifications;
+}
+
+const copyWithLegacyBrowserCommand = (text: string): boolean => {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+  document.body.appendChild(textarea);
+  try {
+    textarea.select();
+    return document.execCommand("copy");
+  } finally {
+    textarea.remove();
+  }
+};
+
+const productionClipboardPort: ClipboardPort = {
+  writeText: (text) => navigator.clipboard.writeText(text),
+  fallbackCopy: copyWithLegacyBrowserCommand,
+  notifications: {
+    success: toast.success,
+    error: toast.error,
+  },
+};
+
 /**
  * Copy text to the system clipboard, reporting whether it landed.
  *
@@ -11,22 +44,18 @@ import { toast } from "sonner";
  * Returns rather than toasts: the copy surfaces phrase their own success
  * message ("Copied 12 shortcodes" vs "Copied recipe parse").
  */
-export async function copyText(text: string): Promise<boolean> {
+export async function copyText(
+  text: string,
+  port: ClipboardPort = productionClipboardPort,
+): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text);
+    await port.writeText(text);
     return true;
   } catch {
     // Fall through to the legacy path.
   }
   try {
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.cssText = "position:fixed;top:0;left:0;opacity:0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    const copied = document.execCommand("copy");
-    textarea.remove();
-    return copied;
+    return port.fallbackCopy(text);
   } catch {
     return false;
   }
@@ -39,28 +68,34 @@ export async function copyText(text: string): Promise<boolean> {
  * with `\n`), so a column of codes pastes into a spreadsheet — or a prompt — as
  * the list it looks like.
  */
-export async function copyShortcodes(codes: string[]): Promise<boolean> {
+export async function copyShortcodes(
+  codes: string[],
+  port: ClipboardPort = productionClipboardPort,
+): Promise<boolean> {
   if (codes.length === 0) return false;
-  const copied = await copyText(codes.join("\n"));
+  const copied = await copyText(codes.join("\n"), port);
   if (!copied) {
-    toast.error("Copy failed");
+    port.notifications.error("Copy failed");
     return false;
   }
-  toast.success(
+  port.notifications.success(
     codes.length === 1 ? `Copied ${codes[0]}` : `Copied ${codes.length} codes`,
   );
   return true;
 }
 
 /** Copy external public identifiers for entities that do not use shortcodes. */
-export async function copyIdentifiers(ids: string[]): Promise<boolean> {
+export async function copyIdentifiers(
+  ids: string[],
+  port: ClipboardPort = productionClipboardPort,
+): Promise<boolean> {
   if (ids.length === 0) return false;
-  const copied = await copyText(ids.join("\n"));
+  const copied = await copyText(ids.join("\n"), port);
   if (!copied) {
-    toast.error("Copy failed");
+    port.notifications.error("Copy failed");
     return false;
   }
-  toast.success(
+  port.notifications.success(
     ids.length === 1 ? `Copied ${ids[0]}` : `Copied ${ids.length} identifiers`,
   );
   return true;

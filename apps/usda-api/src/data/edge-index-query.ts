@@ -87,6 +87,11 @@ export const FOOD_DATA_TYPES = [
   "survey_fndds_food",
 ] as const;
 
+export interface DataTypePredicate {
+  sql: string;
+  values: string[];
+}
+
 // Builds the data_type SQL predicate + bind values for a given column.
 // Precedence: an explicit single `dataTypeFilter` wins, then a multi-type
 // `dataTypes` list (comma-joined), then `foodsOnly` (the user-facing food
@@ -96,7 +101,7 @@ export function dataTypePredicate(
   dataTypeFilter: string | undefined,
   foodsOnly: boolean | undefined,
   dataTypes?: string,
-): { sql: string; values: string[] } {
+): DataTypePredicate {
   if (dataTypeFilter) return { sql: `${column} = ?`, values: [dataTypeFilter] };
   const multi = (dataTypes ?? "")
     .split(",")

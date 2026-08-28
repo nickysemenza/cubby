@@ -4,19 +4,20 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { manifestKey } from "../src/data/artifact-layout.js";
 import { cliArgs } from "./lib/cli-args.js";
+import { z } from "zod";
 
-interface PointerRow {
-  fdc_id: number;
-  bundle_key: string;
-  byte_offset: number;
-  byte_length: number;
-}
+const pointerRowSchema = z.object({
+  fdc_id: z.number().int(),
+  bundle_key: z.string(),
+  byte_offset: z.number().int().nonnegative(),
+  byte_length: z.number().int().nonnegative(),
+});
 
-interface Manifest {
-  artifactCounts: {
-    foods: number;
-  };
-}
+const manifestSchema = z.object({
+  artifactCounts: z.object({ foods: z.number().int().nonnegative() }),
+});
+
+const pointerTargetSchema = z.object({ fdc_id: z.number().int() });
 
 interface CliOptions {
   artifactDir: string;
@@ -57,9 +58,13 @@ async function main() {
       `Expected exactly one version under ${usdaDir}, found: ${versions.join(", ") || "none"}`,
     );
   }
-  const manifest = JSON.parse(
-    await fs.readFile(path.join(r2Root, manifestKey(versions[0]!)), "utf8"),
-  ) as Manifest;
+  const version = versions.at(0);
+  if (!version) throw new Error(`Missing version under ${usdaDir}`);
+  const manifest = manifestSchema.parse(
+    JSON.parse(
+      await fs.readFile(path.join(r2Root, manifestKey(version)), "utf8"),
+    ),
+  );
   const pointers = createInterface({
     input: createReadStream(pointersPath),
     crlfDelay: Infinity,
@@ -68,14 +73,14 @@ async function main() {
   let checked = 0;
   for await (const line of pointers) {
     if (!line.trim()) continue;
-    const pointer = JSON.parse(line) as PointerRow;
+    const pointer = pointerRowSchema.parse(JSON.parse(line));
     const filePath = path.join(r2Root, pointer.bundle_key);
     const raw = await readRange(
       filePath,
       pointer.byte_offset,
       pointer.byte_length,
     );
-    const parsed = JSON.parse(raw);
+    const parsed = pointerTargetSchema.parse(JSON.parse(raw));
     if (parsed.fdc_id !== pointer.fdc_id) {
       throw new Error(
         `Pointer mismatch for ${pointer.fdc_id}: read ${parsed.fdc_id}`,

@@ -149,24 +149,12 @@ function buildBackgroundJobRows({
     const selected = listedBatch.id === selectedBatchId;
     const batch = selected && selectedBatch ? selectedBatch : listedBatch;
     const completed = batch.succeededJobs + batch.skippedJobs;
-    return {
+    const row: BackgroundBatchRow = {
       rowType: "batch",
       rowKey: `batch:${batch.id}`,
       id: batch.id,
       name: `Batch ${shortId(batch.id)}`,
       batch,
-      ...(selected
-        ? {
-            subRows: selectedBatchError
-              ? [
-                  {
-                    ...statusRow(batch.id, "error", selectedBatchError),
-                    retry: selectedBatchRetry,
-                  },
-                ]
-              : children(batch.id, selectedJobs),
-          }
-        : {}),
       work: batch.kind,
       route: `${batch.processor} ${batch.source}`,
       status: batch.status,
@@ -174,6 +162,17 @@ function buildBackgroundJobRows({
       timing: `${formatMs(batch.wallDurationMs) || "—"} · ${formatMs(batch.activeDurationMs)} active`,
       createdAt: batch.createdAt,
     };
+    if (selected) {
+      row.subRows = selectedBatchError
+        ? [
+            {
+              ...statusRow(batch.id, "error", selectedBatchError),
+              retry: selectedBatchRetry,
+            },
+          ]
+        : children(batch.id, selectedJobs);
+    }
+    return row;
   });
   if (selectedBatchId && selectedBatchError && !recentIds.has(selectedBatchId))
     rows.unshift({

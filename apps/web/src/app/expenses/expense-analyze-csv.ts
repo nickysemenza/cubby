@@ -155,8 +155,8 @@ export function expenseAnalyzeCsvFilename(
   data: Pick<ExpenseAnalyzeReadyOut, "rowDimension" | "columnDimension">,
   date = new Date(),
 ) {
-  const shape = data.columnDimension
+  const layout = data.columnDimension
     ? `${data.rowDimension}-by-${data.columnDimension}`
     : data.rowDimension;
-  return `expenses-analysis-${shape}-${format(date, "yyyy-MM-dd")}.csv`;
+  return `expenses-analysis-${layout}-${format(date, "yyyy-MM-dd")}.csv`;
 }

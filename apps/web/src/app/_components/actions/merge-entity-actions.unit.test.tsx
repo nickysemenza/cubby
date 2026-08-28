@@ -1,82 +1,135 @@
-import { act, render, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { testShortcode } from "@cubby/schemas/testing";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { mergeEntityActionDefinitions } from "./merge-entity-actions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-const mocks = vi.hoisted(() => ({
-  dialog: vi.fn(),
-  mutateAsync: vi.fn(),
-}));
+import type { EntityActionRow } from "./entity-actions";
+import {
+  type MergeMutation,
+  mergeEntityActionDefinitions,
+  useStagedMerge,
+} from "./merge-entity-actions";
 
-vi.mock("../hooks/useActionMutation", () => ({
-  useActionMutation: () => ({
-    mutateAsync: mocks.mutateAsync,
-    isPending: false,
-  }),
-}));
-vi.mock("../merge/entity-merge-dialog", () => ({
-  EntityMergeDialog: (props: unknown) => {
-    mocks.dialog(props);
-    return null;
+const keeper = {
+  id: testShortcode("ingredient", "ING-4K7M"),
+  name: "Potato starch",
+} satisfies EntityActionRow;
+
+const alias = {
+  id: testShortcode("ingredient", "ING-4K7N"),
+  name: "Potato Starch",
+} satisfies EntityActionRow;
+
+const mixedVendorPurchases = [
+  {
+    id: testShortcode("purchase", "PUR-4K7M"),
+    vendorId: testShortcode("vendor", "VND-4K7M"),
   },
-}));
-vi.mock("~/app/vendors/vendor.functions", () => ({
-  vendor: { merge: { mutationOptions: {} } },
-}));
-vi.mock("~/app/purchases/purchase.functions", () => ({
-  purchase: { merge: { mutationOptions: {} } },
-}));
+  {
+    id: testShortcode("purchase", "PUR-4K7N"),
+    vendorId: testShortcode("vendor", "VND-4K7N"),
+  },
+] satisfies readonly (EntityActionRow & { vendorId: string })[];
 
-describe("merge entity actions", () => {
-  it("uses the first selected fixed-mode row as keeper and preselects the rest", () => {
-    const definition = mergeEntityActionDefinitions[0];
-    const { result } = renderHook(() => definition.use());
-    const run = result.current.run;
-    expect(run).not.toBeNull();
-    if (!run) throw new Error("Vendor Merge must expose a runner");
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-    act(() => {
-      void run([
-        { id: "VEN-KEEP", name: "Keep" },
-        { id: "VEN-MERGE-1", name: "Merge one" },
-        { id: "VEN-MERGE-2", name: "Merge two" },
-      ]);
-    });
-    render(result.current.dialog);
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
 
-    expect(mocks.dialog).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        entity: "vendor",
-        keeper: expect.objectContaining({ id: "VEN-KEEP" }),
-        initialAliasIds: ["VEN-MERGE-1", "VEN-MERGE-2"],
-        open: true,
-      }),
-    );
+afterEach(() => {
+  harness.dispose();
+});
+
+function MergeActionHarness({
+  mutation,
+  onResolved,
+}: {
+  mutation: MergeMutation<void>;
+  onResolved: (success: boolean) => void;
+}) {
+  const action = useStagedMerge("ingredient", mutation);
+  const stageMerge = () => {
+    const pending = action.run?.([keeper, alias]);
+    if (pending) void pending.then((result) => onResolved(result.success));
+  };
+
+  return (
+    <>
+      <button type="button" onClick={stageMerge}>
+        Stage ingredient merge
+      </button>
+      {action.dialog}
+    </>
+  );
+}
+
+function PurchaseAvailabilityHarness() {
+  const purchaseAction = mergeEntityActionDefinitions[1];
+  const availability = purchaseAction.use().availability;
+  if (!availability)
+    throw new Error("Purchase merge must declare availability.");
+  const result = availability({
+    entity: "purchase",
+    surface: "selection",
+    rows: mixedVendorPurchases,
   });
 
-  it("disables a mixed-vendor Purchase selection without narrowing it", () => {
-    const definition = mergeEntityActionDefinitions[1];
-    const { result } = renderHook(() => definition.use());
-    const first = {
-      id: "PUR-FIRST",
-      name: "First",
-      vendorId: "VEN-FIRST",
-    };
-    const second = {
-      id: "PUR-SECOND",
-      name: "Second",
-      vendorId: "VEN-SECOND",
-    };
+  return (
+    <output>
+      {result.status === "disabled" ? result.reason : "available"}
+    </output>
+  );
+}
+
+describe("merge entity actions", () => {
+  it("registers bounded vendor and purchase merge actions", () => {
+    expect(mergeEntityActionDefinitions).toMatchObject([
+      { entities: ["vendor"], minSelection: 2, verb: "merge" },
+      { entities: ["purchase"], minSelection: 2, verb: "merge" },
+    ]);
+  });
+
+  it("keeps a staged selection until the merge dialog executes its typed mutation", async () => {
+    const merges: Array<{ keepId: string; mergeIds: string[] }> = [];
+    const resolved: boolean[] = [];
+    render(
+      <MergeActionHarness
+        mutation={{
+          isPending: false,
+          mutateAsync: async (input) => {
+            merges.push(input);
+          },
+        }}
+        onResolved={(success) => resolved.push(success)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage ingredient merge" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: "Merge ingredients?",
+      }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+
+    await waitFor(() =>
+      expect(merges).toEqual([{ keepId: keeper.id, mergeIds: [alias.id] }]),
+    );
+    await waitFor(() => expect(resolved).toEqual([true]));
+  });
+
+  it("rejects cross-vendor purchase selections before opening a merge dialog", async () => {
+    render(<PurchaseAvailabilityHarness />, { wrapper: harness.wrapper });
 
     expect(
-      result.current.availability?.({
-        entity: "purchase",
-        surface: "selection",
-        rows: [first, second],
-      }),
-    ).toEqual({
-      status: "disabled",
-      reason: "Purchases must share a vendor before they can be merged.",
-    });
+      await screen.findByText(
+        "Purchases must share a vendor before they can be merged.",
+      ),
+    ).toBeVisible();
   });
 });

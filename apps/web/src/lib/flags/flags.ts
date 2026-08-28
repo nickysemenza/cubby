@@ -91,7 +91,9 @@ export const FLAGS = {
 
 export type FlagKey = keyof typeof FLAGS;
 
-export const FLAG_KEYS = Object.keys(FLAGS) as FlagKey[];
+export const FLAG_KEYS = Object.keys(FLAGS).filter(
+  (key): key is FlagKey => key in FLAGS,
+);
 
 /**
  * Whether a flag's target is build-stripped from production bundles, making the
@@ -100,5 +102,6 @@ export const FLAG_KEYS = Object.keys(FLAGS) as FlagKey[];
  * is readable uniformly across the union.
  */
 export function isDevBuildOnlyFlag(key: FlagKey): boolean {
-  return (FLAGS[key] as FlagDef).devBuildOnly === true;
+  const definition = FLAGS[key];
+  return "devBuildOnly" in definition && definition.devBuildOnly === true;
 }

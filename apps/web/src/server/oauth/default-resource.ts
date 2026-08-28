@@ -1,4 +1,16 @@
+import { z } from "zod";
+
 import { MCP_RESOURCE } from "~/lib/auth";
+
+const tokenRequestBodySchema = z.record(z.string(), z.json());
+
+export interface DefaultResourcePort {
+  readonly resource: string;
+}
+
+const productionDefaultResourcePort: DefaultResourcePort = {
+  resource: MCP_RESOURCE,
+};
 
 /**
  * Default the OAuth `resource` parameter on token requests.
@@ -17,7 +29,10 @@ import { MCP_RESOURCE } from "~/lib/auth";
  * have sent. An explicit `resource` from the client always wins, and anything
  * invalid still gets rejected by the plugin's own `validAudiences` check.
  */
-export async function withDefaultResource(request: Request): Promise<Request> {
+export async function withDefaultResource(
+  request: Request,
+  port: DefaultResourcePort = productionDefaultResourcePort,
+): Promise<Request> {
   if (request.method !== "POST") return request;
   if (!new URL(request.url).pathname.endsWith("/oauth2/token")) return request;
 
@@ -26,7 +41,7 @@ export async function withDefaultResource(request: Request): Promise<Request> {
   if (contentType.includes("application/x-www-form-urlencoded")) {
     const body = new URLSearchParams(await request.text());
     if (body.has("resource")) return rebuild(request, body.toString());
-    body.set("resource", MCP_RESOURCE);
+    body.set("resource", port.resource);
     return rebuild(request, body.toString());
   }
 
@@ -38,17 +53,13 @@ export async function withDefaultResource(request: Request): Promise<Request> {
     } catch {
       return rebuild(request, raw); // let better-auth report the parse error
     }
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      "resource" in body ||
-      Array.isArray(body)
-    ) {
+    const parsed = tokenRequestBodySchema.safeParse(body);
+    if (!parsed.success || Object.hasOwn(parsed.data, "resource")) {
       return rebuild(request, raw);
     }
     return rebuild(
       request,
-      JSON.stringify({ ...body, resource: MCP_RESOURCE }),
+      JSON.stringify({ ...parsed.data, resource: port.resource }),
     );
   }
 

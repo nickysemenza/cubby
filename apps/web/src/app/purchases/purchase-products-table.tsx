@@ -17,7 +17,7 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -169,64 +169,82 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
     () => createCubbyColumnHelper<PurchaseProductRow>(),
     [],
   );
-  const columns = useMemo<CubbyColumnDef<PurchaseProductRow>[]>(
-    () => [
-      ...selection.selectColumns,
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", {
-        header: "Product",
-        expandable: true,
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<PurchaseProductRow>((add) => {
+        selection.selectColumns.forEach(add);
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(
+          createNameColumn(helper, "product", "name", {
+            header: "Product",
+            expandable: true,
+          }),
+        );
+        add(
+          helper.accessor((row) => row.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", label: "Maker" },
+            },
+            cell: (info) =>
+              isUnspecifiedManufacturer(info.getValue())
+                ? "—"
+                : info.getValue(),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "price", {
+            header: "Price",
+            mobile: { slot: "meta", priority: 20 },
+          }),
+        );
+        // Badge the exception: most rows are derived from this order's itemized
+        // expenses, and the explicit link is both rarer and the only detachable
+        // one. Mirrors the marker in `product-purchases.tsx`.
+        add(
+          helper.accessor((row) => row.linked, {
+            id: "link",
+            header: "",
+            // Blank header ⇒ no sorting: the sort control is a button labelled by
+            // the header text, so an empty one has no accessible name. See the
+            // twin in `_components/products/product-purchases.tsx`.
+            enableSorting: false,
+            meta: {
+              className: "w-24",
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: (info) =>
+              info.getValue() ? <Badge variant="outline">Linked</Badge> : null,
+          }),
+        );
+        add(
+          createActionsColumn(helper, "product", {
+            // Expense-derived rows have no link to remove; detach would no-op and
+            // leave the row in place. Clear the Expense's product instead.
+            extraActions: (row) => (
+              <>
+                {row.linked && (
+                  <VerbMenuItem
+                    verb="removeFromPurchase"
+                    disabled={detach.isPending}
+                    onSelect={(event) => {
+                      event.stopPropagation();
+                      detach.mutate({ purchaseId, productIds: [row.id] });
+                    }}
+                  />
+                )}
+              </>
+            ),
+          }),
+        );
       }),
-      helper.accessor((row) => row.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", label: "Maker" },
-        },
-        cell: (info) =>
-          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
-      }),
-      createCurrencyColumn(helper, "price", {
-        header: "Price",
-        mobile: { slot: "meta", priority: 20 },
-      }),
-      // Badge the exception: most rows are derived from this order's itemized
-      // expenses, and the explicit link is both rarer and the only detachable
-      // one. Mirrors the marker in `product-purchases.tsx`.
-      helper.accessor((row) => row.linked, {
-        id: "link",
-        header: "",
-        // Blank header ⇒ no sorting: the sort control is a button labelled by
-        // the header text, so an empty one has no accessible name. See the
-        // twin in `_components/products/product-purchases.tsx`.
-        enableSorting: false,
-        meta: {
-          className: "w-24",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        cell: (info) =>
-          info.getValue() ? <Badge variant="outline">Linked</Badge> : null,
-      }),
-      createActionsColumn(helper, "product", {
-        // Expense-derived rows have no link to remove; detach would no-op and
-        // leave the row in place. Clear the Expense's product instead.
-        extraActions: (row) => (
-          <>
-            {row.linked && (
-              <VerbMenuItem
-                verb="removeFromPurchase"
-                disabled={detach.isPending}
-                onSelect={(event) => {
-                  event.stopPropagation();
-                  detach.mutate({ purchaseId, productIds: [row.id] });
-                }}
-              />
-            )}
-          </>
-        ),
-      }),
-    ],
     [detach, helper, purchaseId, selection.selectColumns],
   );
   const layout = useCubbyTableLayout({ key: "purchase:products", columns });

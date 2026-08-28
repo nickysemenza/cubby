@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db/database";
@@ -13,23 +14,25 @@ import type { RecipeCostingService } from "./recipe-costing.service";
  * throws on any property access states the early return more directly than a
  * live connection could.
  */
-const explodingDb = new Proxy(
-  {},
-  {
-    get(_target, prop) {
-      throw new Error(
-        `expense-pricing touched the database (property "${String(prop)}") on the empty-id path`,
-      );
+const explodingDb = fromPartial<Database>(
+  new Proxy(
+    {},
+    {
+      get(_target, prop) {
+        throw new Error(
+          `expense-pricing touched the database (property "${String(prop)}") on the empty-id path`,
+        );
+      },
     },
-  },
-) as Database;
+  ),
+);
 
 describe("recomputeRecipesForPriceAffectedProducts", () => {
   it("skips the service, and the database, when no product price changed", async () => {
     const recomputeForIngredients = vi.fn();
-    const service = {
+    const service = fromPartial<RecipeCostingService>({
       recomputeForIngredients,
-    } as unknown as RecipeCostingService;
+    });
 
     await expect(
       recomputeRecipesForPriceAffectedProducts(

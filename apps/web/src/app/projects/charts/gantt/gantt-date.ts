@@ -56,7 +56,7 @@ function formatPlain(y: number, m: number, d: number): string {
   return `${y}-${pad2(m)}-${pad2(d)}`;
 }
 
-function parsePlainDate(plain: string): { y: number; m: number; d: number } {
+function parsePlainDate(plain: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(plain);
   if (!match) {
     throw new Error(`Invalid plain date: ${plain}`);
@@ -72,11 +72,7 @@ function dayIndexOf(y: number, m0: number, d: number): number {
   return Math.floor(Date.UTC(y, m0, d) / MS_PER_DAY);
 }
 
-function utcPartsFromDayIndex(day: number): {
-  y: number;
-  m0: number;
-  d: number;
-} {
+function utcPartsFromDayIndex(day: number) {
   const date = new Date(day * MS_PER_DAY);
   return {
     y: date.getUTCFullYear(),

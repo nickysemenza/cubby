@@ -4,7 +4,7 @@ import { deriveUpdateData } from "./base-entity";
 import { productUpdateData } from "./product";
 
 describe("deriveUpdateData", () => {
-  const createShape = {
+  const createFields = {
     name: z.string().min(1),
     tags: z.array(z.string()).default([]),
     count: z.number(),
@@ -12,7 +12,7 @@ describe("deriveUpdateData", () => {
   };
 
   it("makes every required create field optional", () => {
-    const schema = deriveUpdateData(createShape);
+    const schema = deriveUpdateData(createFields);
     expect(schema.parse({})).toEqual({});
     expect(schema.parse({ name: "x", count: 1 })).toEqual({
       name: "x",
@@ -23,13 +23,13 @@ describe("deriveUpdateData", () => {
   it("strips create-time defaults so an omitted field stays undefined", () => {
     // The core guard: a naive `.partial()` keeps `.default([])`, so omitting
     // `tags` on update would coerce to [] and wipe the existing rows.
-    const schema = deriveUpdateData(createShape);
+    const schema = deriveUpdateData(createFields);
     expect(schema.parse({}).tags).toBeUndefined();
     expect(schema.parse({ tags: ["a"] }).tags).toEqual(["a"]);
   });
 
   it("adds update-only fields via `extend`", () => {
-    const schema = deriveUpdateData(createShape, {
+    const schema = deriveUpdateData(createFields, {
       extend: { removeIds: z.array(z.uuid()).optional() },
     });
     const id = "00000000-0000-0000-0000-000000000000";
@@ -37,7 +37,7 @@ describe("deriveUpdateData", () => {
   });
 
   it("drops server-managed fields via `omit`", () => {
-    const schema = deriveUpdateData(createShape, { omit: ["serverField"] });
+    const schema = deriveUpdateData(createFields, { omit: ["serverField"] });
     expect("serverField" in schema.shape).toBe(false);
     expect("name" in schema.shape).toBe(true);
   });

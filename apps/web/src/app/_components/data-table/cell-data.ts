@@ -24,14 +24,21 @@
  * corrupted saved data.
  */
 
-import type { Amount } from "@cubby/schemas/codec";
+import { amount as amountSchema, type Amount } from "@cubby/schemas/codec";
+import type { CellData } from "@tanstack/react-table";
+import { z } from "zod";
 
 import { parsePlainDateInput } from "~/lib/plain-date-input";
 import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { tryFormatAmount } from "../inventory/format-amount";
-import type { CellClipboardSpec } from "./cell-clipboard";
+import type {
+  CellClipboardSpec,
+  CellCopyPayload,
+  CellJsonValue,
+  CellPastePayload,
+} from "./cell-clipboard";
 import type { CellKind } from "./cell-clipboard-model";
 import type { FilterableComboboxItem } from "./editable-cell";
 
@@ -40,7 +47,10 @@ import type { FilterableComboboxItem } from "./editable-cell";
  * row (not a value captured from a single rendered cell) so the range engine
  * can copy/paste against the whole row model, virtualized rows included.
  */
-export interface ColumnCellData<TData, TSaved = unknown> {
+export interface ColumnCellData<
+  TData = CellData,
+  TSaved = CellJsonValue | null | void,
+> {
   kind: CellKind;
   /**
    * Typed numeric projection for read-only selection statistics. This is
@@ -49,15 +59,22 @@ export interface ColumnCellData<TData, TSaved = unknown> {
    */
   getNumericValue?: (row: TData) => number | null;
   /** null → nothing to copy (empty TSV field). */
-  getCopyPayload: (row: TData) => { text: string; json: unknown } | null;
+  getCopyPayload: (row: TData) => CellCopyPayload | null;
   /** Absent → column is read-only for paste. Resolves with the saved value (for optimistic display). */
-  applyPaste?: (
-    row: TData,
-    payload: { json?: unknown; text?: string },
-  ) => Promise<TSaved>;
+  applyPaste?: (row: TData, payload: CellPastePayload) => Promise<TSaved>;
   /** Absent unless this specific relation is nullable. */
   applyClear?: (row: TData) => Promise<TSaved>;
 }
+
+const pastedStringSchema = z.string();
+const pastedNumberSchema = z.number();
+const pastedEntitySchema = z.object({ id: z.string(), name: z.string() });
+const pastedTagsSchema = z.array(z.string());
+
+const pastedString = (payload: CellPastePayload): string => {
+  const parsed = pastedStringSchema.safeParse(payload.json);
+  return parsed.success ? parsed.data : (payload.text ?? "");
+};
 
 /**
  * Adapt a column's `ColumnCellData` + a specific row into a per-cell
@@ -96,7 +113,7 @@ export function textCellData<TData>(
     },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const raw = typeof json === "string" ? json : (text ?? "");
+          const raw = pastedString({ json, text });
           const next = raw.trim() === "" ? null : raw.trim();
           await save(row, next);
           return next;
@@ -108,7 +125,7 @@ export function textCellData<TData>(
 export function dateCellData<TData>(
   getValue: (row: TData) => string | null,
   save?: (row: TData, value: string | null) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, string | null> {
   return {
     kind: "date",
     getCopyPayload: (row) => {
@@ -119,7 +136,7 @@ export function dateCellData<TData>(
     },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const raw = typeof json === "string" ? json : (text ?? "");
+          const raw = pastedString({ json, text });
           const parsed = parsePlainDateInput(raw);
           if (!parsed.ok) throw new Error(parsed.error);
           await save(row, parsed.value);
@@ -133,7 +150,7 @@ export function numberCellData<TData>(
   kind: "number" | "currency",
   getValue: (row: TData) => number | null,
   save?: (row: TData, value: number | null) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, number | null> {
   return {
     kind,
     getNumericValue: getValue,
@@ -143,10 +160,10 @@ export function numberCellData<TData>(
     },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const num =
-            typeof json === "number"
-              ? json
-              : Number.parseFloat((text ?? "").replace(/[^0-9.-]/g, ""));
+          const parsedNumber = pastedNumberSchema.safeParse(json);
+          const num = parsedNumber.success
+            ? parsedNumber.data
+            : Number.parseFloat((text ?? "").replace(/[^0-9.-]/g, ""));
           if (Number.isNaN(num)) {
             throw new Error("Pasted value is not a number");
           }
@@ -161,7 +178,7 @@ export function selectCellData<TData>(
   getValue: (row: TData) => string | null,
   selectOptions: FilterableComboboxItem[],
   save?: (row: TData, value: string) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, string | null> {
   return {
     kind: "select",
     getCopyPayload: (row) => {
@@ -172,8 +189,7 @@ export function selectCellData<TData>(
     },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const candidate =
-            typeof json === "string" ? json : (text ?? "").trim();
+          const candidate = pastedString({ json, text }).trim();
           const opt =
             selectOptions.find((o) => o.value === candidate) ??
             selectOptions.find(
@@ -197,11 +213,11 @@ export function selectCellData<TData>(
  */
 export function entityCellData<TData, TId extends string>(
   entity: string,
-  parseId: (value: unknown) => TId,
+  parseId: (value: string) => TId,
   getItem: (row: TData) => ComboboxItem<TId> | null,
   save?: (row: TData, id: TId) => Promise<void>,
   clear?: (row: TData) => Promise<void>,
-): ColumnCellData<TData, ComboboxItem<TId> | null> {
+): ColumnCellData<TData, Pick<ComboboxItem<TId>, "id" | "name"> | null> {
   return {
     kind: `entity:${entity}`,
     getCopyPayload: (row) => {
@@ -212,19 +228,13 @@ export function entityCellData<TData, TId extends string>(
     },
     applyPaste: save
       ? async (row, { json }) => {
-          if (
-            !json ||
-            typeof json !== "object" ||
-            !("id" in json) ||
-            !("name" in json) ||
-            typeof json.id !== "string" ||
-            typeof json.name !== "string"
-          ) {
+          const parsed = pastedEntitySchema.safeParse(json);
+          if (!parsed.success) {
             throw new Error(`Paste a ${entity} cell here`);
           }
           const pasted = {
-            id: parseId(json.id),
-            name: json.name,
+            id: parseId(parsed.data.id),
+            name: parsed.data.name,
           };
           await save(row, pasted.id);
           return { id: pasted.id, name: pasted.name };
@@ -256,38 +266,28 @@ export function entityCellData<TData, TId extends string>(
 export function amountCellData<TData>(
   getAmount: (row: TData) => Amount,
   save: (row: TData, amount: Amount) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, Amount> {
   return {
     kind: "amount",
     getCopyPayload: (row) => {
       const amount = getAmount(row);
+      const json: z.input<typeof amountSchema> = {
+        value: amount.value,
+        unit: amount.unit,
+      };
+      if (amount.upperValue != null) json.upperValue = amount.upperValue;
       return {
         text: tryFormatAmount(amount),
         // The typed payload is the exact stored amount (range included), so an
         // in-app cell→cell paste never round-trips through the text at all.
-        json: {
-          value: amount.value,
-          unit: amount.unit,
-          ...(amount.upperValue != null
-            ? { upperValue: amount.upperValue }
-            : {}),
-        },
+        json,
       };
     },
     applyPaste: async (row, { json, text }) => {
-      const typed = json as
-        | { value?: unknown; unit?: unknown; upperValue?: unknown }
-        | undefined;
-      if (typed && typeof typed.value === "number") {
-        const next: Amount = {
-          value: typed.value,
-          unit: typeof typed.unit === "string" ? typed.unit : "",
-          ...(typeof typed.upperValue === "number"
-            ? { upperValue: typed.upperValue }
-            : {}),
-        };
-        await save(row, next);
-        return next;
+      const typed = amountSchema.safeParse(json);
+      if (typed.success) {
+        await save(row, typed.data);
+        return typed.data;
       }
       // No typed payload — free text ("1 1/2 cups", "2.5 lb", "5 each", "3",
       // "2-3 cups"). The grammar owns mixed numbers, vulgar fractions, ranges,
@@ -302,10 +302,8 @@ export function amountCellData<TData>(
       const next: Amount = {
         value: parsed.value,
         unit: preserveWrittenWholeUnit(text, parsed.unit),
-        ...(parsed.upper_value != null
-          ? { upperValue: parsed.upper_value }
-          : {}),
       };
+      if (parsed.upper_value != null) next.upperValue = parsed.upper_value;
       await save(row, next);
       return next;
     },
@@ -368,7 +366,7 @@ function isWholeAlias(word: string): boolean {
 export function tagsCellData<TData>(
   getTags: (row: TData) => string[] | null,
   save?: (row: TData, tags: string[] | null) => Promise<void>,
-): ColumnCellData<TData> {
+): ColumnCellData<TData, string[] | null> {
   return {
     kind: "tags",
     getCopyPayload: (row) => {
@@ -379,10 +377,8 @@ export function tagsCellData<TData>(
     },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const fromJson =
-            Array.isArray(json) && json.every((t) => typeof t === "string")
-              ? (json as string[])
-              : undefined;
+          const parsedTags = pastedTagsSchema.safeParse(json);
+          const fromJson = parsedTags.success ? parsedTags.data : undefined;
           const next =
             fromJson ??
             (text ?? "")
@@ -408,6 +404,6 @@ export function timestampCellData<TData>(
   return textCellData<TData>("text", (row) => {
     const v = getValue(row);
     if (!v) return null;
-    return typeof v === "string" ? v : v.toISOString();
+    return v instanceof Date ? v.toISOString() : v;
   });
 }

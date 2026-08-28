@@ -265,11 +265,11 @@ describe("detail filter link route contracts", () => {
       // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
       expect(result.success, JSON.stringify(search)).toBe(true);
       if (!result.success) continue;
-      const parsedSearch = result.data as Record<string, unknown>;
       for (const key of Object.keys(search)) {
-        expect(parsedSearch[key], `${JSON.stringify(search)}: ${key}`).toBe(
-          expected,
-        );
+        const actual = Object.entries(result.data).find(
+          ([parsedKey]) => parsedKey === key,
+        )?.[1];
+        expect(actual, `${JSON.stringify(search)}: ${key}`).toBe(expected);
       }
     }
   });

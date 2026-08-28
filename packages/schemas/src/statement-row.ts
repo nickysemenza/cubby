@@ -231,6 +231,10 @@ export const recordStatementRowsOut = z.object({
  * as "everything" — the one case where "unrestricted" is the wrong default,
  * since here it would silently rewrite the whole ledger's judgments.
  */
+type StatementRowFilterValue = StatementRowFilters[keyof StatementRowFilters];
+const hasStatementRowFilterValue = (value: StatementRowFilterValue): boolean =>
+  value !== undefined && value !== "";
+
 export const statementRowSelector = z.union([
   z.strictObject({
     source: externalIdSource,
@@ -238,10 +242,7 @@ export const statementRowSelector = z.union([
   }),
   z.strictObject({
     filter: statementRowFilters.refine(
-      (value) =>
-        Object.values(value).some((field) =>
-          typeof field === "string" ? field !== "" : field !== undefined,
-        ),
+      (value) => Object.values(value).some(hasStatementRowFilterValue),
       "filter must restrict something; an empty filter would address every row",
     ),
   }),

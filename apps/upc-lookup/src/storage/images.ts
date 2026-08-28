@@ -5,7 +5,21 @@ import {
   responseBodyWithLimit,
   sanitizeExternalUrl,
 } from "@cubby/shared/external-fetch";
-import type { Env } from "../types";
+export interface ImageUploadEnv {
+  IMAGES: Pick<R2Bucket, "put">;
+}
+
+export interface ImageCleanupEnv {
+  IMAGES: Pick<R2Bucket, "delete">;
+}
+
+type AllowedImageType =
+  | "image/jpeg"
+  | "image/png"
+  | "image/gif"
+  | "image/webp"
+  | "image/heic"
+  | "image/heif";
 
 const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -15,6 +29,13 @@ const ALLOWED_IMAGE_TYPES = [
   "image/heic",
   "image/heif",
 ] as const;
+const ALLOWED_IMAGE_TYPE_SET: ReadonlySet<string> = new Set(
+  ALLOWED_IMAGE_TYPES,
+);
+
+const isAllowedImageType = (
+  contentType: string,
+): contentType is AllowedImageType => ALLOWED_IMAGE_TYPE_SET.has(contentType);
 
 const IMAGE_EXTENSIONS = ["jpg", "png", "gif", "webp", "heic", "heif"] as const;
 
@@ -30,7 +51,7 @@ function imageVariantKeys(upc: string): string[] {
 export async function storeImage(
   upc: string,
   imageUrl: string,
-  env: Env,
+  env: ImageUploadEnv,
 ): Promise<string | null> {
   try {
     const response = await fetchExternalResponse(imageUrl);
@@ -78,17 +99,13 @@ export async function storeImage(
 export async function storeImageBlob(
   upc: string,
   file: File,
-  env: Env,
+  env: ImageUploadEnv,
 ): Promise<string | null> {
   try {
     if (file.size > MAX_EXTERNAL_IMAGE_BYTES) {
       throw new Error(`Image exceeds ${MAX_EXTERNAL_IMAGE_BYTES} bytes`);
     }
-    if (
-      !ALLOWED_IMAGE_TYPES.includes(
-        file.type as (typeof ALLOWED_IMAGE_TYPES)[number],
-      )
-    ) {
+    if (!isAllowedImageType(file.type)) {
       throw new Error(
         `Unsupported image content type: ${file.type || "missing"}`,
       );
@@ -108,7 +125,7 @@ export async function storeImageBlob(
 
 /** Remove every known MIME variant except the object referenced by D1. */
 export async function cleanupImageVariants(
-  env: Env,
+  env: ImageCleanupEnv,
   upc: string,
   currentImageKey: string | null,
 ): Promise<void> {
@@ -120,13 +137,16 @@ export async function cleanupImageVariants(
 
 /** Remove every known object variant for a deleted product. */
 export async function deleteImageVariants(
-  env: Env,
+  env: ImageCleanupEnv,
   upc: string,
 ): Promise<void> {
   await deleteImages(env, imageVariantKeys(upc));
 }
 
-async function deleteImages(env: Env, imageKeys: string[]): Promise<void> {
+async function deleteImages(
+  env: ImageCleanupEnv,
+  imageKeys: string[],
+): Promise<void> {
   try {
     await env.IMAGES.delete(imageKeys);
   } catch (error) {

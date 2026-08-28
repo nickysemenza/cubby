@@ -161,18 +161,21 @@ export async function listLedgerParties(
     filters.search
       ? ilike(ledgerParty.name, `%${filters.search.trim()}%`)
       : undefined,
-    filters.kind
-      ? inArray(ledgerParty.kind, filters.kind as LedgerPartyKind[])
-      : undefined,
+    filters.kind ? inArray(ledgerParty.kind, [filters.kind].flat()) : undefined,
   );
   const order = sorts[0] ?? { orderBy: "name", direction: "asc" as const };
-  const orderColumn =
-    {
-      name: ledgerParty.name,
-      kind: ledgerParty.kind,
-      createdAt: ledgerParty.createdAt,
-      updatedAt: ledgerParty.updatedAt,
-    }[order.orderBy as "name"] ?? ledgerParty.name;
+  const orderColumn = (() => {
+    switch (order.orderBy) {
+      case "kind":
+        return ledgerParty.kind;
+      case "createdAt":
+        return ledgerParty.createdAt;
+      case "updatedAt":
+        return ledgerParty.updatedAt;
+      default:
+        return ledgerParty.name;
+    }
+  })();
   const { take, skip } = buildTakeSkip(pagination);
   const { data, count } = await executeListQueryWithCount(
     getDb(db)

@@ -1,5 +1,5 @@
 /** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { type ProductId, productId } from "@cubby/schemas/identifiers";
 import type {
   ProductPickerOnHandOut,
   ProductQuantityLedgerOut,
@@ -7,6 +7,7 @@ import type {
 } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
@@ -36,6 +37,15 @@ export const EMPTY_QUANTITY_LEDGER: QuantityLedger = {
   unknownExitLines: 0,
   locationCount: 0,
 };
+
+const projectedQuantityRowSchema = z.object({
+  productId,
+  acquiredUnits: z.number(),
+  exitedUnits: z.number(),
+  unknownAcquisitionLines: z.number().int(),
+  unknownExitLines: z.number().int(),
+  ledgerLines: z.number().int(),
+});
 
 /** Shared signed per-line SQL contribution; derive all ledger aggregates from this expression. */
 const expenseSignedUnitsSql = (alias: string) =>
@@ -173,14 +183,10 @@ export const loadProductQuantityLedgers = async (
       ${sql.raw(QUANTITY_PROJECTION_FROM)}
      GROUP BY ka.target`;
 
-  const rows = projectionRows<{
-    productId: ProductId;
-    acquiredUnits: number;
-    exitedUnits: number;
-    unknownAcquisitionLines: number;
-    unknownExitLines: number;
-    ledgerLines: number;
-  }>(await unwrapDb(db).execute(query));
+  const rows = projectionRows(
+    await unwrapDb(db).execute(query),
+    projectedQuantityRowSchema,
+  );
 
   const locationRows = await unwrapDb(db)
     .select({
@@ -248,6 +254,10 @@ type QuantityLedgerAggregateRow = {
   locationCount: number;
 };
 
+const quantityLedgerAggregateRowSchema = projectedQuantityRowSchema.extend({
+  locationCount: z.number().int(),
+});
+
 const quantityLedgersFromAggregateRows = (
   rows: readonly QuantityLedgerAggregateRow[],
 ): Map<ProductId, QuantityLedger> => {
@@ -314,8 +324,9 @@ export const loadProductDetailQuantityLedgers = async (
       FROM quantity_ledger q
       LEFT JOIN location_counts l ON l."productId" = q."productId"`;
 
-  const rows = projectionRows<QuantityLedgerAggregateRow>(
+  const rows = projectionRows(
     await unwrapDb(db).execute(query),
+    quantityLedgerAggregateRowSchema,
   );
   return quantityLedgersFromAggregateRows(rows);
 };

@@ -4,75 +4,9 @@ import {
 } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    to,
-    search,
-    params,
-    children,
-    ...props
-  }: {
-    to: string;
-    search?: Record<string, unknown>;
-    params?: Record<string, string>;
-    children: ReactNode;
-  }) => {
-    const path = Object.entries(params ?? {}).reduce(
-      (value, [key, replacement]) => value.replace(`$${key}`, replacement),
-      to,
-    );
-    const query = new URLSearchParams();
-    for (const [key, value] of Object.entries(search ?? {})) {
-      if (value !== undefined) query.set(key, String(value));
-    }
-    return (
-      <a href={`${path}${query.size ? `?${query}` : ""}`} {...props}>
-        {children}
-      </a>
-    );
-  },
-}));
-
-vi.mock("~/components/ui/tooltip", () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ render }: { render: ReactNode }) => <>{render}</>,
-  TooltipContent: ({ children }: { children: ReactNode }) => (
-    <span>{children}</span>
-  ),
-}));
-
-vi.mock("~/app/_components/hooks/useActionMutation", () => ({
-  useActionMutation: () => ({ mutateAsync: vi.fn() }),
-}));
-
-vi.mock("../data-table/editable-cell", () => ({
-  EditableCell: ({
-    value,
-    renderValue,
-  }: {
-    value: unknown;
-    renderValue: (value: never) => ReactNode;
-  }) => <button type="button">{renderValue(value as never)}</button>,
-}));
-
-vi.mock("../data-table/columnHelpers", () => ({
-  describeProductPricingSource: () => "No price recorded",
-  productPriceClearLabel: () => "Clear price",
-  renderProductPriceValue: () => "No price",
-}));
-
-vi.mock("../EntityInlineLink", () => ({
-  EntityInlineLink: ({ data }: { data: { name: string } }) => (
-    <a href="/entity-detail">{data.name}</a>
-  ),
-}));
-
-vi.mock("./product-notes-markdown", () => ({
-  ProductNotesMarkdown: () => null,
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ProductBasicInfo } from "./product-basic-info";
 
@@ -141,12 +75,28 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
 });
 
 describe("ProductBasicInfo filter links", () => {
-  it("links read-only values and keeps editable/relationship cohorts separate", () => {
-    render(<ProductBasicInfo product={product} onEdit={vi.fn()} />);
+  let harness: ReturnType<typeof createBrowserTestHarness>;
 
-    expect(
-      screen.getByRole("link", { name: "Show all products by Milwaukee" }),
-    ).toHaveAttribute("href", "/products?view=table&manufacturer=Milwaukee");
+  beforeEach(() => {
+    harness = createBrowserTestHarness();
+  });
+
+  afterEach(() => {
+    harness.dispose();
+  });
+
+  it("links read-only values and keeps editable/relationship cohorts separate", async () => {
+    render(<ProductBasicInfo product={product} onEdit={() => undefined} />, {
+      wrapper: harness.wrapper,
+    });
+
+    const manufacturer = await screen.findByRole("link", {
+      name: "Show all products by Milwaukee",
+    });
+    expect(manufacturer).toHaveAttribute(
+      "href",
+      "/products?view=table&manufacturer=Milwaukee",
+    );
     expect(
       screen.getByRole("link", {
         name: "Show all products matching model 2853-20",
@@ -170,7 +120,7 @@ describe("ProductBasicInfo filter links", () => {
     const ingredientFilter = screen.getByRole("link", {
       name: "Show all products for Driver bits",
     });
-    expect(ingredientDetail).toHaveAttribute("href", "/entity-detail");
+    expect(ingredientDetail).toHaveAttribute("href", "/ingredients/ING-2ABC");
     expect(ingredientFilter).toHaveAttribute(
       "href",
       "/products?view=table&ingredient=ING-2ABC",

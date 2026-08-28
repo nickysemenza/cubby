@@ -196,10 +196,19 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 // `lru-cache` handles expiry (`ttl`) and bounding (`max`) — the old Map was
 // unbounded and checked `Date.now()` by hand. Cached values are non-nullish
 // query results, so a `get` returning `undefined` unambiguously means miss/expired.
-const cache = new LRUCache<string, NonNullable<unknown>>({
+const recipeCache = new LRUCache<string, NotionRecipeRow[]>({
   max: 100,
   ttl: CACHE_TTL,
 });
+const blockCache = new LRUCache<string, NotionBlock[]>({
+  max: 100,
+  ttl: CACHE_TTL,
+});
+
+type BlockResult = ListBlockChildrenResponse["results"][number];
+const isBlockObjectResponse = (
+  block: BlockResult,
+): block is BlockObjectResponse => "type" in block;
 
 /**
  * Transient Notion errors worth retrying (timeouts, gateway, rate limits).
@@ -224,16 +233,17 @@ export class NotionClient {
     return withTrace(TraceNames.api("notion", operation), fn);
   }
 
-  private async cachedTrace<T>(
+  private async cachedTrace<T extends NonNullable<unknown>>(
+    targetCache: LRUCache<string, T>,
     key: string,
     operation: string,
     fn: () => Promise<T>,
   ): Promise<T> {
-    const cached = cache.get(key) as T | undefined;
+    const cached = targetCache.get(key);
     if (cached !== undefined) return cached;
 
     const result = await this.traced(operation, fn);
-    cache.set(key, result as NonNullable<unknown>);
+    targetCache.set(key, result);
     return result;
   }
 
@@ -302,28 +312,34 @@ export class NotionClient {
 
   /** All rows of the Recipes database (column metadata only; body via getPageContent). */
   async queryRecipes(): Promise<NotionRecipeRow[]> {
-    return this.cachedTrace("recipes", "queryRecipes", async () => {
-      const pages = await this.queryAll(DATA_SOURCE_IDS.recipes);
+    return this.cachedTrace(
+      recipeCache,
+      "recipes",
+      "queryRecipes",
+      async () => {
+        const pages = await this.queryAll(DATA_SOURCE_IDS.recipes);
 
-      return pages.map((page) => {
-        const p = page.properties;
-        return {
-          id: page.id,
-          name: getTitle(p.Name),
-          source: getUrl(p.Source),
-          // Optional columns — these helpers return null/[] when absent.
-          yieldText: getRichText(p.Yield),
-          servings: getNumber(p.Servings),
-          tags: getMultiSelect(p.tags),
-          notionUrl: getPageUrl(page),
-        };
-      });
-    });
+        return pages.map((page) => {
+          const p = page.properties;
+          return {
+            id: page.id,
+            name: getTitle(p.Name),
+            source: getUrl(p.Source),
+            // Optional columns — these helpers return null/[] when absent.
+            yieldText: getRichText(p.Yield),
+            servings: getNumber(p.Servings),
+            tags: getMultiSelect(p.tags),
+            notionUrl: getPageUrl(page),
+          };
+        });
+      },
+    );
   }
 
   /** Fetch page content blocks for rendering. */
   async getPageContent(pageId: string): Promise<NotionBlock[]> {
     return this.cachedTrace(
+      blockCache,
       `pageContent:${pageId}`,
       `getPageContent`,
       async () => {
@@ -339,8 +355,8 @@ export class NotionClient {
             });
 
           for (const block of response.results) {
-            if (!("type" in block)) continue;
-            const typed = block as BlockObjectResponse;
+            if (!isBlockObjectResponse(block)) continue;
+            const typed = block;
 
             // Handle column lists by flattening
             if (typed.type === "column_list" && typed.has_children) {
@@ -356,8 +372,8 @@ export class NotionClient {
                   page_size: 50,
                 });
                 for (const child of children.results) {
-                  if (!("type" in child)) continue;
-                  const nb = blockToNotionBlock(child as BlockObjectResponse);
+                  if (!isBlockObjectResponse(child)) continue;
+                  const nb = blockToNotionBlock(child);
                   if (nb) columnChildren.push(nb);
                 }
               }

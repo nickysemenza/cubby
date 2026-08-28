@@ -38,7 +38,7 @@ interface EditableTagsCellProps {
   onSave: (value: string[] | null) => Promise<void>;
   renderValue: (value: string[] | null) => React.ReactNode;
   /** Enable cmd-C / cmd-V on the focused display trigger. */
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<string[] | null>;
 }
 
 /**
@@ -60,9 +60,7 @@ export function EditableTagsCell({
     value,
     tagsEqual,
   );
-  const edit = useCellEditState(clipboard, (saved) =>
-    setOptimisticValue(saved as string[] | null),
-  );
+  const edit = useCellEditState<string[] | null>(clipboard, setOptimisticValue);
 
   return (
     <>

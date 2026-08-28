@@ -1,4 +1,5 @@
 import type { Query } from "@tanstack/react-query";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { matchesTags } from "~/integrations/tanstack-query/operation-cache";
@@ -31,24 +32,31 @@ const RELATIONSHIP_ROOTS: readonly OperationCacheTag[] = [
   ["vendor"],
 ];
 
-const relationshipRouteQuery = {
+const relationshipRouteQuery = fromPartial<Query>({
   meta: { cacheTags: product.relationshipRoute.definition.tags },
-} as unknown as Query;
+});
+
+const RELATIONSHIP_ROOT_CASES = RELATIONSHIP_ROOTS.map((root) => ({ root }));
 
 describe("product.relationshipRoute cache coverage", () => {
-  it.each(RELATIONSHIP_ROOTS)(
-    "is invalidated by %j",
-    (...root: readonly string[]) => {
-      expect(
-        matchesTags([root as unknown as OperationCacheTag])(
-          relationshipRouteQuery,
-        ),
-      ).toBe(true);
-    },
-  );
+  it.each(RELATIONSHIP_ROOT_CASES)("is invalidated by $root", ({ root }) => {
+    expect(matchesTags([root])(relationshipRouteQuery)).toBe(true);
+  });
 
   it("is not invalidated by an unrelated root", () => {
     expect(matchesTags([["recipe"]])(relationshipRouteQuery)).toBe(false);
     expect(matchesTags([["wish"]])(relationshipRouteQuery)).toBe(false);
+  });
+});
+
+describe("product.kitComponentRows input", () => {
+  it("accepts the empty loaded-page kit set used by the dormant products query", () => {
+    expect(
+      product.kitComponentRows.queryOptions({ parentProductIds: [] }).queryKey,
+    ).toEqual([
+      "operation",
+      "product.kitComponentRows",
+      { input: { parentProductIds: [] } },
+    ]);
   });
 });

@@ -29,11 +29,7 @@ export type RecipeProvenance = {
 };
 
 /** Tagged provenance → the DB column triple. The encode mirror of {@link recipeSourceFromDb}. */
-export function recipeSourceToColumns(p: RecipeProvenance): {
-  SourceType: "Book" | "Website" | "Other" | "Notion";
-  SourceData: string | null;
-  cookbookId: CookbookId | null;
-} {
+export function recipeSourceToColumns(p: RecipeProvenance) {
   return {
     SourceType: p.sourceType,
     SourceData: p.sourceData,

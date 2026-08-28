@@ -12,10 +12,10 @@ import {
   registerMcpTool,
   slimUsdaFood,
   slimUsdaFoodListItem,
-  structuredError,
 } from "./_shared";
 
 export function registerUsdaTools(server: McpServer) {
+  const usdaFoodLookupOut = z.object({ food: usdaFoodMcpOut });
   const searchUsdaFoodsInput = z.object({
     query: z.string().describe("Food name to search for"),
     dataType: dataTypeEnum
@@ -30,6 +30,17 @@ export function registerUsdaTools(server: McpServer) {
       .optional()
       .describe("Items per page (default 25, max 100)"),
   });
+  const findUsdaFoodInput = z
+    .object({
+      upc: upc.optional(),
+      ndbNumber: ndb.optional(),
+    })
+    .refine(
+      (input) => (input.upc === undefined) !== (input.ndbNumber === undefined),
+      {
+        message: "Provide exactly one of `upc` or `ndbNumber`.",
+      },
+    );
   registerMcpTool(server, {
     name: "search_usda_foods",
     description:
@@ -71,8 +82,8 @@ export function registerUsdaTools(server: McpServer) {
     name: "get_usda_food",
     description:
       "Get a USDA food by its FDC id, including compact nutrients-per-100g and any linked Cubby products.",
-    inputSchema: { fdcId },
-    outputSchema: usdaFoodMcpOut,
+    inputSchema: z.object({ fdcId }),
+    outputSchema: usdaFoodLookupOut,
     annotations: READ_ONLY_OPEN,
     handler: async (params, extra) => {
       const rawContext = extra.authInfo?.extra?.entityKernel;
@@ -84,7 +95,7 @@ export function registerUsdaTools(server: McpServer) {
         throw new Error("MCP USDA service context is missing");
       }
       const result = await context.usdaService.getFoodSummaryByID(params.fdcId);
-      return result ? slimUsdaFood(result as Record<string, unknown>) : null;
+      return { food: result ? slimUsdaFood(result) : null };
     },
   });
 
@@ -92,25 +103,27 @@ export function registerUsdaTools(server: McpServer) {
     name: "find_usda_food",
     description:
       "Look up a USDA food by barcode (UPC/GTIN, 12-14 digits) or NDB number. Provide exactly one.",
-    inputSchema: {
-      upc: upc.optional(),
-      ndbNumber: ndb.optional(),
-    },
-    outputSchema: usdaFoodMcpOut,
+    inputSchema: findUsdaFoodInput,
+    outputSchema: usdaFoodLookupOut,
     annotations: READ_ONLY_OPEN,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
-      const upcParam = params.upc as string | undefined;
-      const ndbNumber = params.ndbNumber as number | undefined;
-      if ((upcParam == null) === (ndbNumber == null)) {
-        return structuredError("Provide exactly one of `upc` or `ndbNumber`.");
+      let result;
+      if (params.upc !== undefined) {
+        result = await caller.usda.getByAlternateID({
+          kind: "upc",
+          gtin_upc: params.upc,
+        });
+      } else {
+        if (params.ndbNumber === undefined) {
+          throw new Error("Validated USDA lookup input is incomplete");
+        }
+        result = await caller.usda.getByAlternateID({
+          kind: "ndb",
+          ndb_number: params.ndbNumber,
+        });
       }
-      const lookup =
-        upcParam != null
-          ? ({ kind: "upc", gtin_upc: upcParam } as const)
-          : ({ kind: "ndb", ndb_number: ndbNumber as number } as const);
-      const result = await caller.usda.getByAlternateID(lookup);
-      return result ? slimUsdaFood(result as Record<string, unknown>) : null;
+      return { food: result ? slimUsdaFood(result) : null };
     },
   });
 }

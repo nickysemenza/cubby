@@ -114,7 +114,7 @@ export const computeRecipeUsages = (
 
   const recipeUsages = mapRelation(liveRecipeUsages, (usage) => ({
     id: usage.id,
-    recipe: dbRecipeToTopLevelShape(usage.recipeSection.recipe),
+    recipe: dbRecipeToTopLevel(usage.recipeSection.recipe),
     sectionName: usage.recipeSection.name,
     amounts: usage.amounts,
     rawLine: usage.rawLine,
@@ -138,7 +138,7 @@ const sectionIngredientToAPI = (
     return {
       id: sectionIngredient.id,
       type: "recipe",
-      recipe: dbRecipeToTopLevelShape(sectionIngredient.ingredient.recipe),
+      recipe: dbRecipeToTopLevel(sectionIngredient.ingredient.recipe),
       ingredient: null,
       amounts: sectionIngredient.amounts,
       rawLine: sectionIngredient.rawLine,
@@ -168,7 +168,7 @@ const sectionIngredientToAPI = (
   }
 };
 
-export const dbRecipeToTopLevelShape = (
+export const dbRecipeToTopLevel = (
   // The cookbook join is optional: only the relation-loaded reads carry it, and
   // a recipe read without it just renders its source badge unlinked rather than
   // forcing every caller to join a table it doesn't otherwise need.
@@ -208,7 +208,7 @@ type RecipeShallowOut = Omit<
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
 ) => RecipeShallowOut = (recipeData) => ({
-  ...dbRecipeToTopLevelShape(recipeData),
+  ...dbRecipeToTopLevel(recipeData),
   totals: recipeData.totals,
 });
 

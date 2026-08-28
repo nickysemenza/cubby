@@ -1,3 +1,4 @@
+import type { WAmount } from "@cubby/recipebridge";
 import {
   type RecipeOut,
   recipeOut,
@@ -58,37 +59,40 @@ const mkPricedRow = (
   id: string,
   price: number,
   upper?: number,
-): IngredientDataItem => ({
-  ...sectionIngredientOut.parse({
-    id: rowKey(id),
-    type: "ingredient",
-    amounts: [],
-    modifier: null,
-    rawLine: null,
-    recipe: null,
-    ingredient: {
-      id: ingredientKey(id),
-      name: id,
-      aliases: [],
-      naKinds: [],
+): IngredientDataItem => {
+  const priceAmount: Pick<WAmount, "value" | "unit" | "upper_value"> = {
+    value: price,
+    unit: "dollar",
+  };
+  if (upper != null) priceAmount.upper_value = upper;
+  return {
+    ...sectionIngredientOut.parse({
+      id: rowKey(id),
+      type: "ingredient",
+      amounts: [],
+      modifier: null,
+      rawLine: null,
+      recipe: null,
+      ingredient: {
+        id: ingredientKey(id),
+        name: id,
+        aliases: [],
+        naKinds: [],
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+      },
       createdAt: new Date("2026-01-01"),
       updatedAt: new Date("2026-01-01"),
-    },
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
-  }),
-  sectionName: null,
-  priceInfo: {
-    gram: ok({ value: 1, unit: "g" }),
-    price: ok({
-      value: price,
-      unit: "dollar",
-      ...(upper != null ? { upper_value: upper } : {}),
     }),
-    nutrient: err("no nutrients"),
-  },
-  totalsMissing: { price: false, weight: false, nutrients: true },
-});
+    sectionName: null,
+    priceInfo: {
+      gram: ok({ value: 1, unit: "g" }),
+      price: ok(priceAmount),
+      nutrient: err("no nutrients"),
+    },
+    totalsMissing: { price: false, weight: false, nutrients: true },
+  };
+};
 
 const mkPricedCosting = (rows: IngredientDataItem[]): RecipeCosting => ({
   rows,

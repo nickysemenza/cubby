@@ -8,20 +8,16 @@ import {
 } from "@cubby/schemas/meal";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ShoppingMatrix } from "./shopping-matrix";
 import { buildShoppingColumns, buildShoppingRows } from "./shopping-model";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => <a href="#x">{children}</a>,
-}));
-
 const contribution = (
-  over: Record<string, unknown> = {},
+  overrides: Partial<ShoppingListContribution> = {},
 ): ShoppingListContribution =>
   shoppingListContribution.parse({
     mealId: testShortcode("meal", "MEL-ABCD"),
@@ -33,10 +29,10 @@ const contribution = (
     needValue: 100,
     lineIndex: 0,
     via: [],
-    ...over,
+    ...overrides,
   });
 
-const item = (over: Record<string, unknown> = {}): ShoppingListItem =>
+const item = (overrides: Partial<ShoppingListItem> = {}): ShoppingListItem =>
   shoppingListItem.parse({
     ingredientId: testShortcode("ingredient", "ING-ABCD"),
     name: "flour",
@@ -47,15 +43,30 @@ const item = (over: Record<string, unknown> = {}): ShoppingListItem =>
     estimatedCost: null,
     status: "ok",
     perMeal: [contribution()],
-    ...over,
+    ...overrides,
   });
 
 const NONE: ReadonlySet<string> = new Set();
+const lunchMealId = testShortcode("meal", "MEL-ABCD");
+const dinnerMealId = testShortcode("meal", "MEL-EFGH");
+const flourIngredientId = testShortcode("ingredient", "ING-FABC");
+const saltIngredientId = testShortcode("ingredient", "ING-SFAT");
+const doughRecipeId = testShortcode("recipe", "RCP-DUGA");
 
 const meals = [
   { id: testShortcode("meal", "MEL-ABCD"), name: "Lunch", date: "2026-06-15" },
-  { id: testShortcode("meal", "MEL-EFGH"), name: "Dinner", date: "2026-06-16" },
+  { id: dinnerMealId, name: "Dinner", date: "2026-06-16" },
 ] satisfies Parameters<typeof buildShoppingColumns>[0]["meals"];
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 function renderMatrix(
   items: ShoppingListItem[],
@@ -71,47 +82,50 @@ function renderMatrix(
       groups={groups}
       unexpanded={unexpanded}
       excluded={excluded}
-      onToggleCheck={vi.fn()}
+      onToggleCheck={() => undefined}
     />,
+    { wrapper: harness.wrapper },
   );
 }
 
-const rowCells = (name: string) =>
-  within(
-    screen.getByRole("rowheader", { name: new RegExp(name) })
-      .parentElement as HTMLElement,
-  )
+function rowCells(name: string) {
+  const row = screen.getByRole("rowheader", {
+    name: new RegExp(name),
+  }).parentElement;
+  if (!row) throw new Error(`Missing table row for ${name}`);
+  return within(row)
     .getAllByRole("cell")
-    .map((c) => c.textContent);
+    .map((cell) => cell.textContent);
+}
 
 describe("ShoppingMatrix", () => {
   const twoLines = [
     item({
-      ingredientId: "ING-FABC",
+      ingredientId: flourIngredientId,
       name: "flour",
       perMeal: [
         contribution({
           lineIndex: 0,
-          mealId: "MEL-ABCD",
+          mealId: lunchMealId,
           recipeName: "A",
           needValue: 300,
         }),
       ],
     }),
     item({
-      ingredientId: "ING-SFAT",
+      ingredientId: saltIngredientId,
       name: "salt",
       haveValue: 0,
       perMeal: [
         contribution({
           lineIndex: 0,
-          mealId: "MEL-ABCD",
+          mealId: lunchMealId,
           recipeName: "A",
           needValue: 40,
         }),
         contribution({
           lineIndex: 1,
-          mealId: "MEL-EFGH",
+          mealId: dinnerMealId,
           recipeName: "B",
           needValue: 6,
         }),
@@ -160,7 +174,7 @@ describe("ShoppingMatrix", () => {
   });
 
   it("scales shading to the visible lines when a meal is excluded", () => {
-    const { container } = renderMatrix(twoLines, [], new Set(["MEL-EFGH"]));
+    const { container } = renderMatrix(twoLines, [], new Set([dinnerMealId]));
 
     expect(
       [...container.querySelectorAll("tbody td")].filter((td) =>
@@ -176,19 +190,19 @@ describe("ShoppingMatrix", () => {
         perMeal: [
           contribution({
             lineIndex: 0,
-            mealId: "MEL-ABCD",
+            mealId: lunchMealId,
             mealName: "Lunch",
             recipeName: "A",
           }),
           contribution({
             lineIndex: 1,
-            mealId: "MEL-ABCD",
+            mealId: lunchMealId,
             mealName: "Lunch",
             recipeName: "B",
           }),
           contribution({
             lineIndex: 2,
-            mealId: "MEL-EFGH",
+            mealId: dinnerMealId,
             mealName: "Dinner",
             recipeName: "C",
           }),
@@ -214,8 +228,10 @@ describe("ShoppingMatrix", () => {
   it("counts ingredients in the footer instead of summing amounts", () => {
     renderMatrix(twoLines);
 
-    const foot = screen.getByRole("rowheader", { name: "2 ingredients" })
-      .parentElement as HTMLElement;
+    const foot = screen.getByRole("rowheader", {
+      name: "2 ingredients",
+    }).parentElement;
+    if (!foot) throw new Error("Missing shopping matrix footer");
     const cells = within(foot)
       .getAllByRole("cell")
       .map((c) => c.textContent);
@@ -229,15 +245,15 @@ describe("ShoppingMatrix", () => {
   it("marks a column whose sub-recipe couldn't be expanded", () => {
     renderMatrix(twoLines, [
       unexpandedSubRecipeOut.parse({
-        recipeId: "RCP-DUGA",
+        recipeId: doughRecipeId,
         name: "Dough",
         reason: "missingYield",
         amount: null,
         via: [],
-        mealId: "MEL-ABCD",
+        mealId: lunchMealId,
         mealName: "Lunch",
         date: "2026-06-15",
-        parentRecipeId: "RCP-ABCD",
+        parentRecipeId: testShortcode("recipe", "RCP-ABCD"),
         parentRecipeName: "A",
         lineIndex: 0,
       }),
@@ -253,14 +269,15 @@ describe("ShoppingMatrix", () => {
           contribution({
             lineIndex: 0,
             needValue: 120,
-            via: [{ recipeId: "RCP-DUGA", name: "Dough" }],
+            via: [{ recipeId: doughRecipeId, name: "Dough" }],
           }),
         ],
       }),
     ]);
 
-    const cell = container.querySelector("tbody td") as HTMLElement;
+    const cell = container.querySelector("tbody td");
+    if (!cell) throw new Error("Missing first shopping matrix cell");
     expect(cell.textContent).toBe("↳ 120 g");
-    expect(cell.title).toBe("via Dough");
+    expect(cell.getAttribute("title")).toBe("via Dough");
   });
 });

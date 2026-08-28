@@ -12,8 +12,8 @@ import {
 import { mapLocationIdentityProduct } from "~/server/repo/location/identity-product";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import {
-  dbProductToInventoryEmbedShape,
-  dbProductToInventoryListShape,
+  mapDbProductToInventoryEmbed,
+  mapDbProductToInventoryList,
   mapProductExternalIds,
   mapProductUnitMappings,
   primaryGtinOf,
@@ -34,7 +34,7 @@ type InventoryEntryBaseDB = Pick<
   | "updatedAt"
 >;
 
-const inventoryEntryBaseShape = (entry: InventoryEntryBaseDB) => ({
+const inventoryEntryBaseFields = (entry: InventoryEntryBaseDB) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
   amount: parseInventoryAmount(entry.amount, entry.id),
   valuation: entry.valuation,
@@ -67,7 +67,7 @@ export const dbInventoryEntryToAPI: (
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseShape(inventoryentry),
+    ...inventoryEntryBaseFields(inventoryentry),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       lastBulkInventory: location.lastBulkInventory,
@@ -87,7 +87,7 @@ export const dbInventoryEntryToAPI: (
       updatedAt: location.updatedAt,
     },
     product: {
-      ...dbProductToInventoryEmbedShape({
+      ...mapDbProductToInventoryEmbed({
         ...product,
         pricing,
         primaryGtin: primaryGtinOf(product.externalIds),
@@ -109,7 +109,7 @@ export const dbInventoryEntryToListAPI: (
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseShape(inventoryentry),
+    ...inventoryEntryBaseFields(inventoryentry),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       name: location.name,
@@ -118,7 +118,7 @@ export const dbInventoryEntryToListAPI: (
         name: location.name,
       }),
     },
-    product: dbProductToInventoryListShape({
+    product: mapDbProductToInventoryList({
       ...product,
       pricing,
       primaryGtin: primaryGtinOf(product.externalIds),

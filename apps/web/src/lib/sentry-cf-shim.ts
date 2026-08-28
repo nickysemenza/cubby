@@ -32,23 +32,30 @@
  */
 export { captureException } from "@sentry/cloudflare";
 
-/** No-op: client-only, guarded by `!router.isServer` in router.tsx. */
-export function init(_options?: unknown): void {}
+type SentryBrowserApi = typeof import("@sentry/tanstackstart-react");
+type SentryInitOptions = Parameters<SentryBrowserApi["init"]>[0];
+type SentryRouter = Parameters<
+  SentryBrowserApi["tanstackRouterBrowserTracingIntegration"]
+>[0];
+type SentrySpanOptions = Parameters<SentryBrowserApi["startInactiveSpan"]>[0];
+type SentrySpanAttributes = Parameters<
+  ReturnType<SentryBrowserApi["startInactiveSpan"]>["setAttributes"]
+>[0];
 
 /** No-op: client-only, guarded by `!router.isServer` in router.tsx. */
-export function tanstackRouterBrowserTracingIntegration(_router?: unknown): {
-  name: string;
-} {
+export function init(_options?: SentryInitOptions): void {}
+
+/** No-op: client-only, guarded by `!router.isServer` in router.tsx. */
+export function tanstackRouterBrowserTracingIntegration(
+  _router?: SentryRouter,
+) {
   return { name: "TanStackRouterBrowserTracing" };
 }
 
 /** No-op span: navigation timing is client-only. */
-export function startInactiveSpan(_options?: unknown): {
-  setAttributes(attributes: Record<string, unknown>): void;
-  end(): void;
-} {
+export function startInactiveSpan(_options?: SentrySpanOptions) {
   return {
-    setAttributes: () => {},
+    setAttributes: (_attributes: SentrySpanAttributes) => {},
     end: () => {},
   };
 }

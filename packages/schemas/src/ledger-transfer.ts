@@ -83,7 +83,7 @@ export const ledgerTransferEvidenceTransactionIds = z
     ),
   );
 
-const ledgerTransferCreateShape = {
+const ledgerTransferCreateFields = {
   ...ledgerTransferFields,
   notes: z.string().nullable().default(null),
   sourceClaims: ledgerSourceClaims.nullable().default([]),
@@ -92,13 +92,13 @@ const ledgerTransferCreateShape = {
     .default([]),
 };
 
-export const ledgerTransferCreateInput = z.object(ledgerTransferCreateShape);
+export const ledgerTransferCreateInput = z.object(ledgerTransferCreateFields);
 export type LedgerTransferCreateInput = z.infer<
   typeof ledgerTransferCreateInput
 >;
 
 export const ledgerTransferUpdateData = deriveUpdateData(
-  ledgerTransferCreateShape,
+  ledgerTransferCreateFields,
 );
 export type LedgerTransferUpdateData = z.infer<typeof ledgerTransferUpdateData>;
 

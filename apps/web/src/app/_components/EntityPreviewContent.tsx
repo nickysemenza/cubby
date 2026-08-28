@@ -13,8 +13,9 @@ import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ComponentType, type ReactNode, useEffect } from "react";
 
+import type { EntityActionRow } from "~/app/_components/actions/entity-actions";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { costTypeLabels } from "~/app/expenses/expense-options";
 import {
@@ -30,15 +31,9 @@ import { wishPriceRange } from "~/app/wishes/wish-price-range";
 import { Row } from "~/components/layout";
 import { cookbook } from "~/entities/cookbook.functions";
 import { EntityIcon, entities, entityDetailParams } from "~/entities/entities";
-import {
-  type EntityDetailScoped,
-  entityDetailFor,
-} from "~/entities/entity-detail.functions";
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { fdcIdFromParam } from "~/entities/entity-query";
-import type {
-  DetailEntity,
-  EntityDetailByEntity,
-} from "~/entities/generated/entity-details.gen";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { image } from "~/entities/image.functions";
 import { usdaFood } from "~/entities/usda.functions";
 import { formatCurrencyRange } from "~/lib/format-range";
@@ -65,7 +60,7 @@ type CompactPreviewPresentation = {
   showIdentityHeader?: boolean;
   onNameResolved?: (name: string) => void;
   /** The inspector reuses this successful detail payload for its actions. */
-  onRecordResolved?: (record: object | undefined) => void;
+  onRecordResolved?: (record: EntityActionRow | undefined) => void;
 };
 
 type StandardPreviewPresentation = Required<
@@ -80,7 +75,10 @@ function ResolvedManifestCard({
   showIdentityHeader,
   onNameResolved,
   onRecordResolved,
-}: CompactPreviewPresentation & { card: ManifestCardProps; record: object }) {
+}: CompactPreviewPresentation & {
+  card: ManifestCardProps;
+  record: EntityActionRow;
+}) {
   useEffect(() => {
     onNameResolved?.(card.name);
   }, [card.name, onNameResolved]);
@@ -404,17 +402,13 @@ export function UsdaFoodPreviewContent({
   onRecordResolved,
 }: { fdcId: number } & CompactPreviewPresentation) {
   const query = useQuery(usdaFood.detail.queryOptions({ id: fdcId }));
-  const actionRecord = useMemo(
-    () => (query.data ? { ...query.data, id: String(fdcId) } : undefined),
-    [fdcId, query.data],
-  );
 
   return (
     <PreviewQuery query={query} label="Food" onUnavailable={onRecordResolved}>
       {(data) => (
         <ResolvedManifestCard
           card={toUsdaCard(fdcId, data)}
-          record={actionRecord ?? data}
+          record={{ ...data, id: String(fdcId) }}
           showOpenAction={showOpenAction}
           showIdentityHeader={showIdentityHeader}
           onNameResolved={onNameResolved}
@@ -1048,77 +1042,106 @@ export function toImageCard(data: ImageWithEntity): ManifestCardProps {
 
 // ── Generic dispatch ────────────────────────────────────────────────────────
 
-interface PreviewSpec<D> {
-  label: string;
-  toCard: (data: D) => ManifestCardProps;
-}
-
-// Type-erasure boundary: each entry below is fully checked against its own
-// concrete detail payload at the call site, then widened to `unknown` so the
-// table can hold every entity's spec side by side.
-function defineSpec<D>(spec: PreviewSpec<D>): PreviewSpec<unknown> {
-  return spec as PreviewSpec<unknown>;
-}
-
 type StandardPreviewEntity = Exclude<
   HoverPreviewEntity,
   "usda-food" | "cookbook" | "project" | "image"
 >;
 
-const PREVIEW_TABLE: Record<StandardPreviewEntity, PreviewSpec<unknown>> = {
-  recipe: defineSpec({
+interface PreviewSpec<E extends StandardPreviewEntity> {
+  label: string;
+  toCard: (data: EntityDetailByEntity[E]) => ManifestCardProps;
+}
+
+type StandardPreviewProps = { id: string } & StandardPreviewPresentation;
+
+function createPreviewContent<E extends StandardPreviewEntity>(
+  entity: E,
+  spec: PreviewSpec<E>,
+): ComponentType<StandardPreviewProps> {
+  return function TypedPreviewContent({
+    id,
+    showOpenAction,
+    showIdentityHeader,
+    onNameResolved,
+    onRecordResolved,
+  }) {
+    const query = useQuery(entityDetailFor(entity).queryOptions(id));
+
+    return (
+      <PreviewQuery
+        query={query}
+        label={spec.label}
+        onUnavailable={onRecordResolved}
+      >
+        {(data) => (
+          <ResolvedManifestCard
+            card={spec.toCard(data)}
+            record={data}
+            showOpenAction={showOpenAction}
+            showIdentityHeader={showIdentityHeader}
+            onNameResolved={onNameResolved}
+            onRecordResolved={onRecordResolved}
+          />
+        )}
+      </PreviewQuery>
+    );
+  };
+}
+
+const PREVIEW_CONTENT = {
+  recipe: createPreviewContent("recipe", {
     label: "Recipe",
     toCard: toRecipeCard,
   }),
-  ingredient: defineSpec({
+  ingredient: createPreviewContent("ingredient", {
     label: "Ingredient",
     toCard: toIngredientCard,
   }),
-  product: defineSpec({
+  product: createPreviewContent("product", {
     label: "Product",
     toCard: toProductCard,
   }),
-  location: defineSpec({
+  location: createPreviewContent("location", {
     label: "Location",
     toCard: toLocationCard,
   }),
-  inventory: defineSpec({
+  inventory: createPreviewContent("inventory", {
     label: "Inventory item",
     toCard: toInventoryCard,
   }),
-  meal: defineSpec({
+  meal: createPreviewContent("meal", {
     label: "Meal",
     toCard: toMealCard,
   }),
-  task: defineSpec({
+  task: createPreviewContent("task", {
     label: "Task",
     toCard: toTaskCard,
   }),
-  expense: defineSpec({
+  expense: createPreviewContent("expense", {
     label: "Expense",
     toCard: toExpenseCard,
   }),
-  purchase: defineSpec({
+  purchase: createPreviewContent("purchase", {
     label: "Purchase",
     toCard: toPurchaseCard,
   }),
-  vendor: defineSpec({
+  vendor: createPreviewContent("vendor", {
     label: "Vendor",
     toCard: toVendorCard,
   }),
-  financialAccount: defineSpec({
+  financialAccount: createPreviewContent("financialAccount", {
     label: "Financial account",
     toCard: toFinancialAccountCard,
   }),
-  financialTransaction: defineSpec({
+  financialTransaction: createPreviewContent("financialTransaction", {
     label: "Financial transaction",
     toCard: toFinancialTransactionCard,
   }),
-  wish: defineSpec({
+  wish: createPreviewContent("wish", {
     label: "Wish",
     toCard: toWishCard,
   }),
-};
+} satisfies Record<StandardPreviewEntity, ComponentType<StandardPreviewProps>>;
 
 function GenericPreviewContent({
   entity,
@@ -1131,35 +1154,15 @@ function GenericPreviewContent({
   entity: StandardPreviewEntity;
   id: string;
 } & StandardPreviewPresentation) {
-  const spec = PREVIEW_TABLE[entity];
-  // `entity` is a runtime union, so `entityDetailFor` infers the whole
-  // 16-entity union and `useQuery` cannot pick one overload. Name the widened
-  // options type instead of erasing it — the per-entity checking already
-  // happened at each `defineSpec` entry above (see the type-erasure boundary
-  // note on `defineSpec`).
-  const query = useQuery(
-    entityDetailFor(entity as DetailEntity).queryOptions(id) as ReturnType<
-      EntityDetailScoped<DetailEntity>["queryOptions"]
-    >,
-  );
-
+  const PreviewContent = PREVIEW_CONTENT[entity];
   return (
-    <PreviewQuery
-      query={query}
-      label={spec.label}
-      onUnavailable={onRecordResolved}
-    >
-      {(data) => (
-        <ResolvedManifestCard
-          card={spec.toCard(data)}
-          record={data}
-          showOpenAction={showOpenAction}
-          showIdentityHeader={showIdentityHeader}
-          onNameResolved={onNameResolved}
-          onRecordResolved={onRecordResolved}
-        />
-      )}
-    </PreviewQuery>
+    <PreviewContent
+      id={id}
+      showOpenAction={showOpenAction}
+      showIdentityHeader={showIdentityHeader}
+      onNameResolved={onNameResolved}
+      onRecordResolved={onRecordResolved}
+    />
   );
 }
 

@@ -65,18 +65,18 @@ export function VerbMenuItem({
 }) {
   const { label, icon: Icon, tone } = verbDef(verb);
   const isDisabled = disabled === true || disabledReason != null;
+  const menuItemProps: ComponentProps<typeof DropdownMenuItem> = {};
+  if (disabledReason != null) {
+    menuItemProps["aria-label"] = `${label}, ${disabledReason}`;
+    menuItemProps.className =
+      "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground data-disabled:opacity-100";
+  }
+  if (render && !isDisabled) menuItemProps.render = render;
   return (
     <DropdownMenuItem
       variant={tone === "destructive" ? "destructive" : "default"}
       disabled={isDisabled}
-      {...(disabledReason != null
-        ? {
-            "aria-label": `${label}, ${disabledReason}`,
-            className:
-              "data-disabled:cursor-not-allowed data-disabled:text-muted-foreground data-disabled:opacity-100",
-          }
-        : {})}
-      {...(render && !isDisabled ? { render } : {})}
+      {...menuItemProps}
       onClick={isDisabled ? undefined : onSelect}
     >
       <Icon />
@@ -114,13 +114,14 @@ export function verbBulkAction<TData extends RowData>(
 ): BulkAction<TData> {
   const { label, icon: Icon, tone } = verbDef(verb);
   const { id, ...rest } = options;
-  return {
+  const action: BulkAction<TData> = {
     id: id ?? verbActionId(verb),
     label,
     icon: <Icon />,
-    ...(tone ? { tone } : {}),
     ...rest,
   };
+  if (tone) action.tone = tone;
+  return action;
 }
 
 /**
@@ -163,7 +164,8 @@ export function VerbButton({
       aria-label={disabledReason ? `${label}, ${disabledReason}` : undefined}
       className={className}
       onClick={onClick}
-      {...(render && !isDisabled ? { render, nativeButton: false } : {})}
+      render={render && !isDisabled ? render : undefined}
+      nativeButton={render && !isDisabled ? false : undefined}
     >
       <Icon />
       {label}

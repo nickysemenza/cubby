@@ -1,12 +1,6 @@
-import { imageShortcode } from "@cubby/schemas/identifiers";
-import {
-  imageListFiltersSchema,
-  imageSortableFields,
-  imageUpdateInput,
-  imageWithEntitySchema,
-} from "@cubby/schemas/image";
+import { imageSortableFields } from "@cubby/schemas/image";
 
-import type { EntityKernelBinding } from "~/server/entity-kernel/adapter";
+import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -19,53 +13,27 @@ import {
 
 const imageShortcodes = bindShortcodeResolver("image");
 
-export const imageEntityAdapter: EntityKernelBinding = {
+export const imageEntityAdapter = defineEntityAdapter({
   entity: "image",
   sideEffects: false,
-  schemas: {
-    id: imageShortcode,
-    update: imageUpdateInput,
-    output: imageWithEntitySchema,
-    detail: imageWithEntitySchema,
-    list: imageWithEntitySchema,
-    filters: imageListFiltersSchema,
-  },
   sort: { fields: imageSortableFields, default: "createdAt" },
   lifecycle: { delete: IMAGE_HARD_DELETE },
   repository: {
     get: async (ctx, shortcode) =>
-      getImageById(
-        ctx.db,
-        await imageShortcodes.one(ctx.db, imageShortcode.parse(shortcode)),
-      ),
+      getImageById(ctx.db, await imageShortcodes.one(ctx.db, shortcode)),
     list: (ctx, filters, sorts, pagination) =>
-      imageList(
-        ctx.db,
-        imageListFiltersSchema.parse(filters),
-        sorts,
-        pagination,
-      ),
+      imageList(ctx.db, filters, sorts, pagination),
     update: async (ctx, shortcode, data) => {
-      const entityId = await imageShortcodes.one(
-        ctx.db,
-        imageShortcode.parse(shortcode),
-      );
+      const entityId = await imageShortcodes.one(ctx.db, shortcode);
       return {
-        output: await updateImage(
-          ctx.db,
-          entityId,
-          imageUpdateInput.parse(data),
-        ),
+        output: await updateImage(ctx.db, entityId, data),
         entityId,
       };
     },
     delete: async (ctx, shortcodes) => {
-      const ids = await imageShortcodes.all(
-        ctx.db,
-        imageShortcode.array().parse(shortcodes),
-      );
+      const ids = await imageShortcodes.all(ctx.db, shortcodes);
       const { deletedIds, deletedKeys } = await deleteImages(ctx.db, ids);
       return { deleted: deletedIds.length, detachedImageKeys: deletedKeys };
     },
   },
-};
+});

@@ -1,3 +1,5 @@
+import type { CellData, RowData } from "@tanstack/react-table";
+
 import type { ColumnCellData } from "./cell-data";
 import type { FilterableComboboxItem } from "./editable-cell";
 import type { CubbyTableLayoutV1 } from "./table-layout";
@@ -35,7 +37,7 @@ export interface MobileColumnMeta {
 }
 
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
-export interface CubbyColumnMeta {
+export interface CubbyColumnMeta<TData = CellData> {
   mobile?: MobileColumnMeta;
   className?: string;
   /**
@@ -47,10 +49,20 @@ export interface CubbyColumnMeta {
   numeric?: boolean;
   mono?: boolean;
   filterConfig?: FilterConfig;
-  // Column arrays intentionally erase their heterogeneous row/value types at
-  // the shared chrome seam. Factories still retain TData at their call sites.
-  // oxlint-disable-next-line typescript/no-explicit-any -- heterogeneous table metadata
-  cellData?: ColumnCellData<any>;
+  cellData?: ColumnCellData<TData>;
+}
+
+/**
+ * Attach row-correlated cell metadata to TanStack's non-row-generic meta slot.
+ * Callers retain their exact callback inputs until this single adapter.
+ */
+export function attachCubbyColumnMeta<TData extends RowData>(
+  meta: CubbyColumnMeta<TData>,
+): CubbyColumnMeta {
+  // SAFETY: this metadata is attached only to a ColumnDef<TData> created by the
+  // same column factory. TanStack carries meta without invoking it; every reader
+  // supplies row.original from that same table's TData before a callback runs.
+  return meta as CubbyColumnMeta;
 }
 
 export interface ServerTotals {

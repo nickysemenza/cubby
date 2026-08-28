@@ -155,12 +155,13 @@ export function useDataTableController<TItem extends RowData>({
   // window must not rewrite a person's saved column widths.
   const [tableContainerWidth, setTableContainerWidth] = useState(0);
   useEffect(() => {
-    if (isMobile || typeof ResizeObserver === "undefined") return;
+    const ResizeObserverClass = globalThis.ResizeObserver;
+    if (isMobile || !ResizeObserverClass) return;
     const pane = tableContainerRef.current;
     if (!pane) return;
     const measure = () => setTableContainerWidth(Math.round(pane.clientWidth));
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserverClass(measure);
     observer.observe(pane);
     return () => observer.disconnect();
   }, [isMobile, tableContainerRef]);

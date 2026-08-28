@@ -101,7 +101,7 @@ export const filterStateKey = (filters: Filter[]): string =>
 export function normalizeBarFilters(
   filters: Filter[],
   fields: FilterBarField[],
-): { columnFilters: ColumnFiltersState; externalKey: string } {
+) {
   const columnFilters = barFiltersToFilterState(filters, fields);
   return {
     columnFilters,

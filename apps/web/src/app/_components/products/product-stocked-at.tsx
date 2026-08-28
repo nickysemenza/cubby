@@ -17,6 +17,7 @@ import {
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import {
   type CubbyRow,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
@@ -41,11 +42,12 @@ type InventoryEntry = ProductWithFoodOut["inventoryEntry"][number];
  * component rows arrive rather than guessing at them — the surrounding empty
  * state already carries the fact, and this only names the parts.
  */
-const HeldAsComponents: FC<{ productId: ProductShortcode }> = ({
-  productId,
-}) => {
+const HeldAsComponents: FC<{
+  productId: ProductShortcode;
+  operations: ProductStockedAtOperations;
+}> = ({ productId, operations }) => {
   const { data } = useQuery(
-    productOperations.components.queryOptions({ parentProductId: productId }),
+    operations.components.queryOptions({ parentProductId: productId }),
   );
   if (!data || data.length === 0) return null;
   return (
@@ -106,6 +108,15 @@ type IdentityRow = {
 
 type StockedRow = StockRow | IdentityRow;
 
+/** Remote read used only when a decomposed kit has no direct stock rows. */
+export interface ProductStockedAtOperations {
+  components: typeof productOperations.components;
+}
+
+const productionOperations: ProductStockedAtOperations = {
+  components: productOperations.components,
+};
+
 /** Stable hook config (see apps/web/CLAUDE.md on inline objects). */
 const EMBEDDED_TABLE_STATE = {
   urlSync: false,
@@ -120,10 +131,35 @@ type DialogState =
 
 const CLOSED: DialogState = { type: null };
 
+/** Project inventory and location-as-product rows onto one honest table model. */
+export function productStockedRows(product: ProductWithFoodOut): StockedRow[] {
+  const stock = product.inventoryEntry.map((entry): StockRow => ({
+    ...entry,
+    kind: "stock",
+    product: { name: product.name },
+  }));
+  const identity = product.servingAsLocations.map((location): IdentityRow => ({
+    kind: "identity",
+    // The table keys rows by `id` and an identity row has no InventoryEntry,
+    // so it uses the location shortcode as a display-only table key.
+    id: location.id,
+    location,
+    // A location is one unit of the product by definition.
+    amount: { value: 1, unit: "each" },
+    // The effective price mirrors stock rows' server projection.
+    valuation: product.pricing.effectivePrice,
+    verifiedAt: null,
+    placement: "stock",
+    product: { name: product.name },
+  }));
+  return [...stock, ...identity];
+}
+
 /** Product inventory rows: location and amount are direct, editable entry fields. */
-export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
-  product,
-}) => {
+export const ProductStockedAt: FC<{
+  product: ProductWithFoodOut;
+  operations?: ProductStockedAtOperations;
+}> = ({ product, operations = productionOperations }) => {
   const helper = useMemo(() => createCubbyColumnHelper<StockedRow>(), []);
   const [dialog, setDialog] = useState<DialogState>(CLOSED);
   const update = useUpdateMutation({
@@ -134,37 +170,7 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   // The shared Move/Delete dialogs name a row by its product; on this page the
   // product is the page itself, so carry it onto the row rather than refetching
   // the list-shaped inventory row.
-  const rows = useMemo<StockedRow[]>(() => {
-    const stock: StockedRow[] = product.inventoryEntry.map((entry) => ({
-      ...entry,
-      kind: "stock" as const,
-      product: { name: product.name },
-    }));
-    const identity: StockedRow[] = product.servingAsLocations.map((loc) => ({
-      kind: "identity" as const,
-      // The table keys rows by `id` and an identity row has no InventoryEntry,
-      // so it uses the location shortcode as a display-only table key.
-      id: loc.id,
-      location: loc,
-      // A location is one unit of the product by definition.
-      amount: { value: 1, unit: "each" },
-      // The EFFECTIVE price, not the `price` override column. A stock row's
-      // `valuation` is precomputed from `explicit ?? Expense-derived`, so
-      // reading the override here made two rows of one table answer the same
-      // question from different price sources — and the 86 of 111 bins whose
-      // product carries no manual price simply read blank.
-      valuation: product.pricing.effectivePrice,
-      verifiedAt: null,
-      placement: "stock" as const,
-      product: { name: product.name },
-    }));
-    return [...stock, ...identity];
-  }, [
-    product.inventoryEntry,
-    product.servingAsLocations,
-    product.name,
-    product.pricing.effectivePrice,
-  ]);
+  const rows = useMemo(() => productStockedRows(product), [product]);
 
   const locationBreakdown = useMemo(
     () => buildProductLocationBreakdown(product),
@@ -172,67 +178,84 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
   );
 
   const columns = useMemo(
-    () => [
-      createSingleEntityInlineLinkColumn(helper, "location", "location", {
-        header: "Location",
-        className: "w-56",
-        editable: {
-          isEditable: rowIsEntity,
-          onSave: async (locationId, entry) => {
-            if (!locationId || entry.kind !== "stock") return;
-            await update.mutateAsync({ id: entry.id, data: { locationId } });
-          },
-        },
+    () =>
+      createCubbyColumnCollection<StockedRow>((add) => {
+        add(
+          createSingleEntityInlineLinkColumn(helper, "location", "location", {
+            header: "Location",
+            className: "w-56",
+            editable: {
+              isEditable: rowIsEntity,
+              onSave: async (locationId, entry) => {
+                if (!locationId || entry.kind !== "stock") return;
+                await update.mutateAsync({
+                  id: entry.id,
+                  data: { locationId },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          helper.accessor("kind", {
+            header: "Held as",
+            meta: { className: "w-32" },
+            cell: (info) =>
+              info.getValue() === "identity" ? (
+                <Badge variant="secondary">is this location</Badge>
+              ) : info.row.original.placement === "installed" ? (
+                <Badge variant="secondary">installed</Badge>
+              ) : (
+                <Badge variant="outline">stock</Badge>
+              ),
+          }),
+        );
+        add(
+          createEditableAmountColumn(helper, "amount", {
+            isEditable: rowIsEntity,
+            onSave: async (amount, entry) => {
+              if (entry.kind !== "stock") return;
+              await update.mutateAsync({ id: entry.id, data: { amount } });
+            },
+            getUnitMappings: () => product.unitMappings,
+            // The row's own entity — every other column here points at the
+            // location or the product. Same treatment as the location table.
+            renderDisplay: (content, entry) =>
+              entry.kind === "stock" ? (
+                <Link
+                  to="/inventory/$shortcode"
+                  params={{ shortcode: entry.id }}
+                >
+                  {content}
+                </Link>
+              ) : (
+                content
+              ),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "valuation", {
+            header: "Value",
+            className: "w-24",
+          }),
+        );
+        add(
+          helper.accessor("verifiedAt", {
+            header: "Verified",
+            meta: { className: "w-32" },
+            cell: (info) =>
+              // A location is not recounted as its own stock, so there is nothing
+              // to be stale about.
+              info.row.original.kind === "identity" ? null : (
+                <AuditedHint
+                  at={info.getValue()}
+                  label="verified"
+                  placement={info.row.original.placement}
+                />
+              ),
+          }),
+        );
       }),
-      helper.accessor("kind", {
-        header: "Held as",
-        meta: { className: "w-32" },
-        cell: (info) =>
-          info.getValue() === "identity" ? (
-            <Badge variant="secondary">is this location</Badge>
-          ) : info.row.original.placement === "installed" ? (
-            <Badge variant="secondary">installed</Badge>
-          ) : (
-            <Badge variant="outline">stock</Badge>
-          ),
-      }),
-      createEditableAmountColumn(helper, "amount", {
-        isEditable: rowIsEntity,
-        onSave: async (amount, entry) => {
-          if (entry.kind !== "stock") return;
-          await update.mutateAsync({ id: entry.id, data: { amount } });
-        },
-        getUnitMappings: () => product.unitMappings,
-        // The row's own entity — every other column here points at the
-        // location or the product. Same treatment as the location table.
-        renderDisplay: (content, entry) =>
-          entry.kind === "stock" ? (
-            <Link to="/inventory/$shortcode" params={{ shortcode: entry.id }}>
-              {content}
-            </Link>
-          ) : (
-            content
-          ),
-      }),
-      createCurrencyColumn(helper, "valuation", {
-        header: "Value",
-        className: "w-24",
-      }),
-      helper.accessor("verifiedAt", {
-        header: "Verified",
-        meta: { className: "w-32" },
-        cell: (info) =>
-          // A location is not recounted as its own stock, so there is nothing
-          // to be stale about.
-          info.row.original.kind === "identity" ? null : (
-            <AuditedHint
-              at={info.getValue()}
-              label="verified"
-              placement={info.row.original.placement}
-            />
-          ),
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, product.unitMappings],
   );
@@ -385,7 +408,9 @@ export const ProductStockedAt: FC<{ product: ProductWithFoodOut }> = ({
         <ShelfEmpty
           entity="inventory"
           label="Not stocked under this name"
-          detail={<HeldAsComponents productId={product.id} />}
+          detail={
+            <HeldAsComponents productId={product.id} operations={operations} />
+          }
         />
       );
     }

@@ -1,3 +1,5 @@
+import type { KeyboardCoordinateGetter } from "@dnd-kit/core";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -19,7 +21,6 @@ describe("resolveActivatorDistance", () => {
 
 describe("createValidTargetKeyboardCoordinates", () => {
   it("moves to the nearest valid target in the requested direction", () => {
-    const preventDefault = vi.fn();
     const coordinateGetter = createValidTargetKeyboardCoordinates(
       (_active, target) => target?.valid === true,
     );
@@ -34,9 +35,15 @@ describe("createValidTargetKeyboardCoordinates", () => {
       { id: "valid-far", data: { current: { valid: true } } },
     ];
 
+    const preventDefault = vi.fn();
+    const keyboardEvent = fromPartial<Parameters<KeyboardCoordinateGetter>[0]>({
+      code: "ArrowRight",
+      preventDefault,
+    });
     const result = coordinateGetter(
-      { code: "ArrowRight", preventDefault } as never,
-      {
+      keyboardEvent,
+      fromPartial<Parameters<KeyboardCoordinateGetter>[1]>({
+        active: "active",
         currentCoordinates: { x: 5, y: 7 },
         context: {
           active: { data: { current: {} } },
@@ -44,7 +51,7 @@ describe("createValidTargetKeyboardCoordinates", () => {
           droppableContainers: { getEnabled: () => containers },
           droppableRects: rects,
         },
-      } as never,
+      }),
     );
 
     expect(preventDefault).toHaveBeenCalledOnce();

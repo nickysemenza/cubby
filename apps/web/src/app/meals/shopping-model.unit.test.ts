@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/meal";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   buildShoppingColumns,
@@ -33,7 +34,7 @@ const contribution = (
   over: ContributionOverrides = {},
 ): ShoppingListContribution => {
   const { mealId, recipeId, ...rest } = over;
-  return shoppingListContribution.parse({
+  const input: z.input<typeof shoppingListContribution> = {
     mealId: testShortcode("meal", "MEL-1"),
     mealName: "Dinner",
     date: "2026-06-15",
@@ -44,16 +45,16 @@ const contribution = (
     lineIndex: nextLine++,
     via: [],
     ...rest,
-    ...(mealId === undefined ? {} : { mealId: testShortcode("meal", mealId) }),
-    ...(recipeId === undefined
-      ? {}
-      : { recipeId: testShortcode("recipe", recipeId) }),
-  });
+  };
+  if (mealId !== undefined) input.mealId = testShortcode("meal", mealId);
+  if (recipeId !== undefined)
+    input.recipeId = testShortcode("recipe", recipeId);
+  return shoppingListContribution.parse(input);
 };
 
 const item = (over: ItemOverrides = {}): ShoppingListItem => {
   const { ingredientId, ...rest } = over;
-  return shoppingListItem.parse({
+  const input: z.input<typeof shoppingListItem> = {
     ingredientId: testShortcode("ingredient", "ING-1"),
     name: "flour",
     basisUnit: "g",
@@ -64,15 +65,12 @@ const item = (over: ItemOverrides = {}): ShoppingListItem => {
     estimatedCost: null,
     perMeal: [contribution()],
     ...rest,
-    ...(ingredientId === undefined
-      ? {}
-      : {
-          ingredientId:
-            ingredientId === null
-              ? null
-              : testShortcode("ingredient", ingredientId),
-        }),
-  });
+  };
+  if (ingredientId !== undefined) {
+    input.ingredientId =
+      ingredientId === null ? null : testShortcode("ingredient", ingredientId);
+  }
+  return shoppingListItem.parse(input);
 };
 
 describe("buildShoppingRows", () => {
@@ -190,7 +188,7 @@ describe("buildShoppingRows", () => {
 });
 
 describe("status after exclusion", () => {
-  const statusFor = (over: Record<string, unknown>, needValue: number) =>
+  const statusFor = (over: ItemOverrides, needValue: number) =>
     buildShoppingRows(
       [item({ ...over, perMeal: [contribution({ needValue })] })],
       NONE,

@@ -7,6 +7,7 @@ import {
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { productComponent } from "~/server/db/schema";
 
@@ -40,6 +41,8 @@ import {
  */
 describe("kit component projection", () => {
   const ctx = withTestDb();
+  const effectivePriceRowSchema = z.object({ price: z.number().nullable() });
+  const expectedQuantityRowSchema = z.object({ expected: z.number() });
 
   const seedExpense = (overrides: Partial<ExpenseCreateInput>) =>
     createExpense(
@@ -93,8 +96,7 @@ describe("kit component projection", () => {
       sql`SELECT ${sql.raw(effectiveProductPriceSql('"Product"'))} AS price
             FROM "Product" WHERE "Product"."id" = ${id}`,
     );
-    const row = (rows as unknown as { rows: Array<{ price: number | null }> })
-      .rows[0];
+    const row = effectivePriceRowSchema.parse(rows.rows[0]);
     return row?.price ?? null;
   };
 
@@ -379,8 +381,7 @@ describe("kit component projection", () => {
       sql`SELECT ${sql.raw(expectedQuantitySql('"Product"'))} AS expected
             FROM "Product" WHERE "Product"."id" = ${part.entityId}`,
     );
-    const row = (rows as unknown as { rows: Array<{ expected: number }> })
-      .rows[0];
+    const row = expectedQuantityRowSchema.parse(rows.rows[0]);
     expect(row?.expected).toBe(3);
   });
 });

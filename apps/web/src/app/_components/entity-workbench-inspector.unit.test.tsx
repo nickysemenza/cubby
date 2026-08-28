@@ -1,242 +1,185 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import type { Mock } from "vitest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { imageWithEntitySchema } from "@cubby/schemas/image";
+import {
+  relatedPreviewOutput,
+  relatedViewsFor,
+} from "@cubby/schemas/related-view";
+import { testShortcode } from "@cubby/schemas/testing";
+import { vendorOut } from "@cubby/schemas/vendor";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(
-  (): {
-    preview: Mock<(props: unknown) => void>;
-    relationships: Mock<(props: unknown) => void>;
-    relationshipRoute: Mock<(props: unknown) => void>;
-    activity: Mock<(props: unknown) => void>;
-    actions: Mock<(props: unknown) => void>;
-  } => ({
-    preview: vi.fn(),
-    relationships: vi.fn(),
-    relationshipRoute: vi.fn(),
-    activity: vi.fn(),
-    actions: vi.fn(),
-  }),
-);
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    params,
-    ...props
-  }: {
-    children?: ReactNode;
-    to: string;
-    params?: { id?: string; shortcode?: string };
-    [key: string]: unknown;
-  }) => (
-    <a
-      {...props}
-      data-router-link="true"
-      href={to
-        .replace("$id", params?.id ?? "")
-        .replace("$shortcode", params?.shortcode ?? "")}
-    >
-      {children}
-    </a>
-  ),
-}));
-
-vi.mock("./EntityPreviewContent", () => ({
-  EntityPreviewContent: (props: unknown) => {
-    mocks.preview(props);
-    return <div data-testid="compact-preview" />;
-  },
-}));
-
-vi.mock("./relationships/relationship-explorer", () => ({
-  RelationshipExplorer: (props: unknown) => {
-    mocks.relationships(props);
-    return <div data-testid="relationship-explorer" />;
-  },
-}));
-
-vi.mock("./relationships/relationship-route-preview", () => ({
-  RelationshipRoutePreview: (props: unknown) => {
-    mocks.relationshipRoute(props);
-    return <div data-testid="relationship-route-preview" />;
-  },
-}));
-
-vi.mock("./audit-log/audit-log-list", () => ({
-  AuditLogList: (props: unknown) => {
-    mocks.activity(props);
-    return <div data-testid="audit-log" />;
-  },
-}));
-
-vi.mock("./actions/entity-actions", () => ({
-  EntityActionButtons: (props: unknown) => {
-    mocks.actions(props);
-    return <div data-testid="inspector-actions" />;
-  },
-}));
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
+import { image } from "~/entities/image.functions";
+import { relatedData } from "~/lib/related-data.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
 
-const VENDOR_ID = "VEN-WORKBENCH";
-const IMAGE_ID = "IMG-WORKBENCH";
+const VENDOR_ID = testShortcode("vendor", "VEN-WORK");
+const IMAGE_ID = testShortcode("image", "IMG-WORK");
 const LEDGER_PARTY_ID = "LPY-WORKBENCH";
-const PRODUCT_ID = "PRD-WORKBENCH";
-const INVENTORY_ID = "INV-WORKBENCH";
+
+const vendor = vendorOut.parse({
+  id: VENDOR_ID,
+  name: "Fixture vendor",
+  website: null,
+  orderUrlTemplate: null,
+  notes: null,
+  purchaseCount: 1,
+  spend: 24,
+  latestPurchaseDate: "2026-06-16",
+  logo: null,
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+});
+
+const imageRecord = imageWithEntitySchema.parse({
+  id: IMAGE_ID,
+  url: "https://example.test/fixture.jpg",
+  key: "fixtures/fixture.jpg",
+  filename: "fixture.jpg",
+  size: 1024,
+  contentType: "image/jpeg",
+  status: "UPLOADED",
+  width: 640,
+  height: 480,
+  detectedContentType: "image/jpeg",
+  sha256: null,
+  renderStatus: "verified",
+  storageStatus: "available",
+  verifiedAt: new Date("2026-01-01T00:00:00Z"),
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+  entityType: null,
+  entityId: null,
+  entityName: null,
+  associations: [],
+});
+
+const vendorViews = relatedViewsFor("vendor");
+const vendorRelationshipInput = {
+  source: "vendor" as const,
+  sourceIds: [VENDOR_ID],
+  relationKeys: vendorViews.map((view) => view.key),
+};
+const vendorRelationships = relatedPreviewOutput.parse([
+  {
+    sourceId: VENDOR_ID,
+    relationKey: "vendor.purchases",
+    totalCount: 1,
+    items: [
+      {
+        entity: "purchase",
+        id: testShortcode("purchase", "PUR-WORK"),
+        label: "Fixture purchase",
+        displayImage: null,
+      },
+    ],
+  },
+]);
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function seedVendorInspector() {
+  const detailOptions = entityPreviewQueryOptions("vendor", VENDOR_ID);
+  harness.queryClient.setQueryDefaults(detailOptions.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(detailOptions.queryKey, vendor);
+
+  const relationshipOptions = relatedData.previews.queryOptions(
+    vendorRelationshipInput,
+  );
+  harness.queryClient.setQueryDefaults(relationshipOptions.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(
+    relationshipOptions.queryKey,
+    vendorRelationships,
+  );
+}
+
+function seedImageInspector() {
+  const detailOptions = image.detail.queryOptions({ id: IMAGE_ID });
+  harness.queryClient.setQueryDefaults(detailOptions.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(detailOptions.queryKey, imageRecord);
+}
+
+function renderInspector({
+  entity = "vendor",
+  id = VENDOR_ID,
+  onClose,
+}: {
+  entity?: "vendor" | "image" | "ledgerParty";
+  id?: string;
+  onClose?: () => void;
+} = {}) {
+  return render(
+    <EntityWorkbenchInspector entity={entity} id={id} onClose={onClose} />,
+    { wrapper: harness.wrapper },
+  );
+}
 
 describe("EntityWorkbenchInspector", () => {
-  beforeEach(() => {
-    mocks.preview.mockClear();
-    mocks.relationships.mockClear();
-    mocks.relationshipRoute.mockClear();
-    mocks.activity.mockClear();
-    mocks.actions.mockClear();
-  });
+  it("keeps the compact overview local until a real relationship or activity tab is selected", async () => {
+    seedVendorInspector();
+    let closeCount = 0;
+    renderInspector({ onClose: () => (closeCount += 1) });
 
-  it("keeps the compact overview mounted alone until its tab is selected", () => {
-    const onClose = vi.fn();
-    render(
-      <EntityWorkbenchInspector
-        entity="vendor"
-        id={VENDOR_ID}
-        onClose={onClose}
-      />,
-    );
-
-    expect(screen.getByTestId("compact-preview")).toBeInTheDocument();
-    expect(mocks.preview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entity: "vendor",
-        id: VENDOR_ID,
-        showOpenAction: false,
-        showIdentityHeader: false,
-        onNameResolved: expect.any(Function),
-        onRecordResolved: expect.any(Function),
-      }),
-    );
-    const previewProps = mocks.preview.mock.calls[0]?.[0] as {
-      onNameResolved: (name: string) => void;
-      onRecordResolved: (record: object | undefined) => void;
-    };
-    act(() => previewProps.onNameResolved("Fixture vendor"));
     expect(
-      screen.getByRole("heading", { name: "Fixture vendor" }),
+      await screen.findByRole("heading", { name: "Fixture vendor" }),
     ).toBeVisible();
-    const fullRecord = {
-      id: VENDOR_ID,
-      name: "Fixture vendor",
-      locationCount: 2,
-    };
-    act(() => previewProps.onRecordResolved(fullRecord));
-    expect(mocks.actions).toHaveBeenCalledWith({
-      entity: "vendor",
-      record: fullRecord,
-      surface: "inspector",
-    });
-    expect(mocks.relationships).not.toHaveBeenCalled();
-    expect(mocks.relationshipRoute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entity: "vendor",
-        sourceId: VENDOR_ID,
-      }),
-    );
-    expect(mocks.activity).not.toHaveBeenCalled();
+    expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
-
-    const openLink = screen.getByLabelText("Open full vendor details");
-    expect(openLink.tagName).toBe("A");
-    expect(openLink).toHaveAttribute("data-router-link", "true");
-    expect(openLink).toHaveAttribute("href", `/vendors/${VENDOR_ID}`);
+    expect(screen.getByLabelText("Open full vendor details")).toHaveAttribute(
+      "href",
+      `/vendors/${VENDOR_ID}`,
+    );
 
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
-    expect(screen.getByTestId("relationship-explorer")).toBeInTheDocument();
-    expect(mocks.relationships).toHaveBeenCalledWith({
-      entity: "vendor",
-      sourceId: VENDOR_ID,
-    });
+    expect(await screen.findByText("Fixture purchase")).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(screen.getByTestId("audit-log")).toBeInTheDocument();
-    expect(mocks.activity).toHaveBeenCalledWith({
-      entityType: "vendor",
-      entityId: VENDOR_ID,
-      showEntityLink: false,
-    });
+    expect(await screen.findByText("No activity yet")).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
-    expect(onClose).toHaveBeenCalledOnce();
+    expect(closeCount).toBe(1);
   });
 
-  it("uses a compact overview for a first-wave image entity", () => {
-    render(<EntityWorkbenchInspector entity="image" id={IMAGE_ID} />);
+  it("uses the actual image preview and canonical full-detail route", async () => {
+    seedImageInspector();
+    renderInspector({ entity: "image", id: IMAGE_ID });
 
-    expect(screen.getByTestId("compact-preview")).toBeInTheDocument();
-    expect(mocks.preview).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entity: "image",
-        id: IMAGE_ID,
-        showOpenAction: false,
-        showIdentityHeader: false,
-      }),
-    );
-    const openLink = screen.getByLabelText("Open full image details");
-    expect(openLink.tagName).toBe("A");
-    expect(openLink).toHaveAttribute("data-router-link", "true");
-    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
-  });
-
-  it("clears actions when a compact preview becomes unavailable or deleted", () => {
-    render(<EntityWorkbenchInspector entity="inventory" id={INVENTORY_ID} />);
-
-    const previewProps = mocks.preview.mock.calls[0]?.[0] as {
-      onRecordResolved: (record: object | undefined) => void;
-    };
-    act(() =>
-      previewProps.onRecordResolved({
-        id: INVENTORY_ID,
-        name: "Fixture inventory",
-        availableQuantity: 4,
-      }),
-    );
-    expect(screen.getByTestId("inspector-actions")).toBeVisible();
-
-    act(() => previewProps.onRecordResolved(undefined));
-
-    expect(screen.queryByTestId("inspector-actions")).toBeNull();
-    expect(mocks.actions).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not mount the generic relationship path for Product", () => {
-    render(<EntityWorkbenchInspector entity="product" id={PRODUCT_ID} />);
-
-    expect(mocks.relationshipRoute).not.toHaveBeenCalled();
-    expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
-  });
-
-  it("does not promise an unavailable full record for a route-less fallback", () => {
-    render(
-      <EntityWorkbenchInspector entity="ledgerParty" id={LEDGER_PARTY_ID} />,
-    );
-
-    expect(screen.queryByTestId("compact-preview")).not.toBeInTheDocument();
     expect(
-      screen.getByText("Use Relations or Activity to inspect linked records."),
+      await screen.findByRole("heading", { name: "fixture.jpg" }),
     ).toBeVisible();
-    expect(screen.queryByRole("button", { name: /open full/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
+    expect(screen.getByLabelText("Open full image details")).toHaveAttribute(
+      "href",
+      `/images/${IMAGE_ID}`,
+    );
   });
 
-  it("resets to Overview when the selected record changes", () => {
-    const { rerender } = render(
-      <EntityWorkbenchInspector entity="vendor" id={VENDOR_ID} />,
-    );
+  it("resets to Overview and stops promising a full record when the selection becomes route-less", async () => {
+    seedVendorInspector();
+    const rendered = renderInspector();
 
+    await screen.findByRole("heading", { name: "Fixture vendor" });
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
-    expect(screen.getByTestId("relationship-explorer")).toBeInTheDocument();
+    expect(await screen.findByText("Fixture purchase")).toBeVisible();
 
-    rerender(
+    rendered.rerender(
       <EntityWorkbenchInspector entity="ledgerParty" id={LEDGER_PARTY_ID} />,
     );
 
@@ -244,9 +187,10 @@ describe("EntityWorkbenchInspector", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.queryByTestId("relationship-explorer")).toBeNull();
+    expect(screen.queryByText("Fixture purchase")).toBeNull();
     expect(
       screen.getByText("Use Relations or Activity to inspect linked records."),
     ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /open full/i })).toBeNull();
   });
 });

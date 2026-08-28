@@ -15,7 +15,10 @@ import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import { EntitySummaryCard } from "~/components/entity/entity-summary-card";
+import {
+  EntitySummaryCard,
+  type RecipeSummaryData,
+} from "~/components/entity/entity-summary-card";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -359,25 +362,25 @@ const RecipeDetailInner: React.FC<{
                   title="Recipe Summary"
                   summaryData={{
                     type: "recipe",
-                    data: {
-                      price: totals.price,
-                      // Carry the range upper bounds (ranged amounts like "1–2 cups")
-                      // so the card shows "$4.50–$6.20", matching the table's own card.
-                      ...(totals.priceUpper != null
-                        ? { priceUpper: totals.priceUpper }
-                        : {}),
-                      weight: totals.weight,
-                      ...(totals.weightUpper != null
-                        ? { weightUpper: totals.weightUpper }
-                        : {}),
-                      nutrients: totals.nutrients,
-                      ...(totals.nutrientsUpper
-                        ? { nutrientsUpper: totals.nutrientsUpper }
-                        : {}),
-                      totalIngredients: totals.totalIngredients,
-                      missingByType: totals.missingByType,
-                      perServing: getServingBasis(scaledRecipe),
-                    },
+                    data: (() => {
+                      const summary: RecipeSummaryData = {
+                        price: totals.price,
+                        // Carry the range upper bounds (ranged amounts like "1–2 cups")
+                        // so the card shows "$4.50–$6.20", matching the table's own card.
+                        weight: totals.weight,
+                        nutrients: totals.nutrients,
+                        totalIngredients: totals.totalIngredients,
+                        missingByType: totals.missingByType,
+                        perServing: getServingBasis(scaledRecipe),
+                      };
+                      if (totals.priceUpper != null)
+                        summary.priceUpper = totals.priceUpper;
+                      if (totals.weightUpper != null)
+                        summary.weightUpper = totals.weightUpper;
+                      if (totals.nutrientsUpper)
+                        summary.nutrientsUpper = totals.nutrientsUpper;
+                      return summary;
+                    })(),
                   }}
                 />
               )}

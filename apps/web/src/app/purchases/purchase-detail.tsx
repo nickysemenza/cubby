@@ -373,13 +373,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       title: "Financial settlement",
       icon: Scale,
       placement: "supporting",
-      content: (
-        <FinancialSettlement
-          purchase={
-            purchase as Parameters<typeof FinancialSettlement>[0]["purchase"]
-          }
-        />
-      ),
+      content: <FinancialSettlement purchase={purchase} />,
     },
     // History is appended automatically by `DetailSections` for every
     // auditable entity — see `ACTIVITY_SECTION_ID` there. Not hand-wired here

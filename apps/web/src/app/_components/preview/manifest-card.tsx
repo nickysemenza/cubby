@@ -28,13 +28,21 @@ import { NutrientsSummary } from "../units/NutrientsSummary";
 
 // ── Declarative shape ───────────────────────────────────────────────────────
 
+type CrossLinkSearchValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly string[]
+  | readonly number[];
+
 export type CrossLink = {
   to: EntityDetailRoute;
   // `{ id }` covers usda-food — the one detail route that stays keyed on
   // something other than a shortcode (`String(fdc_id)`); every other entity's
   // route wants `{ shortcode }` containing its canonical public id.
   params: { id: string } | { shortcode: string };
-  search?: Record<string, unknown>;
+  search?: Readonly<Record<string, CrossLinkSearchValue>>;
   /** Leading icon — the target entity's icon (or a view icon for self-views). */
   icon?: ReactNode;
   label: string;
@@ -148,6 +156,8 @@ export function ManifestCard({
               key={cl.label}
               to={cl.to}
               params={cl.params}
+              // SAFETY: each cross-link owns a matching route/search pair;
+              // their heterogeneous union loses that correlation here.
               // TanStack can't statically validate search across a route union.
               search={cl.search as never}
               className={actionLink}

@@ -442,16 +442,12 @@ export const updateExpense = async (
 
     const rest: ResolvedExpenseUpdate = {
       ...restColumns,
-      ...(resolvedProductId === null && data.productQuantity === undefined
-        ? { productQuantity: null }
-        : {}),
-      ...(resolvedProjectId !== undefined
-        ? { projectId: resolvedProjectId }
-        : {}),
-      ...(resolvedProductId !== undefined
-        ? { productId: resolvedProductId }
-        : {}),
     };
+    if (resolvedProductId === null && data.productQuantity === undefined) {
+      rest.productQuantity = null;
+    }
+    if (resolvedProjectId !== undefined) rest.projectId = resolvedProjectId;
+    if (resolvedProductId !== undefined) rest.productId = resolvedProductId;
 
     const applyNested = async () => {
       if (beneficiaries !== undefined)
@@ -492,17 +488,11 @@ export const updateExpense = async (
 
     if (!needsResolve) {
       await applyNested();
-      const output = await expenseCrud.update(
-        tx,
-        id,
-        {
-          ...rest,
-          ...(explicitPurchaseId !== undefined
-            ? { purchaseId: explicitPurchaseId }
-            : {}),
-        },
-        actor,
-      );
+      const update = { ...rest };
+      if (explicitPurchaseId !== undefined) {
+        update.purchaseId = explicitPurchaseId;
+      }
+      const output = await expenseCrud.update(tx, id, update, actor);
       await auditNestedChanges(output);
       if (
         data.cost !== undefined ||
@@ -586,15 +576,9 @@ export const updateExpense = async (
 
     await applyNested();
 
-    const output = await expenseCrud.update(
-      tx,
-      id,
-      {
-        ...rest,
-        ...(resolved === undefined ? {} : { purchaseId: resolved }),
-      },
-      actor,
-    );
+    const update = { ...rest };
+    if (resolved !== undefined) update.purchaseId = resolved;
+    const output = await expenseCrud.update(tx, id, update, actor);
     await auditNestedChanges(output);
     await touchDataQualityTargets(tx, {
       productIds: [beforeQualityTargets?.productId, resolvedProductId].filter(

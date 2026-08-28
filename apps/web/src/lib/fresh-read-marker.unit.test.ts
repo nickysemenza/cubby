@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   FRESH_READ_COOKIE_NAME,
+  FRESH_READ_HEADER_NAME,
+  freshReadRequestHeaders,
   hasFreshReadMarker,
   markFreshReads,
 } from "./fresh-read-marker";
@@ -59,5 +61,16 @@ describe("fresh-read marker", () => {
       hasFreshReadMarker(new Headers({ cookie: "cubby-fresh-reads=0" })),
     ).toBe(false);
     expect(hasFreshReadMarker(new Headers())).toBe(false);
+  });
+
+  it("copies the browser marker to a Start request header", () => {
+    expect(
+      freshReadRequestHeaders({
+        cookie: "session=abc; cubby-fresh-reads=1",
+      }),
+    ).toEqual({ [FRESH_READ_HEADER_NAME]: "1" });
+    expect(freshReadRequestHeaders({ cookie: "cubby-fresh-reads=0" })).toEqual(
+      {},
+    );
   });
 });

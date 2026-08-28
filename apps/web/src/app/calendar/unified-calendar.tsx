@@ -79,6 +79,8 @@ const PERIOD_OPTIONS = [
  * row floor is four chip lanes, so a quiet fortnight is not two screens of
  * empty paper and a busy one still grows.
  */
+// SAFETY: React CSSProperties has no index signature for the calendar's
+// custom properties; these three values are consumed only by event-calendar CSS.
 const FORTNIGHT_DENSITY = {
   "--ec-month-row-min-h": "14rem",
   "--ec-month-bar-h": "3.5rem",
@@ -91,12 +93,12 @@ const LazyCalendarCreateDialog = lazy(() =>
   })),
 );
 
-const KIND_LABELS: Record<CalendarItemKind, string> = {
+const KIND_LABELS = {
   meal: "Meals",
   task: "Tasks",
   expense: "Expenses",
   project: "Projects",
-};
+} satisfies Record<CalendarItemKind, string>;
 
 // No second color map. A calendar chip and the entity's own chrome are the
 // same claim about the same record, and keeping two hand-written maps let them

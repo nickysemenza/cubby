@@ -58,13 +58,6 @@ interface UseLocationHierarchyOptions {
   valuationMode?: "itemCount" | "equalWeight";
 }
 
-interface UseLocationHierarchyResult {
-  data: LocationHierarchyNode | null;
-  isLoading: boolean;
-  isError: boolean;
-  refetch: () => Promise<unknown>;
-}
-
 /**
  * Hook that fetches location tree and inventory data, then transforms
  * into a hierarchical structure suitable for D3 visualizations.
@@ -73,7 +66,7 @@ interface UseLocationHierarchyResult {
  */
 export function useLocationHierarchy(
   options: UseLocationHierarchyOptions = {},
-): UseLocationHierarchyResult {
+) {
   const { valuationMode = "itemCount" } = options;
 
   const locations = useQuery(location.makeTree.queryOptions());

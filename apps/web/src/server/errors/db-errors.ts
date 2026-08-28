@@ -11,29 +11,39 @@
  * record and suggest a merge) still run first inside their repos.
  */
 
+import { z } from "zod";
+
 import { type AppError, createAppError } from "./app-error";
 
-interface PgError {
-  code: string;
-  constraint?: string;
-  detail?: string;
-  table?: string;
-  column?: string;
-}
+const unparsedDatabaseErrorSchema = z.unknown();
+const databaseErrorNodeSchema = z
+  .object({
+    code: z.string().optional(),
+    constraint: z.string().optional(),
+    detail: z.string().optional(),
+    table: z.string().optional(),
+    column: z.string().optional(),
+    cause: z
+      .union([z.instanceof(Error), z.object({}).passthrough()])
+      .optional(),
+  })
+  .passthrough();
+const postgresErrorSchema = databaseErrorNodeSchema.extend({
+  code: z.string().regex(/^[0-9A-Z]{5}$/),
+});
+
+export type UnparsedDatabaseError = z.input<typeof unparsedDatabaseErrorSchema>;
+type PgError = z.output<typeof postgresErrorSchema>;
 
 /** Walk an error's `cause` chain for a Postgres error (5-digit SQLSTATE code). */
-function findPgError(error: unknown): PgError | null {
-  let current: unknown = error;
-  for (let depth = 0; depth < 8 && current != null; depth++) {
-    if (typeof current === "object") {
-      const code = (current as { code?: unknown }).code;
-      if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) {
-        return current as PgError;
-      }
-    }
-    current = (current as { cause?: unknown })?.cause;
-  }
-  return null;
+function findPgError(error: UnparsedDatabaseError, depth = 0): PgError | null {
+  if (depth >= 8) return null;
+  const parsedPostgresError = postgresErrorSchema.safeParse(error);
+  if (parsedPostgresError.success) return parsedPostgresError.data;
+
+  const parsedNode = databaseErrorNodeSchema.safeParse(error);
+  if (!parsedNode.success || parsedNode.data.cause === undefined) return null;
+  return findPgError(parsedNode.data.cause, depth + 1);
 }
 
 /** "ProductExternalId" -> "product external id" for prose. */
@@ -67,7 +77,7 @@ function referencedTableFromDetail(detail?: string): string | null {
  * unique index — caller re-SELECTs the committed winner instead of 500ing.
  */
 export function isUniqueViolation(
-  error: unknown,
+  error: UnparsedDatabaseError,
   constraint?: string,
 ): boolean {
   const pg = findPgError(error);
@@ -98,7 +108,7 @@ export function isUniqueViolation(
  */
 export async function runWithConflictRecovery<T>(
   create: () => Promise<T>,
-  recover: (error: unknown) => Promise<T>,
+  recover: (error: UnparsedDatabaseError) => Promise<T>,
   constraint?: string,
 ): Promise<T> {
   try {
@@ -114,7 +124,9 @@ export async function runWithConflictRecovery<T>(
  * null if the error isn't a recognized Postgres constraint error (so the caller
  * can rethrow the original).
  */
-export function translateDatabaseError(error: unknown): AppError | null {
+export function translateDatabaseError(
+  error: UnparsedDatabaseError,
+): AppError | null {
   const pg = findPgError(error);
   if (!pg) return null;
 

@@ -15,7 +15,9 @@ import {
   shortcodeSchema,
 } from "./shortcode";
 
-const ENTITIES = Object.keys(SHORTCODE_PREFIX) as ShortcodeType[];
+const ENTITIES = Object.keys(SHORTCODE_PREFIX).filter(
+  (entity): entity is ShortcodeType => Object.hasOwn(SHORTCODE_PREFIX, entity),
+);
 
 describe("prefix registry", () => {
   it("uses a distinct prefix per entity", () => {
@@ -101,6 +103,8 @@ describe("shortcodeSchema", () => {
       const schema = shortcodeSchema(entity);
       for (const io of ["input", "output"] as const) {
         const json = z.toJSONSchema(z.object({ id: schema }), { io });
+        // SAFETY: z.object({ id: schema }) always emits a properties.id schema
+        // object; this assertion names only the optional fields under test.
         const id = json.properties?.id as
           | { pattern?: string; description?: string }
           | undefined;

@@ -15,10 +15,11 @@ describe("dailyValuePct", () => {
   });
 
   it("has a Daily Value for every tier 1 nutrient key", () => {
-    for (const key of Object.keys(TIER1_NUTRIENTS) as Array<
-      keyof typeof TIER1_NUTRIENTS
-    >) {
-      expect(DAILY_VALUES[key]).toBeGreaterThan(0);
+    expect(Object.keys(DAILY_VALUES).sort()).toEqual(
+      Object.keys(TIER1_NUTRIENTS).sort(),
+    );
+    for (const value of Object.values(DAILY_VALUES)) {
+      expect(value).toBeGreaterThan(0);
     }
   });
 });

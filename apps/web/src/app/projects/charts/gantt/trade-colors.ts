@@ -11,12 +11,12 @@
  * the other gantt logic.
  */
 
-import type { Trade } from "@cubby/schemas/project";
+import { tradeSchema, type Trade } from "@cubby/schemas/project";
 
 type Phase = "planning" | "structure" | "mep" | "surfaces" | "finish" | "site";
 
 /** Which build phase each trade belongs to. */
-const TRADE_PHASE: Record<Trade, Phase> = {
+const TRADE_PHASE = {
   planning: "planning",
   demolition: "structure",
   building: "structure",
@@ -36,22 +36,22 @@ const TRADE_PHASE: Record<Trade, Phase> = {
   crafts: "site",
   auto: "site",
   other: "site",
-};
+} satisfies Record<Trade, Phase>;
 
 /** Phase -> its muted `--phase-*` colour token. */
-const PHASE_COLOR: Record<Phase, string> = {
+const PHASE_COLOR = {
   planning: "var(--phase-planning)",
   structure: "var(--phase-structure)",
   mep: "var(--phase-mep)",
   surfaces: "var(--phase-surfaces)",
   finish: "var(--phase-finish)",
   site: "var(--phase-site)",
-};
+} satisfies Record<Phase, string>;
 
 /** The phase a trade rolls up to, or null for an unknown/absent trade. */
 function tradePhase(trade: string | null | undefined): Phase | null {
-  if (trade != null && trade in TRADE_PHASE) return TRADE_PHASE[trade as Trade];
-  return null;
+  const parsed = tradeSchema.safeParse(trade);
+  return parsed.success ? TRADE_PHASE[parsed.data] : null;
 }
 
 /** Phase colour for a trade, defaulting to neutral when the trade is unknown. */

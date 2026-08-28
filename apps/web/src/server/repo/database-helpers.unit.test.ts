@@ -1,5 +1,6 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import { testEntityId } from "@cubby/schemas/testing";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { asc } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
@@ -26,8 +27,8 @@ const renderSql = (clauses: ReturnType<typeof buildOrderBy>) =>
  * separates it from a `DrizzleTransaction` is the latter's `rollback`. These
  * stand in for the two handles without a DB — the branch decision is pure.
  */
-const fakeTx = { rollback: () => {} } as unknown as DrizzleTransaction;
-const fakeDb = {} as Database;
+const fakeTx = fromPartial<DrizzleTransaction>({ rollback: () => {} });
+const fakeDb = fromPartial<Database>({});
 
 describe("isTransaction", () => {
   it("recognizes an open transaction by its rollback method", () => {
@@ -323,16 +324,18 @@ describe("buildPartialUpdateValues", () => {
  * task path, which the project-flavoured test never did.
  */
 describe("replaceDependencyEdges self-reference guard", () => {
-  const explodingTx = new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        throw new Error(
-          `replaceDependencyEdges touched the transaction (property "${String(prop)}") before rejecting a self-reference`,
-        );
+  const explodingTx = fromPartial<DrizzleTransaction>(
+    new Proxy(
+      {},
+      {
+        get(_target, prop) {
+          throw new Error(
+            `replaceDependencyEdges touched the transaction (property "${String(prop)}") before rejecting a self-reference`,
+          );
+        },
       },
-    },
-  ) as unknown as DrizzleTransaction;
+    ),
+  );
 
   const A = testEntityId("project", "11111111-1111-4111-8111-111111111111");
   const B = testEntityId("project", "22222222-2222-4222-8222-222222222222");

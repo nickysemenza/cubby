@@ -44,6 +44,9 @@ export interface PageIdentity {
 
 const PageIdentityContext = createContext<PageIdentity | null>(null);
 
+const isTextTitle = (value: ReactNode): value is string =>
+  typeof value === "string";
+
 /** Portal target for table-owned Display and Saved views controls. */
 export function usePageWorkbenchTarget(): HTMLDivElement | null {
   const [target, setTarget] = useState<HTMLDivElement | null>(null);
@@ -191,10 +194,9 @@ function PageWithHeader(props: PageListProps | PageDetailProps) {
   const [count, setCount] = useState<number | undefined>(undefined);
   const listChrome = list?.listChrome ?? "hero";
   const bodyGutter = list?.bodyGutter ?? "none";
-  const loadingLabel =
-    typeof title === "string"
-      ? `Loading ${title.toLocaleLowerCase()}${variant === "detail" ? " details" : " records"}…`
-      : "Loading records…";
+  const loadingLabel = isTextTitle(title)
+    ? `Loading ${title.toLocaleLowerCase()}${variant === "detail" ? " details" : " records"}…`
+    : "Loading records…";
   const identity: PageIdentity | null =
     listChrome === "workbench"
       ? { title, eyebrow, entity, count, actions }

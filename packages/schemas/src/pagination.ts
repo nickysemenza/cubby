@@ -82,7 +82,7 @@ export type RelativeDateFilter = z.infer<typeof relativeDateFilter>;
  *
  * A union rather than a bare array so existing SCALAR callers keep working:
  * these `*FilterFields` are spread into the MCP tool inputs via
- * `mcpListInputShape`, and an LLM (or an old link) passing `trade: "drywall"`
+ * `mcpListInputFields`, and an LLM (or an old link) passing `trade: "drywall"`
  * must stay valid. Repos resolve either shape through `eqAny`.
  */
 export const oneOrMany = <T extends z.ZodTypeAny>(schema: T) =>
@@ -158,7 +158,7 @@ export function mcpPageSizeParam(opts?: {
     .describe(`Items per page (default ${def}, max ${max})`);
 }
 
-export function mcpListInputShape(
+export function mcpListInputFields(
   filterFields: Record<string, z.ZodType>,
   opts?: { defaultPageSize?: number; maxPageSize?: number },
 ) {
@@ -224,13 +224,20 @@ export function buildPaginatedResponse<T>(
    */
   sums?: Record<string, number>,
 ) {
+  type PaginatedMeta = {
+    pageIndex: number;
+    pageSize: number;
+    totalCount: number;
+    sums?: Record<string, number>;
+  };
+  const meta: PaginatedMeta = {
+    pageIndex: pagination.pageIndex,
+    pageSize: pagination.pageSize,
+    totalCount: count,
+  };
+  if (sums) meta.sums = sums;
   return {
-    meta: {
-      pageIndex: pagination.pageIndex,
-      pageSize: pagination.pageSize,
-      totalCount: count,
-      ...(sums ? { sums } : {}),
-    },
+    meta,
     items: data,
   };
 }
@@ -313,19 +320,20 @@ export function createPaginatedResponseSchemaWithContext<
 /**
  * Identifies a record for error messages.
  */
-function identifyRecord(
-  record: unknown,
+const recordIdentifierSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+});
+type RecordIdentifier = z.infer<typeof recordIdentifierSchema> & {
+  index: number;
+};
+
+function identifyRecord<TRecord>(
+  record: TRecord,
   index: number,
-): { id?: string; name?: string; index: number } {
-  const result: { id?: string; name?: string; index: number } = { index };
-
-  if (record && typeof record === "object") {
-    const obj = record as Record<string, unknown>;
-    if (typeof obj.id === "string") result.id = obj.id;
-    if (typeof obj.name === "string") result.name = obj.name;
-  }
-
-  return result;
+): RecordIdentifier {
+  const parsed = recordIdentifierSchema.safeParse(record);
+  return parsed.success ? { ...parsed.data, index } : { index };
 }
 
 /**

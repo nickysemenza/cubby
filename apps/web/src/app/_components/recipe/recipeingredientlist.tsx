@@ -27,7 +27,7 @@ import { renderValueOrMissing } from "~/misc/result";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
@@ -49,13 +49,15 @@ import { MissingMeasureCell } from "./RecipeCostingCoverage";
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
 // "absorbed" keeps its established meaning for frying oil; the rest read as
 // what the estimate stands in for.
-const ESTIMATE_AMOUNT_LABELS: Partial<Record<IngredientUsage, string>> = {
+const ESTIMATE_AMOUNT_LABELS = {
+  normal: undefined,
   frying_medium: "absorbed",
   seasoning: "to taste",
   pan_grease: "for the pan",
   garnish: "garnish",
   dredging: "coating",
-};
+  marinade: undefined,
+} satisfies Record<IngredientUsage, string | undefined>;
 
 // Stable empties for the loading state (referenced by cell renderers).
 const EMPTY_ESTIMATED = new Map<string, IngredientUsage>();
@@ -162,310 +164,332 @@ export const RecipeIngredientList: React.FC<{
 
   const columnHelper = createCubbyColumnHelper<ScalingRow>();
 
-  const columns: CubbyColumnDef<ScalingRow>[] = [
-    columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
-      id: "ing name",
-      header: "Ingredient",
-      enableSorting: false,
-      // Fixed width (like the sibling numeric columns, which use w-*) so the
-      // primary column doesn't collapse to "jala…"; the inner divs truncate
-      // long names. `min-w-*` alone isn't honored by this table's layout.
-      // Kept at w-48 (the overflow trim came from the numeric/pill columns,
-      // which had slack — not from the name column, which is truncation-prone).
-      meta: { className: "w-48" },
-      footer: () => <span className="font-semibold">Totals</span>,
-      cell: (info) => {
-        const row = info.row.original;
-        const rawLine = row.rawLine;
-        const name = info.getValue();
-        return (
-          <div className="min-w-0">
-            <div className="truncate" title={name}>
-              {match(row)
-                .with({ type: "ingredient" }, (r) => (
-                  <EntityPreviewLink
-                    displayImage={null}
-                    entity="ingredient"
-                    id={r.ingredient.id}
-                    className={dottedEntityLink}
-                  >
-                    {name}
-                  </EntityPreviewLink>
-                ))
-                .with({ type: "recipe" }, (r) => (
-                  <EntityPreviewLink
-                    displayImage={null}
-                    entity="recipe"
-                    id={r.recipe.id}
-                    className={dottedEntityLink}
-                  >
-                    {name}
-                  </EntityPreviewLink>
-                ))
-                .exhaustive()}
-              <IngredientModifier modifier={row.modifier} />
-            </div>
-            {rawLine && rawLine !== name && (
-              <div
-                className="truncate text-xs text-muted-foreground italic"
-                title={rawLine}
-              >
-                {rawLine}
-              </div>
-            )}
-            {rawLine && (
-              <CopyCorpusButton
-                rawLine={rawLine}
-                name={name}
-                amounts={row.amounts}
-                modifier={row.modifier}
-              />
-            )}
-          </div>
-        );
-      },
-    }),
-    columnHelper.accessor("amounts", {
-      header: "Amounts",
-      enableSorting: false,
-      meta: { numeric: true, className: "w-28" },
-      cell: (info) => {
-        // The shared column array erases heterogeneous TValue to keep every
-        // column interoperable; this accessor's value is still ScalingRow's
-        // concrete amounts field.
-        const amounts: ScalingRow["amounts"] = info.getValue();
-
-        // Unmeasured estimated rows have no amount; flag the estimate here so
-        // the derived weight/calorie values read as guesses, not measurements.
-        const usage = estimatedRows.get(info.row.original.id);
-        if (amounts.length === 0 && usage) {
+  const columns = createCubbyColumnCollection<ScalingRow>((add) => {
+    add(
+      columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
+        id: "ing name",
+        header: "Ingredient",
+        enableSorting: false,
+        // Fixed width (like the sibling numeric columns, which use w-*) so the
+        // primary column doesn't collapse to "jala…"; the inner divs truncate
+        // long names. `min-w-*` alone isn't honored by this table's layout.
+        // Kept at w-48 (the overflow trim came from the numeric/pill columns,
+        // which had slack — not from the name column, which is truncation-prone).
+        meta: { className: "w-48" },
+        footer: () => <span className="font-semibold">Totals</span>,
+        cell: (info) => {
+          const row = info.row.original;
+          const rawLine = row.rawLine;
+          const name = info.getValue();
           return (
-            <Description as="span">
-              {ESTIMATE_AMOUNT_LABELS[usage] ?? "estimated"}
-              <EstimateMarker />
-            </Description>
-          );
-        }
-
-        // Format each amount using tryFormatAmount
-        return (
-          <Stack gap="xs" className="text-sm">
-            {amounts.map((amount, index) => (
-              <div
-                // oxlint-disable-next-line react/no-array-index-key -- Ingredient amounts are a positional display list without stable ids, and equal amounts are valid.
-                key={index}
-              >
-                {tryFormatAmount(amount)}
+            <div className="min-w-0">
+              <div className="truncate" title={name}>
+                {match(row)
+                  .with({ type: "ingredient" }, (r) => (
+                    <EntityPreviewLink
+                      displayImage={null}
+                      entity="ingredient"
+                      id={r.ingredient.id}
+                      className={dottedEntityLink}
+                    >
+                      {name}
+                    </EntityPreviewLink>
+                  ))
+                  .with({ type: "recipe" }, (r) => (
+                    <EntityPreviewLink
+                      displayImage={null}
+                      entity="recipe"
+                      id={r.recipe.id}
+                      className={dottedEntityLink}
+                    >
+                      {name}
+                    </EntityPreviewLink>
+                  ))
+                  .exhaustive()}
+                <IngredientModifier modifier={row.modifier} />
               </div>
-            ))}
-          </Stack>
-        );
-      },
-    }),
+              {rawLine && rawLine !== name && (
+                <div
+                  className="truncate text-xs text-muted-foreground italic"
+                  title={rawLine}
+                >
+                  {rawLine}
+                </div>
+              )}
+              {rawLine && (
+                <CopyCorpusButton
+                  rawLine={rawLine}
+                  name={name}
+                  amounts={row.amounts}
+                  modifier={row.modifier}
+                />
+              )}
+            </div>
+          );
+        },
+      }),
+    );
+    add(
+      columnHelper.accessor("amounts", {
+        header: "Amounts",
+        enableSorting: false,
+        meta: { numeric: true, className: "w-28" },
+        cell: (info) => {
+          // The shared column array erases heterogeneous TValue to keep every
+          // column interoperable; this accessor's value is still ScalingRow's
+          // concrete amounts field.
+          const amounts: ScalingRow["amounts"] = info.getValue();
+
+          // Unmeasured estimated rows have no amount; flag the estimate here so
+          // the derived weight/calorie values read as guesses, not measurements.
+          const usage = estimatedRows.get(info.row.original.id);
+          if (amounts.length === 0 && usage) {
+            return (
+              <Description as="span">
+                {ESTIMATE_AMOUNT_LABELS[usage] ?? "estimated"}
+                <EstimateMarker />
+              </Description>
+            );
+          }
+
+          // Format each amount using tryFormatAmount
+          return (
+            <Stack gap="xs" className="text-sm">
+              {amounts.map((amount, index) => (
+                <div
+                  // oxlint-disable-next-line react/no-array-index-key -- Ingredient amounts are a positional display list without stable ids, and equal amounts are valid.
+                  key={index}
+                >
+                  {tryFormatAmount(amount)}
+                </div>
+              ))}
+            </Stack>
+          );
+        },
+      }),
+    );
     // Numeric columns are accessors (not display) so the sort key is the raw
     // number; the cell still renders the rich Result-aware view. Missing values
     // sink to the bottom in both directions via sortUndefined: "last".
-    columnHelper.accessor(
-      (row) =>
-        row.priceInfo?.price.isOk()
-          ? row.priceInfo.price.value.value
-          : undefined,
-      {
-        id: "dollars",
-        header: "Cost",
-        meta: { numeric: true, className: "w-20" },
-        sortUndefined: "last",
-        footer: () =>
-          totals ? (
-            <div className="text-right font-mono tabular-nums">
-              {formatCurrencyRange(totals.price, totals.priceUpper)}
-            </div>
-          ) : null,
-        cell: (info) => {
-          const row = info.row.original;
-          const measure = row.priceInfo?.price;
-          if (!measure) return null;
-          return (
-            <span>
-              {measure.isOk() ? (
-                tryFormatAmount(measure.value)
-              ) : (
-                <MissingMeasureCell
-                  gap={gapForRow(row)}
-                  currentRecipeShortcode={recipeShortcode ?? ""}
-                  reason={`${measure.error}`}
-                />
-              )}
-              {estimatedRows.has(row.id) && measure.isOk() && (
-                <EstimateMarker />
-              )}
-            </span>
-          );
-        },
-      },
-    ),
-    columnHelper.accessor(
-      (row) =>
-        row.priceInfo?.gram.isOk() ? row.priceInfo.gram.value.value : undefined,
-      {
-        id: "grams",
-        header: "Weight",
-        meta: { numeric: true, className: "w-20" },
-        sortUndefined: "last",
-        footer: () =>
-          totals ? (
-            <div className="text-right font-mono tabular-nums">
-              {formatNumberRange(
-                totals.weight,
-                totals.weightUpper,
-                (g) => `${Math.round(g)} g`,
-              )}
-            </div>
-          ) : null,
-        cell: (info) => {
-          const row = info.row.original;
-          const measure = row.priceInfo?.gram;
-          if (!measure) return null;
-          return (
-            <span>
-              {measure.isOk() ? (
-                tryFormatAmount(measure.value)
-              ) : (
-                <MissingMeasureCell
-                  gap={gapForRow(row)}
-                  currentRecipeShortcode={recipeShortcode ?? ""}
-                  reason={`${measure.error}`}
-                />
-              )}
-              {estimatedRows.has(row.id) && measure.isOk() && (
-                <EstimateMarker />
-              )}
-            </span>
-          );
-        },
-      },
-    ),
-    columnHelper.accessor((row) => row.scalingPct ?? undefined, {
-      id: "scalingPct",
-      header: "Scaling %",
-      meta: { numeric: true, className: "w-20" },
-      sortUndefined: "last",
-      cell: (props) => {
-        const row = props.row.original;
-        const pct = row.scalingPct;
-        if (pct == null) {
-          return <NoneValue />;
-        }
-        return (
-          <button
-            type="button"
-            onClick={() => setPickedBaseId(row.id)}
-            aria-pressed={row.isScalingBase}
-            title="Set as 100% base"
-            className={cn(
-              "cursor-pointer tabular-nums hover:text-primary",
-              row.isScalingBase && "font-semibold text-primary",
-            )}
-          >
-            {formatScalingPct(pct)}
-          </button>
-        );
-      },
-    }),
-    // One mini-column per key nutrient — the table has room and per-nutrient
-    // columns let you scan a single value (e.g. Protein) down the list.
-    ...KEY_NUTRIENTS.map((n) =>
+    add(
       columnHelper.accessor(
-        (row) => {
-          const res = row.priceInfo?.nutrient;
-          if (!res || res.isErr()) return undefined;
-          const value = res.value[n.code];
-          return value != null && value > 0 ? value : undefined;
-        },
+        (row) =>
+          row.priceInfo?.price.isOk()
+            ? row.priceInfo.price.value.value
+            : undefined,
         {
-          id: `nutrient-${n.code}`,
-          header: () => (
-            <div className="flex flex-col leading-tight">
-              <span>{n.label}</span>
-              <span className="text-2xs font-normal text-muted-foreground lowercase">
-                {n.unit}
-              </span>
-            </div>
-          ),
-          meta: { numeric: true, className: "w-14" },
+          id: "dollars",
+          header: "Cost",
+          meta: { numeric: true, className: "w-20" },
           sortUndefined: "last",
-          footer: () => {
-            if (!totals) return null;
-            const value = totals.nutrients[n.code];
-            if (value == null || value <= 0) {
-              return (
-                <div className="text-right text-muted-foreground/40">·</div>
-              );
-            }
-            const fmt = (v: number) =>
-              n.unit === "g" ? v.toFixed(1) : Math.round(v).toString();
-            return (
+          footer: () =>
+            totals ? (
               <div className="text-right font-mono tabular-nums">
-                {formatNumberRange(value, totals.nutrientsUpper?.[n.code], fmt)}
+                {formatCurrencyRange(totals.price, totals.priceUpper)}
               </div>
-            );
-          },
+            ) : null,
           cell: (info) => {
-            const nutrientResult = info.row.original.priceInfo?.nutrient;
-            if (!nutrientResult) return null;
-            return renderValueOrMissing(nutrientResult, (nutrients) => {
-              const value = nutrients[n.code];
-              if (value == null || value <= 0) {
-                return <span className="text-muted-foreground/40">·</span>;
-              }
-              // Whole numbers for kcal/mg; one decimal for grams.
-              return n.unit === "g"
-                ? value.toFixed(1)
-                : Math.round(value).toString();
-            });
+            const row = info.row.original;
+            const measure = row.priceInfo?.price;
+            if (!measure) return null;
+            return (
+              <span>
+                {measure.isOk() ? (
+                  tryFormatAmount(measure.value)
+                ) : (
+                  <MissingMeasureCell
+                    gap={gapForRow(row)}
+                    currentRecipeShortcode={recipeShortcode ?? ""}
+                    reason={`${measure.error}`}
+                  />
+                )}
+                {estimatedRows.has(row.id) && measure.isOk() && (
+                  <EstimateMarker />
+                )}
+              </span>
+            );
           },
         },
       ),
-    ),
-    columnHelper.display({
-      id: "mappings",
-      header: "Unit Mappings",
-      meta: { className: "w-36" },
-      cell: (props) => {
-        if (ingMap === undefined) {
-          return "loading";
-        }
+    );
+    add(
+      columnHelper.accessor(
+        (row) =>
+          row.priceInfo?.gram.isOk()
+            ? row.priceInfo.gram.value.value
+            : undefined,
+        {
+          id: "grams",
+          header: "Weight",
+          meta: { numeric: true, className: "w-20" },
+          sortUndefined: "last",
+          footer: () =>
+            totals ? (
+              <div className="text-right font-mono tabular-nums">
+                {formatNumberRange(
+                  totals.weight,
+                  totals.weightUpper,
+                  (g) => `${Math.round(g)} g`,
+                )}
+              </div>
+            ) : null,
+          cell: (info) => {
+            const row = info.row.original;
+            const measure = row.priceInfo?.gram;
+            if (!measure) return null;
+            return (
+              <span>
+                {measure.isOk() ? (
+                  tryFormatAmount(measure.value)
+                ) : (
+                  <MissingMeasureCell
+                    gap={gapForRow(row)}
+                    currentRecipeShortcode={recipeShortcode ?? ""}
+                    reason={`${measure.error}`}
+                  />
+                )}
+                {estimatedRows.has(row.id) && measure.isOk() && (
+                  <EstimateMarker />
+                )}
+              </span>
+            );
+          },
+        },
+      ),
+    );
+    add(
+      columnHelper.accessor((row) => row.scalingPct ?? undefined, {
+        id: "scalingPct",
+        header: "Scaling %",
+        meta: { numeric: true, className: "w-20" },
+        sortUndefined: "last",
+        cell: (props) => {
+          const row = props.row.original;
+          const pct = row.scalingPct;
+          if (pct == null) {
+            return <NoneValue />;
+          }
+          return (
+            <button
+              type="button"
+              onClick={() => setPickedBaseId(row.id)}
+              aria-pressed={row.isScalingBase}
+              title="Set as 100% base"
+              className={cn(
+                "cursor-pointer tabular-nums hover:text-primary",
+                row.isScalingBase && "font-semibold text-primary",
+              )}
+            >
+              {formatScalingPct(pct)}
+            </button>
+          );
+        },
+      }),
+    );
+    // One mini-column per key nutrient — the table has room and per-nutrient
+    // columns let you scan a single value (e.g. Protein) down the list.
+    for (const n of KEY_NUTRIENTS) {
+      add(
+        columnHelper.accessor(
+          (row) => {
+            const res = row.priceInfo?.nutrient;
+            if (!res || res.isErr()) return undefined;
+            const value = res.value[n.code];
+            return value != null && value > 0 ? value : undefined;
+          },
+          {
+            id: `nutrient-${n.code}`,
+            header: () => (
+              <div className="flex flex-col leading-tight">
+                <span>{n.label}</span>
+                <span className="text-2xs font-normal text-muted-foreground lowercase">
+                  {n.unit}
+                </span>
+              </div>
+            ),
+            meta: { numeric: true, className: "w-14" },
+            sortUndefined: "last",
+            footer: () => {
+              if (!totals) return null;
+              const value = totals.nutrients[n.code];
+              if (value == null || value <= 0) {
+                return (
+                  <div className="text-right text-muted-foreground/40">·</div>
+                );
+              }
+              const fmt = (v: number) =>
+                n.unit === "g" ? v.toFixed(1) : Math.round(v).toString();
+              return (
+                <div className="text-right font-mono tabular-nums">
+                  {formatNumberRange(
+                    value,
+                    totals.nutrientsUpper?.[n.code],
+                    fmt,
+                  )}
+                </div>
+              );
+            },
+            cell: (info) => {
+              const nutrientResult = info.row.original.priceInfo?.nutrient;
+              if (!nutrientResult) return null;
+              return renderValueOrMissing(nutrientResult, (nutrients) => {
+                const value = nutrients[n.code];
+                if (value == null || value <= 0) {
+                  return <span className="text-muted-foreground/40">·</span>;
+                }
+                // Whole numbers for kcal/mg; one decimal for grams.
+                return n.unit === "g"
+                  ? value.toFixed(1)
+                  : Math.round(value).toString();
+              });
+            },
+          },
+        ),
+      );
+    }
+    add(
+      columnHelper.display({
+        id: "mappings",
+        header: "Unit Mappings",
+        meta: { className: "w-36" },
+        cell: (props) => {
+          if (ingMap === undefined) {
+            return "loading";
+          }
 
-        const id = match(props.row.original)
-          .with({ type: "ingredient" }, (row) => row.ingredient.id)
-          .with({ type: "recipe" }, () => undefined)
-          .exhaustive();
+          const id = match(props.row.original)
+            .with({ type: "ingredient" }, (row) => row.ingredient.id)
+            .with({ type: "recipe" }, () => undefined)
+            .exhaustive();
 
-        const mappings = id ? (mappingsMap[id] ?? []) : [];
-        return (
-          <UnitMappingDisplay
-            mappings={mappings}
-            title=""
-            compact
-            showCoverage
-            showUnitPrice
-          />
-        );
-      },
-    }),
-    createActionsColumnBase(columnHelper, (row) =>
-      match(row)
-        .with({ type: "ingredient" }, (row) => ({
-          to: "/ingredients/$shortcode" as const,
-          params: { shortcode: row.ingredient.id },
-        }))
-        .with({ type: "recipe" }, (row) => ({
-          to: "/recipes/$shortcode" as const,
-          params: { shortcode: row.recipe.id },
-        }))
-        .exhaustive(),
-    ),
-  ];
+          const mappings = id ? (mappingsMap[id] ?? []) : [];
+          return (
+            <UnitMappingDisplay
+              mappings={mappings}
+              title=""
+              compact
+              showCoverage
+              showUnitPrice
+            />
+          );
+        },
+      }),
+    );
+    add(
+      createActionsColumnBase(columnHelper, (row) =>
+        match(row)
+          .with({ type: "ingredient" }, (row) => ({
+            to: "/ingredients/$shortcode" as const,
+            params: { shortcode: row.ingredient.id },
+          }))
+          .with({ type: "recipe" }, (row) => ({
+            to: "/recipes/$shortcode" as const,
+            params: { shortcode: row.recipe.id },
+          }))
+          .exhaustive(),
+      ),
+    );
+  });
 
   const layout = useCubbyTableLayout({
     key: "recipe:ingredients",
@@ -491,17 +515,20 @@ export const RecipeIngredientList: React.FC<{
   // Convert totals to RecipeSummaryData format
   const getRecipeSummaryData = (
     t: CalculateTotalsResult,
-  ): RecipeSummaryData => ({
-    price: t.price,
-    ...(t.priceUpper != null ? { priceUpper: t.priceUpper } : {}),
-    weight: t.weight,
-    ...(t.weightUpper != null ? { weightUpper: t.weightUpper } : {}),
-    nutrients: t.nutrients,
-    ...(t.nutrientsUpper ? { nutrientsUpper: t.nutrientsUpper } : {}),
-    totalIngredients: t.totalIngredients,
-    missingByType: t.missingByType,
-    perServing,
-  });
+  ): RecipeSummaryData => {
+    const summary: RecipeSummaryData = {
+      price: t.price,
+      weight: t.weight,
+      nutrients: t.nutrients,
+      totalIngredients: t.totalIngredients,
+      missingByType: t.missingByType,
+      perServing,
+    };
+    if (t.priceUpper != null) summary.priceUpper = t.priceUpper;
+    if (t.weightUpper != null) summary.weightUpper = t.weightUpper;
+    if (t.nutrientsUpper) summary.nutrientsUpper = t.nutrientsUpper;
+    return summary;
+  };
 
   return (
     <div>

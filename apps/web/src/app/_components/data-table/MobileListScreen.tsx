@@ -16,7 +16,7 @@ import { MobileCardView } from "./MobileCardView";
 import { MobileSortSheet } from "./MobileSortSheet";
 import type { CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
-import { mobileListShape } from "./useMobileListModel";
+import { mobileListLayout } from "./useMobileListModel";
 import type { TableDensity } from "./useTableDensity";
 
 interface MobileRefreshControls {
@@ -128,7 +128,7 @@ export function MobileListScreen<TItem extends RowData>({
       />
 
       {isLoading || !hydrated ? (
-        <MobileCardSkeletonList {...mobileListShape(table)} />
+        <MobileCardSkeletonList {...mobileListLayout(table)} />
       ) : error ? (
         <div className="py-6">
           <ErrorDisplay error={error} />

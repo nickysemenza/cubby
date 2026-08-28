@@ -35,6 +35,14 @@ import { buildLocationGalleryData } from "./location-gallery-data";
 import { LocationIcon } from "./location-icons";
 
 type InventoryItem = InventoryItemForTree;
+interface LocationFilterResult {
+  filtered: InfLocation[];
+  matchingIds: Set<string>;
+}
+interface GalleryStats {
+  locationCount: number;
+  itemCount: number;
+}
 
 /** Find all location IDs matching search term (searches location names and product names) */
 function findMatchingIds(
@@ -96,7 +104,7 @@ function buildAncestorMap(
 function filterLocationsByType(
   locations: InfLocation[],
   typeFilter: LocationType | null,
-): { filtered: InfLocation[]; matchingIds: Set<string> } {
+): LocationFilterResult {
   const matchingIds = new Set<string>();
 
   if (!typeFilter) return { filtered: locations, matchingIds };
@@ -132,7 +140,7 @@ function filterLocationsByEmpty(
   locations: InfLocation[],
   emptyFilter: EmptyFilter,
   inventoryByLocation: Map<string, InventoryItem[]>,
-): { filtered: InfLocation[]; matchingIds: Set<string> } {
+): LocationFilterResult {
   const matchingIds = new Set<string>();
 
   if (emptyFilter === "all") return { filtered: locations, matchingIds };
@@ -217,7 +225,7 @@ function findEmptyMatchingIds(
 function calculateStats(
   locations: InfLocation[],
   inventoryByLocation: Map<string, InventoryItem[]>,
-): { locationCount: number; itemCount: number } {
+): GalleryStats {
   let locationCount = 0;
   let itemCount = 0;
 
@@ -288,8 +296,7 @@ export function LocationGallery() {
           }
         }
         if (topEntry) {
-          const locationId = (topEntry.target as HTMLElement).dataset
-            .locationId;
+          const locationId = topEntry.target.getAttribute("data-location-id");
           if (locationId) {
             setActiveLocationId(locationId);
           }

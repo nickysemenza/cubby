@@ -25,6 +25,14 @@ export default literalEntity({
       module: "@cubby/schemas/ingredient",
       export: "ingredientWithFoodOut",
     },
+    mcpList: {
+      module: "@cubby/schemas/ingredient",
+      export: "ingredientListItemMcpEntityOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/ingredient",
+      export: "ingredientWithFoodMcpEntityOut",
+    },
   },
   filters: {
     audit: true,

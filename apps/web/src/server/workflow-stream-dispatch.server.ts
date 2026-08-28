@@ -1,18 +1,30 @@
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import {
-  START_OPERATIONS,
-  type StartOperationIdOfKind,
-} from "~/lib/generated/start-operation-registry.gen";
-import { registeredStartOperationKind } from "~/lib/start-operation-observability";
-import {
-  WORKFLOW_STREAM_HANDLER_LOADERS,
-  type WorkflowStreamHandlerLoader,
-} from "~/server/generated/start-operation-handlers.gen";
+  type StartOperationDefinition,
+  startOperationDefinitionFor,
+} from "~/lib/start-operation-observability";
+import { WORKFLOW_STREAM_HANDLER_LOADERS } from "~/server/generated/start-operation-handlers.gen";
 import type { WorkflowStreamHandler } from "~/server/subscription-domain.server";
 import { workflowStreamErrorResponse } from "~/server/workflow-stream.server";
 
-type WorkflowStreamHandlerLoaders = Partial<
-  Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>
+export interface WorkflowStreamLoaderPort {
+  load: (
+    operation: StartOperationIdOfKind<"subscription">,
+  ) => Promise<WorkflowStreamHandler> | undefined;
+}
+
+const productionWorkflowStreamLoaderPort: WorkflowStreamLoaderPort = {
+  load: (operation) => WORKFLOW_STREAM_HANDLER_LOADERS[operation]?.(),
+};
+
+type WorkflowStreamDefinition = StartOperationDefinition<
+  StartOperationIdOfKind<"subscription">
 >;
+
+const isWorkflowStreamDefinition = (
+  definition: StartOperationDefinition | undefined,
+): definition is WorkflowStreamDefinition =>
+  definition !== undefined && definition.kind === "subscription";
 
 const rejected = (message: string) =>
   workflowStreamErrorResponse({
@@ -33,22 +45,17 @@ const rejected = (message: string) =>
 export async function dispatchWorkflowStream(
   operation: string,
   request: Request,
-  loaders: WorkflowStreamHandlerLoaders = WORKFLOW_STREAM_HANDLER_LOADERS,
+  port: WorkflowStreamLoaderPort = productionWorkflowStreamLoaderPort,
 ): Promise<Response> {
-  if (
-    !Object.hasOwn(START_OPERATIONS, operation) ||
-    registeredStartOperationKind(
-      operation as StartOperationIdOfKind<"subscription">,
-    ) !== "subscription"
-  ) {
+  const definition = startOperationDefinitionFor(operation);
+  if (!isWorkflowStreamDefinition(definition)) {
     return rejected(`${operation} is not a registered workflow stream`);
   }
-  const loader = loaders[operation as StartOperationIdOfKind<"subscription">];
-  if (!loader) {
+  const handler = await port.load(definition.id);
+  if (!handler) {
     return rejected(
       `No workflow stream handler is registered for ${operation}`,
     );
   }
-  const handler: WorkflowStreamHandler = await loader();
   return await handler({ request });
 }

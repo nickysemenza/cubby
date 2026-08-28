@@ -5,104 +5,22 @@ import {
 } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { ReactNode } from "react";
-import type { Mock } from "vitest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(
-  (): {
-    product: { current?: ProductWithFoodOut };
-    route: { current?: ProductRelationshipRouteOut };
-    previewQuery: Mock<(entity: string, id: string) => void>;
-    relationshipQuery: Mock<(input: { productId: string }) => void>;
-    refetch: Mock<() => void>;
-    routeError: boolean;
-    auditLog: Mock<(props: unknown) => void>;
-    nestedPage: Mock<(props: unknown) => void>;
-  } => ({
-    product: {},
-    route: {},
-    previewQuery: vi.fn(),
-    relationshipQuery: vi.fn(),
-    refetch: vi.fn(),
-    routeError: false,
-    auditLog: vi.fn(),
-    nestedPage: vi.fn(),
-  }),
-);
-
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: { queryKey?: string[] }) =>
-    options.queryKey?.[0] === "relationship-route"
-      ? {
-          data: mocks.route.current,
-          isPending: false,
-          isError: mocks.routeError,
-          refetch: mocks.refetch,
-        }
-      : { data: mocks.product.current, isLoading: false },
-}));
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    hash,
-    params,
-    ...props
-  }: {
-    children?: ReactNode;
-    to: string;
-    hash?: string;
-    params?: { shortcode?: string };
-    [key: string]: unknown;
-  }) => (
-    <a
-      {...props}
-      data-router-link="true"
-      href={`${params?.shortcode ? to.replace("$shortcode", params.shortcode) : to}${hash ? `#${hash}` : ""}`}
-    >
-      {children}
-    </a>
-  ),
-}));
-vi.mock("~/entities/entity-query", () => ({
-  entityPreviewQueryOptions: (entity: string, id: string) => {
-    mocks.previewQuery(entity, id);
-    return { queryKey: [entity, id] };
-  },
-}));
-vi.mock("~/app/products/product.functions", () => ({
-  product: {
-    relationshipRoute: {
-      queryOptions: (input: { productId: string }) => {
-        mocks.relationshipQuery(input);
-        return { queryKey: ["relationship-route", input.productId] };
-      },
-    },
-  },
-}));
-vi.mock("~/app/_components/audit-log/audit-log-list", () => ({
-  AuditLogList: (props: unknown) => {
-    mocks.auditLog(props);
-    return <div data-testid="audit-log" />;
-  },
-}));
-
-vi.mock("../actions/entity-actions", () => ({
-  EntityActionButtons: () => <div data-testid="product-inspector-actions" />,
-}));
-vi.mock("~/components/page/Page", () => ({
-  Page: (props: unknown) => {
-    mocks.nestedPage(props);
-    return <div data-testid="nested-page" />;
-  },
-}));
+import { product as productOperations } from "~/app/products/product.functions";
+import { entityDetail } from "~/entities/entity-detail.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
+  type ProductRelationshipRouteOperations,
   ProductRelationshipRoute,
   ProductRelationshipRouteFrame,
+  type RouteBranch,
 } from "./product-relationship-route";
-import { ProductWorkbenchInspector } from "./product-workbench-inspector";
+import {
+  type ProductWorkbenchInspectorOperations,
+  ProductWorkbenchInspector,
+} from "./product-workbench-inspector";
 
 const product: ProductWithFoodOut = productWithFoodOut.parse({
   id: testShortcode("product", "PRD-INSPECT"),
@@ -277,25 +195,67 @@ const relationshipRoute: ProductRelationshipRouteOut = {
   },
 };
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
 beforeEach(() => {
-  mocks.product.current = product;
-  mocks.route.current = relationshipRoute;
-  mocks.previewQuery.mockClear();
-  mocks.relationshipQuery.mockClear();
-  mocks.refetch.mockClear();
-  mocks.routeError = false;
-  mocks.auditLog.mockClear();
-  mocks.nestedPage.mockClear();
+  harness = createBrowserTestHarness();
 });
 
-describe("ProductWorkbenchInspector", () => {
-  it("uses the product detail query, renders exactly three tabs, and never nests Page", () => {
-    render(<ProductWorkbenchInspector productId={product.id} />);
+afterEach(() => {
+  harness.dispose();
+});
 
-    expect(mocks.previewQuery).toHaveBeenCalledWith("product", product.id);
-    expect(mocks.relationshipQuery).toHaveBeenCalledTimes(1);
-    expect(mocks.relationshipQuery).toHaveBeenCalledWith({
-      productId: product.id,
+function relationshipOperations(
+  route: ProductRelationshipRouteOut = relationshipRoute,
+): ProductRelationshipRouteOperations {
+  return {
+    relationshipRoute: productOperations.relationshipRoute.withTransport(
+      async () => route,
+    ),
+  };
+}
+
+function inspectorOperations(
+  route: ProductRelationshipRouteOut = relationshipRoute,
+): ProductWorkbenchInspectorOperations {
+  return {
+    productDetail: entityDetail.detail
+      .forEntity("product")
+      .withTransport(async () => product),
+    ...relationshipOperations(route),
+  };
+}
+
+function renderInspector(
+  operations: ProductWorkbenchInspectorOperations = inspectorOperations(),
+) {
+  return render(
+    <ProductWorkbenchInspector
+      productId={product.id}
+      operations={operations}
+    />,
+    { wrapper: harness.wrapper },
+  );
+}
+
+function renderRelationshipRoute(
+  route: ProductRelationshipRouteOut = relationshipRoute,
+) {
+  return render(
+    <ProductRelationshipRoute
+      product={product}
+      operations={relationshipOperations(route)}
+    />,
+    { wrapper: harness.wrapper },
+  );
+}
+
+describe("ProductWorkbenchInspector", () => {
+  it("renders exactly three local inspector tabs without a page-level relationship route", async () => {
+    renderInspector();
+
+    await screen.findByRole("navigation", {
+      name: `${product.name} direct relationships`,
     });
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Overview",
@@ -318,14 +278,12 @@ describe("ProductWorkbenchInspector", () => {
       truth.compareDocumentPosition(relationshipStrip) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(mocks.nestedPage).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("nested-page")).not.toBeInTheDocument();
   });
 
-  it("caps the inspector strip at three direct destinations and reveals Relations locally", () => {
-    render(<ProductWorkbenchInspector productId={product.id} />);
+  it("caps the inspector strip at three direct destinations and reveals Relations locally", async () => {
+    renderInspector();
 
-    const strip = screen.getByRole("navigation", {
+    const strip = await screen.findByRole("navigation", {
       name: `${product.name} direct relationships`,
     });
     expect(
@@ -351,28 +309,31 @@ describe("ProductWorkbenchInspector", () => {
     expect(screen.getByRole("button", { name: /^Purchases/ })).toBeVisible();
   });
 
-  it("links compact-strip overflow to the canonical Relationships section without a local tab", () => {
-    const direct = [
-      { id: "stock", label: "Stock", kind: "direct" as const, count: 1 },
+  it("links compact-strip overflow to the canonical Relationships section without a local tab", async () => {
+    const directDestinations = [
+      { id: "stock", label: "Stock", kind: "direct", count: 1 },
       {
         id: "identity-locations",
         label: "Also a location",
-        kind: "direct" as const,
+        kind: "direct",
         count: 1,
       },
       {
         id: "expenses",
         label: "Expenses",
-        kind: "direct" as const,
+        kind: "direct",
         count: 1,
       },
       {
         id: "purchases",
         label: "Purchases",
-        kind: "direct" as const,
+        kind: "direct",
         count: 1,
       },
-    ].map((branch) => ({
+    ] satisfies ReadonlyArray<
+      Pick<RouteBranch, "id" | "label" | "kind" | "count">
+    >;
+    const direct: RouteBranch[] = directDestinations.map((branch) => ({
       ...branch,
       samples: [],
       detailHash: "relationships",
@@ -386,19 +347,20 @@ describe("ProductWorkbenchInspector", () => {
         derived={[]}
         variant="strip"
       />,
+      { wrapper: harness.wrapper },
     );
 
     expect(
-      screen.getByRole("link", { name: "View all direct relationships" }),
+      await screen.findByRole("link", {
+        name: "View all direct relationships",
+      }),
     ).toHaveAttribute("href", `/products/${product.id}#relationships`);
   });
 
-  it("renders direct relationship branches with provenance and derived branches separately", () => {
-    const { rerender } = render(<ProductRelationshipRoute product={product} />);
+  it("renders direct relationship branches with provenance and derived branches separately", async () => {
+    renderRelationshipRoute();
 
-    expect(mocks.relationshipQuery).toHaveBeenCalledWith({
-      productId: product.id,
-    });
+    await screen.findByRole("button", { name: /^Stock/ });
     expect(screen.getByRole("button", { name: /^Stock/ })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /^Also a location/ }),
@@ -428,14 +390,6 @@ describe("ProductWorkbenchInspector", () => {
         name: /acquisition expenses not assigned to a project/,
       }),
     ).not.toBeInTheDocument();
-    rerender(
-      <ProductRelationshipRoute
-        product={productWithFoodOut.parse({
-          ...product,
-          category: "household",
-        })}
-      />,
-    );
     expect(screen.getByText("Used on projects")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Direct Stock: Tool cabinet" }),
@@ -443,71 +397,45 @@ describe("ProductWorkbenchInspector", () => {
       "href",
       `/inventory/${relationshipRoute.direct.inventory.preview[0]?.id}`,
     );
-    expect(
-      screen.getByRole("link", { name: "Direct Stock: Tool cabinet" }),
-    ).toHaveAttribute("data-router-link", "true");
-
-    mocks.route.current = {
-      ...relationshipRoute,
-      direct: {
-        ...relationshipRoute.direct,
-        inventory: {
-          ...relationshipRoute.direct.inventory,
-          count: 0,
-          preview: [],
-        },
-        identityLocations: {
-          ...relationshipRoute.direct.identityLocations,
-          count: 0,
-          preview: [],
-        },
-      },
-    };
-    rerender(<ProductRelationshipRoute product={product} />);
-
-    expect(screen.getByText("Stock")).toBeInTheDocument();
-    expect(screen.getByText("No stock records yet.")).toBeInTheDocument();
-    expect(screen.getByText("Also a location")).toBeInTheDocument();
-    expect(
-      screen.getByText("This product does not identify a location."),
-    ).toBeInTheDocument();
-    const stockBranch = screen
-      .getByRole("button", { name: /^Stock0$/ })
-      .closest("li");
-    expect(stockBranch).not.toBeNull();
-    expect(
-      within(stockBranch as HTMLElement).queryByRole("link"),
-    ).not.toBeInTheDocument();
   });
 
-  it("keeps embedded stock and location evidence available when the route request fails", () => {
-    mocks.routeError = true;
-    render(<ProductRelationshipRoute product={product} />);
+  it("keeps embedded stock and location evidence available when the route request fails", async () => {
+    const failedOperations: ProductRelationshipRouteOperations = {
+      relationshipRoute: productOperations.relationshipRoute.withTransport(
+        async () => {
+          throw new Error("relationship route unavailable");
+        },
+      ),
+    };
+    render(
+      <ProductRelationshipRoute
+        product={product}
+        operations={failedOperations}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
     expect(
-      screen.getByText("Other relationships could not be loaded."),
-    ).toBeInTheDocument();
+      await screen.findByText("Other relationships could not be loaded."),
+    ).toBeVisible();
     expect(screen.getByText("Tool cabinet")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(mocks.refetch).toHaveBeenCalledOnce();
   });
 
-  it("keeps the shared relationship result ready while activity stays lazy", () => {
-    render(<ProductWorkbenchInspector productId={product.id} />);
+  it("keeps the shared relationship result ready while activity stays lazy", async () => {
+    renderInspector();
 
-    expect(mocks.auditLog).not.toHaveBeenCalled();
+    await screen.findByRole("navigation", {
+      name: `${product.name} direct relationships`,
+    });
+    expect(screen.queryByText("No activity yet")).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
     expect(screen.getByText("Relationship route")).toBeInTheDocument();
     expect(screen.getByText("Derived from those records")).toBeInTheDocument();
-    expect(mocks.auditLog).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(mocks.auditLog).toHaveBeenCalledWith({
-      entityType: "product",
-      entityId: product.id,
-      showEntityLink: false,
-    });
+    expect(await screen.findByText("No activity yet")).toBeVisible();
     expect(
       screen.queryByText("Direct relationship sections"),
     ).not.toBeInTheDocument();

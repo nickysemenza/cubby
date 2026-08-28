@@ -15,7 +15,10 @@
  */
 
 import type { EntityMissingEmbedding } from "@cubby/schemas/problems";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import {
+  searchableEntities,
+  type SearchableEntity,
+} from "@cubby/schemas/search";
 import type { SQL } from "drizzle-orm";
 import { and, eq, exists, isNull, notExists, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
@@ -211,10 +214,12 @@ const embeddingSources = {
   },
 } satisfies Record<SearchableEntity, EmbeddingSource>;
 
-const sourceEntries = Object.entries(embeddingSources) as [
-  SearchableEntity,
-  EmbeddingSource,
-][];
+const sourceEntries = searchableEntities.map(
+  (entity): [SearchableEntity, EmbeddingSource] => [
+    entity,
+    embeddingSources[entity],
+  ],
+);
 
 /**
  * "This live row has no embedding under the *current* provider/model/dimensions."

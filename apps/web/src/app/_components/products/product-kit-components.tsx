@@ -28,7 +28,7 @@ import {
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -63,6 +63,23 @@ const SEARCH_PAGE_SIZE = 50;
 const TABLE_STATE = {
   pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
 } as const;
+
+/** Remote descriptors used by the kit composition and its add dialog. */
+export interface ProductKitComponentsOperations {
+  components: typeof productOperations.components;
+  kitMembership: typeof productOperations.kitMembership;
+  search: typeof productOperations.search;
+  attachComponents: typeof productOperations.attachComponents;
+  detachComponents: typeof productOperations.detachComponents;
+}
+
+const productionOperations: ProductKitComponentsOperations = {
+  components: productOperations.components,
+  kitMembership: productOperations.kitMembership,
+  search: productOperations.search,
+  attachComponents: productOperations.attachComponents,
+  detachComponents: productOperations.detachComponents,
+};
 
 type ProductRow = {
   id: string;
@@ -105,6 +122,12 @@ function componentStockSummary(
 }
 type PickerRow = ProductPickerItemOut & { images: ProductRow["images"] };
 
+function isRowSelectionUpdater(
+  updater: Updater<RowSelectionState>,
+): updater is (previous: RowSelectionState) => RowSelectionState {
+  return typeof updater === "function";
+}
+
 function imagesFor(id: string, name: string, url: string | null) {
   return url ? [{ id: `cover:${id}`, url, filename: name }] : [];
 }
@@ -141,35 +164,49 @@ function KitTable({
     bulkActions,
   });
   const helper = useMemo(() => createCubbyColumnHelper<ProductRow>(), []);
-  const columns = useMemo<CubbyColumnDef<ProductRow>[]>(
-    () => [
-      ...selection.selectColumns,
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", {
-        header: nameHeader,
-      }),
-      helper.accessor((row) => row.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", priority: 10, label: "Maker" },
-        },
-        cell: (info) =>
-          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
-      }),
-      helper.accessor((row) => row.quantity, {
-        id: "quantity",
-        header: "Quantity",
-        meta: {
-          className: "w-24",
-          numeric: true,
-          mobile: { slot: "meta", priority: 20, label: "Qty" },
-        },
-        cell: (info) => `×${info.getValue()}`,
-      }),
-      ...(showOnHand
-        ? [
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ProductRow>((add) => {
+        selection.selectColumns.forEach(add);
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(
+          createNameColumn(helper, "product", "name", {
+            header: nameHeader,
+          }),
+        );
+        add(
+          helper.accessor((row) => row.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", priority: 10, label: "Maker" },
+            },
+            cell: (info) =>
+              isUnspecifiedManufacturer(info.getValue())
+                ? "—"
+                : info.getValue(),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.quantity, {
+            id: "quantity",
+            header: "Quantity",
+            meta: {
+              className: "w-24",
+              numeric: true,
+              mobile: { slot: "meta", priority: 20, label: "Qty" },
+            },
+            cell: (info) => `×${info.getValue()}`,
+          }),
+        );
+        if (showOnHand) {
+          add(
             helper.accessor((row) => row.onHandUnits, {
               id: "onHandUnits",
               header: "On hand",
@@ -182,19 +219,19 @@ function KitTable({
               // zero is a real, load-bearing answer: that part is unaccounted.
               cell: (info) => info.getValue() ?? "—",
             }),
-          ]
-        : []),
-      ...(showPrice
-        ? [
+          );
+        }
+        if (showPrice) {
+          add(
             createCurrencyColumn(helper, "price", {
               header: "Price",
               className: "w-32",
               mobile: { slot: "meta", priority: 30 },
             }),
-          ]
-        : []),
-      createActionsColumn(helper, "product", { extraActions: action }),
-    ],
+          );
+        }
+        add(createActionsColumn(helper, "product", { extraActions: action }));
+      }),
     [
       action,
       helper,
@@ -234,11 +271,13 @@ function AddComponentsDialog({
   onOpenChange,
   parentProductId,
   attachedIds,
+  operations,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   parentProductId: string;
   attachedIds: Set<string>;
+  operations: ProductKitComponentsOperations;
 }) {
   const [selected, setSelected] = useState<Map<ProductShortcode, number>>(
     new Map(),
@@ -247,7 +286,7 @@ function AddComponentsDialog({
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
   const searchQuery = useQuery({
-    ...productOperations.search.queryOptions({
+    ...operations.search.queryOptions({
       filters: { nameFilter: search.trim() || undefined },
       pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -275,7 +314,7 @@ function AddComponentsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: productOperations.attachComponents.mutationOptions,
+    mutationFn: operations.attachComponents.mutationOptions,
     success: (result) =>
       `Added ${result.changed} component${result.changed === 1 ? "" : "s"}`,
     onSuccess: () => resetAndClose(false),
@@ -286,8 +325,9 @@ function AddComponentsDialog({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isRowSelectionUpdater(updater)
+      ? updater(rowSelection)
+      : updater;
     setSelected((previous) => {
       const quantities = new Map(previous);
       for (const id of Object.keys(rowSelection)) {
@@ -304,64 +344,78 @@ function AddComponentsDialog({
   };
 
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
-  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
-    () => [
-      buildSelectColumn<PickerRow>(),
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", { header: "Product" }),
-      helper.accessor((row) => row.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", label: "Maker" },
-        },
-        cell: (info) =>
-          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<PickerRow>((add) => {
+        add(buildSelectColumn<PickerRow>());
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(createNameColumn(helper, "product", "name", { header: "Product" }));
+        add(
+          helper.accessor((row) => row.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", label: "Maker" },
+            },
+            cell: (info) =>
+              isUnspecifiedManufacturer(info.getValue())
+                ? "—"
+                : info.getValue(),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "price", {
+            header: "Price",
+            className: "w-28",
+            mobile: { slot: "meta", priority: 20 },
+          }),
+        );
+        add(
+          helper.accessor((row) => selected.get(row.id), {
+            id: "quantity",
+            header: "Quantity",
+            enableSorting: false,
+            meta: {
+              className: "w-24",
+              numeric: true,
+              mobile: {
+                slot: "meta",
+                priority: 30,
+                interactive: true,
+                label: "Qty",
+              },
+            },
+            cell: (info) => {
+              const quantity = selected.get(info.row.original.id);
+              return quantity === undefined ? null : (
+                <Input
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={quantity}
+                  aria-label={`Quantity of ${info.row.original.name}`}
+                  className="h-7 w-20"
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const next = Math.max(1, Number(event.target.value) || 1);
+                    setSelected((previous) => {
+                      const quantities = new Map(previous);
+                      quantities.set(info.row.original.id, next);
+                      return quantities;
+                    });
+                  }}
+                />
+              );
+            },
+          }),
+        );
       }),
-      createCurrencyColumn(helper, "price", {
-        header: "Price",
-        className: "w-28",
-        mobile: { slot: "meta", priority: 20 },
-      }),
-      helper.accessor((row) => selected.get(row.id), {
-        id: "quantity",
-        header: "Quantity",
-        enableSorting: false,
-        meta: {
-          className: "w-24",
-          numeric: true,
-          mobile: {
-            slot: "meta",
-            priority: 30,
-            interactive: true,
-            label: "Qty",
-          },
-        },
-        cell: (info) => {
-          const quantity = selected.get(info.row.original.id);
-          return quantity === undefined ? null : (
-            <Input
-              type="number"
-              min={1}
-              max={9999}
-              value={quantity}
-              aria-label={`Quantity of ${info.row.original.name}`}
-              className="h-7 w-20"
-              onClick={(event) => event.stopPropagation()}
-              onChange={(event) => {
-                const next = Math.max(1, Number(event.target.value) || 1);
-                setSelected((previous) => {
-                  const quantities = new Map(previous);
-                  quantities.set(info.row.original.id, next);
-                  return quantities;
-                });
-              }}
-            />
-          );
-        },
-      }),
-    ],
     [helper, selected],
   );
   const layout = useCubbyTableLayout({
@@ -440,13 +494,19 @@ function AddComponentsDialog({
   );
 }
 
-export function ProductKitComponents({ productId }: { productId: string }) {
+export function ProductKitComponents({
+  productId,
+  operations = productionOperations,
+}: {
+  productId: string;
+  operations?: ProductKitComponentsOperations;
+}) {
   const [addOpen, setAddOpen] = useState(false);
   const componentsQuery = useQuery(
-    productOperations.components.queryOptions({ parentProductId: productId }),
+    operations.components.queryOptions({ parentProductId: productId }),
   );
   const membershipQuery = useQuery(
-    productOperations.kitMembership.queryOptions({ productId }),
+    operations.kitMembership.queryOptions({ productId }),
   );
   const components = componentsQuery.data ?? EMPTY_COMPONENTS;
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
@@ -489,11 +549,11 @@ export function ProductKitComponents({ productId }: { productId: string }) {
   );
 
   const detachComponent = useActionMutation({
-    mutationFn: productOperations.detachComponents.mutationOptions,
+    mutationFn: operations.detachComponents.mutationOptions,
     success: "Component removed",
   });
   const detachMembership = useActionMutation({
-    mutationFn: productOperations.detachComponents.mutationOptions,
+    mutationFn: operations.detachComponents.mutationOptions,
     success: "Removed from kit",
   });
   // The one direction that is already a bulk operation:
@@ -621,6 +681,7 @@ export function ProductKitComponents({ productId }: { productId: string }) {
         onOpenChange={setAddOpen}
         parentProductId={productId}
         attachedIds={new Set(components.map((item) => item.productId))}
+        operations={operations}
       />
     </Stack>
   );

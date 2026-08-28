@@ -1,9 +1,4 @@
-import {
-  inventoryFiltersSchema,
-  inventoryListItemOut,
-  inventorySortableFields,
-  inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/inventory";
+import { inventorySortableFields } from "@cubby/schemas/inventory";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
@@ -25,9 +20,6 @@ const locationShortcodes = bindShortcodeResolver("location");
 
 export const inventoryEntityAdapter = defineEntityAdapter({
   entity: "inventory",
-  filters: inventoryFiltersSchema,
-  detailOutput: inventoryWithLocationAndProductOut,
-  listOutput: inventoryListItemOut,
   sort: { fields: inventorySortableFields, default: "createdAt" },
   lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
   repository: {

@@ -11,7 +11,7 @@ export function registerIngredientTools(server: McpServer) {
     name: "resolve_ingredients",
     description:
       "Batch-resolve a list of ingredient names to IDs in one call: each name is matched to an existing ingredient (case-insensitive, including aliases) or created if missing.",
-    inputSchema: ingredientResolvableNamesInput.shape,
+    inputSchema: ingredientResolvableNamesInput,
     outputSchema: ingredientResolveOrCreateResponseOut,
     annotations: WRITE_CLOSED,
     call: (caller, params) =>

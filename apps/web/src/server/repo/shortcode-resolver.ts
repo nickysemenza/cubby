@@ -18,6 +18,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -193,7 +194,7 @@ export async function resolveFilterIds<E extends ShortcodeEntity>(
   value: string | readonly string[] | undefined,
 ): Promise<EntityId<E>[] | undefined> {
   if (value === undefined) return undefined;
-  const codes = typeof value === "string" ? [value] : value;
+  const codes = Array.isArray(value) ? value : [value];
   if (codes.length === 0) return undefined;
   return resolveAllPresent(db, entity, codes);
 }
@@ -323,10 +324,11 @@ export async function lookupEntityLabels(
         .from(table)
         .where(inArray(table.id, [...ids]));
       for (const row of rows) {
-        if (typeof row.name === "string") {
+        const parsedName = z.string().safeParse(row.name);
+        if (parsedName.success) {
           names.set(
             entityRefKey(entity, parseEntityId(entity, row.id)),
-            row.name,
+            parsedName.data,
           );
         }
       }

@@ -1,53 +1,76 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  accept: vi.fn(),
-  dismiss: vi.fn(),
-}));
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { recommendations } from "~/lib/recommendations.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
 
-vi.mock("@tanstack/react-query", () => ({
-  mutationOptions: (options: unknown) => options,
-  queryOptions: (options: unknown) => options,
-  useQuery: () => ({
-    data: {
-      status: "ready",
-      currentTags: ["existing"],
-      proposals: [{ tag: "workshop", supportingProductCount: 3 }],
-    },
-    isLoading: false,
-    isError: false,
-  }),
-  useMutation: vi
-    .fn()
-    .mockReturnValueOnce({ isPending: false, mutate: mocks.accept })
-    .mockReturnValueOnce({ isPending: false, mutate: mocks.dismiss }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
+import {
+  productionRecommendationWorkbenchOperations,
+  RecommendationWorkbench,
+} from "./recommendation-workbench";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-vi.mock("~/app/problems/components/tier2-fixes", () => ({
-  DuplicateProductMergeFix: () => null,
-}));
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
 
-import { RecommendationWorkbench } from "./recommendation-workbench";
+afterEach(() => {
+  harness.dispose();
+});
 
 describe("RecommendationWorkbench tag propagation", () => {
-  it("does not mutate tags until the proposal is explicitly accepted", () => {
+  it("does not mutate tags until the proposal is explicitly accepted", async () => {
     const sourceId = testShortcode("product", "PRD-TAGS");
+    const updates: Array<
+      Extract<
+        EntityBrowserMutationInput,
+        { action: "update"; entity: "product" }
+      >
+    > = [];
+    const productUpdateMutationOptions = entityMutationOptionsFactory(
+      "product",
+      "update",
+      {
+        execute: async (command) => {
+          if (command.action !== "update" || command.entity !== "product") {
+            throw new Error("Expected a product update command");
+          }
+          updates.push(command);
+          return new Promise<never>(() => undefined);
+        },
+      },
+    );
+    const operations = {
+      ...productionRecommendationWorkbenchOperations,
+      tagPropagation: recommendations.tagPropagation.withTransport(
+        async () => ({
+          status: "ready",
+          currentTags: ["existing"],
+          proposals: [{ tag: "workshop", supportingProductCount: 3 }],
+        }),
+      ),
+      productUpdateMutationOptions,
+    };
+
     render(
-      <RecommendationWorkbench sourceId={sourceId} kind="tag-propagation" />,
+      <RecommendationWorkbench
+        sourceId={sourceId}
+        kind="tag-propagation"
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(mocks.accept).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    const accept = await screen.findByRole("button", { name: "Accept" });
+    expect(updates).toEqual([]);
+    fireEvent.click(accept);
 
-    expect(mocks.accept).toHaveBeenCalledWith({
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0]).toMatchObject({
       id: sourceId,
       data: { tags: ["existing", "workshop"] },
     });

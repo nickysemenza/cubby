@@ -5,74 +5,111 @@
  * refine the originating query, compare evidence, select one record, and only
  * then hand that choice back to the agent. It never attaches the food itself.
  */
-import { App } from "@modelcontextprotocol/ext-apps";
-import "./app.css";
+import type { App } from "@modelcontextprotocol/ext-apps";
+import { z } from "zod/mini";
 import { readCubbyOrigin } from "./origin";
 
 /**
  * The subset of `usdaFoodMcpListOut` (packages/schemas/src/mcp.ts) this app
  * renders — not the full wire shape. Widen it when the UI needs more.
  */
-type Food = {
-  fdc_id: number;
-  description: string | null;
-  data_type: string | null;
-  brand_owner: string | null;
-  brand_name: string | null;
-  nutrientsPer100: Record<string, number> | null;
-  linkedProducts: Array<{ name: string }>;
-};
+const foodSchema = z.object({
+  fdc_id: z.number(),
+  description: z.nullable(z.string()),
+  data_type: z.nullable(z.string()),
+  brand_owner: z.nullable(z.string()),
+  brand_name: z.nullable(z.string()),
+  nutrientsPer100: z.nullable(z.record(z.string(), z.number())),
+  linkedProducts: z.array(z.object({ name: z.string() })),
+});
+type Food = z.infer<typeof foodSchema>;
 
-type SearchResult = {
-  meta?: { totalCount?: number; pageSize?: number };
-  items: Food[];
-};
+const searchResultSchema = z.object({
+  meta: z.optional(
+    z.object({
+      totalCount: z.optional(z.number()),
+      pageSize: z.optional(z.number()),
+    }),
+  ),
+  items: z.array(foodSchema),
+});
+type SearchResult = z.infer<typeof searchResultSchema>;
 
-type SearchInput = {
-  query?: string;
-  dataType?: string;
-  pageIndex?: number;
-  pageSize?: number;
-};
+const searchInputSchema = z.object({
+  query: z.optional(z.string()),
+  dataType: z.optional(z.string()),
+  pageIndex: z.optional(z.number()),
+  pageSize: z.optional(z.number()),
+});
+type SearchInput = z.infer<typeof searchInputSchema>;
 
-const TYPES: Record<string, { label: string; explanation: string }> = {
-  sr_legacy_food: {
-    label: "SR Legacy",
-    explanation: "Historical reference data from the final SR release.",
-  },
-  survey_fndds_food: {
-    label: "Survey",
-    explanation: "Food represented as people typically report eating it.",
-  },
-  foundation_food: {
-    label: "Foundation",
-    explanation: "Analytically sampled basic or minimally processed food.",
-  },
-  branded_food: {
-    label: "Branded",
-    explanation: "A specific manufacturer's label-based product record.",
-  },
-  experimental_food: {
-    label: "Experimental",
-    explanation: "A research record rather than an ordinary food choice.",
-  },
-  agricultural_acquisition: {
-    label: "Agricultural",
-    explanation: "An acquisition record from the Foundation sampling chain.",
-  },
-  market_acquisition: {
-    label: "Market",
-    explanation: "A market acquisition record used for sampling provenance.",
-  },
-  sample_food: {
-    label: "Sample",
-    explanation: "A sampling record rather than an ordinary food choice.",
-  },
-  sub_sample_food: {
-    label: "Sub-sample",
-    explanation: "A sampling component rather than an ordinary food choice.",
-  },
-};
+type FoodTypeDescription = { label: string; explanation: string };
+
+const TYPES = new Map<string, FoodTypeDescription>([
+  [
+    "sr_legacy_food",
+    {
+      label: "SR Legacy",
+      explanation: "Historical reference data from the final SR release.",
+    },
+  ],
+  [
+    "survey_fndds_food",
+    {
+      label: "Survey",
+      explanation: "Food represented as people typically report eating it.",
+    },
+  ],
+  [
+    "foundation_food",
+    {
+      label: "Foundation",
+      explanation: "Analytically sampled basic or minimally processed food.",
+    },
+  ],
+  [
+    "branded_food",
+    {
+      label: "Branded",
+      explanation: "A specific manufacturer's label-based product record.",
+    },
+  ],
+  [
+    "experimental_food",
+    {
+      label: "Experimental",
+      explanation: "A research record rather than an ordinary food choice.",
+    },
+  ],
+  [
+    "agricultural_acquisition",
+    {
+      label: "Agricultural",
+      explanation: "An acquisition record from the Foundation sampling chain.",
+    },
+  ],
+  [
+    "market_acquisition",
+    {
+      label: "Market",
+      explanation: "A market acquisition record used for sampling provenance.",
+    },
+  ],
+  [
+    "sample_food",
+    {
+      label: "Sample",
+      explanation: "A sampling record rather than an ordinary food choice.",
+    },
+  ],
+  [
+    "sub_sample_food",
+    {
+      label: "Sub-sample",
+      explanation: "A sampling component rather than an ordinary food choice.",
+    },
+  ],
+]);
 
 const FILTER_TYPES = [
   ["", "All food types"],
@@ -96,7 +133,19 @@ const MACROS: Array<[code: string, label: string, unit: string]> = [
   ["205", "carbs", "g"],
 ];
 
-let selected: Food | null = null;
+export type UsdaPickerApp = Pick<
+  App,
+  | "callServerTool"
+  | "connect"
+  | "openLink"
+  | "sendMessage"
+  | "setupSizeChangedNotifications"
+  | "updateModelContext"
+  | "ontoolinput"
+  | "ontoolresult"
+>;
+
+type PickerState = { selected: Food | null };
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -109,7 +158,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function openCubby(app: App, path: string): void {
+function openCubby(app: UsdaPickerApp, path: string): void {
   const origin = readCubbyOrigin(document);
   if (origin) void app.openLink({ url: `${origin}${path}` });
 }
@@ -135,7 +184,11 @@ function nestedButton(
   });
 }
 
-function cubbyLink(app: App, label: string, path: string): HTMLButtonElement {
+function cubbyLink(
+  app: UsdaPickerApp,
+  label: string,
+  path: string,
+): HTMLButtonElement {
   return button("btn-quiet", label, () => openCubby(app, path));
 }
 
@@ -153,15 +206,17 @@ function footer(...children: Node[]): HTMLElement {
   return root;
 }
 
-function toolPayload<T>(result: {
+function toolPayload(result: {
   structuredContent?: unknown;
   content?: Array<{ type: string; text?: string }>;
-}): T | null {
-  if (result.structuredContent) return result.structuredContent as T;
+}): SearchResult | null {
+  const structured = searchResultSchema.safeParse(result.structuredContent);
+  if (structured.success) return structured.data;
   const text = result.content?.find((content) => content.type === "text")?.text;
   if (!text) return null;
   try {
-    return JSON.parse(text) as T;
+    const parsed = searchResultSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -178,7 +233,7 @@ function typeInfo(dataType: string | null) {
     return { label: "Unknown", explanation: "USDA data type not provided." };
   }
   return (
-    TYPES[dataType] ?? {
+    TYPES.get(dataType) ?? {
       label: dataType,
       explanation: "USDA source classification.",
     }
@@ -193,7 +248,7 @@ function normalized(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
 }
 
-export function matchEvidence(
+function matchEvidence(
   query: string,
   description: string | null,
 ): "Exact name" | "Starts with search" | null {
@@ -226,9 +281,10 @@ function renderMacros(food: Food): HTMLElement | null {
 }
 
 function renderSearchControls(
-  app: App,
+  app: UsdaPickerApp,
   result: SearchResult,
   input: SearchInput | null,
+  state: PickerState,
 ): HTMLElement {
   const query = input?.query?.trim() ?? "";
   const wrap = el("div", "search-block");
@@ -283,20 +339,20 @@ function renderSearchControls(
       query: nextQuery,
       pageIndex: 0,
       pageSize: input?.pageSize ?? result.meta?.pageSize ?? 25,
-      ...(select.value ? { dataType: select.value } : {}),
     };
+    if (select.value) nextInput.dataType = select.value;
 
     void app
       .callServerTool({ name: "search_usda_foods", arguments: nextInput })
       .then((toolResult) => {
-        const next = toolPayload<SearchResult>(toolResult);
+        const next = toolPayload(toolResult);
         if (toolResult.isError || !next) {
           throw new Error("USDA search did not return usable results");
         }
-        selected = null;
+        state.selected = null;
         document
           .getElementById("root")
-          ?.replaceChildren(render(app, next, nextInput));
+          ?.replaceChildren(render(app, next, nextInput, state));
       })
       .catch(() => {
         submit.disabled = false;
@@ -309,19 +365,25 @@ function renderSearchControls(
   return wrap;
 }
 
+type RenderedFoodCard = {
+  card: HTMLElement;
+  radio: HTMLInputElement;
+};
+
 function renderCard(
-  app: App,
+  app: UsdaPickerApp,
   food: Food,
   query: string,
   onPick: (food: Food) => void,
-): { card: HTMLElement; radio: HTMLInputElement } {
+  state: PickerState,
+): RenderedFoodCard {
   const card = el("div", "card");
   const head = el("div", "card-head");
   const radio = el("input");
   radio.type = "radio";
   radio.name = "usda-match";
   radio.value = String(food.fdc_id);
-  radio.checked = selected?.fdc_id === food.fdc_id;
+  radio.checked = state.selected?.fdc_id === food.fdc_id;
   radio.setAttribute(
     "aria-label",
     `Select ${food.description ?? `FDC ${food.fdc_id}`}`,
@@ -366,7 +428,11 @@ function renderCard(
   const pick = () => onPick(food);
   radio.addEventListener("change", pick);
   card.addEventListener("click", (event) => {
-    if ((event.target as HTMLElement).closest("button, input")) return;
+    if (
+      event.target instanceof HTMLElement &&
+      event.target.closest("button, input")
+    )
+      return;
     radio.checked = true;
     pick();
   });
@@ -374,9 +440,10 @@ function renderCard(
 }
 
 function render(
-  app: App,
+  app: UsdaPickerApp,
   result: SearchResult,
   input: SearchInput | null,
+  state: PickerState,
 ): Node {
   const root = el("div");
   const total = result.meta?.totalCount;
@@ -385,16 +452,16 @@ function render(
     "USDA matches",
     `${total && total > shown ? `${shown} of ${total}` : shown} · per 100g`,
   );
-  body.append(renderSearchControls(app, result, input));
+  body.append(renderSearchControls(app, result, input, state));
 
   const query = input?.query ?? "";
   const hint = el(
     "span",
     "eyebrow selection-hint",
-    selected ? describe(selected) : "Select a match",
+    state.selected ? describe(state.selected) : "Select a match",
   );
   const use = el("button", "btn", "Use this");
-  use.disabled = selected === null;
+  use.disabled = state.selected === null;
   const controls: Array<{
     food: Food;
     card: HTMLElement;
@@ -402,7 +469,7 @@ function render(
   }> = [];
 
   const applySelection = (food: Food) => {
-    selected = food;
+    state.selected = food;
     for (const control of controls) {
       const isSelected = control.food.fdc_id === food.fdc_id;
       control.radio.checked = isSelected;
@@ -427,7 +494,7 @@ function render(
     grid.setAttribute("role", "radiogroup");
     grid.setAttribute("aria-label", "USDA food matches");
     for (const food of result.items) {
-      const control = renderCard(app, food, query, applySelection);
+      const control = renderCard(app, food, query, applySelection, state);
       controls.push({ food, ...control });
       grid.append(control.card);
     }
@@ -435,8 +502,8 @@ function render(
   }
 
   use.addEventListener("click", () => {
-    if (!selected) return;
-    const choice = selected;
+    if (!state.selected) return;
+    const choice = state.selected;
     void app.sendMessage({
       role: "user",
       content: [{ type: "text", text: `Use ${describe(choice)}.` }],
@@ -450,25 +517,26 @@ function render(
   return root;
 }
 
-async function connectUsdaPicker(): Promise<void> {
-  const app = new App({ name: "Cubby USDA Picker", version: "1.0.0" });
+export async function connectUsdaPicker(app: UsdaPickerApp): Promise<void> {
   let input: SearchInput | null = null;
   let payload: SearchResult | null = null;
+  const state: PickerState = { selected: null };
   const mount = () => {
     if (!payload) return;
     document
       .getElementById("root")
-      ?.replaceChildren(render(app, payload, input));
+      ?.replaceChildren(render(app, payload, input, state));
   };
 
   // The host may push input/result immediately after initialization. Register
   // both handlers before connecting so a fast host cannot race past them.
   app.ontoolinput = (notification) => {
-    input = notification.arguments as SearchInput;
+    const parsed = searchInputSchema.safeParse(notification.arguments);
+    input = parsed.success ? parsed.data : null;
     mount();
   };
   app.ontoolresult = (result) => {
-    const next = toolPayload<SearchResult>(result);
+    const next = toolPayload(result);
     const root = document.getElementById("root");
     if (!root) return;
     if (!next) {
@@ -477,7 +545,7 @@ async function connectUsdaPicker(): Promise<void> {
       );
       return;
     }
-    selected = null;
+    state.selected = null;
     payload = next;
     mount();
   };
@@ -485,9 +553,3 @@ async function connectUsdaPicker(): Promise<void> {
   await app.connect();
   app.setupSizeChangedNotifications();
 }
-
-export function bootstrapUsdaPicker(): Promise<void> {
-  return connectUsdaPicker();
-}
-
-void bootstrapUsdaPicker();

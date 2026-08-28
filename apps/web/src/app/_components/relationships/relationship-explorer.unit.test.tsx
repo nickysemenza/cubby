@@ -1,86 +1,104 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
+import { relatedViewsFor } from "@cubby/schemas/related-view";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  refetch: vi.fn(),
-  preview: vi.fn(),
-}));
+import { relatedData } from "~/lib/related-data.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("~/hooks/useHydrated", () => ({
-  useHydratedLoading: (isLoading: boolean) => isLoading,
-}));
+import {
+  type RelationshipExplorerOperations,
+  RelationshipExplorer,
+} from "./relationship-explorer";
 
-vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ fetchQuery: vi.fn() }),
-}));
+const sourceId = "VEN-4K7M";
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-vi.mock("./relationship-route-preview", () => ({
-  useRelationshipRoutePreview: (...args: unknown[]) => mocks.preview(...args),
-}));
+interface RelationshipExplorerTestAdapter {
+  operations: RelationshipExplorerOperations;
+  requestCount: () => number;
+}
 
-vi.mock("./relationship-tree", () => ({
-  RelationshipTree: () => <div data-testid="relationship-tree" />,
-}));
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
 
-import { RelationshipExplorer } from "./relationship-explorer";
+afterEach(() => {
+  harness.dispose();
+});
 
-const views = [{ key: "vendor.purchases", label: "Purchases" }];
-const defaultResult = {
-  groups: [
-    {
-      relationKey: "vendor.purchases",
-      totalCount: 1,
-      items: [],
+function createOperations(
+  result: () => Promise<RelatedPreviewGroup[]>,
+): RelationshipExplorerTestAdapter {
+  let requests = 0;
+  return {
+    operations: {
+      previews: relatedData.previews.withTransport(async () => {
+        requests += 1;
+        return result();
+      }),
+      branch: relatedData.branch.withTransport(async ({ input }) => ({
+        sourceId: input.sourceId,
+        relationKey: input.relationKey,
+        items: [],
+        totalCount: 0,
+        nextOffset: null,
+      })),
     },
-  ],
-  relationKeys: ["vendor.purchases"],
-  views,
-  query: {
-    isError: false,
-    isLoading: false,
-    refetch: mocks.refetch,
-  },
-};
+    requestCount: () => requests,
+  };
+}
+
+function cacheGroups(
+  operations: RelationshipExplorerOperations,
+  groups: RelatedPreviewGroup[],
+) {
+  harness.queryClient.setQueryData(
+    operations.previews.queryOptions({
+      source: "vendor",
+      sourceIds: [sourceId],
+      relationKeys: relatedViewsFor("vendor").map((view) => view.key),
+    }).queryKey,
+    groups,
+  );
+}
 
 describe("RelationshipExplorer", () => {
-  beforeEach(() => {
-    mocks.refetch.mockReset();
-    mocks.preview.mockReset();
-    mocks.preview.mockReturnValue(defaultResult);
-  });
+  it("states when registered relationships have no linked records", () => {
+    const adapter = createOperations(async () => []);
+    cacheGroups(adapter.operations, [
+      { relationKey: "vendor.purchases", totalCount: 0, items: [], sourceId },
+    ]);
 
-  it("states when a registered relationship has no linked records", () => {
-    mocks.preview.mockReturnValue({
-      ...defaultResult,
-      groups: [
-        {
-          relationKey: "vendor.purchases",
-          totalCount: 0,
-          items: [],
-        },
-      ],
-    });
-
-    render(<RelationshipExplorer entity="vendor" sourceId="VEN-4K7M" />);
+    render(
+      <RelationshipExplorer
+        entity="vendor"
+        sourceId={sourceId}
+        operations={adapter.operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
     expect(screen.getByText("No linked records.")).toBeVisible();
-    expect(screen.queryByTestId("relationship-tree")).toBeNull();
   });
 
-  it("offers a top-level retry when relationship previews fail", () => {
-    mocks.preview.mockReturnValue({
-      ...defaultResult,
-      query: {
-        ...defaultResult.query,
-        isError: true,
-      },
+  it("offers a top-level retry when the preview operation fails", async () => {
+    const adapter = createOperations(async () => {
+      throw new Error("relationship service unavailable");
     });
-    render(<RelationshipExplorer entity="vendor" sourceId="VEN-4K7M" />);
+    render(
+      <RelationshipExplorer
+        entity="vendor"
+        sourceId={sourceId}
+        operations={adapter.operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
     expect(
-      screen.getByText("Relationships could not be loaded."),
+      await screen.findByText("Relationships could not be loaded."),
     ).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(mocks.refetch).toHaveBeenCalledOnce();
+    await waitFor(() => expect(adapter.requestCount()).toBe(2));
   });
 });

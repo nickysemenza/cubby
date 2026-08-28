@@ -5,72 +5,47 @@ import { testShortcode } from "@cubby/schemas/testing";
  * default means zodResolver blocks the first submit and nothing is called at
  * all. That failure is invisible to a test that only reads the field.
  */
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { QuickInventoryAdd } from "./quick-inventory-add";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-const mocks = vi.hoisted(() => ({
-  mutateAsync: vi.fn().mockResolvedValue({}),
-}));
+import {
+  type QuickInventoryOperations,
+  QuickInventoryAdd,
+} from "./quick-inventory-add";
 
-vi.mock("./hooks", () => ({
-  useCreateInventoryMutation: () => ({
-    mutateAsync: mocks.mutateAsync,
-    isPending: false,
-  }),
-  useProductLookupInvalidation: () => vi.fn(),
-  useUpcLookup: () => ({}),
-}));
-vi.mock("../combobox/with-search-hook", () => {
-  // Every wrapper renders its children with an empty, settled result set: the
-  // pickers are not what this test is about, but `product-form-fields` imports
-  // the whole map, so a partial mock breaks the module.
-  const passthrough = ({
-    children,
-  }: {
-    children: (props: {
-      items: never[];
-      onSearchChange: () => void;
-      isLoading: boolean;
-      onOpenChange: () => void;
-    }) => ReactNode;
-  }) =>
-    children({
-      items: [],
-      onSearchChange: () => {},
-      isLoading: false,
-      onOpenChange: () => {},
-    });
-  return {
-    WithIngredientSearch: passthrough,
-    WithLocationSearch: passthrough,
-    WithProductSearch: passthrough,
-    WithRecipeSearch: passthrough,
-  };
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
 });
-vi.mock("~/hooks/useImageState", () => ({
-  useImageState: () => ({ reset: vi.fn() }),
-}));
-vi.mock("../products/use-upc-aware-create", () => ({
-  useUpcAwareCreate: () => ({ onCreateNew: vi.fn(), handleCreateNew: vi.fn() }),
-}));
+
+afterEach(() => {
+  harness.dispose();
+});
 
 describe("QuickInventoryAdd", () => {
   it("submits 1 each without the operator typing a unit", async () => {
+    const requests: Parameters<
+      QuickInventoryOperations["createInventory"]
+    >[0][] = [];
+    const operations = {
+      createInventory: async (input) => {
+        requests.push(input);
+      },
+    } satisfies QuickInventoryOperations;
     const { container } = render(
-      <QueryClientProvider client={new QueryClient()}>
-        <QuickInventoryAdd
-          locationId={testShortcode("location", "LOC-2222")}
-          onSuccess={vi.fn()}
-          initialProduct={{
-            id: testShortcode("product", "PRD-4K7M"),
-            name: "Source Drill",
-          }}
-        />
-      </QueryClientProvider>,
+      <QuickInventoryAdd
+        locationId={testShortcode("location", "LOC-2222")}
+        onSuccess={() => undefined}
+        operations={operations}
+        initialProduct={{
+          id: testShortcode("product", "PRD-4K7M"),
+          name: "Source Drill",
+        }}
+      />,
+      { wrapper: harness.wrapper },
     );
 
     expect(screen.getByLabelText("Amount Unit")).toHaveValue("each");
@@ -80,11 +55,13 @@ describe("QuickInventoryAdd", () => {
     fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(mocks.mutateAsync).toHaveBeenCalledWith({
-        productId: "PRD-4K7M",
-        locationId: "LOC-2222",
-        amount: { value: 1, unit: "each" },
-      });
+      expect(requests).toEqual([
+        {
+          productId: "PRD-4K7M",
+          locationId: "LOC-2222",
+          amount: { value: 1, unit: "each" },
+        },
+      ]);
     });
   });
 });

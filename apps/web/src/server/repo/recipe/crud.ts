@@ -67,6 +67,7 @@ import {
   formatSearchTerm,
   getDb,
   idSetPresence,
+  imageJoinBindings,
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
@@ -435,11 +436,7 @@ export const buildRecipeWhere = async (
     [],
     [
       ...auditDateWhereConditions(recipe, filters),
-      ...relatedWhereConditions(
-        "recipe",
-        filters as unknown as Record<string, unknown>,
-        recipe.id,
-      ),
+      ...relatedWhereConditions("recipe", filters, recipe.id),
       pickerSearch,
       // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
       // the id half must distinguish "no cookbook filter" (unrestricted) from
@@ -637,8 +634,7 @@ const createRecipeReturningId = async (
       );
       await associatePendingImages(
         tx,
-        recipeImage,
-        "recipeId",
+        imageJoinBindings.recipe,
         createdRecipe.id,
         resolvedImageIds,
       );
@@ -839,26 +835,22 @@ const upsertRecipeMatching = async (
 ): Promise<UpsertedRecipe> => {
   const updateMatched = (existingId: RecipeId): Promise<UpsertedRecipe> =>
     withTransaction(db, async (tx) => {
+      // Re-import reflects source-owned fields, while absent imported tags
+      // deliberately preserve manual tags.
+      const recipeUpdates: Partial<typeof recipe.$inferInsert> = {
+        ...recipeSourceToColumns(provenance),
+        name: input.name,
+        notes: input.notes ?? null,
+        yield: input.yield ?? null,
+        servings: input.servings ?? null,
+        ...recipeMetaToColumns(input.meta),
+        updatedAt: new Date(),
+      };
+      if (input.tags !== undefined) recipeUpdates.tags = input.tags;
       const updatedRecipe = await updateLiveAndReturn(
         tx,
         recipe,
-        {
-          ...recipeSourceToColumns(provenance),
-          // Re-import reflects the source (like sections + notes — a manual edit
-          // doesn't survive a re-import). For web/cookbook recipes name is the match
-          // key, so this is a no-op; it only bites for Notion, which matches on page
-          // id — a renamed page now updates its title instead of keeping the stale
-          // one. Safe: Notion names are exempt from Recipe_name_key (identity is the
-          // page id via Recipe_notion_page_key), so the rename can't collide.
-          name: input.name,
-          notes: input.notes ?? null,
-          yield: input.yield ?? null,
-          servings: input.servings ?? null,
-          ...recipeMetaToColumns(input.meta),
-          // Undefined imported tags preserve manual tags; supplied tags replace them.
-          ...(input.tags !== undefined ? { tags: input.tags } : {}),
-          updatedAt: new Date(),
-        },
+        recipeUpdates,
         existingId,
       );
       await replaceRecipeSections(tx, updatedRecipe.id, input.sections);

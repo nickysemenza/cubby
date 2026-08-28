@@ -3,7 +3,6 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import {
   DASHBOARD_VIEW_OPTIONS,
-  type DashboardView,
   ProjectsDashboard,
 } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
@@ -41,7 +40,9 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 function ProjectsPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
-  const view = (search.view ?? "overview") as DashboardView;
+  const view =
+    DASHBOARD_VIEW_OPTIONS.find((option) => option.value === search.view)
+      ?.value ?? "overview";
 
   return (
     <Page

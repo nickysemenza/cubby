@@ -25,6 +25,10 @@ export default literalEntity({
       module: "@cubby/schemas/inventory",
       export: "inventoryWithLocationAndProductOut",
     },
+    mcpDetail: {
+      module: "@cubby/schemas/inventory",
+      export: "inventoryWithLocationAndProductMcpEntityOut",
+    },
   },
   filters: {
     audit: true,

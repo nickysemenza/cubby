@@ -1,31 +1,33 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("./DataTableViews", () => ({ DataTableViews: () => null }));
-vi.mock("./data-table-view-options", () => ({
-  DataTableViewOptions: () => null,
-}));
-vi.mock("./LedgerFilters", () => ({ LedgerFilters: () => null }));
+import { describe, expect, it } from "vitest";
 
 import { DataTableToolbar } from "./data-table-toolbar";
-import type { CubbyTable as Table } from "./table-features";
+import { useCubbyTable } from "./table-features";
 
-const table = {} as Table<{ id: string }>;
+function ToolbarHarness() {
+  const table = useCubbyTable({
+    data: [],
+    columns: [],
+    getRowId: (row: { id: string }) => row.id,
+  });
+  return (
+    <DataTableToolbar
+      table={table}
+      isTransitioning
+      showViewOptions={false}
+      actions={<button type="button">Create</button>}
+      bulkActionBar={
+        <div data-bulk-action-bar>
+          <button type="button">Delete selected</button>
+        </div>
+      }
+    />
+  );
+}
 
 describe("DataTableToolbar query tier", () => {
   it("keeps rest and bulk tiers mounted while disabling both during updates", () => {
-    render(
-      <DataTableToolbar
-        table={table}
-        isTransitioning
-        actions={<button type="button">Create</button>}
-        bulkActionBar={
-          <div data-bulk-action-bar>
-            <button type="button">Delete selected</button>
-          </div>
-        }
-      />,
-    );
+    render(<ToolbarHarness />);
 
     expect(screen.getByText("Updating…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();

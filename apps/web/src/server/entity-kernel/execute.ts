@@ -1,18 +1,13 @@
 import type { RelationMutationOut } from "@cubby/schemas/common";
-import {
-  ENTITY_LABEL,
-  ENTITY_NOT_FOUND_REASON,
-} from "@cubby/schemas/identifiers";
-import {
-  buildPaginatedResponse,
-  normalizeSorts,
-  type PaginationParams,
-} from "@cubby/schemas/pagination";
+import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
 import { createAppError } from "~/server/errors/app-error";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import {
+  ENTITY_KERNEL_BINDINGS,
+  ENTITY_KERNEL_OPERATIONS,
+} from "~/server/generated/entity-kernel-bindings.gen";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -39,60 +34,16 @@ import {
   findSearchHits,
 } from "~/server/services/search.service";
 
-import type { EntityKernelBinding, EntityKernelContext } from "./adapter";
+import type { EntityKernelContext } from "./adapter";
 import {
   type EntityCommand,
-  type EntityKernelEntity,
   type EntityMutationCommand,
   type EntityQueryCommand,
+  type EntityResultFor,
   entityCommandSchema,
   entityMutationResultSchema,
   type entityQueryResultSchema,
 } from "./contracts";
-
-const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
-
-function bindingFor(entity: EntityKernelEntity): EntityKernelBinding {
-  return ENTITY_KERNEL_BINDINGS[entity];
-}
-
-function parseSorts(
-  binding: EntityKernelBinding,
-  value: Extract<EntityCommand, { action: "list" }>["sort"],
-) {
-  const field = z.enum(binding.sort.fields);
-  const raw = value ?? {
-    orderBy: binding.sort.default,
-    direction: "desc" as const,
-  };
-  const normalized = normalizeSorts(raw);
-  for (const sort of normalized) field.parse(sort.orderBy);
-  return normalized;
-}
-
-function parseGroupBy(
-  binding: EntityKernelBinding,
-  groupBy: string | undefined,
-) {
-  if (groupBy === undefined) return undefined;
-  return z.enum(binding.sort.groupable ?? binding.sort.fields).parse(groupBy);
-}
-
-async function runSideEffects(
-  ctx: EntityKernelContext,
-  binding: EntityKernelBinding,
-  action: "created" | "updated",
-  entityId: unknown,
-  source: string,
-) {
-  if (!binding.sideEffects) return [];
-  const event = mutationSideEffectEventSchema.parse({
-    action,
-    entity: { entityType: binding.entity, entityId },
-    source,
-  });
-  return await runMutationSideEffects(ctx.db, event);
-}
 
 /**
  * The one application-level entity interface.
@@ -101,6 +52,10 @@ async function runSideEffects(
  * This kernel owns public-id/input validation, list normalization, lifecycle
  * capability gates, and the strictly-after-commit side-effect sequence.
  */
+export function executeEntity<Command extends EntityCommand>(
+  ctx: EntityKernelContext,
+  rawCommand: Command,
+): Promise<EntityResultFor<Command>>;
 export function executeEntity(
   ctx: EntityKernelContext,
   rawCommand: EntityQueryCommand,
@@ -127,52 +82,11 @@ export async function executeEntity(
 
   switch (command.action) {
     case "get": {
-      const binding = bindingFor(command.entity);
-      const id = binding.schemas.id.parse(command.id);
-      const readContext =
-        ctx.actorContext.source === "ui" && ctx.readDb !== ctx.db
-          ? { ...ctx, db: ctx.readDb }
-          : ctx;
-      const item = await binding.repository.get(readContext, id);
-      if (item === null) {
-        if (command.missing === "null") {
-          return {
-            action: command.action,
-            entity: command.entity,
-            item: null,
-          } as const;
-        }
-        throw createAppError(
-          ENTITY_NOT_FOUND_REASON[binding.entity],
-          `${ENTITY_LABEL[binding.entity]} ${command.id} not found`,
-        );
-      }
-      return {
-        action: command.action,
-        entity: command.entity,
-        item: binding.schemas.detail.parse(item),
-      } as const;
+      return ENTITY_KERNEL_OPERATIONS[command.entity].get(ctx, command);
     }
 
     case "list": {
-      const binding = bindingFor(command.entity);
-      const readContext =
-        ctx.readDb === ctx.db ? ctx : { ...ctx, db: ctx.readDb };
-      const filters = binding.schemas.filters.parse(command.filters);
-      const pagination = command.pagination ?? DEFAULT_PAGINATION;
-      const { data, count, sums } = await binding.repository.list(
-        readContext,
-        filters,
-        parseSorts(binding, command.sort),
-        pagination,
-        parseGroupBy(binding, command.groupBy),
-      );
-      const items = z.array(binding.schemas.list).parse(data);
-      return {
-        action: command.action,
-        entity: command.entity,
-        ...buildPaginatedResponse(pagination, items, count, sums),
-      } as const;
+      return ENTITY_KERNEL_OPERATIONS[command.entity].list(ctx, command);
     }
 
     case "search": {
@@ -197,162 +111,63 @@ export async function executeEntity(
     }
 
     case "create": {
-      const binding = bindingFor(command.entity);
-      const schema = binding.schemas.create;
-      const create = binding.repository.create;
-      if (!schema || !create) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `${ENTITY_LABEL[binding.entity]} does not support create`,
-        );
-      }
-      const data = schema.parse(command.data);
-      const created = await create(ctx, data);
-      await deleteStoredObjects(created.detachedImageKeys ?? []);
-      const backgroundBatches = [
-        ...(created.backgroundBatches ?? []),
-        ...(await runSideEffects(
-          ctx,
-          binding,
-          "created",
-          created.entityId,
-          `${binding.entity}.create`,
-        )),
-      ];
-      return entityMutationResultSchema.parse({
-        action: command.action,
-        entity: command.entity,
-        item: binding.schemas.output.parse(created.output),
-        sideEffects: { backgroundBatches },
-      });
+      return ENTITY_KERNEL_OPERATIONS[command.entity].create(ctx, command.data);
     }
 
     case "update": {
-      const binding = bindingFor(command.entity);
-      const schema = binding.schemas.update;
-      const update = binding.repository.update;
-      if (!schema || !update) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `${ENTITY_LABEL[binding.entity]} does not support update`,
-        );
-      }
-      const id = binding.schemas.id.parse(command.id);
-      const data = schema.parse(command.data);
-      const updated = await update(ctx, id, data);
-      await deleteStoredObjects(updated.detachedImageKeys ?? []);
-      const backgroundBatches = [
-        ...(updated.backgroundBatches ?? []),
-        ...(await runSideEffects(
-          ctx,
-          binding,
-          "updated",
-          updated.entityId,
-          `${binding.entity}.update`,
-        )),
-      ];
-      return entityMutationResultSchema.parse({
-        action: command.action,
-        entity: command.entity,
-        item: binding.schemas.output.parse(updated.output),
-        sideEffects: { backgroundBatches },
-      });
+      return ENTITY_KERNEL_OPERATIONS[command.entity].update(
+        ctx,
+        command.id,
+        command.data,
+      );
     }
 
     case "delete": {
-      const binding = bindingFor(command.entity);
-      // A delete-capable binding cannot exist without declaring its incoming
-      // edge policy. Touch the policy at the capability gate so the contract
-      // remains runtime data rather than decorative registry metadata.
-      void binding.lifecycle.delete;
-      const ids = command.ids.map((id) => binding.schemas.id.parse(id));
-      const {
-        deleted,
-        detachedImageKeys = [],
-        backgroundBatches = [],
-        affectedEdges,
-      } = await binding.repository.delete(ctx, ids);
-      await deleteStoredObjects(detachedImageKeys);
-      return {
-        action: command.action,
-        entity: command.entity,
-        deleted,
-        deletedReferences: command.ids.map((id) => ({
-          entity: command.entity,
-          id,
-        })),
-        affectedEdges:
-          affectedEdges ??
-          Object.entries(binding.lifecycle.delete).map(
-            ([edge, disposition]) => ({
-              edge,
-              effect: disposition.effect,
-              changed: null,
-            }),
-          ),
-        sideEffects: { backgroundBatches },
-      } as const;
+      return ENTITY_KERNEL_OPERATIONS[command.entity].delete(ctx, command.ids);
     }
 
     case "bulkUpdate": {
-      const binding = bindingFor(command.entity);
-      const bulkUpdate = binding.repository.bulkUpdate;
-      if (!bulkUpdate) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `${ENTITY_LABEL[binding.entity]} does not support bulk update`,
-        );
-      }
-      const ids = command.ids.map((id) => binding.schemas.id.parse(id));
-      // `data` arrived through the entity's declared bulk-updatable field mask,
-      // so the repository owns the transaction and the N-entity side-effect
-      // fan-out — the kernel only forwards the batches it reports.
-      const {
-        updated,
-        detachedImageKeys = [],
-        backgroundBatches = [],
-      } = await bulkUpdate(ctx, ids, command.data);
-      await deleteStoredObjects(detachedImageKeys);
-      return {
-        action: command.action,
-        entity: command.entity,
-        updated,
-        updatedIds: command.ids,
-        sideEffects: { backgroundBatches },
-      } as const;
+      return ENTITY_KERNEL_OPERATIONS[command.entity].bulkUpdate(
+        ctx,
+        command.ids,
+        command.data,
+      );
     }
 
     case "merge": {
-      const binding = bindingFor(command.entity);
-      const merge = binding.merge;
-      if (!merge || !binding.lifecycle.merge) {
+      const binding = ENTITY_KERNEL_BINDINGS[command.entity];
+      const mergeOperation = binding.mergeOperation;
+      if (!mergeOperation || !binding.lifecycle.merge) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
           `${ENTITY_LABEL[binding.entity]} does not support merge`,
         );
       }
-      const result = await merge.execute(ctx, merge.input.parse(command.data));
+      const result = await mergeOperation.execute(ctx, command.data);
       await deleteStoredObjects(result.detachedImageKeys);
       const backgroundBatches = [
         ...(result.backgroundBatches ?? []),
-        ...(result.entityId
-          ? await runSideEffects(
-              ctx,
-              binding,
-              "updated",
-              result.entityId,
-              `${binding.entity}.merge`,
+        ...(result.entityId && binding.sideEffects
+          ? await runMutationSideEffects(
+              ctx.db,
+              mutationSideEffectEventSchema.parse({
+                action: "updated",
+                entity: {
+                  entityType: binding.entity,
+                  entityId: result.entityId,
+                },
+                source: `${binding.entity}.merge`,
+              }),
             )
           : []),
       ];
-      const output = merge.output.parse(result.output);
-      return {
+      return entityMutationResultSchema.parse({
         action: command.action,
         entity: command.entity,
-        item: merge.item(output),
-        mergeSummary: merge.summary(output),
+        item: result.item,
+        mergeSummary: result.mergeSummary,
         sideEffects: { backgroundBatches },
-      } as const;
+      });
     }
 
     case "attach":

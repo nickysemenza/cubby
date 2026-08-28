@@ -1,3 +1,4 @@
+import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
@@ -39,12 +40,14 @@ const unusedIngredients = async (db: Parameters<typeof ingredientList>[0]) => {
     if (!declaration) throw new Error(`no view declares ${key}`);
     const { data } = await ingredientList(
       db,
-      compileProblemFilters(
-        declaration.entity,
-        declaration.problem.source.kind === "entity"
-          ? declaration.problem.source.filters
-          : [],
-      ) as never,
+      ingredientFiltersSchema.parse(
+        compileProblemFilters(
+          declaration.entity,
+          declaration.problem.source.kind === "entity"
+            ? declaration.problem.source.filters
+            : [],
+        ),
+      ),
       [],
       { pageIndex: 0, pageSize: 100 },
     );

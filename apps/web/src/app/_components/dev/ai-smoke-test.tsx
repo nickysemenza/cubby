@@ -1,4 +1,23 @@
+import { agentAskInputSchema, agentResultSchema } from "@cubby/schemas/agent";
+import {
+  aiLocationIdInput,
+  categoryAuditSchema,
+  categorySuggestionInput,
+  categorySuggestionSchema,
+  detectedInventorySchema,
+  locationSuggestionInput,
+  locationSuggestionSchema,
+  locationTypeSuggestionInput,
+  locationTypeSuggestionSchema,
+  parseSearchInput,
+  parsedSearchSchema,
+  productIdentificationInput,
+  productIdentificationSchema,
+  usdaFoodSuggestionInput,
+  usdaFoodSuggestionOut,
+} from "@cubby/schemas/ai";
 import { useState } from "react";
+import { z } from "zod";
 
 import { useAgentStream } from "~/app/_components/hooks/useAgentStream";
 import { Row } from "~/components/layout";
@@ -20,13 +39,26 @@ import { getErrorMessage } from "~/lib/error-utils";
 
 const MODEL = "claude-haiku-4-5";
 
+const jsonValueSchema = z.json();
+type JsonValue = z.infer<typeof jsonValueSchema>;
+type SmokeResult =
+  | z.infer<typeof categorySuggestionSchema>
+  | z.infer<typeof locationTypeSuggestionSchema>
+  | z.infer<typeof locationSuggestionSchema>
+  | z.infer<typeof parsedSearchSchema>
+  | z.infer<typeof usdaFoodSuggestionOut>
+  | z.infer<typeof productIdentificationSchema>
+  | z.infer<typeof detectedInventorySchema>
+  | z.infer<typeof categoryAuditSchema>
+  | z.infer<typeof agentResultSchema>;
+
 interface EndpointSpec {
   key: string;
   label: string;
   description: string;
   /** Prefilled JSON input, or undefined for input-less endpoints. */
-  defaultInput: unknown;
-  run: (input: unknown) => Promise<unknown>;
+  defaultInput: JsonValue | undefined;
+  run: (input: JsonValue) => Promise<SmokeResult>;
 }
 
 // Core sweep — one spec per distinct AI code path. Inputs are edited as JSON
@@ -37,17 +69,15 @@ const SPECS: EndpointSpec[] = [
     label: "ai.suggestCategory",
     description: "Structured output — product → category",
     defaultInput: { productName: "cordless drill", manufacturer: "DeWalt" },
-    run: (i) =>
-      ai.suggestCategory.call(
-        i as { productName: string; manufacturer: string },
-      ),
+    run: (i) => ai.suggestCategory.call(categorySuggestionInput.parse(i)),
   },
   {
     key: "suggestLocationType",
     label: "ai.suggestLocationType",
     description: "Structured output — location name → type",
     defaultInput: { locationName: "workbench drawer 3" },
-    run: (i) => ai.suggestLocationType.call(i as { locationName: string }),
+    run: (i) =>
+      ai.suggestLocationType.call(locationTypeSuggestionInput.parse(i)),
   },
   {
     key: "suggestLocation",
@@ -55,21 +85,21 @@ const SPECS: EndpointSpec[] = [
     description:
       "Structured output over your real location roster — product → where to put it",
     defaultInput: { productId: "PRD-XXXX" },
-    run: (i) => ai.suggestLocation.call(i as { productId: string }),
+    run: (i) => ai.suggestLocation.call(locationSuggestionInput.parse(i)),
   },
   {
     key: "parseSearch",
     label: "ai.parseSearch",
     description: "Structured output — free-text search → filters",
     defaultInput: { query: "where are my canned tomatoes in the pantry" },
-    run: (i) => ai.parseSearch.call(i as { query: string }),
+    run: (i) => ai.parseSearch.call(parseSearchInput.parse(i)),
   },
   {
     key: "suggestUsdaFood",
     label: "ai.suggestUsdaFood",
     description: "Agentic tool loop — search USDA → select best food",
     defaultInput: { ingredientName: "olive oil" },
-    run: (i) => ai.suggestUsdaFood.call(i as { ingredientName: string }),
+    run: (i) => ai.suggestUsdaFood.call(usdaFoodSuggestionInput.parse(i)),
   },
   {
     key: "auditCategories",
@@ -86,7 +116,7 @@ const SPECS: EndpointSpec[] = [
     defaultInput: {
       imageUrls: [`${__R2_PUBLIC_URL__}/cubby/replace-with-a-real-key.jpg`],
     },
-    run: (i) => ai.identifyProduct.call(i as { imageUrls: string[] }),
+    run: (i) => ai.identifyProduct.call(productIdentificationInput.parse(i)),
   },
   {
     key: "detectInventoryItems",
@@ -94,14 +124,14 @@ const SPECS: EndpointSpec[] = [
     description:
       "Vision — cached structured location inventory detection with product matching",
     defaultInput: { locationId: "replace-with-location-uuid" },
-    run: (i) => ai.detectInventoryItems.call(i as { locationId: string }),
+    run: (i) => ai.detectInventoryItems.call(aiLocationIdInput.parse(i)),
   },
   {
     key: "agentAsk",
     label: "agent.ask",
     description: "Agentic MCP loop (non-streaming) over your data",
     defaultInput: { query: "how many products do I have?" },
-    run: (i) => agent.ask.call(i as { query: string }),
+    run: (i) => agent.ask.call(agentAskInputSchema.parse(i)),
   },
 ];
 
@@ -110,7 +140,7 @@ type RunStatus = "idle" | "running" | "ok" | "error";
 interface RunState {
   status: RunStatus;
   ms?: number;
-  result?: unknown;
+  result?: SmokeResult;
   error?: string;
 }
 
@@ -259,12 +289,12 @@ export function AiSmokeTest() {
 
   const runOne = async (spec: EndpointSpec) => {
     setStates((m) => ({ ...m, [spec.key]: { status: "running" } }));
-    let parsed: unknown;
+    let parsed: JsonValue | undefined;
     try {
       parsed =
         spec.defaultInput === undefined
           ? undefined
-          : JSON.parse(inputs[spec.key] ?? "null");
+          : jsonValueSchema.parse(JSON.parse(inputs[spec.key] ?? "null"));
     } catch (e) {
       setStates((m) => ({
         ...m,
@@ -274,7 +304,7 @@ export function AiSmokeTest() {
     }
     const t0 = performance.now();
     try {
-      const result = await spec.run(parsed);
+      const result = await spec.run(parsed ?? null);
       setStates((m) => ({
         ...m,
         [spec.key]: {

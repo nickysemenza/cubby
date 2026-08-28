@@ -160,7 +160,7 @@ export function registerProjectTools(server: McpServer) {
     name: "list_project_resources",
     description:
       "List the reusable tools and software explicitly used on one exact project. Tools include lifetime acquisition/use economics; software includes non-additive household spend charged during the project's effective window. Sub-project uses remain separate and count independently.",
-    inputSchema: projectResourceProjectInput.shape,
+    inputSchema: projectResourceProjectInput,
     // `{items}`, like every other list tool — see `projectResourcesMcpOut`.
     outputSchema: projectResourcesMcpOut,
     annotations: READ_ONLY_CLOSED,
@@ -173,7 +173,7 @@ export function registerProjectTools(server: McpServer) {
     name: "suggest_project_tools",
     description:
       "Suggest inventoried Cubby tools to attach to one exact project. Suggestions include tools purchased for the project at $100+ and trade-matched tools whose purchase history supports the project's task/expense trades; cheaper trade matches require at least two explicit prior project uses. This is a review queue only and never attaches tools automatically.",
-    inputSchema: projectResourceProjectInput.shape,
+    inputSchema: projectResourceProjectInput,
     outputSchema: projectToolSuggestionsOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.project.toolSuggestions(params),
@@ -184,7 +184,7 @@ export function registerProjectTools(server: McpServer) {
     name: "repoint_project_uses",
     description:
       "Move a Product's recorded project uses onto another Product, in one transaction. This is the tool for retiring or splitting a Product that delete_entity refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as detach_entity plus attach_entity — a detach whose attach is missed discards the project's tool history with nothing to flag it, which is exactly why this stayed its own tool when those six collapsed into two. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product with category tools or software.",
-    inputSchema: repointProjectUsesInput.shape,
+    inputSchema: repointProjectUsesInput,
     outputSchema: repointProjectUsesOut,
     annotations: WRITE_CLOSED,
     call: (caller, params) => caller.project.repointUses(params),
@@ -194,7 +194,7 @@ export function registerProjectTools(server: McpServer) {
     name: "list_product_project_uses",
     description:
       "Show every exact project on which a reusable Cubby tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
-    inputSchema: productProjectUsesInput.shape,
+    inputSchema: productProjectUsesInput,
     outputSchema: productProjectUsesOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller, params) => caller.product.projectUses(params),
@@ -204,7 +204,7 @@ export function registerProjectTools(server: McpServer) {
     name: "get_house_status",
     description:
       'What needs attention around the house, in one call. Returns portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned expenses, missing budgets, unclassified expenses and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with entity get(project) or list(task). Optional filters scope it to a status set, project kinds, locations, a search term, or a date window (dateFrom/dateTo — a project matches when its startDate/endDate override overlaps the window OR it has a task or expense of its own inside it; only projects with no override and no dated content at all are dropped, and that count comes back as hiddenByDate.projects). statusScope defaults to the live statuses (planning/not_started/in_progress) when omitted, so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
-    inputSchema: projectDashboardFiltersSchema.shape,
+    inputSchema: projectDashboardFiltersSchema,
     outputSchema: houseStatusOut,
     annotations: READ_ONLY_CLOSED,
     // `projectDashboardFiltersSchema`'s own default is changing to "no status
@@ -226,7 +226,7 @@ export function registerProjectTools(server: McpServer) {
     name: "get_project_budget",
     description:
       "Which projects are over budget: per project, the subtree budget estimate vs actual + committed spend, with remaining, percentUsed and an overBudget flag, sorted worst-overrun first (unbudgeted projects last). Also returns portfolio totals and planned-vs-actual spend by month. Same optional scope filters as get_house_status (status set, project kinds, locations, search, dateFrom/dateTo), but statusScope defaults to no condition (all four statuses, including done) — a budget tool silently omitting completed spend would be a bug, not a feature. dateFrom/dateTo scope the whole query, not just the monthly series: while a window is set, a project is kept when its startDate/endDate override overlaps it OR it owns a task or expense inside it, and only projects with no dates from any source drop out of the per-project figures.",
-    inputSchema: projectDashboardFiltersSchema.shape,
+    inputSchema: projectDashboardFiltersSchema,
     outputSchema: projectBudgetOut,
     annotations: READ_ONLY_CLOSED,
     call: async (caller, params) => {
@@ -276,6 +276,7 @@ export function registerProjectTools(server: McpServer) {
     name: "list_actionable_tasks",
     description:
       "Unblocked tasks you can act on now — live, not done, and blocked by nothing — plus blocked tasks with transitive why-chains explaining what's in the way (a manual blocked flag, a blocking task, or a blocking project, nearest blocker first).",
+    inputSchema: z.object({}),
     outputSchema: actionableTasksOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller) => caller.task.listActionable(),
@@ -285,6 +286,7 @@ export function registerProjectTools(server: McpServer) {
     name: "get_task_summary",
     description:
       "Task counts across the whole tracker in one cheap call: totalOpen, next (unblocked and actionable now), later, inbox (tasks with no project), overdue, dueThisWeek (rolling 7 days), blocked. Use it to size the backlog before paging entity list(task).",
+    inputSchema: z.object({}),
     outputSchema: taskSummaryOut,
     annotations: READ_ONLY_CLOSED,
     call: (caller) => caller.task.summary(),
@@ -318,7 +320,7 @@ export function registerProjectTools(server: McpServer) {
       "`ratioLabel` classifies cost/amount against `taxRate` as exact | plus_tax | pre_tax | other. It LABELS, it does not match: matching uses one wide window, because tax is multiplicative while fees are additive and no single band catches both. So read the raw `amountDelta` on an `other` — a residual of exactly 9.99 or 12.50 is shipping, which a tax-hypothesis check would have silently rejected. Pre-tax entry is a recurring bug class (24 rows in one pass), which is what `pre_tax` is there to make visible. " +
       '**Always pass `orderId` when the export line has one — and pass `vendor` with it.** An order id is only unique WITHIN a vendor, so a short one (Tool Nirvana\'s "#11325") genuinely collides across retailers. Without `vendor` the matcher cannot tell a collision from a real hit, and an order-id candidate otherwise takes the top slot. Each candidate reports `vendorMatch`: true (agrees), false (CONFLICTS — treat as almost certainly the wrong row; it is demoted below every amount+date candidate but still returned, because the two spellings may just differ), or null (nothing to compare, which is unknown rather than clean). It is the only key that catches BOTH directions of the aggregate problem: a ledger row may AGGREGATE several export lines at an amount that reconciles to nothing, and it may equally hold the SPLIT while you search for the total (B&H order 1121197219 was already two sibling rows, so an amount+date search for its $306.27 total found nothing and a duplicate aggregate was created). The order-id arm ignores the day window on purpose. ' +
       "An empty `candidates` list means 'nothing within the window', NOT 'this expense is missing' — an aggregate row covering your line can sit at an amount no formula relates to yours. Rows with no cost or no date recorded are outside every amount window by construction. Planned (`future: true`) rows are included and flagged, never filtered: an export line often turns out to be one. When one ledger row is the best candidate for two export lines it is returned for both — resolve that yourself rather than assuming a one-to-one assignment.",
-    inputSchema: expenseMatchInput.shape,
+    inputSchema: expenseMatchInput,
     outputSchema: expenseMatchMcpOut,
     annotations: READ_ONLY_CLOSED,
     call: async (caller, params) => {

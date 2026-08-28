@@ -80,7 +80,7 @@ export const loadAllGtins = async (
 ): Promise<Map<ProductId, string[]>> => {
   const unique = [...new Set(ids)];
   const out = new Map<ProductId, string[]>(
-    unique.map((id) => [id, [] as string[]] as const),
+    unique.map((id): [ProductId, string[]] => [id, []]),
   );
   if (unique.length === 0) return out;
   for (const row of await liveGtinRows(db, unique)) {

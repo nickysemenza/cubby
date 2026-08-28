@@ -3,7 +3,7 @@ import type {
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import type { AllowedImageType } from "@cubby/schemas/image";
+import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -28,7 +28,7 @@ import {
   requiredProductField,
 } from "~/app/_components/form-fields";
 import { ComboboxField } from "~/app/_components/form-utils";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
@@ -68,6 +68,8 @@ const manualAddSchema = z.object({
 });
 
 type ManualAddValues = z.input<typeof manualAddSchema>;
+
+const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
 const inventoryCreateMutationOptions = entityMutationOptionsFactory(
   "inventory",
   "create",
@@ -105,8 +107,7 @@ export function SessionCaptureActions({
   // Given a mutation result this also polls its background work (e.g. the AI
   // description enqueued by attaching a photo) so the UI self-heals once it
   // drains.
-  const invalidateCapture = (result?: unknown) =>
-    invalidate({ result, watch: true });
+  const invalidateCapture = () => invalidate({ watch: true });
 
   const uploadImage = useMutation(imageUpload.uploadImage.mutationOptions());
   // Location photos go through the shared capture hook rather than a local
@@ -140,7 +141,7 @@ export function SessionCaptureActions({
   const approveDetectedItem = useMutation(
     ai.approveDetectedInventoryItem.mutationOptions({
       onSuccess: (data) => {
-        invalidateCapture(data);
+        invalidate({ result: data, watch: true });
         toast.success(
           savedWithBackgroundWork(
             data.sideEffects,
@@ -155,7 +156,7 @@ export function SessionCaptureActions({
       "inventory",
       "create",
     )({
-      onSuccess: invalidateCapture,
+      onSuccess: (data) => invalidate({ result: data, watch: true }),
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
@@ -216,9 +217,14 @@ export function SessionCaptureActions({
     const name = photoName.trim();
     if (!file || !name) return;
     try {
+      const contentType = imageContentTypeSchema.safeParse(file.type);
+      if (!contentType.success) {
+        toast.error(`Unsupported image type: ${file.type}`);
+        return;
+      }
       const init = await uploadImage.mutateAsync({
         filename: file.name,
-        contentType: file.type as AllowedImageType,
+        contentType: contentType.data,
         size: file.size,
         entityType: "PRODUCT",
       });
@@ -412,7 +418,7 @@ export function SessionCaptureActions({
               locationId={location.id}
               locationName={location.name}
               hasItems={(location.location.directItemCount ?? 0) > 0}
-              onSettled={invalidateCapture}
+              onSettled={(data) => invalidate({ result: data, watch: true })}
             />
           )}
         </SheetContent>
@@ -531,8 +537,9 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
       amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
   });
-  const createInventory = useActionMutation({
+  const createInventory = useEntityActionMutation({
     entity: "inventory",
+    operation: "create",
     mutationFn: inventoryCreateMutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Added item"),
     onSuccess: () => {

@@ -12,6 +12,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { z } from "zod";
 
 import { Row } from "~/components/layout";
 import { usePageDetailContext } from "~/components/page/Page";
@@ -47,26 +48,40 @@ const ACTIVITY_SECTION_ID = "history";
 const RELATIONS_SECTION_ID = "relationships";
 
 type DetailMode = "overview" | "relations" | "activity";
+type DetailHashResolution = { mode: DetailMode; valid: boolean };
+
+const detailRecordSchema = z
+  .object({
+    id: z.string().optional(),
+    fdc_id: z.number().optional(),
+    name: z.string().optional(),
+    date: z.string().optional(),
+    description: z.string().optional(),
+    filename: z.string().optional(),
+  })
+  .passthrough();
+type DetailRecord = z.output<typeof detailRecordSchema>;
 
 function normalizedHash(hash: string) {
   return hash.startsWith("#") ? hash.slice(1) : hash;
 }
 
-function detailSourceId(entity: Entity, record: unknown): string | undefined {
-  if (!record || typeof record !== "object") return undefined;
-  if ("id" in record && typeof record.id === "string") return record.id;
-  return entity === "usda-food" &&
-    "fdc_id" in record &&
-    typeof record.fdc_id === "number"
+function detailSourceId(
+  entity: Entity,
+  record: DetailRecord | undefined,
+): string | undefined {
+  if (!record) return undefined;
+  if (record.id) return record.id;
+  return entity === "usda-food" && record.fdc_id !== undefined
     ? String(record.fdc_id)
     : undefined;
 }
 
 function detailActionRecord(
-  record: unknown,
+  record: DetailRecord | undefined,
   sourceId: string | undefined,
 ): EntityActionRow | undefined {
-  if (!record || typeof record !== "object" || !sourceId) return undefined;
+  if (!record || !sourceId) return undefined;
   return { ...record, id: sourceId };
 }
 
@@ -80,7 +95,7 @@ function modeForHash({
   overviewIds: ReadonlySet<string>;
   hasRelations: boolean;
   hasActivity: boolean;
-}): { mode: DetailMode; valid: boolean } {
+}): DetailHashResolution {
   const sectionId = normalizedHash(hash);
   if (!sectionId) return { mode: "overview", valid: true };
   if (sectionId === RELATIONS_SECTION_ID) {
@@ -100,6 +115,10 @@ function modeForHash({
 
 const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
   entityManifest[entity].auditable;
+
+function isDetailMode(value: string): value is DetailMode {
+  return value === "overview" || value === "relations" || value === "activity";
+}
 
 type DetailPlacement = "primary" | "supporting" | "full";
 
@@ -434,10 +453,16 @@ export const DetailSections: FC<DetailSectionsProps> = ({
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
+  const parsedDetailRecord = pageDetail
+    ? detailRecordSchema.safeParse(pageDetail.rawData)
+    : undefined;
+  const detailRecord = parsedDetailRecord?.success
+    ? parsedDetailRecord.data
+    : undefined;
   const locationHash = useLocation({ select: (location) => location.hash });
   const navigate = useNavigate();
   const sourceId = pageDetail
-    ? detailSourceId(pageDetail.entity, pageDetail.rawData)
+    ? detailSourceId(pageDetail.entity, detailRecord)
     : undefined;
   const hasSourceViews = relatedViewRegistry.some(
     (view) => view.source === pageDetail?.entity,
@@ -456,13 +481,14 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const ownRelationshipSection = visibleSections.find(
     (section) => section.id === RELATIONS_SECTION_ID,
   );
-  const relationshipSource = pageDetail
-    ? relationshipRouteSourceFromRecord(
-        pageDetail.entity,
-        pageDetail.rawData,
-        sourceId,
-      )
-    : null;
+  const relationshipSource =
+    pageDetail && detailRecord
+      ? relationshipRouteSourceFromRecord(
+          pageDetail.entity,
+          detailRecord,
+          sourceId,
+        )
+      : null;
   const genericRelationshipPreview =
     pageDetail && sourceId && hasSourceViews && !ownRelationshipSection ? (
       <RelationshipRoutePreview
@@ -593,7 +619,8 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   }, [activeMode, locationHash, overviewIds]);
 
   const selectMode = (nextMode: string) => {
-    const mode = nextMode as DetailMode;
+    if (!isDetailMode(nextMode)) return;
+    const mode = nextMode;
     if (
       (mode === "relations" && !hasRelations) ||
       (mode === "activity" && !hasActivity)
@@ -619,7 +646,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const compactRelationshipPreview =
     authoredRelationshipPreview ?? genericRelationshipPreview;
   const actionRecord = pageDetail
-    ? detailActionRecord(pageDetail.rawData, sourceId)
+    ? detailActionRecord(detailRecord, sourceId)
     : undefined;
   const visual = heroVisual({
     heroImages,

@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef } from "react";
 
 import {
   infiniteOperationQueryKey,
-  type OperationQueryKey,
+  isOperationQueryKey,
 } from "~/integrations/tanstack-query/operation-catalog";
 import type { QueryTiming } from "~/lib/query-timing";
 
@@ -18,8 +18,11 @@ import {
   usePaginatedTableCore,
 } from "./usePaginatedTableCore";
 
-interface UseInfiniteTableListOptions<TFilters> {
-  queryOptions: ListQueryOptionsFn<TFilters>;
+interface UseInfiniteTableListOptions<
+  TFilters,
+  TData extends IdentifiedListRow,
+> {
+  queryOptions: ListQueryOptionsFn<TFilters, TData>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   /** Shared table state, owned by the caller (one instance per page). */
   tableState: TableStateReturn;
@@ -74,37 +77,62 @@ export function useInfiniteTableList<
   buildFilters,
   tableState,
   groupBy,
-}: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
-  const { filters, sortParams, pagination } = usePaginatedTableCore({
+}: UseInfiniteTableListOptions<
+  TFilters,
+  TData
+>): UseInfiniteTableListReturn<TData> {
+  const { filters, sortParams, pagination } = usePaginatedTableCore<
+    TFilters,
+    TData
+  >({
     queryOptions,
     buildFilters,
     tableState,
     groupBy,
   });
 
-  const infiniteQueryKey = useMemo(() => {
-    const finiteQueryKey = queryOptions({
-      sort: sortParams,
-      pagination: { pageIndex: 0, pageSize: pagination.pageSize },
-      filters,
-      ...(groupBy && { groupBy }),
-    }).queryKey;
-    return finiteQueryKey[0] === "operation"
-      ? infiniteOperationQueryKey(finiteQueryKey as OperationQueryKey<unknown>)
-      : [...finiteQueryKey, "__infinite__"];
-  }, [queryOptions, sortParams, pagination.pageSize, filters, groupBy]);
-
-  const pageOptions = useMemo(
-    () => (pageParam: number) =>
+  const firstPageOptions = useMemo(
+    () =>
       queryOptions({
         sort: sortParams,
-        pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
+        pagination: { pageIndex: 0, pageSize: pagination.pageSize },
         filters,
         ...(groupBy && { groupBy }),
       }),
     [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
   );
 
+  const infiniteQueryKey = useMemo(() => {
+    const finiteQueryKey = firstPageOptions.queryKey;
+    if (isOperationQueryKey(finiteQueryKey)) {
+      return infiniteOperationQueryKey(finiteQueryKey);
+    }
+    return [...finiteQueryKey, "__infinite__"];
+  }, [firstPageOptions.queryKey]);
+
+  const pageOptions = useMemo(
+    () => (pageParam: number) =>
+      pageParam === 0
+        ? firstPageOptions
+        : queryOptions({
+            sort: sortParams,
+            pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
+            filters,
+            ...(groupBy && { groupBy }),
+          }),
+    [
+      firstPageOptions,
+      queryOptions,
+      sortParams,
+      pagination.pageSize,
+      filters,
+      groupBy,
+    ],
+  );
+
+  // SAFETY: this adapter narrows TanStack's observer result to the exact
+  // page/result members consumed below; queryFn and getNextPageParam carry the
+  // same ListQueryResponse<TData> contract.
   const {
     data: infiniteData,
     isLoading,
@@ -121,18 +149,13 @@ export function useInfiniteTableList<
     // count (useEntityList withholds totalCount while isLoading).
     placeholderData: keepPreviousData,
     queryKey: infiniteQueryKey,
-    queryFn: async ({
-      pageParam,
-      signal,
-    }: {
-      pageParam: number;
-      signal: AbortSignal;
-    }) => {
+    // The infinite adapter owns a different key but the same operation. Carry
+    // the descriptor metadata so root mutation invalidation can still match
+    // its entity/cache tags; omitting it left every list permanently stale.
+    meta: firstPageOptions.meta,
+    queryFn: async ({ pageParam, signal }) => {
       const options = pageOptions(pageParam);
-      return (await options.queryFn({
-        queryKey: options.queryKey,
-        signal,
-      })) as ListQueryResponse<TData>;
+      return options.execute(signal);
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage: ListQueryResponse<TData>) => {
@@ -142,24 +165,7 @@ export function useInfiniteTableList<
       const loaded = (pageIndex + 1) * meta.pageSize;
       return loaded < meta.totalCount ? pageIndex + 1 : undefined;
     },
-  }) as {
-    data:
-      | { pages: ListQueryResponse<TData>[]; pageParams: number[] }
-      | undefined;
-    isLoading: boolean;
-    error: Error | null;
-    // useInfiniteQuery's fetchNextPage resolves with the updated observer
-    // result (has .hasNextPage / .data) — awaited by loadAllPages below.
-    fetchNextPage: (options?: { cancelRefetch?: boolean }) => Promise<{
-      hasNextPage?: boolean;
-      data?: { pages: ListQueryResponse<TData>[] };
-    }>;
-    hasNextPage: boolean;
-    isFetchingNextPage: boolean;
-    isPlaceholderData: boolean;
-    isRefetching: boolean;
-    refetch: () => Promise<unknown>;
-  };
+  });
 
   // Flatten all pages into a single array, with a row-identity backstop for an
   // overlapping or refetched page.

@@ -1,4 +1,4 @@
-import type { AuditEntityType, AuditJsonValue } from "@cubby/schemas/audit";
+import type { AuditJsonValue } from "@cubby/schemas/audit";
 import { sortBy } from "es-toolkit";
 import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -27,10 +27,33 @@ import { cn } from "~/lib/utils";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { AuditEntityLink } from "./audit-entity-link";
 
-function formatChangeValue(value: unknown): string {
+type AuditChanges = NonNullable<AuditLogEntry["changes"]>;
+type AuditJsonObject = { [key: string]: AuditJsonValue };
+
+function isAuditObject(
+  value: AuditJsonValue | undefined,
+): value is AuditJsonObject {
+  return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+function isAuditBoolean(value: AuditJsonValue | undefined): value is boolean {
+  return typeof value === "boolean";
+}
+
+function isAuditNumber(value: AuditJsonValue | undefined): value is number {
+  return typeof value === "number";
+}
+
+function isAuditString(value: AuditJsonValue | undefined): value is string {
+  return typeof value === "string";
+}
+
+function formatChangeValue(value: AuditJsonValue | undefined): string {
   if (value === null || value === undefined || value === "") return "(empty)";
-  if (typeof value === "object") return JSON.stringify(value);
-  const str = String(value);
+  const str =
+    isAuditObject(value) || Array.isArray(value)
+      ? JSON.stringify(value)
+      : String(value);
   return str.length > 500 ? `${str.slice(0, 500)}...` : str;
 }
 
@@ -52,7 +75,7 @@ const LOW_SIGNAL_CHANGE_FIELDS = new Set([
 ]);
 
 /** Column names whose camel-case split still doesn't read as English. */
-const CHANGE_FIELD_LABELS: Record<string, string> = {
+const CHANGE_FIELD_LABELS = {
   displayLabel: "label",
   postedDate: "posted",
   productQuantity: "quantity",
@@ -61,11 +84,17 @@ const CHANGE_FIELD_LABELS: Record<string, string> = {
   statedTotal: "total",
   transactionDate: "date",
   verifiedAt: "verified",
-};
+} satisfies Record<string, string>;
+
+function isChangeFieldLabel(
+  field: string,
+): field is keyof typeof CHANGE_FIELD_LABELS {
+  return field in CHANGE_FIELD_LABELS;
+}
 
 function humanizeChangeField(field: string): string {
   return (
-    CHANGE_FIELD_LABELS[field] ??
+    (isChangeFieldLabel(field) ? CHANGE_FIELD_LABELS[field] : undefined) ??
     field
       // A resolved FK reads as the thing it points at ("location", not
       // "location id") — the id itself is already rendered as a shortcode.
@@ -94,13 +123,13 @@ function formatLedgerValue(
   value: AuditJsonValue | undefined,
 ): LedgerValue | null {
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value === "boolean") {
+  if (isAuditBoolean(value)) {
     return { text: value ? "yes" : "no", mono: false };
   }
-  if (typeof value === "number") {
+  if (isAuditNumber(value)) {
     return { text: formatLedgerNumber(value), mono: true };
   }
-  if (typeof value === "string") {
+  if (isAuditString(value)) {
     return {
       text:
         value.length > LEDGER_VALUE_CHARS
@@ -112,10 +141,11 @@ function formatLedgerValue(
   if (Array.isArray(value)) {
     return { text: `${value.length} items`, mono: true };
   }
+  if (!isAuditObject(value)) return null;
   // `Amount` is by far the most common object diff on the home feed — an
   // inventory quantity change is unreadable as raw JSON and obvious as "3 ea".
   const { value: quantity, unit } = value;
-  return typeof quantity === "number" && typeof unit === "string"
+  return isAuditNumber(quantity) && isAuditString(unit)
     ? { text: `${formatLedgerNumber(quantity)} ${unit}`, mono: true }
     : null;
 }
@@ -197,11 +227,7 @@ function LedgerChangeSummary({
   );
 }
 
-function ChangesList({
-  changes,
-}: {
-  changes: Record<string, { from: unknown; to: unknown }>;
-}) {
+function ChangesList({ changes }: { changes: AuditChanges }) {
   return (
     <Stack gap="xs">
       {Object.entries(changes).map(([field, { from, to }]) => (
@@ -236,16 +262,17 @@ export function AuditLogEntryComponent({
   variant = "default",
 }: AuditLogEntryProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const hasChanges = entry.changes && Object.keys(entry.changes).length > 0;
+  const changes = entry.changes;
+  const hasChanges = changes !== null && Object.keys(changes).length > 0;
 
-  const fallbackEntityLabel = entityLabel(entry.entityType as AuditEntityType);
+  const fallbackEntityLabel = entityLabel(entry.entityType);
   const action = getStatusBadgeProps("audit", entry.action);
 
   if (variant === "ledger") {
     // A create or delete has no interesting "from" side, so its verb IS the
     // news; an update's verb is the one thing the reader can already assume.
     const summary =
-      entry.action === "update" ? summarizeChanges(entry.changes) : null;
+      entry.action === "update" ? summarizeChanges(changes) : null;
 
     return (
       <AuditTimelineItem step={step} className="not-last:pb-2">
@@ -380,29 +407,22 @@ export function AuditLogEntryComponent({
                 </span>
               </Row>
 
-              {hasChanges && (
+              {changes && hasChanges && (
                 <CollapsibleTrigger className="mt-1 flex min-h-11 items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground md:mt-2 md:min-h-0">
                   {isOpen ? (
                     <ChevronDown className="size-3" />
                   ) : (
                     <ChevronRight className="size-3" />
                   )}
-                  {Object.keys(entry.changes!).length} field
-                  {Object.keys(entry.changes!).length > 1 ? "s" : ""} changed
+                  {Object.keys(changes).length} field
+                  {Object.keys(changes).length > 1 ? "s" : ""} changed
                 </CollapsibleTrigger>
               )}
 
               <CollapsibleContent className="mt-2">
-                {entry.changes && (
+                {changes && (
                   <MutedBox padding="sm">
-                    <ChangesList
-                      changes={
-                        entry.changes as Record<
-                          string,
-                          { from: unknown; to: unknown }
-                        >
-                      }
-                    />
+                    <ChangesList changes={changes} />
                   </MutedBox>
                 )}
               </CollapsibleContent>

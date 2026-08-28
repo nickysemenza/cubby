@@ -66,7 +66,7 @@ export function WishDetail({ wish }: { wish: WishOut }) {
   // Overview is edited through inline EditableCell fields, not a Form, so
   // editMode/mappings go unused — this is only here for the History section
   // (mirrors vendor-detail).
-  const { commonSections } = useEntityDetail<WishOut, never>({
+  const { commonSections } = useEntityDetail<"wish", WishOut, never>({
     entity: "wish",
     data: wish,
   });

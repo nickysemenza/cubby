@@ -29,8 +29,8 @@ import { uniq } from "es-toolkit";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
+import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
@@ -57,6 +57,11 @@ interface ProductWriteServices {
   locationValuation: LocationValuationService;
 }
 
+type UpcProductUpdate = Pick<
+  ProductUpdateInput["data"],
+  "manufacturer" | "price"
+>;
+
 const resolveIngredientEntityId = async (
   db: Database,
   shortcode: IngredientShortcode,
@@ -67,7 +72,7 @@ const resolveIngredientEntityId = async (
 };
 
 export async function createProductWithSideEffects(
-  services: ProductWriteServices & { upcLookupClient: UPCLookupClient },
+  services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: ProductCreateInput,
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
@@ -163,7 +168,7 @@ export async function updateProductWithSideEffects(
 }
 
 export async function applyUpcDataWithSideEffects(
-  services: ProductWriteServices & { upcLookupClient: UPCLookupClient },
+  services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: { id: ProductId; upc: string },
   actor: ActorContext,
 ): Promise<ProductWithFoodAndSideEffectsOut> {
@@ -175,7 +180,7 @@ export async function applyUpcDataWithSideEffects(
   );
   const lookup = lookups.get(input.upc) ?? null;
 
-  const data: { manufacturer?: string; price?: number } = {};
+  const data: UpcProductUpdate = {};
   const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;
   if (
     lookupManufacturer != null &&
@@ -265,8 +270,8 @@ const externalIdentity = (hit: UPCLookupHit) => ({
   price: hit.priceDollars ?? null,
 });
 
-type UsdaFoodByUpc = Awaited<ReturnType<USDAClient["findFood"]>>;
-type UPCLookupHit = NonNullable<Awaited<ReturnType<UPCLookupClient["lookup"]>>>;
+type UsdaFoodByUpc = Awaited<ReturnType<UsdaFoodLookupPort["findFood"]>>;
+type UPCLookupHit = NonNullable<Awaited<ReturnType<UpcLookupPort["lookup"]>>>;
 
 export interface LookupUPCResult {
   upc: string;
@@ -296,8 +301,8 @@ export interface LookupUPCResult {
  */
 export async function lookupUPC(
   db: Database,
-  usdaClient: USDAClient,
-  upcLookupClient: UPCLookupClient,
+  usdaClient: UsdaFoodLookupPort,
+  upcLookupClient: UpcLookupPort,
   upc: string,
 ): Promise<LookupUPCResult> {
   const [localProduct, food, external] = await Promise.all([
@@ -328,8 +333,8 @@ export async function lookupUPC(
  */
 export async function findOrCreateByUPC(
   db: Database,
-  usdaClient: USDAClient,
-  upcLookupClient: UPCLookupClient,
+  usdaClient: UsdaFoodLookupPort,
+  upcLookupClient: UpcLookupPort,
   upc: string,
   defaultName: string | undefined,
   actor: ActorContext,
@@ -442,7 +447,7 @@ export async function findOrCreateByUPC(
  */
 async function findOrCreateByISBN(
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupPort,
   canonicalGtin: string,
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
@@ -510,8 +515,8 @@ async function findOrCreateByISBN(
 
 export function findOrCreateByCode(
   db: Database,
-  usdaClient: USDAClient,
-  upcLookupClient: UPCLookupClient,
+  usdaClient: UsdaFoodLookupPort,
+  upcLookupClient: UpcLookupPort,
   input: ProductFindOrCreateByCodeInput,
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
@@ -551,7 +556,7 @@ interface BackfillSummary {
  */
 export async function* backfillUPCImages(
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupPort,
 ): AsyncGenerator<{ done: number; total: number }, BackfillSummary> {
   const allNoImages = await findProductsWithNoImages(db);
   // The provider is keyed by barcode, so a product without one has nothing to

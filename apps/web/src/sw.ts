@@ -26,9 +26,11 @@ import {
  * `self.__WB_MANIFEST` with the precache list after the client build.
  */
 
-// The WebWorker lib types `self` as the generic WorkerGlobalScope; alias it to
-// the service-worker scope so lifecycle/client/fetch events type correctly.
-const sw = self as unknown as ServiceWorkerGlobalScope;
+declare const self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
+};
+
+const sw = self;
 
 // A standalone static page (NOT a router route) so it can be served as a
 // navigation fallback without booting the SPA / causing a hydration mismatch.
@@ -37,9 +39,7 @@ const OFFLINE_URL = "/offline.html";
 // Precache list, injected at build time: scripts/build-sw.mjs replaces the
 // `self.__WB_MANIFEST` token via esbuild define. Keep it as a bare `self.`
 // member access so that replacement matches.
-const manifest: Array<{ url: string; revision: string | null }> =
-  // @ts-expect-error -- __WB_MANIFEST is injected by the build, not a real type
-  self.__WB_MANIFEST;
+const manifest = self.__WB_MANIFEST;
 
 // Cache name is keyed to the build: a digest of every asset revision changes
 // whenever the build output changes. An updated worker waits until the old

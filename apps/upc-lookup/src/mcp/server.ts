@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { type JSONType, z } from "zod";
 import type { Env } from "../types";
 import { createDb } from "../db";
-import type { Product } from "../db/schema";
+import type { NewProduct, Product } from "../db/schema";
 import {
   getProduct,
   createProduct,
@@ -17,7 +17,11 @@ import { getStats } from "../routes/stats";
 import { storeImage, getImageUrl } from "../storage/images";
 import { UPC_REGEX } from "../util/upc";
 
-function json(data: unknown) {
+type JsonResponse = {
+  content: [{ type: "text"; text: string }];
+};
+
+function json(data: JSONType): JsonResponse {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   };
@@ -30,9 +34,7 @@ function errorResult(message: string) {
   };
 }
 
-function withErrorHandling<A>(
-  handler: (args: A) => Promise<ReturnType<typeof json>>,
-) {
+function withErrorHandling<A>(handler: (args: A) => Promise<JsonResponse>) {
   return async (args: A) => {
     try {
       return await handler(args);
@@ -193,7 +195,7 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
       const existing = await getProduct(db, args.upc);
       if (!existing) throw new Error(`Product ${args.upc} not found.`);
 
-      const values: Record<string, unknown> = {};
+      const values: Partial<Omit<NewProduct, "upc">> = {};
       if (args.name !== undefined) values.name = args.name;
       if (args.manufacturer !== undefined)
         values.manufacturer = args.manufacturer;

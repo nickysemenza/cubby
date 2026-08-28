@@ -1,6 +1,7 @@
-import { type Entity, entityRefKey } from "@cubby/schemas/entity";
+import { type Entity, entityRefKey, entitySchema } from "@cubby/schemas/entity";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
@@ -25,15 +26,11 @@ const DISPLAY_IMAGE_ENTITIES = new Set<Entity>([
   "vendor",
 ]);
 
-type DisplayImageRow = EntityDisplayImageRef & { key: string | null };
-
-const rowsOf = (result: unknown): DisplayImageRow[] => {
-  if (Array.isArray(result)) return result as DisplayImageRow[];
-  if (result && typeof result === "object" && "rows" in result) {
-    return (result as { rows: DisplayImageRow[] }).rows;
-  }
-  return [];
-};
+const displayImageRowSchema = z.object({
+  entityType: entitySchema,
+  entityId: z.string(),
+  key: z.string().nullable(),
+});
 
 /**
  * Resolve the canonical display image for a mixed batch of private entity refs.
@@ -134,15 +131,18 @@ export async function resolveEntityDisplayImages(
   `);
 
   return new Map(
-    rowsOf(result).flatMap((row) =>
-      row.key
-        ? [
-            [
-              entityRefKey(row.entityType, row.entityId),
-              { url: getR2PublicUrl(row.key) },
-            ],
-          ]
-        : [],
-    ),
+    z
+      .array(displayImageRowSchema)
+      .parse(result.rows)
+      .flatMap((row) =>
+        row.key
+          ? [
+              [
+                entityRefKey(row.entityType, row.entityId),
+                { url: getR2PublicUrl(row.key) },
+              ],
+            ]
+          : [],
+      ),
   );
 }

@@ -18,6 +18,7 @@ import { expenseCaptureRequest } from "~/entities/editing/editor-requests";
 import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import {
   type EXPENSE_LIST_VIEWS,
+  expenseListLoaderDeps,
   expenseSearchDefaults,
   expenseSearchSchema,
 } from "~/entities/list-search";
@@ -45,13 +46,13 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
 export const Route = createFileRoute("/_authenticated/expenses/")({
   validateSearch: expenseSearchSchema,
   search: { middlewares: [stripSearchParams(expenseSearchDefaults)] },
-  loaderDeps: ({ search }) => search,
+  loaderDeps: ({ search }) => expenseListLoaderDeps(search),
   loader: ({ context, deps, abortController }) =>
     ensureEntityListSsr({
       queryClient: context.queryClient,
       entity: "expense",
-      search: deps,
-      active: (deps.view ?? "ledger") === "ledger",
+      search: deps.search,
+      active: deps.active,
       signal: abortController.signal,
     }),
   component: ExpensesPage,

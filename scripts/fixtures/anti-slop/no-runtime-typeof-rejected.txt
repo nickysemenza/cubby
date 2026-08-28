@@ -1,0 +1,12 @@
+export function inspect(value: unknown): boolean {
+  return typeof value === "string";
+}
+
+export const inferredPredicate = (value: unknown) =>
+  typeof value === "number";
+
+export function isText(value: unknown): value is string {
+  return [value].some(
+    (candidate): boolean => typeof candidate === "string",
+  );
+}

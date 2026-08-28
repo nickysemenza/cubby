@@ -5,7 +5,7 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { calendarFilterSpecs } from "./calendar-filter-specs";
 
 interface CalendarFilterBarProps {
-  search: Record<string, unknown>;
+  search: Readonly<Record<string, string | undefined>>;
   onSearchChange: (params: Record<string, string | undefined>) => void;
 }
 

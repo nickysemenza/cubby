@@ -12,13 +12,24 @@ import {
   mcpUsageSince,
 } from "~/server/repo/mcp-usage";
 
+export interface McpUsageDashboardPort {
+  listCatalog: typeof listMcpToolCatalog;
+  loadAggregate: typeof getMcpUsageAggregateData;
+}
+
+const productionMcpUsageDashboardPort: McpUsageDashboardPort = {
+  listCatalog: listMcpToolCatalog,
+  loadAggregate: getMcpUsageAggregateData,
+};
+
 export async function getMcpUsageDashboard(
   db: Database,
   window: McpUsageWindow,
+  port: McpUsageDashboardPort = productionMcpUsageDashboardPort,
 ): Promise<McpUsageDashboardOut> {
   const [catalog, usage] = await Promise.all([
-    listMcpToolCatalog(),
-    getMcpUsageAggregateData(db, window),
+    port.listCatalog(),
+    port.loadAggregate(db, window),
   ]);
   const registeredNames = new Set(catalog.tools.map((tool) => tool.name));
   const catalogByTool = new Map(catalog.tools.map((tool) => [tool.name, tool]));

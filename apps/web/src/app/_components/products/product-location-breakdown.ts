@@ -97,10 +97,7 @@ const scalarValue = (
   return totals.values().next().value ?? null;
 };
 
-const finalizeNode = (
-  node: MutableNode,
-  globallyMixed: boolean,
-): { node: HierarchyDrilldownNode; totals: Map<string, number> } => {
+const finalizeNode = (node: MutableNode, globallyMixed: boolean) => {
   const totals = new Map(node.directByUnit);
   const children = [...node.children.values()].map((child) => {
     const finalized = finalizeNode(child, globallyMixed);
@@ -111,29 +108,32 @@ const finalizeNode = (
   const directMetricLabel =
     node.directByUnit.size > 0 ? formatTotals(node.directByUnit) : undefined;
 
-  return {
-    totals,
-    node: {
-      id: node.id,
-      label: node.label,
-      metricLabel: formatTotals(totals),
-      metricValue: scalarValue(totals, globallyMixed),
-      ...(directMetricLabel
-        ? {
-            directMetricLabel,
-            directMetricValue: scalarValue(node.directByUnit, globallyMixed),
-          }
-        : {}),
-      ...(node.locationShortcode
-        ? { locationShortcode: node.locationShortcode }
-        : {}),
-      ...(node.displayImage ? { displayImage: node.displayImage } : {}),
-      ...(node.annotations.size > 0
-        ? { annotations: [...node.annotations].sort() }
-        : {}),
-      ...(children.length > 0 ? { children } : {}),
-    },
+  const resultNode: HierarchyDrilldownNode = {
+    id: node.id,
+    label: node.label,
+    metricLabel: formatTotals(totals),
+    metricValue: scalarValue(totals, globallyMixed),
   };
+  if (directMetricLabel !== undefined) {
+    resultNode.directMetricLabel = directMetricLabel;
+    resultNode.directMetricValue = scalarValue(
+      node.directByUnit,
+      globallyMixed,
+    );
+  }
+  if (node.locationShortcode !== undefined) {
+    resultNode.locationShortcode = node.locationShortcode;
+  }
+  if (node.displayImage !== undefined) {
+    resultNode.displayImage = node.displayImage;
+  }
+  if (node.annotations.size > 0) {
+    resultNode.annotations = [...node.annotations].sort();
+  }
+  if (children.length > 0) {
+    resultNode.children = children;
+  }
+  return { totals, node: resultNode };
 };
 
 const sharedPrefix = (
@@ -201,11 +201,13 @@ export const buildProductLocationBreakdown = (
           id: rung.id,
           label: rung.name,
           locationShortcode: rung.id,
-          ...(rung.displayImage ? { displayImage: rung.displayImage } : {}),
           directByUnit: new Map(),
           annotations: new Set(),
           children: new Map(),
         };
+        if (rung.displayImage !== null) {
+          child.displayImage = rung.displayImage;
+        }
         current.children.set(rung.id, child);
       } else if (!child.displayImage && rung.displayImage) {
         // Every rung with this id names the SAME location, so whichever

@@ -44,10 +44,7 @@ function hasDueDate(t: TaskOut): t is TaskOut & { dueDate: string } {
  * `dueDate` + `dueEndDate` is a multi-day bar; a bare `dueDate` is a 1-day
  * milestone (`startDay === endDay`, same convention as `buildTaskRow`).
  */
-function buildFlatTaskRows(tasks: TaskOut[]): {
-  rows: GanttRow[];
-  extent: DayRange | null;
-} {
+function buildFlatTaskRows(tasks: TaskOut[]) {
   const dated = tasks
     .filter(hasDueDate)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));

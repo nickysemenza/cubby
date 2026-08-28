@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
 import { type ReactNode, Suspense, useState } from "react";
+import { z } from "zod";
 
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { AppFooter } from "~/app/_components/footer";
@@ -34,6 +35,7 @@ import {
 import { WorkspaceNavigator } from "./workspace-navigator";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
+const collapsedPreferenceSchema = z.boolean();
 
 const ShellControls = AuthenticatedShellControls;
 const ShellAccount = AuthenticatedShellAccount;
@@ -58,6 +60,7 @@ export function AuthenticatedAppShell({
 }: AuthenticatedAppShellProps) {
   const [collapsed, setCollapsed] = useLocalStorage(
     "app-shell:sidebar-collapsed",
+    collapsedPreferenceSchema,
     false,
   );
   const expanded = !collapsed;

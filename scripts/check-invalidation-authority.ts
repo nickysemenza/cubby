@@ -69,15 +69,19 @@ const INVALIDATION_ENGINE = new Set([
   resolve(webSource, "integrations/tanstack-query/root-provider.tsx"),
 ]);
 
-const { ripple, entityRipple } = (await import(
-  resolve(webSource, "integrations/tanstack-query/cache-tags.ts")
-)) as {
+type CacheTagsModule = {
   ripple: Record<string, readonly (readonly string[])[]>;
   entityRipple: (entity: string) => readonly (readonly string[])[];
 };
-const { generatedEntityManifest } = (await import(
+const cacheTagsModule: CacheTagsModule = await import(
+  resolve(webSource, "integrations/tanstack-query/cache-tags.ts")
+);
+const { ripple, entityRipple } = cacheTagsModule;
+type EntityManifestModule = { generatedEntityManifest: object };
+const entityManifestModule: EntityManifestModule = await import(
   resolve(root, "packages/schemas/src/generated/entity-manifest-data.gen.ts")
-)) as { generatedEntityManifest: Record<string, unknown> };
+);
+const { generatedEntityManifest } = entityManifestModule;
 
 const RETIRED = new Set([
   "invalidateQueryRoots",
@@ -88,9 +92,49 @@ const RETIRED = new Set([
 const IGNORED_DIRECTORIES = new Set(["node_modules", "dist", "coverage"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 
-type AstNode = { type: string; [key: string]: unknown };
-const isNode = (value: unknown): value is AstNode =>
+type AstValue =
+  | AstNode
+  | readonly AstValue[]
+  | boolean
+  | null
+  | number
+  | string
+  | undefined;
+type AstNode = {
+  type: string;
+  name?: string;
+  value?: AstValue;
+  start?: number;
+  end?: number;
+  operator?: string;
+  computed?: boolean;
+  object?: AstValue;
+  property?: AstValue;
+  key?: AstValue;
+  id?: AstValue;
+  init?: AstValue;
+  expression?: AstValue;
+  callee?: AstValue;
+  source?: AstValue;
+  typeAnnotation?: AstValue;
+  typeName?: AstValue;
+  typeParameters?: AstValue;
+  typeArguments?: AstValue;
+  constraint?: AstValue;
+  exprName?: AstValue;
+  imported?: AstValue;
+  local?: AstValue;
+  exported?: AstValue;
+  params?: readonly AstValue[];
+  specifiers?: readonly AstValue[];
+  elements?: readonly AstValue[];
+  arguments?: readonly AstValue[];
+  properties?: readonly AstValue[];
+};
+const isNode = <TValue>(value: TValue): value is TValue & AstNode =>
   typeof value === "object" && value !== null && "type" in value;
+const isStringValue = (value: AstValue | undefined): value is string =>
+  typeof value === "string";
 const children = (node: AstNode): AstNode[] =>
   Object.values(node).flatMap((value) =>
     Array.isArray(value) ? value.filter(isNode) : isNode(value) ? [value] : [],
@@ -125,12 +169,12 @@ const sourceFiles = (path: string): string[] => {
 };
 
 /** `["a","b"]` as a tag, or undefined when the element is not a literal tag. */
-const tagLiteral = (node: unknown): string[] | undefined => {
+const tagLiteral = <TValue>(node: TValue): string[] | undefined => {
   if (!isNode(node) || node.type !== "ArrayExpression") return undefined;
-  const parts = (node.elements as unknown[]).map((element) =>
+  const parts = (node.elements ?? []).map((element) =>
     isNode(element) &&
     element.type === "Literal" &&
-    typeof element.value === "string"
+    isStringValue(element.value)
       ? element.value
       : undefined,
   );
@@ -139,31 +183,31 @@ const tagLiteral = (node: unknown): string[] | undefined => {
     ? parts
     : undefined;
 };
-const tagListLiteral = (node: unknown): string[][] | undefined => {
+const tagListLiteral = <TValue>(node: TValue): string[][] | undefined => {
   if (!isNode(node) || node.type !== "ArrayExpression") return undefined;
-  const tags = (node.elements as unknown[]).map(tagLiteral);
+  const tags = (node.elements ?? []).map(tagLiteral);
   return tags.every((tag): tag is string[] => tag !== undefined)
     ? tags
     : undefined;
 };
 /** `ripple.productMerge` — resolved against the real table, not re-parsed. */
-const rippleReference = (node: unknown): string[][] | undefined => {
+const rippleReference = <TValue>(node: TValue): string[][] | undefined => {
   if (!isNode(node) || node.type !== "MemberExpression") return undefined;
-  const object = node.object as AstNode | undefined;
-  const property = node.property as AstNode | undefined;
+  const object = isNode(node.object) ? node.object : undefined;
+  const property = isNode(node.property) ? node.property : undefined;
   if (object?.type !== "Identifier" || object.name !== "ripple")
     return undefined;
   const name =
     property?.type === "Identifier"
-      ? (property.name as string)
-      : property?.type === "Literal" && typeof property.value === "string"
+      ? property.name
+      : property?.type === "Literal" && isStringValue(property.value)
         ? property.value
         : undefined;
   const row = name === undefined ? undefined : ripple[name];
   return row ? row.map((tag) => [...tag]) : undefined;
 };
 /** An inline policy: only the sibling test can say what it returns. */
-const isPolicyFunction = (node: unknown): boolean =>
+const isPolicyFunction = <TValue>(node: TValue): boolean =>
   isNode(node) &&
   (node.type === "ArrowFunctionExpression" ||
     node.type === "FunctionExpression");
@@ -171,18 +215,18 @@ const isPolicyFunction = (node: unknown): boolean =>
  * `entityRipple(<entity>)` — readable without executing it, because the loop
  * below already walks every value it can return over the whole manifest.
  */
-const isEntityRippleCall = (node: unknown): boolean =>
+const isEntityRippleCall = <TValue>(node: TValue): boolean =>
   isNode(node) &&
   node.type === "CallExpression" &&
   isNode(node.callee) &&
   node.callee.type === "Identifier" &&
   node.callee.name === "entityRipple";
 const propertyName = (node: AstNode): string | undefined => {
-  const key = node.key as AstNode | undefined;
+  const key = isNode(node.key) ? node.key : undefined;
   if (node.computed === true) return undefined;
   return key?.type === "Identifier"
-    ? (key.name as string)
-    : key?.type === "Literal" && typeof key.value === "string"
+    ? key.name
+    : key?.type === "Literal" && isStringValue(key.value)
       ? key.value
       : undefined;
 };
@@ -213,13 +257,13 @@ for (const file of sourceFiles(webSource).sort()) {
   const error = parsed.errors.at(0);
   if (error) throw new Error(`${file}: ${error.message}`);
   const where = (node: AstNode) =>
-    `${relative(root, file)}:${lineAt(source, (node.start as number) ?? 0)}`;
+    `${relative(root, file)}:${lineAt(source, node.start ?? 0)}`;
 
   const isTest = /\.(unit|integration)\.test\.tsx?$/u.test(file);
 
-  walk(parsed.program as unknown as AstNode, (node, parent) => {
+  walk(parsed.program, (node, parent) => {
     // (a) the retired key path
-    if (node.type === "Identifier" && RETIRED.has(node.name as string)) {
+    if (node.type === "Identifier" && node.name && RETIRED.has(node.name)) {
       violations.push(
         `${where(node)} references \`${node.name}\` — the legacy query-key invalidation path is gone; declare tags on the operation descriptor instead.`,
       );
@@ -268,7 +312,7 @@ for (const file of sourceFiles(webSource).sort()) {
     const name =
       node.type === "JSXAttribute"
         ? isNode(node.name) && node.name.type === "JSXIdentifier"
-          ? (node.name.name as string)
+          ? node.name.name
           : undefined
         : propertyName(node);
     if (name !== "invalidates" && name !== "invalidateTags") return;
@@ -284,7 +328,7 @@ for (const file of sourceFiles(webSource).sort()) {
       for (const tag of tags)
         invalidationTags.push({
           file: relative(root, file),
-          line: lineAt(source, (node.start as number) ?? 0),
+          line: lineAt(source, node.start ?? 0),
           tag,
         });
       return;
@@ -299,7 +343,7 @@ for (const file of sourceFiles(webSource).sort()) {
     // is uncounted tags hiding behind an OK line, so it stops the sweep.
     if (isTest || INVALIDATION_ENGINE.has(resolve(file))) return;
     throw new Error(
-      `${where(node)}: \`${name}\` is not readable by check-invalidation-authority (got a ${String((value as AstNode | undefined)?.type ?? "missing value")}). ` +
+      `${where(node)}: \`${name}\` is not readable by check-invalidation-authority (got a ${isNode(value) ? value.type : "missing value"}). ` +
         'Write it as a literal tag list (`[["product"]]`), a `ripple.<row>` reference, or a function — ' +
         "a function is deferred to operation-tags.unit.test.ts, which replays it against a declared sample input.",
     );

@@ -23,10 +23,47 @@ export function problemsBannerMessage(defects: number): string {
     : "No defects found.";
 }
 
-export function ProblemsBanner() {
+export interface ProblemsBannerOperations {
+  readonly getCounts: typeof problems.getCounts;
+}
+
+const productionProblemsBannerOperations: ProblemsBannerOperations = {
+  getCounts: problems.getCounts,
+};
+
+export function ProblemsBanner({
+  isAuthed: authenticated,
+  operations = productionProblemsBannerOperations,
+}: {
+  isAuthed?: boolean;
+  operations?: ProblemsBannerOperations;
+}) {
+  if (authenticated !== undefined) {
+    return (
+      <ProblemsBannerContent isAuthed={authenticated} operations={operations} />
+    );
+  }
+  return <RouteProblemsBanner operations={operations} />;
+}
+
+function RouteProblemsBanner({
+  operations,
+}: {
+  operations: ProblemsBannerOperations;
+}) {
   const { isAuthed } = useRouteContext({ from: "__root__" });
+  return <ProblemsBannerContent isAuthed={isAuthed} operations={operations} />;
+}
+
+function ProblemsBannerContent({
+  isAuthed,
+  operations,
+}: {
+  isAuthed: boolean;
+  operations: ProblemsBannerOperations;
+}) {
   const { data: counts, isLoading } = useQuery({
-    ...problems.getCounts.queryOptions(),
+    ...operations.getCounts.queryOptions(),
     staleTime: 5 * 60 * 1000,
     enabled: isAuthed,
   });

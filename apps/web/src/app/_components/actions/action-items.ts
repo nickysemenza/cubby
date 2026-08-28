@@ -57,10 +57,14 @@ export interface ActionItem {
    * entities have no `/new` route (they create via a dialog on their index
    * page), so their actions deep-link with `{ create: true }` instead.
    */
-  search?: Record<string, unknown>;
+  search?: EntityCreateSearch;
   icon: LucideIcon;
   keywords?: string[];
   surfaces: ActionSurface[];
+}
+
+interface EntityCreateSearch {
+  create: true;
 }
 
 /**
@@ -317,7 +321,7 @@ export function actionsForSurface(surface: ActionSurface): ActionItem[] {
 /** Where an entity's create affordance lives, as typed navigation. */
 export interface CreateTarget {
   to: string;
-  search?: Record<string, unknown>;
+  search?: EntityCreateSearch;
 }
 
 /**

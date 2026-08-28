@@ -19,7 +19,47 @@ export type IdentifierViolation = Readonly<{
   column: number;
 }>;
 
-type AstNode = { type: string; [key: string]: unknown };
+type AstValue =
+  | AstNode
+  | readonly AstValue[]
+  | boolean
+  | null
+  | number
+  | string
+  | undefined;
+type AstNode = {
+  type: string;
+  name?: string;
+  value?: AstValue;
+  start?: number;
+  end?: number;
+  operator?: string;
+  computed?: boolean;
+  object?: AstValue;
+  property?: AstValue;
+  left?: AstValue;
+  right?: AstValue;
+  key?: AstValue;
+  id?: AstValue;
+  init?: AstValue;
+  expression?: AstValue;
+  callee?: AstValue;
+  source?: AstValue;
+  typeAnnotation?: AstValue;
+  typeName?: AstValue;
+  typeParameters?: AstValue;
+  typeArguments?: AstValue;
+  constraint?: AstValue;
+  exprName?: AstValue;
+  imported?: AstValue;
+  local?: AstValue;
+  exported?: AstValue;
+  params?: readonly AstValue[];
+  specifiers?: readonly AstValue[];
+  elements?: readonly AstValue[];
+  arguments?: readonly AstValue[];
+  properties?: readonly AstValue[];
+};
 type Unit = Readonly<{ file: string; source: string; program: AstNode }>;
 type Link = Readonly<{ source: string; name: string }>;
 type ModuleInfo = {
@@ -44,8 +84,12 @@ const UNSAFE_HELPER = /^unsafe(?:[A-Z][A-Za-z0-9]*)?(?:Id|Shortcode)$/u;
 const TESTING_MODULE = "@cubby/schemas/testing";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const isNode = (value: unknown): value is AstNode =>
+const isNode = <TValue>(value: TValue): value is TValue & AstNode =>
   typeof value === "object" && value !== null && "type" in value;
+const isNumberValue = (value: number | undefined): value is number =>
+  typeof value === "number";
+const isStringValue = <TValue>(value: TValue): value is TValue & string =>
+  typeof value === "string";
 const children = (node: AstNode): AstNode[] =>
   Object.values(node).flatMap((value) =>
     Array.isArray(value) ? value.filter(isNode) : isNode(value) ? [value] : [],
@@ -56,9 +100,7 @@ const walk = (node: AstNode, visit: (node: AstNode) => void): void => {
 };
 const nameOf = (node: AstNode | undefined): string | undefined =>
   node?.type === "Identifier" || node?.type === "PrivateIdentifier"
-    ? typeof node.name === "string"
-      ? node.name
-      : undefined
+    ? node.name
     : undefined;
 const qualified = (node: AstNode | undefined): string[] => {
   if (!node) return [];
@@ -71,16 +113,16 @@ const qualified = (node: AstNode | undefined): string[] => {
   const name = nameOf(node);
   return name ? [name] : [];
 };
-const literal = (node: unknown): string | undefined =>
-  isNode(node) && node.type === "Literal" && typeof node.value === "string"
+const literal = <TValue>(node: TValue): string | undefined =>
+  isNode(node) && node.type === "Literal" && isStringValue(node.value)
     ? node.value
     : undefined;
 const unsafeName = (name: string | undefined): name is string =>
   name !== undefined &&
   (UNSAFE_HELPER.test(name) || name === "unsafeIdForEntity");
 const rangeOf = (node: AstNode) => ({
-  start: typeof node.start === "number" ? node.start : 0,
-  end: typeof node.end === "number" ? node.end : 0,
+  start: isNumberValue(node.start) ? node.start : 0,
+  end: isNumberValue(node.end) ? node.end : 0,
 });
 const positionAt = (source: string, offset: number) => {
   const prefix = source.slice(0, offset);
@@ -98,8 +140,49 @@ const parseUnit = (file: string, source: string): Unit => {
   return {
     file: resolve(file),
     source,
-    program: parsed.program as unknown as AstNode,
+    program: parsed.program,
   };
+};
+
+type JsonValue =
+  | JsonObject
+  | readonly JsonValue[]
+  | boolean
+  | null
+  | number
+  | string;
+type JsonObject = {
+  [key: string]: JsonValue | undefined;
+  name?: JsonValue;
+  exports?: JsonValue;
+  main?: JsonValue;
+};
+type PackageExports = string | ReadonlyMap<string, string> | undefined;
+type PackageManifest = {
+  name?: string;
+  exports?: PackageExports;
+  main?: string;
+};
+const isJsonObject = <TValue>(value: TValue): value is TValue & JsonObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isStringExport = <TValue>(value: TValue): value is TValue & string =>
+  isStringValue(value);
+const parsePackageManifest = (value: JsonValue): PackageManifest => {
+  if (!isJsonObject(value)) throw new Error("package.json must be an object");
+  const name = isStringValue(value.name) ? value.name : undefined;
+  const main = isStringValue(value.main) ? value.main : undefined;
+  if (value.exports === undefined || isStringExport(value.exports))
+    return { name, main, exports: value.exports };
+  if (!isJsonObject(value.exports))
+    throw new Error("package.json exports must be a string or object");
+  const entries = Object.entries(value.exports);
+  const exportsMap = new Map<string, string>();
+  for (const [key, target] of entries) {
+    if (!isStringValue(target))
+      throw new Error("package.json export targets must be strings");
+    exportsMap.set(key, target);
+  }
+  return { name, main, exports: exportsMap };
 };
 
 const workspaceExports = (): Map<string, string> => {
@@ -109,19 +192,17 @@ const workspaceExports = (): Map<string, string> => {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const packageFile = join(directory, entry.name, "package.json");
     if (!entry.isDirectory() || !existsSync(packageFile)) continue;
-    const manifest = JSON.parse(readFileSync(packageFile, "utf8")) as {
-      name?: string;
-      exports?: string | Record<string, string>;
-      main?: string;
-    };
+    const manifest = parsePackageManifest(
+      JSON.parse(readFileSync(packageFile, "utf8")),
+    );
     if (!manifest.name) continue;
-    if (typeof manifest.exports === "string") {
+    if (isStringExport(manifest.exports)) {
       result.set(
         manifest.name,
         resolve(dirname(packageFile), manifest.exports),
       );
     } else if (manifest.exports) {
-      for (const [key, target] of Object.entries(manifest.exports)) {
+      for (const [key, target] of manifest.exports) {
         result.set(
           key === "." ? manifest.name : `${manifest.name}${key.slice(1)}`,
           resolve(dirname(packageFile), target),

@@ -73,7 +73,7 @@
         "src/bundles.ts!",
         "build.mjs!",
         "vite.config.ts!",
-        "src/usda-picker.ts!",
+        "src/usda-picker-entry.ts!",
         "harness/{host.ts,vite.config.ts}!"
       ],
       "project": ["src/**/*.ts!", "harness/**/*.ts!"],

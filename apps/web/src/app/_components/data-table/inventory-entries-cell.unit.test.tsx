@@ -8,41 +8,33 @@ import type { LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
-  render,
+  render as renderWithTestingLibrary,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock sonner toast (EditableEntityCell/EditableEntityEditor toast on error).
-vi.mock("sonner", () => ({
-  toast: {
-    error: vi.fn(),
-  },
-}));
-
-// EntityInlineLink → EntityPreviewLink renders a router `Link`, which needs a
-// RouterProvider we don't have in a unit test. Stub it to a plain anchor —
-// the 1-entry test only checks the location name renders, not navigation.
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    className,
-  }: {
-    children?: ReactNode;
-    className?: string;
-  }) => (
-    <a href="/test" className={className}>
-      {children}
-    </a>
-  ),
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import { InventoryEntriesCell } from "./inventory-entries-cell";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function render(element: ReactElement) {
+  return renderWithTestingLibrary(element, { wrapper: harness.wrapper });
+}
 
 const PANTRY: ComboboxItem<LocationShortcode> = {
   id: testShortcode("location", "loc-1"),
@@ -71,6 +63,12 @@ interface TestEntry {
   id: InventoryShortcode;
   amount: Amount;
   location?: { id: LocationShortcode; name: string; type: LocationType | null };
+}
+
+interface ProductEntry {
+  id: InventoryShortcode;
+  amount: Amount;
+  product?: { id: ProductShortcode; name: string; manufacturer: string };
 }
 
 interface TestRow {
@@ -107,6 +105,33 @@ const clickDropdownItem = (name: string) => {
 };
 
 describe("InventoryEntriesCell", () => {
+  it("renders the correlated product projection in stacked layout", () => {
+    const product: ProductEntry["product"] = {
+      id: testShortcode("product", "prd-1"),
+      name: "Bread Flour",
+      manufacturer: "Mill House",
+    };
+    const entry: ProductEntry = {
+      id: testShortcode("inventory", "inv-product-1"),
+      amount: { value: 1, unit: "bag" },
+      product,
+    };
+
+    render(
+      <InventoryEntriesCell<TestRow, ProductEntry, "product">
+        entries={[entry]}
+        entity="product"
+        getRelatedEntity={(candidate) => candidate.product}
+        layout="stacked"
+        row={ROW}
+      />,
+    );
+
+    expect(screen.getByText("1 bag")).toBeInTheDocument();
+    expect(screen.getByText("Bread Flour")).toBeInTheDocument();
+    expect(screen.getByText(/Mill House/)).toBeInTheDocument();
+  });
+
   it("0 entries: shows NoneValue, and picking a location creates an entry", async () => {
     const onCreateEntry = vi.fn().mockResolvedValue(undefined);
     const onMoveEntry = vi.fn().mockResolvedValue(undefined);

@@ -7,6 +7,7 @@ import {
   makeBatchStatusFetcher,
   watchBatchesAndInvalidateTags,
 } from "~/lib/background-batch-polling";
+import type { UnparsedError } from "~/lib/error-utils";
 
 /**
  * Returns a callback that invalidates inventory queries and — given the mutation
@@ -18,7 +19,7 @@ import {
 export function useInventoryInvalidation() {
   const queryClient = useQueryClient();
 
-  return (result?: unknown) => {
+  return <Result>(result?: Result) => {
     void invalidateOperationTags(queryClient, ripple.inventory);
     void watchBatchesAndInvalidateTags({
       queryClient,
@@ -34,7 +35,7 @@ export function useCreateInventoryMutation({
   onError,
 }: {
   onSuccess?: () => void;
-  onError?: (error: unknown) => void;
+  onError?: (error: UnparsedError) => void;
 } = {}) {
   const invalidateInventory = useInventoryInvalidation();
 

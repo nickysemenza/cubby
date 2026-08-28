@@ -54,8 +54,18 @@ const EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS: ReferentialLivenessViolation[] =
   [];
 const REFERENTIAL_LIVENESS_STALE_TIME = 60_000;
 
+export interface EntityIntegrityOperations {
+  catalog: typeof entityIntegrity.catalog;
+  referentialLiveness: typeof integrityProblems.getByType;
+}
+
+const productionOperations: EntityIntegrityOperations = {
+  catalog: entityIntegrity.catalog,
+  referentialLiveness: integrityProblems.getByType,
+};
+
 /** Raw `effect` slug → the badge tone that reads correctly for it. */
-const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
+const EFFECT_VARIANT = {
   block: "destructive",
   "soft-delete": "warning",
   "hard-delete": "destructive",
@@ -63,7 +73,7 @@ const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
   repoint: "default",
   "move-dedupe": "plum",
   preserve: "positive",
-};
+} satisfies Record<OperationEffect, BadgeVariant>;
 
 /**
  * `/entities?tab=integrity` — the static architecture surface (relationships,
@@ -71,13 +81,19 @@ const EFFECT_VARIANT: Record<OperationEffect, BadgeVariant> = {
  * cross-referenced with the focused referential-liveness Problem query. This
  * must not load the full five-lane Problems dashboard just to render one tab.
  */
-export function EntityIntegrityTab() {
+export function EntityIntegrityTab({
+  operations = productionOperations,
+}: {
+  operations?: EntityIntegrityOperations;
+} = {}) {
   const { data: catalog, isLoading: catalogLoading } = useQuery(
-    entityIntegrity.catalog.queryOptions(null),
+    operations.catalog.queryOptions(null),
   );
   const { data: violations = EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS } = useQuery(
     {
-      ...integrityProblems.getByType.queryOptions(REFERENTIAL_LIVENESS_INPUT),
+      ...operations.referentialLiveness.queryOptions(
+        REFERENTIAL_LIVENESS_INPUT,
+      ),
       staleTime: REFERENTIAL_LIVENESS_STALE_TIME,
       select: (result) => result.items,
     },

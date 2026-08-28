@@ -1,24 +1,34 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  fireEvent,
+  render as renderWithTestingLibrary,
+  screen,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { VendorCell, VendorMark } from "./vendor-cell";
 
-vi.mock("~/app/_components/EntityPreviewLink", () => ({
-  EntityPreviewLink: ({
-    children,
-    id,
-    className,
-  }: {
-    children: ReactNode;
-    id: string;
-    className?: string;
-  }) => (
-    <a href={`/vendors/${id}`} className={className}>
-      {children}
-    </a>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function render(element: ReactElement) {
+  return renderWithTestingLibrary(element, { wrapper: harness.wrapper });
+}
+
+function logoImage() {
+  const image = document.querySelector("img");
+  if (!image) throw new Error("Expected the resolved vendor logo image.");
+  return image;
+}
 
 const SEEDED_ID = "VEN-ABCD";
 const EBAY_LOGO = { url: "https://media.example.com/vendors/ebay.png" };
@@ -76,7 +86,7 @@ describe("VendorCell", () => {
     expect(screen.getByRole("presentation", { hidden: true })).toBeTruthy();
 
     // eBay's logo 404s (dead bucket entry, manifest drift, dropped connection).
-    fireEvent.error(document.querySelector("img") as HTMLImageElement);
+    fireEvent.error(logoImage());
     expect(document.querySelector("img")).toBeNull();
     expect(screen.getByText("EB")).toBeTruthy();
 
@@ -97,7 +107,7 @@ describe("VendorCell", () => {
     const { rerender } = render(
       <VendorCell vendor="eBay" vendorId={SEEDED_ID} logo={EBAY_LOGO} />,
     );
-    fireEvent.error(document.querySelector("img") as HTMLImageElement);
+    fireEvent.error(logoImage());
 
     rerender(
       <VendorCell
@@ -174,7 +184,7 @@ describe("VendorCell / VendorMark with a resolved logo", () => {
     );
     expect(document.querySelector("img")).toBeTruthy();
 
-    fireEvent.error(document.querySelector("img") as HTMLImageElement);
+    fireEvent.error(logoImage());
     expect(document.querySelector("img")).toBeNull();
 
     // Re-rendering with the same vendor/id must not retry the broken request.

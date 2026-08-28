@@ -16,7 +16,7 @@ import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithIngredientSearch } from "~/app/_components/combobox/with-search-hook";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -50,7 +50,7 @@ export function SweepProductFollowUp({
   locationName: string;
   /** Called with the product id once it is dealt with, saved or skipped. */
   onClose: (productId: string) => void;
-  onSaved: (result?: unknown) => void;
+  onSaved: () => void;
 }) {
   // `null` means untouched, so the field can show the scanned name as a
   // starting point and still be cleared. Seeding state with the name directly
@@ -59,14 +59,14 @@ export function SweepProductFollowUp({
   const [price, setPrice] = useState("");
   const [ingredient, setIngredient] = useState<ComboboxItem | null>(null);
 
-  const save = useActionMutation({
+  const save = useEntityActionMutation({
     entity: "product",
     operation: "update",
     intent: "full",
     mutationFn: entityMutationOptionsFactory("product", "update"),
     success: "Product details saved",
-    onSuccess: (result) => {
-      onSaved(result);
+    onSuccess: () => {
+      onSaved();
       close();
     },
   });

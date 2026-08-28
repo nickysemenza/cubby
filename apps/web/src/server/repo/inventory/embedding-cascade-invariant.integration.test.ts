@@ -270,12 +270,19 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
   });
 });
 
+type RemovalResult =
+  | Awaited<ReturnType<typeof deleteProjects>>
+  | Awaited<ReturnType<typeof deleteTasks>>
+  | Awaited<ReturnType<typeof deleteExpenses>>
+  | Awaited<ReturnType<typeof deleteMeals>>
+  | Awaited<ReturnType<typeof deleteCookbook>>;
+
 const REMOVAL_ENTRYPOINTS: ReadonlyArray<{
   label: string;
   entity: SearchableEntity;
   seed: (
     db: Database,
-  ) => Promise<{ entityId: string; remove: () => Promise<unknown> }>;
+  ) => Promise<{ entityId: string; remove: () => Promise<RemovalResult> }>;
 }> = [
   {
     label: "deleteProjects",

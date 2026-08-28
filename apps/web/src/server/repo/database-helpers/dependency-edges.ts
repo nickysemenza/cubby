@@ -12,9 +12,9 @@ import {
   type EntityId,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
-import type { AnyColumn, InferInsertModel } from "drizzle-orm";
+import type { InferInsertModel } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -34,23 +34,26 @@ import { notDeleted } from "./query";
  *   4. Delete `id`'s existing edges, then insert the (deduped) new set.
  */
 export async function replaceDependencyEdges<
-  TEdge extends PgTable,
+  TEdge extends AnyPgTable,
   E extends ShortcodeEntity,
 >(
   tx: DrizzleTransaction,
   edgeTable: TEdge,
   opts: {
     /** Column on `edgeTable` identifying the "owning" side (`id`'s row). */
-    ownColumn: AnyColumn;
+    ownColumn: AnyPgColumn;
     /** Column on `edgeTable` identifying the "blocked-by" side (`newIds`). */
-    blockedByColumn: AnyColumn;
+    blockedByColumn: AnyPgColumn;
     /** Build one edge row to insert from (ownId, blockedById). */
     buildRow: (
       ownId: EntityId<E>,
       blockedById: EntityId<E>,
     ) => InferInsertModel<TEdge>;
     /** Table the incoming ids must exist (live) in. */
-    entityTable: PgTable & { id: AnyColumn; deletedAt: AnyColumn };
+    entityTable: AnyPgTable & {
+      id: AnyPgColumn;
+      deletedAt: AnyPgColumn;
+    };
     /**
      * Drives both the error label (`ENTITY_LABEL[entity]`) and the
      * AppErrorReason (`ENTITY_NOT_FOUND_REASON[entity]`) thrown when an
@@ -78,13 +81,11 @@ export async function replaceDependencyEdges<
 
   if (deduped.length > 0) {
     const live = await tx
-      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
-      .select({ id: opts.entityTable.id as any })
+      .select({ id: opts.entityTable.id })
       .from(opts.entityTable)
       .where(
         and(
-          // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
-          inArray(opts.entityTable.id as any, deduped),
+          inArray(opts.entityTable.id, deduped),
           notDeleted(opts.entityTable),
         ),
       );
@@ -121,17 +122,13 @@ export async function replaceDependencyEdges<
  * "blocking" is the reverse read of the same rows — which entities does THIS
  * entity block.
  */
-export async function dependencyIdsFor<
-  TEdge extends PgTable,
-  E extends ShortcodeEntity,
->(
+export async function dependencyIdsFor<E extends ShortcodeEntity>(
   db: Database,
-  edgeTable: TEdge,
   opts: {
     /** Column on `edgeTable` identifying the "owning" side (`ids`' rows). */
-    ownColumn: AnyColumn;
+    ownColumn: AnyPgColumn;
     /** Column on `edgeTable` identifying the "blocked-by" side. */
-    blockedByColumn: AnyColumn;
+    blockedByColumn: AnyPgColumn;
     /** Entity schema used to validate the raw projection at this repo seam. */
     entity: E;
   },
@@ -145,25 +142,19 @@ export async function dependencyIdsFor<
   if (ids.length === 0) return { blockedBy, blocking };
 
   const selectCols = {
-    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
-    own: opts.ownColumn as any,
-    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
-    blockedBy: opts.blockedByColumn as any,
+    own: opts.ownColumn,
+    blockedBy: opts.blockedByColumn,
   };
 
   const [blockedByRows, blockingRows] = await Promise.all([
     getDb(db)
       .select(selectCols)
-      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's generic edge table is too narrow for from().
-      .from(edgeTable as any)
-      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
-      .where(inArray(opts.ownColumn as any, ids)),
+      .from(opts.ownColumn.table)
+      .where(inArray(opts.ownColumn, ids)),
     getDb(db)
       .select(selectCols)
-      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's generic edge table is too narrow for from().
-      .from(edgeTable as any)
-      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for inArray().
-      .where(inArray(opts.blockedByColumn as any, ids)),
+      .from(opts.blockedByColumn.table)
+      .where(inArray(opts.blockedByColumn, ids)),
   ]);
 
   for (const row of blockedByRows) {

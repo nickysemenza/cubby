@@ -6,12 +6,13 @@
  * allowed as imports here.
  */
 import {
+  projectKindSchema,
+  projectStatusSchema,
   type ProjectKind,
   type ProjectStatus,
-  projectKindValues,
-  projectStatusValues,
 } from "@cubby/schemas/project";
 import { format, startOfYear, subMonths } from "date-fns";
+import { z } from "zod";
 
 export type Filters = {
   statuses: Set<ProjectStatus>;
@@ -128,7 +129,8 @@ export function activeFilterCount(filters: Filters): number {
   );
 }
 
-type SavedFilter = { id: string; value: unknown };
+type SavedFilterValue = string | string[] | null;
+type SavedFilter = { id: string; value: SavedFilterValue };
 
 /** Restore every dashboard-owned saved-view field without letting stale or
  * foreign table values leak into the typed URL scope. */
@@ -139,27 +141,27 @@ export function filtersFromSavedViewFilters(
     savedFilters.find((filter) => filter.id === id)?.value;
   const arrayValue = (id: string): string[] => {
     const candidate = value(id);
-    return Array.isArray(candidate)
-      ? candidate.filter((item): item is string => typeof item === "string")
-      : [];
+    return Array.isArray(candidate) ? candidate : [];
   };
   const dateRange = value("dateRange");
   const completionYear = value("completionYear");
+  const parsedDateRange = z.string().safeParse(dateRange);
+  const parsedCompletionYear = z.string().safeParse(completionYear);
+  const statuses = arrayValue("status")
+    .map((item) => projectStatusSchema.safeParse(item).data)
+    .filter((item): item is ProjectStatus => item !== undefined);
+  const kinds = arrayValue("kind")
+    .map((item) => projectKindSchema.safeParse(item).data)
+    .filter((item): item is ProjectKind => item !== undefined);
 
   return {
-    statuses: new Set(
-      arrayValue("status").filter((item): item is ProjectStatus =>
-        projectStatusValues.includes(item as ProjectStatus),
-      ),
-    ),
-    kinds: new Set(
-      arrayValue("kind").filter((item): item is ProjectKind =>
-        projectKindValues.includes(item as ProjectKind),
-      ),
-    ),
+    statuses: new Set(statuses),
+    kinds: new Set(kinds),
     locations: new Set(arrayValue("locations")),
-    dateRange: typeof dateRange === "string" ? dateRange : null,
-    completionYear: typeof completionYear === "string" ? completionYear : null,
+    dateRange: parsedDateRange.success ? parsedDateRange.data : null,
+    completionYear: parsedCompletionYear.success
+      ? parsedCompletionYear.data
+      : null,
   };
 }
 

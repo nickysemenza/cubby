@@ -1,27 +1,28 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import {
+  fireEvent,
+  render as renderWithTestingLibrary,
+  screen,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-vi.mock("~/hooks/useRouteEntity", () => ({
-  useRouteEntity: () => undefined,
-}));
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    to,
-    className,
-  }: {
-    children: ReactNode;
-    to: string;
-    className?: string;
-  }) => (
-    <a href={to} className={className}>
-      {children}
-    </a>
-  ),
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { Page, usePageCount } from "./Page";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function render(element: ReactElement) {
+  return renderWithTestingLibrary(element, { wrapper: harness.wrapper });
+}
 
 function CountReporter({ count }: { count: number }) {
   usePageCount(count);

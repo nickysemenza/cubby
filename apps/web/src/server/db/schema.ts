@@ -2875,9 +2875,17 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
   }),
 }));
 
+type AppSettingValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AppSettingValue[]
+  | { [key: string]: AppSettingValue };
+
 export const appSettings = pgTable("AppSettings", {
   id: pkUuid(),
-  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  metadata: jsonb("metadata").$type<Record<string, AppSettingValue>>(),
   ...baseTimestamps(),
 });
 

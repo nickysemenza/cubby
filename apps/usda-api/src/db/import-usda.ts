@@ -3,20 +3,18 @@ import path from "node:path";
 import process from "node:process";
 import os from "node:os";
 import { parse } from "csv-parse";
+import { z } from "zod";
 import { db, sqlite } from "./client";
 import { rebuildFoodSearchFts } from "./fts";
+import {
+  type CsvRecord,
+  type DatabaseRecord,
+  drainCsvRecords,
+  readUsdaCsvFieldNames,
+  usdaInsertPlaceholders,
+} from "./import-usda-contract";
 import * as schema from "./schema";
-import { sql } from "drizzle-orm";
-import type { SQLiteInsertValue, SQLiteTable } from "drizzle-orm/sqlite-core";
-import type {
-  MeasureUnitCsvRecord,
-  NutrientCsvRecord,
-  FoodCsvRecord,
-  SrLegacyFoodCsvRecord,
-  BrandedFoodCsvRecord,
-  FoodNutrientCsvRecord,
-  FoodPortionCsvRecord,
-} from "./csv-types";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
@@ -32,38 +30,29 @@ interface ImportStats {
   skipped: number;
 }
 
-interface SQLiteRunResult {
-  changes?: number;
-  lastInsertRowid?: number | bigint;
-}
-
 type DrizzlePreparedStatement = {
-  run: (values: Record<string, unknown>) => {
+  run: (values: DatabaseRecord) => {
     changes: number;
     lastInsertRowid: number | bigint;
   };
 };
 
 type FieldTransformValue = "string" | "number" | "integer";
-
-interface TableConfig<TCsv, TSchema extends SQLiteTable> {
+interface TableConfig<TSchema extends SQLiteTable> {
   tableName: string;
   csvFile: string;
   schema: TSchema;
-  transforms: Partial<Record<keyof TCsv, FieldTransformValue>>;
+  transforms: Record<string, FieldTransformValue>;
   // When set, records missing any of these fields (null/undefined) are skipped
-  requiredNonNull?: Array<keyof TCsv>;
+  requiredNonNull?: string[];
   // When provided, empty string values for these fields will be replaced
   // with the specified non-empty string BEFORE converting empties to nulls.
   // Useful to preserve rows where NOT NULL constraints are required but
   // source CSV sometimes contains empty strings (e.g., food.description).
-  fillEmptyWith?: Partial<Record<keyof TCsv, string>>;
+  fillEmptyWith?: Record<string, string>;
 }
 
-const measureUnitConfig: TableConfig<
-  MeasureUnitCsvRecord,
-  typeof schema.usdaMeasureUnit
-> = {
+const measureUnitConfig: TableConfig<typeof schema.usdaMeasureUnit> = {
   tableName: "Measure Units",
   csvFile: "measure_unit.csv",
   schema: schema.usdaMeasureUnit,
@@ -72,10 +61,7 @@ const measureUnitConfig: TableConfig<
   },
 };
 
-const nutrientConfig: TableConfig<
-  NutrientCsvRecord,
-  typeof schema.usdaNutrient
-> = {
+const nutrientConfig: TableConfig<typeof schema.usdaNutrient> = {
   tableName: "Nutrients",
   csvFile: "nutrient.csv",
   schema: schema.usdaNutrient,
@@ -84,7 +70,7 @@ const nutrientConfig: TableConfig<
   },
 };
 
-const foodConfig: TableConfig<FoodCsvRecord, typeof schema.usdaFood> = {
+const foodConfig: TableConfig<typeof schema.usdaFood> = {
   tableName: "Foods",
   csvFile: "food.csv",
   schema: schema.usdaFood,
@@ -95,10 +81,7 @@ const foodConfig: TableConfig<FoodCsvRecord, typeof schema.usdaFood> = {
   fillEmptyWith: { description: "<empty>" },
 };
 
-const srLegacyFoodConfig: TableConfig<
-  SrLegacyFoodCsvRecord,
-  typeof schema.usdaSrLegacyFood
-> = {
+const srLegacyFoodConfig: TableConfig<typeof schema.usdaSrLegacyFood> = {
   tableName: "SR Legacy Foods",
   csvFile: "sr_legacy_food.csv",
   schema: schema.usdaSrLegacyFood,
@@ -108,10 +91,7 @@ const srLegacyFoodConfig: TableConfig<
   },
 };
 
-const brandedFoodConfig: TableConfig<
-  BrandedFoodCsvRecord,
-  typeof schema.usdaBrandedFood
-> = {
+const brandedFoodConfig: TableConfig<typeof schema.usdaBrandedFood> = {
   tableName: "Branded Foods",
   csvFile: "branded_food.csv",
   schema: schema.usdaBrandedFood,
@@ -121,10 +101,7 @@ const brandedFoodConfig: TableConfig<
   },
 };
 
-const foodNutrientConfig: TableConfig<
-  FoodNutrientCsvRecord,
-  typeof schema.usdaFoodNutrient
-> = {
+const foodNutrientConfig: TableConfig<typeof schema.usdaFoodNutrient> = {
   tableName: "Food Nutrients",
   csvFile: "food_nutrient.csv",
   schema: schema.usdaFoodNutrient,
@@ -137,10 +114,7 @@ const foodNutrientConfig: TableConfig<
   requiredNonNull: ["amount"],
 };
 
-const foodPortionConfig: TableConfig<
-  FoodPortionCsvRecord,
-  typeof schema.usdaFoodPortion
-> = {
+const foodPortionConfig: TableConfig<typeof schema.usdaFoodPortion> = {
   tableName: "Food Portions",
   csvFile: "food_portion.csv",
   schema: schema.usdaFoodPortion,
@@ -168,31 +142,27 @@ function transformField(
   }
 }
 
-function transformRecord<
-  TCsv extends Record<string, unknown>,
-  TSchema extends SQLiteTable,
->(
-  csvRecord: TCsv,
-  config: TableConfig<TCsv, TSchema>,
-): Record<string, unknown> {
-  const result = {} as Record<string, unknown>;
+function transformRecord<TSchema extends SQLiteTable>(
+  csvRecord: CsvRecord,
+  config: TableConfig<TSchema>,
+): DatabaseRecord {
+  const result: DatabaseRecord = {};
 
-  for (const csvField in csvRecord) {
-    const csvValue = csvRecord[csvField] as string;
-    const transformType = config.transforms[csvField as keyof TCsv] || "string";
+  for (const [csvField, csvValue] of Object.entries(csvRecord)) {
+    const transformType =
+      Object.entries(config.transforms).find(
+        ([field]) => field === csvField,
+      )?.[1] ?? "string";
     // If the source value is an empty string and a fill value is configured
     // for this field, use the non-empty placeholder instead of converting
     // it to null. This happens BEFORE the generic empty-to-null pass below.
-    const fillValue = config.fillEmptyWith?.[csvField as keyof TCsv] as
-      | string
-      | undefined;
-    if (csvValue === "" && typeof fillValue === "string") {
+    const fillValue = Object.entries(config.fillEmptyWith ?? {}).find(
+      ([field]) => field === csvField,
+    )?.[1];
+    if (csvValue === "" && fillValue !== undefined) {
       result[csvField] = fillValue;
     } else {
-      const transformedValue = transformField(
-        csvValue,
-        transformType as FieldTransformValue,
-      );
+      const transformedValue = transformField(csvValue, transformType);
       result[csvField] = transformedValue;
     }
   }
@@ -200,70 +170,37 @@ function transformRecord<
   return convertEmptyToNull(result);
 }
 
-async function getCsvFieldNames(filePath: string): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    const parser = parse({
-      columns: true,
-      to_line: 2,
-    });
-
-    let fieldNames: string[] = [];
-
-    parser.on("readable", () => {
-      const record = parser.read();
-      if (record && fieldNames.length === 0) {
-        fieldNames = Object.keys(record);
-      }
-    });
-
-    parser.on("end", () => {
-      resolve(fieldNames);
-    });
-
-    parser.on("error", (err) => {
-      reject(err);
-    });
-
-    const fileStream = fs.createReadStream(filePath);
-
-    fileStream.on("error", (err) => {
-      reject(err);
-    });
-
-    fileStream.pipe(parser);
-  });
-}
-
-function createImporter<
-  TCsv extends Record<string, unknown>,
-  TSchema extends SQLiteTable,
->(config: TableConfig<TCsv, TSchema>) {
+function createImporter<TSchema extends SQLiteTable>(
+  config: TableConfig<TSchema>,
+) {
   return async (batchSize?: number): Promise<ImportStats> => {
     console.log(`\n=== Importing ${config.tableName} ===`);
     const filePath = path.join(USDA_DATA_PATH, config.csvFile);
 
     try {
-      const csvFieldNames = await getCsvFieldNames(filePath);
-
-      const placeholderValues = {} as Record<string, unknown>;
-      for (const csvField of csvFieldNames) {
-        placeholderValues[csvField] = sql.placeholder(csvField);
-      }
+      const csvFieldNames = await readUsdaCsvFieldNames(
+        fs.createReadStream(filePath),
+      );
+      const placeholderValues = usdaInsertPlaceholders(
+        config.schema,
+        csvFieldNames,
+      );
 
       const drizzlePrepared = db
         .insert(config.schema)
-        .values(placeholderValues as SQLiteInsertValue<TSchema>)
+        .values(placeholderValues)
         .onConflictDoNothing()
         .prepare();
 
-      const shouldInclude = config.requiredNonNull
-        ? (rec: Record<string, unknown>) =>
-            config.requiredNonNull!.every((k) => rec[k as string] !== null)
+      const requiredNonNull = config.requiredNonNull;
+      const shouldInclude = requiredNonNull
+        ? (rec: DatabaseRecord) =>
+            requiredNonNull.every((key) => rec[String(key)] !== null)
         : undefined;
 
       return streamCsvFile(
         filePath,
-        (csvRecord: TCsv) => transformRecord(csvRecord, config),
+        (csvRecord) => transformRecord(csvRecord, config),
         batchSize,
         drizzlePrepared,
         shouldInclude,
@@ -275,22 +212,19 @@ function createImporter<
   };
 }
 
-async function streamCsvFile<
-  CsvRecord extends Record<string, unknown>,
-  DbRecord extends Record<string, unknown>,
->(
+async function streamCsvFile(
   filePath: string,
-  transformRecord: (record: CsvRecord) => DbRecord,
+  transformRecord: (record: CsvRecord) => DatabaseRecord,
   batchSize: number = DEFAULT_BATCH_SIZE,
   drizzlePrepared: DrizzlePreparedStatement,
-  shouldInclude?: (record: DbRecord) => boolean,
+  shouldInclude?: (record: DatabaseRecord) => boolean,
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
     console.log(`Streaming ${filePath}...`);
     console.log(`  Total rows: ${totalRows}`);
     const stats: ImportStats = { processed: 0, inserted: 0, skipped: 0 };
-    let batch: DbRecord[] = [];
+    let batch: DatabaseRecord[] = [];
     const startTime = Date.now();
 
     const parser = parse({
@@ -307,9 +241,8 @@ async function streamCsvFile<
       const doInsertBatch = () => {
         for (const record of batch) {
           try {
-            const info = drizzlePrepared.run(record) as SQLiteRunResult;
-            const changes =
-              typeof info?.changes === "number" ? info.changes : 1;
+            const info = drizzlePrepared.run(record);
+            const changes = info.changes;
             if (changes > 0) stats.inserted += 1;
             else stats.skipped += 1;
             stats.processed += 1;
@@ -350,27 +283,24 @@ async function streamCsvFile<
     };
 
     parser.on("readable", () => {
-      let record: CsvRecord | null = parser.read() as CsvRecord | null;
-      while (record !== null) {
-        try {
-          const transformedRecord = transformRecord(record);
-          if (shouldInclude && !shouldInclude(transformedRecord)) {
-            stats.skipped++;
-            stats.processed++;
-            continue;
-          }
-          batch.push(transformedRecord);
-
+      drainCsvRecords({
+        reader: parser,
+        transformRecord,
+        shouldInclude,
+        include: (record) => {
+          batch.push(record);
           if (batch.length >= batchSize) {
             processBatch();
           }
-        } catch (error) {
-          console.warn(`Skipping record due to transformation error:`, error);
+        },
+        skip: (error) => {
+          if (error) {
+            console.warn(`Skipping record due to transformation error:`, error);
+          }
           stats.skipped++;
           stats.processed++;
-        }
-        record = parser.read() as CsvRecord | null;
-      }
+        },
+      });
     });
 
     parser.on("error", (err) => {
@@ -394,10 +324,10 @@ async function streamCsvFile<
   });
 }
 
-function convertEmptyToNull<T extends Record<string, unknown>>(obj: T): T {
-  const result = {} as T;
+function convertEmptyToNull(obj: DatabaseRecord) {
+  const result: DatabaseRecord = {};
   for (const [key, value] of Object.entries(obj)) {
-    (result as Record<string, unknown>)[key] = value === "" ? null : value;
+    result[key] = value === "" ? null : value;
   }
   return result;
 }
@@ -487,20 +417,23 @@ type PragmasSnapshot = {
   mmap_size: number;
 };
 
+const pragmaValueSchema = z.union([z.string(), z.number()]);
+type PragmaValue = z.infer<typeof pragmaValueSchema>;
+
+const readPragmaValue = (name: string): PragmaValue =>
+  pragmaValueSchema.parse(sqlite.pragma(name, { simple: true }));
+
+const readNumericPragma = (name: string): number =>
+  z.number().parse(sqlite.pragma(name, { simple: true }));
+
 function applySafePragmas(): PragmasSnapshot {
   console.log("\n=== Applying safe performance PRAGMAs ===");
   const prev: PragmasSnapshot = {
-    journal_mode: sqlite.pragma("journal_mode", { simple: true }) as
-      | string
-      | number,
-    synchronous: sqlite.pragma("synchronous", { simple: true }) as
-      | string
-      | number,
-    temp_store: sqlite.pragma("temp_store", { simple: true }) as
-      | string
-      | number,
-    cache_size: sqlite.pragma("cache_size", { simple: true }) as number,
-    mmap_size: sqlite.pragma("mmap_size", { simple: true }) as number,
+    journal_mode: readPragmaValue("journal_mode"),
+    synchronous: readPragmaValue("synchronous"),
+    temp_store: readPragmaValue("temp_store"),
+    cache_size: readNumericPragma("cache_size"),
+    mmap_size: readNumericPragma("mmap_size"),
   };
   try {
     sqlite.pragma("journal_mode = WAL");
@@ -532,8 +465,10 @@ function applySafePragmas(): PragmasSnapshot {
 
 function restorePragmas(prev: PragmasSnapshot) {
   console.log("\n=== Restoring PRAGMAs ===");
-  const toUpper = (v: string | number) =>
-    typeof v === "string" ? v.toUpperCase() : v;
+  const toUpper = (value: PragmaValue): PragmaValue => {
+    const textValue = z.string().safeParse(value);
+    return textValue.success ? textValue.data.toUpperCase() : value;
+  };
   try {
     sqlite.pragma(`journal_mode = ${toUpper(prev.journal_mode)}`);
   } catch {

@@ -1,4 +1,5 @@
 import type { Child, FC } from "hono/jsx";
+import { z } from "zod";
 import { Card } from "../admin/layout";
 import { getImageUrl } from "../storage/images";
 
@@ -12,24 +13,29 @@ export type FormValues = {
   priceDollars?: number | null;
 };
 
-export function optionalString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
+const stringInputSchema = z.string();
+
+export function optionalString<TValue>(value: TValue): string | null {
+  const parsed = stringInputSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const trimmed = parsed.data.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function parsePrice(value: unknown): number | null {
+export function parsePrice<TValue>(value: TValue): number | null {
   const text = optionalString(value);
   if (text === null) return null;
   const price = Number.parseFloat(text);
   return Number.isFinite(price) ? price : null;
 }
 
-export function uploadedFile(value: unknown): File | null {
+export function uploadedFile<TValue>(value: TValue): File | null {
   return value instanceof File && value.size > 0 ? value : null;
 }
 
-export function readForm(body: Record<string, unknown>): FormValues {
+type FormBody = Record<string, string | File>;
+
+export function readForm(body: FormBody): FormValues {
   return {
     name: optionalString(body.name),
     manufacturer: optionalString(body.manufacturer),

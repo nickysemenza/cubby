@@ -1,7 +1,4 @@
-import {
-  ledgerTransferFiltersSchema,
-  ledgerTransferSortableFields,
-} from "@cubby/schemas/ledger-transfer";
+import { ledgerTransferSortableFields } from "@cubby/schemas/ledger-transfer";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 
@@ -17,7 +14,6 @@ import {
 export const ledgerTransferEntityAdapter = defineEntityAdapter({
   entity: "ledgerTransfer",
   sideEffects: false,
-  filters: ledgerTransferFiltersSchema,
   sort: { fields: ledgerTransferSortableFields, default: "date" },
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   repository: {

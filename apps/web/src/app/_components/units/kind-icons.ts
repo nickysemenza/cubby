@@ -6,15 +6,12 @@ import {
   FlaskConical,
   Ruler,
   Scale,
-  Shapes,
+  Shapes as OtherKindIcon,
   Thermometer,
   Timer,
 } from "lucide-react";
 
-export const kindIconMap: Record<
-  AmountKind,
-  { Icon: LucideIcon; label: string }
-> = {
+const kindIconMap = {
   weight: { Icon: Scale, label: "Weight" },
   volume: { Icon: FlaskConical, label: "Volume" },
   money: { Icon: DollarSign, label: "Money" },
@@ -22,5 +19,20 @@ export const kindIconMap: Record<
   time: { Icon: Timer, label: "Time" },
   temperature: { Icon: Thermometer, label: "Temperature" },
   length: { Icon: Ruler, label: "Length" },
-  other: { Icon: Shapes, label: "Other" },
-};
+  other: { Icon: OtherKindIcon, label: "Other" },
+} satisfies Record<AmountKind, { Icon: LucideIcon; label: string }>;
+
+export function kindIconFor(kind: AmountKind) {
+  switch (kind) {
+    case "weight":
+    case "volume":
+    case "money":
+    case "calories":
+    case "time":
+    case "temperature":
+    case "length":
+      return kindIconMap[kind];
+    default:
+      return kindIconMap.other;
+  }
+}

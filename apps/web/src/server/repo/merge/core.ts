@@ -13,10 +13,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type {
-  IncomingEdge,
-  IncomingEdgeKey,
-} from "~/server/db/entity-incoming-edges";
+import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { createAppError } from "~/server/errors/app-error";
 import type { AuditEntryInput } from "~/server/repo/audit-log";
@@ -26,9 +23,19 @@ import type { RemovableEntity } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
-type MergeableTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
+type MergeableTable = PgTable & { id: PgColumn; deletedAt: PgColumn };
 
 type MergeAuditChanges = Record<string, { from: unknown; to: unknown }>;
+
+const requireResolvedId = <E extends ShortcodeEntity>(
+  id: EntityId<E> | undefined,
+  code: string,
+): EntityId<E> => {
+  if (id === undefined) {
+    throw new Error(`Resolved merge target disappeared for ${code}`);
+  }
+  return id;
+};
 
 /** Refuse self-merge instead of silently filtering the keeper from losers. */
 export const assertDistinctMergeTargets = (
@@ -56,10 +63,18 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
   const codes = uniq([args.keepId, ...args.mergeIds]);
   const ids = await resolveAllOrThrow(db, args.entity, codes);
   const byCode = new Map<string, EntityId<E>>(
-    codes.map((code, i) => [code, ids[i]!]),
+    codes.map((code, i) => {
+      const pair: [string, EntityId<E>] = [
+        code,
+        requireResolvedId(ids[i], code),
+      ];
+      return pair;
+    }),
   );
-  const keepId = byCode.get(args.keepId)!;
-  const loserIds = uniq(args.mergeIds.map((code) => byCode.get(code)!));
+  const keepId = requireResolvedId(byCode.get(args.keepId), args.keepId);
+  const loserIds = uniq(
+    args.mergeIds.map((code) => requireResolvedId(byCode.get(code), code)),
+  );
   return { keepId, loserIds };
 };
 
@@ -67,16 +82,14 @@ export const resolveMergeTargets = async <E extends ShortcodeEntity>(
 const edgeColumn = <E extends Entity>(
   entity: E,
   edgeKey: IncomingEdgeKey<E>,
-): PgColumn => {
-  const edges = INCOMING_EDGES[entity] as unknown as Record<
-    string,
-    IncomingEdge | undefined
-  >;
-  const edge = edges[edgeKey as string];
+): AnyColumn => {
+  const edge = Object.entries(INCOMING_EDGES[entity]).find(
+    ([key]) => key === edgeKey,
+  )?.[1];
   if (!edge) {
     throw new Error(`No incoming edge ${String(edgeKey)} on ${entity}`);
   }
-  return edge.column as PgColumn;
+  return edge.column;
 };
 
 /**
@@ -91,12 +104,13 @@ export const repointEdge = async <E extends Entity>(
 ): Promise<string[]> => {
   if (args.from.length === 0) return [];
   const column = edgeColumn(entity, edgeKey);
-  // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's column-to-table back-reference is untyped.
-  const table = (column as any).table as MergeableTable;
+  // SAFETY: Every incoming-edge column is declared on a PostgreSQL table with
+  // the `id` and `deletedAt` columns required by merge operations.
+  const table = column.table as MergeableTable;
   const columns = getTableColumns(table);
-  const property = Object.keys(columns).find(
-    (key) => columns[key as keyof typeof columns] === column,
-  );
+  const property = Object.entries(columns).find(
+    ([, candidate]) => candidate === column,
+  )?.[0];
   if (!property) {
     throw new Error(
       `Could not resolve a column property for ${String(edgeKey)}`,
@@ -108,11 +122,9 @@ export const repointEdge = async <E extends Entity>(
 
   const rows = await tx
     .update(table)
-    // oxlint-disable-next-line typescript/no-explicit-any -- Dynamic single-column update is keyed by the edge's own property.
-    .set({ [property]: args.to } as any)
+    .set({ [property]: args.to })
     .where(and(...conditions))
-    // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for returning().
-    .returning({ id: table.id as any });
+    .returning({ id: table.id });
   return rows.map((row) => String(row.id));
 };
 
@@ -149,15 +161,12 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       ? await tx
           .delete(table)
           .where(inArray(table.id, ids))
-          // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for returning().
-          .returning({ id: table.id as any })
+          .returning({ id: table.id })
       : await tx
           .update(table)
-          // oxlint-disable-next-line typescript/no-explicit-any -- Soft-delete is dynamic over the structurally-typed table.
-          .set({ deletedAt: new Date() } as any)
+          .set({ deletedAt: new Date() })
           .where(and(inArray(table.id, ids), notDeleted(table)))
-          // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for returning().
-          .returning({ id: table.id as any });
+          .returning({ id: table.id });
 
   // A merge with no actor context (`mergeIngredients`) still has to cascade, so
   // the entries go to a local buffer that is only flushed when there IS one.

@@ -262,17 +262,15 @@ describe("getLocationInventoryBreakdown", () => {
       productCode: string,
       locationCode: string,
       placement?: "stock" | "installed",
-    ) =>
-      createInventoryEntry(
-        ctx.db,
-        {
-          productId: await productId(productCode),
-          locationId: await locationId(locationCode),
-          amount: { value: 1, unit: "each" },
-          ...(placement ? { placement } : {}),
-        },
-        ctx.actor,
-      );
+    ) => {
+      const input: Parameters<typeof createInventoryEntry>[1] = {
+        productId: await productId(productCode),
+        locationId: await locationId(locationCode),
+        amount: { value: 1, unit: "each" },
+      };
+      if (placement !== undefined) input.placement = placement;
+      return createInventoryEntry(ctx.db, input, ctx.actor);
+    };
 
     await stock(liveProduct.id, root.id);
     await stock(liveProduct.id, shelf.id);
@@ -299,7 +297,9 @@ describe("getLocationInventoryBreakdown", () => {
       await locationId(root.id),
     );
 
-    const expectPublicNodeShape = (node: NonNullable<typeof result>): void => {
+    const expectPublicLocationTree = (
+      node: NonNullable<typeof result>,
+    ): void => {
       expect(Object.keys(node).sort()).toEqual(
         [
           "children",
@@ -311,11 +311,12 @@ describe("getLocationInventoryBreakdown", () => {
         ].sort(),
       );
       for (const descendant of node.children) {
-        expectPublicNodeShape(descendant);
+        expectPublicLocationTree(descendant);
       }
     };
     expect(result).not.toBeNull();
-    expectPublicNodeShape(result!);
+    if (!result) throw new Error("Expected the location hierarchy root");
+    expectPublicLocationTree(result);
 
     expect(result).toMatchObject({
       id: root.id,
@@ -377,16 +378,13 @@ describe("getLocationById item counts", () => {
       makeProductInput({ name: productName }),
       ctx.actor,
     );
-    return createInventoryEntry(
-      ctx.db,
-      {
-        productId: await productId(created.id),
-        locationId: await locationId(locationCode),
-        amount: { value: 1, unit: "each" },
-        ...(placement ? { placement } : {}),
-      },
-      ctx.actor,
-    );
+    const input: Parameters<typeof createInventoryEntry>[1] = {
+      productId: await productId(created.id),
+      locationId: await locationId(locationCode),
+      amount: { value: 1, unit: "each" },
+    };
+    if (placement !== undefined) input.placement = placement;
+    return createInventoryEntry(ctx.db, input, ctx.actor);
   };
 
   // Regression: the counts query only covered the fetched location's CHILDREN,
@@ -582,12 +580,13 @@ describe("location kernel — bulkUpdate (the guards, through the kernel)", () =
     ids: LocationShortcode[],
     parentId: LocationShortcode | null,
   ) => {
-    const result = await executeEntity(kernelContext(), {
+    const command = {
       action: "bulkUpdate",
       entity: "location",
       ids,
       data: { parentId },
-    } as EntityMutationCommand);
+    } satisfies EntityMutationCommand;
+    const result = await executeEntity(kernelContext(), command);
     if (result.action !== "bulkUpdate") throw new Error("unreachable");
     return result;
   };
@@ -911,16 +910,17 @@ describe("locationSearch picker rows", () => {
       sortOrder: number,
       overrides: { contentType?: string; renderStatus?: "failed" } = {},
     ) => {
-      const img = await insertWithShortcode(ctx.db, "image", {
+      const imageInput: Parameters<typeof insertWithShortcode<"image">>[2] = {
         key,
         filename: `${key}.png`,
         contentType: overrides.contentType ?? "image/png",
         size: 100,
         status: "UPLOADED",
-        ...(overrides.renderStatus
-          ? { renderStatus: overrides.renderStatus }
-          : {}),
-      });
+      };
+      if (overrides.renderStatus !== undefined) {
+        imageInput.renderStatus = overrides.renderStatus;
+      }
+      const img = await insertWithShortcode(ctx.db, "image", imageInput);
       await insertAndReturn(ctx.db, locationImage, {
         locationId: entityId,
         imageId: img.id,
@@ -1408,18 +1408,22 @@ describe("locationList imagePresenceFilter", () => {
       "location",
       (await resolveLiveShortcode(ctx.db, created.id, "location"))!,
     );
-    const img = await insertWithShortcode(ctx.db, "image", {
+    const imageInput: Parameters<typeof insertWithShortcode<"image">>[2] = {
       key: `location-presence-${name}`,
       filename: "location-presence.png",
       contentType: overrides.contentType ?? "image/png",
       size: 100,
       status: "UPLOADED",
-      ...(overrides.imageDeleted ? { deletedAt: new Date() } : {}),
-    });
-    await insertAndReturn(ctx.db, locationImage, {
+    };
+    if (overrides.imageDeleted) imageInput.deletedAt = new Date();
+    const img = await insertWithShortcode(ctx.db, "image", imageInput);
+    const association: typeof locationImage.$inferInsert = {
       locationId: entityId,
       imageId: img.id,
-      ...(overrides.joinDeleted ? { deletedAt: new Date() } : {}),
+    };
+    if (overrides.joinDeleted) association.deletedAt = new Date();
+    await insertAndReturn(ctx.db, locationImage, {
+      ...association,
     });
     return created.id;
   };

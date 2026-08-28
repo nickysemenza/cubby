@@ -6,7 +6,10 @@ import { Button } from "~/components/ui/button";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { relatedData } from "~/lib/related-data.functions";
 
-import { useRelationshipRoutePreview } from "./relationship-route-preview";
+import {
+  type RelationshipPreviewOperations,
+  useRelationshipRoutePreview,
+} from "./relationship-route-preview";
 import { type RelationshipPreset, RelationshipTree } from "./relationship-tree";
 
 function presetLabel(key: "connections" | "purchase" | "product") {
@@ -14,6 +17,16 @@ function presetLabel(key: "connections" | "purchase" | "product") {
   if (key === "product") return "By product";
   return "Connections";
 }
+
+export interface RelationshipExplorerOperations extends RelationshipPreviewOperations {
+  branch: typeof relatedData.branch;
+}
+
+const productionRelationshipExplorerOperations: RelationshipExplorerOperations =
+  {
+    previews: relatedData.previews,
+    branch: relatedData.branch,
+  };
 
 /**
  * Adapts the registered graph for the outline surface. Previews make the first
@@ -23,14 +36,18 @@ function presetLabel(key: "connections" | "purchase" | "product") {
 export function RelationshipExplorer({
   entity,
   sourceId,
+  operations = productionRelationshipExplorerOperations,
 }: {
   entity: Entity;
   sourceId: string | undefined;
+  operations?: RelationshipExplorerOperations;
 }) {
   const queryClient = useQueryClient();
   const { groups, query, relationKeys, views } = useRelationshipRoutePreview(
     entity,
     sourceId,
+    undefined,
+    operations,
   );
   // Hydration-stable: whether the previews have landed differs between the SSR
   // render and the first client render (TanStack Start's query stream races
@@ -100,7 +117,9 @@ export function RelationshipExplorer({
       const branchSourceId = parent?.id ?? sourceId;
       if (!branchSourceId) return { items: [], hasMore: false };
       const page = await queryClient.fetchQuery(
-        relatedData.branch.queryOptions({
+        operations.branch.queryOptions({
+          // SAFETY: preview relation keys are generated from this entity's
+          // registry; the dynamic tree callback has erased that correlation.
           relationKey: relationKey as (typeof relationKeys)[number],
           sourceId: branchSourceId,
           offset,
@@ -113,7 +132,7 @@ export function RelationshipExplorer({
         totalCount: page.totalCount,
       };
     },
-    [queryClient, sourceId],
+    [operations.branch, queryClient, sourceId],
   );
 
   if (views.length === 0) return null;

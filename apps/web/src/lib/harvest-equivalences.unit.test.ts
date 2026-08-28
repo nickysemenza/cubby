@@ -10,22 +10,22 @@ import {
 
 const amt = (value: number, unit: string): Amount => ({ value, unit });
 
-const GRAMS: Record<string, number> = {
-  g: 1,
-  kg: 1000,
-  oz: 28.3495,
-  lb: 453.592,
-};
-const ML: Record<string, number> = {
-  ml: 1,
-  tsp: 4.92892,
-  tbsp: 14.7868,
-  cup: 236.588,
-};
+const GRAMS = new Map([
+  ["g", 1],
+  ["kg", 1000],
+  ["oz", 28.3495],
+  ["lb", 453.592],
+]);
+const ML = new Map([
+  ["ml", 1],
+  ["tsp", 4.92892],
+  ["tbsp", 14.7868],
+  ["cup", 236.588],
+]);
 const tools: UnitTools = {
   kindOf: ({ unit }) => {
-    if (unit in GRAMS) return "weight";
-    if (unit in ML) return "volume";
+    if (GRAMS.has(unit)) return "weight";
+    if (ML.has(unit)) return "volume";
     if (unit === "C" || unit === "F") return "temperature";
     if (unit === '"') return "length";
     return `other:${unit}`;
@@ -33,8 +33,13 @@ const tools: UnitTools = {
   convert: (value, fromUnit, toUnit) => {
     if (fromUnit === toUnit) return value;
     for (const table of [GRAMS, ML]) {
-      if (fromUnit in table && toUnit in table) {
-        return (value * table[fromUnit]!) / table[toUnit]!;
+      if (table.has(fromUnit) && table.has(toUnit)) {
+        const from = table.get(fromUnit);
+        const to = table.get(toUnit);
+        if (from === undefined || to === undefined) {
+          throw new Error("Expected both units in the conversion table");
+        }
+        return (value * from) / to;
       }
     }
     return null;

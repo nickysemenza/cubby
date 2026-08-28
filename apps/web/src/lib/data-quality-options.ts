@@ -6,17 +6,17 @@ import type { FilterableComboboxItem } from "~/components/ui/combobox";
 
 type DataQualityStatus = (typeof dataQualityStatus.options)[number];
 
-const DATA_QUALITY_LABELS: Record<DataQualityStatus, string> = {
+const DATA_QUALITY_LABELS = {
   complete: "Complete",
   needs_data: "Needs data",
   defect: "Defect",
-};
+} satisfies Record<DataQualityStatus, string>;
 
-const DATA_QUALITY_TONE: Record<DataQualityStatus, BadgeVariant> = {
+const DATA_QUALITY_TONE = {
   complete: "outline",
   needs_data: "warning",
   defect: "destructive",
-};
+} satisfies Record<DataQualityStatus, BadgeVariant>;
 
 /**
  * The one roster for `dataQuality.status` — labels, tone, and filter options.

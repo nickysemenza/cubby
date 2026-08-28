@@ -41,8 +41,11 @@ interface GraphLink extends d3Force.SimulationLinkDatum<GraphNode> {
   target: string | GraphNode;
 }
 
+const isGraphNode = (endpoint: string | GraphNode): endpoint is GraphNode =>
+  endpoint instanceof Object;
+
 const resolvedGraphNode = (endpoint: string | GraphNode): GraphNode | null =>
-  typeof endpoint === "string" ? null : endpoint;
+  isGraphNode(endpoint) ? endpoint : null;
 
 export function RecipeDependencyGraph({
   cookbookId,
@@ -199,8 +202,8 @@ function Graph({
       if (!hovered) return true;
       if (node.id === hovered.id) return true;
       return simLinks.some((l) => {
-        const s = typeof l.source === "string" ? l.source : l.source.id;
-        const t = typeof l.target === "string" ? l.target : l.target.id;
+        const s = isGraphNode(l.source) ? l.source.id : l.source;
+        const t = isGraphNode(l.target) ? l.target.id : l.target;
         return (
           (s === hovered.id && t === node.id) ||
           (t === hovered.id && s === node.id)

@@ -24,16 +24,18 @@ import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
  * purchase line, a project resource, a resolved shortcode), and all this needs
  * from any of them is a name to show beside a quantity field.
  */
+function hasStringManufacturer(
+  row: EntityActionRow,
+): row is EntityActionRow & { manufacturer: string } {
+  return "manufacturer" in row && typeof row.manufacturer === "string";
+}
+
 const asBulkAddProduct = (row: EntityActionRow): BulkAddProduct => {
-  const named = row as EntityActionRow & {
-    name?: unknown;
-    manufacturer?: unknown;
-  };
+  const manufacturer = hasStringManufacturer(row) ? row.manufacturer : null;
   return {
     id: parseShortcodeFor("product", row.id),
-    name: typeof named.name === "string" && named.name ? named.name : row.id,
-    manufacturer:
-      typeof named.manufacturer === "string" ? named.manufacturer : null,
+    name: row.name || row.id,
+    manufacturer,
   };
 };
 
@@ -105,18 +107,32 @@ export function useAddToInventoryAction(): EntityActionHandles {
     // mixed selection has nothing to suggest from. Anything more gets the
     // grid, where the shared location is the whole point.
     dialog: soleWithDetail ? (
-      <ProductAddToInventoryDialog
-        open
-        onOpenChange={(open) => {
-          if (!open) setStaged([]);
-        }}
-        product={{
-          id: soleWithDetail.id,
-          name: soleWithDetail.name,
-          manufacturer: soleWithDetail.manufacturer ?? "",
-        }}
-        {...(accounting ? { accounting } : {})}
-      />
+      accounting ? (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStaged([]);
+          }}
+          product={{
+            id: soleWithDetail.id,
+            name: soleWithDetail.name,
+            manufacturer: soleWithDetail.manufacturer ?? "",
+          }}
+          accounting={accounting}
+        />
+      ) : (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStaged([]);
+          }}
+          product={{
+            id: soleWithDetail.id,
+            name: soleWithDetail.name,
+            manufacturer: soleWithDetail.manufacturer ?? "",
+          }}
+        />
+      )
     ) : (
       <ProductBulkAddToInventoryDialog
         open={staged.length > 1}

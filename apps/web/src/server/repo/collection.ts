@@ -1,14 +1,15 @@
-import type {
-  CollectionCellState,
-  CollectionDetailOut,
-  CollectionMatrixMembership,
-  CollectionMatrixOut,
-  CollectionMatrixSort,
-  CollectionProductPlacementOut,
-  CollectionProductPurchaseOut,
-  CollectionSlug,
-  CollectionSummaryOut,
-  CollectionTagSetInput,
+import {
+  collectionMatrixRowOut,
+  type CollectionCellState,
+  type CollectionDetailOut,
+  type CollectionMatrixMembership,
+  type CollectionMatrixOut,
+  type CollectionMatrixSort,
+  type CollectionProductPlacementOut,
+  type CollectionProductPurchaseOut,
+  type CollectionSlug,
+  type CollectionSummaryOut,
+  type CollectionTagSetInput,
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
@@ -468,18 +469,20 @@ export const getCollectionMatrix = async (
       imageUrl: coverImageUrls.get(item.id) ?? null,
       placements: subject === "product" ? (placements.get(item.id) ?? []) : [],
       purchases: subject === "product" ? (purchases.get(item.id) ?? []) : [],
-      states: Object.fromEntries(
-        graph.collections.map((slug) => [
-          slug,
-          direct.has(slug)
-            ? inherited?.has(slug)
-              ? "both"
-              : "direct"
-            : inherited?.has(slug)
-              ? "inherited"
-              : "empty",
-        ]),
-      ) as Record<CollectionSlug, "empty" | "direct" | "inherited" | "both">,
+      states: collectionMatrixRowOut.shape.states.parse(
+        Object.fromEntries(
+          graph.collections.map((slug) => [
+            slug,
+            direct.has(slug)
+              ? inherited?.has(slug)
+                ? "both"
+                : "direct"
+              : inherited?.has(slug)
+                ? "inherited"
+                : "empty",
+          ]),
+        ),
+      ),
     };
   });
 

@@ -82,10 +82,11 @@ const isKnownCodePath = (path: string) =>
   sharedRootExact.has(path) ||
   startsWithAny(path, sharedRootPrefixes);
 
+const isPresentPath = (path: string | null | undefined): path is string =>
+  typeof path === "string" && path.length > 0;
+
 export function classifyPaths(paths: readonly (string | null | undefined)[]) {
-  const changed = [
-    ...new Set(paths.filter((path) => Boolean(path))),
-  ] as string[];
+  const changed = [...new Set(paths.filter(isPresentPath))];
   const active = changed.filter((path) => !isInert(path));
   const unknown = active.some((path) => !isKnownCodePath(path));
   const dependencies =

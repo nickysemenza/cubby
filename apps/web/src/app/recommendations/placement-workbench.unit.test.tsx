@@ -1,53 +1,77 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({ move: vi.fn() }));
+import { inventory } from "~/app/inventory/inventory.functions";
+import { recommendations } from "~/lib/recommendations.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  mutationOptions: (options: unknown) => options,
-  queryOptions: (options: unknown) => options,
-  useQuery: () => ({
-    data: {
-      inventoryId: "INV-PARKED",
-      productName: "Widget",
-      sourceLocation: { id: "LOC-UNKNOWN", name: "Unknown" },
-      destination: { id: "LOC-SHELF", name: "Shelf" },
-    },
-    isLoading: false,
-    isError: false,
-  }),
-  useMutation: () => ({ isPending: false, mutate: mocks.move }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-vi.mock("~/app/problems/components/tier2-fixes", () => ({
-  DuplicateProductMergeFix: () => null,
-}));
+import {
+  productionRecommendationWorkbenchOperations,
+  RecommendationWorkbench,
+} from "./recommendation-workbench";
 
-import { RecommendationWorkbench } from "./recommendation-workbench";
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 describe("RecommendationWorkbench placement", () => {
-  it("does not move inventory until the recommendation is explicitly accepted", () => {
+  it("does not move inventory until the recommendation is explicitly accepted", async () => {
+    const inventoryId = testShortcode("inventory", "INV-PARKED");
+    const destinationId = testShortcode("location", "LOC-SHELF");
+    const moves: Array<{
+      items: Array<{ inventoryEntryId: string; targetLocationId: string }>;
+    }> = [];
+    const operations = {
+      ...productionRecommendationWorkbenchOperations,
+      placement: recommendations.placement.withTransport(async () => ({
+        inventoryId,
+        productName: "Widget",
+        sourceLocation: {
+          id: testShortcode("location", "LOC-UNKNOWN"),
+          name: "Unknown",
+        },
+        destination: {
+          id: destinationId,
+          name: "Shelf",
+        },
+      })),
+      moveEntries: inventory.moveEntries.withTransport(async ({ input }) => {
+        moves.push(input);
+        return new Promise<never>(() => undefined);
+      }),
+    };
+
     render(
       <RecommendationWorkbench
-        inventoryId={testShortcode("inventory", "INV-PARKED")}
+        inventoryId={inventoryId}
         kind="placement"
+        operations={operations}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(mocks.move).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Move to Shelf" }));
-    expect(mocks.move).toHaveBeenCalledWith({
-      items: [
+    const move = await screen.findByRole("button", { name: "Move to Shelf" });
+    expect(moves).toEqual([]);
+    fireEvent.click(move);
+
+    await waitFor(() =>
+      expect(moves).toEqual([
         {
-          inventoryEntryId: "INV-PARKED",
-          targetLocationId: "LOC-SHELF",
+          items: [
+            {
+              inventoryEntryId: inventoryId,
+              targetLocationId: destinationId,
+            },
+          ],
         },
-      ],
-    });
+      ]),
+    );
   });
 });

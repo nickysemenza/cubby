@@ -67,6 +67,9 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { dbTaskToAPI } from "./helpers";
 
+type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
+type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;
+
 export const TASK_DELETE_EDGE_POLICY = {
   "Task.parentTaskId": {
     code: "cascade-live-child",
@@ -116,7 +119,6 @@ export async function taskDependencyIds(
 }> {
   const raw = await dependencyIdsFor(
     db,
-    taskDependency,
     {
       ownColumn: taskDependency.taskId,
       blockedByColumn: taskDependency.blockedByTaskId,
@@ -477,7 +479,7 @@ export const updateTask = async (
       );
     }
 
-    const changes: Record<string, { from: unknown; to: unknown }> = {
+    const changes: TaskUpdateChanges = {
       ...computeChanges(before, updated, [...AUDIT_FIELDS]),
     };
     if (data.blockedByIds !== undefined) {

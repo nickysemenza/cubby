@@ -24,11 +24,12 @@ export type TradeCostPivot = {
   maxCell: number; // for heatmap scaling
 };
 
-const emptyCells = (): Record<PivotCostKey, number> => ({
-  materials: 0,
-  tools: 0,
-  services: 0,
-});
+const emptyCells = () =>
+  ({
+    materials: 0,
+    tools: 0,
+    services: 0,
+  }) satisfies Record<PivotCostKey, number>;
 
 /**
  * One trade×costType amount, whatever produced it. The two callers reach the

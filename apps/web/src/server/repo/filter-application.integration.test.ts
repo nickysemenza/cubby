@@ -46,7 +46,7 @@ import type { ShortcodeType } from "@cubby/shared";
 import { SHORTCODE_PREFIX, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import type { z } from "zod";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
@@ -138,22 +138,25 @@ const UNRESOLVABLE_BODY = "9999";
  * elsewhere, but declares no filter fields and has no list probe here.
  */
 type ProbeableTarget = Exclude<ShortcodeType, "image">;
-const PROBEABLE_TARGETS = (
-  Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]
-).filter((t): t is ProbeableTarget => t !== "image");
+const PROBEABLE_TARGETS = Object.keys(SHORTCODE_PREFIX)
+  .filter((value): value is ShortcodeType => value in SHORTCODE_PREFIX)
+  .filter((t): t is ProbeableTarget => t !== "image");
 
 type Probe =
   /** A shortcode-typed id. Gets the full #591 battery. */
   | { kind: "id"; target: ProbeableTarget }
-  | { kind: "text"; value: unknown }
+  | { kind: "text"; value: string | string[] }
   | { kind: "date"; value: string }
   | { kind: "number"; value: number }
   | { kind: "skip:boolean" }
   | { kind: "skip:bounded-max" }
   | { kind: "skip:closed-domain" };
 
-const accepts = (schema: z.ZodType, value: unknown) =>
-  schema.safeParse(value).success;
+type ProbeValue = string | string[] | number | boolean;
+const accepts = <TSchema extends z.ZodType>(
+  schema: TSchema,
+  value: ProbeValue,
+) => schema.safeParse(value).success;
 
 const boundDirection = (field: string): "lower" | "upper" | null => {
   const lower = field.toLowerCase();
@@ -162,7 +165,10 @@ const boundDirection = (field: string): "lower" | "upper" | null => {
   return null;
 };
 
-const classify = (field: string, schema: z.ZodType): Probe => {
+const classify = <TSchema extends z.ZodType>(
+  field: string,
+  schema: TSchema,
+): Probe => {
   const numeric = accepts(schema, HUGE);
   // `z.coerce.number()` accepts `true` (Number(true) === 1), so a boolean is only
   // a boolean when it does NOT also take a number.
@@ -340,22 +346,15 @@ const seedWorld = async (ctx: {
 
   const recipes = [];
   for (const name of ["Guard Recipe Alpha", "Guard Recipe Beta"]) {
+    const recipeOptions: Parameters<typeof makeRecipeInput>[0] = { name };
+    if (name === "Guard Recipe Alpha") {
+      recipeOptions.tags = ["guard-recipe-tag"];
+      recipeOptions.sections = [
+        { ingredients: [ingredientRef(ingredientAlpha.id)] },
+      ];
+    }
     recipes.push(
-      await createRecipeFixture(
-        db,
-        makeRecipeInput({
-          name,
-          ...(name === "Guard Recipe Alpha"
-            ? {
-                tags: ["guard-recipe-tag"],
-                sections: [
-                  { ingredients: [ingredientRef(ingredientAlpha.id)] },
-                ],
-              }
-            : {}),
-        }),
-        actor,
-      ),
+      await createRecipeFixture(db, makeRecipeInput(recipeOptions), actor),
     );
   }
   const recipeAlpha = recipes[0];
@@ -588,22 +587,26 @@ const seedWorld = async (ctx: {
   };
 };
 
+type FilterProbeValue = string | string[] | number | boolean | null | undefined;
+type FilterProbeInput = Partial<Record<string, FilterProbeValue>>;
 type ListProbe = (
   db: Database,
-  filters: Record<string, unknown>,
+  filters: FilterProbeInput,
 ) => Promise<{ ids: string[]; count: number }>;
 
 const listFor =
-  <F, R extends { id: string }>(
+  <TFilterFields extends z.ZodRawShape, R extends { id: string }>(
     fn: (
       db: Database,
-      filters: F,
+      filters: z.output<z.ZodObject<TFilterFields>>,
       sorts: SortParams[],
       pagination: PaginationParams,
     ) => Promise<{ data: R[]; count: number }>,
+    fields: TFilterFields,
   ): ListProbe =>
   async (db, filters) => {
-    const { data, count } = await fn(db, filters as F, NO_SORT, PAGE);
+    const typedFilters = z.object(fields).parse(filters);
+    const { data, count } = await fn(db, typedFilters, NO_SORT, PAGE);
     return { ids: data.map((row) => row.id), count };
   };
 
@@ -617,44 +620,76 @@ const GUARDS = {
   // and its `search` — PROJECT name — never leaking into this builder's
   // expense-NAME `search`) lives in `project.integration.test.ts`'s "project
   // dashboard — portfolio analytics" describe block instead.
-  expense: { fields: expenseFilterFields, list: listFor(expenseList) },
+  expense: {
+    fields: expenseFilterFields,
+    list: listFor(expenseList, expenseFilterFields),
+  },
   financialAccount: {
     fields: financialAccountFilterFields,
-    list: listFor(listFinancialAccounts),
+    list: listFor(listFinancialAccounts, financialAccountFilterFields),
   },
   financialTransaction: {
     fields: financialTransactionFilterFields,
-    list: listFor(listFinancialTransactions),
+    list: listFor(listFinancialTransactions, financialTransactionFilterFields),
   },
-  image: { fields: imageFilterFields, list: listFor(imageList) },
-  ingredient: { fields: ingredientFilterFields, list: listFor(ingredientList) },
+  image: {
+    fields: imageFilterFields,
+    list: listFor(imageList, imageFilterFields),
+  },
+  ingredient: {
+    fields: ingredientFilterFields,
+    list: listFor(ingredientList, ingredientFilterFields),
+  },
   inventory: {
     fields: inventoryFilterFields,
-    list: listFor(inventoryentryList),
+    list: listFor(inventoryentryList, inventoryFilterFields),
   },
-  location: { fields: locationFilterFields, list: listFor(locationList) },
+  location: {
+    fields: locationFilterFields,
+    list: listFor(locationList, locationFilterFields),
+  },
   ledgerParty: {
     fields: ledgerPartyFilterFields,
-    list: listFor(listLedgerParties),
+    list: listFor(listLedgerParties, ledgerPartyFilterFields),
   },
   ledgerTransfer: {
     fields: ledgerTransferFilterFields,
-    list: listFor(listLedgerTransfers),
+    list: listFor(listLedgerTransfers, ledgerTransferFilterFields),
   },
-  meal: { fields: mealFilterFields, list: listFor(mealList) },
-  product: { fields: productFilterFields, list: listFor(productList) },
-  project: { fields: projectFilterFields, list: listFor(projectList) },
-  purchase: { fields: purchaseFilterFields, list: listFor(purchaseList) },
-  recipe: { fields: recipeFilterFields, list: listFor(recipeList) },
-  task: { fields: taskFilterFields, list: listFor(taskList) },
-  vendor: { fields: vendorFilterFields, list: listFor(vendorList) },
-  wish: { fields: wishFilterFields, list: listFor(wishList) },
+  meal: {
+    fields: mealFilterFields,
+    list: listFor(mealList, mealFilterFields),
+  },
+  product: {
+    fields: productFilterFields,
+    list: listFor(productList, productFilterFields),
+  },
+  project: {
+    fields: projectFilterFields,
+    list: listFor(projectList, projectFilterFields),
+  },
+  purchase: {
+    fields: purchaseFilterFields,
+    list: listFor(purchaseList, purchaseFilterFields),
+  },
+  recipe: {
+    fields: recipeFilterFields,
+    list: listFor(recipeList, recipeFilterFields),
+  },
+  task: { fields: taskFilterFields, list: listFor(taskList, taskFilterFields) },
+  vendor: {
+    fields: vendorFilterFields,
+    list: listFor(vendorList, vendorFilterFields),
+  },
+  wish: { fields: wishFilterFields, list: listFor(wishList, wishFilterFields) },
 } satisfies Partial<
   Record<Entity, { fields: Record<string, z.ZodType>; list: ListProbe }>
 >;
 
 type GuardedEntity = keyof typeof GUARDS;
-const GUARDED_ENTITIES = Object.keys(GUARDS) as GuardedEntity[];
+const isGuardedEntity = (value: string): value is GuardedEntity =>
+  value in GUARDS;
+const GUARDED_ENTITIES = Object.keys(GUARDS).filter(isGuardedEntity);
 
 const ROUTE_EMPTY_SENTINELS = [
   ["inventory", "productIdFilter"],
@@ -669,7 +704,10 @@ const ROUTE_EMPTY_SENTINELS = [
  */
 const KNOWN_GAPS: Record<string, string> = {};
 
-const isPresenceField = (field: string, schema: z.ZodType): boolean =>
+const isPresenceField = <TSchema extends z.ZodType>(
+  field: string,
+  schema: TSchema,
+): boolean =>
   field.endsWith("PresenceFilter") &&
   accepts(schema, "has") &&
   accepts(schema, "none") &&
@@ -701,7 +739,7 @@ const isPresenceField = (field: string, schema: z.ZodType): boolean =>
  * happens to link it) is stale and must be deleted — asserted below, same as
  * `KNOWN_GAPS`.
  */
-const VACUOUS_ID_FIELDS: Record<string, string> = {
+const VACUOUS_ID_FIELDS = {
   "product.ingredientIdFilter":
     "mutually exclusive with the wish-candidate link on Alpha — hasFoodIndicators force-overrides category to 'food' the instant ingredientId is set, and the wish candidate below needs Alpha to stay 'tools'",
   "inventory.ingredientId":
@@ -718,7 +756,7 @@ const VACUOUS_ID_FIELDS: Record<string, string> = {
     "the task 'blocked-by' trio (TaskDependency) — settable only via the UPDATE-only blockedByIds, not createTask",
   "recipe.cookbookId":
     "Recipe.cookbookId is set by the EPUB/URL importer, not createRecipe — no create-time field exists to link it",
-};
+} satisfies Record<string, string>;
 
 describe("every declared filter field is applied by its repo", () => {
   const ctx = withTestDb();
@@ -741,7 +779,7 @@ describe("every declared filter field is applied by its repo", () => {
     };
 
     for (const [field, schema] of Object.entries(fields)) {
-      const probe = classify(field, schema as z.ZodType);
+      const probe = classify(field, schema);
       const key = `${entity}.${field}`;
       const before = violations.length;
 
@@ -797,14 +835,20 @@ describe("every declared filter field is applied by its repo", () => {
           (candidate) => candidate !== probe.target,
         );
         if (otherTarget) {
-          const wrongPrefix = await list(ctx.db, {
+          const wrongPrefixInput = {
             [field]: world.codes[otherTarget],
-          });
-          if (wrongPrefix.count !== 0) {
-            record(
-              field,
-              `a ${otherTarget} code returned ${wrongPrefix.count} rows; a wrong-prefix code must match nothing`,
-            );
+          };
+          const parsedWrongPrefix = z
+            .object(fields)
+            .safeParse(wrongPrefixInput);
+          if (parsedWrongPrefix.success) {
+            const wrongPrefix = await list(ctx.db, wrongPrefixInput);
+            if (wrongPrefix.count !== 0) {
+              record(
+                field,
+                `a ${otherTarget} code returned ${wrongPrefix.count} rows; a wrong-prefix code must match nothing`,
+              );
+            }
           }
         }
       } else if (
@@ -840,7 +884,7 @@ describe("every declared filter field is applied by its repo", () => {
     const presenceBaseline = new Set((await list(ctx.db, {})).ids);
     const presenceViolations: string[] = [];
     for (const [field, schema] of Object.entries(fields)) {
-      if (!isPresenceField(field, schema as z.ZodType)) continue;
+      if (!isPresenceField(field, schema)) continue;
       const has = new Set((await list(ctx.db, { [field]: "has" })).ids);
       const none = new Set((await list(ctx.db, { [field]: "none" })).ids);
       const overlap = [...has].filter((id) => none.has(id));
@@ -897,7 +941,8 @@ describe("every countable entity's dashboard count matches its list", () => {
       // `listFor` probe to compare against. Its count is a plain
       // `notDeleted(cookbook)` with no list-side predicate to drift from.
       if (!(entity in GUARDS)) continue;
-      const guard = GUARDS[entity as GuardedEntity];
+      if (!isGuardedEntity(entity)) continue;
+      const guard = GUARDS[entity];
       const listed = await guard.list(ctx.db, {});
       if (counts[entity] !== listed.count) {
         mismatches.push(
@@ -947,11 +992,13 @@ describe("guard coverage", () => {
 
   const fieldSchema = (key: string): z.ZodType | undefined => {
     const [entity, field] = key.split(".");
-    const guard = GUARDS[entity as GuardedEntity] as
-      | { fields: Record<string, z.ZodType> }
-      | undefined;
-    if (!guard || !field) return undefined;
-    return guard.fields[field];
+    if (entity === undefined || !isGuardedEntity(entity) || !field) {
+      return undefined;
+    }
+    const guard = GUARDS[entity];
+    return Object.entries(guard.fields).find(
+      ([candidate]) => candidate === field,
+    )?.[1];
   };
 
   it("keeps the known-gap list free of fields that no longer exist", () => {
@@ -972,7 +1019,7 @@ describe("guard coverage", () => {
     const skippedKinds = new Set<string>();
     for (const entity of GUARDED_ENTITIES) {
       for (const [field, schema] of Object.entries(GUARDS[entity].fields)) {
-        const probe = classify(field, schema as z.ZodType);
+        const probe = classify(field, schema);
         if (probe.kind.startsWith("skip:")) skippedKinds.add(probe.kind);
       }
     }

@@ -9,7 +9,7 @@ import { formatCurrency } from "~/lib/utils";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 import { VizTooltip } from "./viz-overlay";
 
-interface CostNode {
+interface TreemapNode {
   name: string;
   /** The ingredient's public id — null for a sub-recipe row (nothing to link). */
   ingredientId: string | null;
@@ -22,12 +22,7 @@ interface CostNode {
   value: number; // Cost in dollars
   percentage: number;
   hasPrice: boolean;
-}
-
-interface TreemapNode {
-  name: string;
-  value: number;
-  children?: CostNode[];
+  children?: TreemapNode[];
 }
 
 interface RecipeCostTreemapProps {
@@ -41,8 +36,8 @@ export default function RecipeCostTreemap({
 }: RecipeCostTreemapProps) {
   // Transform ingredient data into treemap structure
   const treemapData = useMemo(() => {
-    const pricedItems: CostNode[] = [];
-    const unpricedItems: CostNode[] = [];
+    const pricedItems: TreemapNode[] = [];
+    const unpricedItems: TreemapNode[] = [];
 
     for (const ing of ingredients) {
       const name =
@@ -85,6 +80,10 @@ export default function RecipeCostTreemap({
     return {
       name: "Recipe Cost",
       value: totalCost,
+      ingredientId: null,
+      rowKey: "recipe-cost",
+      percentage: 100,
+      hasPrice: true,
       children: [...pricedItems, ...unpricedItems],
     };
   }, [ingredients, totalCost]);
@@ -124,8 +123,8 @@ function Treemap({ data }: TreemapProps) {
       .hierarchy(data)
       .sum((d) => {
         // For leaf nodes, use their value
-        if (!("children" in d) || !d.children) {
-          return (d as CostNode).value;
+        if (!d.children) {
+          return d.value;
         }
         return 0;
       })
@@ -134,23 +133,19 @@ function Treemap({ data }: TreemapProps) {
 
   const treemapLayout = useMemo(() => {
     return d3Hierarchy
-      .treemap<TreemapNode | CostNode>()
+      .treemap<TreemapNode>()
       .size([dimensions.width, dimensions.height])
       .paddingOuter(4)
       .paddingInner(2)
       .round(true)(hierarchy);
   }, [hierarchy, dimensions]);
 
-  const nodes = useMemo(
-    () =>
-      treemapLayout.leaves() as d3Hierarchy.HierarchyRectangularNode<CostNode>[],
-    [treemapLayout],
-  );
+  const nodes = useMemo(() => treemapLayout.leaves(), [treemapLayout]);
 
   // Sequential ink ramp (paper -> ultramarine): bigger cost share -> deeper
   // step. Unpriced cells get a hatched pattern instead of a dominant gray.
   const getNodeFill = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) => {
+    (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) => {
       if (!node.data.hasPrice) return `url(#${noPricePatternId})`;
       const p = node.data.percentage;
       if (p >= 40) return "var(--chart-seq-5)";
@@ -163,7 +158,7 @@ function Treemap({ data }: TreemapProps) {
   );
   // Deep ramp steps need paper-colored ink; shallow steps read with foreground.
   const isDeepFill = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) =>
+    (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) =>
       node.data.hasPrice && node.data.percentage >= 25,
     [],
   );
@@ -299,7 +294,7 @@ function HoverTooltip({
   nodes,
   hoveredName,
 }: {
-  nodes: d3Hierarchy.HierarchyRectangularNode<CostNode>[];
+  nodes: d3Hierarchy.HierarchyRectangularNode<TreemapNode>[];
   hoveredName: string;
 }) {
   const node = nodes.find((n) => n.data.name === hoveredName);

@@ -21,8 +21,12 @@ interface EntityStatProps {
   iconSize?: number;
 }
 
+function isCustomText(value: boolean | string): value is string {
+  return typeof value === "string";
+}
+
 function getLabel(entity: Entity, count: number, label: boolean | string) {
-  if (typeof label === "string") return label;
+  if (isCustomText(label)) return label;
   if (!isBrowserRoutedEntity(entity)) return entity;
   const def = entities[entity];
   return count === 1 ? def.label.toLowerCase() : def.pluralLabel.toLowerCase();
@@ -33,7 +37,7 @@ function getTooltipText(
   count: number,
   tooltip: boolean | string,
 ) {
-  if (typeof tooltip === "string") return tooltip;
+  if (isCustomText(tooltip)) return tooltip;
   if (!isBrowserRoutedEntity(entity)) return `${count} ${entity}`;
   const def = entities[entity];
   const noun =

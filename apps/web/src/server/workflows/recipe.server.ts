@@ -231,11 +231,10 @@ export const harvestEquivalencesWorkflow = async (
 
 export const getRecipeAvailabilityWorkflow = (
   recipeId: z.output<typeof recipeAvailabilityInput>["recipeId"],
-  availability: {
-    getRecipeAvailability: (
-      id: z.output<typeof recipeAvailabilityInput>["recipeId"],
-    ) => Promise<unknown>;
-  },
+  availability: Pick<
+    AuthenticatedStartOperationContext["services"]["availability"],
+    "getRecipeAvailability"
+  >,
 ) => availability.getRecipeAvailability(recipeId);
 
 export const getMakeableWorkflow = async (

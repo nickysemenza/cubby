@@ -1,7 +1,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { createCubbyColumnHelper } from "./table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "./table-features";
 import {
   type CubbyTableLayoutV1,
   clearTableLayoutStoresForTests,
@@ -21,14 +24,16 @@ interface Row {
 }
 
 const helper = createCubbyColumnHelper<Row>();
-const columns = helper.columns([
-  helper.accessor("name", {
-    header: "Name",
-    minSize: 100,
-    maxSize: 300,
-  }),
-  helper.accessor("cost", { header: "Cost" }),
-]);
+const columns = createCubbyColumnCollection<Row>((add) => {
+  add(
+    helper.accessor("name", {
+      header: "Name",
+      minSize: 100,
+      maxSize: 300,
+    }),
+  );
+  add(helper.accessor("cost", { header: "Cost" }));
+});
 
 const defaults: CubbyTableLayoutV1 = {
   version: 1,
@@ -255,13 +260,15 @@ describe("useCubbyTableLayout", () => {
         columnSizing: { image: 128 },
       }),
     );
-    const imageColumns = helper.columns([
-      helper.display({
-        id: "image",
-        meta: { className: "h-px w-16 overflow-hidden px-0 py-0" },
-      }),
-      helper.accessor("name", { header: "Name" }),
-    ]);
+    const imageColumns = createCubbyColumnCollection<Row>((add) => {
+      add(
+        helper.display({
+          id: "image",
+          meta: { className: "h-px w-16 overflow-hidden px-0 py-0" },
+        }),
+      );
+      add(helper.accessor("name", { header: "Name" }));
+    });
 
     const { result } = renderHook(() =>
       useCubbyTableLayout({ key: "products", columns: imageColumns }),
@@ -277,12 +284,14 @@ describe("useCubbyTableLayout", () => {
   });
 
   it("imports legacy Tailwind widths into v9 numeric column definitions", () => {
-    const legacyColumns = helper.columns([
-      helper.accessor("name", {
-        header: "Name",
-        meta: { className: "w-64 min-w-40 max-w-96 truncate" },
-      }),
-    ]);
+    const legacyColumns = createCubbyColumnCollection<Row>((add) => {
+      add(
+        helper.accessor("name", {
+          header: "Name",
+          meta: { className: "w-64 min-w-40 max-w-96 truncate" },
+        }),
+      );
+    });
     const { result } = renderHook(() =>
       useCubbyTableLayout({ columns: legacyColumns }),
     );
@@ -413,7 +422,7 @@ describe("useCubbyTableLayout", () => {
         );
         return layout;
       },
-      { initialProps: { worklist: undefined as string | undefined } },
+      { initialProps: {} },
     );
 
     act(() =>

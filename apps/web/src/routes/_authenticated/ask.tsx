@@ -1,7 +1,3 @@
-import type {
-  BrowserRoutedEntity,
-  ShortcodeEntity,
-} from "@cubby/schemas/entity-manifest";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Search, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -62,18 +58,13 @@ function AskPage() {
   // Mirror the palette's onSelectSource path so /ask sources also seed recents.
   const goToSource = (source: (typeof sources)[number]) => {
     const entity = entityTypeMap[source.entityType];
-    if (!isBrowserRoutedEntity(entity) || entity === "usda-food") return;
+    if (!isBrowserRoutedEntity(entity)) return;
     pushRecent({
       entityType: source.entityType,
       id: source.id,
       name: source.name,
     });
-    navigate(
-      entityDetailLink(
-        entity as Extract<ShortcodeEntity, BrowserRoutedEntity>,
-        source.id,
-      ),
-    );
+    navigate(entityDetailLink(entity, source.id));
   };
 
   return (

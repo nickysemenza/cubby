@@ -92,7 +92,7 @@ const CHUNK_SIZE = 25;
  * get their own `telemetryEntity` extractor at registration (see the report
  * accompanying this PR) rather than growing this list.
  */
-const HAND_MAPPED_TOOLS: Record<string, Entity> = {
+const HAND_MAPPED_TOOLS = {
   verify_product_images: "product",
   verify_products_images: "product",
   patch_product_external_ids: "product",
@@ -113,7 +113,7 @@ const HAND_MAPPED_TOOLS: Record<string, Entity> = {
   bulk_move_inventory: "inventory",
   explain_recipe_costing: "recipe",
   preview_financial_statement_import: "financialTransaction",
-};
+} as const satisfies Record<string, Entity>;
 
 /** Build the full toolName → entity map once. */
 function buildToolNameEntityMap(): Map<string, Entity> {

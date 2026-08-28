@@ -40,7 +40,7 @@ export const buildPackagePrice = (
   dollarsStr: string,
   qtyStr: string,
   unitStr: string,
-): { eachPrice: number | null; mapping: UnitMappingInput | null } => {
+): PackagePrice => {
   const dollars = parsePositive(dollarsStr);
   if (dollars == null) return { eachPrice: null, mapping: null };
   const qty = parsePositive(qtyStr) ?? 1;
@@ -57,6 +57,11 @@ export const buildPackagePrice = (
     },
   };
 };
+
+interface PackagePrice {
+  eachPrice: number | null;
+  mapping: UnitMappingInput | null;
+}
 
 /** A half-typed conversion row contributing to the live preview. */
 interface PreviewConvRow {
@@ -319,6 +324,8 @@ type ProductWrite =
       };
     };
 
+type ProductUpdateData = Extract<ProductWrite, { kind: "update" }>["data"];
+
 export const buildProductWrite = (
   row: EnrichmentRow,
   {
@@ -361,11 +368,7 @@ export const buildProductWrite = (
 
   // product.update replaces the whole mapping set — carry the existing rows
   // (with ids) so we append rather than wipe.
-  const data: {
-    fdc_id?: number;
-    price?: number;
-    unitMappings?: UnitMappingInput[];
-  } = {};
+  const data: ProductUpdateData = {};
   if (food) data.fdc_id = food.fdc_id;
   if (eachPrice != null) data.price = eachPrice;
   if (newMappings.length > 0) {

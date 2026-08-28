@@ -45,11 +45,25 @@ import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
 import { formatCurrency } from "~/lib/utils";
 
-import { createCubbyColumnHelper } from "../data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "../data-table/table-features";
 
 const EMPTY_EXPENSES: ExpenseOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 const QUANTITY_TARGET_PREFIX = "product-expense-quantity-";
+
+/** Read descriptors the history needs before it can choose its empty state. */
+export interface ProductExpenseHistoryOperations {
+  expenses: typeof expense.chartData;
+  kitMembership: typeof productOperations.kitMembership;
+}
+
+const productionOperations: ProductExpenseHistoryOperations = {
+  expenses: expense.chartData,
+  kitMembership: productOperations.kitMembership,
+};
 
 /** A section table must not write the product route's URL. */
 const EMBEDDED_TABLE_STATE = { urlSync: false, readUrlState: false } as const;
@@ -123,22 +137,23 @@ function buildProjectRollup(expenses: ExpenseOut[]): ProjectRollupEntry[] {
 }
 
 /** Expense history for a product, with direct Expense fields editable in place. */
-export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
-  product,
-}) => {
+export const ProductExpenseHistory: FC<{
+  product: ProductWithFoodOut;
+  operations?: ProductExpenseHistoryOperations;
+}> = ({ product, operations = productionOperations }) => {
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const [quantityEditorExpenseId, setQuantityEditorExpenseId] = useState<
     string | null
   >(null);
   const { data, isPending } = useQuery(
-    expense.chartData.queryOptions({ productId: product.id }),
+    operations.expenses.queryOptions({ productId: product.id }),
   );
   const expenses = data ?? EMPTY_EXPENSES;
   // Only consulted when `expenses` is empty (below) — a component of a kit
   // legitimately has zero Expenses of its own, and the generic "link one"
   // empty state is actively misleading there.
   const membershipQuery = useQuery(
-    productOperations.kitMembership.queryOptions({ productId: product.id }),
+    operations.kitMembership.queryOptions({ productId: product.id }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const update = useUpdateMutation({
@@ -216,63 +231,87 @@ export const ProductExpenseHistory: FC<{ product: ProductWithFoodOut }> = ({
   }, [expenses]);
 
   const columns = useMemo(
-    () => [
-      expenseDateColumn(helper, async (date, expense) => {
-        if (date === null) return;
-        await update.mutateAsync({ id: expense.id, data: { date } });
+    () =>
+      createCubbyColumnCollection<ExpenseOut>((add) => {
+        add(
+          expenseDateColumn(helper, async (date, expense) => {
+            if (date === null) return;
+            await update.mutateAsync({ id: expense.id, data: { date } });
+          }),
+        );
+        add(
+          createProjectLinkColumn(helper, {
+            className: "w-40",
+            filterConfig: manifestFilterConfig("expense", "project", {
+              project: rowProjectOptions,
+            }),
+            editable: {
+              onSave: async (projectId, expense) => {
+                await update.mutateAsync({
+                  id: expense.id,
+                  data: { projectId },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          expenseVendorColumn(
+            helper,
+            async (vendor, expense) => {
+              await update.mutateAsync({ id: expense.id, data: { vendor } });
+            },
+            { vendorOptions: rowVendorOptions },
+          ),
+        );
+        add(
+          createTextColumn(helper, "orderId", {
+            header: "Order #",
+            className: "w-32 font-mono",
+          }),
+        );
+        add(
+          expenseProductQuantityColumn(
+            helper,
+            async (productQuantity, expense) => {
+              await update.mutateAsync({
+                id: expense.id,
+                data: { productQuantity },
+              });
+              setQuantityEditorExpenseId(null);
+            },
+            {
+              autoOpen: (expense) => expense.id === quantityEditorExpenseId,
+              id: (expense) => `${QUANTITY_TARGET_PREFIX}${expense.id}`,
+            },
+          ),
+        );
+        add(
+          expenseCostColumn(helper, async (cost, expense) => {
+            await update.mutateAsync({ id: expense.id, data: { cost } });
+          }),
+        );
+        add(
+          expenseTradeColumn(helper, async (trade, expense) => {
+            await update.mutateAsync({ id: expense.id, data: { trade } });
+          }),
+        );
+        add(
+          expenseCostTypeColumn(helper, async (costType, expense) => {
+            await update.mutateAsync({ id: expense.id, data: { costType } });
+          }),
+        );
+        add(
+          expenseLineKindColumn(helper, async (lineKind, expense) => {
+            await update.mutateAsync({ id: expense.id, data: { lineKind } });
+          }),
+        );
+        add(
+          expenseFutureColumn(helper, async (future, expense) => {
+            await update.mutateAsync({ id: expense.id, data: { future } });
+          }),
+        );
       }),
-      createProjectLinkColumn(helper, {
-        className: "w-40",
-        filterConfig: manifestFilterConfig("expense", "project", {
-          project: rowProjectOptions,
-        }),
-        editable: {
-          onSave: async (projectId, expense) => {
-            await update.mutateAsync({ id: expense.id, data: { projectId } });
-          },
-        },
-      }),
-      expenseVendorColumn(
-        helper,
-        async (vendor, expense) => {
-          await update.mutateAsync({ id: expense.id, data: { vendor } });
-        },
-        { vendorOptions: rowVendorOptions },
-      ),
-      createTextColumn(helper, "orderId", {
-        header: "Order #",
-        className: "w-32 font-mono",
-      }),
-      expenseProductQuantityColumn(
-        helper,
-        async (productQuantity, expense) => {
-          await update.mutateAsync({
-            id: expense.id,
-            data: { productQuantity },
-          });
-          setQuantityEditorExpenseId(null);
-        },
-        {
-          autoOpen: (expense) => expense.id === quantityEditorExpenseId,
-          id: (expense) => `${QUANTITY_TARGET_PREFIX}${expense.id}`,
-        },
-      ),
-      expenseCostColumn(helper, async (cost, expense) => {
-        await update.mutateAsync({ id: expense.id, data: { cost } });
-      }),
-      expenseTradeColumn(helper, async (trade, expense) => {
-        await update.mutateAsync({ id: expense.id, data: { trade } });
-      }),
-      expenseCostTypeColumn(helper, async (costType, expense) => {
-        await update.mutateAsync({ id: expense.id, data: { costType } });
-      }),
-      expenseLineKindColumn(helper, async (lineKind, expense) => {
-        await update.mutateAsync({ id: expense.id, data: { lineKind } });
-      }),
-      expenseFutureColumn(helper, async (future, expense) => {
-        await update.mutateAsync({ id: expense.id, data: { future } });
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, quantityEditorExpenseId, rowProjectOptions, rowVendorOptions],
   );

@@ -133,7 +133,8 @@ export function planSweptBin(
  * this misfires, replace this branch with a Location column rather than
  * widening the type groups.
  */
-export function canGoMissing(child: Pick<InfLocation, "type">): boolean {
-  if (!typeSupportsQrCode(child.type)) return false;
-  return getLocationTypeGroup(child.type) === "containers";
+export function canGoMissing(child: Pick<SweepBinNode, "type">): boolean {
+  const type = child.type ?? null;
+  if (!typeSupportsQrCode(type)) return false;
+  return getLocationTypeGroup(type) === "containers";
 }

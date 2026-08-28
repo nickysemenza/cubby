@@ -21,17 +21,17 @@ import { formatCurrency } from "~/lib/utils";
  * `@cubby/schemas/purchase`, never re-derived here, so the list column, the
  * detail cue and the server's `notReconciling` worklist can't disagree.
  */
-const STATUS_PRESENTATION: Record<
-  PurchaseReconciliation,
-  { label: string; variant: BadgeVariant }
-> = {
+const STATUS_PRESENTATION = {
   // Covers both reconcilePurchase "unknown" cases: no stated total to compare
   // against, and no Expense lines to compare with.
   unknown: { label: "Nothing to reconcile", variant: "slate" },
   match: { label: "Reconciles", variant: "positive" },
   refund_adjusted: { label: "Refund-adjusted", variant: "slate" },
   mismatch: { label: "Needs review", variant: "warning" },
-};
+} satisfies Record<
+  PurchaseReconciliation,
+  { label: string; variant: BadgeVariant }
+>;
 
 type ReconciliationPurchase = {
   statedTotal: number | null;

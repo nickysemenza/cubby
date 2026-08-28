@@ -76,7 +76,7 @@ export type RecipeTotalsGap =
     };
 
 // Priority rank for sorting — lower sorts first (highest leverage on top).
-const KIND_RANK: Record<RecipeTotalsGapKind, number> = {
+const KIND_RANK = {
   "no-product": 0,
   "set-subrecipe-amount": 0,
   "set-subrecipe-yield": 0,
@@ -88,7 +88,7 @@ const KIND_RANK: Record<RecipeTotalsGapKind, number> = {
   // Volume is never a recipe-totals blocker; it only surfaces in the global
   // workbench, so its sort rank is nominal.
   "add-volume-mapping": 4,
-};
+} satisfies Record<RecipeTotalsGapKind, number>;
 
 /**
  * Classify a recipe line's unit into the kind that drives the price suggestion.

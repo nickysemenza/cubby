@@ -27,7 +27,7 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
@@ -40,7 +40,10 @@ import { cn } from "~/lib/utils";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { WithProductSearch } from "../combobox/with-search-hook";
-import { ProductFormFields } from "../products/product-form-fields";
+import {
+  type ProductFormFieldPaths,
+  ProductFormFields,
+} from "../products/product-form-fields";
 import { useUpcAwareCreate } from "../products/use-upc-aware-create";
 import { AmountFieldGroup, DEFAULT_AMOUNT_UNIT } from "./amount-field-group";
 import {
@@ -56,6 +59,20 @@ interface QuickInventoryAddProps {
    * used when the surface already knows the product, e.g. a product page.
    */
   initialProduct?: ComboboxItem<ProductShortcode>;
+  /**
+   * Replaces the inventory-create transport for a local host (for example, an
+   * embedded browser harness). The product picker, UPC resolution, and image
+   * state remain their real browser modules.
+   */
+  operations?: QuickInventoryOperations;
+}
+
+export interface QuickInventoryOperations {
+  createInventory: (input: {
+    productId: ProductShortcode;
+    locationId: LocationShortcode;
+    amount: SelectFormValues["amount"];
+  }) => Promise<void>;
 }
 
 const selectFormSchema = z.object({
@@ -87,10 +104,33 @@ const createFormSchema = z
   }));
 type CreateFormValues = z.infer<typeof createFormSchema>;
 
+const createProductFormFieldPaths = {
+  name: "name",
+  manufacturer: "manufacturer",
+  model: "model",
+  notes: "notes",
+  category: "category",
+  upc: "upc",
+  isbn: "isbn",
+  fdcId: "fdc_id",
+  expectedQuantity: "expectedQuantity",
+  price: "price",
+  ingredient: "ingredient",
+  unitMappings: "unitMappings",
+  unitMapping: (index: number) => ({
+    valueA: `unitMappings.${index}.a.value`,
+    unitA: `unitMappings.${index}.a.unit`,
+    valueB: `unitMappings.${index}.b.value`,
+    unitB: `unitMappings.${index}.b.unit`,
+    source: `unitMappings.${index}.source`,
+  }),
+} satisfies ProductFormFieldPaths<CreateFormValues>;
+
 export function QuickInventoryAdd({
   locationId,
   onSuccess,
   initialProduct,
+  operations,
 }: QuickInventoryAddProps) {
   const invalidateProductLookup = useProductLookupInvalidation();
   const [mode, setMode] = useState<"select" | "create">("select");
@@ -106,24 +146,36 @@ export function QuickInventoryAdd({
     },
   });
 
+  const onInventoryAdded = useCallback(() => {
+    toast.success("Tucked it into your cubby.");
+    selectForm.reset({
+      product: initialProduct,
+      amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+    });
+    onSuccess();
+  }, [initialProduct, onSuccess, selectForm]);
+
   const addMutation = useCreateInventoryMutation({
-    onSuccess: () => {
-      toast.success("Tucked it into your cubby.");
-      selectForm.reset({
-        product: initialProduct,
-        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
-      });
-      onSuccess();
-    },
+    onSuccess: onInventoryAdded,
     onError: (err) => toast.error(getErrorMessage(err) || "Failed to add item"),
   });
 
   const onSelectSubmit = async (values: SelectFormValues) => {
-    await addMutation.mutateAsync({
+    const input = {
       productId: getOptionalProductShortcode(values.product)!,
       locationId,
       amount: values.amount,
-    });
+    };
+    if (operations) {
+      try {
+        await operations.createInventory(input);
+        onInventoryAdded();
+      } catch (error) {
+        toast.error(getErrorMessage(error) || "Failed to add item");
+      }
+      return;
+    }
+    await addMutation.mutateAsync(input);
   };
 
   const createForm = useForm<CreateFormValues>({
@@ -145,8 +197,9 @@ export function QuickInventoryAdd({
     },
   });
 
-  const productCreateMutation = useActionMutation({
+  const productCreateMutation = useEntityActionMutation({
     entity: "product",
+    operation: "create",
     mutationFn: entityMutationOptionsFactory("product", "create"),
     onSuccess: invalidateProductLookup,
   });
@@ -358,6 +411,7 @@ export function QuickInventoryAdd({
             <div className="pt-4">
               <ProductFormFields
                 form={createForm}
+                paths={createProductFormFieldPaths}
                 imageHandlers={imageState}
                 hideNameField
                 hidePrice

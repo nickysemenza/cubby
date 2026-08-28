@@ -67,6 +67,19 @@ const DETECTED_ITEM_MATCH_BATCH_SIZE = 3;
 const SEMANTIC_PRODUCT_MATCH_THRESHOLD = 0.86;
 const LOCATION_NO_IMAGES_MESSAGE = "Location has no images to analyze";
 
+export interface LocationVisionAiPort {
+  describeLocation: ReturnType<typeof getAnthropicClient>["describeLocation"];
+  detectInventoryItems: ReturnType<
+    typeof getAnthropicClient
+  >["detectInventoryItems"];
+}
+
+const productionLocationVisionAiPort: LocationVisionAiPort = {
+  describeLocation: (...args) => getAnthropicClient().describeLocation(...args),
+  detectInventoryItems: (...args) =>
+    getAnthropicClient().detectInventoryItems(...args),
+};
+
 class LocationHasNoImagesToAnalyzeError extends Error {
   constructor() {
     super(LOCATION_NO_IMAGES_MESSAGE);
@@ -212,6 +225,7 @@ export async function describeLocation(
   db: Database,
   locationId: LocationId,
   opts: { batchId?: string } = {},
+  ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<LocationDescription> {
   const location = await getLocationById(db, locationId);
 
@@ -256,8 +270,7 @@ export async function describeLocation(
     return cached;
   }
 
-  const client = getAnthropicClient();
-  const result = await client.describeLocation(
+  const result = await ai.describeLocation(
     images.map((img) => img.url),
     location.name,
     {
@@ -409,9 +422,10 @@ async function semanticProductCandidatesBestEffort(
   try {
     return await semanticProductCandidates(db, query, 3);
   } catch (error) {
+    const parsedError = error instanceof Error ? error : null;
     console.warn("ai.inventory.semantic-product-match.failed", {
       query,
-      errorName: error instanceof Error ? error.name : typeof error,
+      errorName: parsedError?.name ?? "UnparsedError",
       message: getErrorMessage(error),
     });
     return [];
@@ -426,6 +440,7 @@ export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
   opts: { batchId?: string } = {},
+  ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<DetectedInventory> {
   const location = await getLocationById(db, locationId);
 
@@ -459,8 +474,7 @@ export async function detectInventoryItems(
       batchId: opts.batchId,
     });
   } else {
-    const client = getAnthropicClient();
-    raw = await client.detectInventoryItems(
+    raw = await ai.detectInventoryItems(
       images.map((img) => img.url),
       location.name,
       {

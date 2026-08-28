@@ -20,14 +20,14 @@ import type { BoardCacheTarget } from "./use-board-mutations";
 
 /** Stable empty defaults — never a fresh `[]`/`{}` per render (would churn memos). */
 const NO_TASKS: TaskOut[] = [];
-const NO_BOARD: {
-  active: TaskOut[];
-  recentDone: TaskOut[];
-  doneCount: number;
-} = {
+const NO_BOARD = {
   active: NO_TASKS,
   recentDone: NO_TASKS,
   doneCount: 0,
+} satisfies {
+  active: TaskOut[];
+  recentDone: TaskOut[];
+  doneCount: number;
 };
 
 const route = getRouteApi("/_authenticated/tasks/");

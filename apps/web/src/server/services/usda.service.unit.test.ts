@@ -11,8 +11,7 @@ import type {
 } from "@cubby/usda-schemas";
 import { describe, expect, it, vi } from "vitest";
 
-import type { USDAClient } from "../clients/usda";
-import { USDAService } from "./usda.service";
+import { USDAService, type USDAServiceClient } from "./usda.service";
 
 /**
  * listLinkedProductFoods is private — exercised through the public
@@ -59,13 +58,13 @@ const FOODS = [
   makeFood(105, "Raw Wheat", "agricultural_acquisition", "000000000005"),
 ];
 
-const LINKED_COUNTS_BY_UPC: Record<string, number> = {
-  "000000000001": 2,
-  "000000000002": 0,
-  "000000000003": 1,
-  "000000000004": 3,
-  "000000000005": 0,
-};
+const LINKED_COUNTS_BY_UPC = new Map([
+  ["000000000001", 2],
+  ["000000000002", 0],
+  ["000000000003", 1],
+  ["000000000004", 3],
+  ["000000000005", 0],
+]);
 
 const dummyProducts = (count: number): ProductTopLevelOut[] =>
   Array.from({ length: count }, (_, index) =>
@@ -109,13 +108,16 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
   );
 
 function makeService() {
-  const usdaClient = {
+  const usdaClient: USDAServiceClient = {
+    findFood: vi.fn(async () => null),
     findFoodsBatch: vi.fn(async () => FOODS),
-  } as unknown as USDAClient;
+    getFoodSummaryByID: vi.fn(async () => null),
+    listFoods: vi.fn(async () => ({ data: [], count: 0 })),
+  };
 
   const getLinkedProducts = vi.fn(async (lookup?: FoodLookupParam) => {
     const upc = lookup?.kind === "upc" ? lookup.gtin_upc : undefined;
-    return dummyProducts(upc ? (LINKED_COUNTS_BY_UPC[upc] ?? 0) : 0);
+    return dummyProducts(upc ? (LINKED_COUNTS_BY_UPC.get(upc) ?? 0) : 0);
   });
 
   const getLinkedProductLookups = vi.fn(async () =>

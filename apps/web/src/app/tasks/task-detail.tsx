@@ -2,7 +2,11 @@ import type {
   ProductShortcode,
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
-import type { TaskOut, TaskStatus, Trade } from "@cubby/schemas/project";
+import {
+  taskStatusSchema,
+  tradeSchema,
+  type TaskOut,
+} from "@cubby/schemas/project";
 import {
   useMutation,
   useQueries,
@@ -250,7 +254,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
 
   // Common sections from entity config (History) — editMode/mappings unused
   // here since Overview is edited via inline EditableCell fields, not a Form.
-  const { commonSections } = useEntityDetail<TaskOut, never>({
+  const { commonSections } = useEntityDetail<"task", TaskOut, never>({
     entity: "task",
     data: task,
   });
@@ -309,21 +313,23 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           value={task.status}
           config={{ type: "select", options: taskStatusOptions }}
           onSave={async (status) => {
-            if (!status) return;
+            const parsedStatus = taskStatusSchema.safeParse(status);
+            if (!parsedStatus.success) return;
             await updateMutation.mutateAsync({
               id: task.id,
-              data: { status: status as TaskStatus },
+              data: { status: parsedStatus.data },
             });
           }}
-          renderValue={(status) =>
-            status ? (
-              <Badge variant={taskStatusBadgeVariant[status as TaskStatus]}>
-                {TASK_STATUS_LABELS[status as TaskStatus]}
+          renderValue={(status) => {
+            const parsedStatus = taskStatusSchema.safeParse(status);
+            return parsedStatus.success ? (
+              <Badge variant={taskStatusBadgeVariant[parsedStatus.data]}>
+                {TASK_STATUS_LABELS[parsedStatus.data]}
               </Badge>
             ) : (
               <NoneValue />
-            )
-          }
+            );
+          }}
         />
       ),
       filterAction: (
@@ -342,10 +348,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           config={{ type: "select", options: tradeOptions }}
           onSave={async (trade) => {
             // Required field — a cleared select is a no-op, not a null write.
-            if (!trade) return;
+            const parsedTrade = tradeSchema.safeParse(trade);
+            if (!parsedTrade.success) return;
             await updateMutation.mutateAsync({
               id: task.id,
-              data: { trade: trade as Trade },
+              data: { trade: parsedTrade.data },
             });
           }}
           renderValue={(v) => renderOptionCell(v, tradeOptions)}

@@ -1,7 +1,12 @@
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import {
+  type InfLocation,
+  type LocationType,
+  locationType,
+} from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
 import { useId } from "react";
+import { z } from "zod";
 
 import { EntityStat } from "~/components/entity/entity-stat";
 import { Row } from "~/components/layout";
@@ -18,6 +23,7 @@ import { LocationBreadcrumb } from "./location-breadcrumb";
 import { locationTypeOptionsWithTheme } from "./location-icons";
 
 const EMPTY_BREADCRUMB: InfLocation[] = [];
+const emptyFilterSchema = z.enum(["all", "withItems", "empty"]);
 
 interface GalleryHeaderProps {
   searchTerm: string;
@@ -130,7 +136,9 @@ export function GalleryHeader({
             value={locationTypeFilter ?? "all"}
             onValueChange={(value) =>
               onTypeFilterChange(
-                value === "all" ? null : (value as LocationType),
+                value === "all"
+                  ? null
+                  : (locationType.safeParse(value).data ?? null),
               )
             }
             className="h-8 w-[120px]"
@@ -171,7 +179,9 @@ export function GalleryHeader({
             ]}
             value={emptyFilter}
             onValueChange={(value) =>
-              onEmptyFilterChange((value ?? "all") as EmptyFilter)
+              onEmptyFilterChange(
+                emptyFilterSchema.safeParse(value ?? "all").data ?? "all",
+              )
             }
             className="h-8 w-[120px]"
             placeholder="All"

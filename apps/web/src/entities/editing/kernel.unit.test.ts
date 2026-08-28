@@ -1,98 +1,113 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { entityEditRegistry } from "./definitions";
 import {
   buildEntityEdit,
   initialEntityEditValues,
   isResolvedEntityEdit,
   resolveEntityEdit,
 } from "./kernel";
+import {
+  parseEntityEditCreateInput,
+  parseEntityEditUpdateInput,
+} from "./mutation-data";
 import type { EntityEditRegistry } from "./registry";
 import type {
-  EntityEditContext,
+  EntityEditDefinition,
   EntityEditField,
   EntityEditRecord,
+  EntityEditValue,
+  EntityEditValueBag,
 } from "./types";
 
 const editable = { mode: "editable" } as const;
 
-const nameField: EntityEditField<"task", EntityEditRecord, string, object> = {
+const stringValue = (value: EntityEditValue): string => z.string().parse(value);
+const savedName = (record: EntityEditRecord | undefined): string | undefined =>
+  z.string().safeParse(record?.name).data;
+
+const nameField: EntityEditField<
+  "task",
+  EntityEditRecord,
+  EntityEditValue,
+  EntityEditValueBag
+> = {
   entity: "task",
   id: "name",
   access: () => editable,
-  initial: ({ record }) =>
-    (record as { name?: string } | undefined)?.name ?? "field default",
-  normalize: (value) => value.trim(),
+  initial: ({ record }) => savedName(record) ?? "field default",
+  normalize: (value) => stringValue(value).trim(),
   validate: ({ value }) =>
-    value
+    stringValue(value)
       ? []
       : [{ field: "name", message: "Name is required.", source: "client" }],
   toPatch: ({ value, record }) =>
-    (record as { name?: string } | undefined)?.name === value
-      ? undefined
-      : { name: value },
+    savedName(record) === value ? undefined : { name: value },
 };
 
-const registry = {
-  task: {
-    entity: "task",
-    fields: [nameField],
-    operations: {
-      create: {
-        defaultIntent: "capture",
-        intents: {
-          capture: {
-            fields: ["name"],
-            defaults: { name: "intent default" },
-            access: () => editable,
-            build: ({
-              patch,
-            }: {
-              record?: EntityEditRecord;
-              patch: object;
-              context: EntityEditContext;
-            }) => ({
-              ok: true as const,
-              changed: true,
-              command: {
-                entity: "task" as const,
-                operation: "create" as const,
-                intent: "capture",
-                data: patch,
-              },
-            }),
-          },
+const taskDefinition = {
+  entity: "task",
+  fields: [nameField],
+  operations: {
+    create: {
+      defaultIntent: "capture",
+      intents: {
+        capture: {
+          fields: ["name"],
+          defaults: { name: "intent default" },
+          access: () => editable,
+          build: ({ patch }) => ({
+            ok: true as const,
+            changed: true,
+            command: {
+              entity: "task",
+              operation: "create",
+              intent: "capture",
+              data: parseEntityEditCreateInput("task", patch),
+            },
+          }),
         },
       },
-      update: {
-        defaultIntent: "schedule",
-        intents: {
-          schedule: {
-            fields: ["name"],
-            access: () => editable,
-            build: ({
-              record,
-              patch,
-            }: {
-              record?: EntityEditRecord;
-              patch: object;
-              context: EntityEditContext;
-            }) => ({
-              ok: true as const,
-              changed: Object.keys(patch).length > 0,
-              command: {
-                entity: "task" as const,
-                operation: "update" as const,
-                intent: "schedule",
-                id: record?.id,
-                data: patch,
-              },
-            }),
-          },
+    },
+    update: {
+      defaultIntent: "schedule",
+      intents: {
+        schedule: {
+          fields: ["name"],
+          access: () => editable,
+          build: ({ record, patch }) =>
+            record
+              ? {
+                  ok: true as const,
+                  changed: Object.keys(patch).length > 0,
+                  command: {
+                    entity: "task" as const,
+                    operation: "update" as const,
+                    intent: "schedule",
+                    id: record.id,
+                    data: parseEntityEditUpdateInput("task", patch),
+                  },
+                }
+              : {
+                  ok: false as const,
+                  issues: [
+                    {
+                      message: "Saved task is required.",
+                      source: "client" as const,
+                    },
+                  ],
+                },
         },
       },
     },
   },
-} as unknown as EntityEditRegistry;
+} satisfies EntityEditDefinition<"task", EntityEditRecord>;
+
+const registry = {
+  ...entityEditRegistry,
+  task: taskDefinition,
+} satisfies EntityEditRegistry;
 
 describe("entity editing kernel", () => {
   it("applies field, intent, then create-seed defaults", () => {

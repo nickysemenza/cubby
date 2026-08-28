@@ -6,13 +6,14 @@
 // terminal select tool, with a `seen` map so the model can only target an id it
 // actually saw. Suggestions only — merge is destructive, so the user confirms.
 
-import type { Confidence } from "@cubby/schemas/ai";
+import { confidence, type Confidence } from "@cubby/schemas/ai";
 import {
   type IngredientId,
   type IngredientShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { z } from "zod";
 
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
@@ -21,6 +22,14 @@ import type { Database } from "~/server/db";
 import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 
 import { drainChat, IS_CF_WORKERS } from "./shared";
+
+export interface IngredientMergeAiPort {
+  getTextAdapter: ReturnType<typeof getAnthropicClient>["getTextAdapter"];
+}
+
+const productionIngredientMergeAiPort: IngredientMergeAiPort = {
+  getTextAdapter: (...args) => getAnthropicClient().getTextAdapter(...args),
+};
 
 export interface IngredientMergeSuggestion {
   target: {
@@ -31,6 +40,21 @@ export interface IngredientMergeSuggestion {
   confidence: Confidence;
   reasoning: string;
 }
+
+interface MergeSelectionState {
+  selection: {
+    ingredientId: string | null;
+    confidence: Confidence;
+    reasoning: string;
+  } | null;
+}
+
+const ingredientSearchArguments = z.object({ query: z.string().min(1) });
+const mergeSelectionArguments = z.object({
+  ingredientId: z.string().nullable(),
+  confidence,
+  reasoning: z.string(),
+});
 
 function buildMergePrompt(): string {
   return `You decide whether a recipe ingredient is the SAME purchasable item as an existing ingredient, so the two can be merged (deduplicated).
@@ -53,8 +77,9 @@ Default to null when unsure. A wrong merge is destructive, so be conservative.`;
 export async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
+  ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
 ): Promise<IngredientMergeSuggestion> {
-  const adapter = getAnthropicClient().getTextAdapter({
+  const adapter = ai.getTextAdapter({
     feature: "ingredient-merge",
     ingredient: source.name,
     env: IS_CF_WORKERS ? "prod" : "dev",
@@ -64,13 +89,7 @@ export async function suggestIngredientMerge(
     string,
     { id: IngredientId; shortcode: IngredientShortcode; name: string }
   >();
-  const state: {
-    selection: {
-      ingredientId: string | null;
-      confidence: Confidence;
-      reasoning: string;
-    } | null;
-  } = { selection: null };
+  const state: MergeSelectionState = { selection: null };
 
   // Run one ingredient search: record every hit in `seen` (so a later select can
   // only target an id the model actually saw) and format for the model. Shared
@@ -99,9 +118,9 @@ export async function suggestIngredientMerge(
       required: ["query"],
     },
   }).server(async (rawArgs) => {
-    const args = (rawArgs ?? {}) as { query?: string };
-    if (!args.query) return "Provide a query.";
-    return runSearch(args.query);
+    const parsed = ingredientSearchArguments.safeParse(rawArgs ?? {});
+    if (!parsed.success) return "Provide a query.";
+    return runSearch(parsed.data.query);
   });
 
   const selectTool = toolDefinition({
@@ -118,16 +137,9 @@ export async function suggestIngredientMerge(
       required: ["ingredientId", "confidence", "reasoning"],
     },
   }).server(async (rawArgs) => {
-    const args = (rawArgs ?? {}) as {
-      ingredientId?: string | null;
-      confidence?: Confidence;
-      reasoning?: string;
-    };
-    state.selection = {
-      ingredientId: args.ingredientId ?? null,
-      confidence: args.confidence ?? "low",
-      reasoning: args.reasoning ?? "",
-    };
+    const parsed = mergeSelectionArguments.safeParse(rawArgs ?? {});
+    if (!parsed.success) return "Invalid selection.";
+    state.selection = parsed.data;
     return "Recorded.";
   });
 

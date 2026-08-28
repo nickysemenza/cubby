@@ -73,7 +73,7 @@ export type DataQualityFacetName = z.infer<typeof dataQualityFacetName>;
 export const dataQualityGapKind = z.enum(["missing", "defect"]);
 export type DataQualityGapKind = z.infer<typeof dataQualityGapKind>;
 
-export const dataCheckFacet: Record<DataCheck, DataQualityFacetName> = {
+export const dataCheckFacet = {
   purchase_date: "identity",
   order_id: "paperwork",
   stated_total: "paperwork",
@@ -91,7 +91,7 @@ export const dataCheckFacet: Record<DataCheck, DataQualityFacetName> = {
   product_image: "provenance",
   amazon_asin: "provenance",
   duplicate_external_id: "integrity",
-};
+} satisfies Record<DataCheck, DataQualityFacetName>;
 
 export const defectDataChecks = [
   "paperwork_mismatch",
@@ -101,7 +101,7 @@ export const defectDataChecks = [
 export const isDefectDataCheck = (
   check: DataCheck,
 ): check is (typeof defectDataChecks)[number] =>
-  defectDataChecks.includes(check as (typeof defectDataChecks)[number]);
+  new Set<DataCheck>(defectDataChecks).has(check);
 
 export const dataQualityGap = z.object({
   check: dataCheck,

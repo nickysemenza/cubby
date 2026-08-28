@@ -1,82 +1,82 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  catalogQueryOptions: vi.fn(() => ({
-    queryKey: [["entityIntegrity", "catalog"]],
-  })),
-  violationsQueryOptions: vi.fn(() => ({
-    queryKey: [["problems", "getByType"]],
-  })),
-  useQuery: vi.fn(),
-}));
+import {
+  entityIntegrity,
+  integrityProblems,
+} from "~/entities/entity-integrity.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: {
-    queryKey: readonly unknown[];
-    select?: (value: unknown) => unknown;
-  }) => {
-    mocks.useQuery(options);
-    const queryRoot = Array.isArray(options.queryKey[0])
-      ? options.queryKey[0][0]
-      : options.queryKey[0];
-    if (queryRoot === "entityIntegrity") {
+import {
+  type EntityIntegrityOperations,
+  EntityIntegrityTab,
+} from "./EntityIntegrityTab";
+
+const emptyCatalog = integrityCatalogSchema.parse({
+  coverage: {
+    relationships: 0,
+    incomingEdges: 0,
+    auditedEdges: 0,
+    exemptEdges: 0,
+    operations: 0,
+  },
+  entities: [],
+  operations: [],
+});
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function integrityOperations(onCatalog: () => void, onViolations: () => void) {
+  return {
+    catalog: entityIntegrity.catalog.withTransport(async () => {
+      onCatalog();
+      return emptyCatalog;
+    }),
+    referentialLiveness: integrityProblems.getByType.withTransport(async () => {
+      onViolations();
       return {
-        data: {
-          coverage: {
-            relationships: 0,
-            incomingEdges: 0,
-            auditedEdges: 0,
-            exemptEdges: 0,
-            operations: 0,
-          },
-          entities: [],
-          operations: [],
-        },
-        isLoading: false,
+        type: "referentialLivenessViolations",
+        items: [],
+        total: 0,
       };
-    }
-    return { data: options.select?.({ items: [] }), isLoading: false };
-  },
-}));
-
-vi.mock("~/entities/entity-integrity.functions", () => ({
-  entityIntegrity: { catalog: { queryOptions: mocks.catalogQueryOptions } },
-  integrityProblems: {
-    getByType: { queryOptions: mocks.violationsQueryOptions },
-  },
-  REFERENTIAL_LIVENESS_INPUT: { key: "referentialLivenessViolations" },
-}));
-
-// If this broad dashboard hook returns, the integrity tab has regressed back to
-// running all five Problems lanes instead of its focused detector query.
-vi.mock("~/app/problems/use-problems-data", () => ({
-  useProblemsData: () => {
-    throw new Error("EntityIntegrityTab must not load full Problems data");
-  },
-}));
-
-vi.mock("./EntityReferenceGraph", () => ({
-  EntityReferenceGraph: () => <div data-testid="reference-graph" />,
-}));
-
-import { EntityIntegrityTab } from "./EntityIntegrityTab";
+    }),
+  } satisfies EntityIntegrityOperations;
+}
 
 describe("EntityIntegrityTab", () => {
-  it("loads only referential-liveness violations at the focused 60s window", () => {
-    render(<EntityIntegrityTab />);
+  it("renders catalog coverage with the focused live-violation operation only", async () => {
+    let catalogCalls = 0;
+    let violationCalls = 0;
+    render(
+      <EntityIntegrityTab
+        operations={integrityOperations(
+          () => {
+            catalogCalls += 1;
+          },
+          () => {
+            violationCalls += 1;
+          },
+        )}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
-    expect(screen.getByTestId("reference-graph")).toBeInTheDocument();
-    expect(mocks.catalogQueryOptions).toHaveBeenCalledTimes(1);
-    expect(mocks.violationsQueryOptions).toHaveBeenCalledTimes(1);
-    const problemQuery = mocks.useQuery.mock.calls
-      .map(([options]) => options)
-      .find(
-        (options: { queryKey: readonly unknown[] }) =>
-          (Array.isArray(options.queryKey[0])
-            ? options.queryKey[0][0]
-            : options.queryKey[0]) === "problems",
-      ) as { staleTime?: number };
-    expect(problemQuery).toMatchObject({ staleTime: 60_000 });
+    expect(
+      await screen.findByText(
+        "One node per entity — click a node (or a chip below) to inspect its relationships, incoming edges, and lifecycle dispositions.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText("Live violations")).toBeVisible();
+    await waitFor(() => expect(catalogCalls).toBe(1));
+    await waitFor(() => expect(violationCalls).toBe(1));
   });
 });

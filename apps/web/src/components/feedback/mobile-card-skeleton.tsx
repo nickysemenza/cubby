@@ -56,7 +56,7 @@ export function MobileCardSkeletonList({
   hasImage = true,
 }: {
   count?: number;
-  /** Spec-grid lines the real rows will have — see `mobileListShape`. */
+  /** Spec-grid lines the real rows will have — see `mobileListLayout`. */
   metaLines?: number;
   hasImage?: boolean;
 }) {

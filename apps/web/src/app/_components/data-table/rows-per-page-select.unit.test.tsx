@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import { RowsPerPageSelect } from "./rows-per-page-select";
@@ -9,10 +10,10 @@ import type { CubbyTable as Table } from "./table-features";
  * so a two-method stub is enough to drive it.
  */
 function tableWithPageSize(pageSize: number) {
-  return {
+  return fromPartial<Table<{ id: string }>>({
     state: { pagination: { pageIndex: 0, pageSize } },
     setPageSize: vi.fn(),
-  } as unknown as Table<Record<string, unknown>>;
+  });
 }
 
 describe("RowsPerPageSelect", () => {

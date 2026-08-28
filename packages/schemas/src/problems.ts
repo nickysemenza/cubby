@@ -19,6 +19,7 @@ import {
   purchaseShortcode,
   recipeShortcode,
   vendorShortcode,
+  nonEmptyTuple,
 } from "./identifiers";
 import {
   plainDate,
@@ -28,7 +29,7 @@ import {
 import { searchableEntityRefFields, searchableEntitySchema } from "./search";
 
 const publicEntityIdSchema = anyShortcodeSchema(
-  shortcodeEntities as unknown as [ShortcodeEntity, ...ShortcodeEntity[]],
+  nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
 );
 
 export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
@@ -707,7 +708,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 export const sectionTotalsSchema = z.record(z.string(), z.number().int());
 export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
 
-const problemsFastShape = {
+const problemsFastFields = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
   orphanedProducts: z.array(orphanedProductSchema),
@@ -752,7 +753,7 @@ const problemsFastShape = {
 };
 
 export const problemsFastSchema = z.object({
-  ...problemsFastShape,
+  ...problemsFastFields,
   sectionTotals: sectionTotalsSchema,
 });
 
@@ -764,7 +765,7 @@ export const problemsFastSchema = z.object({
 // this is the lane that already tolerates a per-product WASM call, and because
 // a WASM sweep on the cheap hot path is the specific mistake that took the
 // Worker down once (see the parse-sweep note above `sectionTotalsSchema`).
-const problemsCoverageShape = {
+const problemsCoverageFields = {
   ingredientsWithPartialCoverage: z.array(ingredientWithPartialCoverageSchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   productsWithTitleDerivableSize: z.array(productWithTitleDerivableSizeSchema),
@@ -781,13 +782,13 @@ const conversionCoverageFreshnessSchema = z.object({
 });
 
 export const problemsCoverageSchema = z.object({
-  ...problemsCoverageShape,
+  ...problemsCoverageFields,
   sectionTotals: sectionTotalsSchema,
   /** Exact list filters read this persisted projection, not the card scan. */
   freshness: conversionCoverageFreshnessSchema,
 });
 
-const problemsUpcShape = {
+const problemsUpcFields = {
   productsWithBetterUpcData: z.array(productWithBetterUpcDataSchema),
 };
 
@@ -806,12 +807,12 @@ export type UpcEnrichmentFreshness = z.infer<
 >;
 
 export const problemsUpcSchema = z.object({
-  ...problemsUpcShape,
+  ...problemsUpcFields,
   sectionTotals: sectionTotalsSchema,
   freshness: upcEnrichmentFreshnessSchema,
 });
 
-const problemsViewsShape = {
+const problemsViewsFields = {
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
   recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
   staleLocations: z.array(staleLocationSchema),
@@ -828,13 +829,13 @@ const problemsViewsShape = {
 };
 
 export const problemsViewsSchema = z.object({
-  ...problemsViewsShape,
+  ...problemsViewsFields,
   /** True population per key; the page above is only what the card shows. */
   sectionTotals: sectionTotalsSchema,
 });
 export type ProblemsViewsOut = z.infer<typeof problemsViewsSchema>;
 
-const problemsTrackerShape = {
+const problemsTrackerFields = {
   overdueTasks: z.array(projectAttentionItemSchema),
   stalledProjects: z.array(projectAttentionItemSchema),
   projectsMissingBudget: z.array(projectAttentionItemSchema),
@@ -845,7 +846,7 @@ const problemsTrackerShape = {
 };
 
 export const problemsTrackerSchema = z.object({
-  ...problemsTrackerShape,
+  ...problemsTrackerFields,
   sectionTotals: sectionTotalsSchema,
 });
 export type ProblemsTracker = z.infer<typeof problemsTrackerSchema>;
@@ -869,11 +870,11 @@ export const TRACKER_PROBLEM_KEY_BY_TYPE = {
 // contract while sharing the grouped shapes above, so lazy loading/cost grouping
 // never makes fields appear optional on the aggregate response.
 const allProblemArrayFields = {
-  ...problemsFastShape,
-  ...problemsCoverageShape,
-  ...problemsUpcShape,
-  ...problemsTrackerShape,
-  ...problemsViewsShape,
+  ...problemsFastFields,
+  ...problemsCoverageFields,
+  ...problemsUpcFields,
+  ...problemsTrackerFields,
+  ...problemsViewsFields,
 };
 
 export const allProblemsSchema = z.object({
@@ -883,6 +884,35 @@ export const allProblemsSchema = z.object({
   conversionCoverageFreshness: conversionCoverageFreshnessSchema.optional(),
   totalProblems: z.number(),
 });
+
+const orphanedEntityEmbeddingMcpOut = orphanedEntityEmbeddingSchema.omit({
+  id: true,
+  entityId: true,
+});
+const unreferencedImageMcpOut = unreferencedImageSchema.omit({
+  id: true,
+  targetId: true,
+});
+const referentialLivenessViolationMcpOut =
+  referentialLivenessViolationSchema.omit({
+    targetId: true,
+    sourceId: true,
+  });
+
+/** MCP problem catalog with storage-only diagnostic identifiers removed. */
+export const allProblemsMcpSchema = allProblemsSchema.extend({
+  orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingMcpOut),
+  unreferencedImages: z.array(unreferencedImageMcpOut),
+  referentialLivenessViolations: z.array(referentialLivenessViolationMcpOut),
+});
+
+export const orphanedEntityEmbeddingsMcpOut = z.array(
+  orphanedEntityEmbeddingMcpOut,
+);
+export const unreferencedImagesMcpOut = z.array(unreferencedImageMcpOut);
+export const referentialLivenessViolationsMcpOut = z.array(
+  referentialLivenessViolationMcpOut,
+);
 
 export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
 
@@ -1096,16 +1126,16 @@ export const sumProblemSections = (
     0,
   );
 
-const byTypeShape = Object.fromEntries(
+const byTypeFields = Object.fromEntries(
   Object.keys(allProblemArrayFields).map((k) => [k, z.number()]),
-) as { [K in keyof typeof allProblemArrayFields]: z.ZodNumber };
+);
 
 export const problemsCountSchema = z.object({
   /** Defect rows only — what the navbar badge and homepage banner show. */
   total: z.number(),
   /** Coverage-backlog rows, reported separately so they never inflate `total`. */
   coverageTotal: z.number(),
-  byType: z.object(byTypeShape),
+  byType: z.object(byTypeFields),
 });
 
 /**

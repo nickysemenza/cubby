@@ -100,7 +100,7 @@ describe("background job table rows", () => {
     [
       {
         status: "ready",
-        jobs: [] as BackgroundJobSummary[],
+        jobs: [],
         pageIndex: 0,
         pageSize: 100,
         totalCount: 0,

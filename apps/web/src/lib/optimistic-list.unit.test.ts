@@ -11,6 +11,17 @@ type Row = { id: string; name: string; acquiredAt: Date | null };
 const row = (id: string, name = id): Row => ({ id, name, acquiredAt: null });
 const acquire = (item: Row): Row => ({ ...item, acquiredAt: new Date(0) });
 
+function isPageWithRows<TValue>(
+  value: TValue,
+): value is TValue & { items: Row[] } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "items" in value &&
+    Array.isArray(value.items)
+  );
+}
+
 describe("patchCachedListItem", () => {
   it("patches the matching row of a plain list page", () => {
     const patched = patchCachedListItem<Row>(
@@ -63,7 +74,9 @@ describe("patchCachedListItem", () => {
     const list = { items: [keep] };
     const patched = patchCachedListItem<Row>(list, "zzz", acquire);
     expect(patched).toBe(list);
-    expect((patched as { items: Row[] }).items[0]).toBe(keep);
+    expect(isPageWithRows(patched)).toBe(true);
+    if (!isPageWithRows(patched)) throw new Error("expected a list page");
+    expect(patched.items[0]).toBe(keep);
   });
 });
 

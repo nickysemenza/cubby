@@ -1,37 +1,20 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueryClientProvider } from "@tanstack/react-query";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CubbyRow as Row } from "../data-table/table-features";
+import type { EntityEditResult } from "~/entities/editing/types";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-/**
- * Pins the fix for the two-tier bug: bulk delete (toolbar) and single-row
- * delete (row menu / swipe) are now literally the same flow over a list of
- * targets — one dialog — instead of bulk delete skipping straight to a
- * delete and routing through `BulkActionBar`'s generic "are you sure" dialog.
- *
- * There is no impact-preview gate any more (see `useOptimisticDelete`'s doc
- * comment): a delete mutation's own structured refusal is the contract, so
- * these no longer mock `entityIntegrity.previewOperation` or assert a
- * `blocked` dialog prop.
- *
- * These treat the memoized `deleteDialog` element as data: reading its props
- * directly is more robust than rendering the underlying base-ui portal dialog
- * in jsdom, and it's a faithful check of what this hook is actually
- * responsible for — wiring the right ids into the shared dialog, not the
- * dialog's own rendering (that's `BulkActionDialog`'s job, already covered
- * elsewhere).
- */
-
-const mocks = vi.hoisted(() => ({
-  commandRemove: vi.fn(),
-}));
-
-vi.mock("~/entities/editing/use-entity-commands", () => ({
-  useEntityCommands: () => ({ remove: mocks.commandRemove }),
-}));
-
+import { useCubbyTable } from "../data-table/table-features";
+import type { DeletableConfig } from "./useDeletableConfig";
 import { useOptimisticDelete } from "./useOptimisticDelete";
 
 interface TestRow {
@@ -39,71 +22,93 @@ interface TestRow {
   name: string | null;
 }
 
-/**
- * `BulkAction.onExecute` is typed over `Row<TData>[]` — the full tanstack-table
- * row object — even though this hook's implementation only ever reads
- * `.original`. A real `Row` is expensive to construct in a unit test, so this
- * stands in for one; it's only exercised through `.original` on the receiving
- * end.
- */
-function row(original: TestRow): Row<TestRow> {
-  return { original } as unknown as Row<TestRow>;
-}
+const deletedProduct = (id: string) =>
+  ({
+    ok: true,
+    entity: "product",
+    id,
+    changed: true,
+  }) satisfies EntityEditResult<"product">;
 
-function makeDeletable(
-  mutationFn: (vars: { ids: string[] }) => Promise<unknown>,
-) {
+const refusedProduct = {
+  ok: false,
+  issues: [{ message: "Delete refused", source: "server" }],
+} satisfies EntityEditResult<"product">;
+
+function registeredDeletable(): DeletableConfig {
   return {
-    mutationOptions: ({
-      onSuccess,
-      onError,
-    }: {
-      onSuccess: () => void;
-      onError: (err: { message?: string }) => void;
-    }) => ({
-      mutationFn,
-      onSuccess,
-      onError,
+    mutationOptions: () => ({
+      mutationFn: async ({ ids }) => ({ deleted: ids.length }),
     }),
     entityLabel: "Product",
-    entity: "product" as const,
+    entity: "product",
   };
 }
 
-const clients: QueryClient[] = [];
-function createWrapper() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
-  });
-  clients.push(client);
-  return function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
+function imageDeletable(requests: string[][]): DeletableConfig {
+  return {
+    mutationOptions: () => ({
+      mutationFn: async ({ ids }) => {
+        requests.push([...ids]);
+        return { deleted: ids.length };
+      },
+    }),
+    entityLabel: "Image",
+    entity: "image",
   };
 }
 
-afterEach(() => {
-  for (const client of clients.splice(0)) client.clear();
-  mocks.commandRemove.mockReset();
+function useTableRows(rows: TestRow[]) {
+  return useCubbyTable({
+    data: rows,
+    columns: [],
+    getRowId: (row) => row.id,
+  }).getRowModel().rows;
+}
+
+function createDeferredCommandPort() {
+  const requests: string[][] = [];
+  let resolvePending:
+    | ((result: EntityEditResult<"product">) => void)
+    | undefined;
+  return {
+    requests,
+    commandPort: {
+      remove: (ids: readonly string[]) => {
+        requests.push([...ids]);
+        return new Promise<EntityEditResult<"product">>((resolve) => {
+          resolvePending = resolve;
+        });
+      },
+    },
+    resolve(result: EntityEditResult<"product">) {
+      if (!resolvePending) throw new Error("Delete command has not started.");
+      resolvePending(result);
+    },
+  };
+}
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
 });
 
-// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-type AnyDialogElement = ReactElement<any>;
+afterEach(() => {
+  harness.dispose();
+});
+
+function QueryHarness({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={harness.queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
 
 describe("useOptimisticDelete", () => {
-  it("optimistically walks infinite pages, then restores totals and rows on failure", async () => {
-    let finishDelete!: (result: {
-      ok: false;
-      issues: { message: string }[];
-    }) => void;
-    mocks.commandRemove.mockReturnValue(
-      new Promise((resolve) => {
-        finishDelete = resolve;
-      }),
-    );
-    const wrapper = createWrapper();
-    const client = clients.at(-1)!;
+  it("optimistically removes paginated rows, then restores the snapshot on a registered refusal", async () => {
+    const command = createDeferredCommandPort();
     const key = [["product"], { page: "all" }] as const;
     const original = {
       pages: [
@@ -118,27 +123,27 @@ describe("useOptimisticDelete", () => {
       ],
       pageParams: [0],
     };
-    client.setQueryDefaults(key, { meta: { cacheTags: [["product"]] } });
-    client.setQueryData(key, original);
-    const { result } = renderHook(
+    harness.queryClient.setQueryDefaults(key, {
+      meta: { cacheTags: [["product"]] },
+    });
+    harness.queryClient.setQueryData(key, original);
+    const hook = renderHook(
       () =>
         useOptimisticDelete<TestRow>({
-          deletable: makeDeletable(vi.fn()),
+          deletable: registeredDeletable(),
+          commandPort: command.commandPort,
         }),
-      { wrapper },
+      { wrapper: QueryHarness },
     );
 
     act(() => {
-      result.current.requestDelete({ id: "PRD-2222", name: "Apples" });
+      hook.result.current.requestDelete({ id: "PRD-2222", name: "Apples" });
     });
-    const dialog = result.current.deleteDialog as AnyDialogElement;
-    let submission!: Promise<void>;
-    act(() => {
-      submission = dialog.props.onSubmit();
-    });
+    render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() =>
-      expect(client.getQueryData(key)).toEqual({
+      expect(harness.queryClient.getQueryData(key)).toEqual({
         pages: [
           {
             items: [{ id: "PRD-3333", name: "Bananas" }],
@@ -150,137 +155,101 @@ describe("useOptimisticDelete", () => {
       }),
     );
 
-    finishDelete({ ok: false, issues: [{ message: "Delete refused" }] });
-    await expect(submission).rejects.toThrow("Delete refused");
-    await waitFor(() => expect(client.getQueryData(key)).toEqual(original));
+    command.resolve(refusedProduct);
+    await waitFor(() =>
+      expect(harness.queryClient.getQueryData(key)).toEqual(original),
+    );
   });
 
-  it("publishes delete through the shared lifecycle action contract", () => {
-    const mutationFn = vi.fn().mockResolvedValue({});
-    const { result } = renderHook(
-      () =>
-        useOptimisticDelete<TestRow>({
-          deletable: makeDeletable(mutationFn),
-        }),
-      { wrapper: createWrapper() },
-    );
-
-    expect(result.current.deleteActionDefinition).toMatchObject({
-      verb: "delete",
-      entities: ["product"],
-      arity: "both",
-      surfaces: ["row", "selection"],
-      group: "destructive",
-      priority: 1000,
-    });
-    expect(
-      result.current.deleteActionDefinition?.use("product").run,
-    ).toBeTypeOf("function");
-  });
-
-  it("opens the whole bulk selection in one dialog, not just the first row", () => {
-    const mutationFn = vi.fn().mockResolvedValue({});
-
-    const { result } = renderHook(
-      () =>
-        useOptimisticDelete<TestRow>({
-          deletable: makeDeletable(mutationFn),
-        }),
-      { wrapper: createWrapper() },
-    );
-
-    act(() => {
-      void result.current.deleteBulkAction?.onExecute([
-        row({ id: "PRD-2222", name: "Apples" }),
-        row({ id: "PRD-3333", name: "Bananas" }),
-      ]);
-    });
-
-    const dialog = result.current.deleteDialog as AnyDialogElement;
-    expect(dialog.props.items).toEqual([
+  it("opens one real confirmation dialog for every selected row and preserves selection on cancel", async () => {
+    const command = createDeferredCommandPort();
+    const rows = [
       { id: "PRD-2222", name: "Apples" },
       { id: "PRD-3333", name: "Bananas" },
-    ]);
-  });
-
-  it("resolves the bulk action's held-open promise as unsuccessful on cancel, without deleting", async () => {
-    const mutationFn = vi.fn().mockResolvedValue({});
-    const { result } = renderHook(
+    ];
+    const hook = renderHook(
       () =>
         useOptimisticDelete<TestRow>({
-          deletable: makeDeletable(mutationFn),
+          deletable: registeredDeletable(),
+          commandPort: command.commandPort,
         }),
-      { wrapper: createWrapper() },
+      { wrapper: QueryHarness },
     );
+    const table = renderHook(() => useTableRows(rows), {
+      wrapper: QueryHarness,
+    });
+    const action = hook.result.current.deleteBulkAction;
+    if (!action) throw new Error("Expected delete bulk action");
 
-    let bulkResult: { success: boolean } | undefined;
+    let outcome: Promise<{ success: boolean }> | undefined;
     act(() => {
-      void result.current.deleteBulkAction
-        ?.onExecute([row({ id: "PRD-2222", name: "Apples" })])
-        .then((r) => {
-          bulkResult = r;
-        });
+      outcome = action.onExecute(table.result.current);
     });
+    if (!outcome) throw new Error("Expected bulk delete outcome.");
+    render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
 
-    const dialog = result.current.deleteDialog as AnyDialogElement;
-    await act(async () => {
-      dialog.props.onOpenChange(false);
-    });
+    expect(await screen.findByText("Apples")).toBeVisible();
+    expect(screen.getByText("Bananas")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    await waitFor(() => expect(bulkResult).toEqual({ success: false }));
-    expect(mutationFn).not.toHaveBeenCalled();
+    await expect(outcome).resolves.toEqual({ success: false });
+    expect(command.requests).toEqual([]);
   });
 
-  it("resolves the bulk action's held-open promise as successful after a real delete", async () => {
-    // This is what lets `useBulkActions.executeAction` clear the toolbar's
-    // row selection once the delete actually happens — not when the dialog
-    // merely opens.
-    const mutationFn = vi.fn().mockResolvedValue({});
-    mocks.commandRemove.mockResolvedValue({ ok: true, issues: [] });
-    const { result } = renderHook(
+  it("settles a successful registered bulk delete only after the command finishes", async () => {
+    const command = createDeferredCommandPort();
+    const rows = [
+      { id: "PRD-2222", name: "Apples" },
+      { id: "PRD-3333", name: "Bananas" },
+    ];
+    const hook = renderHook(
       () =>
         useOptimisticDelete<TestRow>({
-          deletable: makeDeletable(mutationFn),
+          deletable: registeredDeletable(),
+          commandPort: command.commandPort,
         }),
-      { wrapper: createWrapper() },
+      { wrapper: QueryHarness },
     );
+    const table = renderHook(() => useTableRows(rows), {
+      wrapper: QueryHarness,
+    });
+    const action = hook.result.current.deleteBulkAction;
+    if (!action) throw new Error("Expected delete bulk action");
 
-    let bulkResult: { success: boolean } | undefined;
+    let outcome: Promise<{ success: boolean }> | undefined;
     act(() => {
-      void result.current.deleteBulkAction
-        ?.onExecute([
-          row({ id: "PRD-2222", name: "Apples" }),
-          row({ id: "PRD-3333", name: "Bananas" }),
-        ])
-        .then((r) => {
-          bulkResult = r;
-        });
+      outcome = action.onExecute(table.result.current);
     });
+    if (!outcome) throw new Error("Expected bulk delete outcome.");
+    render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() =>
+      expect(command.requests).toEqual([["PRD-2222", "PRD-3333"]]),
+    );
+    command.resolve(deletedProduct("PRD-2222"));
 
-    const dialog = result.current.deleteDialog as AnyDialogElement;
-    await act(async () => {
-      await dialog.props.onSubmit();
-    });
-
-    expect(mocks.commandRemove).toHaveBeenCalledWith(["PRD-2222", "PRD-3333"]);
-    await waitFor(() => expect(bulkResult).toEqual({ success: true }));
+    await expect(outcome).resolves.toEqual({ success: true });
   });
 
-  it("opens the same dialog for a single row-menu delete as for a bulk selection", () => {
-    const mutationFn = vi.fn().mockResolvedValue({});
-    const { result } = renderHook(
+  it("uses the legacy image mutation path without routing through entity commands", async () => {
+    const command = createDeferredCommandPort();
+    const imageRequests: string[][] = [];
+    const hook = renderHook(
       () =>
         useOptimisticDelete<TestRow>({
-          deletable: makeDeletable(mutationFn),
+          deletable: imageDeletable(imageRequests),
+          commandPort: command.commandPort,
         }),
-      { wrapper: createWrapper() },
+      { wrapper: QueryHarness },
     );
 
     act(() => {
-      result.current.requestDelete({ id: "PRD-2222", name: "Apples" });
+      hook.result.current.requestDelete({ id: "IMG-2222", name: "Receipt" });
     });
+    render(<>{hook.result.current.deleteDialog}</>, { wrapper: QueryHarness });
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
 
-    const dialog = result.current.deleteDialog as AnyDialogElement;
-    expect(dialog.props.items).toEqual([{ id: "PRD-2222", name: "Apples" }]);
+    await waitFor(() => expect(imageRequests).toEqual([["IMG-2222"]]));
+    expect(command.requests).toEqual([]);
   });
 });

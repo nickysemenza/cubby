@@ -1,6 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { withEntityKernelMutations } from "tooling/entity-kernel-test-caller";
+import { createRecipeKernelTestCaller } from "tooling/entity-kernel-test-caller";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,7 +16,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     createTestRequestContext(tdb.db, {
       auth: { userId: TEST_ACTOR.userId },
     });
-  const recipeCaller = () => withEntityKernelMutations({}, "recipe", tdb.db);
+  const recipeCaller = () => createRecipeKernelTestCaller(tdb.db);
 
   const createFlourRecipe = (ingredientId: string, need: Amount) =>
     createRecipe(
@@ -119,23 +119,27 @@ describe("AvailabilityService.getRecipeAvailability", () => {
       name: string,
       recipeYield: { value: number; unit: string } | null,
       ingredients: { ingredientId: string; amounts: Amount[] }[],
-    ) =>
-      recipeCaller().create({
+    ) => {
+      const data: Parameters<
+        ReturnType<typeof createRecipeKernelTestCaller>["create"]
+      >[0] = {
         name,
         meta: null,
-        ...(recipeYield ? { yield: recipeYield } : {}),
         sections: [
           {
             ingredients: ingredients.map((i) => ({
               type: "ingredient" as const,
-              ingredientId: i.ingredientId,
+              ingredientId: parseShortcodeFor("ingredient", i.ingredientId),
               recipeId: null,
               amounts: i.amounts,
             })),
             instructions: [{ instruction: "Mix" }],
           },
         ],
-      });
+      };
+      if (recipeYield) data.yield = recipeYield;
+      return recipeCaller().create(data);
+    };
 
     const createParent = (
       subRecipeId: string,
@@ -150,13 +154,13 @@ describe("AvailabilityService.getRecipeAvailability", () => {
             ingredients: [
               {
                 type: "recipe" as const,
-                recipeId: subRecipeId,
+                recipeId: parseShortcodeFor("recipe", subRecipeId),
                 ingredientId: null,
                 amounts,
               },
               ...extras.map((e) => ({
                 type: "ingredient" as const,
-                ingredientId: e.ingredientId,
+                ingredientId: parseShortcodeFor("ingredient", e.ingredientId),
                 recipeId: null,
                 amounts: e.amounts,
               })),

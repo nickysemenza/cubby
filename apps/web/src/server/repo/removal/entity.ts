@@ -37,10 +37,14 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { EntityId } from "@cubby/schemas/identifiers";
+import {
+  type EntityId,
+  imageId as imageIdSchema,
+} from "@cubby/schemas/identifiers";
 import { and, inArray, or, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
@@ -112,8 +116,16 @@ const parentMatches = (
   // clause here is a real predicate, so it cannot be that case. The `or` (not a
   // hand-joined `sql`) is load-bearing: it parenthesizes the disjunction, which
   // the soft path's `and(where, notDeleted(...))` then depends on.
-  return or(match(first), ...rest.map(match)) as SQL<unknown>;
+  const predicate = or(match(first), ...rest.map(match));
+  if (!predicate) {
+    throw new Error("A non-empty parent-column set produced no predicate");
+  }
+  return predicate;
 };
+
+type RowRemoval =
+  | { table: PgTable; where: SQL; mode: "hard" }
+  | { table: SoftDeletableTable; where: SQL; mode: "soft" };
 
 /**
  * Issue one removal statement. Soft removal re-applies `notDeleted` so a row
@@ -122,21 +134,23 @@ const parentMatches = (
  */
 const removeRows = async (
   tx: DrizzleTransaction,
-  table: PgTable,
-  where: SQL,
-  mode: "soft" | "hard",
+  removal: RowRemoval,
   at: Date,
 ): Promise<void> => {
-  if (mode === "hard") {
-    await tx.delete(table).where(where);
+  if (removal.mode === "hard") {
+    await tx.delete(removal.table).where(removal.where);
     return;
   }
-  const deletedAt = (table as SoftDeletableTable).deletedAt;
+  const { deletedAt } = removal.table;
   await tx
-    .update(table)
+    .update(removal.table)
     .set({ deletedAt: at })
-    .where(and(where, notDeleted({ deletedAt })));
+    .where(and(removal.where, notDeleted({ deletedAt })));
 };
+
+const cascadingImageRowsSchema = z.array(
+  z.object({ imageId: imageIdSchema.nullable() }),
+);
 
 /**
  * The images a child cascade is about to orphan, read BEFORE it runs.
@@ -160,19 +174,17 @@ const collectCascadingImageIds = async (
   for (const child of children) {
     const imageColumn = imageJoinColumnFor(child.table);
     if (!imageColumn) continue;
-    const rows = (await tx
-      // oxlint-disable-next-line typescript/no-explicit-any -- Drizzle's dynamic column type is too narrow for select().
-      .select({ imageId: imageColumn as any })
-      .from(child.table)
-      .where(
-        and(
-          parentMatches(child.parentColumns, ids),
-          // A row already tombstoned belongs to an earlier removal, and was
-          // either reaped then or is the residue this cascade is now cleaning
-          // up anyway — either way `reapUnreferencedImages` re-checks.
-          notDeleted(child.table as SoftDeletableTable),
-        ),
-      )) as Array<{ imageId: string | null }>;
+    const parentPredicate = parentMatches(child.parentColumns, ids);
+    const childPredicate =
+      child.mode === "hard"
+        ? parentPredicate
+        : and(parentPredicate, notDeleted(child.table));
+    const rows = cascadingImageRowsSchema.parse(
+      await tx
+        .select({ imageId: imageColumn })
+        .from(child.table)
+        .where(childPredicate),
+    );
     for (const row of rows) {
       if (row.imageId) imageIds.push(row.imageId);
     }
@@ -250,17 +262,21 @@ export const removeEntity = async <E extends RemovableEntity>(
 
     const now = new Date();
     for (const child of children) {
-      await removeRows(
-        tx,
-        child.table,
-        parentMatches(child.parentColumns, ids),
-        child.mode ?? "soft",
-        now,
-      );
+      const where = parentMatches(child.parentColumns, ids);
+      if (child.mode === "hard") {
+        await removeRows(tx, { table: child.table, where, mode: "hard" }, now);
+      } else {
+        await removeRows(tx, { table: child.table, where, mode: "soft" }, now);
+      }
     }
 
-    const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
-    await removeRows(tx, table, inArray(table.id, [...ids]), removal, now);
+    const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+    const where = inArray(table.id, [...ids]);
+    if (removal === "hard") {
+      await removeRows(tx, { table, where, mode: "hard" }, now);
+    } else {
+      await removeRows(tx, { table, where, mode: "soft" }, now);
+    }
 
     await cascadeRemoval(tx, {
       entity,

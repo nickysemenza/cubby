@@ -25,6 +25,9 @@ overrides:
 packageExtensionsChecksum: sha256-L15hUdzOxX1LWRB3GSD+h4NcMKHABUwMYjMGPpPZ/IM=
 
 patchedDependencies:
+  '@electric-sql/pglite-socket@0.2.10':
+    hash: d22528faa1b7e29f8d88a905deccd1033dd43a46f11b98b0c114a4d0efe4cc0f
+    path: patches/@electric-sql__pglite-socket@0.2.10.patch
   wrangler@4.120.0:
     hash: c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85
     path: patches/wrangler@4.120.0.patch
@@ -33,6 +36,9 @@ importers:
 
   .:
     devDependencies:
+      '@oxlint/plugins':
+        specifier: 1.80.0
+        version: 1.80.0
       '@types/node':
         specifier: ^26.1.1
         version: 26.2.0
@@ -57,6 +63,9 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   apps/mcp-apps:
     dependencies:
@@ -66,6 +75,9 @@ importers:
       '@modelcontextprotocol/ext-apps':
         specifier: ^1.7.5
         version: 1.7.5(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       jsdom:
         specifier: ^30.0.0
@@ -192,6 +204,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260719.1
         version: 5.20260816.1
+      '@total-typescript/shoehorn':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -531,7 +546,7 @@ importers:
         version: 0.0.8(@electric-sql/pglite@0.5.7)
       '@electric-sql/pglite-socket':
         specifier: 0.2.10
-        version: 0.2.10(@electric-sql/pglite-age@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_hashids@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_ivm@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_textsearch@0.0.9(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_uuidv7@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgtap@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgvector@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite@0.5.7)
+        version: 0.2.10(patch_hash=d22528faa1b7e29f8d88a905deccd1033dd43a46f11b98b0c114a4d0efe4cc0f)(@electric-sql/pglite-age@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_hashids@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_ivm@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_textsearch@0.0.9(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_uuidv7@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgtap@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgvector@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite@0.5.7)
       '@faker-js/faker':
         specifier: ^10.5.0
         version: 10.6.0
@@ -556,6 +571,9 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@total-typescript/shoehorn':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@types/d3-force':
         specifier: ^3.0.10
         version: 3.0.10
@@ -3381,6 +3399,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@oxlint/plugins@1.80.0':
+    resolution: {integrity: sha512-QRgH1XqQEYNHa4f1vvPQ5fAdNdncHGIUG1ZWLlGIZHky3qwCEeAKYitZNbZMtaXtAQAAFFTOwqUfzESvimqZNA==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+
   '@peculiar/asn1-android@2.8.0':
     resolution: {integrity: sha512-skLbS+IOGv1lUgDqtChr8xvtvEr3HMse/JGBaL2r1J1o/n7a8wqOrovMtlRq/UXLhxvmLaONP67hwtshgzwfzA==}
 
@@ -5343,6 +5365,9 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
+
+  '@total-typescript/shoehorn@0.1.2':
+    resolution: {integrity: sha512-p7nNZbOZIofpDNyP0u1BctFbjxD44Qc+oO5jufgQdFdGIXJLc33QRloJpq7k5T59CTgLWfQSUxsuqLcmeurYRw==}
 
   '@triplit/client@1.0.50':
     resolution: {integrity: sha512-3vjXTSdDQ3fzLDrewCK7elkAQc7CiDg0eZEOZInQbVMFRiakdieO5C2voSnNjSepIYHxDxFSBllgg32QsNpL9Q==}
@@ -10121,7 +10146,7 @@ snapshots:
     dependencies:
       '@electric-sql/pglite': 0.5.7
 
-  '@electric-sql/pglite-socket@0.2.10(@electric-sql/pglite-age@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_hashids@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_ivm@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_textsearch@0.0.9(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_uuidv7@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgtap@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgvector@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite@0.5.7)':
+  '@electric-sql/pglite-socket@0.2.10(patch_hash=d22528faa1b7e29f8d88a905deccd1033dd43a46f11b98b0c114a4d0efe4cc0f)(@electric-sql/pglite-age@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_hashids@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_ivm@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_textsearch@0.0.9(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pg_uuidv7@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgtap@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite-pgvector@0.0.8(@electric-sql/pglite@0.5.7))(@electric-sql/pglite@0.5.7)':
     dependencies:
       '@electric-sql/pglite': 0.5.7
       '@electric-sql/pglite-age': 0.0.8(@electric-sql/pglite@0.5.7)
@@ -12074,6 +12099,8 @@ snapshots:
   '@oxlint/binding-win32-x64-msvc@1.80.0':
     optional: true
 
+  '@oxlint/plugins@1.80.0': {}
+
   '@peculiar/asn1-android@2.8.0':
     dependencies:
       '@peculiar/asn1-schema': 2.8.0
@@ -13999,6 +14026,8 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.17
       '@types/react-dom': 19.2.3(@types/react@19.2.17)
+
+  '@total-typescript/shoehorn@0.1.2': {}
 
   '@triplit/client@1.0.50(better-sqlite3@12.11.1)(typescript@7.0.2)':
     dependencies:

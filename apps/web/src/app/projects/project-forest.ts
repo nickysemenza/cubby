@@ -134,12 +134,13 @@ export function foldForest<T extends ForestNode, R>(
   const { childrenByParent } = forest;
   const emitted = new Set<string>();
   const onStack = new Set<string>();
-  const memo = new Map<string, R>();
+  const memo = new Map<string, { value: R }>();
 
   function visit(node: T, depth: number): R {
     // `has` then `get` (not a `!= null` test): `R` may legitimately be
     // undefined, and a memoized undefined still means "already folded".
-    if (memo.has(node.id)) return memo.get(node.id) as R;
+    const memoized = memo.get(node.id);
+    if (memoized) return memoized.value;
     emitted.add(node.id);
     // The two truncating exits are deliberately NOT memoized: both fold a
     // partial view of the node (no children), and the same node reached later
@@ -156,7 +157,7 @@ export function foldForest<T extends ForestNode, R>(
     }
     onStack.delete(node.id);
     const result = fold(node, childResults, depth);
-    memo.set(node.id, result);
+    memo.set(node.id, { value: result });
     return result;
   }
 

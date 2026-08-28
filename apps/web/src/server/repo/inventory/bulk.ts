@@ -198,8 +198,14 @@ export const bulkProcessInventoryEntries = async (
       const valuationGraphs = await loadValuationGraphs(tx, allProductIds);
 
       const submittedIds = items
-        .filter((item) => item.id)
-        .map((item) => item.id as string);
+        .filter(
+          (
+            item,
+          ): item is ResolvedInventoryBulkOperationItem & {
+            id: InventoryId;
+          } => item.id !== undefined,
+        )
+        .map((item) => item.id);
 
       const itemsToDelete = existingItems.filter(
         (item) => !submittedIds.includes(item.id),
@@ -525,13 +531,15 @@ export const addInventoryEntries = async (
             item.amount,
             valuationGraphs.get(item.productId) ?? [],
           );
-          const created = await insertWithShortcode(tx, "inventory", {
-            productId: item.productId,
-            locationId,
-            amount: item.amount,
-            ...(item.placement ? { placement: item.placement } : {}),
-            valuation,
-          });
+          const values: Parameters<typeof insertWithShortcode<"inventory">>[2] =
+            {
+              productId: item.productId,
+              locationId,
+              amount: item.amount,
+              valuation,
+            };
+          if (item.placement) values.placement = item.placement;
+          const created = await insertWithShortcode(tx, "inventory", values);
           resultIds.push(created.id);
           auditEntries.push({
             entityType: "inventory",
@@ -1169,12 +1177,13 @@ export const reconcileLocationSession = async (
             recomputeNeeded = true;
             resultIds.push(updated.id);
             const changes = computeChanges(before, updated, ["amount"]);
-            auditEntries.push({
+            const auditEntry: AuditEntryInput = {
               entityType: "inventory",
               entityId: before.id,
               action: "update",
-              ...(changes ? { changes } : {}),
-            });
+            };
+            if (changes) auditEntry.changes = changes;
+            auditEntries.push(auditEntry);
           })
           .with({ kind: "remove" }, async () => {
             await tx
@@ -1215,12 +1224,13 @@ export const reconcileLocationSession = async (
               const targetChanges = computeChanges(target, updatedTarget, [
                 "amount",
               ]);
-              auditEntries.push({
+              const auditEntry: AuditEntryInput = {
                 entityType: "inventory",
                 entityId: target.id,
                 action: "update",
-                ...(targetChanges ? { changes: targetChanges } : {}),
-              });
+              };
+              if (targetChanges) auditEntry.changes = targetChanges;
+              auditEntries.push(auditEntry);
               await tx
                 .delete(inventoryEntry)
                 .where(eq(inventoryEntry.id, before.id));
@@ -1241,12 +1251,13 @@ export const reconcileLocationSession = async (
                 eq(inventoryEntry.id, before.id),
               );
               const changes = computeChanges(before, updated, ["locationId"]);
-              auditEntries.push({
+              const auditEntry: AuditEntryInput = {
                 entityType: "inventory",
                 entityId: before.id,
                 action: "update",
-                ...(changes ? { changes } : {}),
-              });
+              };
+              if (changes) auditEntry.changes = changes;
+              auditEntries.push(auditEntry);
               resultIds.push(updated.id);
               targetRowsByLocationProduct.set(targetKey, {
                 id: updated.id,

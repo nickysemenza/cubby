@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import {
   type ProductFilters,
@@ -2691,19 +2691,13 @@ describe("product repository", () => {
           productId: taxImmune.entityId,
           productQuantity: 5,
         });
-        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-        await expect(write).rejects.toThrow();
         // Pin the specific constraint, not just any rejection — a
         // NOT_NULL/FK typo elsewhere in the insert would also throw.
-        await write.catch((error: unknown) => {
-          // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-          expect((error as { cause?: { constraint?: string } }).cause).toEqual(
-            // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
-            expect.objectContaining({
-              code: "23514",
-              constraint: "Expense_lineKind_productId_check",
-            }),
-          );
+        await expect(write).rejects.toMatchObject({
+          cause: {
+            code: "23514",
+            constraint: "Expense_lineKind_productId_check",
+          },
         });
       });
 
@@ -3887,20 +3881,20 @@ describe("product repository — setProductsStockTracked", () => {
       (await getProductsByShortcodes(ctx.db, [bystander.id]))[0]?.stockTracked,
     ).toBeNull();
 
-    const entriesFor = async (id: string) =>
+    const entriesFor = async (id: ProductId) =>
       (
         await getAuditLog(ctx.db, {
           entityType: "product",
-          entityId: id as never,
+          entityId: id,
           limit: 50,
         })
       ).entries.filter((e) => e.action === "update");
 
     const changed = await entriesFor(undecided.entityId);
-    expect(
-      (changed[0]?.changes as Record<string, { from: unknown; to: unknown }>)
-        ?.stockTracked,
-    ).toEqual({ from: null, to: false });
+    expect(changed[0]?.changes?.stockTracked).toEqual({
+      from: null,
+      to: false,
+    });
     expect(await entriesFor(already.entityId)).toHaveLength(0);
   });
 

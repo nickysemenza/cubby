@@ -20,6 +20,7 @@ export {
   batchUpdateWithCaseWhen,
   FindOrCreateConflictError,
   findOrCreate,
+  imageJoinBindings,
   insertAndReturn,
   nextImageSortOrder,
   updateAndReturn,

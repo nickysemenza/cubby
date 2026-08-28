@@ -22,16 +22,15 @@ const scaleTotals = (
   scale: number,
 ): MealRecipeOut["scaledTotals"] => {
   if (!totals) return null;
-  return {
+  const scaled: NonNullable<MealRecipeOut["scaledTotals"]> = {
     costTotal: totals.costTotal * scale,
-    ...(totals.costTotalUpper != null
-      ? { costTotalUpper: totals.costTotalUpper * scale }
-      : {}),
     caloriesTotal: totals.caloriesTotal * scale,
-    ...(totals.caloriesTotalUpper != null
-      ? { caloriesTotalUpper: totals.caloriesTotalUpper * scale }
-      : {}),
   };
+  if (totals.costTotalUpper != null)
+    scaled.costTotalUpper = totals.costTotalUpper * scale;
+  if (totals.caloriesTotalUpper != null)
+    scaled.caloriesTotalUpper = totals.caloriesTotalUpper * scale;
+  return scaled;
 };
 
 /**
@@ -64,13 +63,14 @@ const rollupMealTotals = (recipes: MealRecipeOut[]): MealTotals => {
     if (t.caloriesTotalUpper != null) anyCaloriesUpper = true;
   }
 
-  return {
+  const totals: MealTotals = {
     costTotal,
     caloriesTotal,
     pending,
-    ...(anyCostUpper ? { costTotalUpper: costUpper } : {}),
-    ...(anyCaloriesUpper ? { caloriesTotalUpper: caloriesUpper } : {}),
   };
+  if (anyCostUpper) totals.costTotalUpper = costUpper;
+  if (anyCaloriesUpper) totals.caloriesTotalUpper = caloriesUpper;
+  return totals;
 };
 
 /** Shape of a meal row loaded with `relations.meal.full`. */

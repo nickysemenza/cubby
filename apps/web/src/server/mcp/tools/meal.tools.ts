@@ -23,10 +23,10 @@ export function registerMealTools(server: McpServer) {
     name: "get_shopping_list",
     description:
       "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with on-hand inventory and returns the result as structured data and readable text. Do not invoke it to add arbitrary manual household shopping items.",
-    inputSchema: {
+    inputSchema: z.object({
       from: mealDate.describe("Start day (inclusive)"),
       to: mealDate.describe("End day (inclusive)"),
-    },
+    }),
     outputSchema: shoppingListOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
@@ -42,7 +42,7 @@ export function registerMealTools(server: McpServer) {
     name: "add_recipe_to_meal",
     description:
       "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
-    inputSchema: mealAddRecipeInput.shape,
+    inputSchema: mealAddRecipeInput,
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {
@@ -60,7 +60,7 @@ export function registerMealTools(server: McpServer) {
     name: "update_meal_recipe",
     description:
       "Adjust a planned recipe's scale or sort order within its meal.",
-    inputSchema: {
+    inputSchema: z.object({
       // mealRecipe.id is a declared exception — no shortcode exists for the
       // meal-recipe join row, so this stays the raw uuid.
       id: z
@@ -75,7 +75,7 @@ export function registerMealTools(server: McpServer) {
         .nullable()
         .optional()
         .describe("New sort order"),
-    },
+    }),
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {
@@ -92,14 +92,14 @@ export function registerMealTools(server: McpServer) {
   registerMcpTool(server, {
     name: "remove_meal_recipe",
     description: "Remove a planned recipe from its meal.",
-    inputSchema: {
+    inputSchema: z.object({
       // mealRecipe.id is a declared exception — see update_meal_recipe above.
       id: z
         .string()
         .describe(
           "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
         ),
-    },
+    }),
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,
     handler: async (params, extra) => {

@@ -79,6 +79,7 @@ interface ProductDetailProps {
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const relationshipRouteQuery = useProductRelationshipRoute(product.id);
   const { commonSections, editMode, mappings } = useEntityDetail<
+    "product",
     ProductWithFoodOut,
     { id: string; data: Partial<ProductCreateInput> }
   >({

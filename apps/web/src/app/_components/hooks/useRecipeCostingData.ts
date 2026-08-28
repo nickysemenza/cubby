@@ -81,11 +81,7 @@ async function loadRecipeCostingData(
  * "loading" from "loaded but empty"). Fetching is gated on a stable content
  * signature so streaming/refetch re-renders don't restart the work.
  */
-export function useRecipeCostingData(recipes: RecipeOut[]): {
-  ingMap: Record<string, IngredientWithFoodLeanOut> | null;
-  recipeMap: Record<string, RecipeGraphOut>;
-  isLoading: boolean;
-} {
+export function useRecipeCostingData(recipes: RecipeOut[]) {
   const queryClient = useQueryClient();
 
   const [ingMap, setIngMap] = useState<Record<
@@ -121,7 +117,7 @@ export function useRecipeCostingData(recipes: RecipeOut[]): {
         setRecipeMap(nextRecipeMap);
         setIngMap(nextIngMap);
       })
-      .catch((e: unknown) => {
+      .catch((e) => {
         console.error("Failed to load recipe costing data:", e);
         if (cancelled) return;
         setIngMap({});

@@ -12,10 +12,17 @@ import {
   entityFilterUrlKeys,
   problemFilterSemantics,
 } from "./filter-search-fields";
-import { buildFiltersFromManifest, type FilterSpecCore } from "./filters";
+import {
+  buildFiltersFromManifest,
+  type FilterPatch,
+  type FilterSpecCore,
+} from "./filters";
 import type { FilterAssembly } from "./problem-query";
 
 export const problemFilterSpecs = problemFilterSemantics;
+type ProblemFilterEntity = keyof typeof problemFilterSemantics;
+const isProblemFilterEntity = (entity: Entity): entity is ProblemFilterEntity =>
+  Object.hasOwn(problemFilterSemantics, entity);
 
 /**
  * The first declared range filter whose preset expands to an empty patch, or
@@ -55,13 +62,10 @@ export function findUnexpandedRangeFilter(
 export function compileProblemFilters(
   entity: Entity,
   assembly: FilterAssembly,
-): Record<string, unknown> {
-  const specs: readonly FilterSpecCore[] =
-    (
-      problemFilterSemantics as Partial<
-        Record<Entity, readonly FilterSpecCore[]>
-      >
-    )[entity] ?? [];
+): FilterPatch {
+  const specs: readonly FilterSpecCore[] = isProblemFilterEntity(entity)
+    ? problemFilterSemantics[entity]
+    : [];
   const values = new Map(assembly.map(({ id, value }) => [id, value]));
   const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
   const unknown = assembly.find(({ id }) => !byColumn.has(id));

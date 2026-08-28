@@ -6,6 +6,9 @@ import type {
   RecipeShortcode,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
+import { ingredientOut } from "@cubby/schemas/ingredient";
+import { infLocation } from "@cubby/schemas/location";
+import { productTopLevelOut } from "@cubby/schemas/product";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -104,13 +107,11 @@ export function WithIngredientSearch({
             open
             onOpenChange={setIsDialogOpen}
             seed={{ name: pendingName }}
-            onSuccess={(result) =>
-              resolveWithEntity(
-                buildIngredientComboboxItem(
-                  result as Parameters<typeof buildIngredientComboboxItem>[0],
-                ),
-              )
-            }
+            onSuccess={(result) => {
+              const ingredient = ingredientOut.safeParse(result);
+              if (!ingredient.success) return;
+              resolveWithEntity(buildIngredientComboboxItem(ingredient.data));
+            }}
           />
         </Suspense>
       )}
@@ -194,15 +195,13 @@ export function WithLocationSearch({
             open
             onOpenChange={setIsDialogOpen}
             seed={{ name: pendingName }}
-            onSuccess={(result) =>
+            onSuccess={(result) => {
+              const location = infLocation.safeParse(result);
+              if (!location.success) return;
               resolveWithEntity(
-                buildLocationComboboxItemFromDetail(
-                  result as Parameters<
-                    typeof buildLocationComboboxItemFromDetail
-                  >[0],
-                ),
-              )
-            }
+                buildLocationComboboxItemFromDetail(location.data),
+              );
+            }}
           />
         </Suspense>
       )}
@@ -277,13 +276,11 @@ export function WithProductSearch({
             open
             onOpenChange={setIsDialogOpen}
             seed={{ name: pendingName }}
-            onSuccess={(result) =>
-              resolveWithEntity(
-                buildProductComboboxItem(
-                  result as Parameters<typeof buildProductComboboxItem>[0],
-                ),
-              )
-            }
+            onSuccess={(result) => {
+              const product = productTopLevelOut.safeParse(result);
+              if (!product.success) return;
+              resolveWithEntity(buildProductComboboxItem(product.data));
+            }}
           />
         </Suspense>
       )}

@@ -2,7 +2,7 @@ import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 
 import { hasPriceEntry } from "./workbench-editor-core";
 
-const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
+const FIX_LABEL = {
   "no-product": "Link product",
   "link-usda": "Link USDA",
   "set-per-item-price": "Set price",
@@ -10,7 +10,7 @@ const FIX_LABEL: Record<EnrichmentRow["recommendedFix"], string> = {
   "add-weight-mapping": "Add weight",
   "add-volume-mapping": "Add volume",
   done: "Done",
-};
+} satisfies Record<EnrichmentRow["recommendedFix"], string>;
 
 // The "Next" badge label. A priced-but-money-uncovered row is islanded — the fix
 // is to connect the existing price, not set a new one, so say so.

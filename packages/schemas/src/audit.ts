@@ -2,7 +2,7 @@ import { z } from "zod";
 import { auditSourceSchema } from "./context";
 import { entitySchema } from "./entity";
 import { auditableEntities, type ShortcodeEntity } from "./entity-manifest";
-import { anyShortcodeSchema } from "./identifiers";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifiers";
 import { imageUrlSummary } from "./image-summary";
 import { oneOrMany } from "./pagination";
 
@@ -16,7 +16,7 @@ export const auditEntitySchema = entitySchema.extract([...auditableEntities]);
 export type AuditEntityType = z.infer<typeof auditEntitySchema>;
 
 const auditableEntityIdSchema = anyShortcodeSchema(
-  auditableEntities as unknown as [ShortcodeEntity, ...ShortcodeEntity[]],
+  nonEmptyTuple<ShortcodeEntity>(auditableEntities),
 );
 
 export const auditLogListInput = z.object({

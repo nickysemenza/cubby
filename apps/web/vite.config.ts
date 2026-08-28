@@ -152,7 +152,7 @@ export default defineConfig(async () => {
       __SOURCE_BRANCH__: JSON.stringify(sourceBranch),
       __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
       __R2_PUBLIC_URL__: JSON.stringify(r2PublicUrl),
-      ...(isCloudflare ? { __CF_WORKERS__: "true" } : {}),
+      __CF_WORKERS__: isCloudflare ? "true" : "false",
     },
     server: {
       host: "0.0.0.0",

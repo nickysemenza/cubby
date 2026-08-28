@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 /**
  * Context information for enhanced error messages when parsing fails.
@@ -7,7 +7,7 @@ type ParseContext = {
   /** Entity type name (e.g., "Product", "Location") */
   entityType: string;
   /** Identifying information - can be a string or key-value pairs */
-  identifier?: string | Record<string, unknown>;
+  identifier?: string | Record<string, string>;
 };
 
 /**
@@ -15,14 +15,15 @@ type ParseContext = {
  * Handles both string identifiers and object identifiers.
  */
 function formatIdentifier(
-  identifier: string | Record<string, unknown> | undefined,
+  identifier: string | Record<string, string> | undefined,
 ): string {
   if (!identifier) return "";
-  if (typeof identifier === "string") return identifier;
+  const scalar = z.string().safeParse(identifier);
+  if (scalar.success) return scalar.data;
 
   return Object.entries(identifier)
     .filter(([, v]) => v !== undefined && v !== null)
-    .map(([k, v]) => `${k}=${typeof v === "string" ? `"${v}"` : v}`)
+    .map(([k, v]) => `${k}="${v}"`)
     .join(", ");
 }
 
@@ -41,11 +42,11 @@ function formatIssues(issues: z.core.$ZodIssue[]): string {
 /**
  * Parse data with a Zod schema, throwing an error with contextual information on failure.
  */
-export function parseWithContext<T>(
-  schema: z.ZodType<T>,
-  data: unknown,
+export function parseWithContext<TSchema extends z.ZodType>(
+  schema: TSchema,
+  data: Parameters<TSchema["safeParse"]>[0],
   context: ParseContext,
-): T {
+): z.output<TSchema> {
   const result = schema.safeParse(data);
 
   if (!result.success) {

@@ -17,18 +17,21 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
-import type { EntityDefinition, MergeableConfig } from "~/entities/types";
+import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
-interface MergeRow {
-  id: string;
-}
+type MergeRow = MergeDisplayRow;
+
+const isCopyFactory = (
+  value: ReactNode | ((keeperLabel: ReactNode) => ReactNode),
+): value is (keeperLabel: ReactNode) => ReactNode =>
+  typeof value === "function";
 
 const resolveCopyText = (
   value: ReactNode | ((keeperLabel: ReactNode) => ReactNode) | undefined,
   keeperLabel: ReactNode,
-): ReactNode => (typeof value === "function" ? value(keeperLabel) : value);
+): ReactNode => (isCopyFactory(value) ? value(keeperLabel) : value);
 
 function MergeDialogFooter({
   disabled,
@@ -87,9 +90,9 @@ export function EntityMergeDialog<T extends MergeRow>({
   /** Fixed mode: aliases already chosen by a canonical roster selection. */
   initialAliasIds?: string[];
 }) {
-  // Widened: `entities[entity]` is a union of per-entity literal shapes and
-  // only some declare `mergeable`.
-  const config = (entities[entity] as EntityDefinition).mergeable;
+  const definition = entities[entity];
+  if (!("mergeable" in definition)) return null;
+  const config = definition.mergeable;
   if (!config) return null;
 
   if (config.keeperMode === "fixed") {
@@ -232,15 +235,21 @@ function FixedMergeDialog<T extends MergeRow>({
   isPending: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(initialAliasIds ?? []);
+  const candidatePlan = config.candidateQuery?.(keeper);
   const candidatesQuery = useQuery({
-    ...config.candidateQuery?.(keeper),
-    enabled: open && !!config.candidateQuery,
+    queryKey: candidatePlan?.queryKey ?? ["merge-candidates", keeper.id],
+    meta: candidatePlan?.meta,
+    queryFn: async (context) => {
+      if (!candidatePlan) {
+        throw new Error("Merge configuration has no candidate plan");
+      }
+      return candidatePlan.execute(context.signal);
+    },
+    enabled: open && candidatePlan !== undefined,
   });
   const candidates = useMemo(
     () =>
-      (
-        (candidatesQuery.data as { items?: T[] } | undefined)?.items ?? []
-      ).filter((row) => row.id !== keeper.id),
+      (candidatesQuery.data?.items ?? []).filter((row) => row.id !== keeper.id),
     [candidatesQuery.data, keeper.id],
   );
   const toggle = (id: string) =>

@@ -30,6 +30,10 @@ import { getCostTypeColor } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 
 const COST_KEYS = costTypeValues;
+const costTypeForKey = (value: string): CostType | undefined =>
+  COST_KEYS.find((key) => key === value);
+const tradeForKey = (value: string): Trade | undefined =>
+  Object.keys(TRADE_LABELS).find((key): key is Trade => key === value);
 
 /** Column key is the cost type itself, so cells index `row.cells` directly. */
 const COLUMNS: CrossTabColumn<CostType>[] = COST_KEYS.map((key) => ({
@@ -77,7 +81,10 @@ export function TradeBarsAggregate({
     return <ChartEmpty icon={ShoppingBag} title="No expense data." />;
   }
 
-  const tradeLabel = (value: string) => TRADE_LABELS[value as Trade] ?? value;
+  const tradeLabel = (value: string) => {
+    const trade = tradeForKey(value);
+    return trade ? TRADE_LABELS[trade] : value;
+  };
 
   return (
     <div className="flex flex-col gap-1">
@@ -88,7 +95,10 @@ export function TradeBarsAggregate({
         indexBy="trade"
         margin={{ top: 10, right: 60, bottom: 40, left: 200 }}
         padding={0.25}
-        colors={(bar) => getCostTypeColor(bar.id as string)}
+        colors={(bar) => {
+          const costType = costTypeForKey(String(bar.id));
+          return costType ? getCostTypeColor(costType) : "var(--slate)";
+        }}
         {...nivoBarChrome}
         axisBottom={nivoCurrencyAxis}
         axisLeft={{ tickSize: 0, tickPadding: 8, format: tradeLabel }}
@@ -173,25 +183,30 @@ export function TradeCostMatrixAggregate({
           key: "total",
           label: "Total",
           cellClassName: "font-semibold text-primary",
-          cell: (key) => formatCurrency(columnTotals[key as CostType], 0),
+          cell: (key) => {
+            const costType = costTypeForKey(key);
+            return formatCurrency(costType ? columnTotals[costType] : 0, 0);
+          },
           pinnedCell: () => formatCurrency(grandTotal, 0),
         },
       ]}
       renderColumnHeader={({ key }) => capitalize(key)}
       renderRowHeader={({ data: row }) => TRADE_LABELS[row.trade]}
       cellTitle={({ data: row }, { key }) => {
-        const value = row.cells[key as CostType];
+        const costType = costTypeForKey(key);
+        const value = costType ? row.cells[costType] : 0;
         return value !== 0 ? formatCurrency(value, 2) : undefined;
       }}
       cellClassName={({ data: row }, { key }) => {
-        const value = row.cells[key as CostType];
+        const costType = costTypeForKey(key);
+        const value = costType ? row.cells[costType] : 0;
         return value === 0
           ? emptyCell
           : HEAT_CLASSES[heatBucket(value, maxCell)];
       }}
       renderCell={({ data: row }, { key }) => {
-        const costType = key as CostType;
-        const value = row.cells[costType];
+        const costType = costTypeForKey(key);
+        const value = costType ? row.cells[costType] : 0;
         const label = value !== 0 ? formatCurrency(value, 0) : EMPTY_MARK;
         if (!onCellClick) return label;
         const heat =
@@ -199,13 +214,15 @@ export function TradeCostMatrixAggregate({
         return (
           <button
             type="button"
-            onClick={() => onCellClick(row.trade, costType)}
+            onClick={() => {
+              onCellClick(row.trade, costType ?? null);
+            }}
             title={value !== 0 ? formatCurrency(value, 2) : undefined}
             className={cn(
               cellMono,
               heat,
               interactiveCell,
-              isActive(row.trade, costType) && activeCellRing,
+              isActive(row.trade, costType ?? null) && activeCellRing,
             )}
           >
             {label}

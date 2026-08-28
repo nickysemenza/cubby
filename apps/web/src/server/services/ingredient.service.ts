@@ -19,7 +19,6 @@ import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
 import type { Database } from "~/server/db";
 
-import type { USDAClient } from "../clients/usda";
 import {
   enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
   findFuzzyMergeCandidates,
@@ -31,9 +30,10 @@ import { foodLookupParamFromProduct } from "../repo/product";
 import { recipeTreeLeafIngredientIds } from "../repo/recipe/totals";
 import { TraceNames, withTrace } from "../tracing";
 import { batchEnrichNestedItems, batchEnrichWithFood } from "./usda-helpers";
+import type { UsdaFoodBatchPort } from "./usda-helpers";
 
 const enrichProductsWithFood = async (
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   products: ProductWithMappings[],
 ): Promise<ProductWithMappingsAndFoodOut[]> => {
   return batchEnrichWithFood(products, foodLookupParamFromProduct, usdaClient);
@@ -41,7 +41,7 @@ const enrichProductsWithFood = async (
 
 export const getIngredientByID = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   id: IngredientId,
 ): Promise<IngredientWithFoodOut> => {
   const ingredient = await getIngredientByIDRepo(db, id);
@@ -66,7 +66,7 @@ export const getIngredientByID = async (
  */
 export const getIngredientsByIDs = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   ids: IngredientId[],
 ): Promise<IngredientWithFoodLeanOut[]> => {
   return withTrace(
@@ -86,7 +86,7 @@ export const getIngredientsByIDs = async (
 
 export const getIngredientByName = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   name: string,
 ): Promise<IngredientWithFoodOut | null> => {
   const ingredient = await getIngredientByNameRepo(db, name);
@@ -115,7 +115,7 @@ export const getIngredientByName = async (
  */
 export const enrichmentWorkbench = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   opts?: {
     recipeId?: RecipeId;
     focusId?: IngredientId;

@@ -7,6 +7,44 @@ import {
 
 const KEY = (rootId: string) => `cubby:audit-session:${rootId}`;
 
+interface V3PassFixture {
+  version: 3;
+  startedAt: number;
+  updatedAt?: number | undefined;
+  totalCount?: number | undefined;
+  itemResolutions: [string, { kind: "verify" }][];
+  completedLocationIds: string[] | null;
+  skippedLocationIds?: string[] | undefined;
+  currentIndex: number;
+  summary: {
+    adjusted: number;
+    locations: number;
+    relocated: number;
+    removed: number;
+    verified: number;
+  };
+}
+
+interface V4PassFixture {
+  version: 4;
+  startedAt: number;
+  updatedAt: number;
+  currentIndex: number;
+  completed: string[];
+  skipped: string[];
+  totalCount: number;
+  extra: {
+    itemResolutions: [];
+    summary: {
+      adjusted: number;
+      locations: number;
+      relocated: number;
+      removed: number;
+      verified: number;
+    };
+  };
+}
+
 /**
  * The pass envelope moved from recount's own v3 shape onto the shared
  * `useQueuePass` one. A recount half-finished on a phone is stored locally and
@@ -17,7 +55,7 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-const v3 = (overrides: Record<string, unknown> = {}) =>
+const v3 = (overrides: Partial<V3PassFixture> = {}) =>
   JSON.stringify({
     version: 3,
     startedAt: 1_000,
@@ -37,7 +75,7 @@ const v3 = (overrides: Record<string, unknown> = {}) =>
     ...overrides,
   });
 
-const v4 = (overrides: Record<string, unknown> = {}) =>
+const v4 = (overrides: Partial<V4PassFixture> = {}) =>
   JSON.stringify({
     version: 4,
     startedAt: 5_000,

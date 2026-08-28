@@ -154,9 +154,8 @@ describe("haveIngredientsChanged", () => {
   });
 
   it("ignores blank-vs-null modifier differences", () => {
-    const original: IngItem[] = [
-      { ...baseIngredient, modifier: null as string | null },
-    ];
+    const modifier: string | null = null;
+    const original: IngItem[] = [{ ...baseIngredient, modifier }];
     const updated: IngItem[] = [{ ...baseIngredient, modifier: "  " }];
 
     expect(haveIngredientsChanged(original, updated)).toBe(false);

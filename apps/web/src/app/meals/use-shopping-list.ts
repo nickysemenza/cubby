@@ -1,6 +1,7 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import { z } from "zod";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 
@@ -19,6 +20,7 @@ const NO_GAPS: UnexpandedSubRecipe[] = [];
 const NO_CHECKED: string[] = [];
 const NO_EXCLUDED: readonly string[] = [];
 const NO_OMITTED: ShoppingListOut["omittedMeals"] = [];
+const checkedKeysSchema = z.array(z.string());
 
 /**
  * The shopping list's query + interaction state, owned above the renderer
@@ -42,8 +44,9 @@ export function useShoppingList(
     [excluded],
   );
   // Stored as an array — Sets don't JSON-serialize.
-  const [checkedKeys, setCheckedKeys] = useLocalStorage<string[]>(
+  const [checkedKeys, setCheckedKeys] = useLocalStorage(
     SHOPPING_CHECKED_STORAGE_KEY,
+    checkedKeysSchema,
     NO_CHECKED,
   );
   const checked = useMemo(() => new Set(checkedKeys), [checkedKeys]);

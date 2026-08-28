@@ -3,33 +3,10 @@ import type { z } from "zod";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
 import { workflowStreamResponse } from "~/server/workflow-stream.server";
+import type { Workload } from "~/server/workload";
 
-/**
- * Server-side implementation table for a client subscription domain.
- *
- * The sibling of `implementOperationDomain`, one layer down: it pairs a
- * `defineOperationDomain` descriptor object whose members are `subscription()`
- * declarations with one handler per member, and wraps each pair in
- * `workflowStreamResponse` unchanged — the same-origin check, the actor
- * lookup, per-event `eventSchema.parse`, and the NDJSON framing all stay below
- * this seam. The handler table is a mapped type over the domain's members, so
- * a missing or extra key is a typecheck error.
- *
- * What this deletes is the hand-written route file each stream used to need,
- * whose hardcoded URL string was a typo away from a runtime 404 that no build
- * would catch. Both the client `open()` and the one dispatch route now derive
- * the URL from the operation id.
- */
-
-/**
- * Structural view of a `subscription()` member descriptor, named here so this
- * module never imports the browser Query-integration layer (the same trick
- * `operation-domain.server.ts` uses). The event schema is keyed `event`, not
- * `output`, which is precisely what keeps a subscription from satisfying
- * `OperationDomainDescriptor` — the two tables cannot be crossed by accident.
- */
 type SubscriptionDomainDescriptor = {
-  readonly id: string;
+  readonly id: StartOperationIdOfKind<"subscription">;
   readonly definition: {
     readonly kind: "subscription";
     readonly input: z.ZodType;
@@ -37,48 +14,117 @@ type SubscriptionDomainDescriptor = {
   };
 };
 
+type DeclaredSubscriptionInput<
+  Descriptor extends SubscriptionDomainDescriptor,
+> = z.output<Descriptor["definition"]["input"]>;
+
 type SubscriptionRun<Descriptor extends SubscriptionDomainDescriptor> = (
   context: AuthenticatedStartOperationContext,
-  input: z.output<Descriptor["definition"]["input"]>,
-  /** Aborts when the browser drops the stream; pass it into long workflows. */
+  input: DeclaredSubscriptionInput<Descriptor>,
+  /** Aborts when the browser drops the stream; pass it into workflows. */
   signal: AbortSignal,
-) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
+) =>
+  | AsyncIterable<z.input<Descriptor["definition"]["event"]>>
+  | Promise<AsyncIterable<z.input<Descriptor["definition"]["event"]>>>;
 
 /** Produces the NDJSON response for one stream request. */
 export type WorkflowStreamHandler = (options: {
   request: Request;
 }) => Promise<Response>;
 
-type ErasedSubscriptionRun = (
-  context: AuthenticatedStartOperationContext,
-  input: unknown,
-  signal: AbortSignal,
-) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
+export type WorkflowStreamExecutionOptions<
+  Input,
+  EventSchema extends z.ZodType,
+> = {
+  request: Request;
+  operation: StartOperationIdOfKind<"subscription">;
+  inputSchema: z.ZodType<Input>;
+  eventSchema: EventSchema;
+  workload?: Workload;
+  run: (
+    context: AuthenticatedStartOperationContext,
+    input: Input,
+    signal: AbortSignal,
+  ) =>
+    | AsyncIterable<z.input<EventSchema>>
+    | Promise<AsyncIterable<z.input<EventSchema>>>;
+};
+
+/** Injectable streaming seam; production delegates to workflowStreamResponse. */
+export interface WorkflowStreamExecutionAdapter {
+  respond<Input, EventSchema extends z.ZodType>(
+    options: WorkflowStreamExecutionOptions<Input, EventSchema>,
+  ): Promise<Response>;
+}
+
+const productionStreamExecutionAdapter = {
+  respond<Input, EventSchema extends z.ZodType>(
+    options: WorkflowStreamExecutionOptions<Input, EventSchema>,
+  ) {
+    return workflowStreamResponse(options);
+  },
+} satisfies WorkflowStreamExecutionAdapter;
+
+type SubscriptionImplementationMap<
+  Domain extends Record<string, SubscriptionDomainDescriptor>,
+> = {
+  streams: { readonly [Member in keyof Domain]: WorkflowStreamHandler };
+};
+
+function declaredInputSchema<Descriptor extends SubscriptionDomainDescriptor>(
+  descriptor: Descriptor,
+): z.ZodType<DeclaredSubscriptionInput<Descriptor>>;
+function declaredInputSchema(descriptor: SubscriptionDomainDescriptor) {
+  return descriptor.definition.input;
+}
+
+function declaredEventSchema<Descriptor extends SubscriptionDomainDescriptor>(
+  descriptor: Descriptor,
+): z.ZodType<z.output<Descriptor["definition"]["event"]>>;
+function declaredEventSchema(descriptor: SubscriptionDomainDescriptor) {
+  return descriptor.definition.event;
+}
+
+function streamHandlerFor<Descriptor extends SubscriptionDomainDescriptor>(
+  descriptor: Descriptor,
+  run: SubscriptionRun<Descriptor>,
+  adapter: WorkflowStreamExecutionAdapter,
+): WorkflowStreamHandler {
+  const inputSchema = declaredInputSchema(descriptor);
+  const eventSchema = declaredEventSchema(descriptor);
+  return (options) =>
+    adapter.respond({
+      request: options.request,
+      operation: descriptor.id,
+      inputSchema,
+      eventSchema,
+      run,
+    });
+}
 
 export function implementSubscriptionDomain<
   Domain extends Record<string, SubscriptionDomainDescriptor>,
 >(
   domain: Domain,
+  handlers: {
+    [Member in keyof Domain]: SubscriptionRun<Domain[Member]>;
+  },
+  adapter?: WorkflowStreamExecutionAdapter,
+): SubscriptionImplementationMap<Domain>;
+export function implementSubscriptionDomain<
+  Domain extends Record<string, SubscriptionDomainDescriptor>,
+>(
+  domain: Domain,
   handlers: { [Member in keyof Domain]: SubscriptionRun<Domain[Member]> },
-): {
-  streams: { readonly [Member in keyof Domain]: WorkflowStreamHandler };
-} {
+  adapter: WorkflowStreamExecutionAdapter = productionStreamExecutionAdapter,
+) {
   const streams: Record<string, WorkflowStreamHandler> = {};
-  for (const [member, descriptor] of Object.entries(domain)) {
-    const run = handlers[member as keyof Domain] as
-      | ErasedSubscriptionRun
-      | undefined;
+  for (const member in domain) {
+    const descriptor = domain[member];
+    const run = handlers[member];
+    if (!descriptor) throw new Error(`Missing descriptor for ${member}`);
     if (!run) throw new Error(`Missing handler for ${descriptor.id}`);
-    streams[member] = (options) =>
-      workflowStreamResponse({
-        request: options.request,
-        operation: descriptor.id as StartOperationIdOfKind<"subscription">,
-        inputSchema: descriptor.definition.input,
-        eventSchema: descriptor.definition.event,
-        run,
-      });
+    streams[member] = streamHandlerFor(descriptor, run, adapter);
   }
-  return {
-    streams: streams as { [Member in keyof Domain]: WorkflowStreamHandler },
-  };
+  return { streams };
 }

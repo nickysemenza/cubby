@@ -1,27 +1,20 @@
 import { projectContributionOut } from "@cubby/schemas/household-contribution";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ProjectContributionReport } from "./project-contribution-section";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    className,
-    params,
-    to,
-  }: {
-    children: ReactNode;
-    className?: string;
-    params: { shortcode: string };
-    to: string;
-  }) => (
-    <a className={className} href={to.replace("$shortcode", params.shortcode)}>
-      {children}
-    </a>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 const contribution = projectContributionOut.parse({
   projectId: "PRJ-ABCD",
@@ -74,7 +67,9 @@ const contribution = projectContributionOut.parse({
 
 describe("ProjectContributionReport", () => {
   it("separates costs, beneficiaries, original funding, and attribution gaps", () => {
-    render(<ProjectContributionReport data={contribution} />);
+    render(<ProjectContributionReport data={contribution} />, {
+      wrapper: harness.wrapper,
+    });
 
     expect(screen.getByText("Whole-group cost")).toBeVisible();
     expect(screen.getByText("$125.00")).toBeVisible();

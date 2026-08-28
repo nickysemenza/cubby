@@ -27,6 +27,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   );
 
   const { commonSections, editMode } = useEntityDetail<
+    "location",
     InfLocation,
     LocationUpdateInput
   >({

@@ -58,9 +58,11 @@ function LocationsPage() {
   const search = Route.useSearch();
   const { view = "gallery" } = search;
   const navigate = useNavigate({ from: Route.fullPath });
-  const rawSearch = search as Record<string, unknown>;
   const tableFiltersActive = getEntityFilters("location").some((filter) =>
-    Boolean(rawSearch[filter.urlKey ?? filter.columnId]),
+    Object.entries(search).some(
+      ([key, value]) =>
+        key === (filter.urlKey ?? filter.columnId) && Boolean(value),
+    ),
   );
 
   return (

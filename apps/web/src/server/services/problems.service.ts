@@ -38,9 +38,10 @@ import {
   projectAttentionItemSchema,
   projectAttentionTypeSchema,
 } from "@cubby/schemas/project";
+import { purchaseOut } from "@cubby/schemas/purchase";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
 import { sum, uniq, uniqBy } from "es-toolkit";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { problemQueryDeclarations } from "~/entities/problem-registry";
 import {
@@ -51,8 +52,6 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
 import { type Database, withConnection } from "~/server/db";
 import {
   findOrphanedEntityEmbeddings,
@@ -101,6 +100,7 @@ import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   type DiagnosticRunOptions,
   type DiagnosticSampleResult,
+  type UpcLookupBatchPort,
   runDiagnostic,
 } from "~/server/services/problem-diagnostics.service";
 import {
@@ -108,6 +108,7 @@ import {
   executeProblem,
   findViewProblems,
 } from "~/server/services/problem-views.service";
+import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllBounded } from "~/server/tracing";
 
@@ -144,7 +145,7 @@ const countMissingEmbeddings = async (db: Database) =>
 //     the `product/unmapped` view.
 const findProductCoverageProblems = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<{
   ingredientsWithPartialCoverage: IngredientWithPartialCoverage[];
   productsWithIslandedMappings: ProductWithIslandedMappings[];
@@ -310,7 +311,7 @@ const findProductCoverageProblems = async (
 /** Rebuild the persisted list-query projection using this exact detector scan. */
 export const rebuildProductConversionCoverageProjection = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<ProductConversionCoverageProjection[]> => {
   const { projection } = await findProductCoverageProblems(db, usdaClient);
   await writeProductConversionCoverageProjection(db, projection);
@@ -553,7 +554,7 @@ const exactSectionTotals = (
  */
 const presentCoverageExactRows = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
   partialPage: ExactProblemPage,
   islandPage: ExactProblemPage,
 ): Promise<{
@@ -645,6 +646,77 @@ const presentCoverageExactRows = async (
   };
 };
 
+const exactProblemPresentationRowSchema = z.object({
+  id: z.string(),
+  name: z.string().nullish(),
+  manufacturer: z.string().nullish(),
+  expectedQuantity: z.number().nullish(),
+  inventoryEntry: z
+    .array(
+      z.object({
+        amount: z.object({ value: z.number().optional() }).optional(),
+        location: z
+          .object({ id: z.string().optional(), name: z.string().optional() })
+          .nullish(),
+      }),
+    )
+    .nullish(),
+  onHandUnits: z.number().nullish(),
+  cost: z.number().nullish(),
+  date: z.string().nullish(),
+  purchaseId: z.string().nullish(),
+  vendor: z.string().nullish(),
+  projectName: z.string().nullish(),
+  primaryGtin: z.string().nullish(),
+  quantityLedger: z
+    .object({ expectedQuantity: z.number().optional() })
+    .nullish(),
+  key: z.string().nullish(),
+  filename: z.string().nullish(),
+  contentType: z.string().nullish(),
+  size: z.number().nullish(),
+  createdAt:
+    allProblemsSchema.shape.unknownParkedItems.element.shape.createdAt.nullish(),
+  entityType: z.string().nullish(),
+  entityId: z.string().nullish(),
+  recipes: z
+    .array(
+      z.object({
+        recipe: z
+          .object({
+            totals: z
+              .object({
+                costCovered: z.number().optional(),
+                ingredientCount: z.number().optional(),
+              })
+              .nullish(),
+          })
+          .optional(),
+      }),
+    )
+    .nullish(),
+  amount:
+    allProblemsSchema.shape.unknownParkedItems.element.shape.amount.optional(),
+  product: allProblemsSchema.shape.unknownParkedItems.element.shape.product
+    .extend({ effectivePrice: z.number().nullish() })
+    .optional(),
+  location:
+    allProblemsSchema.shape.unknownParkedItems.element.shape.location.optional(),
+  website: z.string().nullish(),
+  purchaseCount: z.number().nullish(),
+  vendorName: z.string().nullish(),
+  orderId: z.string().nullish(),
+  orderUrl: z.string().nullish(),
+  statedTotal: z.number().nullish(),
+  expenseTotal: z.number().nullish(),
+  expenseCount: z.number().nullish(),
+  unpricedExpenseCount: z.number().nullish(),
+  reconciliation: purchaseOut.shape.reconciliation.nullish(),
+  financialReconciliation: purchaseOut.shape.financialReconciliation.nullish(),
+});
+
+type FastProblemCard = ProblemsFast[FastEntityProblemKey][number];
+
 /**
  * Card-only projections for exact fast Problems.
  *
@@ -654,7 +726,7 @@ const presentCoverageExactRows = async (
  * rich card from accidentally becoming a second detector.
  */
 const presentFastExactRows = (
-  key: string,
+  key: FastEntityProblemKey,
   page: ExactProblemPage,
   hydration?: {
     vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
@@ -671,14 +743,11 @@ const presentFastExactRows = (
       ProblemsFast["financialTransactionAllocationDefects"][number]
     >;
   },
-): unknown[] =>
+): FastProblemCard[] =>
   page.data.map((row) => {
-    const r = row as Record<string, unknown>;
-    const id = String(r.id);
-    const inventory = (r.inventoryEntry ?? []) as Array<{
-      amount?: { value?: number };
-      location?: { id?: string; name?: string };
-    }>;
+    const r = exactProblemPresentationRowSchema.parse(row);
+    const id = r.id;
+    const inventory = r.inventoryEntry ?? [];
     const locations = inventory.flatMap((entry) =>
       entry.location?.id && entry.location.name
         ? [{ id: entry.location.id, name: entry.location.name }]
@@ -686,20 +755,20 @@ const presentFastExactRows = (
     );
     switch (key) {
       case "duplicateInventory":
-        return {
+        return allProblemsSchema.shape.duplicateInventory.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
-          expectedQuantity: (r.expectedQuantity ?? null) as number | null,
+          expectedQuantity: r.expectedQuantity ?? null,
           locations,
-        };
+        });
       case "soldButStillStocked": {
         const totals = hydration?.soldTotals?.get(id);
         if (!totals)
           throw new Error(
             `Canonical sold-but-stocked Problem selected ${id}, but bounded presentation hydration found no row`,
           );
-        return {
+        return allProblemsSchema.shape.soldButStillStocked.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
@@ -710,131 +779,125 @@ const presentFastExactRows = (
             [...locations, ...totals.servingLocations],
             (location) => location.id,
           ),
-        };
+        });
       }
       case "unlinkedExitExpenses":
-        return {
+        return allProblemsSchema.shape.unlinkedExitExpenses.element.parse({
           id,
           name: String(r.name),
           cost: Number(r.cost),
-          date: (r.date ?? null) as string | null,
+          date: r.date ?? null,
           purchaseId: String(r.purchaseId),
-          vendorName: (r.vendor ?? null) as string | null,
-        };
+          vendorName: r.vendor ?? null,
+        });
       case "purchaselessExitExpenses":
-        return {
+        return allProblemsSchema.shape.purchaselessExitExpenses.element.parse({
           id,
           name: String(r.name),
           cost: Number(r.cost),
-          date: (r.date ?? null) as string | null,
-          projectName: (r.projectName ?? null) as string | null,
-        };
+          date: r.date ?? null,
+          projectName: r.projectName ?? null,
+        });
       case "productsWithNoImages":
-        return {
+        return allProblemsSchema.shape.productsWithNoImages.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
-          primaryGtin: (r.primaryGtin ?? null) as string | null,
-        };
+          primaryGtin: r.primaryGtin ?? null,
+        });
       // Only the parent is reported. The units it double-counts are named by
       // its own components table, and repeating them here would make one
       // physical mistake look like several rows.
       case "kitsCountedTwice": {
         // `r.expectedQuantity` is the MANUAL Product column and is null on
         // every kit; the acquired-units number lives on the derived ledger.
-        const ledger = r.quantityLedger as { expectedQuantity?: number } | null;
-        return {
+        const ledger = r.quantityLedger;
+        return allProblemsSchema.shape.kitsCountedTwice.element.parse({
           id,
           name: String(r.name),
           manufacturer: String(r.manufacturer ?? ""),
           ownUnits: Number(r.onHandUnits ?? 0),
           expectedUnits: Number(ledger?.expectedQuantity ?? 0),
-        };
+        });
       }
       case "unreferencedImages":
-        return {
+        return allProblemsSchema.shape.unreferencedImages.element.parse({
           id,
           key: String(r.key),
           filename: String(r.filename),
           contentType: String(r.contentType),
           size: Number(r.size),
-          createdAt: r.createdAt as Date,
-          targetType: (r.entityType ?? null) as string | null,
-          targetId: (r.entityId ?? null) as string | null,
-        };
+          createdAt: r.createdAt,
+          targetType: r.entityType ?? null,
+          targetId: r.entityId ?? null,
+        });
       case "understatedCostMeals": {
-        const recipes = (r.recipes ?? []) as Array<{
-          recipe?: {
-            totals?: { costCovered?: number; ingredientCount?: number } | null;
-          };
-        }>;
-        return {
+        const recipes = r.recipes ?? [];
+        return allProblemsSchema.shape.understatedCostMeals.element.parse({
           id,
-          name: (r.name ?? null) as string | null,
-          date: r.date as string,
+          name: r.name ?? null,
+          date: r.date,
           recipeCount: recipes.filter(
             (entry) =>
               (entry.recipe?.totals?.costCovered ?? 0) <
               (entry.recipe?.totals?.ingredientCount ?? 0),
           ).length,
-        };
+        });
       }
       case "unknownParkedItems":
-        return {
+        return allProblemsSchema.shape.unknownParkedItems.element.parse({
           id,
           amount: r.amount,
           createdAt: r.createdAt,
           product: r.product,
           location: r.location,
-        };
+        });
       case "inventoryWithoutPricePath":
-        return {
+        return allProblemsSchema.shape.inventoryWithoutPricePath.element.parse({
           id,
           amount: r.amount,
-          effectivePrice: Number(
-            (r.product as { effectivePrice?: number } | undefined)
-              ?.effectivePrice ?? 0,
-          ),
+          effectivePrice: Number(r.product?.effectivePrice ?? 0),
           product: r.product,
           location: r.location,
-        };
+        });
       case "vendorsWithoutLogos": {
         const counts = hydration?.vendorExpenseCounts?.get(id);
         if (!counts)
           throw new Error(
             `Canonical vendor-logo Problem selected ${id}, but bounded presentation hydration found no row`,
           );
-        return {
+        return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
           id,
           name: String(r.name),
-          website: (r.website ?? null) as string | null,
+          website: r.website ?? null,
           purchaseCount: Number(r.purchaseCount ?? 0),
           expenseRowCount: counts.expenseRowCount,
-        };
+        });
       }
       case "purchasesNotReconciling":
-        return {
+        return allProblemsSchema.shape.purchasesNotReconciling.element.parse({
           id,
-          vendorName: (r.vendorName ?? null) as string | null,
-          orderId: (r.orderId ?? null) as string | null,
-          orderUrl: (r.orderUrl ?? null) as string | null,
-          date: (r.date ?? null) as string | null,
+          vendorName: r.vendorName ?? null,
+          orderId: r.orderId ?? null,
+          orderUrl: r.orderUrl ?? null,
+          date: r.date ?? null,
           statedTotal: Number(r.statedTotal),
           expenseTotal: Number(r.expenseTotal),
           expenseCount: Number(r.expenseCount),
           unpricedExpenseCount: Number(r.unpricedExpenseCount),
           postedRefundTotal: Number(
-            (r.reconciliation as { postedRefundTotal?: number } | undefined)
-              ?.postedRefundTotal ?? 0,
+            r.financialReconciliation?.postedRefundTotal ?? 0,
           ),
-        };
+        });
       case "purchaseFinancialSettlementMismatches":
-        return {
-          id,
-          vendorName: (r.vendorName ?? null) as string | null,
-          expenseTotal: Number(r.expenseTotal),
-          financialReconciliation: r.financialReconciliation,
-        };
+        return allProblemsSchema.shape.purchaseFinancialSettlementMismatches.element.parse(
+          {
+            id,
+            vendorName: r.vendorName ?? null,
+            expenseTotal: Number(r.expenseTotal),
+            financialReconciliation: r.financialReconciliation,
+          },
+        );
       case "financialTransactionAllocationDefects": {
         const hydrated = hydration?.allocationDefects?.get(id);
         if (hydrated) return hydrated;
@@ -1195,7 +1258,7 @@ export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
  */
 export const findCoverageProblems = async (
   db: Database,
-  usdaClient: USDAClient,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<ProblemsCoverage> => {
   let freshness = await getProductConversionCoverageFreshness(db);
   // Normal mutations synchronously mark affected rows stale. This isolated
@@ -1257,7 +1320,7 @@ export const findCoverageProblems = async (
 
 const findProductsWithBetterUpcData = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupBatchPort,
 ): Promise<{
   products: ProductWithBetterUpcData[];
   count: number;
@@ -1341,7 +1404,7 @@ const presentTrackerProblem = (
 ): ProjectAttentionItem[] => {
   const type = trackerTypeFor(key);
   return page.data.flatMap((row) => {
-    const id = String((row as { id: unknown }).id);
+    const id = z.object({ id: z.string() }).parse(row).id;
     const item = index.get(`${type}:${id}`);
     // A miss is a benign race, not an invariant break: membership and the rule
     // engine each evaluate `householdLocalDate()` independently, so a request
@@ -1410,7 +1473,7 @@ export const findTrackerProblems = async (
 
 export const findUpcProblems = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupBatchPort,
 ): Promise<ProblemsUpc> => {
   const {
     products: productsWithBetterUpcData,
@@ -1434,21 +1497,19 @@ export const findUpcProblems = async (
  */
 export const findProblemCounts = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
+  upcLookupClient: UpcLookupBatchPort,
 ): Promise<ProblemsCount> => {
   const declarations = problemQueryDeclarations();
-  const tasks = Object.fromEntries(
-    declarations.map((definition) => [
-      definition.key,
-      async () =>
-        (
-          await executeProblem(db, definition.key, {
-            mode: "count",
-            diagnostic: { upcLookupClient },
-          })
-        ).count,
-    ]),
-  ) as Record<string, () => Promise<number>>;
+  const tasks: Record<string, () => Promise<number>> = {};
+  for (const definition of declarations) {
+    tasks[definition.key] = async () =>
+      (
+        await executeProblem(db, definition.key, {
+          mode: "count",
+          diagnostic: { upcLookupClient },
+        })
+      ).count;
+  }
   const counts = await traceAllBounded(tasks, 4);
   const byType = problemsCountSchema.shape.byType.parse(
     Object.fromEntries(
@@ -1462,7 +1523,7 @@ export const findProblemCounts = async (
     declarations.reduce(
       (total, definition) =>
         definition.problemClass === problemClass
-          ? total + byType[definition.key]
+          ? total + (byType[definition.key] ?? 0)
           : total,
       0,
     );
@@ -1477,8 +1538,8 @@ export const findProblemCounts = async (
 export const findProblemByType = async (
   db: Database,
   key: ProblemKey,
-  upcLookupClient: UPCLookupClient,
-  usdaClient: USDAClient,
+  upcLookupClient: UpcLookupBatchPort,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<{ type: ProblemKey; items: unknown[]; total: number }> => {
   const result = await executeProblem(db, key, {
     diagnostic: { upcLookupClient },
@@ -1526,8 +1587,8 @@ export const findProblemByType = async (
 // sum of every section length — derived, never hand-summed.
 export const findAllProblems = async (
   db: Database,
-  upcLookupClient: UPCLookupClient,
-  usdaClient: USDAClient,
+  upcLookupClient: UpcLookupBatchPort,
+  usdaClient: UsdaFoodBatchPort,
 ): Promise<AllProblems> => {
   const groups = await traceAll({
     fast: () => findFastProblems(db),

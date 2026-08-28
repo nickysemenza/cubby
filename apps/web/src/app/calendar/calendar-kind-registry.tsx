@@ -83,9 +83,7 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   };
 };
 
-const calendarKindRegistry: {
-  [K in CalendarItemKind]: CalendarKindSpec<K>;
-} = {
+const calendarKindRegistry = {
   meal: {
     create: (date) => mealCaptureRequest({ date }),
     icon: (item) => mealTypeIcon(item.mealType),
@@ -233,8 +231,8 @@ const calendarKindRegistry: {
   },
   project: {
     create: (date) => projectCaptureRequest({ date }),
-    icon: () => KIND_ICONS.project,
-    cover: () => undefined,
+    icon: (_item) => KIND_ICONS.project,
+    cover: (_item) => undefined,
     metadata: (item) =>
       [
         PROJECT_STATUS_LABELS[item.status],
@@ -247,54 +245,81 @@ const calendarKindRegistry: {
       label: PROJECT_STATUS_LABELS[item.status],
       variant: "outline",
     }),
-    edit: () => ({
+    edit: (_item) => ({
       mode: "read-only",
       entity: "project",
       reason:
         "Project dates are derived from its work and spending. Edit the full project to change its record.",
     }),
-    event: () => ({
+    event: (_item, _today) => ({
       className: "bg-muted py-1 hover:bg-muted",
       color: entities.project.color.accent,
       priority: 100,
     }),
   },
+} satisfies {
+  [K in CalendarItemKind]: CalendarKindSpec<K>;
 };
 
-function calendarKindSpec(item: CalendarItem) {
-  switch (item.kind) {
-    case "meal":
-      return calendarKindRegistry.meal;
-    case "task":
-      return calendarKindRegistry.task;
-    case "expense":
-      return calendarKindRegistry.expense;
-    case "project":
-      return calendarKindRegistry.project;
-  }
-}
-
-function calendarItemPresentation(item: CalendarItem, today = "") {
-  const spec = calendarKindSpec(item);
-  // The switch above keeps the registry exhaustively typed; callers see one
-  // simple presentation value and never need to discriminate CalendarItem.
+function calendarItemPresentationFor<K extends CalendarItemKind>(
+  item: ItemOf<K>,
+  spec: CalendarKindSpec<K>,
+  today: string,
+) {
   return {
     // The kind and the entity are the same thing here — see CalendarKindSpec.
     entity: item.kind,
-    icon: spec.icon(item as never),
-    cover: spec.cover(item as never),
-    metadata: spec.metadata(item as never),
-    compactBadge: spec.compactBadge?.(item as never),
-    richBadge: spec.richBadge?.(item as never),
-    event: spec.event(item as never, today),
+    icon: spec.icon(item),
+    cover: spec.cover(item),
+    metadata: spec.metadata(item),
+    compactBadge: spec.compactBadge?.(item),
+    richBadge: spec.richBadge?.(item),
+    event: spec.event(item, today),
   };
+}
+
+function calendarItemPresentation(item: CalendarItem, today = "") {
+  switch (item.kind) {
+    case "meal":
+      return calendarItemPresentationFor(
+        item,
+        calendarKindRegistry.meal,
+        today,
+      );
+    case "task":
+      return calendarItemPresentationFor(
+        item,
+        calendarKindRegistry.task,
+        today,
+      );
+    case "expense":
+      return calendarItemPresentationFor(
+        item,
+        calendarKindRegistry.expense,
+        today,
+      );
+    case "project":
+      return calendarItemPresentationFor(
+        item,
+        calendarKindRegistry.project,
+        today,
+      );
+  }
 }
 
 function calendarItemEditDescriptor(
   item: CalendarItem,
 ): CalendarEditDescriptor {
-  const spec = calendarKindSpec(item);
-  return spec.edit(item as never);
+  switch (item.kind) {
+    case "meal":
+      return calendarKindRegistry.meal.edit(item);
+    case "task":
+      return calendarKindRegistry.task.edit(item);
+    case "expense":
+      return calendarKindRegistry.expense.edit(item);
+    case "project":
+      return calendarKindRegistry.project.edit(item);
+  }
 }
 
 function calendarItemCreateRequest(kind: CalendarItemKind, date?: string) {

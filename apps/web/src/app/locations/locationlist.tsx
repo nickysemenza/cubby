@@ -1,15 +1,19 @@
 import {
   type LocationListItemOut,
-  type LocationType,
   locationCoverImage,
+  locationType,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 
 import {
   createEntityInlineLinkColumn,
@@ -68,117 +72,154 @@ export function LocationList() {
   });
 
   const columns = useMemo(
-    () => [
-      createImageColumn(columnHelper, {
-        entity: "location",
-        // A bin that IS a photographed tote should show the tote. The default
-        // accessor only reads `row.images`, so those rendered the placeholder.
-        getImages: (location) => {
-          const cover = locationCoverImage(location);
-          return cover ? [cover] : [];
-        },
+    () =>
+      createCubbyColumnCollection<LocationListItemOut>((add) => {
+        add(
+          createImageColumn(columnHelper, {
+            entity: "location",
+            // A bin that IS a photographed tote should show the tote. The default
+            // accessor only reads `row.images`, so those rendered the placeholder.
+            getImages: (location) => {
+              const cover = locationCoverImage(location);
+              return cover ? [cover] : [];
+            },
+          }),
+        );
+        add(
+          createNameColumn(columnHelper, "location", "name", {
+            // Keeps the default w-64. This used to be a bare `min-w-0` so the
+            // auto-width name would split the leftover with the slack spacer —
+            // but an auto column under table-fixed absorbs the squeeze in the
+            // other direction too, collapsing toward 0 on a narrow window. The
+            // zero-width trailing gutter gets the same no-dead-space result safely.
+            mobile: { slot: "title", priority: 0 },
+            filterConfig: { placeholder: "Filter by location name..." },
+            editable: {
+              onSave: async (newName, location) => {
+                await updateLocationMutation.mutateAsync({
+                  id: location.id,
+                  data: { name: newName },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          createEntityInlineLinkColumn(columnHelper, "children", "location", {
+            header: "Children",
+            className: "w-40",
+            mobile: { slot: "meta", priority: 55 },
+          }),
+        );
+        add(
+          createSingleEntityInlineLinkColumn(
+            columnHelper,
+            "parent",
+            "location",
+            {
+              header: "Parent",
+              className: "w-56",
+              mobile: { slot: "subtitle", priority: 20 },
+              // No `filterConfig` here — the manifest's `location.parent` spec
+              // (idMulti + nullable) now always overlays this column via
+              // `useStandardColumns`, so a hand-coded fallback would be dead code.
+              editable: {
+                onSave: async (newParentId, location) => {
+                  await updateLocationMutation.mutateAsync({
+                    id: location.id,
+                    data: { parentId: newParentId },
+                  });
+                },
+                clearable: true,
+                filterItems: (item, row) => item.id !== row.id,
+              },
+            },
+          ),
+        );
+        add(
+          createFilterableSelectColumn(columnHelper, "type", {
+            header: "Type",
+            className: "w-32",
+            placeholder: "Filter by type...",
+            selectOptions: locationTypeOptionsWithTheme,
+            // A linked location has no type of its own, so this renders empty for
+            // one — the adjacent "Is a" column carries its identity instead.
+            renderCell: (type) => (
+              <LocationTypeLabel type={type} product={null} />
+            ),
+            mobile: { slot: "subtitle", priority: 15 },
+            editable: {
+              parseValue: (value) => locationType.nullable().parse(value),
+              onSave: async (newType, location) => {
+                await updateLocationMutation.mutateAsync({
+                  id: location.id,
+                  data: { type: newType },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          createSingleEntityInlineLinkColumn(
+            columnHelper,
+            "product",
+            "product",
+            {
+              header: "Is a",
+              className: "w-56",
+              mobile: { slot: "meta", priority: 40 },
+            },
+          ),
+        );
+        add(
+          columnHelper.accessor(
+            (row) => row.valuation?.directValuation ?? null,
+            {
+              id: "valuation",
+              header: "Valuation",
+              cell: (info) => (
+                <InventoryValuationSummary
+                  valuation={info.row.original.valuation}
+                  variant="compact"
+                />
+              ),
+              meta: {
+                className: "w-[180px]",
+                numeric: true,
+                mobile: { slot: "trailing", priority: 10 },
+              },
+            },
+          ),
+        );
+        add(
+          createTextColumn(columnHelper, "aiDescription", {
+            header: "AI Description",
+            className: "min-w-0 w-56 truncate",
+            mobile: { slot: "meta", priority: 70 },
+          }),
+        );
+        add(
+          createTimestampColumn(columnHelper, "lastBulkInventory", {
+            header: "Last Bulk Inventory",
+            className: "w-32",
+            fallback: "Never",
+            mobile: { slot: "meta", priority: 90 },
+          }),
+        );
+        add(
+          createInventoryEntriesColumn(
+            columnHelper,
+            "inventoryEntries",
+            "product",
+            (e) => e.product,
+            {
+              layout: "inline",
+              enableSorting: true,
+              mobile: { slot: "meta", priority: 80 },
+            },
+          ),
+        );
       }),
-      createNameColumn(columnHelper, "location", "name", {
-        // Keeps the default w-64. This used to be a bare `min-w-0` so the
-        // auto-width name would split the leftover with the slack spacer —
-        // but an auto column under table-fixed absorbs the squeeze in the
-        // other direction too, collapsing toward 0 on a narrow window. The
-        // zero-width trailing gutter gets the same no-dead-space result safely.
-        mobile: { slot: "title", priority: 0 },
-        filterConfig: { placeholder: "Filter by location name..." },
-        editable: {
-          onSave: async (newName, location) => {
-            await updateLocationMutation.mutateAsync({
-              id: location.id,
-              data: { name: newName },
-            });
-          },
-        },
-      }),
-      createEntityInlineLinkColumn(columnHelper, "children", "location", {
-        header: "Children",
-        className: "w-40",
-        mobile: { slot: "meta", priority: 55 },
-      }),
-      createSingleEntityInlineLinkColumn(columnHelper, "parent", "location", {
-        header: "Parent",
-        className: "w-56",
-        mobile: { slot: "subtitle", priority: 20 },
-        // No `filterConfig` here — the manifest's `location.parent` spec
-        // (idMulti + nullable) now always overlays this column via
-        // `useStandardColumns`, so a hand-coded fallback would be dead code.
-        editable: {
-          onSave: async (newParentId, location) => {
-            await updateLocationMutation.mutateAsync({
-              id: location.id,
-              data: { parentId: newParentId },
-            });
-          },
-          clearable: true,
-          filterItems: (item, row) => item.id !== row.id,
-        },
-      }),
-      createFilterableSelectColumn(columnHelper, "type", {
-        header: "Type",
-        className: "w-32",
-        placeholder: "Filter by type...",
-        selectOptions: locationTypeOptionsWithTheme,
-        // A linked location has no type of its own, so this renders empty for
-        // one — the adjacent "Is a" column carries its identity instead.
-        renderCell: (type) => <LocationTypeLabel type={type} product={null} />,
-        mobile: { slot: "subtitle", priority: 15 },
-        editable: {
-          onSave: async (newType, location) => {
-            await updateLocationMutation.mutateAsync({
-              id: location.id,
-              data: { type: newType },
-            });
-          },
-        },
-      }),
-      createSingleEntityInlineLinkColumn(columnHelper, "product", "product", {
-        header: "Is a",
-        className: "w-56",
-        mobile: { slot: "meta", priority: 40 },
-      }),
-      columnHelper.accessor((row) => row.valuation?.directValuation ?? null, {
-        id: "valuation",
-        header: "Valuation",
-        cell: (info) => (
-          <InventoryValuationSummary
-            valuation={info.row.original.valuation}
-            variant="compact"
-          />
-        ),
-        meta: {
-          className: "w-[180px]",
-          numeric: true,
-          mobile: { slot: "trailing", priority: 10 },
-        },
-      }),
-      createTextColumn(columnHelper, "aiDescription", {
-        header: "AI Description",
-        className: "min-w-0 w-56 truncate",
-        mobile: { slot: "meta", priority: 70 },
-      }),
-      createTimestampColumn(columnHelper, "lastBulkInventory", {
-        header: "Last Bulk Inventory",
-        className: "w-32",
-        fallback: "Never",
-        mobile: { slot: "meta", priority: 90 },
-      }),
-      createInventoryEntriesColumn(
-        columnHelper,
-        "inventoryEntries",
-        "product",
-        (e) => e.product,
-        {
-          layout: "inline",
-          enableSorting: true,
-          mobile: { slot: "meta", priority: 80 },
-        },
-      ),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateLocationMutation changes every render but is functionally stable
     [columnHelper],
   );
@@ -202,10 +243,10 @@ export function LocationList() {
   );
 
   const groupKeyFn = useCallback((item: LocationListItemOut) => item.type, []);
-  const groupColorFn = useCallback(
-    (key: string) => getLocationTypeColor(key as LocationType),
-    [],
-  );
+  const groupColorFn = useCallback((key: string) => {
+    const parsedType = locationType.safeParse(key);
+    return getLocationTypeColor(parsedType.success ? parsedType.data : null);
+  }, []);
   const groupConfig = useMemo(
     (): GroupConfig<LocationListItemOut> => ({
       field: "type",
@@ -218,6 +259,7 @@ export function LocationList() {
   return (
     <EntityListPage
       entity="location"
+      queryOptions={entityListFor("location").listQueryPlan}
       filterOptions={filterOptions}
       columns={columns}
       extraActions={extraActions}

@@ -1,16 +1,13 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
-  productFiltersSchema,
-  productListItemOut,
   productMergeSummaryOut,
   productSortableFields,
-  productWithFoodOut,
+  productTopLevelOut,
 } from "@cubby/schemas/product";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { ENTITY_BINDINGS } from "~/server/entity-bindings";
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -52,9 +49,6 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
 export const productEntityAdapter = defineEntityAdapter({
   entity: "product",
   sideEffects: false,
-  filters: productFiltersSchema,
-  detailOutput: productWithFoodOut,
-  listOutput: productListItemOut,
   sort: {
     fields: productSortableFields,
     default: "createdAt",
@@ -180,13 +174,12 @@ export const productEntityAdapter = defineEntityAdapter({
   merge: {
     input: mergeProductsInput,
     output: z.object({
-      product: ENTITY_BINDINGS.product.crud!.output,
+      product: productTopLevelOut,
       mergeSummary: productMergeSummaryOut,
     }),
-    item: (output) => (output as { product: unknown }).product,
-    summary: (output) => (output as { mergeSummary: unknown }).mergeSummary,
-    execute: async (ctx, value) => {
-      const input = mergeProductsInput.parse(value);
+    item: (output) => output.product,
+    summary: (output) => output.mergeSummary,
+    execute: async (ctx, input) => {
       const ingredientIds = await linkedProductIngredientIds(ctx.db, [
         input.keepId,
         ...input.mergeIds,

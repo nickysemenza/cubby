@@ -23,6 +23,7 @@ import {
   PinOff,
   RotateCcw,
 } from "lucide-react";
+import { z } from "zod";
 
 import {
   createDndAnnouncements,
@@ -45,7 +46,14 @@ import type {
 } from "./table-features";
 import { isLockedColumnId, withLockedEndLast } from "./table-layout";
 
-type Region = "start" | "center" | "end";
+const columnRegionSchema = z.enum(["start", "center", "end"]);
+type Region = z.infer<typeof columnRegionSchema>;
+
+function dragRegion(
+  value: NonNullable<DragEndEvent["over"]>["data"]["current"],
+): Region | undefined {
+  return columnRegionSchema.safeParse(value?.region).data;
+}
 
 function regionFor<TData extends RowData>(column: Column<TData>): Region {
   return column.getIsPinned() || "center";
@@ -311,10 +319,9 @@ export default function TableLayoutCustomizer<TData extends RowData>({
     if (!activeColumn || isLockedColumnId(activeColumn.id)) return;
     const targetColumn = table.getColumn(String(over.id));
     if (targetColumn && isLockedColumnId(targetColumn.id)) return;
-    const targetRegion = (over.data.current?.region ??
-      (targetColumn ? regionFor(targetColumn) : undefined)) as
-      | Region
-      | undefined;
+    const targetRegion =
+      dragRegion(over.data.current) ??
+      (targetColumn ? regionFor(targetColumn) : undefined);
     if (!targetRegion) return;
 
     const idsByRegion = {
@@ -363,8 +370,7 @@ export default function TableLayoutCustomizer<TData extends RowData>({
         collisionDetection={closestCenter}
         onDragEnd={onDragEnd}
         accessibility={{
-          container:
-            typeof document === "undefined" ? undefined : document.body,
+          container: globalThis.document?.body,
           screenReaderInstructions: cubbyDndScreenReaderInstructions,
           announcements: createDndAnnouncements({
             item: (id) => `${id} column`,

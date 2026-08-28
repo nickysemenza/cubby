@@ -16,7 +16,7 @@ const statusToneClass = {
   destructive: "text-destructive",
 } as const;
 
-const ENTITY_CODE: Record<PickerEntity, string> = {
+const ENTITY_CODE = {
   ingredient: "ING",
   location: "LOC",
   product: "PRD",
@@ -26,7 +26,7 @@ const ENTITY_CODE: Record<PickerEntity, string> = {
   vendor: "VEN",
   financialAccount: "FAC",
   purchase: "PUR",
-};
+} satisfies Record<PickerEntity, string>;
 
 export function matchesPickerItem(
   item: ComboboxItem,

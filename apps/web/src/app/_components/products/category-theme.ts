@@ -23,7 +23,7 @@ export { formatCategoryLabel, getCategoryColor };
 
 // Exhaustive at construction: a new ProductCategory without a key here is a
 // compile error (replaces the old assertNever default-case guarantee).
-const categoryIcons: Record<ProductCategory, LucideIcon> = {
+const categoryIcons = {
   food: Utensils,
   tools: Wrench,
   "tool-consumables": Disc,
@@ -35,7 +35,7 @@ const categoryIcons: Record<ProductCategory, LucideIcon> = {
   books: BookOpen,
   household: Sofa,
   supplies: Sparkles,
-};
+} satisfies Record<ProductCategory, LucideIcon>;
 
 /**
  * Get the icon component for a product category

@@ -2,24 +2,25 @@
  * Portable error utilities with no transport dependency.
  */
 
+import { z } from "zod";
+
+const errorMessageSchema = z.object({ message: z.string() });
+
 /** Safely extract error message from unknown error type. */
-export function getErrorMessage(error: unknown): string {
+export function getErrorMessage<TError>(error: TError): string {
   if (error instanceof Error) {
     return error.message;
   }
-  if (typeof error === "string") {
-    return error;
+  const stringValue = z.string().safeParse(error);
+  if (stringValue.success) {
+    return stringValue.data;
   }
   // DOMException is not an Error subclass in every browser/runtime. Keep this
   // structural fallback narrow so browser-generated failures retain the useful
   // message without stringifying arbitrary objects.
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    return error.message;
+  const messageValue = errorMessageSchema.safeParse(error);
+  if (messageValue.success) {
+    return messageValue.data.message;
   }
   return "An unknown error occurred";
 }

@@ -142,8 +142,11 @@ export function listChromePage({
  */
 type DetailQueryFactory = (shortcode: string) => {
   queryKey: readonly unknown[];
-  queryFn?: (...args: never[]) => unknown;
+  queryFn?: (...args: never[]) => DetailQueryValue;
 };
+
+/** Query payloads are parsed by each entity operation before reaching a page. */
+type DetailQueryValue = object | null;
 
 /** The non-null record a detail query resolves to. */
 type DetailRecord<TQuery extends DetailQueryFactory> = NonNullable<
@@ -177,13 +180,15 @@ export function detailPage<TQuery extends DetailQueryFactory>({
     // `useParams({ strict: false })` because this component is built before any
     // route object exists to read the literal path from. Every caller is a
     // `$shortcode` route, which is what makes the narrowing safe.
+    // SAFETY: this component is only installed on `$shortcode` detail routes.
     const { shortcode } = useParams({ strict: false }) as {
       shortcode: string;
     };
+    // SAFETY: the route factory's query options resolve to the page's
+    // schema-derived record, while the router library hides that correlation
+    // behind conditional generic overloads.
     const { data } = useSuspenseQuery(
-      query(
-        shortcode,
-      ) as unknown as UseSuspenseQueryOptions<DetailRecord<TQuery> | null>,
+      query(shortcode) as UseSuspenseQueryOptions<DetailRecord<TQuery> | null>,
     );
 
     useDetailTitle(shortcode, (data ? title(data) : undefined) ?? undefined);

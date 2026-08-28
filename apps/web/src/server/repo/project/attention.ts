@@ -384,8 +384,10 @@ export async function computeAttentionItems(
 
   // 4. past_due_planned_expense
   for (const row of pastDueExpenseRows) {
-    // `date` is non-null by the query predicate above (`isNotNull(expense.date)`).
-    const plannedFor = row.date as string;
+    if (row.date === null) {
+      throw new Error("Past-due expense query returned a null date");
+    }
+    const plannedFor = row.date;
     items.push(
       attentionItem({
         type: "past_due_planned_expense",

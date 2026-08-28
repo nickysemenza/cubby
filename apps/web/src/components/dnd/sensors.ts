@@ -1,4 +1,5 @@
 import {
+  type Data,
   type KeyboardCoordinateGetter,
   KeyboardSensor,
   MouseSensor,
@@ -17,8 +18,8 @@ export interface CubbyDndSensorOptions {
 }
 
 type ValidKeyboardTarget = (
-  activeData: Record<string, unknown> | undefined,
-  targetData: Record<string, unknown> | undefined,
+  activeData: Data | undefined,
+  targetData: Data | undefined,
 ) => boolean;
 
 export function resolveActivatorDistance(

@@ -15,6 +15,15 @@ import { cn } from "~/lib/utils";
 type RouteTone = "direct" | "derived";
 const STRIP_DIRECT_DESTINATION_LIMIT = 3;
 
+/** Remote relationship summary used by the inspector and product page. */
+export interface ProductRelationshipRouteOperations {
+  relationshipRoute: typeof productOperations.relationshipRoute;
+}
+
+const productionOperations: ProductRelationshipRouteOperations = {
+  relationshipRoute: productOperations.relationshipRoute,
+};
+
 type RouteSample = {
   id: string;
   label: string;
@@ -34,9 +43,14 @@ export type RouteBranch = {
   evidence?: string;
 };
 
-type BranchShape<T> = {
+type RouteSummary<T> = {
   count: number;
   preview: readonly T[];
+};
+
+type ProductRelationshipModel = {
+  direct: RouteBranch[];
+  derived: RouteBranch[];
 };
 
 function ProductSectionLink({
@@ -83,7 +97,11 @@ function InternalRouteLink({
   // retaining Link's native anchor semantics for keyboard and assistive tech.
   return (
     <Link
-      to={to as never}
+      to={
+        // SAFETY: route summaries construct only in-app canonical paths above;
+        // Link's generated route union cannot represent those dynamic detail ids.
+        to as never
+      }
       className={className}
       title={title}
       aria-label={ariaLabel}
@@ -97,7 +115,7 @@ function routeBranch<T>(
   id: string,
   label: string,
   kind: RouteTone,
-  branch: BranchShape<T>,
+  branch: RouteSummary<T>,
   detailHash: string,
   emptyCopy: string,
   sample: (record: T) => RouteSample,
@@ -116,7 +134,7 @@ function routeBranch<T>(
 function toRouteModel(
   product: ProductWithFoodOut,
   summary: ProductRelationshipRouteOut,
-): { direct: RouteBranch[]; derived: RouteBranch[] } {
+): ProductRelationshipModel {
   const direct: RouteBranch[] = [
     routeBranch(
       "stock",
@@ -256,10 +274,9 @@ function toRouteModel(
   return { direct, derived };
 }
 
-function fallbackRouteModel(product: ProductWithFoodOut): {
-  direct: RouteBranch[];
-  derived: RouteBranch[];
-} {
+function fallbackRouteModel(
+  product: ProductWithFoodOut,
+): ProductRelationshipModel {
   const direct: RouteBranch[] = [];
   if (product.inventoryEntry.length > 0) {
     direct.push({
@@ -571,10 +588,11 @@ export function ProductRelationshipRouteFrame({
   );
 }
 
-export function useProductRelationshipRoute(productId: string) {
-  return useQuery(
-    productOperations.relationshipRoute.queryOptions({ productId }),
-  );
+export function useProductRelationshipRoute(
+  productId: string,
+  operations: ProductRelationshipRouteOperations = productionOperations,
+) {
+  return useQuery(operations.relationshipRoute.queryOptions({ productId }));
 }
 
 type ProductRelationshipRouteQuery = ReturnType<
@@ -648,8 +666,9 @@ export const ProductRelationshipRouteContent: FC<{
 export const ProductRelationshipRoute: FC<{
   product: ProductWithFoodOut;
   variant?: "ledger" | "strip";
-}> = ({ product, variant }) => {
-  const query = useProductRelationshipRoute(product.id);
+  operations?: ProductRelationshipRouteOperations;
+}> = ({ product, variant, operations }) => {
+  const query = useProductRelationshipRoute(product.id, operations);
   return (
     <ProductRelationshipRouteContent
       product={product}

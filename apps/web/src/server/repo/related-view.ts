@@ -20,6 +20,7 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { and, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
@@ -224,7 +225,7 @@ const sqlRelatedView = (key: RelatedViewKey) => {
  * The curated registry supplies presentation only; traversal joins are compiled
  * from its declared graph path with the aliases this repository query expects.
  */
-const COMPILED_RELATED_JOINS = Object.fromEntries(
+const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
   relatedViewRegistry.map((view) => [
     view.key,
     compileTraversal(view.source, relatedViewPath(view), "related", {
@@ -232,31 +233,93 @@ const COMPILED_RELATED_JOINS = Object.fromEntries(
       leaf: "t",
     }).joins,
   ]),
-) as Record<RelatedViewKey, SQL>;
+);
 
-type RawRow = {
-  sourceId: string;
-  targetEntityId: string;
-  id: string;
-  label: string;
-  totalCount: number | string;
+const compiledRelatedJoins = (key: RelatedViewKey): SQL => {
+  const joins = COMPILED_RELATED_JOINS.get(key);
+  if (!joins) throw new Error(`Missing compiled traversal for ${key}`);
+  return joins;
 };
 
-type BranchRawRow = RawRow & { sortValue: string | number | Date | null };
+const previewRowSchema = z.object({
+  sourceId: z.string(),
+  targetEntityId: z.string(),
+  id: z.string(),
+  label: z.string(),
+  totalCount: z.coerce.number().int().nonnegative(),
+});
 
-const rowsOf = (result: unknown): RawRow[] => {
-  if (Array.isArray(result)) return result as RawRow[];
-  if (result && typeof result === "object" && "rows" in result) {
-    return (result as { rows: RawRow[] }).rows;
-  }
-  return [];
+const branchRowSchema = previewRowSchema.omit({ sourceId: true });
+
+const optionRowSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  count: z.coerce.number().int().nonnegative(),
+});
+
+const relatedIdsFilterSchema = z.union([z.string(), z.array(z.string())]);
+const relatedSearchFilterSchema = z.string().trim().min(1);
+
+const summaryTotalsRowSchema = z.object({
+  count: z.coerce.number().int().nonnegative(),
+  totalExpenseCount: z.coerce.number().int().nonnegative(),
+  totalPurchaseCount: z.coerce.number().int().nonnegative(),
+  totalUnpricedExpenseCount: z.coerce.number().int().nonnegative(),
+  totalNetSpend: z.coerce.number(),
+  totalKnownAcquiredUnits: z.coerce.number().nonnegative(),
+  totalUnknownAcquisitionQuantityCount: z.coerce.number().int().nonnegative(),
+});
+
+const summaryPageFields = {
+  targetId: z.string().nullable(),
+  targetLabel: z.string().nullable(),
+  imageId: z.string().nullable(),
+  imageKey: z.string().nullable(),
+  imageFilename: z.string().nullable(),
+  imageContentType: z.string().nullable(),
+  expenseCount: z.coerce.number().int().nonnegative(),
+  purchaseCount: z.coerce.number().int().nonnegative(),
+  unpricedExpenseCount: z.coerce.number().int().nonnegative(),
+  netSpend: z.coerce.number(),
+  latestActivity: z.string().nullable(),
+  knownAcquiredUnits: z.coerce.number().nonnegative(),
+  unknownAcquisitionQuantityCount: z.coerce.number().int().nonnegative(),
 };
+
+const summaryPageRowSchema = summaryTotalsRowSchema.extend({
+  ...summaryPageFields,
+  isPageRow: z.literal(true),
+});
+
+const summaryEmptyRowSchema = summaryTotalsRowSchema.extend({
+  targetId: z.null(),
+  targetLabel: z.null(),
+  imageId: z.null(),
+  imageKey: z.null(),
+  imageFilename: z.null(),
+  imageContentType: z.null(),
+  expenseCount: z.null(),
+  purchaseCount: z.null(),
+  unpricedExpenseCount: z.null(),
+  netSpend: z.null(),
+  latestActivity: z.null(),
+  knownAcquiredUnits: z.null(),
+  unknownAcquisitionQuantityCount: z.null(),
+  isPageRow: z.null(),
+});
+
+const summaryRowSchema = z.discriminatedUnion("isPageRow", [
+  summaryPageRowSchema,
+  summaryEmptyRowSchema,
+]);
+
+type PreviewRow = z.infer<typeof previewRowSchema>;
 
 async function loadOneRows(
   db: Database,
   relationKey: RelatedViewKey,
   sourceIds: string[],
-): Promise<RawRow[]> {
+): Promise<PreviewRow[]> {
   const view = sqlRelatedView(relationKey);
   const ids = sql.join(
     sourceIds.map((id) => sql`${id}`),
@@ -271,7 +334,7 @@ async function loadOneRows(
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
-      ${COMPILED_RELATED_JOINS[relationKey]}
+      ${compiledRelatedJoins(relationKey)}
       WHERE s."shortcode" IN (${ids}) AND s."deletedAt" IS NULL
         ${viewWhere(view)}
     ), ranked AS (
@@ -288,7 +351,8 @@ async function loadOneRows(
     WHERE rn <= 3
     ORDER BY "sourceId", rn
   `;
-  return rowsOf(await getDb(db).execute(query));
+  const result = await getDb(db).execute(query);
+  return previewRowSchema.array().parse(result.rows);
 }
 
 export async function loadRelatedPreviews(
@@ -306,8 +370,8 @@ export async function loadRelatedPreviews(
   if (input.sourceIds.length === 0 || relationKeys.length === 0) return [];
   const loaded = await Promise.all(
     relationKeys.map(async (key) => ({
-      relationKey: key as RelatedViewKey,
-      rows: await loadOneRows(db, key as RelatedViewKey, uniq(input.sourceIds)),
+      relationKey: key,
+      rows: await loadOneRows(db, key, uniq(input.sourceIds)),
     })),
   );
   const displayImages = await resolveEntityDisplayImages(
@@ -362,7 +426,7 @@ export async function loadRelatedBranch(
         ${sql.raw(view.label)}::text AS "label",
         ${sql.raw(view.sort)} AS "sortValue"
       FROM ${sql.raw(`"${view.sourceTable}"`)} s
-      ${COMPILED_RELATED_JOINS[input.relationKey]}
+      ${compiledRelatedJoins(input.relationKey)}
       WHERE s."shortcode" = ${input.sourceId} AND s."deletedAt" IS NULL
         ${viewWhere(view)}
     ), ranked AS (
@@ -374,7 +438,8 @@ export async function loadRelatedBranch(
     ORDER BY "sortValue" ${sql.raw(view.sortDirection)}, "label", "id"
     LIMIT ${input.limit} OFFSET ${input.offset}
   `;
-  const rows = rowsOf(await getDb(db).execute(query)) as BranchRawRow[];
+  const result = await getDb(db).execute(query);
+  const rows = branchRowSchema.array().parse(result.rows);
   const displayImages = await resolveEntityDisplayImages(
     db,
     rows.map((row) => ({
@@ -433,7 +498,7 @@ export const relatedSortExpression = (
   const aggregate = view.sortDirection === "DESC" ? "max" : "min";
   return sql`(SELECT ${sql.raw(aggregate)}(${sql.raw(view.sort)})
     FROM ${sql.raw(`"${view.sourceTable}"`)} s
-    ${COMPILED_RELATED_JOINS[relationKey]}
+    ${compiledRelatedJoins(relationKey)}
     WHERE s."id" = ${sql.raw(rootIdRef)} AND s."deletedAt" IS NULL
       ${viewWhere(view)})`;
 };
@@ -450,7 +515,7 @@ export async function loadRelatedOptions(
       ${sql.raw(view.label)}::text AS "label",
       count(DISTINCT s."id")::int AS "count"
     FROM ${sql.raw(`"${view.sourceTable}"`)} s
-    ${COMPILED_RELATED_JOINS[input.relationKey]}
+    ${compiledRelatedJoins(input.relationKey)}
     WHERE s."deletedAt" IS NULL
       ${viewWhere(view)}
       ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${`%${search}%`}` : sql``}
@@ -458,11 +523,8 @@ export async function loadRelatedOptions(
     ORDER BY "label", "id"
     LIMIT ${input.limit}
   `;
-  const rows = rowsOf(await getDb(db).execute(query)) as unknown as Array<{
-    id: string;
-    label: string;
-    count: string | number;
-  }>;
+  const result = await getDb(db).execute(query);
+  const rows = optionRowSchema.array().parse(result.rows);
   return rows.map((row) => ({
     entity: view.targetEntity,
     id: row.id,
@@ -479,10 +541,7 @@ type SummaryDefinition = {
   imageTarget: "product" | "project" | "vendor" | null;
 };
 
-const SUMMARY_DEFINITIONS: Record<
-  RelatedSummaryRelationKey,
-  SummaryDefinition
-> = {
+const SUMMARY_DEFINITIONS = {
   "vendor.products": {
     targetEntity: "product",
     targetJoin: `JOIN "Product" t ON t."id" = se."productId" AND t."deletedAt" IS NULL`,
@@ -519,7 +578,7 @@ const SUMMARY_DEFINITIONS: Record<
     targetPresence: "optional",
     imageTarget: "vendor",
   },
-};
+} satisfies Record<RelatedSummaryRelationKey, SummaryDefinition>;
 
 /**
  * Expense-backed relationship rollups. The scope is deliberately expressed per
@@ -680,32 +739,8 @@ export async function loadRelatedSummary(
     SELECT paged.*, totals.*, (SELECT count(*)::int FROM grouped) AS "count"
     FROM totals LEFT JOIN paged ON TRUE
   `;
-  type SummaryRaw = {
-    targetId: string | null;
-    targetLabel: string | null;
-    imageId: string | null;
-    imageKey: string | null;
-    imageFilename: string | null;
-    imageContentType: string | null;
-    expenseCount: number | string;
-    purchaseCount: number | string;
-    unpricedExpenseCount: number | string;
-    netSpend: number | string;
-    latestActivity: string | null;
-    knownAcquiredUnits: number | string;
-    unknownAcquisitionQuantityCount: number | string;
-    isPageRow: boolean | null;
-    count: number | string;
-    totalExpenseCount: number | string;
-    totalPurchaseCount: number | string;
-    totalUnpricedExpenseCount: number | string;
-    totalNetSpend: number | string;
-    totalKnownAcquiredUnits: number | string;
-    totalUnknownAcquisitionQuantityCount: number | string;
-  };
-  const rows = rowsOf(
-    await getDb(db).execute(query),
-  ) as unknown as SummaryRaw[];
+  const result = await getDb(db).execute(query);
+  const rows = summaryRowSchema.array().parse(result.rows);
   const first = rows[0];
   const zeroTotals = {
     expenseCount: 0,
@@ -776,35 +811,35 @@ export async function loadRelatedSummary(
  * pagination/counts honest while sharing the exact same curated joins as the
  * preview endpoint.
  */
-export function relatedWhereConditions(
+export function relatedWhereConditions<TFilters extends object>(
   source: Entity,
-  filters: Record<string, unknown>,
+  filters: TFilters,
   sourceId: SQLWrapper,
 ): SQL[] {
+  const filterValues = new Map(Object.entries(filters));
   return relatedViewRegistry
     .filter((view) => view.source === source)
     .flatMap((definition) => {
       const view = sqlRelatedView(definition.key);
       const prefix = relatedFilterPrefix(definition);
-      const rawIds = filters[`${prefix}Id`];
-      const ids = Array.isArray(rawIds)
-        ? rawIds.filter((value): value is string => typeof value === "string")
-        : typeof rawIds === "string"
-          ? [rawIds]
-          : undefined;
-      const presence = filters[`${prefix}PresenceFilter`];
-      const rawSearch = filters[`${prefix}Search`];
-      const search =
-        typeof rawSearch === "string" && rawSearch.trim()
-          ? rawSearch.trim()
-          : undefined;
+      const rawIds = filterValues.get(`${prefix}Id`);
+      const parsedIds = relatedIdsFilterSchema.safeParse(rawIds);
+      const ids = parsedIds.success
+        ? Array.isArray(parsedIds.data)
+          ? parsedIds.data
+          : [parsedIds.data]
+        : undefined;
+      const presence = filterValues.get(`${prefix}PresenceFilter`);
+      const rawSearch = filterValues.get(`${prefix}Search`);
+      const parsedSearch = relatedSearchFilterSchema.safeParse(rawSearch);
+      const search = parsedSearch.success ? parsedSearch.data : undefined;
       if (!ids && presence !== "has" && presence !== "none" && !search) {
         return [];
       }
       const exists = (extra?: SQL) => sql`EXISTS (
         SELECT 1
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
-        ${COMPILED_RELATED_JOINS[definition.key]}
+        ${compiledRelatedJoins(definition.key)}
         WHERE s."id" = ${sourceId}
           AND s."deletedAt" IS NULL
           ${viewWhere(view)}

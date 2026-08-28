@@ -14,6 +14,9 @@
  * `rangeMidpoint` from `~/lib/format-range` — don't duplicate it here.
  */
 
+const isFiniteNumber = (value: number | null | undefined): value is number =>
+  value != null && Number.isFinite(value);
+
 /**
  * Cost per unit of a nutrient (e.g. $ / g protein) — cost ÷ nutrientAmount.
  * Null unless both are finite numbers and the amount is strictly positive (a
@@ -23,9 +26,9 @@ export function costPerNutrient(
   cost: number | null | undefined,
   nutrientAmount: number | null | undefined,
 ): number | null {
-  if (!Number.isFinite(cost) || !Number.isFinite(nutrientAmount)) return null;
-  if ((nutrientAmount as number) <= 0) return null;
-  return (cost as number) / (nutrientAmount as number);
+  if (!isFiniteNumber(cost) || !isFiniteNumber(nutrientAmount)) return null;
+  if (nutrientAmount <= 0) return null;
+  return cost / nutrientAmount;
 }
 
 /**
@@ -36,7 +39,7 @@ export function proteinPer100Kcal(
   protein: number | null | undefined,
   kcal: number | null | undefined,
 ): number | null {
-  if (!Number.isFinite(protein) || !Number.isFinite(kcal)) return null;
-  if ((kcal as number) <= 0) return null;
-  return ((protein as number) / (kcal as number)) * 100;
+  if (!isFiniteNumber(protein) || !isFiniteNumber(kcal)) return null;
+  if (kcal <= 0) return null;
+  return (protein / kcal) * 100;
 }

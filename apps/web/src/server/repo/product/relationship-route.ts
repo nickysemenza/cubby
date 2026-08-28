@@ -10,6 +10,7 @@
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductRelationshipRouteOut } from "@cubby/schemas/product";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
@@ -30,43 +31,50 @@ import { expensePairPredicate } from "~/server/repo/purchase-products";
 
 const PREVIEW_LIMIT = 3;
 
-type PurchaseRelationRow = {
-  purchaseCode: string;
-  displayLabel: string | null;
-  orderId: string | null;
-  date: string;
-  vendorCode: string | null;
-  vendorName: string | null;
-  linkAttachedAt: Date | string | null;
-  source: "expense" | "link" | "both";
-  totalCount: number;
-};
+const purchaseRelationRowSchema = z.object({
+  purchaseCode: z.string(),
+  displayLabel: z.string().nullable(),
+  orderId: z.string().nullable(),
+  date: z.string(),
+  vendorCode: z.string().nullable(),
+  vendorName: z.string().nullable(),
+  linkAttachedAt: z.union([z.date(), z.string()]).nullable(),
+  source: z.enum(["expense", "link", "both"]),
+  totalCount: z.number(),
+});
+type PurchaseRelationRow = z.output<typeof purchaseRelationRowSchema>;
 
-type ProjectPreviewRelationRow = {
-  kind: "purchased" | "used";
-  totalCount: number;
-  unassignedExpenseCount: number;
-  id: string;
-  name: string;
-  status: (typeof project.status.enumValues)[number];
-};
+const projectPreviewRelationRowSchema = z.object({
+  kind: z.enum(["purchased", "used"]),
+  totalCount: z.number(),
+  unassignedExpenseCount: z.number(),
+  id: z.string(),
+  name: z.string(),
+  status: z.enum(project.status.enumValues),
+});
+type ProjectPreviewRelationRow = z.output<
+  typeof projectPreviewRelationRowSchema
+>;
 
-type ProjectRelationRow =
-  | ProjectPreviewRelationRow
-  | {
-      kind: "meta";
-      totalCount: number;
-      unassignedExpenseCount: number;
-      id: null;
-      name: null;
-      status: null;
-    };
+const projectRelationRowSchema = z.discriminatedUnion("kind", [
+  projectPreviewRelationRowSchema,
+  z.object({
+    kind: z.literal("meta"),
+    totalCount: z.number(),
+    unassignedExpenseCount: z.number(),
+    id: z.null(),
+    name: z.null(),
+    status: z.null(),
+  }),
+]);
+type ProjectRelationRow = z.output<typeof projectRelationRowSchema>;
 
-type VendorRelationRow = {
-  totalCount: number;
-  id: string;
-  name: string;
-};
+const vendorRelationRowSchema = z.object({
+  totalCount: z.number(),
+  id: z.string(),
+  name: z.string(),
+});
+type VendorRelationRow = z.output<typeof vendorRelationRowSchema>;
 
 const mapPurchaseLinkAttachedAt = (
   value: Date | string | null,
@@ -368,8 +376,12 @@ export async function getProductRelationshipRoute(
     throw createAppError("PRODUCT_NOT_FOUND", `Product ${productId} not found`);
   }
 
-  const purchaseRows = purchaseResult.rows as unknown as PurchaseRelationRow[];
-  const projectRows = projectResult.rows as unknown as ProjectRelationRow[];
+  const purchaseRows = purchaseRelationRowSchema
+    .array()
+    .parse(purchaseResult.rows);
+  const projectRows = projectRelationRowSchema
+    .array()
+    .parse(projectResult.rows);
   const usedProjectRows = projectRows.filter(
     (row): row is ProjectPreviewRelationRow => row.kind === "used",
   );
@@ -377,7 +389,7 @@ export async function getProductRelationshipRoute(
     (row): row is ProjectPreviewRelationRow => row.kind === "purchased",
   );
   const projectMeta = projectRows.find((row) => row.kind === "meta");
-  const vendorRows = vendorResult.rows as unknown as VendorRelationRow[];
+  const vendorRows = vendorRelationRowSchema.array().parse(vendorResult.rows);
   const inventory = inventoryRows.map((row) => ({
     id: parseShortcodeFor("inventory", row.id),
     amount: row.amount,

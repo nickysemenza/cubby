@@ -1,9 +1,11 @@
 import type { LocationSuggestion } from "@cubby/schemas/ai";
-import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type {
+  LocationShortcode,
+  ProductShortcode,
+} from "@cubby/schemas/identifiers";
+import type {
+  FieldPathByValue,
   FieldValues,
-  Path,
-  PathValue,
   UseFormReturn,
 } from "react-hook-form";
 
@@ -11,16 +13,29 @@ import { ai } from "~/lib/ai.functions";
 
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
+import type { ComboboxItem } from "../combobox/combobox-types";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 
+export interface LocationFieldWithAIOperations {
+  suggestLocation: typeof ai.suggestLocation;
+}
+
+const productionLocationFieldWithAIOperations: LocationFieldWithAIOperations = {
+  suggestLocation: ai.suggestLocation,
+};
+
 interface LocationFieldWithAIProps<
-  TFieldValues extends FieldValues = FieldValues,
+  TFieldValues extends FieldValues,
+  TName extends FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>,
 > {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: TName;
   /** The product being put away — the whole basis of the suggestion. */
   productId: ProductShortcode;
   label?: string;
+  operations?: LocationFieldWithAIOperations;
+  /** The owning form supplies the correlated field write. */
+  acceptLocation: (location: ComboboxItem<LocationShortcode>) => void;
 }
 
 /**
@@ -34,13 +49,16 @@ interface LocationFieldWithAIProps<
  * ancestor breadcrumb like every other pick, or it reads as an ambiguous name.
  */
 export function LocationFieldWithAI<
-  TFieldValues extends FieldValues = FieldValues,
+  TFieldValues extends FieldValues,
+  TName extends FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>,
 >({
   form,
   name,
   productId,
   label = "Location",
-}: LocationFieldWithAIProps<TFieldValues>) {
+  operations = productionLocationFieldWithAIOperations,
+  acceptLocation,
+}: LocationFieldWithAIProps<TFieldValues, TName>) {
   return (
     <FieldWithAISuggest<LocationSuggestion>
       field={
@@ -57,16 +75,9 @@ export function LocationFieldWithAI<
       basisKey={productId}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
-      runSuggest={() => ai.suggestLocation.call({ productId })}
-      onAccept={(r) =>
-        form.setValue(
-          name,
-          buildLocationComboboxItem(r.location) as PathValue<
-            TFieldValues,
-            Path<TFieldValues>
-          >,
-          { shouldValidate: true },
-        )
+      runSuggest={() => operations.suggestLocation.call({ productId })}
+      onAccept={(result) =>
+        acceptLocation(buildLocationComboboxItem(result.location))
       }
     />
   );

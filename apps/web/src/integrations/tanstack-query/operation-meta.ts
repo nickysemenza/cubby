@@ -1,4 +1,5 @@
 import type { QueryKey } from "@tanstack/react-query";
+import { z } from "zod";
 
 import type { OperationTransport } from "~/lib/perf/perf-store";
 
@@ -63,8 +64,10 @@ export function operationDescriptor(
   meta?: CubbyOperationMeta,
 ): OperationDescriptor {
   const head = nestedKey(queryKey);
-  const inferredEntity =
-    head && typeof head[0] === "string" ? head[0] : undefined;
+  const inferredEntityResult = z.string().safeParse(head?.[0]);
+  const inferredEntity = inferredEntityResult.success
+    ? inferredEntityResult.data
+    : undefined;
   return {
     transport: meta?.transport ?? inferredTransport(queryKey),
     operation: meta?.operation ?? inferredOperation(queryKey),

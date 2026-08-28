@@ -43,6 +43,18 @@ import {
   type BackgroundQueueDeliveredMessage,
 } from "./background-queue-types";
 
+export interface BackgroundQueueEmbeddingPort {
+  readonly configured: () => boolean;
+  readonly embed: typeof embedTexts;
+  readonly config: typeof getSemanticEmbeddingConfig;
+}
+
+const productionBackgroundQueueEmbeddingPort: BackgroundQueueEmbeddingPort = {
+  configured: semanticEmbeddingsConfigured,
+  embed: embedTexts,
+  config: getSemanticEmbeddingConfig,
+};
+
 export async function processBackgroundQueueMessage(
   db: Database,
   message: BackgroundQueueDeliveredMessage,
@@ -94,6 +106,7 @@ export async function processBackgroundJob(
   db: Database,
   jobId: string,
   batchKind?: BackgroundJobKind,
+  embeddingPort: BackgroundQueueEmbeddingPort = productionBackgroundQueueEmbeddingPort,
 ): Promise<"succeeded" | "skipped" | "retry" | "failed" | "leased"> {
   // The job kind isn't known until this read returns, and a missing job is a
   // non-event — both stay outside the span below.
@@ -141,6 +154,7 @@ export async function processBackgroundJob(
           db,
           running.batchId,
           parsed,
+          embeddingPort,
         );
         await finishBackgroundJob(db, jobId, status);
         if (isBackgroundWorkflowKind(batchKind)) {
@@ -179,6 +193,7 @@ async function runBackgroundJobPayload(
   db: Database,
   batchId: string,
   parsed: ReturnType<typeof backgroundJobPayloadSchema.parse>,
+  embeddingPort: BackgroundQueueEmbeddingPort,
 ): Promise<"succeeded" | "skipped"> {
   return match(parsed)
     .with({ kind: "recipe-totals.recompute" }, async (p) => {
@@ -198,11 +213,12 @@ async function runBackgroundJobPayload(
       if (!text) return "skipped" as const;
       // Computed unconditionally now: a sha256 over already-loaded text is
       // nothing next to the HTTP embedding call it can avoid below.
+      const config = embeddingPort.config();
       const currentHash = await embeddingTextHash({
         entityType: text.entityType,
-        provider: getSemanticEmbeddingConfig().provider,
-        model: getSemanticEmbeddingConfig().model,
-        dimensions: getSemanticEmbeddingConfig().dimensions,
+        provider: config.provider,
+        model: config.model,
+        dimensions: config.dimensions,
         text: normalizeSearchText(text.embeddingText),
       });
       if (p.payload.expectedEmbeddingHash) {
@@ -241,12 +257,12 @@ async function runBackgroundJobPayload(
       const storedHash = await getStoredEmbeddingHash(db, {
         entityType: text.entityType,
         entityId: text.entityId,
-        config: getSemanticEmbeddingConfig(),
+        config,
       });
       if (storedHash === currentHash) return "skipped" as const;
 
-      if (!semanticEmbeddingsConfigured()) return "skipped" as const;
-      const [embedding] = await embedTexts([text.embeddingText], {
+      if (!embeddingPort.configured()) return "skipped" as const;
+      const [embedding] = await embeddingPort.embed([text.embeddingText], {
         operation: "entityEmbeddingRefresh",
         db,
         feature: "entity-embedding",
@@ -259,7 +275,7 @@ async function runBackgroundJobPayload(
       if (!embedding) return "skipped" as const;
       await upsertEntityEmbedding(db, {
         ...text,
-        config: getSemanticEmbeddingConfig(),
+        config,
         embedding,
       });
       return "succeeded" as const;

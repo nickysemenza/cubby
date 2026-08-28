@@ -44,17 +44,11 @@ export function surfaceStructuredOutputRunErrors<T extends AnyTextAdapter>(
     return throwProviderRunErrors(adapter.structuredOutputStream(options));
   };
 
-  return new Proxy(adapter, {
-    get(target, property, receiver) {
-      if (property === "chatStream") return chatStream;
-      if (property === "structuredOutputStream") {
-        return target.structuredOutputStream
-          ? structuredOutputStream
-          : undefined;
-      }
-
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
+  return {
+    ...adapter,
+    chatStream,
+    structuredOutputStream: adapter.structuredOutputStream
+      ? structuredOutputStream
+      : undefined,
+  };
 }

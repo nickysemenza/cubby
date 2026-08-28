@@ -1,5 +1,9 @@
 import type { LocationTypeSuggestion } from "@cubby/schemas/ai";
-import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type {
+  FieldPathByValue,
+  FieldValues,
+  UseFormReturn,
+} from "react-hook-form";
 
 import { ai } from "~/lib/ai.functions";
 
@@ -9,7 +13,7 @@ import { locationTypeOptionsWithTheme } from "./location-icons";
 
 interface TypeFieldWithAIProps<TFieldValues extends FieldValues = FieldValues> {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, string | null | undefined>;
   locationName: string;
   disabled?: boolean;
   description?: string;
@@ -46,7 +50,11 @@ export function TypeFieldWithAI<
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
       runSuggest={() => ai.suggestLocationType.call({ locationName })}
-      onAccept={(r) => form.setValue(name, r.type as TFieldValues[typeof name])}
+      onAccept={(r) => {
+        // SAFETY: `name` is constrained to a string-valued field; React Hook
+        // Form cannot carry that value constraint through its generic setter.
+        form.setValue(name, r.type as TFieldValues[typeof name]);
+      }}
     />
   );
 }

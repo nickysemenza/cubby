@@ -85,12 +85,62 @@ export const mutationSideEffectEventSchema = z.object({
 export type MutationSideEffectEvent = z.infer<
   typeof mutationSideEffectEventSchema
 >;
+
+export interface MutationSideEffectPorts {
+  readonly dispatchBackgroundJobs: typeof dispatchBackgroundJobs;
+  readonly dispatchLocationValuationRecompute: typeof dispatchLocationValuationRecompute;
+  readonly dispatchProblemCountsRefresh: typeof dispatchProblemCountsRefresh;
+  readonly findInventoryEmbeddingRefsForProducts: typeof findInventoryEmbeddingRefsForProducts;
+  readonly findInventoryEmbeddingRefsForLocations: typeof findInventoryEmbeddingRefsForLocations;
+  readonly findRecipeEmbeddingRefsForIngredients: typeof findRecipeEmbeddingRefsForIngredients;
+  readonly findTaskEmbeddingRefsForProducts: typeof findTaskEmbeddingRefsForProducts;
+  readonly findWishEmbeddingRefsForProducts: typeof findWishEmbeddingRefsForProducts;
+  readonly findMealEmbeddingRefsForRecipes: typeof findMealEmbeddingRefsForRecipes;
+  readonly findTrackerEmbeddingRefsForProjects: typeof findTrackerEmbeddingRefsForProjects;
+  readonly findEmbeddingRefsForVendors: typeof findEmbeddingRefsForVendors;
+  readonly findEmbeddingRefsForPurchases: typeof findEmbeddingRefsForPurchases;
+  readonly findTransactionEmbeddingRefsForAccounts: typeof findTransactionEmbeddingRefsForAccounts;
+  readonly findCommercialEmbeddingRefsForExpenses: typeof findCommercialEmbeddingRefsForExpenses;
+  readonly refreshSearchDocument: (
+    db: Database,
+    entityType: SearchableEntity,
+    entityId: string,
+  ) => Promise<void>;
+  readonly refreshSearchDocuments: (
+    db: Database,
+    refs: SearchableEntityRef[],
+  ) => Promise<void>;
+}
+
+const productionMutationSideEffectPorts: MutationSideEffectPorts = {
+  dispatchBackgroundJobs,
+  dispatchLocationValuationRecompute,
+  dispatchProblemCountsRefresh,
+  findInventoryEmbeddingRefsForProducts,
+  findInventoryEmbeddingRefsForLocations,
+  findRecipeEmbeddingRefsForIngredients,
+  findTaskEmbeddingRefsForProducts,
+  findWishEmbeddingRefsForProducts,
+  findMealEmbeddingRefsForRecipes,
+  findTrackerEmbeddingRefsForProjects,
+  findEmbeddingRefsForVendors,
+  findEmbeddingRefsForPurchases,
+  findTransactionEmbeddingRefsForAccounts,
+  findCommercialEmbeddingRefsForExpenses,
+  refreshSearchDocument: async (...args) => {
+    await refreshSearchDocument(...args);
+  },
+  refreshSearchDocuments: async (...args) => {
+    await refreshSearchDocuments(...args);
+  },
+};
 type MutationEntityType = MutationSideEffectEvent["entity"]["entityType"];
 type MutationAction = MutationSideEffectEvent["action"];
 
 interface HandlerContext {
   db: Database;
   event: MutationSideEffectEvent;
+  ports: MutationSideEffectPorts;
 }
 
 type MutationSideEffectBatchHandler = (
@@ -130,12 +180,13 @@ const ownEmbeddingRef = (
 async function refreshOwnSearchDocument(
   db: Database,
   event: MutationSideEffectEvent,
+  ports: MutationSideEffectPorts,
 ): Promise<void> {
   if (event.action === "deleted") return;
   const ref = ownEmbeddingRef(event);
   if (!ref) return;
   try {
-    await refreshSearchDocument(db, ref.entityType, ref.entityId);
+    await ports.refreshSearchDocument(db, ref.entityType, ref.entityId);
   } catch (error) {
     console.error("search.document.sync-refresh.failed", {
       source: event.source,
@@ -151,11 +202,12 @@ async function enqueueEntityEmbeddingRefreshMany(
   db: Database,
   refs: SearchableEntityRef[],
   event: MutationSideEffectEvent,
+  ports: MutationSideEffectPorts,
 ): Promise<BackgroundBatchRef[]> {
   const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
   if (uniqueRefs.length === 0) return [];
 
-  const dispatched = await dispatchBackgroundJobs(db, {
+  const dispatched = await ports.dispatchBackgroundJobs(db, {
     kind: "entity-embedding.refresh",
     source: "mutation",
     metadata: {
@@ -193,7 +245,7 @@ const collectInventoryEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "product") return [];
-  return await findInventoryEmbeddingRefsForProducts(ctx.db, [
+  return await ctx.ports.findInventoryEmbeddingRefsForProducts(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -202,7 +254,7 @@ const collectTaskEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "product") return [];
-  return await findTaskEmbeddingRefsForProducts(ctx.db, [
+  return await ctx.ports.findTaskEmbeddingRefsForProducts(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -211,7 +263,7 @@ const collectWishEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "product") return [];
-  return await findWishEmbeddingRefsForProducts(ctx.db, [
+  return await ctx.ports.findWishEmbeddingRefsForProducts(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -220,7 +272,7 @@ const collectInventoryEmbeddingRefsForLocation: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "location") return [];
-  return await findInventoryEmbeddingRefsForLocations(ctx.db, [
+  return await ctx.ports.findInventoryEmbeddingRefsForLocations(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -229,7 +281,7 @@ const collectRecipeEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "ingredient") return [];
-  return await findRecipeEmbeddingRefsForIngredients(ctx.db, [
+  return await ctx.ports.findRecipeEmbeddingRefsForIngredients(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -238,7 +290,7 @@ const collectMealEmbeddingRefsForRecipe: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "recipe") return [];
-  return await findMealEmbeddingRefsForRecipes(ctx.db, [
+  return await ctx.ports.findMealEmbeddingRefsForRecipes(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -247,26 +299,30 @@ const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "project") return [];
-  return await findTrackerEmbeddingRefsForProjects(ctx.db, [
+  return await ctx.ports.findTrackerEmbeddingRefsForProjects(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
 
 const collectEmbeddingRefsForVendor: EmbeddingRefCollector = async (ctx) => {
   if (ctx.event.entity.entityType !== "vendor") return [];
-  return findEmbeddingRefsForVendors(ctx.db, [ctx.event.entity.entityId]);
+  return ctx.ports.findEmbeddingRefsForVendors(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
 };
 
 const collectEmbeddingRefsForPurchase: EmbeddingRefCollector = async (ctx) => {
   if (ctx.event.entity.entityType !== "purchase") return [];
-  return findEmbeddingRefsForPurchases(ctx.db, [ctx.event.entity.entityId]);
+  return ctx.ports.findEmbeddingRefsForPurchases(ctx.db, [
+    ctx.event.entity.entityId,
+  ]);
 };
 
 const collectTransactionEmbeddingRefsForAccount: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "financialAccount") return [];
-  return findTransactionEmbeddingRefsForAccounts(ctx.db, [
+  return ctx.ports.findTransactionEmbeddingRefsForAccounts(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -275,7 +331,7 @@ const collectCommercialEmbeddingRefsForExpense: EmbeddingRefCollector = async (
   ctx,
 ) => {
   if (ctx.event.entity.entityType !== "expense") return [];
-  return findCommercialEmbeddingRefsForExpenses(ctx.db, [
+  return ctx.ports.findCommercialEmbeddingRefsForExpenses(ctx.db, [
     ctx.event.entity.entityId,
   ]);
 };
@@ -284,7 +340,12 @@ async function refreshOwnEmbedding(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectOwnEmbeddingRef(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 // NOTE: there is no onDelete embedding handler. Embedding soft-delete is
@@ -298,35 +359,60 @@ async function refreshInventoryEmbeddingsForProduct(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectInventoryEmbeddingRefsForProduct(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 async function refreshTaskEmbeddingsForProduct(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectTaskEmbeddingRefsForProduct(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 async function refreshWishEmbeddingsForProduct(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectWishEmbeddingRefsForProduct(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 async function refreshInventoryEmbeddingsForLocation(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectInventoryEmbeddingRefsForLocation(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 async function refreshRecipeEmbeddingsForIngredient(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectRecipeEmbeddingRefsForIngredient(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 // Meals embed their planned recipes' names, so a recipe update fans out.
@@ -334,7 +420,12 @@ async function refreshMealEmbeddingsForRecipe(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectMealEmbeddingRefsForRecipe(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 // Tasks/expenses embed their project's name, so a project update fans out.
@@ -342,35 +433,40 @@ async function refreshTrackerEmbeddingsForProject(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectTrackerEmbeddingRefsForProject(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return await enqueueEntityEmbeddingRefreshMany(
+    ctx.db,
+    refs,
+    ctx.event,
+    ctx.ports,
+  );
 }
 
 async function refreshEmbeddingsForVendor(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectEmbeddingRefsForVendor(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshEmbeddingsForPurchase(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectEmbeddingRefsForPurchase(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshTransactionEmbeddingsForAccount(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectTransactionEmbeddingRefsForAccount(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshCommercialEmbeddingsForExpense(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
   const refs = await collectCommercialEmbeddingRefsForExpense(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event);
+  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 // Maps each embedding-refresh handler to its ref-only collector, so the bulk
@@ -424,7 +520,7 @@ async function enqueueLocationAiRefresh(
     "location-ai.description.refresh",
     "location-ai.inventory.refresh",
   ] as const) {
-    const dispatched = await dispatchBackgroundJobs(ctx.db, {
+    const dispatched = await ctx.ports.dispatchBackgroundJobs(ctx.db, {
       kind,
       source: "mutation",
       metadata: {
@@ -591,11 +687,12 @@ const handlersFor = (
 async function runManifestHandlers(
   db: Database,
   event: MutationSideEffectEvent,
+  ports: MutationSideEffectPorts,
 ): Promise<BackgroundBatchRef[]> {
   const handlers = handlersFor(event);
   const batches: BackgroundBatchRef[] = [];
   for (const handler of handlers) {
-    batches.push(...(await handler({ db, event })));
+    batches.push(...(await handler({ db, event, ports })));
   }
   return batches;
 }
@@ -608,9 +705,10 @@ async function runManifestHandlers(
 async function enqueueProblemCountsRefreshBestEffort(
   db: Database,
   source: string,
+  ports: MutationSideEffectPorts,
 ): Promise<BackgroundBatchRef | null> {
   try {
-    const dispatched = await dispatchProblemCountsRefresh(
+    const dispatched = await ports.dispatchProblemCountsRefresh(
       db,
       "mutation",
       source,
@@ -628,12 +726,13 @@ async function enqueueProblemCountsRefreshBestEffort(
 export async function runMutationSideEffects(
   db: Database,
   event: MutationSideEffectEvent,
+  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<BackgroundBatchRef[]> {
   const parsed = mutationSideEffectEventSchema.parse(event);
-  await refreshOwnSearchDocument(db, parsed);
-  const batches = await runManifestHandlers(db, parsed);
+  await refreshOwnSearchDocument(db, parsed, ports);
+  const batches = await runManifestHandlers(db, parsed, ports);
   if (needsValuationRecompute(parsed)) {
-    const dispatched = await dispatchLocationValuationRecompute(
+    const dispatched = await ports.dispatchLocationValuationRecompute(
       db,
       parsed.source,
     );
@@ -642,6 +741,7 @@ export async function runMutationSideEffects(
   const problemCounts = await enqueueProblemCountsRefreshBestEffort(
     db,
     parsed.source,
+    ports,
   );
   if (problemCounts) batches.push(problemCounts);
   return batches;
@@ -650,6 +750,7 @@ export async function runMutationSideEffects(
 export async function runMutationSideEffectsForEntities(
   db: Database,
   events: MutationSideEffectEvent[],
+  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<BackgroundBatchRef[]> {
   const parsed = events.map((event) =>
     mutationSideEffectEventSchema.parse(event),
@@ -664,7 +765,7 @@ export async function runMutationSideEffectsForEntities(
   );
   if (ownSearchRefs.length > 0) {
     try {
-      await refreshSearchDocuments(db, ownSearchRefs);
+      await ports.refreshSearchDocuments(db, ownSearchRefs);
     } catch (error) {
       console.error("search.document.bulk-sync-refresh.failed", {
         refCount: ownSearchRefs.length,
@@ -682,10 +783,10 @@ export async function runMutationSideEffectsForEntities(
     for (const handler of handlersFor(event)) {
       const collector = embeddingRefCollectorByHandler.get(handler);
       if (collector) {
-        waveEmbeddingRefs.push(...(await collector({ db, event })));
+        waveEmbeddingRefs.push(...(await collector({ db, event, ports })));
         continue;
       }
-      batches.push(...(await handler({ db, event })));
+      batches.push(...(await handler({ db, event, ports })));
     }
   }
   const firstEvent = parsed[0];
@@ -695,13 +796,14 @@ export async function runMutationSideEffectsForEntities(
         db,
         waveEmbeddingRefs,
         firstEvent,
+        ports,
       )),
     );
   }
   // Valuation is whole-tree, so a bulk wave needs exactly one recompute, not one
   // per entity (the previous per-entity fan-out ran N whole-tree recomputes).
   if (parsed.some(needsValuationRecompute)) {
-    const dispatched = await dispatchLocationValuationRecompute(
+    const dispatched = await ports.dispatchLocationValuationRecompute(
       db,
       parsed[0]?.source ?? "mutation.bulk",
     );
@@ -711,6 +813,7 @@ export async function runMutationSideEffectsForEntities(
     const problemCounts = await enqueueProblemCountsRefreshBestEffort(
       db,
       parsed[0]?.source ?? "mutation.bulk",
+      ports,
     );
     if (problemCounts) batches.push(problemCounts);
   }

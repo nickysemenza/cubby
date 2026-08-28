@@ -67,6 +67,10 @@ export interface ChipsInputProps {
 
 const defaultNormalize = (raw: string) => raw.trim();
 
+function isDomNode(value: EventTarget | null): value is Node {
+  return value instanceof Node;
+}
+
 /**
  * Theme-agnostic chips (tag-pills) input: type + Enter/comma/button to add, x
  * to remove, optional filtered suggestions dropdown. Owns state/keyboard/
@@ -106,7 +110,8 @@ export const ChipsInput: FC<ChipsInputProps> = ({
     const handleClickOutside = (event: MouseEvent) => {
       if (
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        (!isDomNode(event.target) ||
+          !containerRef.current.contains(event.target))
       ) {
         setShowSuggestions(false);
       }

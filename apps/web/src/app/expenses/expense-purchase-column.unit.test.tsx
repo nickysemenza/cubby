@@ -1,33 +1,16 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { useMemo } from "react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    params,
-    className,
-  }: {
-    children?: ReactNode;
-    params?: { shortcode?: string };
-    className?: string;
-  }) => (
-    <a
-      href={`/purchases/${params?.shortcode ?? "missing"}`}
-      className={className}
-    >
-      {children}
-    </a>
-  ),
-}));
-
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
-
+import RTable from "~/app/_components/data-table/Table";
+import {
+  createCubbyColumnHelper,
+  useCubbyTable,
+} from "~/app/_components/data-table/table-features";
 import { expenseVendorColumn } from "~/app/projects/shared";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 const LINKED: ExpenseOut = {
   id: testShortcode("expense", "EXP-4K7M"),
@@ -61,33 +44,52 @@ const LINKED: ExpenseOut = {
   updatedAt: new Date("2026-07-20T00:00:00Z"),
 };
 
-const renderCell = (expense: ExpenseOut) => {
-  const column = expenseVendorColumn(
-    createCubbyColumnHelper<ExpenseOut>(),
-    vi.fn(async () => undefined),
-    { asPurchase: true },
+const helper = createCubbyColumnHelper<ExpenseOut>();
+
+function ExpensePurchaseCell({ expense }: { expense: ExpenseOut }) {
+  const columns = useMemo(
+    () =>
+      helper.columns([
+        expenseVendorColumn(helper, async () => undefined, {
+          asPurchase: true,
+        }),
+      ]),
+    [],
   );
-  if (typeof column.cell !== "function")
-    throw new Error("expected cell renderer");
-  return render(
-    column.cell({
-      row: { original: expense },
-      getValue: () => expense.vendor,
-    } as never),
-  );
-};
+  const table = useCubbyTable({
+    data: [expense],
+    columns,
+    getRowId: (row) => row.id,
+  });
+  return <RTable table={table} ariaLabel="Expense purchase" />;
+}
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+const renderCell = (expense: ExpenseOut) =>
+  render(<ExpensePurchaseCell expense={expense} />, {
+    wrapper: harness.wrapper,
+  });
 
 describe("expenses Purchase column", () => {
-  it("keeps purchase navigation separate from the vendor edit pencil", () => {
+  it("keeps purchase navigation separate from the vendor edit pencil", async () => {
     renderCell(LINKED);
 
-    const link = screen.getByRole("link", { name: "ORDER-42" });
+    const link = await screen.findByRole("link", { name: "ORDER-42" });
     const pencil = screen.getByRole("button", { name: "Edit vendor" });
     expect(link.getAttribute("href")).toBe("/purchases/PUR-4K7M");
     expect(link.contains(pencil)).toBe(false);
   });
 
-  it("shows an empty value with an edit affordance when unattached", () => {
+  it("shows an empty value with an edit affordance when unattached", async () => {
     renderCell({
       ...LINKED,
       purchaseId: null,
@@ -97,8 +99,8 @@ describe("expenses Purchase column", () => {
       orderId: null,
     });
 
+    expect(await screen.findByText("(none)")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
-    expect(screen.getByText("(none)")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Edit vendor" })).toBeTruthy();
   });
 });

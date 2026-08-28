@@ -61,11 +61,11 @@ const FEED_KINDS = {
 type PublishableKind = (typeof FEED_KINDS)[IcsFeed][number];
 type PublishableCalendarItem = Extract<CalendarItem, { kind: PublishableKind }>;
 
-const FEED_NAMES: Record<IcsFeed, string> = {
+const FEED_NAMES = {
   meals: "Cubby Meals",
   tasks: "Cubby Tasks",
   all: "Cubby",
-};
+} satisfies Record<IcsFeed, string>;
 
 /** Which calendar kinds a given feed publishes. */
 export const kindsForFeed = (feed: IcsFeed): FeedKinds => FEED_KINDS[feed];
@@ -163,12 +163,10 @@ interface CalendarKindSpec<K extends PublishableKind> {
   ) => { startMinutes: number; durationMinutes: number } | null;
 }
 
-const KIND_SPECS: {
-  [K in PublishableKind]: CalendarKindSpec<K>;
-} = {
+const KIND_SPECS = {
   meal: {
     detailBase: "/meals",
-    includes: () => true,
+    includes: (_item: ItemOfKind<"meal">) => true,
     summary: (item) => item.title,
     // An unslotted meal has no time of day to claim, so it stays the full-day
     // banner it has always been rather than being parked at an invented hour.
@@ -209,6 +207,8 @@ const KIND_SPECS: {
       return parts.join("\n");
     },
   },
+} satisfies {
+  [K in PublishableKind]: CalendarKindSpec<K>;
 };
 
 /** Whether this feed publishes the item: kind membership, then the kind's own filter. */

@@ -4,8 +4,11 @@ import {
   problemsUnknownTypeOut,
 } from "@cubby/schemas/mcp";
 import {
-  allProblemsSchema,
+  allProblemsMcpSchema,
   assembleAllProblems,
+  orphanedEntityEmbeddingsMcpOut,
+  referentialLivenessViolationsMcpOut,
+  unreferencedImagesMcpOut,
 } from "@cubby/schemas/problems";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -14,12 +17,39 @@ import { expectedProblemKeys, problemQuery } from "~/entities/problem-registry";
 
 import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
+const problemKeySchema = z.enum(expectedProblemKeys);
+
+function projectProblemTypeSlice(
+  value: z.input<typeof problemsTypeSliceOut>,
+): z.output<typeof problemsTypeSliceOut> {
+  const slice = problemsTypeSliceOut.parse(value);
+  switch (slice.type) {
+    case "orphanedEntityEmbeddings":
+      return problemsTypeSliceOut.parse({
+        ...slice,
+        items: orphanedEntityEmbeddingsMcpOut.parse(slice.items),
+      });
+    case "unreferencedImages":
+      return problemsTypeSliceOut.parse({
+        ...slice,
+        items: unreferencedImagesMcpOut.parse(slice.items),
+      });
+    case "referentialLivenessViolations":
+      return problemsTypeSliceOut.parse({
+        ...slice,
+        items: referentialLivenessViolationsMcpOut.parse(slice.items),
+      });
+    default:
+      return slice;
+  }
+}
+
 export function registerProblemsTools(server: McpServer) {
   registerMcpTool(server, {
     name: "list_problems",
     description:
       "List data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses).",
-    inputSchema: {
+    inputSchema: z.object({
       countsOnly: z
         .boolean()
         .optional()
@@ -32,10 +62,10 @@ export function registerProblemsTools(server: McpServer) {
         .describe(
           "Return only this problem category (e.g. 'orphanedProducts'). Ignored when countsOnly is true.",
         ),
-    },
+    }),
     outputSchema: z.union([
       problemsCountSchema,
-      allProblemsSchema,
+      allProblemsMcpSchema,
       problemsTypeSliceOut,
       problemsUnknownTypeOut,
     ]),
@@ -45,17 +75,20 @@ export function registerProblemsTools(server: McpServer) {
       if (params.countsOnly) {
         return await caller.problems.getCounts();
       }
-      if (typeof params.type === "string") {
-        const definition = problemQuery(
-          params.type as (typeof expectedProblemKeys)[number],
-        );
-        if (!definition) {
+      if (params.type !== undefined) {
+        const parsedProblemKey = problemKeySchema.safeParse(params.type);
+        if (!parsedProblemKey.success) {
           return {
             error: `Unknown problem type '${params.type}'`,
             availableTypes: expectedProblemKeys,
           };
         }
-        return await caller.problems.getByType({ key: definition.key });
+        const definition = problemQuery(parsedProblemKey.data);
+        if (!definition)
+          throw new Error("Problem query registry is incomplete");
+        return projectProblemTypeSlice(
+          await caller.problems.getByType({ key: definition.key }),
+        );
       }
       const [fast, coverage, upc, tracker, views] = await Promise.all([
         caller.problems.getFast(),
@@ -65,7 +98,7 @@ export function registerProblemsTools(server: McpServer) {
         caller.problems.getViews(),
       ]);
       const all = assembleAllProblems({ fast, coverage, upc, tracker, views });
-      return all;
+      return allProblemsMcpSchema.parse(all);
     },
   });
 }

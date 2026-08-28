@@ -1,8 +1,26 @@
+import type {
+  ResolveScanStraysOut,
+  ScanAtLocationOut,
+} from "@cubby/schemas/scan";
 import { testShortcode } from "@cubby/schemas/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import {
+  type SweepCommitOutcome,
+  type LocationSweepDependencies,
+  type LocationSweepLocation,
+  useLocationSweep,
+} from "./useLocationSweep";
+
+function requireOutcome(
+  outcome: SweepCommitOutcome | undefined,
+): SweepCommitOutcome {
+  if (!outcome) throw new Error("commit outcome was not returned");
+  return outcome;
+}
 
 /**
  * The sweep's wiring, not its arithmetic — `planSweptBin` and `resolveProductScan`
@@ -11,83 +29,86 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * anchor gate that keeps a scan read at one shelf from landing on the next.
  */
 
-/** Cubby shortcodes exclude I, L, O, 0 and 1 — a fixture that ignores that is
- * rejected by the real resolver and the test passes for the wrong reason. */
-const mocks = vi.hoisted(() => ({
-  locations: new Map<string, unknown>(),
-  scan: vi.fn(),
-  resolveStrays: vi.fn(),
-  reparent: vi.fn(),
-  calls: [] as string[],
-  toastError: vi.fn(),
-  toastSuccess: vi.fn(),
-}));
+const HOME_ID = testShortcode("location", "home");
+const GARAGE_ID = testShortcode("location", "garage");
+const SHELF_ID = testShortcode("location", "shelf-a");
+const BIN_ID = testShortcode("location", "bin-9");
+const NEXT_ID = testShortcode("location", "shelf-b");
+const PRODUCT_ID = testShortcode("product", "drill");
+const INVENTORY_ID = testShortcode("inventory", "drill");
 
-vi.mock("sonner", () => ({
-  toast: { error: mocks.toastError, success: mocks.toastSuccess },
-}));
-
-vi.mock("~/app/inventory/inventory.functions", () => ({
-  inventory: {
-    scanAtLocation: {
-      mutationOptions: () => ({
-        mutationFn: async (input: unknown) => mocks.scan(input),
-      }),
-    },
-    resolveScanStrays: {
-      mutationOptions: () => ({
-        mutationFn: async (input: unknown) => {
-          mocks.calls.push("resolveScanStrays");
-          return mocks.resolveStrays(input);
-        },
-      }),
-    },
-  },
-}));
-
-vi.mock("~/app/locations/location.functions", () => ({
-  location: {
-    bulkUpdateParent: {
-      mutationOptions: () => ({
-        mutationFn: async (input: unknown) => {
-          mocks.calls.push("bulkUpdateParent");
-          return mocks.reparent(input);
-        },
-      }),
-    },
-    ensureGlobalUnknown: {
-      mutationOptions: () => ({ mutationFn: vi.fn() }),
-    },
-  },
-}));
-
-vi.mock("~/entities/entity-detail.functions", () => ({
-  entityDetailFor: (_entity: string) => ({
-    queryOptions: (shortcode: string) => ({
-      queryKey: [["location", "detail"], { shortcode }],
-      queryFn: () => mocks.locations.get(shortcode) ?? null,
-    }),
-  }),
-}));
-
-import { useLocationSweep } from "./useLocationSweep";
-
-// Home > Garage > Shelf A, so Garage is a genuine ancestor of the swept shelf
-// and Bin 9 (also in the Garage) is a sibling that can be brought in.
-const HOME = { id: "LOC-HME3", name: "Home", type: "house", children: [] };
-const GARAGE = { id: "LOC-GRG4", name: "Garage", type: "room", parent: HOME };
-const SHELF = {
-  id: "LOC-SHF2",
+const HOME: LocationSweepLocation = {
+  id: HOME_ID,
+  name: "Home",
+  type: "house",
+  children: [],
+};
+const GARAGE: LocationSweepLocation = {
+  id: GARAGE_ID,
+  name: "Garage",
+  type: "room",
+  parent: HOME,
+};
+const SHELF: LocationSweepLocation = {
+  id: SHELF_ID,
   name: "Shelf A",
   type: "shelf",
   parent: GARAGE,
-  children: [] as unknown[],
+  children: [],
 };
-const STRAY_BIN = {
-  id: "LOC-BN99",
+const STRAY_BIN: LocationSweepLocation = {
+  id: BIN_ID,
   name: "Bin 9",
   type: "box",
   parent: GARAGE,
+};
+
+interface SweepTestState {
+  locations: Map<
+    string,
+    LocationSweepLocation | Promise<LocationSweepLocation>
+  >;
+  scanResult: ScanAtLocationOut | undefined;
+  calls: string[];
+  errors: string[];
+  successes: string[];
+  reparentFailure: Error | undefined;
+  resolveFailure: Error | undefined;
+}
+
+const state: SweepTestState = {
+  locations: new Map(),
+  scanResult: undefined,
+  calls: [],
+  errors: [],
+  successes: [],
+  reparentFailure: undefined,
+  resolveFailure: undefined,
+};
+
+const dependencies: LocationSweepDependencies = {
+  fetchLocation: async (id) => (await state.locations.get(id)) ?? null,
+  scanAtLocation: async () => {
+    if (!state.scanResult) throw new Error("scan fixture was not configured");
+    return state.scanResult;
+  },
+  resolveScanStrays: async () => {
+    state.calls.push("resolveScanStrays");
+    if (state.resolveFailure) throw state.resolveFailure;
+    return {
+      moved: 1,
+      skipped: [],
+      sideEffects: { backgroundBatches: [] },
+    } satisfies ResolveScanStraysOut;
+  },
+  bulkUpdateParent: async () => {
+    state.calls.push("bulkUpdateParent");
+    if (state.reparentFailure) throw state.reparentFailure;
+    return { updated: 1 };
+  },
+  ensureGlobalUnknown: async () => HOME,
+  notifyError: (message) => state.errors.push(message),
+  notifySuccess: (message) => state.successes.push(message),
 };
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -97,41 +118,47 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-const render = (locationId = "LOC-SHF2") =>
+const renderSweep = (locationId = SHELF_ID) =>
   renderHook(
     (props: { locationId: string }) =>
       useLocationSweep({
         locationId: testShortcode("location", props.locationId),
         onSettled: () => {},
+        dependencies,
       }),
     { wrapper, initialProps: { locationId } },
   );
 
 beforeEach(() => {
-  mocks.calls.length = 0;
-  vi.clearAllMocks();
-  mocks.locations = new Map<string, unknown>([
-    ["LOC-SHF2", SHELF],
-    ["LOC-HME3", HOME],
-    ["LOC-GRG4", GARAGE],
-    ["LOC-BN99", STRAY_BIN],
+  state.calls.length = 0;
+  state.errors.length = 0;
+  state.successes.length = 0;
+  state.scanResult = undefined;
+  state.reparentFailure = undefined;
+  state.resolveFailure = undefined;
+  state.locations = new Map([
+    [SHELF_ID, SHELF],
+    [HOME_ID, HOME],
+    [GARAGE_ID, GARAGE],
+    [BIN_ID, STRAY_BIN],
   ]);
-  mocks.reparent.mockResolvedValue({ updated: 1 });
-  mocks.resolveStrays.mockResolvedValue({ moved: 1, skipped: [] });
 });
 
 const strayRow = (locationId: string, locationName: string) => ({
-  entryId: "INV-DR55",
-  location: { id: locationId, name: locationName },
+  entryId: INVENTORY_ID,
+  location: {
+    id: testShortcode("location", locationId),
+    name: locationName,
+  },
   amount: { value: 1, unit: "each" },
   ambiguousQuantity: false,
 });
 
-const queueStray = (locationId: string, locationName: string) =>
-  mocks.scan.mockResolvedValue({
+const queueStray = (locationId: string, locationName: string) => {
+  state.scanResult = {
     outcome: "queued",
     product: {
-      id: "PRD-DR55",
+      id: PRODUCT_ID,
       name: "Drill",
       created: false,
       manufacturer: "Acme",
@@ -139,54 +166,54 @@ const queueStray = (locationId: string, locationName: string) =>
     },
     strays: [strayRow(locationId, locationName)],
     sideEffects: { backgroundBatches: [] },
-  });
+  };
+};
 
 describe("useLocationSweep bin scanning", () => {
   it("queues a bin that lives elsewhere, once per label", async () => {
-    const { result } = render();
+    const { result } = renderSweep();
 
     act(() => {
-      result.current.scan("LOC-BN99");
-      result.current.scan("LOC-BN99");
+      result.current.scan(BIN_ID);
+      result.current.scan(BIN_ID);
     });
 
     await waitFor(() => expect(result.current.bins).toHaveLength(1));
     expect(result.current.bins[0]).toMatchObject({
-      id: "LOC-BN99",
+      id: BIN_ID,
       name: "Bin 9",
       currentParentName: "Garage",
     });
   });
 
   it("confirms a direct child without queueing or writing anything", async () => {
-    mocks.locations.set("LOC-BN22", {
-      id: "LOC-BN22",
+    const directChildId = testShortcode("location", "bin-22");
+    state.locations.set(directChildId, {
+      id: directChildId,
       name: "Bin 1",
       type: "box",
       parent: SHELF,
     });
-    const { result } = render();
+    const { result } = renderSweep();
 
-    act(() => result.current.scan("LOC-BN22"));
+    act(() => result.current.scan(directChildId));
 
     await waitFor(() => expect(result.current.tally.confirmed).toBe(1));
     expect(result.current.bins).toHaveLength(0);
-    expect(mocks.calls).toEqual([]);
+    expect(state.calls).toEqual([]);
   });
 
   it.each([
-    ["Home", "LOC-HME3", "holds the whole house"],
-    ["an ancestor", "LOC-GRG4", "can't move inside it"],
-    ["the shelf being swept", "LOC-SHF2", "the one you're sweeping"],
+    ["Home", HOME_ID, "holds the whole house"],
+    ["an ancestor", GARAGE_ID, "can't move inside it"],
+    ["the shelf being swept", SHELF_ID, "the one you're sweeping"],
   ])("refuses %s rather than queueing a cycle", async (_label, code, said) => {
-    const { result } = render();
+    const { result } = renderSweep();
 
     act(() => result.current.scan(code));
 
     await waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith(
-        expect.stringContaining(said),
-      ),
+      expect(state.errors.some((message) => message.includes(said))).toBe(true),
     );
     expect(result.current.bins).toHaveLength(0);
   });
@@ -194,117 +221,109 @@ describe("useLocationSweep bin scanning", () => {
 
 describe("useLocationSweep commit", () => {
   it("moves bins before items, so an adopted bin is not emptied", async () => {
-    queueStray("LOC-BN99", "Bin 9");
-    const { result } = render();
+    queueStray(BIN_ID, "Bin 9");
+    const { result } = renderSweep();
 
-    act(() => result.current.scan("PRD-DR55"));
+    act(() => result.current.scan(PRODUCT_ID));
     await waitFor(() => expect(result.current.strays).toHaveLength(1));
-    act(() => result.current.scan("LOC-BN99"));
+    act(() => result.current.scan(BIN_ID));
     await waitFor(() => expect(result.current.bins).toHaveLength(1));
 
-    let outcome: Awaited<ReturnType<typeof result.current.commitQueued>>;
+    let outcome: SweepCommitOutcome | undefined;
     await act(async () => {
       outcome = await result.current.commitQueued({});
     });
 
-    // The drill travelled in with Bin 9; moving it too would leave the bin we
-    // just adopted empty.
-    expect(mocks.calls).toEqual(["bulkUpdateParent"]);
-    // ...and the queue still empties. Left behind, the row would survive a
-    // successful commit, and the next click — with no adopted bins left to
-    // filter against — would pull it out of the bin.
+    expect(state.calls).toEqual(["bulkUpdateParent"]);
     expect(result.current.strays).toHaveLength(0);
     expect(result.current.bins).toHaveLength(0);
-    expect(outcome!.keptInAdoptedBin).toBe(1);
-    expect(outcome!.bins.moved).toBe(1);
+    const completed = requireOutcome(outcome);
+    expect(completed.keptInAdoptedBin).toBe(1);
+    expect(completed.bins.moved).toBe(1);
   });
 
   it("still moves an item whose bin was not adopted", async () => {
-    queueStray("LOC-GRG4", "Garage");
-    const { result } = render();
+    queueStray(GARAGE_ID, "Garage");
+    const { result } = renderSweep();
 
-    act(() => result.current.scan("PRD-DR55"));
+    act(() => result.current.scan(PRODUCT_ID));
     await waitFor(() => expect(result.current.strays).toHaveLength(1));
-    act(() => result.current.scan("LOC-BN99"));
+    act(() => result.current.scan(BIN_ID));
     await waitFor(() => expect(result.current.bins).toHaveLength(1));
 
     await act(async () => {
       await result.current.commitQueued({});
     });
 
-    expect(mocks.calls).toEqual(["bulkUpdateParent", "resolveScanStrays"]);
+    expect(state.calls).toEqual(["bulkUpdateParent", "resolveScanStrays"]);
   });
 
   it("aborts the whole commit when bins fail, leaving both queues intact", async () => {
-    queueStray("LOC-GRG4", "Garage");
-    mocks.reparent.mockRejectedValue(new Error("cycle"));
-    const { result } = render();
+    queueStray(GARAGE_ID, "Garage");
+    state.reparentFailure = new Error("cycle");
+    const { result } = renderSweep();
 
-    act(() => result.current.scan("PRD-DR55"));
+    act(() => result.current.scan(PRODUCT_ID));
     await waitFor(() => expect(result.current.strays).toHaveLength(1));
-    act(() => result.current.scan("LOC-BN99"));
+    act(() => result.current.scan(BIN_ID));
     await waitFor(() => expect(result.current.bins).toHaveLength(1));
 
-    let outcome: Awaited<ReturnType<typeof result.current.commitQueued>>;
+    let outcome: SweepCommitOutcome | undefined;
     await act(async () => {
       outcome = await result.current.commitQueued({});
     });
 
-    expect(outcome!.failed).toBe("bins");
-    expect(mocks.calls).toEqual(["bulkUpdateParent"]);
+    const completed = requireOutcome(outcome);
+    expect(completed.failed).toBe("bins");
+    expect(state.calls).toEqual(["bulkUpdateParent"]);
     expect(result.current.bins).toHaveLength(1);
     expect(result.current.strays).toHaveLength(1);
   });
 
   it("banks the bin count when only the item half fails", async () => {
-    queueStray("LOC-GRG4", "Garage");
-    mocks.resolveStrays.mockRejectedValue(new Error("nope"));
-    const { result } = render();
+    queueStray(GARAGE_ID, "Garage");
+    state.resolveFailure = new Error("nope");
+    const { result } = renderSweep();
 
-    act(() => result.current.scan("PRD-DR55"));
+    act(() => result.current.scan(PRODUCT_ID));
     await waitFor(() => expect(result.current.strays).toHaveLength(1));
-    act(() => result.current.scan("LOC-BN99"));
+    act(() => result.current.scan(BIN_ID));
     await waitFor(() => expect(result.current.bins).toHaveLength(1));
 
-    let outcome: Awaited<ReturnType<typeof result.current.commitQueued>>;
+    let outcome: SweepCommitOutcome | undefined;
     await act(async () => {
       outcome = await result.current.commitQueued({});
     });
 
-    expect(outcome!.failed).toBe("products");
-    expect(outcome!.bins.moved).toBe(1);
+    const completed = requireOutcome(outcome);
+    expect(completed.failed).toBe("products");
+    expect(completed.bins.moved).toBe(1);
     expect(result.current.bins).toHaveLength(0);
     expect(result.current.strays).toHaveLength(1);
   });
 });
 
 describe("useLocationSweep anchor gate", () => {
-  /**
-   * The bug this exists for: `reset()` empties the queue on a location change
-   * but cannot abort a lookup already in flight. Merged into the new
-   * location's queue, a reparent physically misfiles a bin — and there is no
-   * undo for that.
-   */
   it("discards a scan that resolves after the sweep moved on", async () => {
     let release: (() => void) | undefined;
-    mocks.locations.set(
-      "LOC-BN99",
+    state.locations.set(
+      BIN_ID,
       new Promise((resolve) => {
         release = () => resolve(STRAY_BIN);
       }),
     );
-    mocks.locations.set("LOC-NXT2", {
-      id: "LOC-NXT2",
+    state.locations.set(NEXT_ID, {
+      id: NEXT_ID,
       name: "Shelf B",
       type: "shelf",
       parent: HOME,
       children: [],
     });
 
-    const { result, rerender } = render();
-    act(() => result.current.scan("LOC-BN99"));
+    const { result, rerender } = renderSweep();
+    act(() => result.current.scan(BIN_ID));
 
-    rerender({ locationId: "LOC-NXT2" });
+    rerender({ locationId: NEXT_ID });
     act(() => release?.());
 
     await waitFor(() => expect(result.current.pending).toBe(0));

@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -35,7 +36,10 @@ import {
   renderOptionCell,
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
-import { createCubbyColumnHelper } from "../data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "../data-table/table-features";
 import { useCubbyTableLayout } from "../data-table/table-layout";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -51,33 +55,45 @@ type MatchStateSearchValue = StatementRowMatchState | "all";
 const NO_ROWS: StatementRowOut[] = [];
 const NO_SOURCES: string[] = [];
 
-const MATCH_STATE_TONE: Record<StatementRowMatchState, BadgeVariant> = {
+const MATCH_STATE_TONE = {
   matched: "positive",
   unmatched: "warning",
   superseded: "slate",
   ignored: "secondary",
-};
+} satisfies Record<StatementRowMatchState, BadgeVariant>;
 
-const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = (
-  Object.keys(MATCH_STATE_TONE) as StatementRowMatchState[]
-).map((value) => ({
-  value,
-  label: value.charAt(0).toUpperCase() + value.slice(1),
-  color: badgeVariantColor[MATCH_STATE_TONE[value]],
-}));
+const MATCH_STATE_VALUES = [
+  "matched",
+  "unmatched",
+  "superseded",
+  "ignored",
+] as const satisfies readonly StatementRowMatchState[];
+const matchStateSearchSchema = z.enum([...MATCH_STATE_VALUES, "all"] as const);
 
-const DISPOSITION_TONE: Record<StatementRowDisposition, BadgeVariant> = {
+const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = MATCH_STATE_VALUES.map(
+  (value) => ({
+    value,
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+    color: badgeVariantColor[MATCH_STATE_TONE[value]],
+  }),
+);
+
+const DISPOSITION_TONE = {
   open: "outline",
   ignored: "secondary",
-};
+} satisfies Record<StatementRowDisposition, BadgeVariant>;
+const DISPOSITION_VALUES = [
+  "open",
+  "ignored",
+] as const satisfies readonly StatementRowDisposition[];
 
-const DISPOSITION_OPTIONS: FilterableComboboxItem[] = (
-  Object.keys(DISPOSITION_TONE) as StatementRowDisposition[]
-).map((value) => ({
-  value,
-  label: value.charAt(0).toUpperCase() + value.slice(1),
-  color: badgeVariantColor[DISPOSITION_TONE[value]],
-}));
+const DISPOSITION_OPTIONS: FilterableComboboxItem[] = DISPOSITION_VALUES.map(
+  (value) => ({
+    value,
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+    color: badgeVariantColor[DISPOSITION_TONE[value]],
+  }),
+);
 
 /** Route search → server filters. `"all"` never reaches the wire — it's the
  * client-only way to say "no matchState filter" (see the route file). */
@@ -235,7 +251,7 @@ function StatementRowFilterBar({
         aria-label="Match state"
         value={search.matchState ?? "unmatched"}
         onChange={(e) =>
-          onUpdate({ matchState: e.target.value as MatchStateSearchValue })
+          onUpdate({ matchState: matchStateSearchSchema.parse(e.target.value) })
         }
       >
         <option value="unmatched">Unmatched</option>
@@ -250,7 +266,8 @@ function StatementRowFilterBar({
         onChange={(e) =>
           onUpdate({
             disposition: e.target.value
-              ? (e.target.value as StatementRowDisposition)
+              ? (DISPOSITION_VALUES.find((value) => value === e.target.value) ??
+                undefined)
               : undefined,
           })
         }
@@ -297,12 +314,10 @@ const columnHelper = createCubbyColumnHelper<StatementRowOut>();
 
 type StatementRowSortField = (typeof statementRowSortableFields)[number];
 
-// Match `statementRowSortableFields` exactly — a column id outside this set
-// would sort client-side visuals only, since the server only understands
-// these five (see listStatementRows' orderColumn switch).
-const SORTABLE: ReadonlySet<StatementRowSortField> = new Set(
-  statementRowSortableFields,
-);
+const isStatementRowSortField = (
+  value: string,
+): value is StatementRowSortField =>
+  statementRowSortableFields.some((field) => field === value);
 
 export function StatementRowList() {
   const search = route.useSearch();
@@ -346,9 +361,9 @@ export function StatementRowList() {
 
   const sortParams = tableState.getSortParams();
   const sort: { orderBy: StatementRowSortField; direction: "asc" | "desc" } =
-    SORTABLE.has(sortParams.orderBy as StatementRowSortField)
+    isStatementRowSortField(sortParams.orderBy)
       ? {
-          orderBy: sortParams.orderBy as StatementRowSortField,
+          orderBy: sortParams.orderBy,
           direction: sortParams.direction,
         }
       : { orderBy: "statementDate", direction: sortParams.direction };
@@ -371,124 +386,147 @@ export function StatementRowList() {
   );
 
   const columns = useMemo(
-    () => [
-      createPlainDateColumn(columnHelper, "statementDate", {
-        header: "Date",
-        className: "w-24",
-      }),
-      columnHelper.accessor("accountDescriptor", {
-        id: "accountDescriptor",
-        header: "Account",
-        enableSorting: true,
-        meta: { className: "w-48" },
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <Stack gap="tight" className="min-w-0">
-              <span className="block truncate" title={row.accountDescriptor}>
-                {row.accountDescriptor}
-              </span>
-              {row.accountName && (
-                <span
-                  className="block truncate text-2xs text-muted-foreground"
-                  title={row.accountName}
-                >
-                  {row.accountName}
+    () =>
+      createCubbyColumnCollection<StatementRowOut>((add) => {
+        add(
+          createPlainDateColumn(columnHelper, "statementDate", {
+            header: "Date",
+            className: "w-24",
+          }),
+        );
+        add(
+          columnHelper.accessor("accountDescriptor", {
+            id: "accountDescriptor",
+            header: "Account",
+            enableSorting: true,
+            meta: { className: "w-48" },
+            cell: (info) => {
+              const row = info.row.original;
+              return (
+                <Stack gap="tight" className="min-w-0">
+                  <span
+                    className="block truncate"
+                    title={row.accountDescriptor}
+                  >
+                    {row.accountDescriptor}
+                  </span>
+                  {row.accountName && (
+                    <span
+                      className="block truncate text-2xs text-muted-foreground"
+                      title={row.accountName}
+                    >
+                      {row.accountName}
+                    </span>
+                  )}
+                </Stack>
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("rawDescription", {
+            id: "rawDescription",
+            header: "Description",
+            enableSorting: true,
+            meta: { className: "w-72" },
+            cell: (info) => (
+              <Tooltip>
+                <TooltipTrigger render={<span className="block truncate" />}>
+                  {info.getValue()}
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  {info.getValue()}
+                </TooltipContent>
+              </Tooltip>
+            ),
+          }),
+        );
+        add(
+          columnHelper.accessor("merchant", {
+            id: "merchant",
+            header: "Merchant",
+            enableSorting: false,
+            meta: { className: "w-40" },
+            cell: (info) => {
+              const value = info.getValue();
+              return value ? (
+                <span className="block truncate">{value}</span>
+              ) : (
+                <NoneValue />
+              );
+            },
+          }),
+        );
+        add(
+          createCurrencyColumn(columnHelper, "amount", {
+            header: "Amount",
+            className: "w-24",
+            signedTone: true,
+          }),
+        );
+        add(
+          columnHelper.accessor("matchState", {
+            id: "matchState",
+            header: "Match",
+            enableSorting: false,
+            meta: { className: "w-28" },
+            cell: (info) =>
+              renderOptionCell(info.getValue(), MATCH_STATE_OPTIONS),
+          }),
+        );
+        add(
+          columnHelper.accessor("source", {
+            id: "source",
+            header: "Source",
+            enableSorting: false,
+            meta: { className: "w-24", mono: true },
+            cell: (info) => info.getValue(),
+          }),
+        );
+        add(
+          columnHelper.accessor("disposition", {
+            id: "disposition",
+            header: "Disposition",
+            enableSorting: false,
+            meta: { className: "w-32" },
+            cell: (info) => {
+              const row = info.row.original;
+              // The reason stays a hover title — it is free-form prose, not part of
+              // the taxonomy label.
+              return (
+                <span title={row.dispositionReason ?? undefined}>
+                  {renderOptionCell(row.disposition, DISPOSITION_OPTIONS)}
                 </span>
-              )}
-            </Stack>
-          );
-        },
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("transactionId", {
+            id: "transactionId",
+            header: "Transaction",
+            enableSorting: false,
+            meta: { className: "w-28" },
+            // financialTransaction has no EntityInlineLink/hover-preview case (see
+            // apps/web/CLAUDE.md), so this is the plain truncated-link-with-title
+            // shape rather than EntityInlineLink.
+            cell: (info) => {
+              const transactionId = info.getValue();
+              if (!transactionId) return <NoneValue />;
+              return (
+                <Link
+                  to="/financial-transactions/$shortcode"
+                  params={{ shortcode: transactionId }}
+                  title={transactionId}
+                  className="block truncate font-mono text-primary hover:underline"
+                >
+                  {transactionId}
+                </Link>
+              );
+            },
+          }),
+        );
       }),
-      columnHelper.accessor("rawDescription", {
-        id: "rawDescription",
-        header: "Description",
-        enableSorting: true,
-        meta: { className: "w-72" },
-        cell: (info) => (
-          <Tooltip>
-            <TooltipTrigger render={<span className="block truncate" />}>
-              {info.getValue()}
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs">
-              {info.getValue()}
-            </TooltipContent>
-          </Tooltip>
-        ),
-      }),
-      columnHelper.accessor("merchant", {
-        id: "merchant",
-        header: "Merchant",
-        enableSorting: false,
-        meta: { className: "w-40" },
-        cell: (info) => {
-          const value = info.getValue();
-          return value ? (
-            <span className="block truncate">{value}</span>
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-      createCurrencyColumn(columnHelper, "amount", {
-        header: "Amount",
-        className: "w-24",
-        signedTone: true,
-      }),
-      columnHelper.accessor("matchState", {
-        id: "matchState",
-        header: "Match",
-        enableSorting: false,
-        meta: { className: "w-28" },
-        cell: (info) => renderOptionCell(info.getValue(), MATCH_STATE_OPTIONS),
-      }),
-      columnHelper.accessor("source", {
-        id: "source",
-        header: "Source",
-        enableSorting: false,
-        meta: { className: "w-24", mono: true },
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.accessor("disposition", {
-        id: "disposition",
-        header: "Disposition",
-        enableSorting: false,
-        meta: { className: "w-32" },
-        cell: (info) => {
-          const row = info.row.original;
-          // The reason stays a hover title — it is free-form prose, not part of
-          // the taxonomy label.
-          return (
-            <span title={row.dispositionReason ?? undefined}>
-              {renderOptionCell(row.disposition, DISPOSITION_OPTIONS)}
-            </span>
-          );
-        },
-      }),
-      columnHelper.accessor("transactionId", {
-        id: "transactionId",
-        header: "Transaction",
-        enableSorting: false,
-        meta: { className: "w-28" },
-        // financialTransaction has no EntityInlineLink/hover-preview case (see
-        // apps/web/CLAUDE.md), so this is the plain truncated-link-with-title
-        // shape rather than EntityInlineLink.
-        cell: (info) => {
-          const transactionId = info.getValue();
-          if (!transactionId) return <NoneValue />;
-          return (
-            <Link
-              to="/financial-transactions/$shortcode"
-              params={{ shortcode: transactionId }}
-              title={transactionId}
-              className="block truncate font-mono text-primary hover:underline"
-            >
-              {transactionId}
-            </Link>
-          );
-        },
-      }),
-    ],
     [],
   );
 

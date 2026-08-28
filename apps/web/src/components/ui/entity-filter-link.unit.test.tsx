@@ -1,46 +1,28 @@
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    to,
-    search,
-    children,
-    ...props
-  }: {
-    to: string;
-    search?: Record<string, unknown>;
-    children: ReactNode;
-  }) => {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(search ?? {})) {
-      if (value !== undefined)
-        params.set(key, Array.isArray(value) ? value.join(",") : String(value));
-    }
-    const suffix = params.size > 0 ? `?${params}` : "";
-    return (
-      <a href={`${to}${suffix}`} {...props}>
-        {children}
-      </a>
-    );
-  },
-}));
-
-vi.mock("~/components/ui/tooltip", () => ({
-  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ render }: { render: ReactNode }) => <>{render}</>,
-  TooltipContent: ({ children }: { children: ReactNode }) => (
-    <span>{children}</span>
-  ),
-}));
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { BasicInfo } from "~/components/common/basic-info";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { EntityFilterLink } from "./entity-filter-link";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
+
+function renderFilterLink(content: React.ReactNode) {
+  return render(content, { wrapper: harness.wrapper });
+}
 
 describe("EntityFilterLink", () => {
   it("turns a read-only facet into a readable filtered-list link", () => {
-    render(
+    renderFilterLink(
       <EntityFilterLink
         to="/products"
         search={{ manufacturer: "Acme" }}
@@ -60,7 +42,7 @@ describe("EntityFilterLink", () => {
   });
 
   it("keeps the filter action outside an editable value", () => {
-    render(
+    renderFilterLink(
       <BasicInfo
         fields={[
           {

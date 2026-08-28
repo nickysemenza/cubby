@@ -11,6 +11,18 @@ export default literalEntity({
     create: { module: "@cubby/schemas/meal", export: "mealCreateInput" },
     update: { module: "@cubby/schemas/meal", export: "mealUpdateData" },
     output: { module: "@cubby/schemas/meal", export: "mealOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/meal",
+      export: "mealMcpEntityOut",
+    },
+    mcpList: {
+      module: "@cubby/schemas/meal",
+      export: "mealMcpEntityOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/meal",
+      export: "mealMcpEntityOut",
+    },
   },
   filters: {
     audit: true,

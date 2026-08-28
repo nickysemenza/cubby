@@ -44,7 +44,7 @@ export {
   computeRecipeUsages,
   cookbookOnlyForIngredientSql,
   dbRecipeToAPIShallow,
-  dbRecipeToTopLevelShape,
+  dbRecipeToTopLevel,
   liveRecipeCountForIngredientSql,
   ownRecipeCountForIngredientSql,
 } from "./helpers";

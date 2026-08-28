@@ -7,7 +7,7 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
-import { kindIconMap } from "./kind-icons";
+import { kindIconFor } from "./kind-icons";
 
 /**
  * A single lit/dim kind-icon with a tooltip + sr-only label. Shared by the
@@ -25,7 +25,7 @@ export function KindIcon({
   /** Extra classes for the tooltip-trigger span (positioning/padding). */
   className?: string;
 }) {
-  const { Icon, label } = kindIconMap[kind]!;
+  const { Icon, label } = kindIconFor(kind);
   const state = lit ? "convertible" : "no conversion";
   return (
     <Tooltip>

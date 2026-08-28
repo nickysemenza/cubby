@@ -5,13 +5,17 @@ import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
 
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { Row as FlexRow, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { multiSelectFilterFn } from "~/entities/filters";
 
 import {
@@ -125,143 +129,167 @@ export function InventoryItemList() {
   // a new object every render — the closure captures mutateAsync correctly,
   // and it's functionally stable across renders.
   const columns = useMemo(
-    () => [
-      columnHelper.accessor((row) => row.product.id, {
-        id: "image",
-        header: () => <ImageIcon className="size-3 text-muted-foreground" />,
-        enableSorting: false,
-        meta: {
-          className: "h-px w-10 overflow-hidden px-0 py-0",
-          mobile: { slot: "image", priority: -10 },
-        },
-        cell: (info) => (
-          <InventoryProductImageCell productId={info.getValue()} />
-        ),
+    () =>
+      createCubbyColumnCollection<InventoryListItem>((add) => {
+        add(
+          columnHelper.accessor((row) => row.product.id, {
+            id: "image",
+            header: () => (
+              <ImageIcon className="size-3 text-muted-foreground" />
+            ),
+            enableSorting: false,
+            meta: {
+              className: "h-px w-10 overflow-hidden px-0 py-0",
+              mobile: { slot: "image", priority: -10 },
+            },
+            cell: (info) => (
+              <InventoryProductImageCell productId={info.getValue()} />
+            ),
+          }),
+        );
+        add(
+          createEditableAmountColumn(columnHelper, "amount", {
+            header: "Qty",
+            className: "w-36",
+            mobile: { slot: "trailing", priority: 10 },
+            onSave: async (newAmount, row) => {
+              await updateMutation.mutateAsync({
+                id: row.id,
+                data: { amount: newAmount },
+              });
+            },
+            // Keep the pre-editable click-through to the entry's detail page
+            // (same link-in-display pattern as createNameColumn's editable —
+            // including the click fence, without which this click would also open
+            // the amount editor).
+            renderDisplay: (content, row) => (
+              <Link
+                to={entities.inventory.routes.detail}
+                params={entityDetailParams(row.id)}
+              >
+                {content}
+              </Link>
+            ),
+          }),
+        );
+        add(
+          createCurrencyColumn(columnHelper, "valuation", {
+            header: "Valuation",
+            mobile: { slot: "trailing", priority: 30 },
+          }),
+        );
+        add(
+          columnHelper.accessor("product", {
+            header: "Product",
+            enableSorting: false,
+            meta: {
+              className: "min-w-0 w-64",
+              surplus: true,
+              mobile: { slot: "meta", priority: 50 },
+              filterConfig: { placeholder: "Filter product..." },
+            },
+            cell: (info) => {
+              const product = info.getValue();
+              const upc =
+                product.primaryGtin === null
+                  ? null
+                  : displayGtin(product.primaryGtin);
+              return (
+                <div className="flex items-center gap-2">
+                  <Stack gap="xs" className="min-w-0 flex-1">
+                    <EntityInlineLink
+                      displayImage={undefined}
+                      entity="product"
+                      data={product}
+                      compact
+                    />
+                    {upc && (
+                      <div className="text-xs text-muted-foreground">
+                        <TableLink
+                          to="/usda/upc/$code"
+                          params={{ code: upc }}
+                          variant="mono"
+                        >
+                          {upc}
+                        </TableLink>
+                      </div>
+                    )}
+                  </Stack>
+                </div>
+              );
+            },
+          }),
+        );
+        add(
+          createSingleEntityInlineLinkColumn(
+            columnHelper,
+            "location",
+            "location",
+            {
+              className: "min-w-0 w-40 max-w-56",
+              mobile: { slot: "subtitle", priority: 20 },
+              filterConfig: { placeholder: "Filter location..." },
+              editable: {
+                // Not clearable, so newLocationId is never actually null — the
+                // fallback only satisfies inventory.update's optional (non-nullable)
+                // locationId field.
+                onSave: async (newLocationId, row) => {
+                  await updateMutation.mutateAsync({
+                    id: row.id,
+                    data: { locationId: newLocationId ?? undefined },
+                  });
+                },
+              },
+            },
+          ),
+        );
+        // Product-attribute columns — hidden by default (toggle via the View
+        // menu) since the qty/valuation/product/location set covers the common
+        // case, but real columns so "show me the Milwaukee stuff" is a header
+        // filter, not an agent-only capability (see manufacturerFilter /
+        // categoryFilter in inventoryFilterFields).
+        add(
+          columnHelper.accessor((row) => row.product.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            enableSorting: false,
+            meta: {
+              className: "min-w-0 w-40 truncate",
+              mobile: { slot: "meta", priority: 70 },
+              filterConfig: { placeholder: "Filter by manufacturer..." },
+            },
+            cell: (info) => info.getValue() || <NoneValue />,
+          }),
+        );
+        add(
+          columnHelper.accessor((row) => row.product.category, {
+            id: "category",
+            header: "Category",
+            enableSorting: false,
+            filterFn: multiSelectFilterFn,
+            meta: {
+              className: "w-32",
+              mobile: { slot: "meta", priority: 75 },
+              filterConfig: {
+                placeholder: "Filter by category...",
+                filterType: "multiselect",
+                options: productCategoryOptionsWithTheme,
+              },
+            },
+            cell: (info) => <CategoryLabel category={info.getValue()} />,
+          }),
+        );
+        // Last deliberate recount — the only honest freshness signal for a count
+        // (`updatedAt` moves on a price-driven valuation recompute). Dash = never
+        // verified; sortable so the oldest bins surface first.
+        add(
+          createTimestampColumn(columnHelper, "verifiedAt", {
+            header: "Verified",
+            className: "w-32",
+            mobile: { slot: "meta", priority: 60 },
+          }),
+        );
       }),
-      createEditableAmountColumn(columnHelper, "amount", {
-        header: "Qty",
-        className: "w-36",
-        mobile: { slot: "trailing", priority: 10 },
-        onSave: async (newAmount, row) => {
-          await updateMutation.mutateAsync({
-            id: row.id,
-            data: { amount: newAmount },
-          });
-        },
-        // Keep the pre-editable click-through to the entry's detail page
-        // (same link-in-display pattern as createNameColumn's editable —
-        // including the click fence, without which this click would also open
-        // the amount editor).
-        renderDisplay: (content, row) => (
-          <Link
-            to={entities.inventory.routes.detail}
-            params={entityDetailParams(row.id)}
-          >
-            {content}
-          </Link>
-        ),
-      }),
-      createCurrencyColumn(columnHelper, "valuation", {
-        header: "Valuation",
-        mobile: { slot: "trailing", priority: 30 },
-      }),
-      columnHelper.accessor("product", {
-        header: "Product",
-        enableSorting: false,
-        meta: {
-          className: "min-w-0 w-64",
-          surplus: true,
-          mobile: { slot: "meta", priority: 50 },
-          filterConfig: { placeholder: "Filter product..." },
-        },
-        cell: (info) => {
-          const product = info.getValue();
-          const upc =
-            product.primaryGtin === null
-              ? null
-              : displayGtin(product.primaryGtin);
-          return (
-            <div className="flex items-center gap-2">
-              <Stack gap="xs" className="min-w-0 flex-1">
-                <EntityInlineLink
-                  displayImage={undefined}
-                  entity="product"
-                  data={product}
-                  compact
-                />
-                {upc && (
-                  <div className="text-xs text-muted-foreground">
-                    <TableLink
-                      to="/usda/upc/$code"
-                      params={{ code: upc }}
-                      variant="mono"
-                    >
-                      {upc}
-                    </TableLink>
-                  </div>
-                )}
-              </Stack>
-            </div>
-          );
-        },
-      }),
-      createSingleEntityInlineLinkColumn(columnHelper, "location", "location", {
-        className: "min-w-0 w-40 max-w-56",
-        mobile: { slot: "subtitle", priority: 20 },
-        filterConfig: { placeholder: "Filter location..." },
-        editable: {
-          // Not clearable, so newLocationId is never actually null — the
-          // fallback only satisfies inventory.update's optional (non-nullable)
-          // locationId field.
-          onSave: async (newLocationId, row) => {
-            await updateMutation.mutateAsync({
-              id: row.id,
-              data: { locationId: newLocationId ?? undefined },
-            });
-          },
-        },
-      }),
-      // Product-attribute columns — hidden by default (toggle via the View
-      // menu) since the qty/valuation/product/location set covers the common
-      // case, but real columns so "show me the Milwaukee stuff" is a header
-      // filter, not an agent-only capability (see manufacturerFilter /
-      // categoryFilter in inventoryFilterFields).
-      columnHelper.accessor((row) => row.product.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        enableSorting: false,
-        meta: {
-          className: "min-w-0 w-40 truncate",
-          mobile: { slot: "meta", priority: 70 },
-          filterConfig: { placeholder: "Filter by manufacturer..." },
-        },
-        cell: (info) => info.getValue() || <NoneValue />,
-      }),
-      columnHelper.accessor((row) => row.product.category, {
-        id: "category",
-        header: "Category",
-        enableSorting: false,
-        filterFn: multiSelectFilterFn,
-        meta: {
-          className: "w-32",
-          mobile: { slot: "meta", priority: 75 },
-          filterConfig: {
-            placeholder: "Filter by category...",
-            filterType: "multiselect",
-            options: productCategoryOptionsWithTheme,
-          },
-        },
-        cell: (info) => <CategoryLabel category={info.getValue()} />,
-      }),
-      // Last deliberate recount — the only honest freshness signal for a count
-      // (`updatedAt` moves on a price-driven valuation recompute). Dash = never
-      // verified; sortable so the oldest bins surface first.
-      createTimestampColumn(columnHelper, "verifiedAt", {
-        header: "Verified",
-        className: "w-32",
-        mobile: { slot: "meta", priority: 60 },
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
     [columnHelper],
   );
@@ -271,6 +299,7 @@ export function InventoryItemList() {
   // loading state, and delete dialog directly.
   const { workbench, data, totalCount } = useEntityList({
     entity: "inventory",
+    queryOptions: entityListFor("inventory").listQueryPlan,
     onInspectRow: inspectRow,
     subject: PRODUCT_SUBJECT,
     // Inventory has custom columns (product image, amount instead of name)

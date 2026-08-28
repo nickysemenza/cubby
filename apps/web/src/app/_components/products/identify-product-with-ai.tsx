@@ -1,7 +1,6 @@
 import type { ProductIdentification } from "@cubby/schemas/ai";
 import { Sparkles } from "lucide-react";
 import { useCallback, useState } from "react";
-import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 
 import { Row, Stack } from "~/components/layout";
@@ -13,16 +12,26 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { ConfidenceReasoningCard } from "../ai/ai-suggest";
 import type { PendingImage } from "../PendingImageUpload";
 
-interface IdentifyProductButtonProps<
-  TFieldValues extends FieldValues = FieldValues,
-> {
-  form: UseFormReturn<TFieldValues>;
+type ProductIdentityUpdate =
+  | { field: "name" | "manufacturer" | "model"; value: string }
+  | {
+      field: "category";
+      value: Exclude<ProductIdentification["category"], null>;
+    };
+
+interface ProductIdentityFormPort {
+  setValue(update: ProductIdentityUpdate): void;
+}
+
+interface IdentifyProductButtonProps {
+  form: ProductIdentityFormPort;
   pendingImages: PendingImage[];
 }
 
-export function IdentifyProductButton<
-  TFieldValues extends FieldValues = FieldValues,
->({ form, pendingImages }: IdentifyProductButtonProps<TFieldValues>) {
+export function IdentifyProductButton({
+  form,
+  pendingImages,
+}: IdentifyProductButtonProps) {
   const [result, setResult] = useState<{
     value: ProductIdentification;
     basisKey: string;
@@ -52,25 +61,16 @@ export function IdentifyProductButton<
   const accept = useCallback(() => {
     if (!result) return;
     const identification = result.value;
-    form.setValue(
-      "name" as Path<TFieldValues>,
-      identification.name as TFieldValues[Path<TFieldValues>],
-    );
-    form.setValue(
-      "manufacturer" as Path<TFieldValues>,
-      identification.manufacturer as TFieldValues[Path<TFieldValues>],
-    );
+    form.setValue({ field: "name", value: identification.name });
+    form.setValue({
+      field: "manufacturer",
+      value: identification.manufacturer,
+    });
     if (identification.category !== null) {
-      form.setValue(
-        "category" as Path<TFieldValues>,
-        identification.category as TFieldValues[Path<TFieldValues>],
-      );
+      form.setValue({ field: "category", value: identification.category });
     }
     if (identification.model !== null) {
-      form.setValue(
-        "model" as Path<TFieldValues>,
-        identification.model as TFieldValues[Path<TFieldValues>],
-      );
+      form.setValue({ field: "model", value: identification.model });
     }
     setResult(null);
     toast.success("Product details applied from photo");

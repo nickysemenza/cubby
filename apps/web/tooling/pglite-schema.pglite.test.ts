@@ -5,12 +5,19 @@ import { pushSchema } from "drizzle-kit/api";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Database as CubbyDatabase } from "~/server/db";
+import { Database as CubbyDatabase } from "~/server/db";
+import type { DatabaseRuntime } from "~/server/db/database";
 import * as schema from "~/server/db/schema";
 import { findSearchHits } from "~/server/services/search.service";
+import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 
 const pg = await PGlite.create({ extensions: { pg_trgm, vector } });
 const db = drizzle(pg, { schema });
+const runtime: DatabaseRuntime = {
+  client: db,
+  withConnection: (fn) => fn(db),
+};
+const cubbyDb = new CubbyDatabase(() => runtime);
 
 afterAll(async () => {
   await pg.close();
@@ -19,11 +26,9 @@ afterAll(async () => {
 beforeAll(async () => {
   await pg.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
   await pg.exec("CREATE EXTENSION IF NOT EXISTS vector;");
-  const { apply } = await pushSchema(
-    schema,
-    db as unknown as Parameters<typeof pushSchema>[1],
-    ["public"],
-  );
+  const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
+    "public",
+  ]);
   await apply();
 });
 
@@ -42,7 +47,7 @@ describe("PGlite full Cubby schema", () => {
       )
     `);
 
-    const hits = await findSearchHits(db as unknown as CubbyDatabase, {
+    const hits = await findSearchHits(cubbyDb, {
       query: "hammer",
       entityTypes: ["product"],
     });

@@ -24,7 +24,7 @@ const makeLocation = (
   locationSeq += 1;
   const suffix = shortcodeAlphabet[locationSeq];
   if (!suffix) throw new Error("Location demo fixture capacity exceeded");
-  return {
+  const location: z.infer<typeof infLocation> = {
     id: locationShortcode.parse(`LOC-222${suffix}`),
     name,
     aliases: [],
@@ -35,8 +35,9 @@ const makeLocation = (
     images: [],
     valuation: null,
     ...ts,
-    ...(children ? { children } : {}),
   };
+  if (children !== undefined) location.children = children;
+  return location;
 };
 
 // Zod schema for rich text input (raw text + ingredient names for parsing)

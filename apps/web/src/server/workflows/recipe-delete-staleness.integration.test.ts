@@ -1,5 +1,6 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -44,11 +45,13 @@ describe("recipe deletion cost-staleness workflows", () => {
   const recompute = (ids: RecipeId[]) =>
     workflowContext().services.recipeCosting.recompute(ids);
   const installFakeQueue = () =>
-    setCfEnv({
-      BACKGROUND_QUEUE: { send: async () => {}, sendBatch: async () => {} },
-    } as unknown as Env);
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: { send: async () => {}, sendBatch: async () => {} },
+      }),
+    );
 
-  afterEach(() => setCfEnv(undefined as unknown as Env));
+  afterEach(() => setCfEnv(undefined));
 
   const seedParentWithSubRecipe = async () => {
     const ingredient = await findOrCreateIngredient(ctx.db, "sub flour");

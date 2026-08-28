@@ -2,8 +2,8 @@ import { Keyboard, ScanBarcode } from "lucide-react";
 import { useCallback, useId, useRef, useState } from "react";
 
 import {
-  PersistentScanner,
-  UNIVERSAL_SCAN_FORMATS,
+  productionPersistentScannerPort,
+  type PersistentScannerPort,
 } from "~/app/_components/inventory/persistent-scanner";
 import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -19,10 +19,14 @@ import { resolveScanCode } from "~/lib/scan-code";
 
 interface ScanWorkbenchProps {
   onResolve: (value: ResolvedScanCode) => Promise<void>;
+  scanner?: PersistentScannerPort;
 }
 
 /** Camera and keyboard entry for the same one-code-at-a-time navigation job. */
-export function ScanWorkbench({ onResolve }: ScanWorkbenchProps) {
+export function ScanWorkbench({
+  onResolve,
+  scanner = productionPersistentScannerPort,
+}: ScanWorkbenchProps) {
   const inputId = useId();
   const helpId = useId();
   const resolvingRef = useRef(false);
@@ -91,10 +95,10 @@ export function ScanWorkbench({ onResolve }: ScanWorkbenchProps) {
           </div>
         </div>
       ) : (
-        <PersistentScanner
+        <scanner.Scanner
           onScan={(value) => void openValue(value)}
           onError={(message) => setError(`Camera unavailable. ${message}`)}
-          formatsToSupport={UNIVERSAL_SCAN_FORMATS}
+          formatsToSupport={scanner.formats}
           scanHintText="Point at a Cubby label or product barcode"
         />
       )}

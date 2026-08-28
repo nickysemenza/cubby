@@ -16,6 +16,12 @@ const INLINE_LINK_FETCHABLE = [
   "recipe",
   "ingredient",
 ] as const satisfies readonly Entity[];
+type FetchableInlineEntity = (typeof INLINE_LINK_FETCHABLE)[number];
+
+const isFetchableInlineEntity = (
+  entity: AuditEntityType,
+): entity is FetchableInlineEntity =>
+  INLINE_LINK_FETCHABLE.some((candidate) => candidate === entity);
 
 interface EntityInlineLinkByIdProps {
   entityType: AuditEntityType;
@@ -37,20 +43,18 @@ export function EntityInlineLinkById({
   // inline-link types; everything else (inventory, cookbook, or an out-of-union runtime
   // entityType from a legacy audit row) gets a skipped query so useQuery never
   // receives a non-object arg — v5 throws "only the Object form is allowed".
-  const isFetchable = (INLINE_LINK_FETCHABLE as readonly string[]).includes(
-    entityType,
-  );
   const queryOptions = useMemo(
     () =>
-      isFetchable
-        ? entityPreviewQueryOptions(entityType as Entity, entityId)
+      isFetchableInlineEntity(entityType)
+        ? entityPreviewQueryOptions(entityType, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [isFetchable, entityType, entityId],
+    [entityType, entityId],
   );
 
   // Single query hook instead of 4 disabled ones
-  // oxlint-disable-next-line typescript/no-explicit-any -- useQuery cannot narrow the mixed generated query-options union
-  const query = useQuery(queryOptions as any);
+  // SAFETY: the options union is narrowed by the fetchable entity guard, but
+  // React Query's generic overload cannot express that correlation.
+  const query = useQuery(queryOptions as never);
 
   // Inventory entries have no getByID that returns product info, so there is
   // no name to resolve here — and this component is handed a uuid, not the
@@ -70,15 +74,17 @@ export function EntityInlineLinkById({
     );
   }
 
-  if (isFetchable && query.isLoading) {
+  if (isFetchableInlineEntity(entityType) && query.isLoading) {
     return <Spinner className="text-muted-foreground" />;
   }
 
-  if (query.data) {
+  if (isFetchableInlineEntity(entityType) && query.data) {
     return (
       <EntityInlineLink
         displayImage={undefined}
-        entity={entityType as "product" | "location" | "recipe" | "ingredient"}
+        entity={entityType}
+        // SAFETY: the preview query options and this discriminant are selected
+        // by the same fetchable entity guard above.
         data={query.data as never}
         compact={compact}
       />
@@ -90,7 +96,7 @@ export function EntityInlineLinkById({
   return (
     <span className="text-sm text-muted-foreground italic">
       {entityType}
-      {isFetchable ? " (deleted)" : ""}
+      {isFetchableInlineEntity(entityType) ? " (deleted)" : ""}
     </span>
   );
 }

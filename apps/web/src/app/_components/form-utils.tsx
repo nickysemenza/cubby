@@ -3,9 +3,9 @@ import { lazy, type ReactNode, Suspense, useEffect, useRef } from "react";
 import {
   Controller,
   type FieldValues,
+  type FieldPathByValue,
   FormProvider,
   type Path,
-  type PathValue,
   type UseFormReturn,
 } from "react-hook-form";
 import { toast } from "sonner";
@@ -37,15 +37,29 @@ import { FormFieldGroup } from "./forms/form-field-group";
 // the user opts in. The build-time constant must remain a separate gate so the
 // lazy import is tree-shaken in prod regardless of the flag.
 declare const __CF_WORKERS__: boolean | undefined;
+const readCloudflareWorkersFlag = (): boolean | undefined => {
+  try {
+    return __CF_WORKERS__;
+  } catch {
+    return undefined;
+  }
+};
 const FORM_DEVTOOLS_BUNDLED =
-  import.meta.env.DEV &&
-  !(typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true);
+  import.meta.env.DEV && readCloudflareWorkersFlag() !== true;
 
 const DevTool = FORM_DEVTOOLS_BUNDLED
   ? lazy(() =>
       import("@hookform/devtools").then((m) => ({ default: m.DevTool })),
     )
   : () => null;
+
+function devToolControl<TFieldValues extends FieldValues>(
+  control: UseFormReturn<TFieldValues>["control"],
+) {
+  // SAFETY: @hookform/devtools accepts the same control at runtime but
+  // publishes an incompatible private generic surface.
+  return control as never;
+}
 
 // Base props shared by all forms
 interface BaseFormProps {
@@ -92,7 +106,7 @@ function getPendingButtonText(text: string): string {
  * lint/knip unused-export gate clean).
  */
 function FormStatusBanner({ error }: { error?: string | readonly string[] }) {
-  const lines = typeof error === "string" ? [error] : (error ?? []);
+  const lines = isFormErrorMessage(error) ? [error] : (error ?? []);
   if (lines.length === 0) return null;
   return (
     <Alert variant="destructive" data-slot="form-status-banner">
@@ -112,6 +126,10 @@ function FormStatusBanner({ error }: { error?: string | readonly string[] }) {
   );
 }
 
+type FormError = string | readonly string[] | undefined;
+const isFormErrorMessage = (error: FormError): error is string =>
+  typeof error === "string";
+
 /**
  * Fire a success toast on the pending → settled transition (when no error
  * landed). Kept generic so any `FormWrapper`-based form can opt in by passing
@@ -124,7 +142,7 @@ function useSubmitSuccessToast(
   successMessage: string | undefined,
 ) {
   const wasPending = useRef(false);
-  const failed = typeof error === "string" ? error.length > 0 : !!error?.length;
+  const failed = isFormErrorMessage(error) ? error.length > 0 : !!error?.length;
   useEffect(() => {
     if (wasPending.current && !isPending && !failed && successMessage) {
       toast.success(successMessage);
@@ -174,7 +192,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
     <FormProvider {...form}>
       {FORM_DEVTOOLS_BUNDLED && formDevtoolsEnabled ? (
         <Suspense>
-          <DevTool control={form.control as never} />
+          <DevTool control={devToolControl(form.control)} />
         </Suspense>
       ) : null}
       <Stack
@@ -261,7 +279,7 @@ export function NullableTextareaField<
   rows = 4,
 }: {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
   placeholder: string;
   rows?: number;
@@ -281,7 +299,7 @@ export function NullableTextareaField<
             id={name}
             placeholder={placeholder}
             {...field}
-            value={(field.value as string | null) ?? ""}
+            value={field.value ?? ""}
             onChange={(e) => {
               const v = e.target.value;
               field.onChange(v === "" ? null : v);
@@ -307,7 +325,7 @@ export function RequiredTextareaField<
   rows = 3,
 }: {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
   placeholder: string;
   rows?: number;
@@ -348,7 +366,7 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   label,
 }: {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
 }) {
   return (
@@ -365,7 +383,7 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
           <DatePickerInput
             id={name}
             name={name}
-            value={(field.value as string | null) ?? null}
+            value={field.value ?? null}
             onChange={(v) => field.onChange(v)}
             onBlur={field.onBlur}
             clearable
@@ -391,7 +409,7 @@ export function NullableNumericField<
   fraction = false,
 }: {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, number | null | undefined>;
   label: string;
   placeholder: string;
   step?: string;
@@ -420,12 +438,8 @@ export function NullableNumericField<
                 id={name}
                 aria-label={label}
                 placeholder={placeholder}
-                value={(field.value as number | null) ?? null}
-                onChange={(value) =>
-                  field.onChange(
-                    value as PathValue<TFieldValues, Path<TFieldValues>>,
-                  )
-                }
+                value={field.value ?? null}
+                onChange={(value) => field.onChange(value)}
               />
             </FormFieldGroup>
           );
@@ -440,13 +454,11 @@ export function NullableNumericField<
           step,
           placeholder,
           ...field,
-          value: field.value != null ? (field.value as number).toString() : "",
+          value: field.value != null ? field.value.toString() : "",
           onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
             const value = e.target.value;
             const numberValue = value ? parseFloat(value) : null;
-            field.onChange(
-              numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
-            );
+            field.onChange(numberValue);
           },
           "aria-invalid": fieldState.invalid,
         };
@@ -494,7 +506,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   disabledItemReasons,
 }: {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>;
   label?: string;
   items: ComboboxItem[];
   onSearchChange: (query: string) => void;
@@ -544,11 +556,9 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
             })}
             onSearchChange={onSearchChange}
             isLoading={isLoading}
-            value={field.value as ComboboxItem | null}
+            value={field.value ?? null}
             setValue={(value) => {
-              field.onChange(
-                value as PathValue<TFieldValues, Path<TFieldValues>>,
-              );
+              field.onChange(value);
               onSelect?.(value);
             }}
             onCreateNew={onCreateNew}
@@ -562,8 +572,8 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
 }
 
 // Helper to submit changes or cancel if no changes detected
-export function submitOrCancel<T>(
-  updates: Record<string, unknown>,
+export function submitOrCancel<TUpdates extends object, T>(
+  updates: TUpdates,
   buildPayload: () => T,
   onEdit: (data: T) => void,
   onCancel?: () => void,
@@ -577,20 +587,17 @@ export function submitOrCancel<T>(
 
 // Generic function to build an update object based on changed fields
 export function buildUpdateObject<
-  T extends Record<string, unknown>,
-  F extends Record<string, unknown>,
->(
-  entity: T,
-  formValues: F,
-  fields: Array<string & keyof T & keyof F>,
-): Partial<T> {
+  T extends object,
+  K extends keyof T,
+  F extends Pick<T, K>,
+>(entity: T, formValues: F, fields: readonly K[]): Partial<T> {
   const updates: Partial<T> = {};
 
   fields.forEach((field) => {
     const entityValue = entity[field];
     const formValue = formValues[field];
     if (JSON.stringify(entityValue) !== JSON.stringify(formValue)) {
-      updates[field] = formValue as unknown as T[typeof field];
+      Object.assign(updates, { [field]: formValue });
     }
   });
 
@@ -665,7 +672,7 @@ export function UnifiedTextField<
   focusOnMount = false,
 }: {
   form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
   placeholder: string;
   nullable?: boolean;
@@ -678,12 +685,8 @@ export function UnifiedTextField<
       control={form.control}
       name={name}
       render={({ field, fieldState }) => {
-        const value = nullable
-          ? (field.value as string | null) || ""
-          : field.value;
-        const icon = getIcon
-          ? getIcon(nullable ? (field.value as string | null) : field.value)
-          : null;
+        const value = field.value ?? "";
+        const icon = getIcon ? getIcon(field.value ?? null) : null;
         return (
           <FormFieldGroup
             htmlFor={name}

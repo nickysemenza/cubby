@@ -45,6 +45,7 @@ import { wishSortableFields } from "@cubby/schemas/wish";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
@@ -109,28 +110,72 @@ const desc = (orderBy: string): SortParams[] => [
   { orderBy, direction: "desc" },
 ];
 
+type SortObject = { readonly [key: string]: SortCell };
+type SortCell =
+  | string
+  | number
+  | boolean
+  | Date
+  | null
+  | undefined
+  | SortCell[]
+  | SortObject;
+type SortRow = SortObject;
+
+const sortCellSchema: z.ZodType<SortCell> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.date(),
+    z.null(),
+    z.undefined(),
+    z.array(sortCellSchema),
+    z.record(z.string(), sortCellSchema),
+  ]),
+);
+const sortRowSchema = z.record(z.string(), sortCellSchema);
+const inventoryEntryCellSchema = z.object({
+  location: z.object({ name: z.string().nullish() }).nullish(),
+});
+const recipeTagsSchema = z.array(z.string()).nullish();
+
 // ---------------------------------------------------------------------------
 // Cell extraction
 // ---------------------------------------------------------------------------
 
 /** Dotted-path read, or `undefined` the moment any hop is missing/null. */
-const getByPath = (row: unknown, path: string): unknown =>
-  path.split(".").reduce<unknown>((acc, key) => {
-    if (acc === null || typeof acc !== "object") return undefined;
-    return (acc as Record<string, unknown>)[key];
-  }, row);
+const getByPath = (row: SortRow, path: string): SortCell | undefined => {
+  let current: SortCell | undefined = row;
+  for (const key of path.split(".")) {
+    const parsed = sortRowSchema.safeParse(current);
+    if (!parsed.success) return undefined;
+    current = parsed.data[key];
+  }
+  return current;
+};
 
 /** Map sortable-field ids to genuinely different list-row shapes. */
-type CellAccessor = string | ((row: Record<string, unknown>) => unknown);
+type CellAccessor = string | ((row: SortRow) => SortCell | undefined);
 
-const FIELD_ALIASES: Record<string, CellAccessor> = {
+const isCellAccessorFunction = (
+  accessor: CellAccessor,
+): accessor is (row: SortRow) => SortCell | undefined =>
+  typeof accessor === "function";
+
+const aliasFor = (key: string): CellAccessor | undefined =>
+  Object.entries(FIELD_ALIASES).find(([candidate]) => candidate === key)?.[1];
+
+const FIELD_ALIASES = {
   // `expenses` is persisted as a column id; the row value is `expenseCount`.
   "product.expenses": "expenseCount",
   // Match the cell's locations to the sort's `MIN(location.name)`.
   "product.location": (row) => {
-    const entries = row.inventoryEntry as
-      | Array<{ location?: { name?: unknown } }>
-      | undefined;
+    const parsedEntries = z
+      .array(inventoryEntryCellSchema)
+      .nullish()
+      .safeParse(row.inventoryEntry);
+    const entries = parsedEntries.success ? parsedEntries.data : [];
     const names = (entries ?? [])
       .map((entry) => entry.location?.name)
       .filter((name): name is string => typeof name === "string");
@@ -150,7 +195,8 @@ const FIELD_ALIASES: Record<string, CellAccessor> = {
   "recipe.totalMinutes": "meta.times.totalMinutes",
   // SQL sorts by the first tag; the cell renders the full chip list.
   "recipe.tags": (row) => {
-    const tags = row.tags as string[] | null | undefined;
+    const parsedTags = recipeTagsSchema.safeParse(row.tags);
+    const tags = parsedTags.success ? parsedTags.data : undefined;
     return tags && tags.length > 0 ? tags[0] : undefined;
   },
   // Joined-name sorts surface the label under `*Name`.
@@ -162,10 +208,10 @@ const FIELD_ALIASES: Record<string, CellAccessor> = {
   "purchase.vendor": "vendorName",
   // The mapper nests expected quantity under its ledger.
   "product.expectedQuantity": "quantityLedger.expectedQuantity",
-};
+} satisfies Record<string, CellAccessor>;
 
 /** Fields with no scalar list-cell value comparable to their sort projection. */
-const SORT_ONLY_FIELDS: Record<string, string> = {
+const SORT_ONLY_FIELDS = {
   "product.identity_strength":
     "no rendered cell — a ranking heuristic (barcode > other external id > manufacturer+model > model > none) used only to order the enrichment worklist, never displayed as a value.",
   "product.primaryGtin":
@@ -186,33 +232,42 @@ const SORT_ONLY_FIELDS: Record<string, string> = {
     "the sort key is the separate `servings` column; the rendered cell is `formatYield(recipe.yield)` prose whenever the structured `yield` amount is present, falling back to a plain 'N servings' string only when it's null — no single field holds what's displayed in both cases.",
   "wish.priceRange":
     "no `priceRange` field on WishOut; the rendered cell is computed client-side by `wishPriceRange(candidates)` off the `candidates[]` array, not a row field.",
-};
+} satisfies Record<string, string>;
 
 /**
  * Sortable fields where the sort DELIBERATELY differs from the cell — a
  * declared, cited approximation, not a bug. Skipped rather than asserted;
  * the staleness test still keeps this free of fields that no longer exist.
  */
-const KNOWN_APPROXIMATIONS: Record<string, string> = {
+const KNOWN_APPROXIMATIONS = {
   "project.startDate":
     'project/lookup.ts\'s 20-line APPROXIMATION comment: the cell is `dates.effectiveStart`, "a fully recursive fold over descendants" (subtree.ts); the sort is deliberately non-recursive — "matching the true recursive fold would need a recursive CTE, and at this scale... it moves nothing. Everything *displayed* comes from `dates.effectiveStart`... this only orders rows."',
   "meal.mealType":
     "closed low-cardinality enum ordered by a deliberate domain rank (breakfast < lunch < dinner < snack, via `array_position` in resolveMealSort, meal/crud.ts), not alphabetically — same displayed string, different collation by design.",
-};
+} satisfies Record<string, string>;
 
 /** Normalize a raw cell value to a comparable primitive, or `undefined` if it
  * isn't one. Nulls/undefined are "not comparable for this row" — callers skip
  * them rather than treat them as an ordering fact (NULLS FIRST/LAST varies by
  * site; encoding it would produce false positives). */
-const normalizeCellValue = (raw: unknown): string | number | undefined => {
+const normalizeCellValue = (
+  raw: SortCell | undefined,
+): string | number | undefined => {
   if (raw === null || raw === undefined) return undefined;
-  if (raw instanceof Date) return raw.getTime();
-  if (typeof raw === "boolean") return raw ? 1 : 0;
-  if (typeof raw === "string" || typeof raw === "number") return raw;
-  if (Array.isArray(raw)) return raw.length;
-  if (typeof raw === "object") {
-    const name = (raw as Record<string, unknown>).name;
-    if (typeof name === "string") return name;
+  const date = z.date().safeParse(raw);
+  if (date.success) return date.data.getTime();
+  const boolean = z.boolean().safeParse(raw);
+  if (boolean.success) return boolean.data ? 1 : 0;
+  const string = z.string().safeParse(raw);
+  if (string.success) return string.data;
+  const number = z.number().safeParse(raw);
+  if (number.success) return number.data;
+  const array = z.array(sortCellSchema).safeParse(raw);
+  if (array.success) return array.data.length;
+  const object = sortRowSchema.safeParse(raw);
+  if (object.success) {
+    const name = z.string().safeParse(object.data.name);
+    if (name.success) return name.data;
   }
   return undefined;
 };
@@ -220,18 +275,19 @@ const normalizeCellValue = (raw: unknown): string | number | undefined => {
 const extractCell = (
   entity: string,
   field: string,
-  row: Record<string, unknown>,
+  row: SortRow,
 ): string | number | undefined => {
-  const accessor = FIELD_ALIASES[`${entity}.${field}`] ?? field;
-  const raw =
-    typeof accessor === "function" ? accessor(row) : getByPath(row, accessor);
+  const accessor = aliasFor(`${entity}.${field}`) ?? field;
+  const raw = isCellAccessorFunction(accessor)
+    ? accessor(row)
+    : getByPath(row, accessor);
   return normalizeCellValue(raw);
 };
 
 const compareValues = (a: string | number, b: string | number): number =>
-  typeof a === "string" && typeof b === "string"
-    ? a.localeCompare(b)
-    : (a as number) - (b as number);
+  z.string().safeParse(a).success && z.string().safeParse(b).success
+    ? String(a).localeCompare(String(b))
+    : Number(a) - Number(b);
 
 /** Are the non-null cell values, in returned order, monotone for `direction`? */
 const isMonotone = (
@@ -928,64 +984,83 @@ const seedWorld = async (ctx: { db: Database; actor: SeedActor }) => {
 type SortListProbe = (
   db: Database,
   sorts: SortParams[],
-) => Promise<{ rows: Record<string, unknown>[]; count: number }>;
+) => Promise<{ rows: SortRow[]; count: number }>;
 
 const sortListFor =
-  <F>(
+  <F, TRow>(
     fn: (
       db: Database,
       filters: F,
       sorts: SortParams[],
       pagination: PaginationParams,
-    ) => Promise<{ data: unknown[]; count: number }>,
+    ) => Promise<{ data: TRow[]; count: number }>,
+    emptyFilters: F,
   ): SortListProbe =>
   async (db, sorts) => {
-    const { data, count } = await fn(db, {} as F, sorts, PAGE);
-    return { rows: data as Record<string, unknown>[], count };
+    const { data, count } = await fn(db, emptyFilters, sorts, PAGE);
+    return { rows: data.map((row) => sortRowSchema.parse(row)), count };
   };
 
 const SORT_GUARDS = {
-  expense: { fields: expenseSortableFields, list: sortListFor(expenseList) },
+  expense: {
+    fields: expenseSortableFields,
+    list: sortListFor(expenseList, {}),
+  },
   financialAccount: {
     fields: financialAccountSortableFields,
-    list: sortListFor(listFinancialAccounts),
+    list: sortListFor(listFinancialAccounts, {}),
   },
   financialTransaction: {
     fields: financialTransactionSortableFields,
-    list: sortListFor(listFinancialTransactions),
+    list: sortListFor(listFinancialTransactions, {}),
   },
-  image: { fields: imageSortableFields, list: sortListFor(imageList) },
+  image: { fields: imageSortableFields, list: sortListFor(imageList, {}) },
   ingredient: {
     fields: ingredientSortableFields,
-    list: sortListFor(ingredientList),
+    list: sortListFor(ingredientList, {}),
   },
   inventory: {
     fields: inventorySortableFields,
-    list: sortListFor(inventoryentryList),
+    list: sortListFor(inventoryentryList, {}),
   },
-  location: { fields: locationSortableFields, list: sortListFor(locationList) },
+  location: {
+    fields: locationSortableFields,
+    list: sortListFor(locationList, {}),
+  },
   ledgerParty: {
     fields: ledgerPartySortableFields,
-    list: sortListFor(listLedgerParties),
+    list: sortListFor(listLedgerParties, {}),
   },
   ledgerTransfer: {
     fields: ledgerTransferSortableFields,
-    list: sortListFor(listLedgerTransfers),
+    list: sortListFor(listLedgerTransfers, {}),
   },
-  meal: { fields: mealSortableFields, list: sortListFor(mealList) },
-  product: { fields: productSortableFields, list: sortListFor(productList) },
-  project: { fields: projectSortableFields, list: sortListFor(projectList) },
-  purchase: { fields: purchaseSortableFields, list: sortListFor(purchaseList) },
-  recipe: { fields: recipeSortableFields, list: sortListFor(recipeList) },
-  task: { fields: taskSortableFields, list: sortListFor(taskList) },
-  vendor: { fields: vendorSortableFields, list: sortListFor(vendorList) },
-  wish: { fields: wishSortableFields, list: sortListFor(wishList) },
+  meal: { fields: mealSortableFields, list: sortListFor(mealList, {}) },
+  product: {
+    fields: productSortableFields,
+    list: sortListFor(productList, {}),
+  },
+  project: {
+    fields: projectSortableFields,
+    list: sortListFor(projectList, {}),
+  },
+  purchase: {
+    fields: purchaseSortableFields,
+    list: sortListFor(purchaseList, {}),
+  },
+  recipe: { fields: recipeSortableFields, list: sortListFor(recipeList, {}) },
+  task: { fields: taskSortableFields, list: sortListFor(taskList, {}) },
+  vendor: { fields: vendorSortableFields, list: sortListFor(vendorList, {}) },
+  wish: { fields: wishSortableFields, list: sortListFor(wishList, {}) },
 } satisfies Partial<
   Record<Entity, { fields: readonly string[]; list: SortListProbe }>
 >;
 
 type SortGuardedEntity = keyof typeof SORT_GUARDS;
-const SORT_GUARDED_ENTITIES = Object.keys(SORT_GUARDS) as SortGuardedEntity[];
+const isSortGuardedEntity = (value: string): value is SortGuardedEntity =>
+  value in SORT_GUARDS;
+const SORT_GUARDED_ENTITIES =
+  Object.keys(SORT_GUARDS).filter(isSortGuardedEntity);
 
 describe("every declared sortable field sorts by the value it displays", () => {
   const ctx = withTestDb();
@@ -1074,10 +1149,9 @@ describe("sort guard coverage", () => {
   const fieldExists = (key: string): boolean => {
     const [entity, ...rest] = key.split(".");
     const field = rest.join(".");
-    const guard = SORT_GUARDS[entity as SortGuardedEntity] as
-      | { fields: readonly string[] }
-      | undefined;
-    return guard?.fields.includes(field) ?? false;
+    if (entity === undefined || !isSortGuardedEntity(entity)) return false;
+    const guard = SORT_GUARDS[entity];
+    return guard?.fields.some((candidate) => candidate === field) ?? false;
   };
 
   it("keeps the field-alias map free of fields that no longer exist", () => {

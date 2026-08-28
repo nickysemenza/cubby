@@ -38,9 +38,12 @@ interface ProfilerTrace {
   samples: ProfilerSample[];
   resources: string[];
 }
+interface ProfilerSession {
+  stop(): Promise<ProfilerTrace>;
+}
 declare global {
   var Profiler: {
-    new (init: ProfilerInit): { stop(): Promise<ProfilerTrace> };
+    new (init: ProfilerInit): ProfilerSession;
   };
   interface Window {
     __jsProfile?: typeof captureProfile;
@@ -58,7 +61,7 @@ async function captureProfile(
   sampleInterval = 10,
   topN = 25,
 ): Promise<HotFrame[]> {
-  let profiler: { stop(): Promise<ProfilerTrace> };
+  let profiler: ProfilerSession;
   try {
     profiler = new Profiler({ sampleInterval, maxBufferSize: 1_000_000 });
   } catch (e) {
@@ -111,6 +114,6 @@ async function captureProfile(
 
 /** Expose `window.__jsProfile` in dev. No-op on the server. */
 export function installJsProfiler(): void {
-  if (typeof window === "undefined") return;
+  if (globalThis.window === undefined) return;
   window.__jsProfile = captureProfile;
 }

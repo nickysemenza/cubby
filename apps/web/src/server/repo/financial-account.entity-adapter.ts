@@ -1,7 +1,4 @@
-import {
-  financialAccountFiltersSchema,
-  financialAccountSortableFields,
-} from "@cubby/schemas/financial-account";
+import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 
@@ -16,7 +13,6 @@ import {
 
 export const financialAccountEntityAdapter = defineEntityAdapter({
   entity: "financialAccount",
-  filters: financialAccountFiltersSchema,
   sort: { fields: financialAccountSortableFields, default: "name" },
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
   repository: {

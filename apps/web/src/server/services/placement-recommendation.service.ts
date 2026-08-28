@@ -11,6 +11,18 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 type PlacementRecommendation = z.infer<typeof placementRecommendationOut>;
 
+export interface PlacementRecommendationPorts {
+  readonly getInventoryEntryByShortcode: typeof getInventoryEntryByShortcode;
+  readonly getProductStockRows: typeof getProductStockRows;
+  readonly resolveOrThrow: typeof resolveOrThrow;
+}
+
+const productionPlacementRecommendationPorts: PlacementRecommendationPorts = {
+  getInventoryEntryByShortcode,
+  getProductStockRows,
+  resolveOrThrow,
+};
+
 /**
  * A parked row earns a destination only when its exact Product already has one
  * other live stock location. Ambiguous filing stays in Problems as a prompt;
@@ -19,13 +31,18 @@ type PlacementRecommendation = z.infer<typeof placementRecommendationOut>;
 export async function getPlacementRecommendation(
   db: Database,
   inventoryId: InventoryShortcode,
+  ports: PlacementRecommendationPorts = productionPlacementRecommendationPorts,
 ): Promise<PlacementRecommendation> {
-  const source = await getInventoryEntryByShortcode(db, inventoryId);
+  const source = await ports.getInventoryEntryByShortcode(db, inventoryId);
   if (!source) return null;
   if (source.placement !== "stock" || source.location.name !== "Unknown")
     return null;
-  const productId = await resolveOrThrow(db, "product", source.product.id);
-  const destinations = (await getProductStockRows(db, productId)).filter(
+  const productId = await ports.resolveOrThrow(
+    db,
+    "product",
+    source.product.id,
+  );
+  const destinations = (await ports.getProductStockRows(db, productId)).filter(
     (row) => row.id !== source.id && row.location.name !== "Unknown",
   );
   if (destinations.length !== 1) return null;

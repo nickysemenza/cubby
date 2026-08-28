@@ -33,9 +33,10 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { shortcodeHead } from "~/lib/page-title";
 
+const tabSchema = z.enum(["recipes", "ingredients"]);
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
-  tab: z.enum(["recipes", "ingredients"]).optional().catch(undefined),
+  tab: tabSchema.optional().catch(undefined),
   // Embedded RecipeList mirrors sort/page to the URL (useTableState urlSync) —
   // merge so this strict schema doesn't strip those keys.
   ...tableSearchFields,
@@ -48,14 +49,27 @@ const CookbookNotFound = notFoundPage(
   "This cookbook is no longer available.",
 );
 
+export interface CookbookDetailLoaderPort {
+  load(shortcode: string): Promise<CookbookSummary | null>;
+}
+
+export async function loadCookbookDetail(
+  shortcode: string,
+  port: CookbookDetailLoaderPort,
+): Promise<void> {
+  const cookbook = await port.load(shortcode);
+  if (!cookbook) throw notFound();
+}
+
 export const Route = createFileRoute("/_authenticated/cookbooks/$shortcode")({
   validateSearch: searchSchema,
-  loader: async ({ params, context }) => {
-    const cookbook = await context.queryClient.ensureQueryData(
-      cookbookOperations.detail.queryOptions({ shortcode: params.shortcode }),
-    );
-    if (!cookbook) throw notFound();
-  },
+  loader: ({ params, context }) =>
+    loadCookbookDetail(params.shortcode, {
+      load: (shortcode) =>
+        context.queryClient.ensureQueryData(
+          cookbookOperations.detail.queryOptions({ shortcode }),
+        ),
+    }),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   notFoundComponent: CookbookNotFound,
@@ -80,7 +94,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
 
-  const tabs = useTabParam(tab, "recipes", (next) =>
+  const tabs = useTabParam(tab, "recipes", tabSchema, (next) =>
     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
   );
 
@@ -102,7 +116,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
   const queryClient = useQueryClient();
   const reprocess = useBulkStream<
     never,
-    { reprocessed: number; importableExtras: number }
+    { reprocessed: number; importableExtras: string[] }
   >();
   // Takes the id rather than closing over it: this is declared above the
   // "not resolved yet" guard below, where `cookbookId` is still optional.
@@ -113,8 +127,8 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
       {
         successToast: ({ reprocessed, importableExtras }) => {
           const extra =
-            importableExtras > 0
-              ? ` (${importableExtras} more in the source not yet imported)`
+            importableExtras.length > 0
+              ? ` (${importableExtras.length} more in the source not yet imported)`
               : "";
           return `Reprocessed ${reprocessed} recipe${reprocessed === 1 ? "" : "s"} from ${name}${extra}`;
         },

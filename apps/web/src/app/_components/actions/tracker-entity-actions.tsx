@@ -1,11 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
-  type CostType,
+  parseShortcodeFor,
+  type TaskShortcode,
+} from "@cubby/schemas/identifiers";
+import {
+  costTypeSchema,
   type ExpenseOut,
   expenseOut,
-  type TaskStatus,
-  type Trade,
+  taskStatusSchema,
+  tradeSchema,
 } from "@cubby/schemas/project";
 import { useCallback, useRef, useState } from "react";
 
@@ -41,6 +44,11 @@ interface TrackerActionRow extends EntityActionRow {
   status?: string;
   dueDate?: string | null;
   dueEndDate?: string | null;
+}
+
+function requireTrackerEntity(entity: Entity): TrackerEntity {
+  if (entity === "expense" || entity === "task") return entity;
+  throw new Error(`Tracker action does not support ${entity}`);
 }
 
 const asTrackerRow = (row: EntityActionRow): TrackerActionRow => ({
@@ -133,7 +141,7 @@ const rowMenuItem = (
 export function useMoveToProjectEntityAction(
   entity: Entity,
 ): EntityActionHandles {
-  const trackerEntity = entity as TrackerEntity;
+  const trackerEntity = requireTrackerEntity(entity);
   const staged = useStagedRows();
   const bulkMutation = useTrackerBulkMutation(trackerEntity, "Moved");
   const expenseUpdate = useUpdateMutation({
@@ -194,7 +202,7 @@ export function useMoveToProjectEntityAction(
 }
 
 export function useSetTradeEntityAction(entity: Entity): EntityActionHandles {
-  const trackerEntity = entity as TrackerEntity;
+  const trackerEntity = requireTrackerEntity(entity);
   const staged = useStagedRows();
   const mutation = useTrackerBulkMutation(trackerEntity);
   return {
@@ -218,14 +226,14 @@ export function useSetTradeEntityAction(entity: Entity): EntityActionHandles {
               ids: staged.items.map((item) =>
                 parseShortcodeFor("expense", item.id),
               ),
-              data: { trade: trade as Trade },
+              data: { trade: tradeSchema.parse(trade) },
             });
           } else {
             await mutation.mutateAsync({
               ids: staged.items.map((item) =>
                 parseShortcodeFor("task", item.id),
               ),
-              data: { trade: trade as Trade },
+              data: { trade: tradeSchema.parse(trade) },
             });
           }
           staged.complete();
@@ -258,7 +266,7 @@ export function useSetExpenseCostTypeAction(): EntityActionHandles {
             ids: staged.items.map((item) =>
               parseShortcodeFor("expense", item.id),
             ),
-            data: { costType: costType as CostType },
+            data: { costType: costTypeSchema.parse(costType) },
           });
           staged.complete();
         }}
@@ -280,7 +288,7 @@ export function useSetTaskStatusAction(): EntityActionHandles {
           if (!open) staged.cancel();
         }}
         items={staged.items}
-        currentStatus={(item) => item.status as TaskStatus}
+        currentStatus={(item) => taskStatusSchema.parse(item.status)}
         isPending={mutation.isPending}
         onConfirm={async (status) => {
           await mutation.mutateAsync({
@@ -383,9 +391,7 @@ export function useMarkExpensePurchasedAction(): EntityActionHandles {
 }
 
 export function useCreateProjectFromTasksAction(): EntityActionHandles {
-  const [taskIds, setTaskIds] = useState<
-    ReturnType<typeof parseShortcodeFor<"task">>[]
-  >([]);
+  const [taskIds, setTaskIds] = useState<TaskShortcode[]>([]);
   return {
     run: async (rows) => {
       setTaskIds(rows.map((row) => parseShortcodeFor("task", row.id)));

@@ -251,9 +251,19 @@ export function NotionImport() {
               </div>
               <NativeSelect
                 value={filter}
-                onChange={(event) =>
-                  setFilter(event.target.value as NotionPreviewFilter)
-                }
+                onChange={(event) => {
+                  const nextFilter = [
+                    "all",
+                    "new",
+                    "will-update",
+                    "unchanged",
+                    "needs-formatting",
+                  ].find(
+                    (candidate): candidate is NotionPreviewFilter =>
+                      candidate === event.target.value,
+                  );
+                  if (nextFilter) setFilter(nextFilter);
+                }}
                 aria-label="Filter Notion recipes by status"
               >
                 <option value="all">All ({items.length})</option>

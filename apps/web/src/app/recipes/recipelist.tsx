@@ -4,13 +4,18 @@ import { useQuery } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
 import { relatedData } from "~/lib/related-data.functions";
 
@@ -245,238 +250,252 @@ export function RecipeList({
         />
       );
     };
-    return [
+    return createCubbyColumnCollection<RecipeListItem>((add) => {
       // Tags column
-      columnHelper.accessor("tags", {
-        id: "tags",
-        header: "Tags",
-        enableSorting: true,
-        meta: {
-          className: "w-48",
-          mobile: { slot: "subtitle", priority: 10 },
-          cellData: tagsCellDataDef,
-        },
-        cell: (info) => {
-          const recipe = info.row.original;
-          return (
-            <EditableTagsCell
-              value={recipe.tags ?? null}
-              renderValue={renderTags}
-              clipboard={specFromCellData(tagsCellDataDef, recipe)}
-              onSave={(nextTags) => saveTags(recipe, nextTags)}
-            />
-          );
-        },
-      }),
+      add(
+        columnHelper.accessor("tags", {
+          id: "tags",
+          header: "Tags",
+          enableSorting: true,
+          meta: attachCubbyColumnMeta({
+            className: "w-48",
+            mobile: { slot: "subtitle", priority: 10 },
+            cellData: tagsCellDataDef,
+          }),
+          cell: (info) => {
+            const recipe = info.row.original;
+            return (
+              <EditableTagsCell
+                value={recipe.tags ?? null}
+                renderValue={renderTags}
+                clipboard={specFromCellData(tagsCellDataDef, recipe)}
+                onSave={(nextTags) => saveTags(recipe, nextTags)}
+              />
+            );
+          },
+        }),
+      );
       // Yield column. Accessor (not display) so it sorts server-side; the
       // accessorFn exposes `servings` (recipeList orders "yield" by it), while
       // the cell still shows yield-or-servings.
-      columnHelper.accessor((row) => row.servings ?? undefined, {
-        id: "yield",
-        header: "Yield",
-        meta: {
-          numeric: true,
-          className: "w-24",
-          // Mobile: yield/servings is the most useful at-a-glance datum, and
-          // recipe rows have no image — surface it as the row subtitle.
-          mobile: { slot: "subtitle", priority: 5, interactive: true },
-          cellData: servingsCellDataDef,
-        },
-        cell: (info) => {
-          const recipe = info.row.original;
-          // A structured yield ("2 loaves") is authoritative and owned by the
-          // detail page's yield editor — read-only here. Only recipes with no
-          // structured yield fall back to the plain servings count, which is
-          // safe to edit inline.
-          if (recipe.yield) return formatYield(recipe.yield);
-          return (
-            <EditableCell<number>
-              value={recipe.servings ?? null}
-              config={{ type: "number" }}
-              clipboard={specFromCellData(servingsCellDataDef, recipe)}
-              renderValue={(servings) =>
-                servings == null ? <NoneValue /> : `${servings} servings`
-              }
-              onSave={(newValue) => saveServings(recipe, newValue)}
-            />
-          );
-        },
-      }),
+      add(
+        columnHelper.accessor((row) => row.servings ?? undefined, {
+          id: "yield",
+          header: "Yield",
+          meta: attachCubbyColumnMeta({
+            numeric: true,
+            className: "w-24",
+            // Mobile: yield/servings is the most useful at-a-glance datum, and
+            // recipe rows have no image — surface it as the row subtitle.
+            mobile: { slot: "subtitle", priority: 5, interactive: true },
+            cellData: servingsCellDataDef,
+          }),
+          cell: (info) => {
+            const recipe = info.row.original;
+            // A structured yield ("2 loaves") is authoritative and owned by the
+            // detail page's yield editor — read-only here. Only recipes with no
+            // structured yield fall back to the plain servings count, which is
+            // safe to edit inline.
+            if (recipe.yield) return formatYield(recipe.yield);
+            return (
+              <EditableCell
+                value={recipe.servings ?? null}
+                config={{ type: "number" }}
+                clipboard={specFromCellData(servingsCellDataDef, recipe)}
+                renderValue={(servings) =>
+                  servings == null ? <NoneValue /> : `${servings} servings`
+                }
+                onSave={(newValue) => saveServings(recipe, newValue)}
+              />
+            );
+          },
+        }),
+      );
       // Total cost — read from the server-persisted rollup (recipe.totals).
       // Accessor (not display) so the column sorts server-side by costTotal;
       // null totals = not yet computed (the drain will fill it) → skeleton.
-      columnHelper.accessor((row) => row.totals?.costTotal ?? undefined, {
-        id: "costTotal",
-        header: "Cost",
-        meta: {
-          numeric: true,
-          className: "w-24",
-          mobile: { slot: "trailing", priority: 5 },
-        },
-        sortUndefined: "last",
-        cell: (info) => {
-          const recipe = info.row.original;
-          const totals = recipe.totals;
-          // Null totals = not yet computed. Fresh recipe → the drain is about to
-          // fill it (skeleton); plausibly stuck → offer a manual recompute so the
-          // skeleton doesn't animate forever.
-          if (!totals)
-            return totalsLookStuck(recipe) ? (
-              <StuckTotalsCell recipe={recipe} withAction />
-            ) : (
-              <Skeleton className="h-4 w-12" />
+      add(
+        columnHelper.accessor((row) => row.totals?.costTotal ?? undefined, {
+          id: "costTotal",
+          header: "Cost",
+          meta: {
+            numeric: true,
+            className: "w-24",
+            mobile: { slot: "trailing", priority: 5 },
+          },
+          sortUndefined: "last",
+          cell: (info) => {
+            const recipe = info.row.original;
+            const totals = recipe.totals;
+            // Null totals = not yet computed. Fresh recipe → the drain is about to
+            // fill it (skeleton); plausibly stuck → offer a manual recompute so the
+            // skeleton doesn't animate forever.
+            if (!totals)
+              return totalsLookStuck(recipe) ? (
+                <StuckTotalsCell recipe={recipe} withAction />
+              ) : (
+                <Skeleton className="h-4 w-12" />
+              );
+            if (!totals.costTotal) return <NoneValue />;
+            const perItem = getServingBasis(recipe);
+            return (
+              <Stack gap="xs">
+                <CoverageValue
+                  covered={totals.costCovered}
+                  total={totals.ingredientCount}
+                >
+                  {formatCurrencyRange(totals.costTotal, totals.costTotalUpper)}
+                </CoverageValue>
+                {perItem &&
+                  (() => {
+                    const per = perServingRange(
+                      totals.costTotal,
+                      totals.costTotalUpper,
+                      perItem.divisor,
+                    );
+                    return (
+                      <div className="text-2xs text-muted-foreground">
+                        {formatCurrencyRange(per.value, per.upper)}{" "}
+                        {perUnitSuffix(perItem.noun, { short: true })}
+                      </div>
+                    );
+                  })()}
+              </Stack>
             );
-          if (!totals.costTotal) return <NoneValue />;
-          const perItem = getServingBasis(recipe);
-          return (
-            <Stack gap="xs">
-              <CoverageValue
-                covered={totals.costCovered}
-                total={totals.ingredientCount}
-              >
-                {formatCurrencyRange(totals.costTotal, totals.costTotalUpper)}
-              </CoverageValue>
-              {perItem &&
-                (() => {
-                  const per = perServingRange(
-                    totals.costTotal,
-                    totals.costTotalUpper,
-                    perItem.divisor,
-                  );
-                  return (
-                    <div className="text-2xs text-muted-foreground">
-                      {formatCurrencyRange(per.value, per.upper)}{" "}
-                      {perUnitSuffix(perItem.noun, { short: true })}
-                    </div>
-                  );
-                })()}
-            </Stack>
-          );
-        },
-      }),
+          },
+        }),
+      );
       // Total calories — server-persisted rollup.
-      columnHelper.accessor((row) => row.totals?.caloriesTotal ?? undefined, {
-        id: "caloriesTotal",
-        header: "Calories",
-        meta: {
-          numeric: true,
-          className: "w-28",
-          mobile: { slot: "trailing", priority: 10 },
-        },
-        sortUndefined: "last",
-        cell: (info) => {
-          const recipe = info.row.original;
-          const totals = recipe.totals;
-          // Mirror the cost cell: skeleton while fresh, "not costed" once stuck
-          // (the recompute affordance lives on the cost column so a row shows it
-          // once).
-          if (!totals)
-            return totalsLookStuck(recipe) ? (
-              <StuckTotalsCell recipe={recipe} withAction={false} />
-            ) : (
-              <Skeleton className="h-4 w-12" />
-            );
-          if (!totals.caloriesTotal) return <NoneValue />;
-          const perItem = getServingBasis(recipe);
-          return (
-            <Stack gap="xs">
-              <CoverageValue
-                covered={totals.caloriesCovered}
-                total={totals.ingredientCount}
-              >
-                {formatNumberRange(
-                  totals.caloriesTotal,
-                  totals.caloriesTotalUpper,
-                  (n) => `${Math.round(n)}`,
-                )}{" "}
-                kcal
-              </CoverageValue>
-              {perItem &&
-                (() => {
-                  const per = perServingRange(
+      add(
+        columnHelper.accessor((row) => row.totals?.caloriesTotal ?? undefined, {
+          id: "caloriesTotal",
+          header: "Calories",
+          meta: {
+            numeric: true,
+            className: "w-28",
+            mobile: { slot: "trailing", priority: 10 },
+          },
+          sortUndefined: "last",
+          cell: (info) => {
+            const recipe = info.row.original;
+            const totals = recipe.totals;
+            // Mirror the cost cell: skeleton while fresh, "not costed" once stuck
+            // (the recompute affordance lives on the cost column so a row shows it
+            // once).
+            if (!totals)
+              return totalsLookStuck(recipe) ? (
+                <StuckTotalsCell recipe={recipe} withAction={false} />
+              ) : (
+                <Skeleton className="h-4 w-12" />
+              );
+            if (!totals.caloriesTotal) return <NoneValue />;
+            const perItem = getServingBasis(recipe);
+            return (
+              <Stack gap="xs">
+                <CoverageValue
+                  covered={totals.caloriesCovered}
+                  total={totals.ingredientCount}
+                >
+                  {formatNumberRange(
                     totals.caloriesTotal,
                     totals.caloriesTotalUpper,
-                    perItem.divisor,
-                  );
-                  return (
-                    <div className="text-2xs text-muted-foreground">
-                      {formatNumberRange(
-                        per.value,
-                        per.upper,
-                        (n) => `${Math.round(n)}`,
-                      )}{" "}
-                      kcal {perUnitSuffix(perItem.noun, { short: true })}
-                    </div>
-                  );
-                })()}
-            </Stack>
-          );
-        },
-      }),
+                    (n) => `${Math.round(n)}`,
+                  )}{" "}
+                  kcal
+                </CoverageValue>
+                {perItem &&
+                  (() => {
+                    const per = perServingRange(
+                      totals.caloriesTotal,
+                      totals.caloriesTotalUpper,
+                      perItem.divisor,
+                    );
+                    return (
+                      <div className="text-2xs text-muted-foreground">
+                        {formatNumberRange(
+                          per.value,
+                          per.upper,
+                          (n) => `${Math.round(n)}`,
+                        )}{" "}
+                        kcal {perUnitSuffix(perItem.noun, { short: true })}
+                      </div>
+                    );
+                  })()}
+              </Stack>
+            );
+          },
+        }),
+      );
       // Total time — the weeknight axis. Accessor on `totalMinutes` so sorting
       // and the range filter are the server's `Recipe.totalMinutes` column, but
       // the cell prints the source's own prose whenever there is one: a present
       // string does NOT imply a present count, and vice versa, so a recipe can
       // show "about 1½ hours" here while sorting on nothing at all.
-      columnHelper.accessor(
-        (row) => row.meta?.times?.totalMinutes ?? undefined,
-        {
-          id: "totalMinutes",
-          header: "Time",
-          meta: {
-            numeric: true,
-            className: "w-24",
-            mobile: { slot: "meta", priority: 25 },
+      add(
+        columnHelper.accessor(
+          (row) => row.meta?.times?.totalMinutes ?? undefined,
+          {
+            id: "totalMinutes",
+            header: "Time",
+            meta: {
+              numeric: true,
+              className: "w-24",
+              mobile: { slot: "meta", priority: 25 },
+            },
+            sortUndefined: "last",
+            cell: (info) => {
+              const times = info.row.original.meta?.times;
+              const label = formatRecipeTime(times?.total, times?.totalMinutes);
+              return label ?? <NoneValue />;
+            },
           },
-          sortUndefined: "last",
-          cell: (info) => {
-            const times = info.row.original.meta?.times;
-            const label = formatRecipeTime(times?.total, times?.totalMinutes);
-            return label ?? <NoneValue />;
-          },
-        },
-      ),
+        ),
+      );
       // Source column: cookbook link for book recipes, external URL for web
       // recipes, nothing otherwise — via the shared RecipeSourceLink.
-      columnHelper.accessor("source", {
-        header: "Source",
-        meta: {
-          className: "w-44",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        cell: (info) => {
-          const source = info.getValue();
-          if (!sourceLabel(source)) return <NoneValue />;
-          return (
-            <RecipeSourceLink
-              source={source}
-              text="host"
-              onClick={(e) => e.stopPropagation()}
-            />
-          );
-        },
-      }),
+      add(
+        columnHelper.accessor("source", {
+          header: "Source",
+          meta: {
+            className: "w-44",
+            mobile: { slot: "meta", priority: 30 },
+          },
+          cell: (info) => {
+            const source = info.getValue();
+            if (!sourceLabel(source)) return <NoneValue />;
+            return (
+              <RecipeSourceLink
+                source={source}
+                text="host"
+                onClick={(e) => e.stopPropagation()}
+              />
+            );
+          },
+        }),
+      );
       // Meals column: how many live meal plans use this recipe. A live
       // MealRecipe under a soft-deleted Meal doesn't count (see
       // liveMealCountForRecipeSql) — mirrors the "meals" presence filter.
-      columnHelper.accessor("mealCount", {
-        id: "meals",
-        header: "Meals",
-        meta: {
-          numeric: true,
-          className: "w-20",
-          mobile: { slot: "meta", priority: 40 },
-        },
-        cell: (info) => {
-          const count = info.getValue();
-          return count ? (
-            <span className="font-mono tabular-nums">{count}</span>
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-    ];
+      add(
+        columnHelper.accessor("mealCount", {
+          id: "meals",
+          header: "Meals",
+          meta: {
+            numeric: true,
+            className: "w-20",
+            mobile: { slot: "meta", priority: 40 },
+          },
+          cell: (info) => {
+            const count = info.getValue();
+            return count ? (
+              <span className="font-mono tabular-nums">{count}</span>
+            ) : (
+              <NoneValue />
+            );
+          },
+        }),
+      );
+    });
     // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
   }, [columnHelper]);
 
@@ -489,6 +508,7 @@ export function RecipeList({
   return (
     <EntityListPage
       entity="recipe"
+      queryOptions={entityListFor("recipe").listQueryPlan}
       // Constant scope when rendered on a cookbook page; merged over the
       // table's own column filters so search-within-a-book still works.
       scopeFilters={cookbookScope}

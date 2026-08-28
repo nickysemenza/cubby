@@ -1,7 +1,12 @@
-import type { IngredientId, ProductId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientId,
+  type ProductId,
+  productId,
+} from "@cubby/schemas/identifiers";
 import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
 import { and, inArray, isNotNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
@@ -33,6 +38,14 @@ const EMPTY_AGGREGATE: PricingAggregate = {
   unknownExpenseCount: 0,
   knownUnitCount: 0,
 };
+
+const pricingAggregateRowSchema = z.object({
+  productId,
+  knownCost: z.number(),
+  knownUnitCount: z.number(),
+  knownExpenseCount: z.number().int(),
+  unknownExpenseCount: z.number().int(),
+});
 
 /**
  * The weighted all-history unit cost, UNROUNDED.
@@ -143,13 +156,10 @@ const loadPricingAggregates = async (
       ${sql.raw(PRICING_PROJECTION_FROM)}
      GROUP BY ka.target`;
 
-  const rows = projectionRows<{
-    productId: ProductId;
-    knownCost: number;
-    knownUnitCount: number;
-    knownExpenseCount: number;
-    unknownExpenseCount: number;
-  }>(await unwrapDb(db).execute(query));
+  const rows = projectionRows(
+    await unwrapDb(db).execute(query),
+    pricingAggregateRowSchema,
+  );
 
   const aggregateById = new Map<ProductId, PricingAggregate>();
   for (const row of rows) {

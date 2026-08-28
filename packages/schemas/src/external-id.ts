@@ -126,17 +126,19 @@ export type ExternalIdInput = z.infer<typeof externalIdInput>;
  * `Product.upc` the only place a second barcode could go — and it had room for
  * one. Now it mirrors the partial unique in the database exactly.
  */
-const uniqueExternalIdSlots = <T extends z.ZodType>(item: T) =>
+type ExternalIdSlot = {
+  source: string;
+  kind: ExternalIdKind;
+  externalId: string;
+  isPrimary?: boolean;
+};
+
+const uniqueExternalIdSlots = <T extends z.ZodType<ExternalIdSlot>>(item: T) =>
   z.array(item).superRefine((values, ctx) => {
     const primaries = new Set<string>();
     const seen = new Set<string>();
     for (const [index, value] of values.entries()) {
-      const entry = value as {
-        source: string;
-        kind: ExternalIdKind;
-        externalId: string;
-        isPrimary?: boolean;
-      };
+      const entry = value;
       const slot = `${entry.source}\u0000${entry.kind}`;
       const value_ = `${slot}\u0000${entry.externalId}`;
       if (seen.has(value_)) {
@@ -163,7 +165,7 @@ const uniqueExternalIdSlots = <T extends z.ZodType>(item: T) =>
     // two, so nothing downstream would reject it — the slot would just stop
     // answering, since the next primary upsert's arbiter matches no row.
     for (const [index, value] of values.entries()) {
-      const entry = value as { source: string; kind: ExternalIdKind };
+      const entry = value;
       const slot = `${entry.source}\u0000${entry.kind}`;
       if (primaries.has(slot)) continue;
       ctx.addIssue({

@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { hasActiveFilters, isNarrowed } from "./entity-empty-states";
@@ -10,11 +11,14 @@ import type { CubbyTable as Table } from "./table-features";
  * under a scope still reads as "no matches" rather than "you have nothing yet".
  */
 describe("isNarrowed", () => {
-  const table = (columnFilters: unknown[], urlScopeCount?: number) =>
-    ({
+  const table = (
+    columnFilters: { id: string; value: string[] }[],
+    urlScopeCount?: number,
+  ) =>
+    fromPartial<Table<{ id: string }>>({
       state: { columnFilters },
       options: { meta: urlScopeCount ? { urlScopeCount } : {} },
-    }) as unknown as Table<Record<string, unknown>>;
+    });
 
   it("is false with neither a column filter nor a scope", () => {
     expect(isNarrowed(table([]))).toBe(false);

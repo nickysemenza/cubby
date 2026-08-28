@@ -3,88 +3,17 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  rTable: vi.fn(),
-  /** The row-action renderer `useClientEntityList` was handed. */
-  extraActions: { current: null as ((row: never) => ReactNode) | null },
-  /** The rows it was handed — grafted `StockedRow`s, not raw entries. */
-  rows: { current: [] as unknown[] },
-  /** The per-row selection guard, so a test can assert it, not just trust it. */
-  rowIsEntity: { current: null as ((row: never) => boolean) | null },
-  moveDialog: vi.fn(),
-  deleteDialog: vi.fn(),
-  hierarchyDrilldown: vi.fn(),
-}));
+import { product as productOperations } from "~/app/products/product.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("~/app/_components/data-table/Table", () => ({
-  default: (props: unknown) => {
-    mocks.rTable(props);
-    return <div data-testid="rtable" />;
-  },
-}));
-vi.mock("~/app/_components/visualizations/hierarchy-drilldown", () => ({
-  HierarchyDrilldown: (props: unknown) => {
-    mocks.hierarchyDrilldown(props);
-    return <div data-testid="location-breakdown" />;
-  },
-}));
-vi.mock("~/components/ui/dropdown-menu", () => ({
-  DropdownMenuItem: ({
-    children,
-    onClick,
-  }: {
-    children: ReactNode;
-    onClick?: (e: { stopPropagation: () => void }) => void;
-  }) => (
-    <button type="button" onClick={() => onClick?.({ stopPropagation() {} })}>
-      {children}
-    </button>
-  ),
-}));
-vi.mock("~/app/_components/hooks/useClientEntityList", () => ({
-  useClientEntityList: (opts: {
-    data: unknown[];
-    extraActions?: (row: never) => ReactNode;
-    rowIsEntity?: (row: never) => boolean;
-  }) => {
-    mocks.extraActions.current = opts.extraActions ?? null;
-    mocks.rows.current = opts.data;
-    mocks.rowIsEntity.current = opts.rowIsEntity ?? null;
-    return {
-      workbench: {
-        entity: "inventory",
-        table: {
-          getRowModel: () => ({ rows: [] }),
-          resetRowSelection: vi.fn(),
-        },
-        bulkActionBar: null,
-        deleteDialog: null,
-      },
-      requestDelete: vi.fn(),
-    };
-  },
-}));
-vi.mock("~/app/_components/hooks/useUpdateMutation", () => ({
-  useUpdateMutation: () => ({ mutateAsync: vi.fn() }),
-}));
-vi.mock("~/app/_components/inventory/move-inventory-dialog", () => ({
-  MoveInventoryDialog: (props: unknown) => {
-    mocks.moveDialog(props);
-    return null;
-  },
-}));
-vi.mock("~/app/_components/inventory/delete-inventory-dialog", () => ({
-  DeleteInventoryDialog: (props: unknown) => {
-    mocks.deleteDialog(props);
-    return null;
-  },
-}));
-
-import { ProductStockedAt } from "./product-stocked-at";
+import {
+  type ProductStockedAtOperations,
+  ProductStockedAt,
+  productStockedRows,
+} from "./product-stocked-at";
 
 const entry = (id: string, locationId: string) => ({
   id: testShortcode("inventory", id),
@@ -171,7 +100,6 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   updatedAt: new Date("2026-01-01"),
 });
 
-/** A product held only as bins in service — no loose stock at all. */
 const locationsOnlyProduct: ProductWithFoodOut = productWithFoodOut.parse({
   ...product,
   inventoryEntry: [],
@@ -186,153 +114,136 @@ const locationsOnlyProduct: ProductWithFoodOut = productWithFoodOut.parse({
   ],
 });
 
-/**
- * Render the table, then fire one row action against the row the component
- * actually built — not the raw entry it was given, which is the whole point of
- * the grafting these tests cover.
- */
-const fireRowAction = (label: string, rowIndex: number) => {
-  render(<ProductStockedAt product={product} />);
-  const row = mocks.rows.current[rowIndex];
-  expect(row).toBeDefined();
-  const menu = render(mocks.extraActions.current!(row as never));
-  fireEvent.click(menu.getByText(label));
+const componentOperations: ProductStockedAtOperations = {
+  components: productOperations.components.withTransport(async () => [
+    {
+      productId: testShortcode("product", "PRD-COMPONENT"),
+      productName: "Clamp jaw",
+      manufacturer: "Bora",
+      quantity: 2,
+      price: null,
+      coverImageUrl: null,
+      onHandUnits: 3,
+      attachedAt: new Date("2026-01-01"),
+    },
+  ]),
 };
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
 beforeEach(() => {
-  for (const m of [
-    mocks.rTable,
-    mocks.moveDialog,
-    mocks.deleteDialog,
-    mocks.hierarchyDrilldown,
-  ])
-    m.mockClear();
-  mocks.extraActions.current = null;
-  mocks.rowIsEntity.current = null;
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function renderStockedAt(
+  stockedProduct: ProductWithFoodOut,
+  operations: ProductStockedAtOperations = componentOperations,
+) {
+  return render(
+    <ProductStockedAt product={stockedProduct} operations={operations} />,
+    { wrapper: harness.wrapper },
+  );
+}
+
+describe("productStockedRows", () => {
+  it("keeps stock entries actionable and represents a location identity at the effective price", () => {
+    const stockRows = productStockedRows(product);
+    const identityRows = productStockedRows(locationsOnlyProduct);
+    const explicitIdentityRows = productStockedRows(
+      productWithFoodOut.parse({
+        ...locationsOnlyProduct,
+        price: 40,
+        pricing: {
+          effectivePrice: 40,
+          derivedPrice: 26.26,
+          source: "explicit",
+          knownExpenseCount: 0,
+          unknownExpenseCount: 0,
+          knownUnitCount: 0,
+          partial: false,
+        },
+      }),
+    );
+
+    expect(stockRows).toHaveLength(2);
+    expect(stockRows[0]).toMatchObject({ kind: "stock", id: "INV-AAAA" });
+    expect(identityRows).toEqual([
+      expect.objectContaining({
+        kind: "identity",
+        amount: { value: 1, unit: "each" },
+        valuation: 26.26,
+      }),
+    ]);
+    expect(explicitIdentityRows[0]).toMatchObject({ valuation: 40 });
+  });
 });
 
 describe("ProductStockedAt", () => {
-  it("renders the location breakdown above the editable entries table", () => {
-    render(<ProductStockedAt product={product} />);
-    expect(screen.getByTestId("location-breakdown")).toBeInTheDocument();
-    expect(screen.getByTestId("rtable")).toBeInTheDocument();
-    expect(mocks.hierarchyDrilldown).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ariaLabel: "Bora Clamp location breakdown",
-        root: expect.objectContaining({ metricLabel: "4 each" }),
+  it("renders the location breakdown and real embedded table", async () => {
+    renderStockedAt(product);
+
+    const breakdown = await screen.findByLabelText(
+      "Bora Clamp location breakdown",
+    );
+    const inventory = await screen.findByLabelText("Bora Clamp inventory");
+    expect(breakdown).toHaveTextContent("4 each");
+    expect(inventory).toBeVisible();
+    expect(within(breakdown).getAllByText("shelf")).toHaveLength(2);
+    expect(within(inventory).getAllByText("stock")).toHaveLength(2);
+  });
+
+  it("renders the unstocked shelf state only when neither stock form exists", async () => {
+    renderStockedAt(
+      productWithFoodOut.parse({
+        ...product,
+        inventoryEntry: [],
+        servingAsLocations: [],
       }),
     );
+
+    expect(await screen.findByText("Not stocked anywhere")).toBeVisible();
   });
 
-  it("renders the empty shelf state instead of a table when nothing is stocked", () => {
-    render(
-      <ProductStockedAt
-        product={productWithFoodOut.parse({
-          ...product,
-          inventoryEntry: [],
-          servingAsLocations: [],
-        })}
-      />,
+  it("keeps a location-identity row in the table and out of inventory actions", async () => {
+    renderStockedAt(locationsOnlyProduct);
+
+    const breakdown = await screen.findByLabelText(
+      "Bora Clamp location breakdown",
     );
-    expect(mocks.rTable).not.toHaveBeenCalled();
-    expect(screen.getByText("Not stocked anywhere")).toBeInTheDocument();
-  });
-
-  it("tables a product held only as locations rather than calling it unstocked", () => {
-    render(<ProductStockedAt product={locationsOnlyProduct} />);
-    expect(screen.queryByText("Not stocked anywhere")).not.toBeInTheDocument();
-    expect(mocks.rTable).toHaveBeenCalled();
-    expect(mocks.rows.current).toHaveLength(1);
-    expect(mocks.rows.current[0]).toMatchObject({
-      kind: "identity",
-      amount: { value: 1, unit: "each" },
+    const inventory = await screen.findByLabelText("Bora Clamp inventory");
+    expect(within(breakdown).getByText("chrome wire shelf")).toBeVisible();
+    expect(within(breakdown).getByText("is this location")).toBeVisible();
+    expect(within(inventory).getByText("chrome wire shelf")).toBeVisible();
+    const identityRow = within(inventory).getByRole("row", {
+      name: /chrome wire shelf/,
     });
-  });
-
-  it("values an identity row at the effective price when there is no override", () => {
-    render(<ProductStockedAt product={locationsOnlyProduct} />);
-    expect(mocks.rows.current[0]).toMatchObject({ valuation: 26.26 });
-  });
-
-  it("lets the manual override win over the derived price", () => {
-    render(
-      <ProductStockedAt
-        product={productWithFoodOut.parse({
-          ...locationsOnlyProduct,
-          price: 40,
-          pricing: {
-            effectivePrice: 40,
-            derivedPrice: 26.26,
-            source: "explicit",
-            knownExpenseCount: 0,
-            unknownExpenseCount: 0,
-            knownUnitCount: 0,
-            partial: false,
-          },
-        })}
-      />,
+    fireEvent.click(
+      within(identityRow).getByRole("button", { name: "Open menu" }),
     );
-    expect(mocks.rows.current[0]).toMatchObject({ valuation: 40 });
+    expect(
+      screen.queryByRole("menuitem", {
+        name: /move|delete|mark as stock|mark installed/i,
+      }),
+    ).toBeNull();
   });
 
-  it("gives an identity row no row menu and no selection", () => {
-    render(<ProductStockedAt product={locationsOnlyProduct} />);
-    const row = mocks.rows.current[0];
-    expect(row).toBeDefined();
-    // No InventoryEntry behind it, so Move and Delete have nothing to act on —
-    // the menu is absent rather than present and failing. The registry's
-    // Discard filters the same row out on its own (see
-    // `use-discard-inventory-action`), so neither half offers it.
-    expect(mocks.extraActions.current!(row as never)).toBeNull();
-    expect(mocks.rowIsEntity.current!(row as never)).toBe(false);
-  });
-
-  it("still selects and offers the menu on a real stock row", () => {
-    render(<ProductStockedAt product={product} />);
-    const row = mocks.rows.current[0];
-    expect(mocks.rowIsEntity.current!(row as never)).toBe(true);
-    expect(mocks.extraActions.current!(row as never)).not.toBeNull();
-  });
-
-  // Discard is deliberately absent: it is a registered `inventory` action now,
-  // so it arrives through `EntityActionRowMenuItems` rather than this table's
-  // own `extraActions`.
-  it("offers Move and Delete on every row", () => {
-    render(<ProductStockedAt product={product} />);
-    const menu = render(
-      mocks.extraActions.current!(mocks.rows.current[0] as never),
+  it("uses the components operation when a decomposed kit has no direct stock", async () => {
+    renderStockedAt(
+      productWithFoodOut.parse({
+        ...product,
+        inventoryEntry: [],
+        componentCount: 1,
+      }),
     );
-    expect(menu.getByText("Move to...")).toBeInTheDocument();
-    expect(menu.queryByText("Discard...")).not.toBeInTheDocument();
-    expect(menu.getByText("Delete")).toBeInTheDocument();
-  });
 
-  it("names a deleted row by the page's product", () => {
-    fireRowAction("Delete", 0);
-
-    const props = mocks.deleteDialog.mock.calls.at(-1)?.[0];
-    expect(props.open).toBe(true);
-    expect(props.items).toHaveLength(1);
-    expect(props.items[0].product.name).toBe("Bora Clamp");
-    expect(props.items[0].id).toBe("INV-AAAA");
-  });
-
-  it("hands Move the row's own source location", () => {
-    fireRowAction("Move to...", 1);
-
-    const props = mocks.moveDialog.mock.calls.at(-1)?.[0];
-    expect(props.open).toBe(true);
-    expect(props.items[0].location.id).toBe("LOC-BBBB");
-  });
-
-  it("leaves every dialog closed and unseeded at rest", () => {
-    render(<ProductStockedAt product={product} />);
-
-    expect(mocks.moveDialog).toHaveBeenLastCalledWith(
-      expect.objectContaining({ open: false, items: [] }),
-    );
-    expect(mocks.deleteDialog).toHaveBeenLastCalledWith(
-      expect.objectContaining({ open: false, items: [] }),
-    );
+    expect(
+      await screen.findByText("Not stocked under this name"),
+    ).toBeVisible();
+    expect(await screen.findByText("Clamp jaw")).toBeVisible();
+    expect(screen.getByText("2×")).toBeVisible();
   });
 });

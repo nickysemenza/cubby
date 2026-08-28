@@ -4,7 +4,8 @@ import type {
   TestCase,
   TestResult,
 } from "@playwright/test/reporter";
-import type { TestHarness } from "wrangler";
+
+import "./e2e-runtime-state";
 
 class E2EHarnessReporter implements Reporter {
   private sawRetry = false;
@@ -18,10 +19,7 @@ class E2EHarnessReporter implements Reporter {
       return;
     }
 
-    const harness = (globalThis as Record<string, unknown>).__E2E_HARNESS__ as
-      | TestHarness
-      | undefined;
-    harness?.debug();
+    globalThis.__E2E_HARNESS__?.debug();
   }
 }
 

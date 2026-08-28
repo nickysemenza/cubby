@@ -21,12 +21,22 @@ describe("form-utils", () => {
 
   describe("buildUpdateObject", () => {
     // Only fields that differ (by JSON equality) land in the update object.
+    type FormValue =
+      | string
+      | number
+      | boolean
+      | null
+      | undefined
+      | string[]
+      | { theme: string; notifications: boolean }
+      | { date: Date; count: number };
+    type FormData = Record<string, FormValue>;
     interface Case {
       name: string;
-      entity: Record<string, unknown>;
-      formValues: Record<string, unknown>;
+      entity: FormData;
+      formValues: FormData;
       fields: string[];
-      expected: Record<string, unknown>;
+      expected: Partial<FormData>;
     }
 
     const CASES: Case[] = [

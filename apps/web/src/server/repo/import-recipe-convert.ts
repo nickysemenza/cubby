@@ -1,3 +1,5 @@
+import type { WAmount } from "@cubby/recipebridge";
+import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
@@ -20,6 +22,14 @@ import {
   upsertRecipe,
 } from "./recipe/crud";
 import { lookupShortcodes } from "./shortcode-resolver";
+
+const parsedAmountToInput = (parsed: WAmount): Amount => {
+  const amount: Amount = { value: parsed.value, unit: parsed.unit };
+  if (parsed.upper_value != null && parsed.upper_value > parsed.value) {
+    amount.upperValue = parsed.upper_value;
+  }
+  return amount;
+};
 
 /**
  * Per-import shared state, threaded through the converter when importing a whole
@@ -155,13 +165,7 @@ const importRecipeToRecipeInput = async (
                     type: "recipe" as const,
                     ingredientId: null,
                     recipeId: parseShortcodeFor("recipe", recipeId),
-                    amounts: parsed.amounts.map((a) => ({
-                      value: a.value,
-                      unit: a.unit,
-                      ...(a.upper_value != null && a.upper_value > a.value
-                        ? { upperValue: a.upper_value }
-                        : {}),
-                    })),
+                    amounts: parsed.amounts.map(parsedAmountToInput),
                     rawLine: line,
                     modifier: parsed.modifier ?? null,
                   };
@@ -174,13 +178,7 @@ const importRecipeToRecipeInput = async (
                   // Map the parser's WAmount (snake `upper_value`) to the persisted
                   // Amount (camel `upperValue`). The `> value` guard drops a
                   // degenerate equal range at the source.
-                  amounts: parsed.amounts.map((a) => ({
-                    value: a.value,
-                    unit: a.unit,
-                    ...(a.upper_value != null && a.upper_value > a.value
-                      ? { upperValue: a.upper_value }
-                      : {}),
-                  })),
+                  amounts: parsed.amounts.map(parsedAmountToInput),
                   rawLine: line,
                   modifier: parsed.modifier ?? null,
                 };

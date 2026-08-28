@@ -1,0 +1,5 @@
+export function inspect(value: unknown): boolean {
+  return value !== null;
+}
+
+export const identity = (value: unknown): unknown => value;

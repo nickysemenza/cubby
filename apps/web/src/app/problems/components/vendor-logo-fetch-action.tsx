@@ -6,15 +6,27 @@ import { vendor as vendorOperations } from "~/app/vendors/vendor.functions";
 import { Button } from "~/components/ui/button";
 
 type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
+type FetchLogoMutationOptions =
+  typeof vendorOperations.fetchLogo.mutationOptions;
+
+export interface VendorLogoFetchOperations {
+  fetchLogo: FetchLogoMutationOptions;
+}
+
+const productionOperations: VendorLogoFetchOperations = {
+  fetchLogo: vendorOperations.fetchLogo.mutationOptions,
+};
 
 /** Explicit per-item replacement for the retired vendor-logo seeder. */
 export function VendorLogoFetchAction({
   vendor,
+  operations = productionOperations,
 }: {
   vendor: VendorLogoTarget;
+  operations?: VendorLogoFetchOperations;
 }) {
   const fetchLogo = useActionMutation({
-    mutationFn: vendorOperations.fetchLogo.mutationOptions,
+    mutationFn: operations.fetchLogo,
     success: `Added logo for ${vendor.name}`,
   });
 

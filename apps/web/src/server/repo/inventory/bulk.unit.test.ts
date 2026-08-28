@@ -1,4 +1,5 @@
 import { testEntityId } from "@cubby/schemas/testing";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { TEST_ACTOR } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -14,16 +15,11 @@ import { bulkMoveInventoryEntries } from "./bulk";
  * The integration test this replaces resolved every code before the guard, so
  * it seeded records only to reach a check that never touches the database.
  */
-const explodingDb = new Proxy(
-  {},
-  {
-    get(_target, prop) {
-      throw new Error(
-        `bulkMoveInventoryEntries touched the database (property "${String(prop)}") before rejecting a same-location move`,
-      );
-    },
+const explodingDb = fromPartial<Database>({
+  clientForRepository() {
+    throw new Error("bulkMoveInventoryEntries touched the database");
   },
-) as Database;
+});
 
 const LOCATION_A = testEntityId(
   "location",

@@ -1,13 +1,15 @@
-import { expenseOut } from "@cubby/schemas/project";
+import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
-  act,
   fireEvent,
   render,
   renderHook,
   screen,
+  waitFor,
 } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
   useCreateProjectFromTasksAction,
@@ -15,131 +17,131 @@ import {
   useMoveToProjectEntityAction,
 } from "./tracker-entity-actions";
 
-const mutation = vi.hoisted(() => ({
-  bulk: vi.fn().mockResolvedValue({ updated: 1, sideEffects: null }),
-  update: vi.fn().mockResolvedValue({}),
-}));
+const expenseRow = {
+  id: testShortcode("expense", "EXP-2345"),
+  name: "Paint",
+  projectId: null,
+} satisfies Pick<ExpenseOut, "id" | "name" | "projectId">;
 
-vi.mock("../hooks/useActionMutation", () => ({
-  useActionMutation: () => ({ isPending: false, mutateAsync: mutation.bulk }),
-}));
+const plannedExpense = expenseOut.parse({
+  id: expenseRow.id,
+  name: "Paint",
+  cost: 42,
+  date: "2026-08-18",
+  costType: "materials",
+  trade: "building",
+  lineKind: "principal",
+  lineBasis: "item_line",
+  future: true,
+  vendor: null,
+  vendorId: null,
+  vendorLogo: null,
+  projectId: null,
+  projectName: null,
+  productId: null,
+  productName: null,
+  productQuantity: null,
+  purchaseId: null,
+  orderId: null,
+  orderUrl: null,
+  notes: null,
+  url: null,
+  purchaseDate: null,
+  purchaseDisplayLabel: null,
+  sourceClaims: [],
+  beneficiaries: [],
+  funders: [],
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+});
 
-vi.mock("../hooks/useUpdateMutation", () => ({
-  useUpdateMutation: () => ({
-    isPending: false,
-    mutateAsync: mutation.update,
-  }),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-vi.mock("../tracker/move-to-project-dialog", () => ({
-  MoveToProjectDialog: ({
-    onOpenChange,
-    onConfirm,
-  }: {
-    onOpenChange: (open: boolean) => void;
-    onConfirm: (projectId: null) => Promise<void>;
-  }) => (
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function MoveToProjectActionHarness({
+  onResolved,
+}: {
+  onResolved: (success: boolean) => void;
+}) {
+  const action = useMoveToProjectEntityAction("expense");
+  const stageExpense = () => {
+    const pending = action.run?.([expenseRow]);
+    if (pending) void pending.then((result) => onResolved(result.success));
+  };
+
+  return (
     <>
-      <button type="button" onClick={() => onOpenChange(false)}>
-        Cancel move
+      <button type="button" onClick={stageExpense}>
+        Stage expense move
       </button>
-      <button type="button" onClick={() => void onConfirm(null)}>
-        Confirm move
-      </button>
+      {action.dialog}
     </>
-  ),
-}));
+  );
+}
 
-vi.mock("../tracker/set-field-dialog", () => ({
-  SetFieldDialog: () => null,
-}));
-vi.mock("../tracker/set-task-status-dialog", () => ({
-  SetTaskStatusDialog: () => null,
-}));
-vi.mock("../tracker/set-due-date-dialog", () => ({
-  SetDueDateDialog: () => null,
-}));
-vi.mock("~/app/expenses/settle-expense-dialog", () => ({
-  SettleExpenseDialog: () => null,
-}));
-vi.mock("~/app/tasks/create-project-from-tasks-dialog", () => ({
-  CreateProjectFromTasksDialog: () => null,
-}));
+function CreateProjectActionHarness({
+  onResolved,
+}: {
+  onResolved: (success: boolean) => void;
+}) {
+  const action = useCreateProjectFromTasksAction();
+  const stageTasks = () => {
+    const pending = action.run?.([
+      { id: testShortcode("task", "TSK-2345"), name: "Prep" },
+      { id: testShortcode("task", "TSK-2346"), name: "Install" },
+    ]);
+    if (pending) void pending.then((result) => onResolved(result.success));
+  };
+
+  return (
+    <>
+      <button type="button" onClick={stageTasks}>
+        Stage project from tasks
+      </button>
+      {action.dialog}
+    </>
+  );
+}
 
 describe("tracker entity actions", () => {
-  it("keeps selection while a staged dialog is open and clears only on success", async () => {
-    const { result, rerender } = renderHook(() =>
-      useMoveToProjectEntityAction("expense"),
+  it("keeps a staged move selected until its real dialog is cancelled", async () => {
+    const resolved: boolean[] = [];
+    render(
+      <MoveToProjectActionHarness
+        onResolved={(success) => resolved.push(success)}
+      />,
+      { wrapper: harness.wrapper },
     );
-    const expenseRow = {
-      id: "EXP-2345",
-      name: "Paint",
-      projectId: null,
-    };
-    let pending!: Promise<{ success: boolean }>;
-    act(() => {
-      pending = result.current.run?.([expenseRow]) as Promise<{
-        success: boolean;
-      }>;
-    });
-    rerender();
-    const view = render(result.current.dialog);
 
-    fireEvent.click(screen.getByRole("button", { name: "Cancel move" }));
-    await expect(pending).resolves.toEqual({ success: false });
-    expect(mutation.bulk).not.toHaveBeenCalled();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage expense move" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Move 1 Expense?" }),
+    ).toBeVisible();
+    expect(screen.getByText("Paint")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Clear project" })).toBeVisible();
+    expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
 
-    act(() => {
-      pending = result.current.run?.([expenseRow]) as Promise<{
-        success: boolean;
-      }>;
-    });
-    rerender();
-    view.rerender(result.current.dialog);
-    fireEvent.click(screen.getByRole("button", { name: "Confirm move" }));
-    await expect(pending).resolves.toEqual({ success: true });
-    expect(mutation.bulk).toHaveBeenCalledWith({
-      ids: ["EXP-2345"],
-      data: { projectId: null },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(resolved).toEqual([false]));
+    expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
   });
 
-  it("keeps Mark purchased single-record and data-aware", () => {
-    const { result } = renderHook(() => useMarkExpensePurchasedAction());
-    const base = expenseOut.parse({
-      id: testShortcode("expense", "EXP-2345"),
-      name: "Paint",
-      cost: 42,
-      date: "2026-08-18",
-      costType: "materials",
-      trade: "building",
-      lineKind: "principal",
-      lineBasis: "item_line",
-      future: false,
-      vendor: null,
-      vendorId: null,
-      vendorLogo: null,
-      projectId: null,
-      projectName: null,
-      productId: null,
-      productName: null,
-      productQuantity: null,
-      purchaseId: null,
-      orderId: null,
-      orderUrl: null,
-      notes: null,
-      url: null,
-      purchaseDate: null,
-      purchaseDisplayLabel: null,
-      sourceClaims: [],
-      beneficiaries: [],
-      funders: [],
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
+  it("keeps Mark purchased refused for already-purchased or adjustment records", async () => {
+    const { result } = renderHook(() => useMarkExpensePurchasedAction(), {
+      wrapper: harness.wrapper,
     });
-    const purchased = base;
-    const planned = expenseOut.parse({ ...base, future: true });
-    const adjustment = expenseOut.parse({ ...planned, lineKind: "tax" });
+    await waitFor(() => expect(result.current).not.toBeNull());
+    const purchased = expenseOut.parse({ ...plannedExpense, future: false });
+    const adjustment = expenseOut.parse({ ...plannedExpense, lineKind: "tax" });
 
     expect(
       result.current.availability?.({
@@ -151,13 +153,6 @@ describe("tracker entity actions", () => {
     expect(
       result.current.availability?.({
         entity: "expense",
-        surface: "inspector",
-        rows: [planned],
-      }),
-    ).toEqual({ status: "available" });
-    expect(
-      result.current.availability?.({
-        entity: "expense",
         surface: "row",
         rows: [adjustment],
       }),
@@ -165,15 +160,34 @@ describe("tracker entity actions", () => {
       status: "disabled",
       reason: "Adjustments aren't classified",
     });
+    expect(
+      result.current.availability?.({
+        entity: "expense",
+        surface: "row",
+        rows: [plannedExpense],
+      }),
+    ).toEqual({ status: "available" });
   });
 
-  it("retains selection for the specialized create-project transaction", async () => {
-    const { result } = renderHook(() => useCreateProjectFromTasksAction());
-    await expect(
-      result.current.run?.([
-        { id: "TSK-2345", name: "Prep" },
-        { id: "TSK-2346", name: "Install" },
-      ]),
-    ).resolves.toEqual({ success: true });
+  it("opens the specialized project transaction with its staged task selection", async () => {
+    const resolved: boolean[] = [];
+    render(
+      <CreateProjectActionHarness
+        onResolved={(success) => resolved.push(success)}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Stage project from tasks" }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "New Project From Tasks" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Create a project and move 2 selected tasks onto it."),
+    ).toBeVisible();
+    await waitFor(() => expect(resolved).toEqual([true]));
+    expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
   });
 });

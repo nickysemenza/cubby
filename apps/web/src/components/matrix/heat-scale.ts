@@ -27,11 +27,11 @@ export function heatBucket(value: number, max: number): HeatBucket {
   return 1;
 }
 
-export const HEAT_CLASSES: Record<HeatBucket, string> = {
+export const HEAT_CLASSES = {
   0: "",
   1: "bg-chart-seq-1",
   2: "bg-chart-seq-2",
   3: "bg-chart-seq-3",
   4: "bg-chart-seq-4 text-background", // deep fills flip to paper ink
   5: "bg-chart-seq-5 text-background",
-};
+} satisfies Record<HeatBucket, string>;

@@ -16,6 +16,11 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 import type { USDAClient } from "../clients/usda";
 
+export type USDAServiceClient = Pick<
+  USDAClient,
+  "findFood" | "findFoodsBatch" | "getFoodSummaryByID" | "listFoods"
+>;
+
 const FOOD_DATA_TYPES = new Set<DataType>([
   "branded_food",
   "foundation_food",
@@ -25,7 +30,7 @@ const FOOD_DATA_TYPES = new Set<DataType>([
 
 export class USDAService {
   constructor(
-    private usdaClient: USDAClient,
+    private usdaClient: USDAServiceClient,
     private getLinkedProducts: (
       lookup?: FoodLookupParam,
     ) => Promise<ProductTopLevelOut[]>,

@@ -7,6 +7,13 @@ import { EMPTY_MARK } from "./matrix-chrome";
 
 type Row = { name: string; values: Record<string, number | undefined> };
 
+const parentElement = (element: Element): HTMLElement => {
+  if (!(element.parentElement instanceof HTMLElement)) {
+    throw new Error("Expected element parent");
+  }
+  return element.parentElement;
+};
+
 const columns: CrossTabColumn<string>[] = [
   { key: "c1", data: "One", groupKey: "g1" },
   { key: "c2", data: "Two", groupKey: "g1" },
@@ -46,8 +53,9 @@ describe("CrossTabTable", () => {
   it("renders the empty mark where a row has no value, never a zero", () => {
     renderTable();
 
-    const saltRow = screen.getByRole("rowheader", { name: "salt" })
-      .parentElement as HTMLElement;
+    const saltRow = parentElement(
+      screen.getByRole("rowheader", { name: "salt" }),
+    );
     const cells = within(saltRow).getAllByRole("cell");
 
     // salt only has c2 — the other two columns must read as absent.
@@ -115,9 +123,10 @@ describe("CrossTabTable", () => {
       "80px",
       "80px",
     ]);
-    expect((container.querySelector("table") as HTMLElement).style.width).toBe(
-      "520px",
-    );
+    const table = container.querySelector("table");
+    expect(table).not.toBeNull();
+    if (!(table instanceof HTMLElement)) throw new Error("Expected table");
+    expect(table.style.width).toBe("520px");
   });
 
   it("renders footer rows over both body and pinned columns", () => {
@@ -135,7 +144,7 @@ describe("CrossTabTable", () => {
     });
 
     const footLabel = screen.getByRole("rowheader", { name: "2 ingredients" });
-    const footRow = footLabel.parentElement as HTMLElement;
+    const footRow = parentElement(footLabel);
 
     expect(
       within(footRow)
@@ -150,7 +159,9 @@ describe("CrossTabTable", () => {
       renderCell: () => <button type="button">cell</button>,
     });
 
-    const cell = screen.getAllByRole("cell")[0] as HTMLElement;
+    const cell = screen.getAllByRole("cell")[0];
+    expect(cell).toBeDefined();
+    if (!cell) throw new Error("Expected cell");
     expect(cell.className).toBe("p-0");
   });
 

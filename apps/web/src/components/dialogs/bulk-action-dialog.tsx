@@ -1,6 +1,7 @@
 import { uniq } from "es-toolkit";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
+import { z } from "zod";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -140,7 +141,9 @@ export function BulkActionDialog<T extends { id: string }>({
                     <span
                       className="min-w-0 flex-1 truncate"
                       title={
-                        typeof rendered === "string" ? rendered : undefined
+                        z.string().safeParse(rendered).success
+                          ? z.string().parse(rendered)
+                          : undefined
                       }
                     >
                       {rendered}

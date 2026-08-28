@@ -14,15 +14,16 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import type * as Shared from "@cubby/shared";
 import {
   PUBLIC_SHORTCODE_PREFIXES,
+  generateShortcode,
   parseShortcode,
+  parseShortcodeFor,
   SHORTCODE_PREFIX,
 } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { location, product } from "~/server/db/schema";
 
@@ -49,30 +50,32 @@ import {
   findOrCreateWithShortcode,
   generateUniqueShortcode,
   insertWithShortcode,
+  type ShortcodeGeneratorPort,
   SHORTCODE_TABLE,
 } from "./shortcode-utils";
 
-let nextCode: string | null = null;
-vi.mock("@cubby/shared", async (importOriginal) => {
-  const actual = await importOriginal<typeof Shared>();
+interface PinnedShortcodeGenerator {
+  readonly port: ShortcodeGeneratorPort;
+  readonly pin: (shortcode: string) => void;
+}
+
+function createPinnedShortcodeGenerator(): PinnedShortcodeGenerator {
+  let pinned: string | undefined;
   return {
-    ...actual,
-    generateShortcode: (
-      entity: Parameters<typeof actual.generateShortcode>[0],
-    ) => {
-      if (nextCode !== null) {
-        const pinned = nextCode;
-        nextCode = null;
-        return pinned;
-      }
-      return actual.generateShortcode(entity);
+    port: {
+      generate(entity) {
+        const shortcode = pinned;
+        pinned = undefined;
+        return shortcode === undefined
+          ? generateShortcode(entity)
+          : parseShortcodeFor(entity, shortcode);
+      },
+    },
+    pin(shortcode) {
+      pinned = shortcode;
     },
   };
-});
-
-afterEach(() => {
-  nextCode = null;
-});
+}
 
 describe("shortcode minting", () => {
   const ctx = withTestDb();
@@ -127,8 +130,11 @@ describe("uniqueness spans soft-deleted rows", () => {
     // The pre-check must see the tombstone. (Pinning the generator makes this
     // exact rather than probabilistic: it hands out the retired code, and
     // generateUniqueShortcode has to reject it and try again.)
-    nextCode = retired;
-    expect(await generateUniqueShortcode(ctx.db, "location")).not.toBe(retired);
+    const generator = createPinnedShortcodeGenerator();
+    generator.pin(retired);
+    expect(
+      await generateUniqueShortcode(ctx.db, "location", generator.port),
+    ).not.toBe(retired);
 
     // And the index must reject it even if something bypassed the pre-check.
     // This is the case the old partial `WHERE deletedAt IS NULL` index allowed,
@@ -169,11 +175,17 @@ describe("insertWithShortcode", () => {
 
     await new Promise((r) => setTimeout(r, 100));
 
-    nextCode = contested;
-    const loser = insertWithShortcode(ctx.db, "product", {
-      name: "Loser",
-      manufacturer: "ACME",
-    });
+    const generator = createPinnedShortcodeGenerator();
+    generator.pin(contested);
+    const loser = insertWithShortcode(
+      ctx.db,
+      "product",
+      {
+        name: "Loser",
+        manufacturer: "ACME",
+      },
+      generator.port,
+    );
 
     await new Promise((r) => setTimeout(r, 100));
     releaseWinner();
@@ -198,7 +210,8 @@ describe("insertWithShortcode", () => {
       ctx.actor,
     );
 
-    nextCode = squatter.id;
+    const generator = createPinnedShortcodeGenerator();
+    generator.pin(squatter.id);
     const { row, created } = await findOrCreateWithShortcode(
       ctx.db,
       "location",
@@ -206,6 +219,7 @@ describe("insertWithShortcode", () => {
         where: eq(location.name, "Brand New Bin"),
         values: () => ({ name: "Brand New Bin", type: "shelf" as const }),
       },
+      generator.port,
     );
 
     expect(created).toBe(true);
@@ -249,11 +263,17 @@ describe("insertWithShortcode", () => {
         shortcode: contested,
       });
 
-      nextCode = contested;
-      const created = await insertWithShortcode(tx, "product", {
-        name: "Retried",
-        manufacturer: "ACME",
-      });
+      const generator = createPinnedShortcodeGenerator();
+      generator.pin(contested);
+      const created = await insertWithShortcode(
+        tx,
+        "product",
+        {
+          name: "Retried",
+          manufacturer: "ACME",
+        },
+        generator.port,
+      );
       expect(created.shortcode).not.toBe(contested);
 
       // The caller's transaction is still alive — this is the assertion that

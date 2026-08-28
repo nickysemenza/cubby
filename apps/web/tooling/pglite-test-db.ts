@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { vector } from "@electric-sql/pglite-pgvector";
 import { drizzle } from "drizzle-orm/pglite";
-import type { Database } from "../src/server/db/database";
+import { Database, type DatabaseRuntime } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
 
 const createDrizzle = (pg: PGlite) => drizzle<typeof schema>(pg, { schema });
@@ -41,6 +41,10 @@ const createFileDb = async (): Promise<PGliteFileDb> => {
     loadDataDir: archive,
   });
   const rawDb = createDrizzle(pg);
+  const runtime: DatabaseRuntime = {
+    client: rawDb,
+    withConnection: (fn) => fn(rawDb),
+  };
   const result = await pg.query<{ list: string | null }>(
     `SELECT string_agg(format('%I', tablename), ', ') AS list
        FROM pg_tables WHERE schemaname = 'public'`,
@@ -54,7 +58,7 @@ const createFileDb = async (): Promise<PGliteFileDb> => {
   }
 
   fileDb = {
-    db: rawDb as unknown as Database,
+    db: new Database(() => runtime),
     rawDb,
     pg,
     truncateTargets,

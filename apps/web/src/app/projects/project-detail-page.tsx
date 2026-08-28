@@ -1,8 +1,6 @@
 import {
   type ExpenseOut,
-  type ProjectKind,
   type ProjectOut,
-  type ProjectStatus,
   type TaskOut,
   type Trade,
   taskStatusValues,
@@ -653,7 +651,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
             if (!status) return;
             await updateMutation.mutateAsync({
               id: project.id,
-              data: { status: status as ProjectStatus },
+              data: { status },
             });
           }}
           renderValue={(status) =>
@@ -685,7 +683,7 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
           onSave={async (kind) => {
             await updateMutation.mutateAsync({
               id: project.id,
-              data: { kind: kind as ProjectKind | null },
+              data: { kind },
             });
           }}
           renderValue={(v) => renderOptionCell(v, projectKindOptions)}

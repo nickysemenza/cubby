@@ -5,6 +5,7 @@ import {
   searchableEntities,
 } from "@cubby/schemas/search";
 import { type SQL, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, uuidArrayParam } from "~/server/repo/database-helpers";
@@ -41,12 +42,13 @@ export interface SearchDocumentDiagnostics {
 }
 
 /** Internal query boundary for the search service's indexed retrieval SQL. */
-export async function executeSearchDocumentSql<T>(
+export async function executeSearchDocumentSql<Schema extends z.ZodType>(
   db: Database,
+  rowSchema: Schema,
   query: SQL,
-): Promise<T[]> {
-  const result = await getDb(db).execute<Record<string, unknown>>(query);
-  return result.rows as unknown as T[];
+): Promise<Array<z.output<Schema>>> {
+  const result = await getDb(db).execute(query);
+  return z.array(rowSchema).parse(result.rows);
 }
 
 /**

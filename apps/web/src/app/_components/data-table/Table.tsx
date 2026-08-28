@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { RowData } from "@tanstack/react-table";
+import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
 import type { ReactNode } from "react";
@@ -50,6 +50,10 @@ import TableHeaderLayout from "./TableHeaderLayout";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
 import type { TableDensity } from "./useTableDensity";
+
+type DesktopPaneStyle = React.CSSProperties & {
+  "--row-accent"?: string;
+};
 
 // Faint row guides every `rowHeight` px so the virtualized spacer (the gap the
 // renderer hasn't filled yet on a fast scroll) reads as empty table rows
@@ -536,9 +540,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           // rowIndex is a valid position into the rows array (flat index when
           // ungrouped, or the row's flat index when grouped).
           const row = rows[item.rowIndex]!;
-          const rowSelectionProjection = (
-            ranges: typeof table.state.cellSelection,
-          ) => {
+          const rowSelectionProjection = (ranges: CellSelectionState) => {
             const focused = ranges.at(-1)?.focusRowId === row.id;
             const version = ranges
               .filter((range) => {
@@ -629,6 +631,25 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     );
   };
 
+  const desktopPaneStyle: DesktopPaneStyle = {
+    // Embedded tables sit in a scrolling detail page, so they take a fixed
+    // ceiling instead of claiming the rest of the viewport.
+    maxHeight: embedded
+      ? "60vh"
+      : paneMaxHeight != null
+        ? `${paneMaxHeight}px`
+        : undefined,
+    // A docked record inspector is a workbench pane, not a table footer. Keep
+    // it at the available viewport height even with only one or two rows.
+    height:
+      desktopInspector && !embedded && paneMaxHeight != null
+        ? `${paneMaxHeight}px`
+        : undefined,
+  };
+  if (entity && isBrowserRoutedEntity(entity)) {
+    desktopPaneStyle["--row-accent"] = entities[entity].color.accent;
+  }
+
   return (
     // max-w-[90rem]: self-cap at the 2xl page width. Most list pages are
     // already capped by Page, but wide hosts (locations' tabbed
@@ -668,27 +689,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               embedded ? "border" : "border-r border-b",
               desktopInspector && !embedded && "xl:pr-[25rem]",
             )}
-            style={
-              {
-                ...(entity && isBrowserRoutedEntity(entity)
-                  ? { "--row-accent": entities[entity].color.accent }
-                  : {}),
-                // Embedded tables sit in a scrolling detail page, so they take a
-                // fixed ceiling instead of claiming the rest of the viewport.
-                maxHeight: embedded
-                  ? "60vh"
-                  : paneMaxHeight != null
-                    ? `${paneMaxHeight}px`
-                    : undefined,
-                // A docked record inspector is a workbench pane, not a table
-                // footer. Keep it at the available viewport height even when a
-                // filter leaves only one or two table rows.
-                height:
-                  desktopInspector && !embedded && paneMaxHeight != null
-                    ? `${paneMaxHeight}px`
-                    : undefined,
-              } as React.CSSProperties
-            }
+            style={desktopPaneStyle}
           >
             {/* Toolbar — the column's fixed top end. Holds view options,
               filters reset, the bulk-action bar, and a page-size control. */}
@@ -734,7 +735,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                   in sync with the nav and toolbar heights. */}
                 <TableHeader className="sticky top-0 z-30 bg-card shadow-[0_1px_0_var(--border)] [&_th]:bg-card [&_tr]:border-b-0">
                   <TableHeaderLayout
-                    table={table as unknown as ITable<RowData>}
+                    table={table}
                     styles={styles}
                     isDebugEnabled={isDebugEnabled}
                   />

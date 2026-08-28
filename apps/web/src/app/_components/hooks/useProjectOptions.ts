@@ -32,7 +32,7 @@ export function useProjectOptions() {
   const options = useMemo(
     () =>
       data?.map((project) => ({
-        value: project.id as string,
+        value: String(project.id),
         label: project.name,
         icon: createElement(ProjectMark, { icon: project.icon }),
       })) ?? NO_PROJECT_OPTIONS,
@@ -41,7 +41,7 @@ export function useProjectOptions() {
   const iconById = useMemo(
     () =>
       data
-        ? new Map(data.map((project) => [project.id as string, project.icon]))
+        ? new Map(data.map((project) => [String(project.id), project.icon]))
         : NO_PROJECT_ICONS,
     [data],
   );

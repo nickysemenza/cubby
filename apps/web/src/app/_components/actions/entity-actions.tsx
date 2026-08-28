@@ -81,6 +81,10 @@ export interface EntityActionSubject extends EntityActionRow {
   entity: Entity;
 }
 
+const isEntityActionRow = (row: {
+  id: string | number;
+}): row is EntityActionRow => typeof row.id === "string";
+
 /** Where a registered domain action is allowed to appear. */
 type EntityActionSurface =
   | "row"
@@ -151,23 +155,26 @@ const compareEntityActions = <
 function entityActionBulkAction<TRow extends EntityActionRow>(
   action: ResolvedEntityAction<TRow>,
 ): BulkAction<TRow> {
-  return verbBulkAction<TRow>(action.verb, {
+  const options: Omit<BulkAction<TRow>, "id" | "label" | "icon" | "tone"> & {
+    id?: string;
+  } = {
     id: action.id,
     minSelection: action.minSelection,
-    ...(action.maxSelection == null
-      ? {}
-      : { maxSelection: action.maxSelection }),
-    ...(action.preserveSelection ? { preserveSelection: true } : {}),
     availability: (selectedRows) =>
       action.availability(selectedRows.map((row) => row.original)),
     onExecute: (selectedRows) =>
       action.run(selectedRows.map((row) => row.original)),
-  });
+  };
+  if (action.maxSelection !== undefined) {
+    options.maxSelection = action.maxSelection;
+  }
+  if (action.preserveSelection) {
+    options.preserveSelection = true;
+  }
+  return verbBulkAction<TRow>(action.verb, options);
 }
 
-const DEFAULT_PLACEMENT: Readonly<
-  Record<EntityActionSurface, EntityActionPlacement>
-> = {
+const DEFAULT_PLACEMENT = {
   row: "overflow",
   selection: "primary",
   inspector: "primary",
@@ -177,7 +184,7 @@ const DEFAULT_PLACEMENT: Readonly<
   "inventory-page": "primary",
   "home-quick": "primary",
   "empty-state": "primary",
-};
+} satisfies Readonly<Record<EntityActionSurface, EntityActionPlacement>>;
 
 const AVAILABLE: EntityActionAvailability = { status: "available" };
 const HIDDEN: EntityActionAvailability = { status: "hidden" };
@@ -189,6 +196,33 @@ const DEFAULT_SURFACES: readonly EntityActionSurface[] = [
   "detail",
 ];
 const NO_ADDITIONAL_ACTIONS: readonly EntityActionDefinition[] = [];
+
+export interface EntityActionClipboardPort {
+  copyShortcodes: typeof copyShortcodes;
+  copyIdentifiers: typeof copyIdentifiers;
+}
+
+const productionEntityActionClipboard: EntityActionClipboardPort = {
+  copyShortcodes,
+  copyIdentifiers,
+};
+const EntityActionClipboardContext = createContext<EntityActionClipboardPort>(
+  productionEntityActionClipboard,
+);
+
+export function EntityActionClipboardProvider({
+  port,
+  children,
+}: {
+  port: EntityActionClipboardPort;
+  children: ReactNode;
+}) {
+  return (
+    <EntityActionClipboardContext.Provider value={port}>
+      {children}
+    </EntityActionClipboardContext.Provider>
+  );
+}
 
 /**
  * How many rows an action means anything on.
@@ -269,18 +303,21 @@ const entityActions: readonly EntityActionDefinition[] = [
     priority: 0,
     placement: { inspector: "overflow", detail: "overflow" },
     preserveSelection: true,
-    use: () => ({
-      run: async (rows) => ({
-        success: await copyShortcodes(rows.map((row) => row.id)),
-      }),
-      rowMenuItem: (row) => (
-        <VerbMenuItem
-          verb="copyCodes"
-          onSelect={() => void copyShortcodes([row.id])}
-        />
-      ),
-      dialog: null,
-    }),
+    use: () => {
+      const clipboard = useContext(EntityActionClipboardContext);
+      return {
+        run: async (rows) => ({
+          success: await clipboard.copyShortcodes(rows.map((row) => row.id)),
+        }),
+        rowMenuItem: (row) => (
+          <VerbMenuItem
+            verb="copyCodes"
+            onSelect={() => void clipboard.copyShortcodes([row.id])}
+          />
+        ),
+        dialog: null,
+      };
+    },
   },
   {
     verb: "copyIdentifiers",
@@ -291,18 +328,21 @@ const entityActions: readonly EntityActionDefinition[] = [
     priority: 0,
     placement: { inspector: "overflow", detail: "overflow" },
     preserveSelection: true,
-    use: () => ({
-      run: async (rows) => ({
-        success: await copyIdentifiers(rows.map((row) => row.id)),
-      }),
-      rowMenuItem: (row) => (
-        <VerbMenuItem
-          verb="copyIdentifiers"
-          onSelect={() => void copyIdentifiers([row.id])}
-        />
-      ),
-      dialog: null,
-    }),
+    use: () => {
+      const clipboard = useContext(EntityActionClipboardContext);
+      return {
+        run: async (rows) => ({
+          success: await clipboard.copyIdentifiers(rows.map((row) => row.id)),
+        }),
+        rowMenuItem: (row) => (
+          <VerbMenuItem
+            verb="copyIdentifiers"
+            onSelect={() => void clipboard.copyIdentifiers([row.id])}
+          />
+        ),
+        dialog: null,
+      };
+    },
   },
   {
     verb: "addToInventory",
@@ -562,21 +602,21 @@ export function useEntityActions<TRow extends EntityActionRow>(
       if (!run) return [];
       const { minSelection, maxSelection } = selectionBounds(definition);
       const metadata = actionMetadata(definition, "selection");
-      return [
-        {
-          id: definition.id ?? verbActionId(definition.verb),
-          verb: definition.verb,
-          surface: "selection",
-          arity: definition.arity,
-          ...metadata,
-          minSelection,
-          ...(maxSelection == null ? {} : { maxSelection }),
-          preserveSelection: definition.preserveSelection ?? false,
-          availability: (rows: readonly TRow[]) =>
-            actionAvailability(definition, handles, "selection", rows),
-          run: (rows: readonly TRow[]) => run(rows),
-        } satisfies ResolvedEntityAction<TRow>,
-      ];
+      const selectionAction: ResolvedEntityAction<TRow> = {
+        id: definition.id ?? verbActionId(definition.verb),
+        verb: definition.verb,
+        surface: "selection",
+        arity: definition.arity,
+        ...metadata,
+        minSelection,
+        preserveSelection: definition.preserveSelection ?? false,
+        availability: (rows: readonly TRow[]) =>
+          actionAvailability(definition, handles, "selection", rows),
+        run: (rows: readonly TRow[]) => run(rows),
+      };
+      if (maxSelection !== undefined)
+        selectionAction.maxSelection = maxSelection;
+      return [selectionAction];
     })
     .sort(compareEntityActions);
 
@@ -621,19 +661,18 @@ export function useEntityActions<TRow extends EntityActionRow>(
         const { run } = handles;
         if (!run) return [];
         const metadata = actionMetadata(definition, surface);
-        return [
-          {
-            id: definition.id ?? verbActionId(definition.verb),
-            verb: definition.verb,
-            surface,
-            arity: definition.arity as Exclude<EntityActionArity, "multi">,
-            run: (row: EntityActionRow) => void run([row]),
-            ...metadata,
-            preserveSelection: definition.preserveSelection ?? false,
-            availability: (row: EntityActionRow) =>
-              actionAvailability(definition, handles, surface, [row]),
-          },
-        ];
+        const recordAction: ResolvedEntityRecordAction = {
+          id: definition.id ?? verbActionId(definition.verb),
+          verb: definition.verb,
+          surface,
+          arity: definition.arity,
+          run: (row: EntityActionRow) => void run([row]),
+          ...metadata,
+          preserveSelection: definition.preserveSelection ?? false,
+          availability: (row: EntityActionRow) =>
+            actionAvailability(definition, handles, surface, [row]),
+        };
+        return [recordAction];
       })
       .sort(compareEntityActions);
 
@@ -735,10 +774,7 @@ export function EntityActionRowMenuItems({
 
   // Registered actions address rows by public shortcode; the only rows keyed
   // by anything else are non-entity rows no definition can target.
-  const own =
-    typeof row.id === "string"
-      ? itemsFor(entity, row as EntityActionRow)
-      : null;
+  const own = isEntityActionRow(row) ? itemsFor(entity, row) : null;
   // A row whose subject IS itself would otherwise list every action twice.
   const subjectItems =
     subject && !(subject.entity === entity && subject.id === row.id)

@@ -394,10 +394,11 @@ export async function updateFinancialAccount(
         );
     }
     const { ledgerPartyId: _ledgerPartyId, ...accountData } = data;
-    const values = buildPartialUpdateValues({
+    const updateData: Partial<typeof financialAccount.$inferInsert> = {
       ...accountData,
-      ...(ledgerPartyId === undefined ? {} : { ledgerPartyId }),
-    });
+    };
+    if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
+    const values = buildPartialUpdateValues(updateData);
     await tx
       .update(financialAccount)
       .set(values)

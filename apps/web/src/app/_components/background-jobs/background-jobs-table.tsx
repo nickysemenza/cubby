@@ -30,6 +30,7 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyCellContext,
   type CubbyFilterFn,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -60,13 +61,13 @@ import {
 } from "./background-job-rows";
 import {
   batchFilterText,
-  isRecord,
   parseBackgroundEntityRef,
+  parseBackgroundMetadata,
 } from "./batch-metadata";
 import { formatDate } from "./format";
 
 type QueueStatus = BackgroundBatchStatus | BackgroundJobStatus;
-const STATUS_TONE: Record<QueueStatus, BadgeVariant> = {
+const STATUS_TONE = {
   pending: "slate",
   queued: "slate",
   running: "default",
@@ -75,7 +76,7 @@ const STATUS_TONE: Record<QueueStatus, BadgeVariant> = {
   partial: "warning",
   failed: "destructive",
   cancelled: "outline",
-};
+} satisfies Record<QueueStatus, BadgeVariant>;
 const COLUMN_DEFAULTS = {
   sortUndefined: "last" as const,
   enableCellSelection: false,
@@ -86,12 +87,17 @@ const SELECT_FILTERS = [
   ["batchProcessor", "processor", "Processor", backgroundBatchProcessors],
   ["batchStatus", "status", "Status", backgroundBatchStatuses],
 ] as const;
-const JOB_LABEL: Partial<Record<BackgroundJobKind, string>> = {
+const JOB_LABEL = {
   "entity-embedding.backfill.coordinator": "Continue semantic backfill",
   "search-document.repair.coordinator": "Continue document repair",
   "location-valuation.recompute": "All locations",
   "problems.counts.refresh": "Problem counts",
-};
+} satisfies Partial<Record<BackgroundJobKind, string>>;
+
+const isExpandedUpdater = (
+  value: ExpandedState | ((previous: ExpandedState) => ExpandedState),
+): value is (previous: ExpandedState) => ExpandedState =>
+  typeof value === "function";
 
 interface BackgroundJobsTableProps {
   rows: BackgroundJobTableRow[];
@@ -144,8 +150,8 @@ function EntityTarget({
 }
 
 function OriginLink({ batch }: { batch: BackgroundBatchRow["batch"] }) {
-  const metadata = isRecord(batch.metadata) ? batch.metadata : null;
-  const source = typeof metadata?.source === "string" ? metadata.source : null;
+  const metadata = parseBackgroundMetadata(batch.metadata);
+  const source = metadata?.source ?? null;
   const entity = parseBackgroundEntityRef(metadata?.entity);
   if (entity) return <EntityTarget {...entity} />;
   if (source) return source;
@@ -184,12 +190,11 @@ function JobTarget({ row }: { row: BackgroundJobRow }) {
       `${payload.recipeIds.length} recipes`
     );
   }
-  return JOB_LABEL[kind];
+  return Object.entries(JOB_LABEL).find(([label]) => label === kind)?.[1];
 }
 
-async function copyJson(value: unknown, label: string) {
-  if (!(await copyText(JSON.stringify(value, null, 2))))
-    return toast.error("Copy failed");
+async function copyJson(serialized: string, label: string) {
+  if (!(await copyText(serialized))) return toast.error("Copy failed");
   toast.success(`Copied ${label}`);
 }
 
@@ -234,7 +239,11 @@ function RowActions({
   add(
     `Copy ${copyLabel}`,
     ClipboardCopy,
-    () => void copyJson(batch?.metadata ?? job?.payload, copyLabel),
+    () =>
+      void copyJson(
+        JSON.stringify(batch?.metadata ?? job?.payload, null, 2) ?? "null",
+        copyLabel,
+      ),
   );
   if (batch) {
     const failedOnly = row.id === props.selectedBatchId && props.showFailedOnly;
@@ -258,7 +267,8 @@ function RowActions({
       add(
         "Copy error",
         ClipboardCopy,
-        () => void copyJson(job.lastError, "job error"),
+        () =>
+          void copyJson(JSON.stringify(job.lastError, null, 2), "job error"),
       );
     add(
       "Retry job",
@@ -382,122 +392,145 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     },
     [props.selectedBatchId],
   );
-  const columns = [
-    helper.accessor(
-      (row) =>
-        row.rowType === "batch" ? batchFilterText(row.batch) : undefined,
-      {
-        id: "search",
-        header: "Search",
-        filterFn: batchFilter,
-        enableSorting: false,
-        enableHiding: false,
-        meta: {
-          mobile: { slot: "hidden" },
-          filterConfig: { placeholder: "Filter source, entity, or id" },
-        },
-      },
-    ),
-    ...SELECT_FILTERS.map(([id, field, header, values]) =>
+  const columns = createCubbyColumnCollection<BackgroundJobTableRow>((add) => {
+    add(
       helper.accessor(
-        (row) => (row.rowType === "batch" ? row.batch[field] : undefined),
+        (row) =>
+          row.rowType === "batch" ? batchFilterText(row.batch) : undefined,
         {
-          id,
-          header,
+          id: "search",
+          header: "Search",
           filterFn: batchFilter,
           enableSorting: false,
           enableHiding: false,
           meta: {
             mobile: { slot: "hidden" },
-            filterConfig: {
-              placeholder: `All ${header.toLowerCase()}s`,
-              filterType: "select",
-              options: values.map((value) => ({ label: value, value })),
-            },
+            filterConfig: { placeholder: "Filter source, entity, or id" },
           },
         },
       ),
-    ),
-    helper.accessor("name", {
-      id: "record",
-      header: "Record",
-      size: 180,
-      enableCellSelection: false,
-      meta: { mono: true, mobile: { slot: "title", priority: 0 } },
-      cell: RecordCell,
-    }),
-    helper.accessor("work", {
-      ...COLUMN_DEFAULTS,
-      header: "Work",
-      size: 260,
-      meta: { mobile: { slot: "subtitle", priority: 10 } },
-      cell: ({ row, getValue }) =>
-        row.original.rowType === "job" ? (
-          <JobTarget row={row.original} />
-        ) : (
-          getValue()
+    );
+    for (const [id, field, header, values] of SELECT_FILTERS) {
+      add(
+        helper.accessor(
+          (row) => (row.rowType === "batch" ? row.batch[field] : undefined),
+          {
+            id,
+            header,
+            filterFn: batchFilter,
+            enableSorting: false,
+            enableHiding: false,
+            meta: {
+              mobile: { slot: "hidden" },
+              filterConfig: {
+                placeholder: `All ${header.toLowerCase()}s`,
+                filterType: "select",
+                options: values.map((value) => ({ label: value, value })),
+              },
+            },
+          },
         ),
-    }),
-    helper.accessor("route", {
-      ...COLUMN_DEFAULTS,
-      header: "Route",
-      size: 190,
-      meta: { mobile: { slot: "meta", priority: 30 } },
-      cell: ({ row, getValue }) =>
-        row.original.rowType === "batch" ? (
-          <Row gap="xs">
-            <span>{row.original.batch.processor}</span>
-            <span>·</span>
-            <OriginLink batch={row.original.batch} />
-          </Row>
-        ) : (
-          getValue()
-        ),
-    }),
-    helper.accessor("status", {
-      ...COLUMN_DEFAULTS,
-      header: "Status",
-      size: 170,
-      meta: { mobile: { slot: "trailing", priority: 10 } },
-      cell: ({ row, getValue }) =>
-        getValue() ? (
-          <Row gap="xs">
-            <Badge variant={STATUS_TONE[getValue()!]}>{getValue()}</Badge>
-            <span className="font-mono text-2xs text-muted-foreground">
-              {row.original.progress}
-            </span>
-          </Row>
-        ) : null,
-    }),
-    helper.accessor("timing", {
-      ...COLUMN_DEFAULTS,
-      header: "Timing",
-      size: 150,
-      meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
-    }),
-    helper.accessor("createdAt", {
-      ...COLUMN_DEFAULTS,
-      header: "Created",
-      size: 190,
-      sortFn: (left, right, id) =>
-        (left.getValue<Date | null>(id)?.getTime() ?? 0) -
-        (right.getValue<Date | null>(id)?.getTime() ?? 0),
-      meta: { mono: true, mobile: { slot: "meta", priority: 60 } },
-      cell: ({ getValue }) => (getValue() ? formatDate(getValue()!) : null),
-    }),
-    helper.display({
-      id: "actions",
-      header: "",
-      size: 96,
-      minSize: 40,
-      maxSize: 160,
-      enableSorting: false,
-      enableHiding: false,
-      enableCellSelection: false,
-      meta: { mobile: { slot: "actions", priority: 100 } },
-      cell: ({ row }) => <RowActions row={row.original} {...props} />,
-    }),
-  ];
+      );
+    }
+    add(
+      helper.accessor("name", {
+        id: "record",
+        header: "Record",
+        size: 180,
+        enableCellSelection: false,
+        meta: { mono: true, mobile: { slot: "title", priority: 0 } },
+        cell: RecordCell,
+      }),
+    );
+    add(
+      helper.accessor("work", {
+        ...COLUMN_DEFAULTS,
+        header: "Work",
+        size: 260,
+        meta: { mobile: { slot: "subtitle", priority: 10 } },
+        cell: ({ row, getValue }) =>
+          row.original.rowType === "job" ? (
+            <JobTarget row={row.original} />
+          ) : (
+            getValue()
+          ),
+      }),
+    );
+    add(
+      helper.accessor("route", {
+        ...COLUMN_DEFAULTS,
+        header: "Route",
+        size: 190,
+        meta: { mobile: { slot: "meta", priority: 30 } },
+        cell: ({ row, getValue }) =>
+          row.original.rowType === "batch" ? (
+            <Row gap="xs">
+              <span>{row.original.batch.processor}</span>
+              <span>·</span>
+              <OriginLink batch={row.original.batch} />
+            </Row>
+          ) : (
+            getValue()
+          ),
+      }),
+    );
+    add(
+      helper.accessor("status", {
+        ...COLUMN_DEFAULTS,
+        header: "Status",
+        size: 170,
+        meta: { mobile: { slot: "trailing", priority: 10 } },
+        cell: ({ row, getValue }) => {
+          const status = getValue();
+          return status ? (
+            <Row gap="xs">
+              <Badge variant={STATUS_TONE[status]}>{status}</Badge>
+              <span className="font-mono text-2xs text-muted-foreground">
+                {row.original.progress}
+              </span>
+            </Row>
+          ) : null;
+        },
+      }),
+    );
+    add(
+      helper.accessor("timing", {
+        ...COLUMN_DEFAULTS,
+        header: "Timing",
+        size: 150,
+        meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
+      }),
+    );
+    add(
+      helper.accessor("createdAt", {
+        ...COLUMN_DEFAULTS,
+        header: "Created",
+        size: 190,
+        sortFn: (left, right, id) =>
+          (left.getValue<Date | null>(id)?.getTime() ?? 0) -
+          (right.getValue<Date | null>(id)?.getTime() ?? 0),
+        meta: { mono: true, mobile: { slot: "meta", priority: 60 } },
+        cell: ({ getValue }) => {
+          const createdAt = getValue();
+          return createdAt ? formatDate(createdAt) : null;
+        },
+      }),
+    );
+    add(
+      helper.display({
+        id: "actions",
+        header: "",
+        size: 96,
+        minSize: 40,
+        maxSize: 160,
+        enableSorting: false,
+        enableHiding: false,
+        enableCellSelection: false,
+        meta: { mobile: { slot: "actions", priority: 100 } },
+        cell: ({ row }) => <RowActions row={row.original} {...props} />,
+      }),
+    );
+  });
   const layout = useCubbyTableLayout({
     key: "background-jobs",
     columns,
@@ -522,7 +555,7 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     [props.selectedBatchId],
   );
   const onExpandedChange: OnChangeFn<ExpandedState> = (updater) => {
-    const next = typeof updater === "function" ? updater(expanded) : updater;
+    const next = isExpandedUpdater(updater) ? updater(expanded) : updater;
     if (next === true) return;
     const current = props.selectedBatchId
       ? `batch:${props.selectedBatchId}`

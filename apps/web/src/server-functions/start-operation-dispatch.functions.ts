@@ -1,18 +1,45 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import type { StartOperationId } from "~/lib/start-operation-observability";
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import {
+  type StartOperationDefinition,
+  startOperationDefinitionFor,
+} from "~/lib/start-operation-observability";
 import { authenticatedStartServerFunction } from "~/server/middleware/entity-server-functions";
-import type { StartOperationResult } from "~/server/start-operation.contract";
+import {
+  type UnparsedStartOperationData,
+  unparsedStartOperationDataSchema,
+} from "~/server/start-operation.contract";
 
-export type StartOperationDispatchInput = {
-  operation: StartOperationId;
-  input: unknown;
+type BrowserStartOperationId = StartOperationIdOfKind<"query" | "mutation">;
+type BrowserStartOperationDefinition =
+  StartOperationDefinition<BrowserStartOperationId>;
+
+const isBrowserStartOperationDefinition = (
+  definition: StartOperationDefinition | undefined,
+): definition is BrowserStartOperationDefinition =>
+  definition !== undefined && definition.kind !== "subscription";
+
+export type StartOperationDispatchInput<
+  Operation extends BrowserStartOperationId = BrowserStartOperationId,
+> = {
+  operation: Operation;
+  input: UnparsedStartOperationData;
 };
 
+const startOperationIdSchema = z.string().transform((operation, ctx) => {
+  const definition = startOperationDefinitionFor(operation);
+  if (isBrowserStartOperationDefinition(definition)) return definition.id;
+  ctx.addIssue({
+    code: "custom",
+    message: `Unknown Start operation: ${operation}`,
+  });
+  return z.NEVER;
+});
 const startOperationDispatchInput = z.object({
-  operation: z.string(),
-  input: z.unknown(),
+  operation: startOperationIdSchema,
+  input: unparsedStartOperationDataSchema,
 });
 
 /** The only ordinary browser-to-Worker Start function. */
@@ -20,23 +47,16 @@ const dispatchStartOperationServerFunction = createServerFn({
   method: "POST",
 })
   .middleware([authenticatedStartServerFunction])
-  .validator(
-    (value: unknown) =>
-      startOperationDispatchInput.parse(value) as StartOperationDispatchInput,
-  )
+  .validator(<Value>(value: Value) => startOperationDispatchInput.parse(value))
   .handler(async ({ data, context }) => {
     const { dispatchStartOperation } =
       await import("~/server/start-operation-dispatch.server");
-    return (await dispatchStartOperation({
+    return await dispatchStartOperation({
       operation: data.operation,
       input: data.input,
       request: context.startOperation,
-    })) as never;
+    });
   });
 
 export const dispatchStartOperationTransport =
-  dispatchStartOperationServerFunction as unknown as (options: {
-    data: StartOperationDispatchInput;
-    signal?: AbortSignal;
-    headers?: HeadersInit;
-  }) => Promise<StartOperationResult<unknown>>;
+  dispatchStartOperationServerFunction;

@@ -65,10 +65,15 @@ export type RequestActor = {
   source: AuditSource;
 };
 
+interface ReadDatabaseSelection {
+  readDb: Database;
+  readConsistency: ReadConsistencyDecision;
+}
+
 const selectReadDatabase = (opts: {
   headers: Pick<Headers, "get">;
   actor?: RequestActor;
-}): { readDb: Database; readConsistency: ReadConsistencyDecision } => {
+}): ReadDatabaseSelection => {
   const readConsistency = decideReadConsistency({
     browserRequest: !opts.actor && isBrowserUiRequest(opts.headers),
     boundedStaleAvailable: boundedStaleDb !== db,
@@ -114,6 +119,7 @@ export const createRequestContext = async (opts: {
       ? userId.parse(betterSession.user.id)
       : null;
 
+    const requestOrigin: RequestOrigin = "ui";
     return {
       ...crudServices,
       ...readSelection,
@@ -124,7 +130,7 @@ export const createRequestContext = async (opts: {
       actorContext: authenticatedUserId
         ? buildActorContext(authenticatedUserId, "ui")
         : null,
-      requestOrigin: "ui" as RequestOrigin,
+      requestOrigin,
       ...opts,
     };
   });

@@ -78,7 +78,10 @@ export const integrityProblemsHandlers = implementOperationDomain(
   {
     getByType: {
       readPolicy: "strong",
-      run: (context, input) => findProblemByTypeWorkflow(context, input),
+      run: async (context, input) =>
+        integrityProblems.getByType.definition.output.parse(
+          await findProblemByTypeWorkflow(context, input),
+        ),
     },
   },
 );

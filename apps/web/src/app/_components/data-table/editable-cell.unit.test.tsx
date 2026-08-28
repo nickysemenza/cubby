@@ -11,13 +11,21 @@ import {
   CELL_EDIT_EVENT,
   CellSelectionContext,
 } from "./cell-selection-context";
-import { EditableCell } from "./editable-cell";
+import {
+  EditableCell,
+  EditorNotificationContext,
+  type EditorNotificationPort,
+} from "./editable-cell";
 
-vi.mock("sonner", () => ({
-  toast: {
-    error: vi.fn(),
-  },
-}));
+function createEditorNotifications(): EditorNotificationPort & {
+  errors: string[];
+} {
+  const errors: string[] = [];
+  return {
+    errors,
+    showError: (message) => errors.push(message),
+  };
+}
 
 describe("EditableCell component", () => {
   it("renders display mode by default", () => {
@@ -374,15 +382,24 @@ describe("EditableCell select editor (commit-on-pick)", () => {
   });
 
   it("shows a toast and stays open when onSave rejects", async () => {
-    const { toast } = await import("sonner");
+    const notifications = createEditorNotifications();
     const onSave = vi.fn().mockRejectedValue(new Error("Save failed"));
-    renderSelect("a", onSave);
+    render(
+      <EditorNotificationContext.Provider value={notifications}>
+        <EditableCell
+          value="a"
+          onSave={onSave}
+          config={{ type: "select", options: OPTIONS }}
+          renderValue={(value) => <span data-testid="display">{value}</span>}
+        />
+      </EditorNotificationContext.Provider>,
+    );
 
     await openDropdown();
     fireEvent.click(await screen.findByRole("option", { name: "Banana" }));
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Save failed");
+      expect(notifications.errors).toEqual(["Save failed"]);
     });
     expect(screen.getByRole("combobox")).toBeInTheDocument();
     expect(screen.getByTestId("display")).toHaveTextContent("a");

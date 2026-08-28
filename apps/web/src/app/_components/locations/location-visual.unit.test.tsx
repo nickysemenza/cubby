@@ -2,25 +2,27 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { LocationVisual } from "./location-visual";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    "aria-label": ariaLabel,
-  }: {
-    children: ReactNode;
-    "aria-label"?: string;
-  }) => (
-    <a href="#visual" aria-label={ariaLabel}>
-      {children}
-    </a>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
+
+function renderVisual(visual: React.ReactNode) {
+  return render(visual, { wrapper: harness.wrapper });
+}
 
 const image = (id: string): ImageOut =>
   imageOut.parse({
@@ -85,7 +87,7 @@ const containerLocation = (overrides: Partial<InfLocation> = {}) =>
 
 describe("LocationVisual", () => {
   it("separates the inherited product cover from direct child photos", () => {
-    render(
+    renderVisual(
       <LocationVisual
         location={containerLocation()}
         variant="hero"
@@ -109,7 +111,7 @@ describe("LocationVisual", () => {
   });
 
   it("uses an own location photo ahead of the product cover", () => {
-    render(
+    renderVisual(
       <LocationVisual
         location={containerLocation({ images: [image("own")] })}
         variant="hero"
@@ -129,7 +131,9 @@ describe("LocationVisual", () => {
   });
 
   it("uses a compact phone aspect ratio while retaining the desktop plate", () => {
-    render(<LocationVisual location={containerLocation()} variant="hero" />);
+    renderVisual(
+      <LocationVisual location={containerLocation()} variant="hero" />,
+    );
 
     expect(
       screen.getByLabelText("Visual overview of Abrasives box")
@@ -138,14 +142,16 @@ describe("LocationVisual", () => {
   });
 
   it("keeps compact media non-interactive inside an outer location link", () => {
-    render(<LocationVisual location={containerLocation()} variant="compact" />);
+    renderVisual(
+      <LocationVisual location={containerLocation()} variant="compact" />,
+    );
 
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByTitle("2 child locations")).toHaveTextContent("2");
   });
 
   it("uses the location icon fallback when no record supplies a photo", () => {
-    render(
+    renderVisual(
       <LocationVisual
         location={location("DDDD", "Empty bin", "box")}
         variant="hero"
@@ -157,7 +163,7 @@ describe("LocationVisual", () => {
   });
 
   it("labels mixed direct-child types as compartments", () => {
-    render(
+    renderVisual(
       <LocationVisual
         location={containerLocation({
           children: [

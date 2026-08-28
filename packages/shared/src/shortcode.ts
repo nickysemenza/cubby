@@ -34,12 +34,15 @@ export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
  * (`P-4K7M` became `PRD-4K7M`). The generated alias table declares the only
  * accepted swaps.
  */
-const PREFIX_TO_TYPE = Object.fromEntries(
-  (Object.keys(SHORTCODE_PREFIX) as ShortcodeType[]).map((type) => [
-    SHORTCODE_PREFIX[type],
-    type,
-  ]),
-) as Record<string, ShortcodeType | undefined>;
+const PREFIX_TO_TYPE: Partial<Record<string, ShortcodeType>> = {};
+const isShortcodeType = (type: string): type is ShortcodeType =>
+  Object.hasOwn(SHORTCODE_PREFIX, type);
+
+for (const [type, prefix] of Object.entries(SHORTCODE_PREFIX)) {
+  if (isShortcodeType(type)) {
+    PREFIX_TO_TYPE[prefix] = type;
+  }
+}
 
 const LEGACY_TO_TYPE: Record<string, ShortcodeType | undefined> =
   LEGACY_SHORTCODE_PREFIX;
@@ -177,7 +180,7 @@ const SHORTCODE_SCHEMA = {
   task: taskShortcode,
   vendor: vendorShortcode,
   wish: wishShortcode,
-} as const satisfies Record<ShortcodeType, unknown>;
+} as const satisfies Record<ShortcodeType, z.ZodType>;
 
 /**
  * The shortcode schema for an entity, preserving its exact branded type through
@@ -194,13 +197,13 @@ export type ShortcodeFor<T extends ShortcodeType> = z.infer<
 >;
 
 /** Validate and normalize one entity's public identifier. */
-export function parseShortcodeFor<T extends ShortcodeType>(
+export function parseShortcodeFor<T extends ShortcodeType, TInput>(
   type: T,
-  value: unknown,
+  value: TInput,
 ): ShortcodeFor<T>;
-export function parseShortcodeFor(
+export function parseShortcodeFor<TInput>(
   type: ShortcodeType,
-  value: unknown,
+  value: TInput,
 ): AnyShortcode {
   return SHORTCODE_SCHEMA[type].parse(value);
 }

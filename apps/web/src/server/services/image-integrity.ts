@@ -3,12 +3,21 @@ import { imageDimensionsFromData } from "image-dimensions";
 
 import { createAppError } from "~/server/errors/app-error";
 
-const MIME_BY_DIMENSION_TYPE: Record<string, string> = {
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  heic: "image/heic",
+const dimensionMimeType = (dimensionType: string): string | undefined => {
+  switch (dimensionType) {
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "heic":
+      return "image/heic";
+    default:
+      return undefined;
+  }
 };
 
 const signatureContentType = (bytes: Uint8Array): string | undefined => {
@@ -115,7 +124,7 @@ export const inspectImageFile = async (
   }
   const dimensions = imageDimensionsFromData(bytes);
   const detectedContentType = dimensions
-    ? (MIME_BY_DIMENSION_TYPE[dimensions.type] ?? signature)
+    ? (dimensionMimeType(dimensions.type) ?? signature)
     : signature;
   if (!dimensions)
     throw createAppError(

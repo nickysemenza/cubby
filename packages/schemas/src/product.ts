@@ -71,7 +71,7 @@ import {
 import { baseKind } from "./problems";
 import { plainDate, projectStatusSchema, taskStatusSchema } from "./project";
 import { purchaseProductSource } from "./purchase";
-import { recipeUsageOut } from "./recipe";
+import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   mcpUnitMappingOut,
@@ -106,7 +106,7 @@ export const hasFoodIndicators = (product: {
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
-const productCreateShape = {
+const productCreateFields = {
   // Override the output/read `name` (lax for reads) with a non-empty constraint on
   // the create/update boundary; keep the mock hint for test fixtures.
   name: requiredName("Product name")
@@ -184,13 +184,13 @@ const productCreateShape = {
   pendingImageIds: z.array(imageShortcode).optional(),
 };
 
-export const productCreateInput = z.object(productCreateShape);
+export const productCreateInput = z.object(productCreateFields);
 
 // A partial update makes every create field optional and — critically — strips
 // the create-time `.default([])` off `unitMappings`/`externalIds` so omitting
 // them leaves the existing rows UNCHANGED (see deriveUpdateData). `removeImageIds`
 // is update-only.
-export const productUpdateData = deriveUpdateData(productCreateShape, {
+export const productUpdateData = deriveUpdateData(productCreateFields, {
   extend: {
     // Public `IMG-` codes, as returned by the web `ProductOut.images[].id` —
     // resolved to uuids in the repo before they reach the `ProductImage` join
@@ -860,6 +860,21 @@ export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut
 >;
 
+const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
+const productUnitMappingMcpEntityOut = unitMappingOut.omit({ id: true });
+
+/** Product references embedded in MCP entity results never expose child-row ids. */
+export const productWithMappingsMcpEntityOut = productWithMappingsOut.extend({
+  externalIds: z.array(productExternalIdMcpEntityOut),
+  unitMappings: z.array(productUnitMappingMcpEntityOut),
+});
+
+export const productWithMappingsAndFoodMcpEntityOut =
+  productWithMappingsAndFoodOut.extend({
+    externalIds: z.array(productExternalIdMcpEntityOut),
+    unitMappings: z.array(productUnitMappingMcpEntityOut),
+  });
+
 export const productPickerItemOut = z.object({
   id: productShortcode,
   name: z.string(),
@@ -1070,6 +1085,12 @@ export const productListItemOut = z.object({
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 
+/** Generic MCP entity list row with storage-only child identifiers removed. */
+export const productListItemMcpEntityOut = productListItemOut.extend({
+  externalIds: z.array(productExternalIdMcpEntityOut),
+  unitMappings: z.array(productUnitMappingMcpEntityOut),
+});
+
 export const productWithFoodOut = z.object({
   ...productTopLevelFields,
   ingredient: productIngredientOut.nullable(),
@@ -1097,6 +1118,18 @@ export const productWithFoodOut = z.object({
   ...productQuantityFields,
 });
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
+
+/** Generic MCP entity detail with storage-only child identifiers removed. */
+export const productWithFoodMcpEntityOut = productWithFoodOut.extend({
+  externalIds: z.array(productExternalIdMcpEntityOut),
+  unitMappings: z.array(productUnitMappingMcpEntityOut),
+  recipeUsages: z.array(recipeUsageMcpEntityOut),
+});
+
+/** Generic MCP create/update result with storage-only child identifiers removed. */
+export const productTopLevelMcpEntityOut = productTopLevelOut.extend({
+  externalIds: z.array(productExternalIdMcpEntityOut),
+});
 
 export const productWithFoodAndSideEffectsOut = z.object({
   ...productTopLevelFields,

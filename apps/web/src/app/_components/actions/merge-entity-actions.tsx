@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { z } from "zod";
 
 import { purchase } from "~/app/purchases/purchase.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
@@ -12,19 +13,21 @@ import type {
   EntityActionRow,
 } from "./entity-actions";
 
-type MergeEntity = "purchase" | "vendor";
+type MergeEntity = "ingredient" | "purchase" | "vendor";
 type MergeRow = EntityActionRow & { name: string };
-type MergeMutation = {
+export type MergeMutation<TOutput> = {
   mutateAsync: (input: {
     keepId: string;
     mergeIds: string[];
-  }) => Promise<unknown>;
+  }) => Promise<TOutput>;
   isPending: boolean;
 };
 
-function useStagedMerge(
+const purchaseMergeRowSchema = z.object({ vendorId: z.string() }).passthrough();
+
+export function useStagedMerge<TOutput>(
   entity: MergeEntity,
-  mutation: MergeMutation,
+  mutation: MergeMutation<TOutput>,
 ): EntityActionHandles {
   const [rows, setRows] = useState<MergeRow[]>([]);
   const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
@@ -70,6 +73,7 @@ function useStagedMerge(
     dialog: (
       <EntityMergeDialog
         entity={entity}
+        rows={rows}
         keeper={rows[0]}
         initialAliasIds={rows.slice(1).map((row) => row.id)}
         open={rows.length > 0}
@@ -107,11 +111,10 @@ function useMergePurchasesEntityAction(): EntityActionHandles {
       const base = baseAvailability?.(context);
       if (base && base.status !== "available") return base;
       if (context.rows.length < 2) return { status: "available" };
-      const vendorIds = context.rows.map((row) =>
-        "vendorId" in row && typeof row.vendorId === "string"
-          ? row.vendorId
-          : null,
-      );
+      const vendorIds = context.rows.map((row) => {
+        const parsed = purchaseMergeRowSchema.safeParse(row);
+        return parsed.success ? parsed.data.vendorId : null;
+      });
       return vendorIds.every(
         (vendorId) => vendorId !== null && vendorId === vendorIds[0],
       )

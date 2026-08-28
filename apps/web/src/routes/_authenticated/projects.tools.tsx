@@ -12,13 +12,12 @@ import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 
 const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
-  z.preprocess(
-    (value) =>
-      typeof value === "string"
-        ? value.split(",").filter((item) => item.length > 0)
-        : value,
-    z.array(itemSchema).optional(),
-  );
+  z.preprocess((value) => {
+    const text = z.string().safeParse(value);
+    return text.success
+      ? text.data.split(",").filter((item) => item.length > 0)
+      : value;
+  }, z.array(itemSchema).optional());
 
 const completionYearParam = urlStringParam
   .refine(

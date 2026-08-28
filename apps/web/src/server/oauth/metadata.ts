@@ -8,11 +8,11 @@ import { auth, MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "~/lib/auth";
  * them from the *frontend* (the MCP Inspector and browser-based clients both
  * do), so they need permissive CORS or discovery fails before it starts.
  */
-const CORS_HEADERS: Record<string, string> = {
+const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "*",
-};
+} as const satisfies Readonly<Record<string, string>>;
 
 function withCors(response: Response): Response {
   const headers = new Headers(response.headers);

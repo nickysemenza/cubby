@@ -300,7 +300,12 @@ export function TaskBoard({
     if (rect && scrollRoot) {
       autoScroller.current?.update(
         { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
-        [scrollRoot, document.scrollingElement as HTMLElement | null],
+        [
+          scrollRoot,
+          document.scrollingElement instanceof HTMLElement
+            ? document.scrollingElement
+            : null,
+        ],
       );
     }
   };
@@ -333,8 +338,7 @@ export function TaskBoard({
           clearDragState();
         }}
         accessibility={{
-          container:
-            typeof document === "undefined" ? undefined : document.body,
+          container: globalThis.document?.body,
           screenReaderInstructions: cubbyDndScreenReaderInstructions,
           announcements: createDndAnnouncements({
             item: (id) =>
@@ -403,11 +407,7 @@ export function TaskBoard({
 const boardCollisionDetection: CollisionDetection = (args) => {
   const active = asDragData(args.active.data.current ?? {});
   const targetDataFor = (collision: ReturnType<typeof pointerWithin>[number]) =>
-    (
-      collision.data?.droppableContainer as
-        | { data?: { current?: Record<string, unknown> } }
-        | undefined
-    )?.data?.current ?? {};
+    collision.data?.droppableContainer?.data?.current ?? {};
   const isValid = (collision: ReturnType<typeof pointerWithin>[number]) => {
     const targetData = targetDataFor(collision);
     const card = asCardDropData(targetData);

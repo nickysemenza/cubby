@@ -1,25 +1,16 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import {
+  EntityActionClipboardProvider,
+  type EntityActionClipboardPort,
+} from "../actions/entity-actions";
 import type { BulkAction } from "../data-table/bulk-actions.types";
 import type { CubbyRow as Row } from "../data-table/table-features";
-
-const mocks = vi.hoisted(() => ({
-  copyShortcodes: vi.fn(async () => true),
-  copyIdentifiers: vi.fn(async () => true),
-  navigate: vi.fn(async () => undefined),
-}));
-
-vi.mock("~/lib/clipboard", () => ({
-  copyShortcodes: mocks.copyShortcodes,
-  copyIdentifiers: mocks.copyIdentifiers,
-}));
-vi.mock("@tanstack/react-router", () => ({
-  useNavigate: () => mocks.navigate,
-}));
-
 import { useListBulkActions } from "./useListBulkActions";
 
 interface TestRow {
@@ -27,7 +18,7 @@ interface TestRow {
 }
 
 const rows = (...ids: string[]) =>
-  ids.map((id) => ({ original: { id } })) as Row<TestRow>[];
+  ids.map((id) => fromPartial<Row<TestRow>>({ original: { id } }));
 
 const noop: BulkAction<TestRow> = {
   id: "delete",
@@ -35,14 +26,42 @@ const noop: BulkAction<TestRow> = {
   onExecute: async () => ({ success: true }),
 };
 
-// The product entry's action resolves product detail to derive its kit
-// warning, so resolving the registry needs a client. The app always has one.
-const client = new QueryClient({
-  defaultOptions: { queries: { retry: false } },
+let harness: ReturnType<typeof createBrowserTestHarness>;
+let copiedShortcodes: string[][];
+let copiedIdentifiers: string[][];
+let clipboard: EntityActionClipboardPort;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+  copiedShortcodes = [];
+  copiedIdentifiers = [];
+  clipboard = {
+    copyShortcodes: async (codes) => {
+      copiedShortcodes.push([...codes]);
+      return true;
+    },
+    copyIdentifiers: async (ids) => {
+      copiedIdentifiers.push([...ids]);
+      return true;
+    },
+  };
 });
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={client}>{children}</QueryClientProvider>
-);
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
+
+function wrapper({ children }: { children: ReactNode }) {
+  const BrowserProviders = harness.wrapper;
+  return (
+    <BrowserProviders>
+      <EntityActionClipboardProvider port={clipboard}>
+        {children}
+      </EntityActionClipboardProvider>
+    </BrowserProviders>
+  );
+}
 
 describe("useListBulkActions", () => {
   it("offers Copy codes on a shortcode entity with no other actions", () => {
@@ -120,7 +139,7 @@ describe("useListBulkActions", () => {
     await act(async () => {
       await result.current.state.executeAction(action!, selected);
     });
-    expect(mocks.copyIdentifiers).toHaveBeenCalledWith(["12345", "67890"]);
+    expect(copiedIdentifiers).toEqual([["12345", "67890"]]);
   });
 
   it("leads with Copy and trails with Delete", () => {
@@ -231,7 +250,7 @@ describe("useListBulkActions", () => {
       await result.current.state.executeAction(copy!, selected);
     });
 
-    expect(mocks.copyShortcodes).toHaveBeenCalledWith(["PRD-4K7M", "PRD-9X2A"]);
+    expect(copiedShortcodes).toEqual([["PRD-4K7M", "PRD-9X2A"]]);
     expect(result.current.state.selectedCount).toBe(2);
   });
 

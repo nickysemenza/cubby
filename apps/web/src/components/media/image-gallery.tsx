@@ -29,7 +29,8 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            const index = Number((entry.target as HTMLElement).dataset.index);
+            if (!(entry.target instanceof HTMLElement)) continue;
+            const index = Number(entry.target.dataset.index);
             if (!Number.isNaN(index)) {
               setActiveIndex(index);
             }
@@ -56,7 +57,8 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
   const scrollTo = useCallback((index: number) => {
     const container = scrollRef.current;
     if (!container) return;
-    const child = container.children[index] as HTMLElement | undefined;
+    const child = container.children[index];
+    if (!(child instanceof HTMLElement)) return;
     child?.scrollIntoView({
       behavior: "smooth",
       inline: "start",
@@ -70,8 +72,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
     <div className={cn("relative", className)}>
       <div
         ref={(el) => {
-          (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current =
-            el;
+          scrollRef.current = el;
           setupObserver(el);
         }}
         className="flex snap-x snap-mandatory scrollbar-none gap-0 overflow-x-auto"

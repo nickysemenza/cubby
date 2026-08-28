@@ -1,4 +1,5 @@
 import type { RecipeId } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -357,23 +358,25 @@ describe("RecipeCostingService", () => {
     // so the queue doesn't leak into tests expecting inline/no-binding behavior.
     const installFakeQueue = () => {
       const sent: Array<{ batchId: string; jobId: string }> = [];
-      setCfEnv({
-        BACKGROUND_QUEUE: {
-          send: async (m: { batchId: string; jobId: string }) => {
-            sent.push({ batchId: m.batchId, jobId: m.jobId });
+      setCfEnv(
+        fromPartial<Env>({
+          BACKGROUND_QUEUE: {
+            send: async (m: { batchId: string; jobId: string }) => {
+              sent.push({ batchId: m.batchId, jobId: m.jobId });
+            },
+            sendBatch: async (
+              messages: Iterable<{
+                body: { batchId: string; jobId: string };
+              }>,
+            ) => {
+              for (const { body } of messages) {
+                sent.push({ batchId: body.batchId, jobId: body.jobId });
+              }
+            },
           },
-          sendBatch: async (
-            messages: Iterable<{
-              body: { batchId: string; jobId: string };
-            }>,
-          ) => {
-            for (const { body } of messages) {
-              sent.push({ batchId: body.batchId, jobId: body.jobId });
-            }
-          },
-        },
-      } as unknown as Env);
-      return { sent, reset: () => setCfEnv(undefined as unknown as Env) };
+        }),
+      );
+      return { sent, reset: () => setCfEnv(undefined) };
     };
 
     it("persists and processes jobs inline when no queue is bound", async () => {

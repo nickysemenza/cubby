@@ -1,5 +1,7 @@
+import { mcpToolCatalogOut } from "@cubby/schemas/telemetry";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { z } from "zod";
 
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
@@ -19,28 +21,17 @@ import { mcp } from "~/lib/mcp.functions";
 
 import { McpUsageDashboard } from "./mcp-usage-dashboard";
 
-type ToolAnnotations = {
-  readOnlyHint?: boolean;
-  destructiveHint?: boolean;
-  idempotentHint?: boolean;
-  openWorldHint?: boolean;
-};
+const jsonValueSchema = z.json();
+type JsonValue = z.infer<typeof jsonValueSchema>;
+type CatalogTool = z.infer<typeof mcpToolCatalogOut>["tools"][number];
 
-type CatalogTool = {
-  name: string;
-  description?: string;
-  title?: string;
-  inputSchema?: Record<string, unknown>;
-  outputSchema?: Record<string, unknown>;
-  annotations?: ToolAnnotations;
-};
-
-function schemaHasMock(value: unknown): boolean {
-  if (!value || typeof value !== "object") return false;
+function schemaHasMock(value: JsonValue): boolean {
+  if (value === null) return false;
   if (Array.isArray(value)) return value.some(schemaHasMock);
-  const obj = value as Record<string, unknown>;
-  if ("mock" in obj) return true;
-  return Object.values(obj).some(schemaHasMock);
+  const object = z.record(z.string(), jsonValueSchema).safeParse(value);
+  return object.success
+    ? "mock" in object.data || Object.values(object.data).some(schemaHasMock)
+    : false;
 }
 
 function AnnotationBadges({ tool }: { tool: CatalogTool }) {
@@ -83,7 +74,7 @@ function SchemaPanel({
   schema,
 }: {
   title: string;
-  schema?: Record<string, unknown>;
+  schema?: CatalogTool["inputSchema"];
 }) {
   return (
     <Card>
@@ -129,7 +120,7 @@ function CatalogInspector() {
   const [query, setQuery] = useState("");
   const [selectedName, setSelectedName] = useState<string | null>(null);
 
-  const tools = (data?.tools ?? []) as CatalogTool[];
+  const tools = data?.tools ?? [];
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

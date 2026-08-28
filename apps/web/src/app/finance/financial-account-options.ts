@@ -20,16 +20,13 @@ export const provisionalOptions = booleanCellOptions(
   { true: "var(--warning)", false: "var(--positive)" },
 );
 
-const ACCOUNT_IDENTITY_KIND_LABELS: Record<
-  FinancialAccountIdentityKind,
-  string
-> = {
+const ACCOUNT_IDENTITY_KIND_LABELS = {
   credit_card: "Credit card",
   bank_account: "Bank account",
   stored_value: "Gift card or store credit",
   cash: "Cash",
   other: "Other",
-};
+} satisfies Record<FinancialAccountIdentityKind, string>;
 
 /**
  * Labels and tone for `FinancialAccount.identity.kind`.

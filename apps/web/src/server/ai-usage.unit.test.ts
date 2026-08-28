@@ -1,33 +1,39 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-const emitTelemetry = vi.fn();
-vi.mock("~/server/telemetry", () => ({ emitTelemetry }));
+import { Database } from "~/server/db";
 
-const { recordAiUsage } = await import("./ai-usage");
+import { type AiUsagePort, recordAiUsage } from "./ai-usage";
 
 describe("recordAiUsage", () => {
-  beforeEach(() => emitTelemetry.mockReset());
-
   it("preserves AI usage fields in the queued event", async () => {
-    emitTelemetry.mockResolvedValue(undefined);
-    await recordAiUsage({} as never, {
-      feature: "embeddings",
-      provider: "openai",
-      model: "text-embedding-3-small",
-      operation: "embed",
-      inputTokens: 12,
-      outputTokens: 0,
-      durationMs: 31,
-      cacheStatus: "none",
-      entity: {
-        entityType: "product",
-        entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
-      },
-      batchId: "a04c5cf6-707b-4367-b6fa-b924541e8be2",
+    const emit = vi.fn<AiUsagePort["emit"]>();
+    const db = new Database(() => {
+      throw new Error(
+        "The injected telemetry port must not access the database",
+      );
     });
+    await recordAiUsage(
+      db,
+      {
+        feature: "embeddings",
+        provider: "openai",
+        model: "text-embedding-3-small",
+        operation: "embed",
+        inputTokens: 12,
+        outputTokens: 0,
+        durationMs: 31,
+        cacheStatus: "none",
+        entity: {
+          entityType: "product",
+          entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
+        },
+        batchId: "a04c5cf6-707b-4367-b6fa-b924541e8be2",
+      },
+      { emit },
+    );
 
-    expect(emitTelemetry).toHaveBeenCalledWith(
-      {},
+    expect(emit).toHaveBeenCalledWith(
+      db,
       expect.objectContaining({
         type: "ai_usage",
         feature: "embeddings",

@@ -19,23 +19,17 @@ import {
 
 const sorted = (xs: readonly string[]) => [...xs].sort();
 
-/**
- * Widen an `as const` manifest entry to the full descriptor. Each literal entry
- * narrows to exactly the keys it declares, so an OPTIONAL key (shortcodePrefix,
- * legacyShortcodePrefix) doesn't exist on the type of an entry that omits it —
- * which is precisely what these assertions need to look at.
- */
 const descriptor = (entity: Entity): EntityDescriptor =>
-  entityManifest[entity] as EntityDescriptor;
+  entityDescriptor.parse(entityManifest[entity]);
 
-const IMAGE_KEY: Record<string, string> = {
+const IMAGE_KEY = {
   product: "PRODUCT",
   recipe: "RECIPE",
   cookbook: "COOKBOOK",
   location: "LOCATION",
   project: "PROJECT",
   purchase: "PURCHASE",
-};
+} satisfies Partial<Record<Entity, string>>;
 
 describe("entity manifest", () => {
   it("covers every entity exactly once, each a valid descriptor", () => {

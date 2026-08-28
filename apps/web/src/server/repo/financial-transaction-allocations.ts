@@ -48,7 +48,7 @@ export type AllocationSnapshot = Map<FinancialTransactionId, AllocationRow[]>;
 const cents = (value: number) => Math.round(value * 100);
 
 /** Stable, readable audit payload: `["PUR-9QXK:-8.96", "PUR-9ZMQ:-7.80"]`. */
-const auditShape = (rows: readonly AllocationRow[]) =>
+const allocationAuditRows = (rows: readonly AllocationRow[]) =>
   rows.map((row) => `${row.purchaseShortcode}:${row.amount.toFixed(2)}`).sort();
 
 export async function readAllocations(
@@ -123,8 +123,8 @@ export async function applyAllocationChanges(
 
   const changedTransactionIds: FinancialTransactionId[] = [];
   for (const id of ids) {
-    const from = auditShape(opts.before.get(id) ?? []);
-    const to = auditShape(after.get(id) ?? []);
+    const from = allocationAuditRows(opts.before.get(id) ?? []);
+    const to = allocationAuditRows(after.get(id) ?? []);
     if (from.length === to.length && from.every((v, i) => v === to[i]))
       continue;
     changedTransactionIds.push(id);
@@ -154,7 +154,7 @@ export async function applyAllocationChanges(
  */
 export function assertAllocationSetValid(value: {
   transactionAmount: number;
-  kind: string;
+  kind: FinancialTransactionKind;
   next: readonly AllocationInput[];
 }): void {
   const { next, transactionAmount } = value;
@@ -192,7 +192,7 @@ export function assertAllocationSetValid(value: {
 
   const violation = financialTransactionSettlementViolation({
     linked: next.length > 0,
-    kind: value.kind as FinancialTransactionKind,
+    kind: value.kind,
     amount: transactionAmount,
   });
   if (violation)

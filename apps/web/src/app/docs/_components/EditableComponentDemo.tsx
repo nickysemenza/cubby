@@ -1,4 +1,4 @@
-import { JsonEditor } from "json-edit-react";
+import { JsonEditor, type JsonData } from "json-edit-react";
 import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
@@ -44,9 +44,11 @@ export function EditableComponentDemo<T>({
       return undefined;
     }
   }, [schema]);
+  // Runtime prop accepted by json-edit-react but absent from its published props.
+  type JsonEditorSchemaProps = { jsonSchema?: typeof jsonSchema };
 
   const handleUpdate = useCallback(
-    (newData: unknown) => {
+    (newData: JsonData) => {
       // Validate with Zod before accepting
       const result = schema.safeParse(newData);
       if (result.success) {
@@ -63,6 +65,9 @@ export function EditableComponentDemo<T>({
     setData(defaultData);
     setError(null);
   }, [defaultData]);
+
+  const jsonEditorSchemaProps: JsonEditorSchemaProps = {};
+  if (jsonSchema) jsonEditorSchemaProps.jsonSchema = jsonSchema;
 
   return (
     <div className={cn("my-6", className)}>
@@ -114,7 +119,7 @@ export function EditableComponentDemo<T>({
               restrictDelete={false}
               restrictAdd={false}
               restrictTypeSelection={false}
-              {...(jsonSchema ? { jsonSchema } : {})}
+              {...jsonEditorSchemaProps}
             />
           </div>
           {error && (

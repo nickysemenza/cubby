@@ -1,35 +1,36 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityInlineLink } from "./EntityInlineLink";
-
-vi.mock("./EntityPreviewLink", () => ({
-  EntityPreviewLink: ({
-    children,
-    displayImage,
-    showIdentityMark,
-  }: {
-    children: ReactNode;
-    displayImage: { url: string } | null;
-    showIdentityMark?: boolean;
-  }) => (
-    <span
-      data-testid="entity-link"
-      data-image={displayImage?.url ?? "none"}
-      data-show-mark={showIdentityMark === false ? "false" : "true"}
-    >
-      {children}
-    </span>
-  ),
-}));
 
 const enrichedProduct = {
   id: "PRD-TEST",
   name: "Test product",
   images: [{ url: "https://example.com/product.jpg" }],
 };
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function productLink() {
+  return screen.getByRole("link", { name: "Test product" });
+}
+
+function inlineImage(link: HTMLElement): HTMLImageElement {
+  const image = link.querySelector("img");
+  if (!image) throw new Error("Expected an inline identity image.");
+  return image;
+}
 
 describe("EntityInlineLink display images", () => {
   it("derives the image from an established enriched read projection", () => {
@@ -39,12 +40,14 @@ describe("EntityInlineLink display images", () => {
         data={enrichedProduct}
         displayImage={undefined}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByTestId("entity-link")).toHaveAttribute(
-      "data-image",
+    expect(inlineImage(productLink())).toHaveAttribute(
+      "src",
       enrichedProduct.images[0]?.url,
     );
+    expect(productLink()).toHaveAttribute("href", "/products/PRD-TEST");
   });
 
   it("prefers a location's own photo over the cover of the SKU it is", () => {
@@ -62,12 +65,12 @@ describe("EntityInlineLink display images", () => {
         }}
         displayImage={undefined}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByTestId("entity-link")).toHaveAttribute(
-      "data-image",
-      "https://example.com/tote-in-place.jpg",
-    );
+    expect(
+      inlineImage(screen.getByRole("link", { name: "Blue tote" })),
+    ).toHaveAttribute("src", "https://example.com/tote-in-place.jpg");
   });
 
   it("falls back to the cover of the SKU a location is when it has no photo", () => {
@@ -85,12 +88,12 @@ describe("EntityInlineLink display images", () => {
         }}
         displayImage={undefined}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByTestId("entity-link")).toHaveAttribute(
-      "data-image",
-      "https://example.com/rack.jpg",
-    );
+    expect(
+      inlineImage(screen.getByRole("link", { name: "Metal rack" })),
+    ).toHaveAttribute("src", "https://example.com/rack.jpg");
   });
 
   it("never draws an attached PDF manual as a thumbnail", () => {
@@ -115,12 +118,12 @@ describe("EntityInlineLink display images", () => {
         }}
         displayImage={undefined}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByTestId("entity-link")).toHaveAttribute(
-      "data-image",
-      "https://example.com/bench.jpg",
-    );
+    expect(
+      inlineImage(screen.getByRole("link", { name: "Workbench" })),
+    ).toHaveAttribute("src", "https://example.com/bench.jpg");
   });
 
   it("suppresses its identity mark when adjacent media already supplies it", () => {
@@ -131,11 +134,11 @@ describe("EntityInlineLink display images", () => {
         displayImage={enrichedProduct.images[0]}
         showIdentityMark={false}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByTestId("entity-link")).toHaveAttribute(
-      "data-show-mark",
-      "false",
-    );
+    const link = productLink();
+    expect(link.querySelector("img")).toBeNull();
+    expect(link.querySelector("svg")).toBeNull();
   });
 });

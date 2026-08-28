@@ -11,7 +11,7 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -34,10 +34,25 @@ const EMPTY_PURCHASES: ProductPurchaseOut[] = [];
 const EMPTY_MEMBERSHIP: KitMembershipOut[] = [];
 type PurchaseRow = ProductPurchaseOut & { id: string; name: string };
 
-export function ProductPurchases({ productId }: { productId: string }) {
-  const query = useQuery(
-    productOperations.purchases.queryOptions({ productId }),
-  );
+/** Read descriptors the purchase section needs before choosing its empty state. */
+export interface ProductPurchasesOperations {
+  purchases: typeof productOperations.purchases;
+  kitMembership: typeof productOperations.kitMembership;
+}
+
+const productionOperations: ProductPurchasesOperations = {
+  purchases: productOperations.purchases,
+  kitMembership: productOperations.kitMembership,
+};
+
+export function ProductPurchases({
+  productId,
+  operations = productionOperations,
+}: {
+  productId: string;
+  operations?: ProductPurchasesOperations;
+}) {
+  const query = useQuery(operations.purchases.queryOptions({ productId }));
   const items = query.data ?? EMPTY_PURCHASES;
   // Only consulted when `items` is empty (below) — a component of a kit is
   // never itself attached to a purchase, so the generic "attach this
@@ -45,7 +60,7 @@ export function ProductPurchases({ productId }: { productId: string }) {
   // reintroduce the per-component modelling that was deliberately removed in
   // favor of the kit carrying one Expense.
   const membershipQuery = useQuery(
-    productOperations.kitMembership.queryOptions({ productId }),
+    operations.kitMembership.queryOptions({ productId }),
   );
   const membership = membershipQuery.data ?? EMPTY_MEMBERSHIP;
   const rows = useMemo<PurchaseRow[]>(
@@ -66,65 +81,80 @@ export function ProductPurchases({ productId }: { productId: string }) {
     success: "Link removed — any itemized expense still relates these",
   });
   const helper = useMemo(() => createCubbyColumnHelper<PurchaseRow>(), []);
-  const columns = useMemo<CubbyColumnDef<PurchaseRow>[]>(
-    () => [
-      createNameColumn(helper, "purchase", "name", { header: "Purchase" }),
-      helper.accessor((row) => row.vendorName, {
-        id: "vendor",
-        header: "Vendor",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<PurchaseRow>((add) => {
+        add(
+          createNameColumn(helper, "purchase", "name", { header: "Purchase" }),
+        );
+        add(
+          helper.accessor((row) => row.vendorName, {
+            id: "vendor",
+            header: "Vendor",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", priority: 10 },
+            },
+          }),
+        );
+        add(
+          helper.accessor((row) => row.date, {
+            id: "date",
+            header: "Date",
+            meta: {
+              className: "w-32",
+              mono: true,
+              mobile: { slot: "meta", priority: 20 },
+            },
+            cell: (info) =>
+              format(parsePlainDate(info.getValue()), "MMM d, yyyy"),
+          }),
+        );
+        // Badge the rare case, not the common one. Nearly every row here is
+        // derived from an itemized Expense; the explicit `PurchaseProduct` link
+        // is the exception (13 in the whole ledger) and the only detachable one,
+        // so it is what earns a marker.
+        add(
+          helper.accessor((row) => row.linkAttachedAt !== null, {
+            id: "link",
+            header: "",
+            // A blank header MUST also disable sorting. The sort control renders as
+            // a button labelled by the header text, so an empty one is a button
+            // with no accessible name — a `serious` Axe violation that fails the
+            // accessibility smoke E2E. Same pairing as the `url` column in
+            // `expenses/expenselist.tsx`.
+            enableSorting: false,
+            meta: {
+              className: "w-24",
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: (info) =>
+              info.getValue() ? <Badge variant="outline">Linked</Badge> : null,
+          }),
+        );
+        add(
+          createActionsColumn(helper, "purchase", {
+            // Only an explicit link can be detached. An expense-derived row has no
+            // `PurchaseProduct` row to remove, and offering the verb there would
+            // "succeed" (detach is a no-op on a missing pair) while the row stayed
+            // on screen. To break that relation you edit the Expense's product.
+            extraActions: (row) =>
+              row.linkAttachedAt === null ? null : (
+                <VerbMenuItem
+                  verb="removeFromPurchase"
+                  disabled={detach.isPending}
+                  onSelect={(event) => {
+                    event.stopPropagation();
+                    detach.mutate({
+                      purchaseId: row.id,
+                      productIds: [productId],
+                    });
+                  }}
+                />
+              ),
+          }),
+        );
       }),
-      helper.accessor((row) => row.date, {
-        id: "date",
-        header: "Date",
-        meta: {
-          className: "w-32",
-          mono: true,
-          mobile: { slot: "meta", priority: 20 },
-        },
-        cell: (info) => format(parsePlainDate(info.getValue()), "MMM d, yyyy"),
-      }),
-      // Badge the rare case, not the common one. Nearly every row here is
-      // derived from an itemized Expense; the explicit `PurchaseProduct` link
-      // is the exception (13 in the whole ledger) and the only detachable one,
-      // so it is what earns a marker.
-      helper.accessor((row) => row.linkAttachedAt !== null, {
-        id: "link",
-        header: "",
-        // A blank header MUST also disable sorting. The sort control renders as
-        // a button labelled by the header text, so an empty one is a button
-        // with no accessible name — a `serious` Axe violation that fails the
-        // accessibility smoke E2E. Same pairing as the `url` column in
-        // `expenses/expenselist.tsx`.
-        enableSorting: false,
-        meta: {
-          className: "w-24",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        cell: (info) =>
-          info.getValue() ? <Badge variant="outline">Linked</Badge> : null,
-      }),
-      createActionsColumn(helper, "purchase", {
-        // Only an explicit link can be detached. An expense-derived row has no
-        // `PurchaseProduct` row to remove, and offering the verb there would
-        // "succeed" (detach is a no-op on a missing pair) while the row stayed
-        // on screen. To break that relation you edit the Expense's product.
-        extraActions: (row) =>
-          row.linkAttachedAt === null ? null : (
-            <VerbMenuItem
-              verb="removeFromPurchase"
-              disabled={detach.isPending}
-              onSelect={(event) => {
-                event.stopPropagation();
-                detach.mutate({ purchaseId: row.id, productIds: [productId] });
-              }}
-            />
-          ),
-      }),
-    ],
     [detach, helper, productId],
   );
   const layout = useCubbyTableLayout({ key: "product:purchases", columns });

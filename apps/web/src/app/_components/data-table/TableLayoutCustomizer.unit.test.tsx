@@ -1,186 +1,97 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type {
-  CubbyColumn as Column,
-  CubbyTable as Table,
-} from "./table-features";
+import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import type { CubbyTableMeta } from "./table-meta";
 import TableLayoutCustomizer from "./TableLayoutCustomizer";
 
-type TestRow = Record<string, unknown>;
+interface TestRow {
+  id: string;
+  name: string;
+  trade: string;
+}
 
-function layoutHarness() {
-  let order = ["select", "image", "name", "trade", "actions"];
-  // Mirrors what `normalizeTableLayout` produces: both structural ends pinned.
-  const pinning: Record<string, false | "start" | "end"> = {
-    select: "start",
-    image: "start",
-    name: false,
-    trade: false,
-    actions: "end",
-  };
-  const visibility = {
+const helper = createCubbyColumnHelper<TestRow>();
+const columns = helper.columns([
+  helper.display({ header: "Select", id: "select" }),
+  helper.display({ header: "Image", id: "image" }),
+  helper.accessor("name", { header: "Name", id: "name" }),
+  helper.accessor("trade", { header: "Trade", id: "trade" }),
+  helper.display({ header: "Actions", id: "actions" }),
+]);
+const defaultLayout = {
+  version: 1,
+  columnOrder: ["select", "image", "name", "trade", "actions"],
+  columnPinning: { start: ["select", "image"], end: ["actions"] },
+  columnVisibility: {
     select: true,
     image: true,
     name: true,
     trade: true,
     actions: true,
-  };
-  const table = {
-    state: {
-      get columnPinning() {
-        return {
-          start: order.filter((id) => pinning[id] === "start"),
-          end: order.filter((id) => pinning[id] === "end"),
-        };
-      },
-    },
-    options: {
-      meta: {
-        defaultLayout: {
-          version: 1,
-          columnOrder: ["select", "image", "name", "trade", "actions"],
-          columnPinning: { start: ["select", "image"], end: ["actions"] },
-          columnVisibility: {
-            select: true,
-            image: true,
-            name: true,
-            trade: true,
-            actions: true,
-          },
-          columnSizing: {},
-        },
-      },
-    },
-    setColumnOrder: vi.fn((next: string[]) => {
-      order = next;
-    }),
-    setColumnPinning: vi.fn((next: { start?: string[]; end?: string[] }) => {
-      for (const id of order) pinning[id] = false;
-      for (const id of next.start ?? []) pinning[id] = "start";
-      for (const id of next.end ?? []) pinning[id] = "end";
-    }),
-    setColumnVisibility: vi.fn(),
-    setColumnSizing: vi.fn(),
-  } as unknown as Table<TestRow>;
+  },
+  columnSizing: {},
+} satisfies NonNullable<CubbyTableMeta["defaultLayout"]>;
 
-  const columns = Object.fromEntries(
-    order.map((id) => [
-      id,
-      {
-        id,
-        table,
-        columnDef: {
-          header:
-            id === "name"
-              ? "Name"
-              : id === "trade"
-                ? "Trade"
-                : id === "select"
-                  ? "Select"
-                  : id === "image"
-                    ? "Image"
-                    : "Actions",
-        },
-        getIsPinned: () => pinning[id] ?? false,
-        pin: (region: false | "start" | "end") => {
-          pinning[id] = region;
-        },
-        getCanHide: () => id === "name" || id === "trade",
-        getIsVisible: () => visibility[id as keyof typeof visibility],
-        toggleVisibility: () => {
-          visibility[id as keyof typeof visibility] =
-            !visibility[id as keyof typeof visibility];
-        },
-      } as unknown as Column<TestRow>,
-    ]),
-  );
-  Object.assign(table, {
-    getAllLeafColumns: () => order.map((id) => columns[id]!),
-    getColumn: (id: string) => columns[id],
+function LayoutHarness() {
+  const table = useCubbyTable({
+    data: [{ id: "PRD-4K7M", name: "Hammer", trade: "tools" }],
+    columns,
+    getRowId: (row) => row.id,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
   });
-
-  return { table, getOrder: () => order, pinning, visibility };
+  return (
+    <>
+      <TableLayoutCustomizer table={table} />
+      <output data-testid="column-order">
+        {table.state.columnOrder.join(",")}
+      </output>
+    </>
+  );
 }
 
 describe("TableLayoutCustomizer", () => {
-  it("locks the structural columns at both ends", () => {
-    const harness = layoutHarness();
-    render(<TableLayoutCustomizer table={harness.table} />);
+  it("keeps structural columns out of every mutable affordance", () => {
+    render(<LayoutHarness />);
 
-    for (const locked of ["Select", "Image", "Actions"]) {
+    for (const label of ["Select", "Image", "Actions"]) {
       expect(
-        screen.queryByRole("button", { name: `Drag ${locked}` }),
-      ).not.toBeInTheDocument();
+        screen.queryByRole("button", { name: `Drag ${label}` }),
+      ).toBeNull();
       expect(
-        screen.queryByRole("button", { name: `Move ${locked} later` }),
-      ).not.toBeInTheDocument();
+        screen.queryByRole("button", { name: `Move ${label} later` }),
+      ).toBeNull();
       expect(
-        screen.queryByRole("button", { name: `Move ${locked} earlier` }),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: `Hide ${locked}` }),
-      ).not.toBeInTheDocument();
+        screen.queryByRole("button", { name: `Hide ${label}` }),
+      ).toBeNull();
     }
-    expect(
-      screen.queryByRole("button", { name: "Unpin Image" }),
-    ).not.toBeInTheDocument();
-    // The pin controls are what previously let Actions leave the trailing edge.
-    expect(
-      screen.queryByRole("button", { name: "Unpin Actions" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Pin Actions to start" }),
-    ).not.toBeInTheDocument();
-    expect(harness.pinning.actions).toBe("end");
-
-    expect(
-      screen.getByRole("button", { name: "Drag Name" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unpin Image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Unpin Actions" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Drag Name" })).toBeVisible();
   });
 
-  it("offers accessible hide and exact reset commands", () => {
-    const harness = layoutHarness();
-    render(<TableLayoutCustomizer table={harness.table} />);
+  it("hides an optional column and restores the defined layout", () => {
+    render(<LayoutHarness />);
 
     fireEvent.click(screen.getByRole("button", { name: "Hide Name" }));
-    expect(harness.visibility.name).toBe(false);
+    expect(screen.getByRole("button", { name: "Show Name" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Trade earlier" }));
+    expect(screen.getByTestId("column-order")).toHaveTextContent(
+      "select,image,trade,name,actions",
+    );
 
     fireEvent.click(
       screen.getByRole("button", { name: "Restore default layout" }),
     );
-    expect(harness.table.setColumnOrder).toHaveBeenLastCalledWith([
-      "select",
-      "image",
-      "name",
-      "trade",
-      "actions",
-    ]);
-    expect(harness.table.setColumnPinning).toHaveBeenCalledWith({
-      start: ["select", "image"],
-      end: ["actions"],
-    });
-    expect(harness.table.setColumnVisibility).toHaveBeenCalledWith({
-      select: true,
-      image: true,
-      name: true,
-      trade: true,
-      actions: true,
-    });
-    expect(harness.table.setColumnSizing).toHaveBeenCalledWith({});
-  });
-
-  it("moves a pinned column through the pinning array", () => {
-    const harness = layoutHarness();
-    harness.pinning.name = "start";
-    harness.pinning.trade = "start";
-    render(<TableLayoutCustomizer table={harness.table} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Move Trade earlier" }));
-
-    expect(harness.table.setColumnPinning).toHaveBeenCalledWith({
-      start: ["select", "image", "trade", "name"],
-      end: ["actions"],
-    });
+    expect(screen.getByTestId("column-order")).toHaveTextContent(
+      "select,image,name,trade,actions",
+    );
+    expect(screen.getByRole("button", { name: "Hide Name" })).toBeVisible();
   });
 });

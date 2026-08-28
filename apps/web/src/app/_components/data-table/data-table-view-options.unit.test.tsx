@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { columnLabel } from "./data-table-view-options";
@@ -11,14 +12,12 @@ import type { CubbyColumn as Column } from "./table-features";
  * instead of "Quantity Variance". `columnLabel` is the same header-first,
  * `humanize`-fallback derivation `LedgerFilters` uses.
  */
+type TestRow = { id: string };
 function column(
   id: string,
-  header?: unknown,
-): Column<Record<string, unknown>, unknown> {
-  return { id, columnDef: { header } } as unknown as Column<
-    Record<string, unknown>,
-    unknown
-  >;
+  header?: Column<TestRow, unknown>["columnDef"]["header"],
+): Column<TestRow, unknown> {
+  return fromPartial({ id, columnDef: { header } });
 }
 
 describe("columnLabel", () => {

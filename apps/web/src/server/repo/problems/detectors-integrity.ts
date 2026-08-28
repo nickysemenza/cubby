@@ -60,19 +60,15 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type {
   EdgeRole,
-  EdgeSemantics,
   ReferentialLivenessViolation,
 } from "@cubby/schemas/entity-integrity";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
-import {
-  INCOMING_EDGES,
-  type IncomingEdge,
-} from "~/server/db/entity-incoming-edges";
+import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { getDb } from "~/server/repo/database-helpers";
 
 /** Cap on returned rows per edge — a pathological backlog can't blow up the response. */
@@ -119,17 +115,14 @@ const EXPECTED_EDGE_COUNT = 58;
 function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
   const specs: EdgeAuditSpec[] = [];
 
-  for (const [targetEntity, edgeMap] of Object.entries(INCOMING_EDGES) as [
-    Entity,
-    Record<string, IncomingEdge>,
-  ][]) {
-    const semanticsMap = ENTITY_EDGE_SEMANTICS[targetEntity] as Record<
-      string,
-      EdgeSemantics
-    >;
+  for (const targetEntity of allEntities) {
+    const edgeMap = INCOMING_EDGES[targetEntity];
+    const semanticsMap = ENTITY_EDGE_SEMANTICS[targetEntity];
 
     for (const [edgeKey, edge] of Object.entries(edgeMap)) {
-      const semantics = semanticsMap[edgeKey];
+      const semantics = Object.entries(semanticsMap).find(
+        ([semanticsKey]) => semanticsKey === edgeKey,
+      )?.[1];
       if (!semantics) {
         throw new Error(
           `No ENTITY_EDGE_SEMANTICS entry for "${edgeKey}" (target entity "${targetEntity}") — ` +
@@ -269,13 +262,13 @@ function describeViolation(
   return base;
 }
 
-type DetailRow = Record<string, unknown> & {
+type DetailRow = Record<string, string> & {
   edgeKey: string;
   sourceId: string;
   targetId: string;
 };
 
-type CountRow = Record<string, unknown> & {
+type CountRow = Record<string, string | number> & {
   edgeKey: string;
   count: number;
 };

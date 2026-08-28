@@ -5,6 +5,7 @@ import { purchaseCreateInput, purchaseOut } from "@cubby/schemas/purchase";
 import { vendorCreateInput, vendorOut } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -95,13 +96,15 @@ describe("purchase deletion embedding fanout", () => {
     });
 
     const batches = await listBackgroundBatches(ctx.db, 50);
+    const purchaseDeleteMetadata = z.object({
+      source: z.literal("purchase.delete"),
+    });
     const details = await Promise.all(
       batches
         .filter(
           (batch) =>
             batch.kind === "entity-embedding.refresh" &&
-            (batch.metadata as { source?: string } | null)?.source ===
-              "purchase.delete",
+            purchaseDeleteMetadata.safeParse(batch.metadata).success,
         )
         .map((batch) => getBackgroundBatchDetail(ctx.db, batch.id)),
     );

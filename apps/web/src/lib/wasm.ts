@@ -85,30 +85,50 @@ const CACHEABLE_METHODS = [
 type CacheableMethod = (typeof CACHEABLE_METHODS)[number];
 const cacheableMethods = new Set<string>(CACHEABLE_METHODS);
 
+type WasmMethod = Extract<
+  WasmType[keyof WasmType],
+  (...args: never[]) => string | number | boolean | null | undefined | object
+>;
+type WasmParameters = Parameters<WasmMethod>;
+type WasmResult = ReturnType<WasmMethod>;
+
+const isWasmFunction = (value: WasmType[keyof WasmType]): value is WasmMethod =>
+  typeof value === "function";
+
 // Bounded LRU keyed by `${method}:${JSON.stringify(args)}`. Results are never
 // nullish (the cached methods return strings/numbers/objects), so a `get`
 // returning undefined unambiguously means "miss".
-const resultCache = new LRUCache<string, NonNullable<unknown>>({ max: 2048 });
+const resultCache = new LRUCache<string, NonNullable<WasmResult>>({
+  max: 2048,
+});
+
+const isStringArgument = <TArgument>(
+  arg: TArgument,
+): arg is Extract<TArgument, string> => typeof arg === "string";
+
+const isObjectArgument = <TArgument>(
+  arg: TArgument,
+): arg is Extract<TArgument, object> => arg !== null && typeof arg === "object";
 
 /** Compact, non-dumping summary of a WASM call's args for the slow-call warning. */
-const summarizeArg = (arg: unknown): string => {
+const summarizeArg = <TArgument>(arg: TArgument): string => {
   if (arg instanceof Uint8Array || arg instanceof ArrayBuffer) {
     return `Uint8Array(${arg.byteLength})`;
   }
-  if (typeof arg === "string") {
+  if (isStringArgument(arg)) {
     return arg.length > 64 ? `"${arg.slice(0, 61)}…"` : JSON.stringify(arg);
   }
   if (Array.isArray(arg)) return `Array(${arg.length})`;
-  if (arg && typeof arg === "object") return "{…}";
+  if (isObjectArgument(arg)) return "{…}";
   return String(arg);
 };
 
 /** Invoke the real WASM method inside a trace span (+ dev slow-call warning). */
-const tracedCall = (
+const tracedCall = <TArgs extends WasmParameters, TResult>(
   name: string,
-  method: (...args: unknown[]) => unknown,
-  args: unknown[],
-): unknown => {
+  method: (...args: TArgs) => TResult,
+  args: TArgs,
+): TResult => {
   const tracer = getTracer();
   return tracer.startActiveSpan(TraceNames.wasm(name), (span) => {
     const recording = span.isRecording();
@@ -148,18 +168,23 @@ const tracedCall = (
  * WASM module with OpenTelemetry tracing + a result cache for pure methods.
  * All methods are synchronous - WASM is guaranteed loaded at module init.
  */
-export const wasm: ImmutableWasm<WasmType> = new Proxy(instance, {
+const instrumentedWasm = new Proxy(instance, {
   get(target, prop) {
+    // SAFETY: Proxy keys come from the exact imported module target; symbol or
+    // absent lookups produce undefined and take the non-function branch below.
     const method = target[prop as keyof WasmType];
-    if (typeof method !== "function") {
+    if (!isWasmFunction(method)) {
       return method;
     }
     const name = String(prop);
-    const fn = method as (...args: unknown[]) => unknown;
+    // SAFETY: Every runtime value exported by recipebridge is a synchronous
+    // function whose generated argument and return types are members of these
+    // unions; the Proxy handler cannot retain the key-to-signature correlation.
+    const fn = method as (...args: WasmParameters) => WasmResult;
     if (!cacheableMethods.has(name)) {
-      return (...args: unknown[]) => tracedCall(name, fn, args);
+      return (...args: WasmParameters) => tracedCall(name, fn, args);
     }
-    return (...args: unknown[]) => {
+    return (...args: WasmParameters) => {
       const key = `${name}:${JSON.stringify(args)}`;
       const cached = resultCache.get(key); // updates recency on hit
       if (cached !== undefined) {
@@ -168,10 +193,12 @@ export const wasm: ImmutableWasm<WasmType> = new Proxy(instance, {
         return cached;
       }
       const result = tracedCall(name, fn, args);
-      resultCache.set(key, result as NonNullable<unknown>);
+      if (result !== null && result !== undefined) resultCache.set(key, result);
       if (getFlag("perfOverlay"))
         recordWasmCache(name, false, resultCache.size);
       return result;
     };
   },
 });
+
+export const wasm = instrumentedWasm satisfies ImmutableWasm<WasmType>;

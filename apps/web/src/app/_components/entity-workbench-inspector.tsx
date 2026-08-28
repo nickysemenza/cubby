@@ -41,9 +41,6 @@ const supportsCompactOverview = (
 const isAuditableEntity = (entity: Entity): entity is AuditEntityType =>
   entityManifest[entity].auditable;
 
-const isEntityActionRecord = (record: object): record is EntityActionRow =>
-  "id" in record && typeof record.id === "string";
-
 function UnsupportedOverview({ entity, id }: { entity: Entity; id: string }) {
   const label = entityLabel(entity);
 
@@ -101,13 +98,12 @@ function EntityWorkbenchInspectorContent({
   const handleNameResolved = useCallback((name: string) => {
     setResolvedName((current) => (current === name ? current : name));
   }, []);
-  const handleRecordResolved = useCallback((record: object | undefined) => {
-    if (!record || !isEntityActionRecord(record)) {
-      setResolvedRecord(undefined);
-      return;
-    }
-    setResolvedRecord((current) => (current === record ? current : record));
-  }, []);
+  const handleRecordResolved = useCallback(
+    (record: EntityActionRow | undefined) => {
+      setResolvedRecord((current) => (current === record ? current : record));
+    },
+    [],
+  );
 
   return (
     <EntityInspectorFrame

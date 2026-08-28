@@ -1,26 +1,15 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { vendorOut } from "@cubby/schemas/vendor";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  mutate: vi.fn(),
-  useActionMutation: vi.fn(),
-  fetchVendorLogoMutationOptions: vi.fn(),
-}));
+import { vendor as vendorOperations } from "~/app/vendors/vendor.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("~/app/_components/hooks/useActionMutation", () => ({
-  useActionMutation: mocks.useActionMutation,
-}));
-
-vi.mock("~/app/vendors/vendor.functions", () => ({
-  vendor: {
-    fetchLogo: {
-      mutationOptions: mocks.fetchVendorLogoMutationOptions,
-    },
-  },
-}));
-
-import { VendorLogoFetchAction } from "./vendor-logo-fetch-action";
+import {
+  type VendorLogoFetchOperations,
+  VendorLogoFetchAction,
+} from "./vendor-logo-fetch-action";
 
 const vendor = {
   id: testShortcode("vendor", "VEN-2345"),
@@ -28,44 +17,87 @@ const vendor = {
   website: "https://example.com",
 };
 
+const fetchedVendor = vendorOut.parse({
+  ...vendor,
+  orderUrlTemplate: null,
+  notes: null,
+  purchaseCount: 0,
+  spend: 0,
+  latestPurchaseDate: null,
+  logo: null,
+  createdAt: new Date("2026-08-27T00:00:00.000Z"),
+  updatedAt: new Date("2026-08-27T00:00:00.000Z"),
+});
+
+function createOperations() {
+  const requests: Array<{ id: (typeof vendor)["id"] }> = [];
+  const fetchLogo = vendorOperations.fetchLogo.withTransport(
+    async ({ input }) => {
+      requests.push(input);
+      return fetchedVendor;
+    },
+  );
+  return {
+    operations: { fetchLogo: fetchLogo.mutationOptions },
+    requests,
+  } satisfies {
+    operations: VendorLogoFetchOperations;
+    requests: Array<{ id: (typeof vendor)["id"] }>;
+  };
+}
+
+function createPendingOperations(): VendorLogoFetchOperations {
+  const fetchLogo = vendorOperations.fetchLogo.withTransport(
+    () => new Promise<typeof fetchedVendor>(() => undefined),
+  );
+  return { fetchLogo: fetchLogo.mutationOptions };
+}
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
 describe("VendorLogoFetchAction", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.useActionMutation.mockReturnValue({
-      mutate: mocks.mutate,
-      isPending: false,
-    });
+    harness = createBrowserTestHarness();
   });
 
-  it("offers an explicit fetch for a vendor with a website", () => {
-    render(<VendorLogoFetchAction vendor={vendor} />);
+  afterEach(() => {
+    harness.dispose();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Fetch logo" }));
-    expect(mocks.mutate).toHaveBeenCalledWith({ id: vendor.id });
-    expect(mocks.useActionMutation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mutationFn: mocks.fetchVendorLogoMutationOptions,
-        success: "Added logo for Example Supply",
-      }),
-    );
+  it("offers an explicit fetch for a vendor with a website", async () => {
+    const { operations, requests } = createOperations();
+    render(<VendorLogoFetchAction vendor={vendor} operations={operations} />, {
+      wrapper: harness.wrapper,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Fetch logo" }));
+    await waitFor(() => expect(requests).toEqual([{ id: vendor.id }]));
   });
 
   it("renders no action until a website is recorded", () => {
     const { container } = render(
-      <VendorLogoFetchAction vendor={{ ...vendor, website: null }} />,
+      <VendorLogoFetchAction
+        vendor={{ ...vendor, website: null }}
+        operations={createOperations().operations}
+      />,
+      { wrapper: harness.wrapper },
     );
 
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows a disabled pending state", () => {
-    mocks.useActionMutation.mockReturnValue({
-      mutate: mocks.mutate,
-      isPending: true,
-    });
+  it("shows a disabled pending state", async () => {
+    render(
+      <VendorLogoFetchAction
+        vendor={vendor}
+        operations={createPendingOperations()}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Fetch logo" }));
 
-    render(<VendorLogoFetchAction vendor={vendor} />);
-
-    expect(screen.getByRole("button", { name: "Fetching…" })).toBeDisabled();
+    expect(
+      await screen.findByRole("button", { name: "Fetching…" }),
+    ).toBeDisabled();
   });
 });

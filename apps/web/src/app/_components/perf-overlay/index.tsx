@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -30,18 +31,25 @@ import { cn } from "~/lib/utils";
 import { type LiveQueryStats, readLiveQueryStats } from "./use-query-stats";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+const cornerSchema = z.enum([
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+]);
+const minimizedSchema = z.boolean();
 const CORNERS: Corner[] = [
   "bottom-left",
   "bottom-right",
   "top-right",
   "top-left",
 ];
-const CORNER_CLASS: Record<Corner, string> = {
+const CORNER_CLASS = {
   "top-left": "top-2 left-2",
   "top-right": "top-2 right-2",
   "bottom-left": "bottom-2 left-2",
   "bottom-right": "bottom-2 right-2",
-};
+} satisfies Record<Corner, string>;
 
 type Tab = "WASM" | "Queries" | "Renders" | "Runtime" | "Vitals" | "Slow";
 const TABS: Tab[] = ["Slow", "WASM", "Queries", "Renders", "Runtime", "Vitals"];
@@ -54,11 +62,16 @@ const ms = (n: number) => `${n.toFixed(1)}ms`;
  * just starts the runtime collectors and polls a snapshot every 500ms.
  */
 export function PerfOverlay() {
-  const [corner, setCorner] = useLocalStorage<Corner>(
+  const [corner, setCorner] = useLocalStorage(
     "perfOverlayCorner",
+    cornerSchema,
     "bottom-left",
   );
-  const [minimized, setMinimized] = useLocalStorage("perfOverlayMin", false);
+  const [minimized, setMinimized] = useLocalStorage(
+    "perfOverlayMin",
+    minimizedSchema,
+    false,
+  );
   const [tab, setTab] = useState<Tab>("Slow");
   const [paused, setPausedState] = useState(false);
   const [snap, setSnap] = useState<PerfSnapshot>(() => snapshot());
@@ -251,18 +264,18 @@ function Bar({ pct, tone = 1 }: { pct: number; tone?: number }) {
   );
 }
 
-const SLOW_TONE: Record<SlowEvent["kind"], number> = {
+const SLOW_TONE = {
   query: 1,
   mutation: 5,
   wasm: 2,
   render: 4,
-};
-const SLOW_TAG: Record<SlowEvent["kind"], string> = {
+} satisfies Record<SlowEvent["kind"], number>;
+const SLOW_TAG = {
   query: "qry",
   mutation: "mut",
   wasm: "wasm",
   render: "rndr",
-};
+} satisfies Record<SlowEvent["kind"], string>;
 
 /** Chronological log of jank events (≥16ms) across WASM, queries and renders. */
 function SlowTab({ snap }: { snap: PerfSnapshot }) {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveCellClearTarget } from "./cell-clear";
+import type { CellJsonValue } from "./cell-clipboard";
 import type { CellSelection } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";
 
@@ -19,7 +20,7 @@ const single: CellSelection = {
 };
 
 const column = (
-  applyClear?: (row: Row) => Promise<unknown>,
+  applyClear?: (row: Row) => Promise<CellJsonValue | null>,
 ): ColumnCellData<Row> => ({
   kind: "entity:project",
   getCopyPayload: (row) =>

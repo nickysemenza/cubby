@@ -41,9 +41,12 @@ export function useGlobalSearch(
     wait: LEXICAL_DEBOUNCE_MS,
   });
   const shouldSearch = query.trim().length > 0;
+  // Query options are constructed even while disabled, so their schema-derived
+  // input must remain valid before the user has typed anything.
+  const queryInput = shouldSearch ? query : "inactive-command-search";
   const lexical = useQuery({
     ...search.find.queryOptions({
-      query,
+      query: queryInput,
       entityTypes: entityType ? [entityType] : undefined,
       limit: COMMAND_SEARCH_RESULT_LIMIT,
     }),

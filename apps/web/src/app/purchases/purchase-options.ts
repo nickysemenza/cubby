@@ -8,12 +8,12 @@ const reconciliationValues = [
   "mismatch",
   "unknown",
 ] as const;
-const reconciliationLabels: Record<PurchaseReconciliation, string> = {
+const reconciliationLabels = {
   match: "Reconciles",
   refund_adjusted: "Refund-adjusted",
   mismatch: "Needs review",
   unknown: "No stated total",
-};
+} satisfies Record<PurchaseReconciliation, string>;
 
 export const purchaseReconciliationOptions = buildSelectOptions(
   reconciliationValues,
@@ -21,10 +21,7 @@ export const purchaseReconciliationOptions = buildSelectOptions(
 );
 
 /** Table preset → exact server bounds. URL/MCP callers can send exact bounds. */
-export function resolvePurchaseExpenseTotalFilter(preset: string | undefined): {
-  expenseTotalMin?: number;
-  expenseTotalMax?: number;
-} {
+export function resolvePurchaseExpenseTotalFilter(preset: string | undefined) {
   if (preset === "gte500") return { expenseTotalMin: 500 };
   if (preset === "gte200") return { expenseTotalMin: 200 };
   if (preset === "gte100") return { expenseTotalMin: 100 };

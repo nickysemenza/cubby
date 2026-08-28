@@ -11,8 +11,7 @@ const CreateInventoryItem: FC = () => {
 
   const { error, isPending, submit, cancel } = useEntityCreateController<
     "inventory",
-    z.infer<typeof inventoryCreatePayloadData>,
-    { id: string }
+    z.infer<typeof inventoryCreatePayloadData>
   >("inventory", {
     onSuccess: invalidateInventory,
   });

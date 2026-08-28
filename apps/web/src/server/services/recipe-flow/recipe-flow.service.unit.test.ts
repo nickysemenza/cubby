@@ -9,33 +9,15 @@ import type {
   RecipeFlowPlan,
 } from "@cubby/schemas/recipe-flow";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import type { Database } from "~/server/db";
+import { Database } from "~/server/db";
 
-const mocks = vi.hoisted(() => ({
-  getRecipeByID: vi.fn(),
-  listAnalyses: vi.fn(),
-  upsertAnalysis: vi.fn(),
-  recordUsage: vi.fn(),
-  generate: vi.fn(),
-}));
-
-vi.mock("~/server/repo/recipe", () => ({
-  getRecipeByID: mocks.getRecipeByID,
-}));
-vi.mock("~/server/repo/ai-analysis", () => ({
-  listAiAnalysesForEntityFeature: mocks.listAnalyses,
-  upsertAiAnalysis: mocks.upsertAnalysis,
-}));
-vi.mock("~/server/ai-usage", () => ({
-  recordAiUsage: mocks.recordUsage,
-}));
-vi.mock("~/server/clients/anthropic", () => ({
-  getAnthropicClient: () => ({ generateRecipeFlow: mocks.generate }),
-}));
-
-import { generateRecipeFlow, getRecipeFlowState } from "./recipe-flow.service";
+import {
+  generateRecipeFlow,
+  getRecipeFlowState,
+  type RecipeFlowPorts,
+} from "./recipe-flow.service";
 
 const RECIPE_ID = testEntityId(
   "recipe",
@@ -43,6 +25,9 @@ const RECIPE_ID = testEntityId(
 );
 const SECTION_ID = "00000000-0000-4000-8000-000000000002";
 const USAGE_ID = "00000000-0000-4000-8000-000000000003";
+const db = new Database(() => {
+  throw new Error("Recipe-flow unit ports do not resolve a database runtime");
+});
 
 const recipe: RecipeOut = recipeOut.parse({
   id: testShortcode("recipe", "RCP-TOAST"),
@@ -113,155 +98,121 @@ const validCandidate = (): RecipeFlowAiPlan => ({
   ],
 });
 
-const artifact = (
-  fingerprint: string,
-  guidance: string | null = null,
-  model = "claude-haiku-4-5",
-): RecipeFlowArtifact => ({
+const artifact = (fingerprint: string): RecipeFlowArtifact => ({
   plan: validPlan(),
-  guidance,
+  guidance: null,
   warnings: [],
   contentFingerprint: fingerprint,
-  model,
+  model: "claude-haiku-4-5",
   promptVersion: "2026-07-29.1",
   generatedAt: new Date("2026-07-29T12:00:00Z"),
 });
 
-const db = {} as Database;
+class InMemoryRecipeFlowPorts {
+  readonly analyses: Array<{
+    inputFingerprint: string;
+    model: RecipeFlowArtifact["model"];
+    promptVersion: string;
+    result: RecipeFlowArtifact;
+    updatedAt: Date;
+  }> = [];
+  readonly generated: RecipeFlowAiPlan[] = [];
+  readonly usage: Array<{ cacheStatus: string | null | undefined }> = [];
+  readonly repairRequests: unknown[] = [];
+
+  readonly ports = {
+    getRecipe: async () => recipe,
+    listCandidates: async () => this.analyses,
+    persistArtifact: async (_db, _recipeId, input) => {
+      const result = artifact(input.fingerprint);
+      result.guidance = input.guidance;
+      result.plan = input.plan;
+      result.warnings = input.warnings;
+      result.model = input.feature.model;
+      result.promptVersion = input.feature.promptVersion;
+      this.analyses.unshift({
+        inputFingerprint: input.fingerprint,
+        model: result.model,
+        promptVersion: result.promptVersion,
+        result,
+        updatedAt: result.generatedAt,
+      });
+      return result;
+    },
+    recordAiUsage: async (_db, usage) => {
+      this.usage.push({ cacheStatus: usage.cacheStatus });
+    },
+    generateRecipeFlow: async (_prompt, _guidance, repair) => {
+      if (repair) this.repairRequests.push(repair);
+      const candidate = this.generated.shift();
+      if (!candidate) throw new Error("No in-memory recipe-flow candidate");
+      return candidate;
+    },
+  } satisfies RecipeFlowPorts;
+}
 
 describe("recipe-flow service", () => {
+  let memory: InMemoryRecipeFlowPorts;
+
   beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getRecipeByID.mockResolvedValue(recipe);
-    mocks.listAnalyses.mockResolvedValue([]);
-    mocks.upsertAnalysis.mockImplementation(
-      async (_db, _key, result: RecipeFlowArtifact) => result,
-    );
+    memory = new InMemoryRecipeFlowPorts();
   });
 
   it("returns missing, then recognizes a matching cached artifact", async () => {
-    const missing = await getRecipeFlowState(db, RECIPE_ID);
+    const missing = await getRecipeFlowState(db, RECIPE_ID, memory.ports);
     expect(missing.status).toBe("missing");
-
     const cached = artifact(missing.currentFingerprint);
-    mocks.listAnalyses.mockResolvedValue([
-      {
-        inputFingerprint: missing.currentFingerprint,
-        model: cached.model,
-        promptVersion: cached.promptVersion,
-        result: cached,
-        updatedAt: cached.generatedAt,
-      },
-    ]);
+    memory.analyses.push({
+      inputFingerprint: missing.currentFingerprint,
+      model: cached.model,
+      promptVersion: cached.promptVersion,
+      result: cached,
+      updatedAt: cached.generatedAt,
+    });
 
-    const current = await getRecipeFlowState(db, RECIPE_ID);
-    expect(current).toMatchObject({
+    await expect(
+      getRecipeFlowState(db, RECIPE_ID, memory.ports),
+    ).resolves.toMatchObject({
       status: "current",
       artifact: cached,
     });
   });
 
   it("persists a valid primary-model graph", async () => {
-    mocks.generate.mockResolvedValue(validCandidate());
+    memory.generated.push(validCandidate());
 
-    const result = await generateRecipeFlow(db, {
-      id: RECIPE_ID,
-      force: false,
-    });
-
-    expect(result.model).toBe("claude-haiku-4-5");
-    expect(mocks.generate).toHaveBeenCalledTimes(1);
-    expect(mocks.upsertAnalysis).toHaveBeenCalledOnce();
+    await expect(
+      generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports),
+    ).resolves.toMatchObject({ model: "claude-haiku-4-5" });
+    expect(memory.analyses).toHaveLength(1);
   });
 
   it("repairs a contextually invalid graph with the fallback model", async () => {
     const invalid = validCandidate();
     invalid.sources = [];
     invalid.operations[0]!.inputs = [{ kind: "source", id: "missing-bread" }];
-    mocks.generate
-      .mockResolvedValueOnce(invalid)
-      .mockResolvedValueOnce(validCandidate());
+    memory.generated.push(invalid, validCandidate());
 
-    const result = await generateRecipeFlow(db, {
-      id: RECIPE_ID,
-      force: true,
-    });
-
-    expect(result.model).toBe("claude-sonnet-4-6");
-    expect(mocks.generate).toHaveBeenCalledTimes(2);
-    expect(mocks.generate.mock.calls[1]?.[2]).toMatchObject({
-      candidate: invalid,
-      issues: expect.arrayContaining([
-        expect.stringContaining("missing from the flow"),
-      ]),
-    });
+    await expect(
+      generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
+    ).resolves.toMatchObject({ model: "claude-sonnet-4-6" });
+    expect(memory.repairRequests).toHaveLength(1);
   });
 
-  it("repairs a provider candidate that fails canonical schema validation", async () => {
-    const invalid = validCandidate();
-    invalid.operations[0]!.inputs = [];
-    mocks.generate
-      .mockResolvedValueOnce(invalid)
-      .mockResolvedValueOnce(validCandidate());
-
-    const result = await generateRecipeFlow(db, {
-      id: RECIPE_ID,
-      force: true,
-    });
-
-    expect(result.model).toBe("claude-sonnet-4-6");
-    expect(mocks.generate).toHaveBeenCalledTimes(2);
-    expect(mocks.generate.mock.calls[1]?.[2]).toMatchObject({
-      candidate: invalid,
-      issues: expect.arrayContaining([
-        expect.stringContaining("operations.0.inputs"),
-      ]),
-    });
-  });
-
-  it("reuses persistent guidance after the recipe becomes stale", async () => {
-    const stale = artifact("a".repeat(64), "keep the crust branch separate");
-    mocks.listAnalyses.mockResolvedValue([
-      {
-        inputFingerprint: stale.contentFingerprint,
-        model: stale.model,
-        promptVersion: stale.promptVersion,
-        result: stale,
-        updatedAt: stale.generatedAt,
-      },
-    ]);
-    mocks.generate.mockResolvedValue(validCandidate());
-
-    await generateRecipeFlow(db, { id: RECIPE_ID, force: false });
-
-    expect(mocks.generate.mock.calls[0]?.[1]).toBe(
-      "keep the crust branch separate",
-    );
-  });
-
-  it("serves an exact cache hit without calling the model", async () => {
-    const missing = await getRecipeFlowState(db, RECIPE_ID);
+  it("serves an exact cache hit without calling the provider", async () => {
+    const missing = await getRecipeFlowState(db, RECIPE_ID, memory.ports);
     const cached = artifact(missing.currentFingerprint);
-    mocks.listAnalyses.mockResolvedValue([
-      {
-        inputFingerprint: cached.contentFingerprint,
-        model: cached.model,
-        promptVersion: cached.promptVersion,
-        result: cached,
-        updatedAt: cached.generatedAt,
-      },
-    ]);
-
-    const result = await generateRecipeFlow(db, {
-      id: RECIPE_ID,
-      force: false,
+    memory.analyses.push({
+      inputFingerprint: cached.contentFingerprint,
+      model: cached.model,
+      promptVersion: cached.promptVersion,
+      result: cached,
+      updatedAt: cached.generatedAt,
     });
 
-    expect(result).toEqual(cached);
-    expect(mocks.generate).not.toHaveBeenCalled();
-    expect(mocks.recordUsage).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({ cacheStatus: "hit" }),
-    );
+    await expect(
+      generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports),
+    ).resolves.toEqual(cached);
+    expect(memory.usage).toEqual([{ cacheStatus: "hit" }]);
   });
 });

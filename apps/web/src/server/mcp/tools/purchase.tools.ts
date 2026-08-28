@@ -53,7 +53,7 @@ import { READ_ONLY_CLOSED, registerRouterTool, WRITE_CLOSED } from "./_shared";
  * legitimately makes the parts disagree with the original, and that is
  * expected, not an error — nothing here rejects it.
  */
-const splitExpenseMcpOut = z.object({
+export const splitExpenseMcpOut = z.object({
   items: z.array(expenseOut),
   originalCost: z
     .number()
@@ -77,7 +77,7 @@ export function registerPurchaseTools(server: McpServer) {
     name: "reclassify_purchase_document",
     description:
       "Reclassify one existing attachment on a Purchase. Primary evidence is exactly order_confirmation, sales_order, invoice, or receipt; payment receipts, credits, returns, quotes, estimates, contracts, statements, specifications, and other files remain useful but do not satisfy primary_document completeness. Returns the Purchase with freshly computed dataQuality.",
-    inputSchema: reclassifyPurchaseDocumentInput.shape,
+    inputSchema: reclassifyPurchaseDocumentInput,
     outputSchema: purchaseOut,
     annotations: WRITE_CLOSED,
     call: (caller, params) => caller.purchase.reclassifyDocument(params),
@@ -91,7 +91,7 @@ export function registerPurchaseTools(server: McpServer) {
       "Parts are expected to sum to the original expense's cost, but that is a convention, NOT a rule this tool enforces: nothing validates the sum. The response's `originalCost`/`partsSum`/`delta` are a CUE, never a gate — parts are recorded exactly as entered, and a non-zero delta is EXPECTED, not an error, whenever a partial refund or a discount applied to only one part legitimately makes the parts disagree with the original. The same gap is separately DISPLAYED as a purchase-reconciliation cue against statedTotal/expenseTotal; posted refunds that exactly explain it are classified `refund_adjusted`, other differences remain `mismatch`. " +
       "The original Expense is soft-deleted and every part is created on the SAME purchase (`purchaseId`) the original had — this only re-labels how one purchase's money is attributed; it never creates a new purchase or moves money to a different vendor. If the purchase had no `statedTotal`, one is seeded from the original expense's cost so the parts have something to reconcile against. " +
       "REFUSES when the Expense has no purchase attached (`purchaseId` is null). Use entity update(expense) with a `vendor` (and `orderId` if known) to give the Expense a purchase, then split it.",
-    inputSchema: splitExpenseInput.shape,
+    inputSchema: splitExpenseInput,
     outputSchema: splitExpenseMcpOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params, context) => {
@@ -124,7 +124,7 @@ export function registerPurchaseTools(server: McpServer) {
       "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. This only rewrites `purchaseId` on the given expenses; it creates no money, changes no cost/trade/costType/project on any Expense, and leaves the target purchase's identity (vendorId/orderId/date/statedTotal/documents) untouched aside from gaining those expenses. " +
       "NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases. Do not combine them just because they share a project or vendor; use the Project rollup for that view. " +
       "REFUSES when `purchaseId` does not resolve to a live purchase.",
-    inputSchema: linkExpensesToPurchaseInput.shape,
+    inputSchema: linkExpensesToPurchaseInput,
     outputSchema: purchaseOut,
     annotations: WRITE_CLOSED,
     call: (caller, params) => caller.purchase.link(params),
@@ -134,7 +134,7 @@ export function registerPurchaseTools(server: McpServer) {
     name: "list_purchase_products",
     description:
       'List the Products one Purchase acquired. Rows come from TWO sources and `source` says which: "expense" means one of this order\'s own itemized Expenses names the product (the common case), "link" means an explicit PurchaseProduct row, and "both" means each exists for that pair. Only Expenses that ACQUIRE count — a negative Expense records an exit (sale, return, disposal), so a disposal order does not list the goods it sold. This is PROVENANCE, not money: nothing here carries an amount or quantity or appears in any spend total. The explicit link exists because an order paid in installments has Expenses with lineBasis "allocation" — a slice of a total that was never itemized, either by payment schedule (a deposit buys no particular item) or by an estimated materials/labor split — and such a row can never carry a productId. Where spend IS itemized per product (lineBasis "item_line"), the Expense\'s own productId already records it and is the better source; those pairs appear here with source "expense" and need no link. `linkAttachedAt` is when the explicit link was recorded, and is null on a source "expense" row — it is also the test for whether detach_entity has anything to remove.',
-    inputSchema: purchaseProductsInput.shape,
+    inputSchema: purchaseProductsInput,
     // `{items}`, like every other list tool — see `purchaseProductsMcpOut`.
     outputSchema: purchaseProductsMcpOut,
     annotations: READ_ONLY_CLOSED,

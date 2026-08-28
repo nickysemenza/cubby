@@ -7,7 +7,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import { mealCreateInput } from "@cubby/schemas/meal";
+import { type MealCreateInput, mealCreateInput } from "@cubby/schemas/meal";
 import {
   countProblems,
   PROBLEM_CLASS,
@@ -21,7 +21,7 @@ import {
 } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
-import type { FoodSummary } from "@cubby/usda-schemas";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -30,11 +30,7 @@ import { describe, expect, it, vi } from "vitest";
 import { compileProblemFilters } from "~/entities/problem-filter-semantics";
 import { viewProblemDeclarations } from "~/entities/view-manifest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
-import {
-  PartialUpcBatchLookupError,
-  type UPCLookupClient,
-} from "~/server/clients/upc-lookup";
-import type { USDAClient } from "~/server/clients/usda";
+import { PartialUpcBatchLookupError } from "~/server/clients/upc-lookup";
 import {
   financialTransaction,
   inventoryEntry,
@@ -48,6 +44,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 
+import type { UpcLookupBatchPort } from "../services/problem-diagnostics.service";
 import { findViewProblems } from "../services/problem-views.service";
 import {
   findAllProblems,
@@ -57,6 +54,7 @@ import {
   rebuildProductConversionCoverageProjection,
   reparseStaleIngredientParses,
 } from "../services/problems.service";
+import type { UsdaFoodBatchPort } from "../services/usda-helpers";
 import { getDb } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { createIngredient, getIngredientByName } from "./ingredient";
@@ -114,7 +112,7 @@ const upcResponse = (
   description: null,
   priceDollars: null,
   imageUrl: null,
-  source: "upcitemdb" as UPCLookupResponse["source"],
+  source: "upcitemdb",
   cached: false,
   ...overrides,
 });
@@ -123,7 +121,7 @@ const fakeUpcClient = (
   byUpc: Record<string, UPCLookupResponse | null> = {},
 ) => {
   const calls: string[] = [];
-  const client = {
+  const client: UpcLookupBatchPort = {
     lookupBatch: async (upcs: string[]) => {
       calls.push(...upcs);
       const result = new Map<string, UPCLookupResponse>();
@@ -133,15 +131,16 @@ const fakeUpcClient = (
       }
       return result;
     },
-  } as unknown as UPCLookupClient;
+  };
   return { client, calls };
 };
 
-const fakeUsdaClient = (foods: (FoodSummary | null)[] = []) =>
-  ({
-    findFoodsBatch: async (lookups: unknown[]) =>
-      lookups.map((_, i) => foods[i] ?? null),
-  }) as unknown as USDAClient;
+const fakeUsdaClient = (
+  foods: (FoodSummary | null)[] = [],
+): UsdaFoodBatchPort => ({
+  findFoodsBatch: async (lookups: FoodLookupParam[]) =>
+    lookups.map((_, i) => foods[i] ?? null),
+});
 
 describe("problems repo", () => {
   const ctx = withTestDb();
@@ -2323,11 +2322,17 @@ describe("problems service — totals count defects only", () => {
     expect(all.emptyLocations.map((l) => l.id)).toContain(emptyLoc.id);
     expect(all.orphanedProducts.map((p) => p.id)).toContain(orphan.id);
 
+    const {
+      totalProblems: _totalProblems,
+      sectionTotals,
+      upcFreshness: _upcFreshness,
+      conversionCoverageFreshness: _conversionCoverageFreshness,
+      ...problemSections
+    } = all;
     const defectSum = sumProblemSections(
-      Object.fromEntries(
-        Object.entries(all).filter(([, v]) => Array.isArray(v)),
-      ) as Record<string, readonly unknown[]>,
+      problemSections,
       "defect",
+      sectionTotals,
     );
     expect(all.totalProblems).toBe(defectSum);
     expect(all.emptyLocations.length).toBeGreaterThan(0);
@@ -2685,7 +2690,10 @@ describe("problems — duplicate vendors", () => {
 describe("problems — cooked meals with nothing planned", () => {
   const ctx = withTestDb();
 
-  const makeMeal = (date: string, overrides: Record<string, unknown> = {}) =>
+  const makeMeal = (
+    date: string,
+    overrides: Omit<Partial<MealCreateInput>, "date"> = {},
+  ) =>
     createMealFixture(
       ctx.db,
       mealCreateInput.parse({ date, ...overrides }),

@@ -6,13 +6,17 @@ import {
   createPlainDateColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 
 /**
  * The brand mark leading each vendor's name. Module-level for the same reason as
@@ -37,52 +41,61 @@ export function VendorList() {
   );
 
   const columns = useMemo(
-    () => [
-      columnHelper.accessor((row) => row.website, {
-        id: "website",
-        header: "Website",
-        enableSorting: false,
-        meta: {
-          className: "w-40",
-          mobile: { slot: "meta", priority: 30, interactive: true },
-        },
-        cell: (info) => {
-          const website = info.getValue();
-          if (!website) return <NoneValue />;
-          return <ExternalLinkText href={website} truncate />;
-        },
+    () =>
+      createCubbyColumnCollection<VendorOut>((add) => {
+        add(
+          columnHelper.accessor((row) => row.website, {
+            id: "website",
+            header: "Website",
+            enableSorting: false,
+            meta: {
+              className: "w-40",
+              mobile: { slot: "meta", priority: 30, interactive: true },
+            },
+            cell: (info) => {
+              const website = info.getValue();
+              if (!website) return <NoneValue />;
+              return <ExternalLinkText href={website} truncate />;
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor((row) => row.purchaseCount, {
+            id: "purchaseCount",
+            header: "Purchases",
+            meta: {
+              numeric: true,
+              className: "w-24",
+              mobile: { slot: "meta", priority: 20 },
+            },
+            cell: (info) => (
+              <span className="font-mono tabular-nums">{info.getValue()}</span>
+            ),
+          }),
+        );
+        // `signedTone` because vendor spend genuinely goes negative (a refund-only
+        // vendor, or the family wedding contributions), and a credit must not read
+        // as spend. The footer is exact: `vendorList` returns a `sums.spend` over
+        // the whole filtered set, and `createCurrencyColumn` prefers that server
+        // aggregate over reducing the loaded rows (keyed on the column id, so no
+        // wiring here beyond naming the column `spend`).
+        add(
+          createCurrencyColumn(columnHelper, "spend", {
+            header: "Spend",
+            className: "w-28",
+            decimals: 0,
+            signedTone: true,
+            mobile: { slot: "trailing", priority: 5 },
+          }),
+        );
+        add(
+          createPlainDateColumn(columnHelper, "latestPurchaseDate", {
+            header: "Latest purchase",
+            className: "w-32",
+            mobile: { slot: "meta", priority: 35 },
+          }),
+        );
       }),
-      columnHelper.accessor((row) => row.purchaseCount, {
-        id: "purchaseCount",
-        header: "Purchases",
-        meta: {
-          numeric: true,
-          className: "w-24",
-          mobile: { slot: "meta", priority: 20 },
-        },
-        cell: (info) => (
-          <span className="font-mono tabular-nums">{info.getValue()}</span>
-        ),
-      }),
-      // `signedTone` because vendor spend genuinely goes negative (a refund-only
-      // vendor, or the family wedding contributions), and a credit must not read
-      // as spend. The footer is exact: `vendorList` returns a `sums.spend` over
-      // the whole filtered set, and `createCurrencyColumn` prefers that server
-      // aggregate over reducing the loaded rows (keyed on the column id, so no
-      // wiring here beyond naming the column `spend`).
-      createCurrencyColumn(columnHelper, "spend", {
-        header: "Spend",
-        className: "w-28",
-        decimals: 0,
-        signedTone: true,
-        mobile: { slot: "trailing", priority: 5 },
-      }),
-      createPlainDateColumn(columnHelper, "latestPurchaseDate", {
-        header: "Latest purchase",
-        className: "w-32",
-        mobile: { slot: "meta", priority: 35 },
-      }),
-    ],
     [columnHelper],
   );
 
@@ -99,6 +112,7 @@ export function VendorList() {
   return (
     <EntityListPage<VendorOut, VendorFilters>
       entity="vendor"
+      queryOptions={entityListFor("vendor").listQueryPlan}
       columns={columns}
       nameEditable={nameEditable}
       // Sparse table (four columns), so the name gets a fixed width instead of

@@ -4,7 +4,14 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Check, Pencil, RotateCcw, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
@@ -26,15 +33,33 @@ import {
   showAmountAndPrice,
   tryFormatAmount,
 } from "../inventory/format-amount";
-import type { CellClipboardSpec } from "./cell-clipboard";
+import type { CellClipboardSpec, CellPastePayload } from "./cell-clipboard";
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
 import { CellSelectionContext } from "./cell-selection-context";
 
 export type { FilterableComboboxItem };
 
-type EditableInputConfig = {
-  type: "text" | "number";
+/**
+ * The editor owns retry behavior, while the host owns how its failure is
+ * surfaced. The default keeps browser behavior on Sonner; tests and embedded
+ * hosts can provide a faithful notification destination without replacing a
+ * module.
+ */
+export interface EditorNotificationPort {
+  showError: (message: string) => void;
+}
+
+const sonnerEditorNotifications: EditorNotificationPort = {
+  showError: (message) => toast.error(message),
+};
+
+export const EditorNotificationContext = createContext<EditorNotificationPort>(
+  sonnerEditorNotifications,
+);
+
+type EditableTextConfig = {
+  type: "text";
   prefix?: string;
   step?: string;
   placeholder?: string;
@@ -45,6 +70,13 @@ type EditableInputConfig = {
    */
   multiline?: boolean;
   rows?: number;
+};
+
+type EditableNumberConfig = {
+  type: "number";
+  prefix?: string;
+  step?: string;
+  placeholder?: string;
 };
 
 type EditableCurrencyConfig = {
@@ -80,75 +112,136 @@ type EditableDateConfig = {
   placeholder?: string;
 };
 
-type EditableConfig =
-  | EditableInputConfig
-  | EditableCurrencyConfig
-  | EditableSelectConfig
-  | EditableDateConfig;
-
-interface EditableCellProps<T> {
+interface EditableCellCommonProps<T> {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
-  config: EditableConfig;
   renderValue: (value: T | null) => React.ReactNode;
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<T | null>;
   trigger?: "wrap" | "pencil";
   autoOpen?: boolean;
 }
 
-export function EditableCell<T>({
-  value,
-  onSave,
-  config,
-  renderValue,
-  clipboard,
-  trigger = "wrap",
-  autoOpen = false,
-}: EditableCellProps<T>) {
-  if (config.type === "select") {
+type EditableTextCellProps = EditableCellCommonProps<string> & {
+  config: EditableTextConfig;
+};
+
+type EditableNumberCellProps = EditableCellCommonProps<number> & {
+  config: EditableNumberConfig;
+};
+
+type EditableSelectCellProps<T extends string = string> =
+  EditableCellCommonProps<T> & {
+    config: EditableSelectConfig;
+  };
+
+type EditableDateCellProps = EditableCellCommonProps<string> & {
+  config: EditableDateConfig;
+};
+
+type EditableCurrencyCellProps = EditableCellCommonProps<number> & {
+  config: EditableCurrencyConfig;
+};
+
+type EditableCellProps =
+  | EditableTextCellProps
+  | EditableNumberCellProps
+  | EditableSelectCellProps
+  | EditableDateCellProps
+  | EditableCurrencyCellProps;
+
+function isSelectCellProps(
+  props: EditableCellProps,
+): props is EditableSelectCellProps {
+  return props.config.type === "select";
+}
+
+function isDateCellProps(
+  props: EditableCellProps,
+): props is EditableDateCellProps {
+  return props.config.type === "date";
+}
+
+function isTextCellProps(
+  props: EditableCellProps,
+): props is EditableTextCellProps {
+  return props.config.type === "text";
+}
+
+export function EditableCell(props: EditableTextCellProps): React.ReactNode;
+export function EditableCell(props: EditableNumberCellProps): React.ReactNode;
+export function EditableCell<T extends string>(
+  props: EditableSelectCellProps<T>,
+): React.ReactNode;
+export function EditableCell(props: EditableDateCellProps): React.ReactNode;
+export function EditableCell(props: EditableCurrencyCellProps): React.ReactNode;
+export function EditableCell(props: EditableCellProps) {
+  if (isSelectCellProps(props)) {
+    const { config } = props;
     return (
       <EditableSelectCellInternal
-        value={value as string | null}
-        onSave={onSave as (value: string | null) => Promise<void>}
+        value={props.value}
+        onSave={props.onSave}
         options={config.options}
         placeholder={config.placeholder}
         clearable={config.clearable}
-        renderValue={renderValue as (value: string | null) => React.ReactNode}
-        clipboard={clipboard}
-        trigger={trigger}
-        autoOpen={autoOpen}
+        renderValue={props.renderValue}
+        clipboard={props.clipboard}
+        trigger={props.trigger ?? "wrap"}
+        autoOpen={props.autoOpen ?? false}
       />
     );
   }
 
-  if (config.type === "date") {
+  if (isDateCellProps(props)) {
+    const { config } = props;
     return (
       <EditableDateCellInternal
-        value={value as string | null}
-        onSave={onSave as (value: string | null) => Promise<void>}
+        value={props.value}
+        onSave={props.onSave}
         placeholder={config.placeholder}
-        renderValue={renderValue as (value: string | null) => React.ReactNode}
-        clipboard={clipboard}
-        trigger={trigger}
-        autoOpen={autoOpen}
+        renderValue={props.renderValue}
+        clipboard={props.clipboard}
+        trigger={props.trigger ?? "wrap"}
+        autoOpen={props.autoOpen ?? false}
       />
     );
   }
 
+  if (isTextCellProps(props)) {
+    const { config } = props;
+    return (
+      <EditableInputCellInternal
+        value={props.value}
+        onSave={props.onSave}
+        config={config}
+        parseValue={(value) => value}
+        renderValue={props.renderValue}
+        clipboard={props.clipboard}
+        trigger={props.trigger ?? "wrap"}
+        autoOpen={props.autoOpen ?? false}
+      />
+    );
+  }
+
+  const { config } = props;
   return (
     <EditableInputCellInternal
-      value={value}
-      onSave={onSave}
+      value={props.value}
+      onSave={props.onSave}
       config={config}
-      renderValue={renderValue}
-      clipboard={clipboard}
-      trigger={trigger}
-      autoOpen={autoOpen}
+      parseValue={(value) => {
+        const parsed = Number.parseFloat(value);
+        return Number.isNaN(parsed) ? null : parsed;
+      }}
+      renderValue={props.renderValue}
+      clipboard={props.clipboard}
+      trigger={props.trigger ?? "wrap"}
+      autoOpen={props.autoOpen ?? false}
     />
   );
 }
 
-export function useCellEditState<TSaved = unknown>(
+export function useCellEditState<TSaved = void>(
   clipboard: CellClipboardSpec<TSaved> | undefined,
   onPasted?: (value: TSaved) => void,
 ) {
@@ -185,7 +278,7 @@ export function useCellEditState<TSaved = unknown>(
         ...effectiveClipboard,
         isEditing: () => isEditingRef.current,
         onPasteValue: pasteThrough
-          ? async (payload: { json?: unknown; text?: string }) => {
+          ? async (payload: CellPastePayload) => {
               const saved = await pasteThrough(payload);
               if (saved !== undefined) onPasted?.(saved);
               return saved;
@@ -208,7 +301,7 @@ const referenceEquals = <T,>(a: T | null, b: T | null) => a === b;
 
 type EditTriggerMode = "wrap" | "pencil";
 
-function EditableDisplay({
+function EditableDisplay<TSaved>({
   mode,
   triggerRef,
   onStartEdit,
@@ -218,7 +311,7 @@ function EditableDisplay({
   mode: EditTriggerMode;
   triggerRef: React.Ref<HTMLButtonElement>;
   onStartEdit: (seedText?: string) => void;
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<TSaved>;
   children: React.ReactNode;
 }) {
   if (mode === "pencil") {
@@ -282,15 +375,18 @@ export function useOptimisticDisplayValue<T>(
  * Each editor keeps its own widget, draft state, and unchanged predicate — it
  * passes the predicate result as `opts.unchanged` at the call site.
  */
+interface EditorCommit<T> {
+  isPending: boolean;
+  commit: (next: T, opts?: { unchanged?: boolean }) => Promise<void>;
+}
+
 export function useEditorCommit<T>(args: {
   onSave: (next: T) => Promise<void>;
   onCommit: (next: T) => void;
   onCancel: () => void;
-}): {
-  isPending: boolean;
-  commit: (next: T, opts?: { unchanged?: boolean }) => Promise<void>;
-} {
+}): EditorCommit<T> {
   const { onSave, onCommit, onCancel } = args;
+  const notifications = useContext(EditorNotificationContext);
   const [isPending, setIsPending] = useState(false);
   const pendingRef = useRef(false);
 
@@ -312,13 +408,13 @@ export function useEditorCommit<T>(args: {
         onCommit(next);
       } catch (err) {
         // Stay open with state intact so the user can retry or cancel.
-        toast.error(getErrorMessage(err));
+        notifications.showError(getErrorMessage(err));
       } finally {
         pendingRef.current = false;
         setIsPending(false);
       }
     },
-    [onSave, onCommit, onCancel],
+    [onSave, onCommit, onCancel, notifications],
   );
 
   return { isPending, commit };
@@ -328,6 +424,7 @@ function EditableInputCellInternal<T>({
   value,
   onSave,
   config,
+  parseValue,
   renderValue,
   clipboard,
   trigger,
@@ -335,16 +432,15 @@ function EditableInputCellInternal<T>({
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
-  config: EditableInputConfig | EditableCurrencyConfig;
+  config: EditableTextConfig | EditableNumberConfig | EditableCurrencyConfig;
+  parseValue: (value: string) => T | null;
   renderValue: (value: T | null) => React.ReactNode;
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<T | null>;
   trigger: EditTriggerMode;
   autoOpen: boolean;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-  const edit = useCellEditState(clipboard, (saved) =>
-    setOptimisticValue(saved as T | null),
-  );
+  const edit = useCellEditState(clipboard, setOptimisticValue);
 
   useEffect(() => {
     if (autoOpen) edit.open();
@@ -381,6 +477,7 @@ function EditableInputCellInternal<T>({
             value={value}
             onSave={onSave}
             config={config}
+            parseValue={parseValue}
             seedText={edit.seedText}
             onCancel={edit.cancel}
             onCommit={(nextValue) => {
@@ -398,13 +495,15 @@ function EditableInputEditor<T>({
   value,
   onSave,
   config,
+  parseValue,
   seedText,
   onCancel,
   onCommit,
 }: {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
-  config: EditableInputConfig | EditableCurrencyConfig;
+  config: EditableTextConfig | EditableNumberConfig | EditableCurrencyConfig;
+  parseValue: (value: string) => T | null;
   seedText: string | null;
   onCancel: () => void;
   onCommit: (value: T | null) => void;
@@ -427,17 +526,6 @@ function EditableInputEditor<T>({
   const rows = !isCurrency && "rows" in config ? config.rows : undefined;
   const clearLabel =
     config.type === "currency" ? config.clearable?.label : undefined;
-
-  const parse = useCallback(
-    (s: string): T | null => {
-      if (inputType === "number" || isCurrency) {
-        const num = parseFloat(s);
-        return Number.isNaN(num) ? null : (num as T);
-      }
-      return s as unknown as T;
-    },
-    [inputType, isCurrency],
-  );
 
   const format = useCallback((v: T): string => {
     return String(v);
@@ -465,17 +553,12 @@ function EditableInputEditor<T>({
 
   const handleSave = useCallback(async () => {
     const trimmed = inputValue.trim();
-    const parsed =
-      trimmed === ""
-        ? null
-        : parse
-          ? parse(trimmed)
-          : (trimmed as unknown as T);
+    const parsed = trimmed === "" ? null : parseValue(trimmed);
 
     await commit(parsed, {
       unchanged: parsed === value || (parsed === null && value === null),
     });
-  }, [inputValue, parse, value, commit]);
+  }, [inputValue, parseValue, value, commit]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -583,14 +666,12 @@ function EditableSelectCellInternal({
   placeholder?: string;
   clearable?: boolean;
   renderValue: (value: string | null) => React.ReactNode;
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<string | null>;
   trigger: EditTriggerMode;
   autoOpen: boolean;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-  const edit = useCellEditState(clipboard, (saved) =>
-    setOptimisticValue(saved as string | null),
-  );
+  const edit = useCellEditState(clipboard, setOptimisticValue);
 
   useEffect(() => {
     if (autoOpen) edit.open();
@@ -701,14 +782,12 @@ function EditableDateCellInternal({
   onSave: (value: string | null) => Promise<void>;
   placeholder?: string;
   renderValue: (value: string | null) => React.ReactNode;
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<string | null>;
   trigger: EditTriggerMode;
   autoOpen: boolean;
 }) {
   const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
-  const edit = useCellEditState(clipboard, (saved) =>
-    setOptimisticValue(saved as string | null),
-  );
+  const edit = useCellEditState(clipboard, setOptimisticValue);
 
   useEffect(() => {
     if (autoOpen) edit.open();
@@ -813,7 +892,7 @@ interface EditableAmountCellProps {
    */
   renderDisplay?: (content: React.ReactNode) => React.ReactNode;
   trigger?: EditTriggerMode;
-  clipboard?: CellClipboardSpec;
+  clipboard?: CellClipboardSpec<Amount>;
 }
 
 export function EditableAmountCell({
@@ -829,9 +908,7 @@ export function EditableAmountCell({
   const [optimisticAmount, setOptimisticAmount] = useState<Amount | undefined>(
     undefined,
   );
-  const edit = useCellEditState(clipboard, (saved) =>
-    setOptimisticAmount(saved as Amount),
-  );
+  const edit = useCellEditState(clipboard, setOptimisticAmount);
 
   const displayAmount = optimisticAmount ?? amount;
 

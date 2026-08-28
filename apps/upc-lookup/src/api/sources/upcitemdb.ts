@@ -5,6 +5,17 @@ import type { ProductSource } from "./types";
 const UPCITEMDB_API_URL = "https://api.upcitemdb.com/prod/trial/lookup";
 const TIMEOUT_MS = 5000;
 
+/** The UPC source's only environmental dependencies. */
+export interface UPCitemdbRuntime {
+  fetch: typeof fetch;
+  timeoutSignal: (milliseconds: number) => AbortSignal;
+}
+
+const productionUPCitemdbRuntime: UPCitemdbRuntime = {
+  fetch,
+  timeoutSignal: AbortSignal.timeout,
+};
+
 /**
  * Look up product data from UPCitemdb.
  * Free trial tier: ~100 requests/day (cached results don't count against it).
@@ -15,13 +26,14 @@ const TIMEOUT_MS = 5000;
  */
 export async function lookupUPCitemdb(
   upc: string,
+  runtime: UPCitemdbRuntime = productionUPCitemdbRuntime,
 ): Promise<ExternalLookupResult> {
   try {
-    const response = await fetch(`${UPCITEMDB_API_URL}?upc=${upc}`, {
+    const response = await runtime.fetch(`${UPCITEMDB_API_URL}?upc=${upc}`, {
       headers: {
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: runtime.timeoutSignal(TIMEOUT_MS),
     });
 
     if (!response.ok) {

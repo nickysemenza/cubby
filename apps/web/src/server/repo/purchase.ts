@@ -94,6 +94,7 @@ import {
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
+  imageJoinBindings,
   type ListReadIntent,
   lockAndValidateForDelete,
   nextImageSortOrder,
@@ -398,13 +399,7 @@ const syncPurchaseImages = async (
 
   if (imageOrder && imageOrder.length > 0) {
     const orderedIds = await resolveAllPresent(tx, "image", imageOrder);
-    await applyImageOrder(
-      tx,
-      purchaseImage,
-      purchaseImage.purchaseId,
-      id,
-      orderedIds,
-    );
+    await applyImageOrder(tx, imageJoinBindings.purchase, id, orderedIds);
   }
 
   if (removeImageIds && removeImageIds.length > 0) {
@@ -424,14 +419,12 @@ const syncPurchaseImages = async (
     );
     const startSortOrder = await nextImageSortOrder(
       tx,
-      purchaseImage,
-      purchaseImage.purchaseId,
+      imageJoinBindings.purchase,
       id,
     );
     await associatePendingImages(
       tx,
-      purchaseImage,
-      "purchaseId",
+      imageJoinBindings.purchase,
       id,
       resolvedImageIds,
       startSortOrder,
@@ -1560,6 +1553,27 @@ export const foldChargeInto = async (
       .filter((value): value is ProductId => value !== null),
   });
 
+  type PurchaseMergeSurvivorChanges = {
+    foldedIn: { from: null; to: PurchaseId };
+    carriedOver?: { from: null; to: typeof carried };
+    discardedStatedTotal?: {
+      from: number;
+      to: number | null;
+    };
+  };
+  const survivorChanges: PurchaseMergeSurvivorChanges = {
+    foldedIn: { from: null, to: deadId },
+  };
+  if (Object.keys(carried).length > 0) {
+    survivorChanges.carriedOver = { from: null, to: carried };
+  }
+  if (discardedStatedTotal !== undefined) {
+    survivorChanges.discardedStatedTotal = {
+      from: discardedStatedTotal,
+      to: survivor?.statedTotal ?? null,
+    };
+  }
+
   await finalizeMerge(tx, {
     entity: "purchase",
     table: purchase,
@@ -1567,20 +1581,7 @@ export const foldChargeInto = async (
     loserIds: [deadId],
     removal: "soft",
     actor,
-    survivorChanges: {
-      foldedIn: { from: null, to: deadId },
-      ...(Object.keys(carried).length > 0
-        ? { carriedOver: { from: null, to: carried } }
-        : {}),
-      ...(discardedStatedTotal !== undefined
-        ? {
-            discardedStatedTotal: {
-              from: discardedStatedTotal,
-              to: survivor?.statedTotal ?? null,
-            },
-          }
-        : {}),
-    },
+    survivorChanges,
   });
 };
 
@@ -1609,7 +1610,9 @@ const checkPurchaseMergeSet = (
     violations.push({
       kind: "order-collision",
       offendingIds: orderIdBearers.map((r) => r.id),
-      orderIds: orderIdBearers.map((r) => r.orderId as string),
+      orderIds: orderIdBearers.flatMap((row) =>
+        row.orderId === null ? [] : [row.orderId],
+      ),
     });
   }
 

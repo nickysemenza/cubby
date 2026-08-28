@@ -38,6 +38,30 @@ async function expectCleanVisualState(page: Page) {
   await expect(
     page.getByText("Other relationships could not be loaded.", { exact: true }),
   ).toHaveCount(0);
+
+  // Earlier E2E cases legitimately change the global problem count. The badge
+  // is masked below, but its content-dependent width would otherwise move the
+  // adjacent shell controls and make the goldens depend on suite order.
+  await page.addStyleTag({
+    content: `
+      [data-testid="problems-badge"] {
+        flex: 0 0 2.75rem !important;
+        inline-size: 2.75rem !important;
+        min-inline-size: 2.75rem !important;
+        max-inline-size: 2.75rem !important;
+        overflow: hidden !important;
+      }
+
+      @media (min-width: 768px) {
+        [data-testid="problems-badge"] {
+          flex-basis: 2.125rem !important;
+          inline-size: 2.125rem !important;
+          min-inline-size: 2.125rem !important;
+          max-inline-size: 2.125rem !important;
+        }
+      }
+    `,
+  });
 }
 
 function nondeterministicMasks(page: Page) {

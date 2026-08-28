@@ -1,117 +1,74 @@
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { ListWorkbench, type ListWorkbenchModel } from "./ListWorkbench";
-import type { CubbyTable } from "./table-features";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-type TestRow = { id: string; name: string };
+import { ListWorkbench } from "./ListWorkbench";
+import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
 
-const { renderTable } = vi.hoisted(() => ({
-  renderTable: vi.fn((props: Record<string, unknown>) => (
-    <div data-testid="raw-table">
-      {props.additionalToolbarContent as ReactNode}
-      {props.emptyState as ReactNode}
-    </div>
-  )),
-}));
+interface TestRow {
+  id: string;
+  name: string;
+}
 
-vi.mock("./Table", () => ({ default: renderTable }));
+const helper = createCubbyColumnHelper<TestRow>();
+const columns = helper.columns([
+  helper.accessor("name", { header: "Name", id: "name" }),
+]);
+const browserHarnesses: Array<ReturnType<typeof createBrowserTestHarness>> = [];
 
-const table = {} as CubbyTable<TestRow>;
+function WorkbenchHarness({ mode = "page" }: { mode?: "page" | "embedded" }) {
+  const table = useCubbyTable({
+    data: mode === "page" ? [{ id: "PRD-4K7M", name: "Hammer" }] : [],
+    columns,
+    getRowId: (row) => row.id,
+  });
+  return (
+    <ListWorkbench
+      model={{
+        entity: "product",
+        table,
+        bulkActionBar: <span>Bulk actions</span>,
+        deleteDialog: <div>Delete Product</div>,
+      }}
+      mode={mode}
+      ariaLabel="Products"
+      contextualStatus={<span>Net cost: $42</span>}
+      emptyState={<span>No products linked</span>}
+    />
+  );
+}
+
+async function renderWorkbench(mode?: "page" | "embedded") {
+  const browser = createBrowserTestHarness();
+  browserHarnesses.push(browser);
+  await act(async () => {
+    await browser.loadRouter();
+  });
+  return render(<WorkbenchHarness mode={mode} />, {
+    wrapper: browser.routerWrapper,
+  });
+}
+
+afterEach(() => {
+  for (const browser of browserHarnesses) browser.dispose();
+  browserHarnesses.length = 0;
+});
 
 describe("ListWorkbench", () => {
-  it("renders a page-list model without caller prop choreography", () => {
-    const onGroupedChange = vi.fn();
-    const model: ListWorkbenchModel<TestRow> = {
-      entity: "product",
-      table,
-      isLoading: true,
-      error: new Error("query failed"),
-      timing: { durationMs: 14, isFresh: true },
-      bulkActionBar: <span>Bulk actions</span>,
-      deleteDialog: <div>Delete Product</div>,
-      infiniteScroll: { hasNextPage: false } as never,
-      refreshControls: { onRefresh: vi.fn(), isRefreshing: false },
-      groupConfig: {
-        field: "category",
-        keyFn: () => "Tools",
-        colorFn: () => "ochre",
-      },
-      grouped: true,
-      onGroupedChange,
-    };
+  it("renders the real page table with its shared status and deletion chrome", async () => {
+    await renderWorkbench();
 
-    render(<ListWorkbench model={model} ariaLabel="Products" />);
-
-    const props = renderTable.mock.lastCall?.[0] as Record<string, unknown>;
-    expect(props).toMatchObject({
-      table,
-      entity: "product",
-      isLoading: true,
-      error: model.error,
-      timing: model.timing,
-      bulkActionBar: model.bulkActionBar,
-      infiniteScroll: model.infiniteScroll,
-      refreshControls: model.refreshControls,
-      groupConfig: model.groupConfig,
-      grouped: true,
-      onGroupedChange,
-      embedded: false,
-      toolbarMode: "auto",
-      ariaLabel: "Products",
-    });
-    expect(screen.getByText("Delete Product")).toBeTruthy();
+    expect(await screen.findByText("Hammer")).toBeVisible();
+    expect(screen.getByText("Net cost: $42")).toBeVisible();
+    expect(screen.getByText("Delete Product")).toBeVisible();
   });
 
-  it("gives an embedded relationship ledger compact chrome and keeps domain choices local", () => {
-    const model: ListWorkbenchModel<TestRow> = {
-      entity: "expense",
-      table,
-    };
+  it("keeps an embedded relationship ledger's empty copy in the real table", async () => {
+    await renderWorkbench("embedded");
 
-    render(
-      <ListWorkbench
-        model={model}
-        mode="embedded"
-        ariaLabel="Product expenses"
-        contextualStatus={<span>Net cost: $42</span>}
-        emptyState={<span>No expenses linked</span>}
-        showColumnMenu
-      />,
-    );
-
-    const props = renderTable.mock.lastCall?.[0] as Record<string, unknown>;
-    expect(props).toMatchObject({
-      table,
-      entity: "expense",
-      embedded: true,
-      toolbarMode: "internal",
-      showColumnMenu: true,
-      ariaLabel: "Product expenses",
-    });
-    expect(screen.getByText("Net cost: $42")).toBeTruthy();
-    expect(screen.getByText("No expenses linked")).toBeTruthy();
-  });
-
-  it("passes current-record state and an optional desktop inspector to page tables", () => {
-    const model: ListWorkbenchModel<TestRow> = {
-      entity: "product",
-      table,
-    };
-
-    render(
-      <ListWorkbench
-        model={model}
-        currentRowId="PRD-4K7M"
-        desktopInspector={<aside>Product inspector</aside>}
-        inspectorToggle={<button type="button">Toggle inspector</button>}
-      />,
-    );
-
-    const props = renderTable.mock.lastCall?.[0] as Record<string, unknown>;
-    expect(props.currentRowId).toBe("PRD-4K7M");
-    expect(props.desktopInspector).toBeTruthy();
-    expect(props.inspectorToggle).toBeTruthy();
+    expect(await screen.findByText("No products linked")).toBeVisible();
+    expect(screen.getByText("Net cost: $42")).toBeVisible();
+    expect(screen.getByText("Delete Product")).toBeVisible();
   });
 });

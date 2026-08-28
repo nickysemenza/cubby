@@ -2,7 +2,10 @@ import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  useActionMutation,
+  useEntityActionMutation,
+} from "~/app/_components/hooks/useActionMutation";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { useQueuePass } from "~/app/_components/queue-pass/useQueuePass";
 import { Row, Stack } from "~/components/layout";
@@ -30,6 +33,16 @@ const LOOKAHEAD = 5;
 const REVIEW_SCOPE = "review";
 
 type MergePair = { id: string; name: string };
+
+function isTextEditingTarget(
+  target: EventTarget | null,
+): target is HTMLTextAreaElement | HTMLInputElement | HTMLElement {
+  return (
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLInputElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
 
 /**
  * Keyboard-first review queue: walks a worklist one ingredient at a time. Each
@@ -94,7 +107,7 @@ export function ReviewQueue({
     );
   }, [idx, queue, ensureProposals, pass.settled]);
 
-  const markNoUsdaMut = useActionMutation({
+  const markNoUsdaMut = useEntityActionMutation({
     entity: "product",
     operation: "update",
     intent: "full",
@@ -190,12 +203,11 @@ export function ReviewQueue({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = kbdRef.current;
-      const t = e.target as HTMLElement | null;
+      const t = e.target;
       const isText =
-        !!t &&
-        (t.tagName === "TEXTAREA" ||
-          (t.tagName === "INPUT" &&
-            (t as HTMLInputElement).type !== "number") ||
+        isTextEditingTarget(t) &&
+        (t instanceof HTMLTextAreaElement ||
+          (t instanceof HTMLInputElement && t.type !== "number") ||
           t.isContentEditable);
 
       if (e.key === "Escape") {

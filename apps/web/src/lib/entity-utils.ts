@@ -1,43 +1,20 @@
-function hasProperty<K extends string>(
-  obj: unknown,
-  key: K,
-): obj is Record<K, unknown> {
-  return typeof obj === "object" && obj !== null && key in obj;
-}
+import { z } from "zod";
 
-function isObjectWithName(value: unknown): value is { name: string } {
-  return (
-    hasProperty(value, "name") &&
-    typeof value.name === "string" &&
-    value.name.trim() !== ""
-  );
-}
+const namedEntitySchema = z.object({ name: z.string().trim().min(1) });
+const titledEntitySchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  filename: z.string().trim().min(1).optional(),
+  product: namedEntitySchema.optional(),
+  location: namedEntitySchema.optional(),
+});
 
 export function extractEntityTitle<T>(rowData: T): string {
-  if (
-    hasProperty(rowData, "name") &&
-    typeof rowData.name === "string" &&
-    rowData.name.trim()
-  ) {
-    return rowData.name;
-  }
-
-  if (
-    hasProperty(rowData, "filename") &&
-    typeof rowData.filename === "string" &&
-    rowData.filename.trim()
-  ) {
-    return rowData.filename;
-  }
-
-  if (
-    hasProperty(rowData, "product") &&
-    isObjectWithName(rowData.product) &&
-    hasProperty(rowData, "location") &&
-    isObjectWithName(rowData.location)
-  ) {
-    return `${rowData.product.name} @ ${rowData.location.name}`;
-  }
+  const parsed = titledEntitySchema.safeParse(rowData);
+  if (!parsed.success) return "Unknown";
+  if (parsed.data.name) return parsed.data.name;
+  if (parsed.data.filename) return parsed.data.filename;
+  if (parsed.data.product && parsed.data.location)
+    return `${parsed.data.product.name} @ ${parsed.data.location.name}`;
 
   return "Unknown";
 }

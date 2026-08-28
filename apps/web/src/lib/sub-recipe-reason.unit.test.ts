@@ -1,4 +1,3 @@
-import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
 import { subRecipeBlockReason } from "@cubby/schemas/availability";
 import { describe, expect, it } from "vitest";
 
@@ -26,7 +25,7 @@ describe("blockReasonText", () => {
     // here — but only once the zod enum grows too. This pins the two together,
     // so adding a variant to one without the other fails loudly.
     for (const reason of subRecipeBlockReason.options) {
-      expect(blockReasonText(reason as SubRecipeBlockReason)).toMatch(/\S/);
+      expect(blockReasonText(reason)).toMatch(/\S/);
     }
   });
 });

@@ -1,8 +1,13 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
+import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 
+import {
+  parseEntityEditCreateInput,
+  parseEntityEditUpdateInput,
+} from "./mutation-data";
 import type { EntityEditRegistry } from "./registry";
 import type {
   EditableEntity,
@@ -14,6 +19,8 @@ import type {
   EntityEditIssue,
   EntityEditOperation,
   EntityEditRecord,
+  EntityEditValue,
+  EntityEditValueBag,
 } from "./types";
 
 const editable: EntityEditAccess = { mode: "editable" };
@@ -23,15 +30,18 @@ const readOnly = (reason: string): EntityEditAccess => ({
   reason,
 });
 
-const valueFor = (record: EntityEditRecord | undefined, id: string) =>
-  record && id in record
-    ? (record as EntityEditRecord & Record<string, unknown>)[id]
-    : undefined;
+const editValueSchema = z.union([z.json(), z.date(), z.undefined()]);
+const valueFor = (record: EntityEditRecord | undefined, id: string) => {
+  const candidate = Object.entries(record ?? {}).find(
+    ([key]) => key === id,
+  )?.[1];
+  return editValueSchema.parse(candidate);
+};
 
 const changed = (
   record: EntityEditRecord | undefined,
   id: string,
-  value: unknown,
+  value: EntityEditValue,
 ) => !record || !isEqual(valueFor(record, id), value);
 
 const noIssues = (): readonly EntityEditIssue[] => [];
@@ -39,8 +49,8 @@ const noIssues = (): readonly EntityEditIssue[] => [];
 type EditField<E extends EditableEntity> = EntityEditField<
   E,
   EntityEditRecord,
-  unknown,
-  object
+  EntityEditValue,
+  EntityEditValueBag
 >;
 
 type EditIntent<E extends EditableEntity> = EntityEditIntentDefinition<
@@ -50,7 +60,7 @@ type EditIntent<E extends EditableEntity> = EntityEditIntentDefinition<
 
 interface FieldOptions<E extends EditableEntity> {
   required?: boolean;
-  normalize?: (value: unknown) => unknown;
+  normalize?: (value: EntityEditValue) => EntityEditValue;
   access?: EditField<E>["access"];
   validate?: EditField<E>["validate"];
 }
@@ -63,9 +73,9 @@ interface IntentOptions<E extends EditableEntity> {
   defaults?: EditIntent<E>["defaults"];
   acceptsSeed?: boolean;
   buildData?: (
-    patch: Record<string, unknown>,
+    patch: EntityEditValueBag,
     context: EntityEditContext,
-  ) => object;
+  ) => EntityEditValueBag;
 }
 
 /** Bare intent names, or names paired with the configuration they need. */
@@ -111,13 +121,16 @@ const builderFor = <E extends EditableEntity>(
     id,
     access: options?.access ?? (() => editable),
     initial: ({ record, context }) =>
-      valueFor(record, id) ?? context[id] ?? null,
+      valueFor(record, id) ??
+      (id === "parentProjectId" ? context.parentProjectId : undefined) ??
+      null,
     normalize: options?.normalize ?? ((value) => value),
     validate: (input) => {
       const { value } = input;
+      const text = z.string().safeParse(value);
       if (
         options?.required &&
-        (value == null || (typeof value === "string" && !value.trim()))
+        (value == null || (text.success && !text.data.trim()))
       ) {
         return [
           { field: id, message: "This field is required.", source: "client" },
@@ -133,13 +146,17 @@ const builderFor = <E extends EditableEntity>(
     trimmedName: () =>
       makeField("name", {
         required: true,
-        normalize: (value: unknown) =>
-          typeof value === "string" ? value.trim() : value,
+        normalize: (value) => {
+          const parsed = z.string().safeParse(value);
+          return parsed.success ? parsed.data.trim() : value;
+        },
       }),
     nullableText: (id: string) =>
       makeField(id, {
-        normalize: (value: unknown) =>
-          typeof value === "string" ? value.trim() || null : value,
+        normalize: (value) => {
+          const parsed = z.string().safeParse(value);
+          return parsed.success ? parsed.data.trim() || null : value;
+        },
       }),
     fieldsFor: (semanticIntent: string) => fieldsFor(entity, semanticIntent),
   });
@@ -158,41 +175,68 @@ const makeIntent = <E extends EditableEntity>(
   acceptsSeed: options.acceptsSeed,
   build: ({ record, patch, context }) => {
     const keys = Object.keys(patch);
-    if (operation !== "create" && !record) {
+    const data = options.buildData ? options.buildData(patch, context) : patch;
+    if (operation === "create") {
       return {
-        ok: false as const,
+        ok: true,
+        changed: true,
+        command: {
+          entity,
+          operation,
+          intent: semanticIntent,
+          data: parseEntityEditCreateInput(entity, data),
+        },
+      };
+    }
+    if (!record) {
+      return {
+        ok: false,
         issues: [
           {
             message: `${entity} ${operation} requires a record.`,
-            source: "client" as const,
+            source: "client",
           },
         ],
       };
     }
+    if (operation === "update") {
+      return {
+        ok: true,
+        changed: keys.length > 0,
+        command: {
+          entity,
+          operation,
+          intent: semanticIntent,
+          id: record.id,
+          data: parseEntityEditUpdateInput(entity, data),
+        },
+      };
+    }
     return {
-      ok: true as const,
-      changed: operation === "create" || keys.length > 0,
+      ok: true,
+      changed: true,
       command: {
         entity,
         operation,
         intent: semanticIntent,
-        ...(record ? { id: record.id } : {}),
-        data: options.buildData
-          ? options.buildData(patch as Record<string, unknown>, context)
-          : patch,
+        ids: [record.id],
       },
     };
   },
 });
 
+const isIntentNameList = <E extends EditableEntity>(
+  declared: IntentDeclaration<E>,
+): declared is readonly string[] => Array.isArray(declared);
+
 /** Declaration order is observable: the first intent is the operation default. */
 const intentEntries = <E extends EditableEntity>(
   declared: IntentDeclaration<E>,
 ): [string, IntentOptions<E>][] => {
-  if (Array.isArray(declared)) {
-    return (declared as readonly string[]).map((name) => [name, {}]);
+  if (isIntentNameList(declared)) {
+    return declared.map((name) => [name, {}]);
   }
-  return Object.entries(declared as Record<string, IntentOptions<E>>);
+  return Object.entries(declared);
 };
 
 const operationDefinition = <E extends EditableEntity>(
@@ -201,8 +245,10 @@ const operationDefinition = <E extends EditableEntity>(
   declared: IntentDeclaration<E>,
 ) => {
   const entries = intentEntries(declared);
+  const first = entries[0];
+  if (!first) throw new Error(`${entity}.${operation} requires an intent`);
   return {
-    defaultIntent: entries[0]![0],
+    defaultIntent: first[0],
     intents: Object.fromEntries(
       entries.map(([name, options]) => [
         name,
@@ -217,26 +263,27 @@ const buildDefinition = <E extends EditableEntity>(
   build: (f: EntityEditBuilder<E>) => EntityEditBody<E>,
 ): EntityEditDefinition<E, EntityEditRecord> => {
   const body = build(builderFor(entity));
+  const operations: EntityEditDefinition<E, EntityEditRecord>["operations"] = {
+    delete: {
+      defaultIntent: "delete",
+      intents: {
+        delete: makeIntent(entity, "delete", "delete", {
+          fields: [],
+          access: () => body.delete ?? editable,
+        }),
+      },
+    },
+  };
+  if (body.create) {
+    operations.create = operationDefinition(entity, "create", body.create);
+  }
+  if (body.update) {
+    operations.update = operationDefinition(entity, "update", body.update);
+  }
   return {
     entity,
     fields: body.fields,
-    operations: {
-      ...(body.create
-        ? { create: operationDefinition(entity, "create", body.create) }
-        : {}),
-      ...(body.update
-        ? { update: operationDefinition(entity, "update", body.update) }
-        : {}),
-      delete: {
-        defaultIntent: "delete",
-        intents: {
-          delete: makeIntent(entity, "delete", "delete", {
-            fields: [],
-            access: () => body.delete ?? editable,
-          }),
-        },
-      },
-    },
+    operations,
   };
 };
 
@@ -251,20 +298,30 @@ type EntityEditBuilders = {
  * mapped parameter demands every editable entity and hands each builder an `f`
  * bound to its own key, so a definition cannot name a different entity.
  */
-const defineEntityEdits = (builders: EntityEditBuilders): EntityEditRegistry =>
-  Object.fromEntries(
-    Object.entries(builders).map(([entity, build]) => [
-      entity,
-      // `Object.entries` erases the key/value correlation the mapped type
-      // above enforces; this is the only place it has to be re-asserted.
-      buildDefinition(
-        entity as EditableEntity,
-        build as (
-          f: EntityEditBuilder<EditableEntity>,
-        ) => EntityEditBody<EditableEntity>,
-      ),
-    ]),
-  ) as EntityEditRegistry;
+const defineEntityEdits = (
+  builders: EntityEditBuilders,
+): EntityEditRegistry => ({
+  product: buildDefinition("product", builders.product),
+  ingredient: buildDefinition("ingredient", builders.ingredient),
+  inventory: buildDefinition("inventory", builders.inventory),
+  location: buildDefinition("location", builders.location),
+  recipe: buildDefinition("recipe", builders.recipe),
+  meal: buildDefinition("meal", builders.meal),
+  project: buildDefinition("project", builders.project),
+  task: buildDefinition("task", builders.task),
+  expense: buildDefinition("expense", builders.expense),
+  vendor: buildDefinition("vendor", builders.vendor),
+  purchase: buildDefinition("purchase", builders.purchase),
+  financialAccount: buildDefinition(
+    "financialAccount",
+    builders.financialAccount,
+  ),
+  financialTransaction: buildDefinition(
+    "financialTransaction",
+    builders.financialTransaction,
+  ),
+  wish: buildDefinition("wish", builders.wish),
+});
 
 const requiredDate =
   (
@@ -283,60 +340,63 @@ const requiredDate =
           },
         ];
 
-const normalizeSourceAliases = (value: unknown) =>
-  Array.isArray(value)
-    ? value
-        .filter(
-          (alias): alias is Record<string, unknown> =>
-            Boolean(alias) && typeof alias === "object",
-        )
-        .map((alias) => ({
-          source: String(alias.source ?? "").trim(),
-          alias: String(alias.alias ?? "").trim(),
-          externalAccountId:
-            String(alias.externalAccountId ?? "").trim() || null,
-        }))
-        .filter((alias) => alias.source && alias.alias)
-    : [];
+const sourceAliasDraft = z.object({
+  source: z.string(),
+  alias: z.string(),
+  externalAccountId: z.string().nullable().optional(),
+});
+const normalizeSourceAliases = (value: EntityEditValue) => {
+  const parsed = z.array(sourceAliasDraft).safeParse(value);
+  if (!parsed.success) return [];
+  return parsed.data
+    .map((alias) => ({
+      source: alias.source.trim(),
+      alias: alias.alias.trim(),
+      externalAccountId: alias.externalAccountId?.trim() || null,
+    }))
+    .filter((alias) => alias.source && alias.alias);
+};
 
-const financialAccountIdentity = (patch: Record<string, unknown>) => {
+const financialAccountIdentity = (patch: EntityEditValueBag) => {
   const kind = patch.kind;
   const last4 = String(patch.last4 ?? "").trim() || null;
+  let identity: EntityEditValue;
   if (kind === "credit_card") {
-    return {
+    identity = {
       kind,
       issuer: String(patch.issuer ?? "").trim() || null,
       network: String(patch.network ?? "").trim() || null,
       last4,
     };
-  }
-  if (kind === "bank_account") {
-    return {
+  } else if (kind === "bank_account") {
+    identity = {
       kind,
       institution: String(patch.institution ?? "").trim() || null,
-      accountType: patch.accountType ?? "checking",
+      accountType: String(patch.accountType ?? "checking"),
       last4,
     };
-  }
-  if (kind === "stored_value") {
-    return {
+  } else if (kind === "stored_value") {
+    identity = {
       kind,
       provider: String(patch.provider ?? "").trim(),
       last4,
     };
-  }
-  if (kind === "other") {
-    return {
+  } else if (kind === "other") {
+    identity = {
       kind,
       institution: String(patch.institution ?? "").trim() || null,
       last4,
     };
+  } else {
+    identity = { kind: "cash" };
   }
-  return { kind: "cash" };
+  return identity;
 };
 
 /** Creates flatten the identity discriminant; updates patch it in place. */
-const financialAccountCreateData = (patch: Record<string, unknown>) => ({
+const financialAccountCreateData = (
+  patch: EntityEditValueBag,
+): EntityEditValueBag => ({
   name: patch.name,
   provisional: patch.provisional,
   identity: financialAccountIdentity(patch),
@@ -344,47 +404,45 @@ const financialAccountCreateData = (patch: Record<string, unknown>) => ({
   notes: patch.notes,
 });
 
-const normalizedNullableTextPatch = (
-  patch: Record<string, unknown>,
-  key: string,
-) => (key in patch ? { [key]: String(patch[key] ?? "").trim() || null } : {});
-
-const normalizeFinancialTransaction = (patch: Record<string, unknown>) => ({
-  ...patch,
-  ...normalizedNullableTextPatch(patch, "purchaseId"),
-  ...normalizedNullableTextPatch(patch, "transactionDate"),
-  ...normalizedNullableTextPatch(patch, "postedDate"),
-  ...normalizedNullableTextPatch(patch, "merchant"),
-  ...normalizedNullableTextPatch(patch, "rawDescription"),
-  ...normalizedNullableTextPatch(patch, "sourceCategory"),
-  ...normalizedNullableTextPatch(patch, "notes"),
-  ...("sourceRefs" in patch
-    ? {
-        sourceRefs: Array.isArray(patch.sourceRefs)
-          ? patch.sourceRefs
-              .filter(
-                (reference): reference is Record<string, unknown> =>
-                  Boolean(reference) && typeof reference === "object",
-              )
-              .map((reference) => ({
-                source: String(reference.source ?? "").trim(),
-                externalId: String(reference.externalId ?? "").trim(),
-              }))
-              .filter((reference) => reference.source && reference.externalId)
-          : [],
-      }
-    : {}),
+const sourceReferenceDraft = z.object({
+  source: z.string(),
+  externalId: z.string(),
 });
+const normalizeFinancialTransaction = (
+  patch: EntityEditValueBag,
+): EntityEditValueBag => {
+  const normalized = { ...patch };
+  for (const key of [
+    "purchaseId",
+    "transactionDate",
+    "postedDate",
+    "merchant",
+    "rawDescription",
+    "sourceCategory",
+    "notes",
+  ]) {
+    if (key in patch) normalized[key] = String(patch[key] ?? "").trim() || null;
+  }
+  if ("sourceRefs" in patch) {
+    const parsed = z.array(sourceReferenceDraft).safeParse(patch.sourceRefs);
+    normalized.sourceRefs = parsed.success
+      ? parsed.data
+          .map((reference) => ({
+            source: reference.source.trim(),
+            externalId: reference.externalId.trim(),
+          }))
+          .filter((reference) => reference.source && reference.externalId)
+      : [];
+  }
+  return normalized;
+};
 
 /**
  * Semantic capabilities, rather than presentation surfaces, choose editable
  * fragments. A Calendar and a detail page can therefore share `schedule`
  * without sharing a form shell; a cell has no power to widen its patch.
  */
-const semanticFields: Record<
-  EditableEntity,
-  Record<string, readonly string[]>
-> = {
+const semanticFields = {
   product: {
     capture: ["name", "manufacturer"],
     full: [
@@ -612,10 +670,12 @@ const semanticFields: Record<
     identity: ["name", "notes", "candidateProductIds"],
     acquisition: ["acquired"],
   },
-};
+} satisfies Record<EditableEntity, Record<string, readonly string[]>>;
 
 const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
-  semanticFields[entity][semanticIntent] ?? [];
+  Object.entries(semanticFields[entity]).find(
+    ([intent]) => intent === semanticIntent,
+  )?.[1] ?? [];
 
 /**
  * The data-only registry of Cubby's standard entity editing semantics.
@@ -743,10 +803,10 @@ export const entityEditRegistry = defineEntityEdits({
       f("trade"),
       f("dueDate"),
       f("dueEndDate", {
-        validate: ({ value, values }) =>
-          typeof value === "string" &&
-          typeof values.dueDate === "string" &&
-          value < values.dueDate
+        validate: ({ value, values }) => {
+          const end = z.string().safeParse(value);
+          const due = z.string().safeParse(values.dueDate);
+          return end.success && due.success && end.data < due.data
             ? [
                 {
                   field: "dueEndDate",
@@ -754,7 +814,8 @@ export const entityEditRegistry = defineEntityEdits({
                   source: "client",
                 },
               ]
-            : noIssues(),
+            : noIssues();
+        },
       }),
       f.nullableText("notes"),
     ],
@@ -834,14 +895,12 @@ export const entityEditRegistry = defineEntityEdits({
           productQuantity: patch.productId
             ? (patch.productQuantity ?? null)
             : null,
-          vendor:
-            typeof patch.vendor === "string"
-              ? patch.vendor.trim() || null
-              : null,
-          orderId:
-            typeof patch.orderId === "string"
-              ? patch.orderId.trim() || null
-              : null,
+          vendor: z.string().safeParse(patch.vendor).success
+            ? z.string().parse(patch.vendor).trim() || null
+            : null,
+          orderId: z.string().safeParse(patch.orderId).success
+            ? z.string().parse(patch.orderId).trim() || null
+            : null,
           url: null,
           notes: null,
         }),
@@ -945,13 +1004,13 @@ export const entityEditRegistry = defineEntityEdits({
     update: {
       full: {
         acceptsSeed: true,
-        buildData: (patch) =>
-          "sourceAliases" in patch
-            ? {
-                ...patch,
-                sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-              }
-            : patch,
+        buildData: (patch) => {
+          if (!("sourceAliases" in patch)) return patch;
+          return {
+            ...patch,
+            sourceAliases: normalizeSourceAliases(patch.sourceAliases),
+          };
+        },
       },
       identity: {},
     },
@@ -963,8 +1022,9 @@ export const entityEditRegistry = defineEntityEdits({
       f("kind"),
       f("status"),
       f("amount", {
-        validate: ({ value }) =>
-          typeof value === "number" && Number.isFinite(value) && value !== 0
+        validate: ({ value }) => {
+          const amount = z.number().finite().safeParse(value);
+          return amount.success && amount.data !== 0
             ? noIssues()
             : [
                 {
@@ -972,7 +1032,8 @@ export const entityEditRegistry = defineEntityEdits({
                   message: "Amount must be a non-zero number.",
                   source: "client",
                 },
-              ],
+              ];
+        },
       }),
       f("transactionDate"),
       f("postedDate", {

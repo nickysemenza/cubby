@@ -316,6 +316,16 @@ export function setPaused(value: boolean): void {
   paused = value;
 }
 
+interface PerformanceMemoryTelemetry extends Performance {
+  memory: { usedJSHeapSize: number };
+}
+
+function hasMemoryTelemetry(
+  value: Performance,
+): value is PerformanceMemoryTelemetry {
+  return "memory" in value;
+}
+
 export function snapshot(): PerfSnapshot {
   const now = performance.now();
   const queriesOut: Record<string, QueryStat> = {};
@@ -326,9 +336,7 @@ export function snapshot(): PerfSnapshot {
     queryTimestamps.set(key, ts);
     queriesOut[key] = { ...s, fanout: ts.length >= FANOUT_THRESHOLD };
   }
-  const mem = (
-    performance as Performance & { memory?: { usedJSHeapSize: number } }
-  ).memory;
+  const mem = hasMemoryTelemetry(performance) ? performance.memory : undefined;
   return {
     wasm: Object.fromEntries(wasm),
     cacheSize,
@@ -355,7 +363,7 @@ let fpsWindowStart = 0;
 let vitalsRegistered = false;
 
 export function startCollectors(): void {
-  if (typeof window === "undefined" || rafId !== null) return;
+  if (globalThis.window === undefined || rafId !== null) return;
 
   fpsWindowStart = performance.now();
   frames = 0;

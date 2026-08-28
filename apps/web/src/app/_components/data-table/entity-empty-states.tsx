@@ -23,7 +23,7 @@ interface EntityEmptyConfig {
   actionLabel?: string;
 }
 
-const entityEmptyConfig: Record<BrowserRoutedEntity, EntityEmptyConfig> = {
+const entityEmptyConfig = {
   recipe: {
     title: "Your recipe book awaits",
     description:
@@ -121,7 +121,7 @@ const entityEmptyConfig: Record<BrowserRoutedEntity, EntityEmptyConfig> = {
     title: "Nothing found in the USDA database",
     description: "Search for a food to pull in its nutrition details.",
   },
-};
+} satisfies Record<BrowserRoutedEntity, EntityEmptyConfig>;
 
 interface EntityEmptyStateProps {
   entity: BrowserRoutedEntity;
@@ -138,7 +138,7 @@ export function EntityEmptyState({
     return <FilteredEmptyState onClearFilters={onClearFilters} />;
   }
 
-  const config = entityEmptyConfig[entity];
+  const config: EntityEmptyConfig = entityEmptyConfig[entity];
   const entityDef = entities[entity];
 
   if (!config || !entityDef) {

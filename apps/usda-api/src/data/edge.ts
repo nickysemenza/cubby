@@ -18,9 +18,10 @@ import {
   sqlOrderBy,
 } from "./edge-index-query.js";
 import { getActiveVersion } from "./edge-version.js";
-import type { EdgeBindings } from "./cloudflare-types.js";
+import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types.js";
 import { readFoodCache, writeFoodCache } from "./food-cache.js";
-import type { Counts, ListFoodsResult, USDADataSource } from "./types.js";
+import type { ListFoodsResult, USDADataSource } from "./types.js";
+import { z } from "zod";
 
 export {
   dataTypePredicate,
@@ -37,9 +38,7 @@ const DEFAULT_CONCURRENCY = 50;
 
 type LookupColumn = "gtin_upc" | "ndb_number" | "fdc_id";
 
-interface Manifest {
-  counts: Counts;
-}
+const manifestSchema = z.object({ counts: countsSchema });
 
 function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
   if (!result.success) {
@@ -50,10 +49,15 @@ function rowsFromResult<T>(result: { results?: T[]; success: boolean }): T[] {
 
 export function createEdgeUsdaDataSource(
   env: EdgeBindings,
-  options: { r2Concurrency?: number } = {},
+  options: { r2Concurrency?: number; cache?: EdgeCachePort | null } = {},
 ): USDADataSource {
   const r2Concurrency = options.r2Concurrency ?? DEFAULT_CONCURRENCY;
-  const { hydrate, hydrateRows } = createFoodBundleLoader(env, r2Concurrency);
+  const cache = options.cache ?? null;
+  const { hydrate, hydrateRows } = createFoodBundleLoader(
+    env,
+    r2Concurrency,
+    cache,
+  );
 
   async function getPointerByFdcId(
     fdcId: number,
@@ -170,11 +174,6 @@ export function createEdgeUsdaDataSource(
       // The manifest is immutable per dataset version (a re-import writes a new
       // key), so cache the parsed counts in the colo-local Cache API keyed by
       // version — turning the per-request R2 read + JSON parse into a cache hit.
-      // Same `caches.default` guard as readBundleText (absent under Node tests).
-      const cache =
-        typeof caches !== "undefined"
-          ? (caches as unknown as { default: Cache }).default
-          : null;
       const cacheKey = new Request(
         `https://usda-cache/counts/${encodeURIComponent(key)}`,
       );
@@ -200,8 +199,8 @@ export function createEdgeUsdaDataSource(
       if (!object) {
         throw new Error(`Missing USDA edge manifest: ${key}`);
       }
-      const manifest = JSON.parse(await object.text()) as Manifest;
-      const counts = countsSchema.parse(manifest.counts);
+      const manifest = manifestSchema.parse(JSON.parse(await object.text()));
+      const counts = manifest.counts;
       try {
         await cache?.put(
           cacheKey,

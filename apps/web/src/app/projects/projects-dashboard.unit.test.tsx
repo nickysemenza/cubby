@@ -1,34 +1,21 @@
 import type { ProjectOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ProjectCard } from "./projects-dashboard";
 
-vi.mock("@tanstack/react-router", () => ({
-  getRouteApi: () => ({
-    useSearch: () => ({}),
-    useNavigate: () => vi.fn(),
-  }),
-  Link: ({
-    children,
-    onClick,
-  }: {
-    children: ReactNode;
-    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
-  }) => (
-    <a
-      href="/projects/PRJ-CARD"
-      onClick={(event) => {
-        onClick?.(event);
-        event.preventDefault();
-      }}
-    >
-      {children}
-    </a>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
 
 function projectFixture(): ProjectOut {
   return {
@@ -86,7 +73,9 @@ describe("ProjectCard inspection", () => {
   it("does not mark cards current when inspection is unavailable", () => {
     const project = projectFixture();
 
-    render(<ProjectCard project={project} coverUrl={undefined} />);
+    render(<ProjectCard project={project} coverUrl={undefined} />, {
+      wrapper: harness.wrapper,
+    });
 
     const titleLink = screen.getByRole("link", { name: /Kitchen refresh/ });
     expect(titleLink).not.toHaveAttribute("aria-current");
@@ -117,10 +106,11 @@ describe("ProjectCard inspection", () => {
           onRowHoverEnd: vi.fn(),
         }}
       />,
+      { wrapper: harness.wrapper },
     );
 
     const titleLink = screen.getByRole("link", { name: /Kitchen refresh/ });
-    expect(titleLink).toHaveAttribute("href", "/projects/PRJ-CARD");
+    expect(titleLink).toHaveAttribute("href", `/projects/${project.id}`);
     fireEvent.click(titleLink);
     expect(onRowClick).not.toHaveBeenCalled();
 

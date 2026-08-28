@@ -24,7 +24,10 @@ import {
   createSingleEntityInlineLinkColumn,
 } from "../data-table/columnHelpers";
 import { ListWorkbench } from "../data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "../data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "../data-table/table-features";
 import { useClientEntityList } from "../hooks/useClientEntityList";
 import { locationTypeOptionsWithTheme } from "./location-icons";
 import { resolveLocationPrimaryVisual } from "./location-visual-resolver";
@@ -73,80 +76,97 @@ export function LocationChildrenTable({
   const rows = useMemo(() => toRows(data), [data]);
 
   const columns = useMemo(
-    () => [
-      // `location` declares `standardColumns: []` (entities.tsx), so image and
-      // name are the table's own — which is also why the expand chevron is set
-      // here rather than via the tree config's `expandable`.
-      createImageColumn(helper, {
-        entity: "location",
-        getImages: (row) => {
-          const image = resolveLocationPrimaryVisual(row).image;
-          return image ? [image] : [];
-        },
-      }),
-      createNameColumn(helper, "location", "name", {
-        expandable: true,
-        filterConfig: { placeholder: "Filter by location name..." },
-        mobile: { slot: "title", priority: 0 },
-      }),
-      createFilterableSelectColumn(helper, "type", {
-        header: "Type",
-        className: "w-32",
-        placeholder: "Filter by type...",
-        selectOptions: locationTypeOptionsWithTheme,
-        // Renders empty for a product-linked child — the "Is a" column beside
-        // it carries that identity, same split as the locations list.
-        renderCell: (type) => <LocationTypeLabel type={type} product={null} />,
-        mobile: { slot: "subtitle", priority: 15 },
-      }),
-      createSingleEntityInlineLinkColumn(helper, "product", "product", {
-        header: "Is a",
-        className: "w-48",
-        mobile: { slot: "meta", priority: 40 },
-      }),
-      helper.accessor(
-        (row) => row.valuation?.totalItemCount ?? row.totalItemCount ?? 0,
-        {
-          id: "items",
-          header: "Items",
-          meta: {
-            className: "w-20",
-            numeric: true,
-            mobile: { slot: "meta", priority: 30 },
-          },
-          // The accessor already coerces null to 0, so the cell cannot tell
-          // "empty shelf" from "unknown" — and an empty shelf is a fact. Show it.
-          cell: (info) => info.getValue(),
-        },
-      ),
-      helper.accessor((row) => row.childCount ?? 0, {
-        id: "locs",
-        header: "Locs",
-        meta: {
-          className: "w-20",
-          numeric: true,
-          mobile: { slot: "meta", priority: 40 },
-        },
-        cell: (info) => info.getValue(),
-      }),
-      // Total, not direct — it's the number the shelf card's caption shows, and
-      // on a parent row the subtree total is the useful one.
-      helper.accessor((row) => row.valuation?.totalValuation ?? 0, {
-        id: "valuation",
-        header: "Value",
-        meta: {
-          className: "w-28",
-          numeric: true,
-          mobile: { slot: "trailing", priority: 10 },
-        },
-        cell: (info) =>
-          info.getValue() === 0 ? (
-            <NoneValue />
-          ) : (
-            formatCurrency(info.getValue())
+    () =>
+      createCubbyColumnCollection<LocationTreeRow>((add) => {
+        // `location` declares `standardColumns: []` (entities.tsx), so image and
+        // name are the table's own — which is also why the expand chevron is set
+        // here rather than via the tree config's `expandable`.
+        add(
+          createImageColumn(helper, {
+            entity: "location",
+            getImages: (row) => {
+              const image = resolveLocationPrimaryVisual(row).image;
+              return image ? [image] : [];
+            },
+          }),
+        );
+        add(
+          createNameColumn(helper, "location", "name", {
+            expandable: true,
+            filterConfig: { placeholder: "Filter by location name..." },
+            mobile: { slot: "title", priority: 0 },
+          }),
+        );
+        add(
+          createFilterableSelectColumn(helper, "type", {
+            header: "Type",
+            className: "w-32",
+            placeholder: "Filter by type...",
+            selectOptions: locationTypeOptionsWithTheme,
+            // Renders empty for a product-linked child — the "Is a" column beside
+            // it carries that identity, same split as the locations list.
+            renderCell: (type) => (
+              <LocationTypeLabel type={type} product={null} />
+            ),
+            mobile: { slot: "subtitle", priority: 15 },
+          }),
+        );
+        add(
+          createSingleEntityInlineLinkColumn(helper, "product", "product", {
+            header: "Is a",
+            className: "w-48",
+            mobile: { slot: "meta", priority: 40 },
+          }),
+        );
+        add(
+          helper.accessor(
+            (row) => row.valuation?.totalItemCount ?? row.totalItemCount ?? 0,
+            {
+              id: "items",
+              header: "Items",
+              meta: {
+                className: "w-20",
+                numeric: true,
+                mobile: { slot: "meta", priority: 30 },
+              },
+              // The accessor already coerces null to 0, so the cell cannot tell
+              // "empty shelf" from "unknown" — and an empty shelf is a fact. Show it.
+              cell: (info) => info.getValue(),
+            },
           ),
+        );
+        add(
+          helper.accessor((row) => row.childCount ?? 0, {
+            id: "locs",
+            header: "Locs",
+            meta: {
+              className: "w-20",
+              numeric: true,
+              mobile: { slot: "meta", priority: 40 },
+            },
+            cell: (info) => info.getValue(),
+          }),
+        );
+        // Total, not direct — it's the number the shelf card's caption shows, and
+        // on a parent row the subtree total is the useful one.
+        add(
+          helper.accessor((row) => row.valuation?.totalValuation ?? 0, {
+            id: "valuation",
+            header: "Value",
+            meta: {
+              className: "w-28",
+              numeric: true,
+              mobile: { slot: "trailing", priority: 10 },
+            },
+            cell: (info) =>
+              info.getValue() === 0 ? (
+                <NoneValue />
+              ) : (
+                formatCurrency(info.getValue())
+              ),
+          }),
+        );
       }),
-    ],
     [helper],
   );
 

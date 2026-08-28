@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-vi.mock("~/lib/auth", () => ({
-  MCP_RESOURCE: "https://cubby.example.com/api/mcp",
-}));
-
-const { withDefaultResource } = await import("./default-resource");
+import { withDefaultResource } from "./default-resource";
+import type { DefaultResourcePort } from "./default-resource";
 
 const TOKEN_URL = "https://cubby.example.com/api/auth/oauth2/token";
+const testResourcePort: DefaultResourcePort = {
+  resource: "https://cubby.example.com/api/mcp",
+};
 
 function form(body: Record<string, string>, url = TOKEN_URL) {
   return new Request(url, {
@@ -26,6 +26,7 @@ describe("withDefaultResource", () => {
   it("fills in the resource when a token request omits it", async () => {
     const result = await withDefaultResource(
       form({ grant_type: "authorization_code", code: "abc" }),
+      testResourcePort,
     );
 
     expect((await params(result)).get("resource")).toBe(
@@ -36,6 +37,7 @@ describe("withDefaultResource", () => {
   it("leaves an explicit resource alone", async () => {
     const result = await withDefaultResource(
       form({ grant_type: "refresh_token", resource: "https://other/api" }),
+      testResourcePort,
     );
 
     expect((await params(result)).get("resource")).toBe("https://other/api");
@@ -48,7 +50,7 @@ describe("withDefaultResource", () => {
       body: JSON.stringify({ grant_type: "refresh_token" }),
     });
 
-    const result = await withDefaultResource(request);
+    const result = await withDefaultResource(request, testResourcePort);
 
     expect(await result.json()).toEqual({
       grant_type: "refresh_token",
@@ -63,7 +65,9 @@ describe("withDefaultResource", () => {
       body: "{not json",
     });
 
-    expect(await (await withDefaultResource(request)).text()).toBe("{not json");
+    expect(
+      await (await withDefaultResource(request, testResourcePort)).text(),
+    ).toBe("{not json");
   });
 
   it.each([

@@ -25,7 +25,7 @@ export type IngredientMatchMap = Map<string, IngredientMatch | null>;
 export function useIngredientMatches(
   names: string[],
   opts?: { enabled?: boolean },
-): { matchMap: IngredientMatchMap; isLoading: boolean } {
+) {
   const uniqueNames = useMemo(
     () => uniq(names.filter((n) => n.length > 0)),
     [names],

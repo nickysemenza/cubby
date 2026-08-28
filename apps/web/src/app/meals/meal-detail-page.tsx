@@ -3,8 +3,8 @@ import type { MealRecipeOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
-  type MealKind,
-  type MealType,
+  mealKindSchema,
+  mealTypeSchema,
 } from "@cubby/schemas/meal-classification";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -217,22 +217,29 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                         onSave={async (mealType) => {
                           // Nullable on purpose — clearing it means "unslotted", which
                           // is a real state, not a rejected edit.
+                          const parsedMealType =
+                            mealType === null
+                              ? null
+                              : mealTypeSchema.parse(mealType);
                           await updateMeal.mutateAsync({
                             id: mealId,
                             data: {
-                              mealType: (mealType as MealType | null) || null,
+                              mealType: parsedMealType,
                             },
                           });
                         }}
-                        renderValue={(value) =>
-                          value ? (
+                        renderValue={(value) => {
+                          const parsedMealType = mealTypeSchema
+                            .nullable()
+                            .safeParse(value).data;
+                          return parsedMealType ? (
                             <Badge variant="outline">
-                              {MEAL_TYPE_LABELS[value as MealType]}
+                              {MEAL_TYPE_LABELS[parsedMealType]}
                             </Badge>
                           ) : (
                             <NoneValue />
-                          )
-                        }
+                          );
+                        }}
                       />
                       {meal.mealType ? (
                         <EntityFilterLink
@@ -249,18 +256,25 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                         onSave={async (mealKind) => {
                           // NOT NULL — a cleared select is a no-op, not a null write.
                           if (!mealKind) return;
+                          const parsedMealKind = mealKindSchema.parse(mealKind);
                           await updateMeal.mutateAsync({
                             id: mealId,
-                            data: { mealKind: mealKind as MealKind },
+                            data: { mealKind: parsedMealKind },
                           });
                         }}
-                        renderValue={(value) => (
-                          <Badge
-                            variant={mealKindBadgeVariant[value as MealKind]}
-                          >
-                            {MEAL_KIND_LABELS[value as MealKind]}
-                          </Badge>
-                        )}
+                        renderValue={(value) => {
+                          const parsedMealKind =
+                            mealKindSchema.safeParse(value).data;
+                          return parsedMealKind ? (
+                            <Badge
+                              variant={mealKindBadgeVariant[parsedMealKind]}
+                            >
+                              {MEAL_KIND_LABELS[parsedMealKind]}
+                            </Badge>
+                          ) : (
+                            <NoneValue />
+                          );
+                        }}
                       />
                       <EntityFilterLink
                         to="/meals"

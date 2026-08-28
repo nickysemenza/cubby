@@ -1,76 +1,82 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CubbyRow as Row } from "../data-table/table-features";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("~/lib/clipboard", () => ({ copyShortcodes: vi.fn(async () => true) }));
-
-import { useEntitySelection } from "./useEntitySelection";
+import {
+  canSelectEntityRecord,
+  useEntitySelection,
+} from "./useEntitySelection";
 
 interface TestRow {
   id: string;
   projection: boolean;
 }
 
-const row = (id: string, projection = false) =>
-  ({ original: { id, projection } }) as Row<TestRow>;
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-const client = new QueryClient({
-  defaultOptions: { queries: { retry: false } },
+beforeEach(() => {
+  harness = createBrowserTestHarness();
 });
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={client}>{children}</QueryClientProvider>
-);
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function BrowserWrapper({ children }: { children: ReactNode }) {
+  const Wrapper = harness.wrapper;
+  return <Wrapper>{children}</Wrapper>;
+}
 
 describe("useEntitySelection", () => {
   it("contributes the select column and the shared bar actions", () => {
     const { result } = renderHook(
       () => useEntitySelection<TestRow>({ entity: "task" }),
-      { wrapper },
+      { wrapper: BrowserWrapper },
     );
 
-    expect(result.current.selectColumns.map((c) => c.id)).toEqual(["select"]);
+    expect(result.current.selectColumns.map((column) => column.id)).toEqual([
+      "select",
+    ]);
     expect(result.current.enableRowSelection).toBe(true);
     expect(result.current.selectedCount).toBe(0);
   });
 
-  // The reason the predicate exists: a projection sub-row is not a record, so
-  // it must not enter a selection the bulk actions will run against.
-  it("composes an exclusion predicate with the selection being enabled at all", () => {
-    const { result } = renderHook(
-      () =>
-        useEntitySelection<TestRow>({
-          entity: "task",
-          canSelectRow: (r) => !r.projection,
-        }),
-      { wrapper },
-    );
+  it("excludes projection rows before a bulk action can receive them", () => {
+    const canSelect = (row: TestRow) => !row.projection;
 
-    const canSelect = result.current.enableRowSelection;
-    expect(typeof canSelect).toBe("function");
-    if (typeof canSelect !== "function") return;
-    expect(canSelect(row("TSK-1"))).toBe(true);
-    expect(canSelect(row("TSK-2", true))).toBe(false);
+    expect(
+      canSelectEntityRecord(true, canSelect, {
+        id: "TSK-1",
+        projection: false,
+      }),
+    ).toBe(true);
+    expect(
+      canSelectEntityRecord(true, canSelect, {
+        id: "TSK-2",
+        projection: true,
+      }),
+    ).toBe(false);
   });
 
   it("renders no bar while nothing is selected", () => {
     const { result } = renderHook(
       () => useEntitySelection<TestRow>({ entity: "task" }),
-      { wrapper },
+      { wrapper: BrowserWrapper },
     );
 
-    // The table is only read once rows are selected, so the empty case never
-    // touches it.
-    expect(result.current.renderBulkActionBar(null as never)).toBeNull();
+    expect(result.current.renderBulkActionBar(null)).toBeNull();
   });
 
   it("enables selection for an inspect-only surface", () => {
-    const onInspectRow = vi.fn();
     const { result } = renderHook(
-      () => useEntitySelection<TestRow>({ entity: "task", onInspectRow }),
-      { wrapper },
+      () =>
+        useEntitySelection<TestRow>({
+          entity: "task",
+          onInspectRow: () => undefined,
+        }),
+      { wrapper: BrowserWrapper },
     );
 
     expect(result.current.selectColumns.map((column) => column.id)).toEqual([

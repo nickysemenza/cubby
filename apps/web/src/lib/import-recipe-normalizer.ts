@@ -1,9 +1,10 @@
-import { sanitizeSectionName } from "@cubby/schemas/codec";
+import { amount, sanitizeSectionName } from "@cubby/schemas/codec";
 import {
   composeNotesMarkdown,
   type ImportRecipe,
 } from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
 
@@ -22,6 +23,11 @@ type NormalizedImportRecipe = {
   notes: string | null;
   sections: NormalizedImportSection[];
 };
+
+type NormalizedImportYield = Pick<
+  NormalizedImportRecipe,
+  "yield" | "servings"
+> & { servingsFromYield: NormalizedImportRecipe["servings"] };
 
 export const importRecipeUrl = (url: string | undefined): string | null =>
   /^https?:\/\//i.test(url ?? "") ? (url ?? null) : null;
@@ -58,12 +64,10 @@ const normalizeImportMeta = (
 
 const normalizeImportYield = (
   recipeYield: ImportRecipe["meta"]["recipe_yield"],
-): {
-  yield: NormalizedImportRecipe["yield"];
-  servingsFromYield: NormalizedImportRecipe["servings"];
-} => {
-  if (typeof recipeYield === "string") {
-    const parsed = wasm.parse_yield(recipeYield);
+): Omit<NormalizedImportYield, "servings"> => {
+  const stringYield = z.string().safeParse(recipeYield);
+  if (stringYield.success) {
+    const parsed = wasm.parse_yield(stringYield.data);
     return {
       yield: parsed.recipe_yield ?? null,
       servingsFromYield: parsed.servings ?? null,
@@ -71,7 +75,7 @@ const normalizeImportYield = (
   }
 
   return {
-    yield: recipeYield ?? null,
+    yield: recipeYield === undefined ? null : amount.parse(recipeYield),
     servingsFromYield: null,
   };
 };
@@ -100,7 +104,7 @@ export const normalizeImportRecipe = (
   };
 };
 
-export const normalizedImportSignatureShape = (
+export const normalizedImportSignatureContent = (
   recipe: ImportRecipe,
   tags?: string[] | null,
 ) => {

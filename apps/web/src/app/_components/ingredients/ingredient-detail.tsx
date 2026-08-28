@@ -62,6 +62,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const startEnriching = useCallback(() => setIsEnriching(true), []);
 
   const { commonSections, editMode, mappings } = useEntityDetail<
+    "ingredient",
     IngredientWithFoodOut,
     IngredientUpdateInput
   >({

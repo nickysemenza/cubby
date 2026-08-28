@@ -4,6 +4,7 @@ import {
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { render, renderHook } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import type { CubbyRow as Row } from "../data-table/table-features";
@@ -16,6 +17,10 @@ import {
   entityActionCatalogDescriptors,
   useEntityActions,
 } from "./entity-actions";
+
+function entityProps(entity: "product" | "task") {
+  return { entity };
+}
 
 interface TestRow {
   id: string;
@@ -374,7 +379,7 @@ describe("useEntityActions", () => {
     });
     expect(
       result.current.selectionActions[1]?.availability?.([
-        { original: { id: "PRD-LOCKED" } } as Row<TestRow>,
+        fromPartial<Row<TestRow>>({ original: { id: "PRD-LOCKED" } }),
       ]),
     ).toEqual({
       status: "disabled",
@@ -436,7 +441,7 @@ describe("useEntityActions", () => {
 
   // `entity` fixes which hooks run, so swapping it would reorder them.
   it("throws if the entity changes for a mounted component", () => {
-    const initialProps: { entity: "product" | "task" } = { entity: "product" };
+    const initialProps = entityProps("product");
     const { rerender } = renderHook(
       ({ entity }: { entity: "product" | "task" }) =>
         useEntityActions<TestRow>(entity, REGISTRY),

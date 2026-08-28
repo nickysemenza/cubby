@@ -1,24 +1,32 @@
-import { type AuditEntityType, auditEntitySchema } from "@cubby/schemas/audit";
+import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { BackgroundBatchSummary } from "@cubby/schemas/background-jobs";
+import { z } from "zod";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+const backgroundEntityRefSchema = z.object({
+  entityType: auditEntitySchema,
+  entityId: z.string(),
+});
+const backgroundMetadataSchema = z.object({
+  source: z.string().optional(),
+  entity: backgroundEntityRefSchema.optional(),
+});
+
+type BackgroundEntityRef = z.output<typeof backgroundEntityRefSchema>;
+type BackgroundMetadata = z.output<typeof backgroundMetadataSchema>;
+type BatchMetadataInput = BackgroundBatchSummary["metadata"];
+
+function parseBackgroundMetadata(
+  value: BatchMetadataInput,
+): BackgroundMetadata | null {
+  const parsed = backgroundMetadataSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
-interface BackgroundEntityRef {
-  entityType: AuditEntityType;
-  entityId: string;
-}
-
-function parseBackgroundEntityRef(value: unknown): BackgroundEntityRef | null {
-  if (!isRecord(value)) return null;
-  const { entityType, entityId } = value;
-  if (typeof entityType !== "string" || typeof entityId !== "string") {
-    return null;
-  }
-  const parsedEntityType = auditEntitySchema.safeParse(entityType);
-  if (!parsedEntityType.success) return null;
-  return { entityType: parsedEntityType.data, entityId };
+function parseBackgroundEntityRef(
+  value: BatchMetadataInput,
+): BackgroundEntityRef | null {
+  const parsed = backgroundEntityRefSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 function batchFilterText(batch: BackgroundBatchSummary): string {
@@ -34,4 +42,4 @@ function batchFilterText(batch: BackgroundBatchSummary): string {
     .toLowerCase();
 }
 
-export { batchFilterText, isRecord, parseBackgroundEntityRef };
+export { batchFilterText, parseBackgroundEntityRef, parseBackgroundMetadata };

@@ -4,7 +4,7 @@ import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { useChunkedRecordQuery } from "~/app/_components/hooks/useChunkedRecordQuery";
 import { product as productOperations } from "~/app/products/product.functions";
 
-type ProductImageMap = Record<string, ImageOut[]>;
+export type ProductImageMap = Record<string, ImageOut[]>;
 
 const ProductImageSummariesContext = createContext<ProductImageMap>({});
 const EMPTY_PRODUCT_IMAGE_MAP: ProductImageMap = {};

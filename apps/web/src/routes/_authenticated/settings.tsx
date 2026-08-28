@@ -35,7 +35,10 @@ import {
   useFlags,
 } from "~/lib/flags";
 import { pageTitle } from "~/lib/page-title";
-import type { TimingResponse } from "~/routes/api/debug/timing";
+import {
+  timingResponseSchema,
+  type TimingResponse,
+} from "~/routes/api/debug/timing";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -112,7 +115,7 @@ function SettingsPage() {
                         <FlagRow
                           key={key}
                           flagKey={key}
-                          value={flags[key]}
+                          value={flags.get(key) ?? FLAGS[key].default}
                           onChange={(v) => setFlag(key, v)}
                         />
                       ))}
@@ -177,7 +180,7 @@ function DiagnosticsCard() {
       queryFn: async () => {
         const res = await fetch("/api/debug/timing");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<TimingResponse>;
+        return timingResponseSchema.parse(await res.json());
       },
       staleTime: 60_000,
       refetchOnWindowFocus: false,

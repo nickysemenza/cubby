@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
-import type { Plugin } from "vite";
+import type { HookHandler, Plugin } from "vite";
 import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
@@ -40,9 +40,11 @@ const gitCommit = execSync("git rev-parse --short HEAD", {
  * WASM failure still surfaces as a genuine failure.
  */
 function wasmInlinedForVitest(): Plugin {
+  // SAFETY: vite-plugin-wasm returns one concrete plugin here, while Vite's
+  // public PluginOption type also permits arrays and falsy conditional entries.
   const plugin = wasm() as Plugin;
   const load = plugin.load;
-  if (typeof load !== "function") {
+  if (!isPluginLoadHook(load)) {
     throw new Error("vite-plugin-wasm no longer exposes a `load` function");
   }
   return {
@@ -51,6 +53,12 @@ function wasmInlinedForVitest(): Plugin {
       return load.call(this, id, { ...options, ssr: true });
     },
   };
+}
+
+type PluginLoadHook = HookHandler<NonNullable<Plugin["load"]>>;
+
+function isPluginLoadHook(load: Plugin["load"]): load is PluginLoadHook {
+  return typeof load === "function";
 }
 
 /** Keep IntegreSQL opt-in while supporting both direct and full-suite commands. */
@@ -223,8 +231,8 @@ export default defineConfig({
             // full safe TRUNCATE path documented in tooling/test-setup.ts.
             hookTimeout: 30000,
             // Integration stays on isolated forks: database clients and module
-            // caches are file-scoped, while shared registries make vi.mock order
-            // dependent. Larger IntegreSQL pools do not reduce CREATE latency.
+            // singletons are file-scoped, while shared registries must not cross
+            // test-file boundaries. Larger IntegreSQL pools do not reduce CREATE latency.
             sequence: { groupOrder: 2 },
           },
         },

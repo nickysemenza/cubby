@@ -80,7 +80,10 @@ function DesktopDataRowInner<TItem extends RowData>({
         // In cell-selection mode a click on an editable cell selects it (via the
         // container's mousedown delegation); don't also navigate/open the row.
         if (suppressCellRowClick) {
-          const td = (e.target as HTMLElement).closest("td[data-cell-col]");
+          const td =
+            e.target instanceof HTMLElement
+              ? e.target.closest("td[data-cell-col]")
+              : null;
           if (td?.querySelector("[data-cell-edit-trigger]")) return;
         }
         onRowClick(row);
@@ -242,7 +245,8 @@ function rowPropsAreEqual<TItem extends RowData>(
   );
 }
 
-export const DesktopDataRow = memo(
-  DesktopDataRowInner,
-  rowPropsAreEqual,
-) as typeof DesktopDataRowInner;
+const memoizedDesktopDataRow = memo(DesktopDataRowInner, rowPropsAreEqual);
+export const DesktopDataRow =
+  // SAFETY: React.memo preserves DesktopDataRowInner's generic props at this
+  // boundary; the comparator compares the complete generic prop set.
+  memoizedDesktopDataRow as typeof DesktopDataRowInner;

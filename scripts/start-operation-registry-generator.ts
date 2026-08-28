@@ -1,7 +1,13 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
-import { parseSync } from "oxc-parser";
+import {
+  type Expression,
+  parseSync,
+  type Program,
+  type PropertyKey,
+  type StringLiteral,
+} from "oxc-parser";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const SOURCE_ROOT = join(ROOT, "apps/web/src");
@@ -26,8 +32,6 @@ type HandlerDefinition = {
    */
   member: string;
 };
-type AstNode = { type: string; [key: string]: unknown };
-
 const sourceFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -38,52 +42,53 @@ const sourceFiles = (directory: string): string[] =>
       : [];
   });
 
-const calledName = (expression: AstNode): string | undefined =>
-  expression.type === "Identifier"
-    ? (expression.name as string | undefined)
-    : expression.type === "MemberExpression"
-      ? ((expression.property as AstNode | undefined)?.name as
-          | string
-          | undefined)
-      : undefined;
+const isStringLiteral = (
+  expression: Expression | PropertyKey,
+): expression is StringLiteral =>
+  expression.type === "Literal" && typeof expression.value === "string";
+
+const propertyName = (key: PropertyKey): string | undefined => {
+  if (key.type === "Identifier") return key.name;
+  return isStringLiteral(key) ? key.value : undefined;
+};
+
+const calledName = (expression: Expression): string | undefined => {
+  if (expression.type === "Identifier") return expression.name;
+  if (expression.type !== "MemberExpression") return undefined;
+  return propertyName(expression.property);
+};
 
 const moduleSpecifier = (path: string): string =>
   `~/${relative(SOURCE_ROOT, path)
     .replaceAll("\\", "/")
     .replace(/\.[cm]?[jt]sx?$/u, "")}`;
 
-const programCache = new Map<string, AstNode>();
-const parseFile = (path: string): AstNode => {
+const programCache = new Map<string, Program>();
+const parseFile = (path: string): Program => {
   const cached = programCache.get(path);
   if (cached) return cached;
   const program = parseSync(path, readFileSync(path, "utf8"), {
     lang: path.endsWith("x") ? "tsx" : "ts",
-  }).program as unknown as AstNode;
+  }).program;
   programCache.set(path, program);
   return program;
 };
 
 const topLevelVariableDeclarators = (
-  program: AstNode,
-): { exportName: string; init: AstNode }[] => {
-  const body = Array.isArray(program.body) ? (program.body as AstNode[]) : [];
-  const declarators: { exportName: string; init: AstNode }[] = [];
-  for (const statement of body) {
+  program: Program,
+): { exportName: string; init: Expression }[] => {
+  const declarators: { exportName: string; init: Expression }[] = [];
+  for (const statement of program.body) {
     const declaration =
       statement.type === "ExportNamedDeclaration"
-        ? (statement.declaration as AstNode | undefined)
+        ? statement.declaration
         : statement.type === "VariableDeclaration"
           ? statement
           : undefined;
     if (declaration?.type !== "VariableDeclaration") continue;
-    const variables = Array.isArray(declaration.declarations)
-      ? (declaration.declarations as AstNode[])
-      : [];
-    for (const variable of variables) {
-      const id = variable.id as AstNode | undefined;
-      const init = variable.init as AstNode | undefined;
-      if (typeof id?.name === "string" && init) {
-        declarators.push({ exportName: id.name, init });
+    for (const variable of declaration.declarations) {
+      if (variable.id.type === "Identifier" && variable.init) {
+        declarators.push({ exportName: variable.id.name, init: variable.init });
       }
     }
   }
@@ -111,12 +116,11 @@ let cachedDomainDeclarations: DomainDeclarations | undefined;
  * rejected: under verbatimModuleSyntax it emits a runtime `import {}` for its
  * side effects.
  */
-const assertClientSafeImports = (path: string, body: AstNode[]): void => {
+const assertClientSafeImports = (path: string, body: Program["body"]): void => {
   for (const statement of body) {
     if (statement.type !== "ImportDeclaration") continue;
     if (statement.importKind === "type") continue;
-    const source = (statement.source as AstNode | undefined)?.value;
-    if (typeof source !== "string") continue;
+    const source = statement.source.value;
     if (/^~\/server(?:\/|$)/u.test(source) || source.startsWith("node:")) {
       throw new Error(
         `${relative(ROOT, path)} declares a Start operation domain but has a runtime import of ${JSON.stringify(source)}. Domain modules load in the browser; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
@@ -143,40 +147,29 @@ export const collectDomainDeclarations = (): DomainDeclarations => {
     for (const { exportName, init } of topLevelVariableDeclarators(program)) {
       if (
         init.type !== "CallExpression" ||
-        calledName(init.callee as AstNode) !== "defineOperationDomain"
+        calledName(init.callee) !== "defineOperationDomain"
       ) {
         continue;
       }
       if (!auditedModules.has(path)) {
         auditedModules.add(path);
-        assertClientSafeImports(
-          path,
-          Array.isArray(program.body) ? (program.body as AstNode[]) : [],
-        );
+        assertClientSafeImports(path, program.body);
       }
-      const args = Array.isArray(init.arguments)
-        ? (init.arguments as AstNode[])
-        : [];
-      const [domainArg, definitionsArg] = args;
+      const [domainArg, definitionsArg] = init.arguments;
       if (
-        domainArg?.type !== "Literal" ||
-        typeof domainArg.value !== "string" ||
+        !domainArg ||
+        domainArg.type === "SpreadElement" ||
+        !isStringLiteral(domainArg) ||
         definitionsArg?.type !== "ObjectExpression"
       ) {
         continue;
       }
       const members = new Map<string, DomainMember>();
-      const properties = Array.isArray(definitionsArg.properties)
-        ? (definitionsArg.properties as AstNode[])
-        : [];
-      for (const property of properties) {
+      for (const property of definitionsArg.properties) {
         if (property.type !== "Property") continue;
-        const key = property.key as AstNode | undefined;
-        const value = property.value as AstNode | undefined;
-        const memberName = key?.name ?? key?.value;
-        if (typeof memberName !== "string" || value?.type !== "CallExpression")
-          continue;
-        const kind = calledName(value.callee as AstNode);
+        const memberName = propertyName(property.key);
+        if (!memberName || property.value.type !== "CallExpression") continue;
+        const kind = calledName(property.value.callee);
         if (kind !== "query" && kind !== "mutation" && kind !== "subscription")
           continue;
         const operation = `${domainArg.value}.${memberName}`;
@@ -204,24 +197,16 @@ export const collectDomainDeclarations = (): DomainDeclarations => {
 
 /** Named-import bindings of a module: local name -> imported name + source. */
 const importBindings = (
-  body: AstNode[],
+  body: Program["body"],
 ): Map<string, { source: string; imported: string }> => {
   const bindings = new Map<string, { source: string; imported: string }>();
   for (const statement of body) {
     if (statement.type !== "ImportDeclaration") continue;
-    const source = (statement.source as AstNode | undefined)?.value;
-    if (typeof source !== "string") continue;
-    const specifiers = Array.isArray(statement.specifiers)
-      ? (statement.specifiers as AstNode[])
-      : [];
-    for (const specifier of specifiers) {
+    const source = statement.source.value;
+    for (const specifier of statement.specifiers) {
       if (specifier.type !== "ImportSpecifier") continue;
-      const local = (specifier.local as AstNode | undefined)?.name;
-      const importedNode = specifier.imported as AstNode | undefined;
-      const imported = importedNode?.name ?? importedNode?.value;
-      if (typeof local === "string" && typeof imported === "string") {
-        bindings.set(local, { source, imported });
-      }
+      const imported = propertyName(specifier.imported);
+      if (imported) bindings.set(specifier.local.name, { source, imported });
     }
   }
   return bindings;
@@ -314,33 +299,23 @@ export const collectStartOperationHandlers = (): CollectedHandlers => {
   };
   for (const path of sourceFiles(SERVER_ROOT)) {
     const program = parseFile(path);
-    const body = Array.isArray(program.body) ? (program.body as AstNode[]) : [];
-    const bindings = importBindings(body);
-    for (const statement of body) {
+    const bindings = importBindings(program.body);
+    for (const statement of program.body) {
       const declaration =
         statement.type === "ExportNamedDeclaration"
-          ? (statement.declaration as AstNode | undefined)
+          ? statement.declaration
           : undefined;
       if (declaration?.type !== "VariableDeclaration") continue;
-      const variables = Array.isArray(declaration.declarations)
-        ? (declaration.declarations as AstNode[])
-        : [];
-      for (const variable of variables) {
-        const id = variable.id as AstNode | undefined;
-        const implementation = variable.init as AstNode | undefined;
-        if (typeof id?.name !== "string") continue;
-        const implementer =
-          implementation?.type === "CallExpression"
-            ? calledName(implementation.callee as AstNode)
-            : undefined;
+      for (const variable of declaration.declarations) {
+        const id = variable.id;
+        const implementation = variable.init;
+        if (id.type !== "Identifier") continue;
+        if (implementation?.type !== "CallExpression") continue;
+        const implementer = calledName(implementation.callee);
         if (!isImplementer(implementer)) continue;
-        const args = Array.isArray(implementation?.arguments)
-          ? (implementation.arguments as AstNode[])
-          : [];
-        const [domainArg, tableArg] = args;
+        const [domainArg, tableArg] = implementation.arguments;
         if (
           domainArg?.type !== "Identifier" ||
-          typeof domainArg.name !== "string" ||
           tableArg?.type !== "ObjectExpression"
         ) {
           throw new Error(
@@ -354,14 +329,10 @@ export const collectStartOperationHandlers = (): CollectedHandlers => {
           domainArg.name,
         );
         const allowed: readonly Kind[] = IMPLEMENTERS[implementer].kinds;
-        const properties = Array.isArray(tableArg.properties)
-          ? (tableArg.properties as AstNode[])
-          : [];
-        for (const property of properties) {
+        for (const property of tableArg.properties) {
           if (property.type !== "Property") continue;
-          const key = property.key as AstNode | undefined;
-          const memberName = key?.name ?? key?.value;
-          if (typeof memberName !== "string") continue;
+          const memberName = propertyName(property.key);
+          if (!memberName) continue;
           const member = domain.members.get(memberName);
           if (!member) {
             throw new Error(
@@ -500,13 +471,15 @@ export const renderStartOperationHandlers = (): string => {
   return (
     `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
     `import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";\n` +
-    `import type { StartOperationResult } from "~/server/start-operation.contract";\n` +
+    `import type { StartOperationResult, UnparsedStartOperationData } from "~/server/start-operation.contract";\n` +
     `import type { StartOperationRequest } from "~/server/start-operation.server";\n` +
     `import type { WorkflowStreamHandler } from "~/server/subscription-domain.server";\n` +
-    `\nexport type StartOperationHandler = (options: { data: unknown; request: StartOperationRequest }) => Promise<StartOperationResult<unknown>>;\n` +
-    `export type StartOperationHandlerLoader = () => Promise<StartOperationHandler>;\n` +
+    `\nexport type StartOperationHandler<Output = UnparsedStartOperationData> = (options: { data: UnparsedStartOperationData; request: StartOperationRequest }) => Promise<StartOperationResult<Output>>;\n` +
+    `export type StartOperationHandlerLoader<Output = UnparsedStartOperationData> = () => Promise<StartOperationHandler<Output>>;\n` +
     `export type WorkflowStreamHandlerLoader = () => Promise<WorkflowStreamHandler>;\n` +
     `\nexport const START_OPERATION_HANDLER_LOADERS = {\n${loaders(operations, "operations")}\n} as const satisfies Record<StartOperationIdOfKind<"query" | "mutation">, StartOperationHandlerLoader>;\n` +
+    `\nexport type LoadedStartOperationHandler<Operation extends StartOperationIdOfKind<"query" | "mutation">> = Awaited<ReturnType<(typeof START_OPERATION_HANDLER_LOADERS)[Operation]>>;\n` +
+    `export type StartOperationDispatchResult<Operation extends StartOperationIdOfKind<"query" | "mutation">> = Awaited<ReturnType<LoadedStartOperationHandler<Operation>>>;\n` +
     `\nexport const WORKFLOW_STREAM_HANDLER_LOADERS = {\n${loaders(subscriptions, "streams")}\n} as const satisfies Record<StartOperationIdOfKind<"subscription">, WorkflowStreamHandlerLoader>;\n`
   );
 };

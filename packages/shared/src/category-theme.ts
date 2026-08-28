@@ -53,28 +53,27 @@ export const isNonFoodCategory = (
  * dominant "food" category. Matte, off the warm axis — distinguishes categories
  * by value, not hue, so category dots/donut segments read as one printed figure.
  */
-export const categoryColors: Record<ProductCategory | "uncategorized", string> =
-  {
-    food: "var(--chart-1)",
+export const categoryColors = {
+  food: "var(--chart-1)",
 
-    tools: "var(--chart-2)",
-    "tool-consumables": "var(--chart-4)",
-    "tool-accessories": "var(--chart-6)",
+  tools: "var(--chart-2)",
+  "tool-consumables": "var(--chart-4)",
+  "tool-accessories": "var(--chart-6)",
 
-    storage: "var(--chart-3)",
+  storage: "var(--chart-3)",
 
-    hardware: "var(--chart-5)",
+  hardware: "var(--chart-5)",
 
-    electronics: "var(--chart-7)",
-    software: "var(--chart-5)",
+  electronics: "var(--chart-7)",
+  software: "var(--chart-5)",
 
-    books: "var(--chart-3)",
+  books: "var(--chart-3)",
 
-    household: "var(--chart-8)",
-    supplies: "var(--chart-6)",
+  household: "var(--chart-8)",
+  supplies: "var(--chart-6)",
 
-    uncategorized: "var(--chart-neutral)",
-  };
+  uncategorized: "var(--chart-neutral)",
+} as const satisfies Record<ProductCategory | "uncategorized", string>;
 
 export const getCategoryColor = (category: ProductCategory | null): string =>
   category ? categoryColors[category] : categoryColors.uncategorized;

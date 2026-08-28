@@ -32,7 +32,6 @@ import {
   recipeIdInput,
   recipeIdsInput,
   recipeRecomputeAllOut,
-  recipeRecomputeDurableEventSchema,
   recipeTagsOut,
   recipeWithSideEffectsOut,
 } from "@cubby/schemas/recipe";
@@ -58,7 +57,6 @@ import {
   query,
   subscription,
 } from "~/integrations/tanstack-query/operation-catalog";
-import type { BulkProgressEvent } from "~/lib/bulk-progress";
 
 export const recipe = defineOperationDomain("recipe", {
   getManyByIDs: query({
@@ -185,14 +183,21 @@ export const suggestions = defineOperationDomain("suggestions", {
   }),
 });
 
-type RecipeRecomputeDurableResult = {
-  enqueued: number;
-  total: number;
-  batchId: string | null;
-};
-const recomputeEventSchema = recipeRecomputeDurableEventSchema as z.ZodType<
-  BulkProgressEvent<unknown, RecipeRecomputeDurableResult>
->;
+const recomputeEventSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("progress"),
+    done: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  }),
+  z.object({
+    type: z.literal("done"),
+    result: z.object({
+      enqueued: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+      batchId: z.string().nullable(),
+    }),
+  }),
+]);
 export const recipeStreams = defineOperationDomain("recipe", {
   recomputeAllDurable: subscription({
     input: z.undefined(),

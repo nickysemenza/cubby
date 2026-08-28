@@ -11,6 +11,7 @@ import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
@@ -23,10 +24,43 @@ import type { USDAService } from "~/server/services/usda.service";
 
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
+export interface UsdaMatchAiPort {
+  getTextAdapter: ReturnType<typeof getAnthropicClient>["getTextAdapter"];
+}
+
+const productionUsdaMatchAiPort: UsdaMatchAiPort = {
+  getTextAdapter: (...args) => getAnthropicClient().getTextAdapter(...args),
+};
+
 export interface UsdaFoodSuggestion {
   food: FoodSummaryWithLinkedProducts | null;
   confidence: Confidence;
   reasoning: string;
+}
+
+interface UsdaFoodSelection {
+  fdcId: number | null;
+  confidence: Confidence;
+  reasoning: string;
+}
+
+interface UsdaSelectionState {
+  selection: UsdaFoodSelection | null;
+}
+
+const searchToolArgumentsSchema = z.object({
+  query: z.string().min(1),
+  dataType: dataTypeEnum.optional(),
+});
+
+const selectToolArgumentsSchema = z.object({
+  fdcId: z.number().nullable(),
+  confidence: z.enum(["high", "medium", "low"]),
+  reasoning: z.string(),
+});
+
+export interface UsdaLookupPort {
+  listFoods: USDAService["listFoods"];
 }
 
 function buildUsdaMatchPrompt(): string {
@@ -49,12 +83,13 @@ Rules:
  * it without a re-fetch, or null when nothing fits.
  */
 export async function suggestUsdaFood(
-  usdaService: USDAService,
+  usdaService: UsdaLookupPort,
   db: Database,
   ingredientName: string,
   opts: { ingredientId?: IngredientId } = {},
+  ai: UsdaMatchAiPort = productionUsdaMatchAiPort,
 ): Promise<UsdaFoodSuggestion> {
-  const adapter = getAnthropicClient().getTextAdapter({
+  const adapter = ai.getTextAdapter({
     feature: "usda-food-suggest",
     ingredient: ingredientName,
     env: IS_CF_WORKERS ? "prod" : "dev",
@@ -65,13 +100,7 @@ export async function suggestUsdaFood(
   const seenFoods = new Map<number, FoodSummaryWithLinkedProducts>();
   // Holder object (not a bare `let`) so TS keeps the declared type after the
   // closure assignment instead of narrowing it away.
-  const state: {
-    selection: {
-      fdcId: number | null;
-      confidence: Confidence;
-      reasoning: string;
-    } | null;
-  } = { selection: null };
+  const state: UsdaSelectionState = { selection: null };
 
   // Run one USDA search: list, record every result in `seenFoods` (so a later
   // select can return the full record and reject ids never seen), and format it
@@ -120,9 +149,10 @@ export async function suggestUsdaFood(
       required: ["query"],
     },
   }).server(async (rawArgs) => {
-    const args = (rawArgs ?? {}) as { query?: string; dataType?: DataType };
-    if (!args.query) return "Provide a query.";
-    return runSearch(args.query, args.dataType);
+    const parsed = searchToolArgumentsSchema.safeParse(rawArgs);
+    if (!parsed.success) return "Provide a query.";
+    const { query, dataType } = parsed.data;
+    return runSearch(query, dataType);
   });
 
   const selectTool = toolDefinition({
@@ -139,15 +169,13 @@ export async function suggestUsdaFood(
       required: ["fdcId", "confidence", "reasoning"],
     },
   }).server(async (rawArgs) => {
-    const args = (rawArgs ?? {}) as {
-      fdcId?: number | null;
-      confidence?: Confidence;
-      reasoning?: string;
-    };
+    const parsed = selectToolArgumentsSchema.safeParse(rawArgs);
+    if (!parsed.success) return "Provide a complete selection.";
+    const args = parsed.data;
     state.selection = {
-      fdcId: args.fdcId ?? null,
-      confidence: args.confidence ?? "low",
-      reasoning: args.reasoning ?? "",
+      fdcId: args.fdcId,
+      confidence: args.confidence,
+      reasoning: args.reasoning,
     };
     return "Recorded.";
   });
@@ -209,6 +237,38 @@ interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
   name: string;
 }
 
+export interface UsdaMatchPorts<TDatabase> {
+  dispatchRetries: (
+    database: TDatabase,
+    input: Parameters<typeof dispatchBackgroundJobs>[1],
+  ) => Promise<void>;
+  getIngredient: (
+    database: TDatabase,
+    id: IngredientId,
+  ) => Promise<{ name: string }>;
+  suggest: (
+    service: UsdaLookupPort,
+    database: TDatabase,
+    name: string,
+    options?: { ingredientId?: IngredientId },
+  ) => Promise<UsdaFoodSuggestion>;
+  servicesForRetry: (
+    database: TDatabase,
+  ) => Promise<{ usdaService: UsdaLookupPort }>;
+}
+
+const productionUsdaMatchPorts: UsdaMatchPorts<Database> = {
+  dispatchRetries: async (database, input) => {
+    await dispatchBackgroundJobs(database, input);
+  },
+  getIngredient: getIngredientByID,
+  suggest: suggestUsdaFood,
+  servicesForRetry: async (database) => {
+    const { buildCrudServices } = await import("~/server/request-context");
+    return buildCrudServices(database);
+  },
+};
+
 /**
  * Batch {@link suggestUsdaFood} for the enrichment workbench's "Suggest USDA for
  * selected" action. Read-only — returns one suggestion per name for the user to
@@ -226,10 +286,11 @@ interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
  * the unattended-retry work the queue exists for, unlike the interactive
  * search loop above it).
  */
-export async function suggestUsdaFoodBatch(
-  usdaService: USDAService,
-  db: Database,
+async function suggestUsdaFoodBatchWithPorts<TDatabase>(
+  usdaService: UsdaLookupPort,
+  db: TDatabase,
   ingredients: { id: IngredientId; name: string }[],
+  ports: UsdaMatchPorts<TDatabase>,
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
   const out: UsdaFoodBatchSuggestion[] = [];
@@ -237,7 +298,7 @@ export async function suggestUsdaFoodBatch(
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
-      batch.map((item) => suggestUsdaFood(usdaService, db, item.name)),
+      batch.map((item) => ports.suggest(usdaService, db, item.name)),
     );
     for (const [j, result] of results.entries()) {
       const item = batch[j]!;
@@ -278,7 +339,7 @@ export async function suggestUsdaFoodBatch(
   //     the caller.
   if (failed.length > 0) {
     try {
-      await dispatchBackgroundJobs(db, {
+      await ports.dispatchRetries(db, {
         kind: "usda-match.retry",
         source: "mutation",
         jobs: failed.map((item) => ({
@@ -315,12 +376,30 @@ export async function suggestUsdaFoodBatch(
  * successful retry's only visible effect is the job finishing "succeeded"
  * rather than "failed", confirming the transient failure has cleared.
  */
-export async function retryUsdaMatch(
-  db: Database,
+async function retryUsdaMatchWithPorts<TDatabase>(
+  db: TDatabase,
   ingredientId: IngredientId,
+  ports: UsdaMatchPorts<TDatabase>,
 ): Promise<void> {
-  const { buildCrudServices } = await import("~/server/request-context");
-  const { usdaService } = buildCrudServices(db);
-  const ingredient = await getIngredientByID(db, ingredientId);
-  await suggestUsdaFood(usdaService, db, ingredient.name, { ingredientId });
+  const { usdaService } = await ports.servicesForRetry(db);
+  const ingredient = await ports.getIngredient(db, ingredientId);
+  await ports.suggest(usdaService, db, ingredient.name, { ingredientId });
 }
+
+export function createUsdaMatchService<TDatabase>(
+  ports: UsdaMatchPorts<TDatabase>,
+) {
+  return {
+    retryUsdaMatch: (database: TDatabase, ingredientId: IngredientId) =>
+      retryUsdaMatchWithPorts(database, ingredientId, ports),
+    suggestUsdaFoodBatch: (
+      service: UsdaLookupPort,
+      database: TDatabase,
+      ingredients: { id: IngredientId; name: string }[],
+    ) => suggestUsdaFoodBatchWithPorts(service, database, ingredients, ports),
+  };
+}
+
+const productionUsdaMatch = createUsdaMatchService(productionUsdaMatchPorts);
+export const retryUsdaMatch = productionUsdaMatch.retryUsdaMatch;
+export const suggestUsdaFoodBatch = productionUsdaMatch.suggestUsdaFoodBatch;

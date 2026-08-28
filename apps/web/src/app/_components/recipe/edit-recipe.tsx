@@ -14,15 +14,17 @@ export default function EditRecipeForm({
   recipe,
   onCancel,
 }: EditRecipeFormProps) {
-  const { error, isPending, submit } =
-    useEntityDetailController<RecipeUpdateInput>({
-      entity: "recipe",
-      entityId: recipe.id,
-      onSuccess: () => {
-        toast.success("Recipe saved.");
-        onCancel();
-      },
-    });
+  const { error, isPending, submit } = useEntityDetailController<
+    "recipe",
+    RecipeUpdateInput
+  >({
+    entity: "recipe",
+    entityId: recipe.id,
+    onSuccess: () => {
+      toast.success("Recipe saved.");
+      onCancel();
+    },
+  });
 
   return (
     <RecipeForm

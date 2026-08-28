@@ -45,6 +45,10 @@ export type StartOperationTraceContext = {
   entity?: string;
 };
 
+export interface StartOperationHeaders extends Record<string, string> {}
+
+export interface StartOperationTraceAttributes extends Record<string, string> {}
+
 const isStartOperation = (value: string | null): value is StartOperationId =>
   value !== null && Object.hasOwn(START_OPERATIONS, value);
 
@@ -65,10 +69,10 @@ export const registeredStartOperationKind = <Id extends StartOperationId>(
 
 export const isStartOperationEntity = (
   operation: StartOperationId,
-  value: unknown,
+  value: string | null | undefined,
 ): value is string =>
-  typeof value === "string" &&
-  (START_OPERATIONS[operation].entities as readonly string[]).includes(value);
+  value != null &&
+  new Set<string>(START_OPERATIONS[operation].entities).has(value);
 
 export const startOperationDefinition = <Id extends StartOperationId>(
   operation: Id,
@@ -76,7 +80,7 @@ export const startOperationDefinition = <Id extends StartOperationId>(
   ({
     id: operation,
     ...START_OPERATIONS[operation],
-  }) as StartOperationDefinition<Id>;
+  }) satisfies StartOperationDefinition<Id>;
 
 /**
  * Build the only semantic dimensions a browser Start call may send to tracing.
@@ -86,10 +90,10 @@ export function startOperationHeaders(options: {
   operation: StartOperationId;
   kind: StartOperationKind;
   entity?: string;
-}): Record<string, string> {
+}): StartOperationHeaders {
   if (!isStartOperation(options.operation)) return {};
   if (!isStartOperationKind(options.operation, options.kind)) return {};
-  const headers: Record<string, string> = {
+  const headers: StartOperationHeaders = {
     [START_OPERATION_HEADER]: options.operation,
     [START_OPERATION_KIND_HEADER]: options.kind,
   };
@@ -108,11 +112,12 @@ export function readStartOperationTraceContext(
   const kind = headers.get(START_OPERATION_KIND_HEADER);
   if (!isStartOperationKind(operation, kind)) return undefined;
   const entity = headers.get(START_OPERATION_ENTITY_HEADER);
-  return {
+  const context: StartOperationTraceContext = {
     operation,
     kind,
-    ...(isStartOperationEntity(operation, entity) ? { entity } : {}),
   };
+  if (isStartOperationEntity(operation, entity)) context.entity = entity;
+  return context;
 }
 
 export const startOperationTraceName = (
@@ -126,12 +131,13 @@ export const serverFunctionTraceName = (
 
 export const startOperationTraceAttributes = (
   context: StartOperationTraceContext | undefined,
-): Record<string, string> =>
-  context
-    ? {
-        "rpc.system": "start",
-        "rpc.method": context.operation,
-        "rpc.type": context.kind,
-        ...(context.entity ? { "cubby.entity": context.entity } : {}),
-      }
-    : {};
+): StartOperationTraceAttributes => {
+  if (!context) return {};
+  const attributes: StartOperationTraceAttributes = {
+    "rpc.system": "start",
+    "rpc.method": context.operation,
+    "rpc.type": context.kind,
+  };
+  if (context.entity) attributes["cubby.entity"] = context.entity;
+  return attributes;
+};

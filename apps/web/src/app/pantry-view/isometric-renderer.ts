@@ -39,7 +39,7 @@ const BG_COLOR = "#f7f9fc";
 // canvas. Client-only (getComputedStyle); on the server the value is unused
 // (the canvas never paints there) so the raw token passes through harmlessly.
 export function resolveCssColor(color: string): string {
-  if (typeof window === "undefined" || !color.startsWith("var(")) return color;
+  if (!globalThis.window || !color.startsWith("var(")) return color;
   const name = color.slice(4, -1).split(",")[0]?.trim();
   if (!name) return color;
   const resolved = getComputedStyle(document.documentElement)

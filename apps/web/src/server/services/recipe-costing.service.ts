@@ -68,18 +68,16 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import type { USDAClient } from "../clients/usda";
 import { getIngredientsByIDs } from "./ingredient.service";
+import type { UsdaFoodBatchPort } from "./usda-helpers";
 
 const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
   const caloriesUpper = t.nutrientsUpper
     ? getNutrientValueByKey(t.nutrientsUpper, "kcal")
     : undefined;
-  return {
+  const totals: RecipeTotals = {
     costTotal: t.price,
-    ...(t.priceUpper != null ? { costTotalUpper: t.priceUpper } : {}),
     caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
-    ...(caloriesUpper != null ? { caloriesTotalUpper: caloriesUpper } : {}),
     ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroColumn>>(
       (acc, key) => {
         acc[`${key}Total`] = getNutrientValueByKey(t.nutrients, key);
@@ -91,6 +89,9 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
     costCovered: t.totalIngredients - t.missingByType.price.length,
     caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,
   };
+  if (t.priceUpper != null) totals.costTotalUpper = t.priceUpper;
+  if (caloriesUpper != null) totals.caloriesTotalUpper = caloriesUpper;
+  return totals;
 };
 
 // Per-field tolerance for "persisted differs from a fresh compute". Cost is
@@ -99,9 +100,9 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
 // else defaults to a small epsilon. One map so the dry-run predicate
 // (totalsDiffer) and explainRecipe's drift can't diverge.
 const DEFAULT_EPSILON = 0.005;
-const TOTALS_EPSILON: Partial<Record<keyof RecipeTotals, number>> = {
-  caloriesTotal: 0.5,
-};
+const TOTALS_EPSILON = new Map<keyof RecipeTotals, number>([
+  ["caloriesTotal", 0.5],
+]);
 
 const fieldDiffers = (
   a: RecipeTotals,
@@ -109,7 +110,7 @@ const fieldDiffers = (
   field: keyof RecipeTotals,
 ): boolean =>
   Math.abs((a[field] ?? 0) - (b[field] ?? 0)) >
-  (TOTALS_EPSILON[field] ?? DEFAULT_EPSILON);
+  (TOTALS_EPSILON.get(field) ?? DEFAULT_EPSILON);
 
 // Whether a fresh compute differs from what's persisted — the honest "would
 // change" predicate behind the dry-run. The field roster is owned by the schema
@@ -162,7 +163,7 @@ const usdaMissesFor = (
 export class RecipeCostingService {
   constructor(
     private db: Database,
-    private usdaClient: USDAClient,
+    private usdaClient: UsdaFoodBatchPort,
   ) {}
 
   private async loadContext(recipes: RecipeCostingInput[]): Promise<{

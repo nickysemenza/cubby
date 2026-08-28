@@ -40,9 +40,9 @@ export const recipeTotalsFields = {
 
 export const recipeTotals = z.object(recipeTotalsFields);
 export type RecipeTotals = z.infer<typeof recipeTotals>;
-export const recipeTotalsFieldNames = Object.keys(
-  recipeTotalsFields,
-) as (keyof RecipeTotals)[];
+export const recipeTotalsFieldNames = Object.keys(recipeTotalsFields).filter(
+  (key): key is keyof RecipeTotals => key in recipeTotalsFields,
+);
 
 // The cost/calorie head of recipeTotals — the subset meal scaling carries. One
 // source so the meal schemas can't drift from recipeTotals' field names or the

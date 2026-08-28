@@ -3,7 +3,7 @@ import {
   entityKernelContextSchema,
 } from "~/server/entity-kernel";
 
-type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
+import type { ToolExtra } from "./tools/tool-registration";
 
 /** The MCP request's explicit entity-kernel capability; workflow tools use caller instead. */
 export function getEntityKernelContext(extra: ToolExtra): EntityKernelContext {

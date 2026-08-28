@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { invalidateOperationTags } from "./operation-cache";
-import { defineOperationDomain, mutation, query } from "./operation-catalog";
+import {
+  defineOperationDomain,
+  isOperationQueryKey,
+  mutation,
+  query,
+} from "./operation-catalog";
 
 const calendar = defineOperationDomain("calendar", {
   range: query({
@@ -21,6 +26,22 @@ const calendar = defineOperationDomain("calendar", {
 });
 
 describe("operation catalog", () => {
+  it("recognizes only complete registered finite operation keys", () => {
+    expect(
+      isOperationQueryKey(calendar.range.queryKey({ start: "2026-08-25" })),
+    ).toBe(true);
+    expect(
+      isOperationQueryKey([
+        "operation",
+        "not.registered",
+        { input: { start: "2026-08-25" } },
+      ]),
+    ).toBe(false);
+    expect(
+      isOperationQueryKey(["operation", "calendar.range", { entity: 4 }]),
+    ).toBe(false);
+  });
+
   it("derives stable finite and infinite keys with entity specialization", () => {
     expect(calendar.range.queryKey({ start: "2026-08-25" })).toEqual([
       "operation",
@@ -46,6 +67,8 @@ describe("operation catalog", () => {
       entityDetail.infiniteQueryOptions(
         { entity: "product", id: "P1" },
         {
+          initialPageParam: 0,
+          pageParamSchema: z.number().int().nonnegative(),
           page: (input, page) => ({ ...input, id: `${input.id}-${page}` }),
           getNextPageParam: () => undefined,
         },

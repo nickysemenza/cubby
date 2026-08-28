@@ -1,5 +1,9 @@
 "use client";
 
+import type { MouseEvent, TouchEvent } from "react";
+
+type ResizeStartEvent = MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>;
+
 /**
  * Thin adapter around v9's native mouse/touch resize handler. With
  * `columnResizeMode: "onEnd"`, the table commits once at gesture end and the
@@ -14,7 +18,7 @@ export function ColumnResizeHandle({
    * method itself. v9's header method reads `this`, so passing the bare
    * prototype function loses the header instance before a resize can begin.
    */
-  onResizeStart: (event: unknown) => void;
+  onResizeStart: (event: ResizeStartEvent) => void;
   onReset: () => void;
 }) {
   return (

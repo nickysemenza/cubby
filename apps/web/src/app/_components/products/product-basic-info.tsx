@@ -1,7 +1,10 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import type { ImageOut } from "@cubby/schemas/image";
 import { isbnFromGtin } from "@cubby/schemas/isbn";
-import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import {
+  productCategory,
+  type ProductWithFoodOut,
+} from "@cubby/schemas/product";
 import {
   collectionSlugFromTag,
   formatCollectionLabel,
@@ -9,7 +12,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -51,12 +54,16 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   documents = NO_DOCUMENTS,
   onManualLink,
 }) => {
+  const category = productCategory
+    .nullable()
+    .catch(null)
+    .parse(product.category);
   const primaryIsbn = product.primaryGtin
     ? isbnFromGtin(product.primaryGtin)
     : null;
 
   // Mutation for inline editing (price, category, etc.)
-  const updateProductMutation = useActionMutation({
+  const updateProductMutation = useEntityActionMutation({
     entity: "product",
     operation: "update",
     intent: "full",
@@ -131,7 +138,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       label: "Category",
       value: (
         <EditableCell
-          value={product.category}
+          value={category}
           onSave={async (newCategory) => {
             await updateProductMutation.mutateAsync({
               id: product.id,
@@ -146,11 +153,11 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           renderValue={(cat) => <CategoryLabel category={cat} />}
         />
       ),
-      filterAction: product.category ? (
+      filterAction: category ? (
         <EntityFilterLink
           to="/products"
-          search={{ view: "table", category: product.category }}
-          label={`Show all products in ${product.category}`}
+          search={{ view: "table", category }}
+          label={`Show all products in ${category}`}
         />
       ) : undefined,
     },

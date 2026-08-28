@@ -51,7 +51,7 @@ export function useIsometricPantry() {
   const inventoryQuery = useAllInventoryItems();
 
   const inventory = useMemo(() => {
-    return inventoryQuery.items as unknown as InventoryData[];
+    return inventoryQuery.items satisfies InventoryData[];
   }, [inventoryQuery.items]);
 
   const rooms = useMemo(() => {

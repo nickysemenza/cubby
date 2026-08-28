@@ -1,5 +1,6 @@
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
+import { z } from "zod";
 
 export type FilterKind =
   | "text" // substring match
@@ -11,6 +12,30 @@ export type FilterKind =
   | "idMulti" // any-of a set of branded entity ids
   | "range"; // preset key expanding to a {from,to} pair
 
+/** Scalar values accepted by the server-side filter contracts. */
+type FilterScalar = string | number | boolean;
+
+/** Values written into a named server filter patch. */
+type FilterOutputValue = FilterScalar | string[] | null | undefined;
+
+/** The open field set shared by generated entity filter schemas. */
+export type FilterPatch = Partial<Record<string, FilterOutputValue>>;
+
+/** URL search values after the router's ingress parser has accepted them. */
+export type FilterSearch = Readonly<Record<string, string | undefined>>;
+
+const filterSearchValueSchema = z.string().optional();
+
+/** Parse router search state into the string-valued filter representation. */
+const parseFilterSearch = <TSearch extends {}>(input: TSearch) => {
+  const parsed: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const result = filterSearchValueSchema.safeParse(value);
+    if (result.success) parsed[key] = result.data;
+  }
+  return parsed satisfies FilterSearch;
+};
+
 export interface FilterSpecCore {
   columnId: string;
   field?: string;
@@ -20,8 +45,8 @@ export interface FilterSpecCore {
    */
   urlKey?: string;
   kind: FilterKind;
-  brand?: (value: string) => unknown;
-  expand?: (value: string) => Record<string, unknown>;
+  brand?: (value: string) => string;
+  expand?: (value: string) => FilterPatch;
   /**
    * No table column renders this spec — it's URL state only: a deep link's
    * scope (expenses' `?productId=` and `?order=`), surfaced as a `ScopeChip`
@@ -99,6 +124,14 @@ const many = (value: FilterValue): string[] | undefined => {
   return values.length ? values : undefined;
 };
 
+const parseFilterValue = <TValue>(value: TValue): FilterValue => {
+  const parsed = z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+};
+
 /**
  * Column-filter state → the server's `*Filters` object.
  *
@@ -110,9 +143,9 @@ const many = (value: FilterValue): string[] | undefined => {
 export function buildFiltersFromManifest(
   specs: readonly FilterSpecCore[],
   get: (columnId: string) => FilterValue,
-): Record<string, unknown> {
-  const filters: Record<string, unknown> = {};
-  const brand = (spec: FilterSpecCore, value: string) => {
+) {
+  const filters: FilterPatch = {};
+  const brand = (spec: FilterSpecCore, value: string): string | undefined => {
     try {
       return spec.brand?.(value) ?? value;
     } catch {
@@ -168,13 +201,11 @@ export function buildFiltersFromManifest(
         // constraint at all. Degenerate, but the control permits it.
         if (wantsNone && wantsAny) return undefined;
         const presence = wantsNone ? "none" : wantsAny ? "has" : undefined;
-        return {
-          ...(() => {
-            const parsed = brandAll(rest);
-            return parsed.length ? { [field]: parsed } : {};
-          })(),
-          ...(presence ? { [nullable.field]: presence } : {}),
-        };
+        const patch: FilterPatch = {};
+        const parsed = brandAll(rest);
+        if (parsed.length) patch[field] = parsed;
+        if (presence) patch[nullable.field] = presence;
+        return Object.keys(patch).length ? patch : undefined;
       })
       .with("range", () =>
         // A range preset owns several server fields at once (dateFrom+dateTo),
@@ -200,12 +231,12 @@ export function buildFiltersFromManifest(
  * Sentinels mirror `eqAnyOrPresence` server-side, including its OR rule:
  * `["projA", FILTER_NONE]` is "project A *or* unassigned", not a contradiction.
  */
-function matchesMultiSelect(
+function matchesMultiSelect<TFilterValue>(
   value: string | null | undefined,
-  filterValue: unknown,
+  filterValue: TFilterValue,
 ): boolean {
-  if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
-  const selected = filterValue as string[];
+  const selected = parseFilterValue(filterValue);
+  if (!Array.isArray(selected) || selected.length === 0) return true;
   // "" counts as absent: clearing an inline text edit writes an empty string,
   // and the `(none)` option has to find those rows too.
   const isEmpty = value == null || value === "";
@@ -229,11 +260,13 @@ function matchesMultiSelect(
  * claims that slot for `addMeta`.
  */
 export const multiSelectFilterFnBy =
-  (read: (value: unknown) => string | null | undefined) =>
+  <TCellValue, TFilterValue>(
+    read: (value: TCellValue) => string | null | undefined,
+  ) =>
   (
-    row: { getValue: (id: string) => unknown },
+    row: { getValue: (id: string) => TCellValue },
     columnId: string,
-    filterValue: unknown,
+    filterValue: TFilterValue,
   ): boolean =>
     matchesMultiSelect(read(row.getValue(columnId)), filterValue);
 
@@ -302,7 +335,7 @@ export const partitionFilterSpecs = (
 export function encodeFilters(
   specs: readonly FilterSpecCore[],
   get: (columnId: string) => FilterValue,
-): Record<string, string | undefined> {
+) {
   const params: Record<string, string | undefined> = {};
   for (const spec of specs) {
     const raw = get(spec.columnId);
@@ -317,24 +350,27 @@ export function encodeFilters(
 }
 
 /** Search params → column-filter state, shaped per each spec's `kind`. */
-export function decodeFilters(
+export function decodeFilters<TSearch extends {}>(
   specs: readonly FilterSpecCore[],
-  search: Record<string, unknown>,
+  search: TSearch,
 ): Array<{ id: string; value: string | string[] }> {
+  const parsedSearch = parseFilterSearch(search);
   const filters: Array<{ id: string; value: string | string[] }> = [];
   for (const spec of specs) {
-    const raw = search[spec.urlKey ?? spec.columnId];
-    if (typeof raw !== "string" || raw === "") continue;
+    const raw = parsedSearch[spec.urlKey ?? spec.columnId];
+    if (raw === undefined || raw === "") continue;
     const parts = raw
       .split(LIST_SEPARATOR)
       .map((part) => part.trim())
       .filter(Boolean);
     if (parts.length === 0) continue;
+    const first = parts[0];
+    if (first === undefined) continue;
     filters.push({
       id: spec.columnId,
       // A multi column always holds an array, even for one value — mixing the
       // two shapes is what splits the React Query cache.
-      value: isMultiFilterKind(spec.kind) ? parts : (parts[0] as string),
+      value: isMultiFilterKind(spec.kind) ? parts : first,
     });
   }
   return filters;
@@ -353,13 +389,18 @@ export function decodeFilters(
  * hand-rolled lookups that happen to match.
  */
 export const filterGetterFromColumnFilters =
-  (columnFilters: ReadonlyArray<{ id: string; value: unknown }>) =>
+  <TFilterValue>(
+    columnFilters: ReadonlyArray<{ id: string; value: TFilterValue }>,
+  ) =>
   (columnId: string): FilterValue =>
-    columnFilters.find((f) => f.id === columnId)?.value as FilterValue;
+    (() => {
+      const raw = columnFilters.find((f) => f.id === columnId)?.value;
+      return parseFilterValue(raw);
+    })();
 
-export function filterGetterFromSearch(
+export function filterGetterFromSearch<TSearch extends {}>(
   specs: readonly FilterSpecCore[],
-  search: Record<string, unknown>,
+  search: TSearch,
 ): (columnId: string) => FilterValue {
   const decoded = new Map(
     decodeFilters(specs, search).map((f) => [f.id, f.value]),
@@ -412,9 +453,10 @@ export function sortToParam(sorting: readonly SortTerm[]): string | undefined {
 }
 
 /** `name,-createdAt` (or legacy single `name`/`-name`) → sort terms. */
-export function paramToSort(value: unknown): SortTerm[] | undefined {
-  if (typeof value !== "string" || value.length === 0) return undefined;
-  const parsed = value
+export function paramToSort<TValue>(value: TValue): SortTerm[] | undefined {
+  const parsedValue = filterSearchValueSchema.safeParse(value).data;
+  if (parsedValue === undefined || parsedValue.length === 0) return undefined;
+  const parsed = parsedValue
     .split(LIST_SEPARATOR)
     .map((t) => t.trim())
     .filter(Boolean)
@@ -562,7 +604,7 @@ function describeFilter(
  */
 function summarizeFilters(
   specs: readonly SummarizableSpec[],
-  search: Record<string, unknown>,
+  search: FilterSearch,
 ): string[] {
   const byColumnId = new Map(specs.map((spec) => [spec.columnId, spec]));
   const segments: string[] = [];
@@ -581,7 +623,7 @@ function summarizeFilters(
 }
 
 /** `-price` → `↓price`; `name,-createdAt` → `↑name ↓createdAt`. */
-function summarizeSort(value: unknown): string | undefined {
+function summarizeSort(value: string | undefined): string | undefined {
   const terms = paramToSort(value);
   if (!terms) return undefined;
   return terms.map((term) => `${term.desc ? "↓" : "↑"}${term.id}`).join(" ");
@@ -592,12 +634,13 @@ function summarizeSort(value: unknown): string | undefined {
  * sort. Empty when the page is unnarrowed and unsorted, which is what makes the
  * caller's title collapse back to a bare `Products | cubby`.
  */
-export function summarizeListState(
+export function summarizeListState<TSearch extends {}>(
   specs: readonly SummarizableSpec[],
-  search: Record<string, unknown>,
+  search: TSearch,
 ): string | undefined {
-  const filters = summarizeFilters(specs, search);
-  const sort = summarizeSort(search.sort);
+  const parsedSearch = parseFilterSearch(search);
+  const filters = summarizeFilters(specs, parsedSearch);
+  const sort = summarizeSort(parsedSearch.sort);
   const summary = [collapse(filters, MAX_SEGMENTS), sort]
     .filter(Boolean)
     .join(" ");

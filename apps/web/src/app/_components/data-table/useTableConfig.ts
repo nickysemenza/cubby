@@ -7,7 +7,8 @@ import type {
 import { useMemo, useState } from "react";
 
 import {
-  type CubbyColumnDef,
+  materializeCubbyColumns,
+  type CubbyColumnCollection,
   type CubbyRow,
   type CubbyTable,
   cubbyStructuralTableStateSelector,
@@ -19,11 +20,7 @@ import type { TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData extends RowData> {
   data: TData[];
-  // Note: ColumnDef is invariant in TValue; columns often mix TValue types across accessors.
-  // Using `any` here intentionally erases TValue to allow heterogeneous columns while keeping TData strict.
-  // This mirrors TanStack's guidance for consumer-facing helpers that don't operate on TValue.
-  // oxlint-disable-next-line typescript/no-explicit-any -- intentional
-  columns: CubbyColumnDef<TData, any>[];
+  columns: CubbyColumnCollection<TData>;
   tableState: TableStateReturn;
   totalCount: number;
   manualPagination?: boolean;
@@ -125,17 +122,42 @@ export function useTableConfig<TData extends RowData>({
   const columnVisibility = controlledVisibility ?? internalVisibility;
   const setColumnVisibility =
     controlledOnVisibilityChange ?? setInternalVisibility;
-  const tableColumns = layout?.columns ?? columns;
+  const tableColumns = layout?.columns ?? materializeCubbyColumns(columns);
 
   // Memoize table options to prevent recreating on every render
-  const tableOptions = useMemo(
-    () => ({
+  const tableOptions = useMemo(() => {
+    const meta = {
+      defaultLayout: layout?.defaultLayout,
+      scrollRestorationId: layout?.key,
+    };
+    if (serverTotals) {
+      Object.assign(meta, { serverTotals });
+    }
+    if (urlScopeCount > 0) {
+      Object.assign(meta, { urlScopeCount });
+    }
+    if (rowContentVersion !== undefined) {
+      Object.assign(meta, { rowContentVersion });
+    }
+
+    const state = {
+      sorting,
+      columnFilters,
+      pagination,
+    };
+    if (!layout) {
+      Object.assign(state, { columnVisibility });
+    }
+    if (rowSelection) {
+      Object.assign(state, { rowSelection });
+    }
+
+    const options = {
       data,
       columns: tableColumns,
       onPaginationChange: setPagination,
       onSortingChange: setSorting,
       onColumnFiltersChange: setColumnFilters,
-      ...(!layout ? { onColumnVisibilityChange: setColumnVisibility } : {}),
       manualSorting,
       manualFiltering,
       manualPagination,
@@ -147,67 +169,80 @@ export function useTableConfig<TData extends RowData>({
       maxMultiSortColCount: 3,
       enableSortingRemoval: true,
       sortDescFirst: false,
-      ...(enableSorting !== undefined ? { enableSorting } : {}),
       rowCount: totalCount,
-      meta: {
-        ...(serverTotals ? { serverTotals } : {}),
-        ...(urlScopeCount > 0 ? { urlScopeCount } : {}),
-        ...(rowContentVersion !== undefined ? { rowContentVersion } : {}),
-        defaultLayout: layout?.defaultLayout,
-        scrollRestorationId: layout?.key,
-      },
-      ...(getRowId ? { getRowId } : {}),
-      ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
-      ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
+      meta,
       enableRowRangeSelection: true,
       autoResetCellSelection: false,
       enableMultiCellRangeSelection: false,
-      ...(getSubRows ? { getSubRows } : {}),
-      ...(filterFromLeafRows !== undefined ? { filterFromLeafRows } : {}),
-      ...(paginateExpandedRows !== undefined ? { paginateExpandedRows } : {}),
-      ...(autoResetExpanded !== undefined ? { autoResetExpanded } : {}),
-      ...(layout ? { atoms: layout.atoms } : {}),
-      state: {
-        sorting,
-        columnFilters,
-        ...(!layout ? { columnVisibility } : {}),
-        pagination,
-        ...(rowSelection ? { rowSelection } : {}),
-      },
-    }),
-    [
-      data,
-      tableColumns,
-      sorting,
-      setSorting,
-      columnFilters,
-      setColumnFilters,
-      columnVisibility,
-      setColumnVisibility,
-      layout,
-      pagination,
-      setPagination,
-      manualSorting,
-      manualFiltering,
-      manualPagination,
-      enableSorting,
-      totalCount,
-      serverTotals,
-      urlScopeCount,
-      rowContentVersion,
-      getRowId,
-      enableRowSelection,
-      rowSelection,
-      onRowSelectionChange,
-      getSubRows,
-      filterFromLeafRows,
-      paginateExpandedRows,
-      autoResetExpanded,
-    ],
-  );
+      state,
+    };
 
-  return useCubbyTable(
-    tableOptions,
-    cubbyStructuralTableStateSelector,
-  ) as unknown as CubbyTable<TData>;
+    if (!layout) {
+      Object.assign(options, {
+        onColumnVisibilityChange: setColumnVisibility,
+      });
+    }
+    if (enableSorting !== undefined) {
+      Object.assign(options, { enableSorting });
+    }
+    if (getRowId) {
+      Object.assign(options, { getRowId });
+    }
+    if (enableRowSelection !== undefined) {
+      Object.assign(options, { enableRowSelection });
+    }
+    if (onRowSelectionChange) {
+      Object.assign(options, { onRowSelectionChange });
+    }
+    if (getSubRows) {
+      Object.assign(options, { getSubRows });
+    }
+    if (filterFromLeafRows !== undefined) {
+      Object.assign(options, { filterFromLeafRows });
+    }
+    if (paginateExpandedRows !== undefined) {
+      Object.assign(options, { paginateExpandedRows });
+    }
+    if (autoResetExpanded !== undefined) {
+      Object.assign(options, { autoResetExpanded });
+    }
+    if (layout) {
+      Object.assign(options, { atoms: layout.atoms });
+    }
+
+    return options;
+  }, [
+    data,
+    tableColumns,
+    sorting,
+    setSorting,
+    columnFilters,
+    setColumnFilters,
+    columnVisibility,
+    setColumnVisibility,
+    layout,
+    pagination,
+    setPagination,
+    manualSorting,
+    manualFiltering,
+    manualPagination,
+    enableSorting,
+    totalCount,
+    serverTotals,
+    urlScopeCount,
+    rowContentVersion,
+    getRowId,
+    enableRowSelection,
+    rowSelection,
+    onRowSelectionChange,
+    getSubRows,
+    filterFromLeafRows,
+    paginateExpandedRows,
+    autoResetExpanded,
+  ]);
+
+  return useCubbyTable<
+    TData,
+    ReturnType<typeof cubbyStructuralTableStateSelector>
+  >(tableOptions, cubbyStructuralTableStateSelector);
 }

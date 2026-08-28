@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import {
   createEdgeUsdaDataSource,
@@ -9,7 +10,37 @@ import {
   matchQualityCase,
   normalizeUpc,
 } from "./edge";
-import type { EdgeBindings } from "./cloudflare-types";
+import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types";
+
+type TestD1Row = Record<string, string | number | null>;
+type TestD1Result = { success: boolean; results: TestD1Row[] };
+type TestD1Value = { value: string } | { count: number } | null;
+type TestPreparedStatement = {
+  query?: string;
+  bind(...values: unknown[]): TestPreparedStatement;
+  first(): Promise<TestD1Value>;
+  all(): Promise<TestD1Result>;
+  run(): Promise<TestD1Result>;
+};
+type TestDatabase = {
+  prepare(query: string): TestPreparedStatement;
+  batch(statements: TestPreparedStatement[]): Promise<TestD1Result[]>;
+};
+type TestR2Object = { text(): Promise<string> };
+type TestR2Options = { range?: { offset: number; length: number } };
+type TestBucket = {
+  get(key: string, options?: TestR2Options): Promise<TestR2Object | null>;
+};
+
+function toEdgeBindings(db: TestDatabase, bucket: TestBucket): EdgeBindings {
+  return fromPartial<EdgeBindings>({ DB: db, USDA_BUNDLES: bucket });
+}
+
+function requiredBinding(bindings: string[], index: number): string {
+  const value = bindings[index];
+  if (value === undefined) throw new Error(`missing binding at index ${index}`);
+  return value;
+}
 
 describe("normalizeUpc", () => {
   it("left-pads leading-zero-stripped UPCs to 12 digits", () => {
@@ -140,7 +171,10 @@ describe("matchQualityCase", () => {
     // The bug this exists for: FTS matches `butter*`, so "Butterbur" (a Japanese
     // vegetable) tied with real butters on the prefix tier and then won on
     // description length — outranking "Butter, whipped, with salt" and ghee.
-    const [, wordSpace, wordComma, prefix] = matchQualityBindings("butter");
+    const bindings = matchQualityBindings("butter");
+    const wordSpace = requiredBinding(bindings, 1);
+    const wordComma = requiredBinding(bindings, 2);
+    const prefix = requiredBinding(bindings, 3);
     const like = (pattern: string, value: string) => {
       const re = new RegExp(
         `^${pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/%/g, ".*")}$`,
@@ -148,8 +182,7 @@ describe("matchQualityCase", () => {
       );
       return re.test(value);
     };
-    const isWord = (d: string) =>
-      like(wordSpace as string, d) || like(wordComma as string, d);
+    const isWord = (d: string) => like(wordSpace, d) || like(wordComma, d);
 
     expect(isWord("Butter, salted")).toBe(true);
     expect(isWord("Butter oil, anhydrous")).toBe(true);
@@ -157,7 +190,7 @@ describe("matchQualityCase", () => {
     expect(isWord("Butterbur, canned")).toBe(false);
     expect(isWord("Butterbur, (fuki), raw")).toBe(false);
     // Butterbur still matches the looser prefix tier, so it is ranked, not lost.
-    expect(like(prefix as string, "Butterbur, canned")).toBe(true);
+    expect(like(prefix, "Butterbur, canned")).toBe(true);
   });
 });
 
@@ -173,15 +206,18 @@ function makeEnv(bindCounts: number[]): EdgeBindings {
           }
           return statement;
         },
-        async first<T>() {
+        async first() {
           if (query.includes("usda_edge_meta")) {
-            return { value: "vtest" } as T;
+            return { value: "vtest" };
           }
           return null;
         },
-        async all<T>() {
+        async all() {
           expect(boundValues.length).toBeLessThanOrEqual(100);
-          return { success: true, results: [] as T[] };
+          return { success: true, results: [] };
+        },
+        async run() {
+          return { success: true, results: [] };
         },
       };
       return statement;
@@ -189,15 +225,12 @@ function makeEnv(bindCounts: number[]): EdgeBindings {
     // The index-lookup phase now issues one D1 batch() for all chunk
     // statements; route each through its own `all()` so the per-chunk bound
     // parameter assertion still runs.
-    async batch<T>(statements: Array<{ all(): Promise<T> }>) {
+    async batch(statements: TestPreparedStatement[]) {
       return Promise.all(statements.map((s) => s.all()));
     },
   };
 
-  return {
-    DB: db as unknown as EdgeBindings["DB"],
-    USDA_BUNDLES: { get: vi.fn() } as unknown as EdgeBindings["USDA_BUNDLES"],
-  };
+  return toEdgeBindings(db, { get: async () => null });
 }
 
 function validFoodText(fdcId: number): string {
@@ -254,35 +287,29 @@ function makeBatchHydrationEnv({
         bind() {
           return statement;
         },
-        async first<T>() {
+        async first() {
           if (query.includes("usda_edge_meta")) {
-            return { value: "vtest" } as T;
+            return { value: "vtest" };
           }
           return null;
         },
-        async all<T>() {
+        async all() {
           if (query.includes("food_cache")) {
             if (foodCacheReadError) throw foodCacheReadError;
-            return { success: true, results: cachedRows as T[] };
+            return { success: true, results: cachedRows };
           }
           if (query.includes("WHERE fdc_id IN")) {
-            return { success: true, results: [row] as T[] };
+            return { success: true, results: [row] };
           }
-          return { success: true, results: [] as T[] };
+          return { success: true, results: [] };
         },
         async run() {
-          return { success: true };
+          return { success: true, results: [] };
         },
       };
       return statement;
     },
-    async batch<T>(
-      statements: Array<{
-        query?: string;
-        all(): Promise<T>;
-        run(): Promise<T>;
-      }>,
-    ) {
+    async batch(statements: TestPreparedStatement[]) {
       if (
         statements.some((statement) =>
           statement.query?.includes("INSERT OR IGNORE INTO food_cache"),
@@ -296,10 +323,7 @@ function makeBatchHydrationEnv({
   };
 
   return {
-    env: {
-      DB: db as unknown as EdgeBindings["DB"],
-      USDA_BUNDLES: { get: r2Get } as unknown as EdgeBindings["USDA_BUNDLES"],
-    },
+    env: toEdgeBindings(db, { get: r2Get }),
     r2Get,
   };
 }
@@ -319,26 +343,29 @@ function makeListHydrationEnv({
         bind() {
           return statement;
         },
-        async first<T>() {
+        async first() {
           if (query.includes("usda_edge_meta")) {
-            return { value: "vtest" } as T;
+            return { value: "vtest" };
           }
-          if (query.includes("count(*)")) return { count: 1 } as T;
+          if (query.includes("count(*)")) return { count: 1 };
           return null;
         },
-        async all<T>() {
-          return { success: true, results: [row] as T[] };
+        async all() {
+          return { success: true, results: [row] };
+        },
+        async run() {
+          return { success: true, results: [] };
         },
       };
       return statement;
     },
+    async batch(statements: TestPreparedStatement[]) {
+      return Promise.all(statements.map((statement) => statement.all()));
+    },
   };
 
   return {
-    env: {
-      DB: db as unknown as EdgeBindings["DB"],
-      USDA_BUNDLES: { get: r2Get } as unknown as EdgeBindings["USDA_BUNDLES"],
-    },
+    env: toEdgeBindings(db, { get: r2Get }),
     r2Get,
   };
 }
@@ -392,30 +419,33 @@ describe("createEdgeUsdaDataSource", () => {
       byte_offset: 0,
       byte_length: badFood.length,
     };
-    const env = {
-      DB: {
+    const env = toEdgeBindings(
+      {
         prepare(query: string) {
           const stmt = {
             bind() {
               return stmt;
             },
-            async first<T>() {
-              if (query.includes("usda_edge_meta"))
-                return { value: "vtest" } as T;
-              if (query.includes("count(")) return { count: 1 } as T;
+            async first() {
+              if (query.includes("usda_edge_meta")) return { value: "vtest" };
+              if (query.includes("count(")) return { count: 1 };
               return null;
             },
-            async all<T>() {
-              return { success: true, results: [row] as T[] };
+            async all() {
+              return { success: true, results: [row] };
+            },
+            async run() {
+              return { success: true, results: [] };
             },
           };
           return stmt;
         },
+        async batch(statements: TestPreparedStatement[]) {
+          return Promise.all(statements.map((statement) => statement.all()));
+        },
       },
-      USDA_BUNDLES: {
-        get: async () => ({ text: async () => badFood }),
-      },
-    } as unknown as EdgeBindings;
+      { get: async () => ({ text: async () => badFood }) },
+    );
 
     const dataSource = createEdgeUsdaDataSource(env);
     // listFoods receives the PARSED query (defaults applied), so orderBy/
@@ -493,20 +523,18 @@ describe("createEdgeUsdaDataSource", () => {
 
   it("treats bundle Cache API read and write failures as R2 misses", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.stubGlobal("caches", {
-      default: {
-        match: async () => {
-          throw new Error("cache read failed");
-        },
-        put: async () => {
-          throw new Error("cache write failed");
-        },
+    const cache: EdgeCachePort = {
+      match: async () => {
+        throw new Error("cache read failed");
       },
-    });
+      put: async () => {
+        throw new Error("cache write failed");
+      },
+    };
 
     try {
       const { env, r2Get } = makeListHydrationEnv({ fdcId: 5 });
-      const dataSource = createEdgeUsdaDataSource(env);
+      const dataSource = createEdgeUsdaDataSource(env, { cache });
 
       const result = await dataSource.listFoods({
         pageIndex: 0,
@@ -519,7 +547,6 @@ describe("createEdgeUsdaDataSource", () => {
       expect(result.count).toBe(1);
       expect(r2Get).toHaveBeenCalledTimes(1);
     } finally {
-      vi.unstubAllGlobals();
       warn.mockRestore();
     }
   });
@@ -527,16 +554,14 @@ describe("createEdgeUsdaDataSource", () => {
   it("falls back to R2 when a cached bundle payload is unparseable", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const bundleText = validFoodText(6);
-    vi.stubGlobal("caches", {
-      default: {
-        match: async () => new Response("not json"),
-        put: vi.fn(),
-      },
-    });
+    const cache: EdgeCachePort = {
+      match: async () => new Response("not json"),
+      put: vi.fn(),
+    };
 
     try {
       const { env, r2Get } = makeListHydrationEnv({ fdcId: 6, bundleText });
-      const dataSource = createEdgeUsdaDataSource(env);
+      const dataSource = createEdgeUsdaDataSource(env, { cache });
 
       const result = await dataSource.listFoods({
         pageIndex: 0,
@@ -549,7 +574,6 @@ describe("createEdgeUsdaDataSource", () => {
       expect(result.count).toBe(1);
       expect(r2Get).toHaveBeenCalledTimes(1);
     } finally {
-      vi.unstubAllGlobals();
       warn.mockRestore();
     }
   });
@@ -567,49 +591,50 @@ describe("createEdgeUsdaDataSource", () => {
     const manifestText = JSON.stringify({ counts });
     let r2Reads = 0;
     const store = new Map<string, Response>();
-    // Minimal colo Cache API stand-in (absent under Node by default).
-    vi.stubGlobal("caches", {
-      default: {
-        match: async (req: Request) => store.get(req.url),
-        put: async (req: Request, res: Response) => {
-          store.set(req.url, res);
+    const cache: EdgeCachePort = {
+      match: async (req) => store.get(req.url),
+      put: async (req, res) => {
+        store.set(req.url, res);
+      },
+    };
+
+    const env = toEdgeBindings(
+      {
+        prepare(query: string) {
+          const stmt = {
+            bind() {
+              return stmt;
+            },
+            async first() {
+              if (query.includes("usda_edge_meta")) return { value: "vtest" };
+              return null;
+            },
+            async all() {
+              return { success: true, results: [] };
+            },
+            async run() {
+              return { success: true, results: [] };
+            },
+          };
+          return stmt;
+        },
+        async batch(statements: TestPreparedStatement[]) {
+          return Promise.all(statements.map((statement) => statement.all()));
         },
       },
-    });
-
-    try {
-      const env = {
-        DB: {
-          prepare(query: string) {
-            const stmt = {
-              bind() {
-                return stmt;
-              },
-              async first<T>() {
-                if (query.includes("usda_edge_meta"))
-                  return { value: "vtest" } as T;
-                return null;
-              },
-            };
-            return stmt;
-          },
+      {
+        get: async () => {
+          r2Reads += 1;
+          return { text: async () => manifestText };
         },
-        USDA_BUNDLES: {
-          get: async () => {
-            r2Reads += 1;
-            return { text: async () => manifestText };
-          },
-        },
-      } as unknown as EdgeBindings;
+      },
+    );
 
-      const dataSource = createEdgeUsdaDataSource(env);
-      expect(await dataSource.getCounts()).toEqual(counts);
-      expect(r2Reads).toBe(1); // miss → one R2 read
-      expect(await dataSource.getCounts()).toEqual(counts);
-      expect(r2Reads).toBe(1); // hit → served from cache, no second R2 read
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const dataSource = createEdgeUsdaDataSource(env, { cache });
+    expect(await dataSource.getCounts()).toEqual(counts);
+    expect(r2Reads).toBe(1); // miss → one R2 read
+    expect(await dataSource.getCounts()).toEqual(counts);
+    expect(r2Reads).toBe(1); // hit → served from cache, no second R2 read
   });
 });
 
@@ -623,7 +648,9 @@ describe("createEdgeUsdaDataSource", () => {
  * prevented is someone reading `fdc_id DESC` as a typo and "fixing" it, which a
  * shape assertion catches and a mocked result set never would.
  */
-function makeQueryRecordingEnv(): { env: EdgeBindings; queries: string[] } {
+type QueryRecordingEnvironment = { env: EdgeBindings; queries: string[] };
+
+function makeQueryRecordingEnv(): QueryRecordingEnvironment {
   const queries: string[] = [];
   const db = {
     prepare(query: string) {
@@ -632,26 +659,26 @@ function makeQueryRecordingEnv(): { env: EdgeBindings; queries: string[] } {
         bind() {
           return statement;
         },
-        async first<T>() {
-          if (query.includes("usda_edge_meta")) return { value: "vtest" } as T;
-          if (query.includes("count(*)")) return { count: 0 } as T;
+        async first() {
+          if (query.includes("usda_edge_meta")) return { value: "vtest" };
+          if (query.includes("count(*)")) return { count: 0 };
           return null;
         },
-        async all<T>() {
-          return { success: true, results: [] as T[] };
+        async all() {
+          return { success: true, results: [] };
+        },
+        async run() {
+          return { success: true, results: [] };
         },
       };
       return statement;
     },
-    async batch<T>(statements: Array<{ all(): Promise<T> }>) {
+    async batch(statements: TestPreparedStatement[]) {
       return Promise.all(statements.map((s) => s.all()));
     },
   };
   return {
-    env: {
-      DB: db as unknown as EdgeBindings["DB"],
-      USDA_BUNDLES: { get: vi.fn() } as unknown as EdgeBindings["USDA_BUNDLES"],
-    },
+    env: toEdgeBindings(db, { get: async () => null }),
     queries,
   };
 }

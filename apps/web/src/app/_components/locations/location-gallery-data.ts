@@ -6,7 +6,7 @@ import { uniq } from "es-toolkit";
 
 const NO_INVENTORY_ITEMS: InventoryItemForTree[] = [];
 
-export type LocationInventoryIndex = Map<string, InventoryItemForTree[]>;
+type LocationInventoryIndex = Map<string, InventoryItemForTree[]>;
 
 /**
  * Every distinct product referenced anywhere in a `location.makeTree` forest —
@@ -36,10 +36,7 @@ export function collectTreeProductIds(locations: InfLocation[]): string[] {
  * the minimal product projection the gallery needs, so this keeps the default
  * Locations page independent of the paginated `inventory.list` endpoint.
  */
-export function buildLocationGalleryData(locations: InfLocation[]): {
-  inventoryByLocation: LocationInventoryIndex;
-  productIds: string[];
-} {
+export function buildLocationGalleryData(locations: InfLocation[]) {
   const inventoryByLocation: LocationInventoryIndex = new Map();
 
   const visit = (nodes: InfLocation[]) => {

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   buildFiltersFromManifest,
   FILTER_ANY,
   FILTER_NONE,
   type FilterSpecCore,
+  type FilterSearch,
   type FilterValue,
   isMultiFilterKind,
   multiSelectFilterFn,
@@ -193,7 +195,7 @@ describe("buildFiltersFromManifest", () => {
             kind: "idMulti",
             // A brand that would visibly mangle a sentinel if it slipped
             // through unpartitioned.
-            brand: (v) => ({ branded: v }),
+            brand: (v) => `branded:${v}`,
             nullable: { field: "projectPresence", label: "Project" },
           },
         ];
@@ -203,7 +205,7 @@ describe("buildFiltersFromManifest", () => {
             getter({ project: ["p1", FILTER_NONE] }),
           ),
         ).toEqual({
-          projectId: [{ branded: "p1" }],
+          projectId: ["branded:p1"],
           projectPresence: "none",
         });
       });
@@ -284,11 +286,20 @@ describe("nullableSentinelOptions", () => {
 });
 
 describe("multiSelectFilterFn", () => {
-  const row = (value: unknown) => ({ getValue: () => value });
+  type EntityReference = {
+    id?: string | null;
+    name?: string | null;
+  };
+  type TestCellValue = string | null | undefined | EntityReference;
+  const entityReferenceSchema = z.object({
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+  });
+  const row = (value: TestCellValue) => ({ getValue: () => value });
   const run = (
-    value: unknown,
-    filterValue: unknown,
-    read?: (v: unknown) => string | null | undefined,
+    value: TestCellValue,
+    filterValue: FilterValue,
+    read?: (v: TestCellValue) => string | null | undefined,
   ) =>
     (read ? multiSelectFilterFnBy(read) : multiSelectFilterFn)(
       row(value),
@@ -335,8 +346,10 @@ describe("multiSelectFilterFn", () => {
     // The regression: an entity-ref accessor ({id,name}) stringifies to
     // "[object Object]", so the roster matched nothing and (none) never found
     // an unassigned row on the embedded project-detail tables.
-    const byId = (v: unknown) =>
-      (v as { id?: string | null } | null)?.id ?? null;
+    const byId = (value: TestCellValue) => {
+      const parsed = entityReferenceSchema.safeParse(value);
+      return parsed.success ? (parsed.data.id ?? null) : null;
+    };
     expect(run({ id: "p1", name: "Kitchen" }, ["p1"], byId)).toBe(true);
     expect(run({ id: "p2", name: "Bath" }, ["p1"], byId)).toBe(false);
     expect(run({ id: null, name: null }, [FILTER_NONE], byId)).toBe(true);
@@ -395,8 +408,7 @@ describe("summarizeListState", () => {
     { columnId: "notes", urlKey: "q", kind: "text" },
   ];
 
-  const summarize = (search: Record<string, unknown>) =>
-    summarizeListState(specs, search);
+  const summarize = (search: FilterSearch) => summarizeListState(specs, search);
 
   it("is undefined when nothing is filtered or sorted", () => {
     expect(summarize({})).toBeUndefined();

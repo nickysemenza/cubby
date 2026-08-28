@@ -26,13 +26,13 @@ function householdCalendarDate(plainDate: string) {
 }
 
 /** Weeks a period covers when it is week-aligned; month is not. */
-const WEEK_ALIGNED_SPAN: Partial<Record<CalendarPeriod, number>> = {
-  week: 1,
-  fortnight: 2,
-};
+const WEEK_ALIGNED_SPAN = new Map<CalendarPeriod, number>([
+  ["week", 1],
+  ["fortnight", 2],
+]);
 
 function getCalendarPeriodRange(anchor: Date, period: CalendarPeriod) {
-  const weeks = WEEK_ALIGNED_SPAN[period];
+  const weeks = WEEK_ALIGNED_SPAN.get(period);
   const activeStart = weeks
     ? startOfWeek(anchor, { weekStartsOn: 0 })
     : startOfMonth(anchor);
@@ -57,7 +57,7 @@ function shiftCalendarPeriod(
   period: CalendarPeriod,
   direction: -1 | 1,
 ) {
-  const weeks = WEEK_ALIGNED_SPAN[period];
+  const weeks = WEEK_ALIGNED_SPAN.get(period);
   return weeks
     ? addWeeks(anchor, direction * weeks)
     : addMonths(anchor, direction);

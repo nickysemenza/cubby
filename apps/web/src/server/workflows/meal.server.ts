@@ -161,10 +161,7 @@ export const getShoppingListWorkflow = async (
     meals: cookedMeals.map((m) => ({ id: m.id, name: m.name, date: m.date })),
     omittedMeals,
     items,
-    estimatedTotal: sumBy(
-      items as Array<{ estimatedCost: number | null }>,
-      (i) => i.estimatedCost ?? 0,
-    ),
+    estimatedTotal: sumBy(items, (i) => i.estimatedCost ?? 0),
     pricedItems: items.filter((i) => i.estimatedCost != null).length,
     unexpanded: unexpanded.flatMap((b: BlockedSubRecipe) => {
       const meta = lineMeta[b.lineIndex];

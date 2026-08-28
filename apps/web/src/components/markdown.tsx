@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { z } from "zod";
 
 import { selfLinkLabel } from "~/lib/link-label";
 import { cn } from "~/lib/utils";
@@ -60,10 +61,8 @@ const components = {
     // A link whose visible text is just its own URL (the Notion import left
     // these in project notes) renders as a wall of raw URL; show a short
     // host+path label instead, keeping the full URL on hover.
-    const label =
-      typeof children === "string" && href
-        ? selfLinkLabel(href, children)
-        : null;
+    const text = z.string().safeParse(children);
+    const label = text.success && href ? selfLinkLabel(href, text.data) : null;
     return (
       <a
         className={markdownAnchorClass}

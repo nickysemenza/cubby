@@ -3,7 +3,6 @@ import type {
   WAmount,
   WAvailabilityInput,
   WAvailabilityResult,
-  WAvailabilityStatus,
   WCostingInput,
   WCostingRow,
   WIngredientUsage,
@@ -28,8 +27,8 @@ import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   getNutrientUnitString,
-  type NutrientKey,
   type NutrientsPer100,
+  TIER1_NUTRIENT_KEYS,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 import { err, ok } from "neverthrow";
@@ -157,11 +156,9 @@ export const availabilityStatusFor = (
   haveValue: number | null,
   prior: IngredientAvailabilityStatus,
 ): IngredientAvailabilityStatus =>
-  wasm.availability_status_for(
-    needValue,
-    haveValue,
-    prior as WAvailabilityStatus,
-  ) as IngredientAvailabilityStatus;
+  prior === "subrecipe"
+    ? prior
+    : wasm.availability_status_for(needValue, haveValue, prior);
 
 /** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
 type IngredientPriceInfo = {
@@ -235,7 +232,7 @@ export type RecipeCosting = {
  * WASM); the engine special-cases `unit === "kcal"` to the Calories kind.
  */
 const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
-  (Object.keys(TIER1_NUTRIENTS) as NutrientKey[]).map((key) => ({
+  TIER1_NUTRIENT_KEYS.map((key) => ({
     code: TIER1_NUTRIENTS[key].code,
     unit: getNutrientUnitString(key),
   }));
@@ -245,18 +242,18 @@ const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
  * (snake `upper_value`). Mapping here is what lets a ranged amount ("2–3 cups")
  * actually reach the engine — a straight passthrough would drop the bound.
  */
-export const toWAmount = (a: Amount): WAmount => ({
-  value: a.value,
-  unit: a.unit,
-  ...(a.upperValue != null ? { upper_value: a.upperValue } : {}),
-});
+export const toWAmount = (a: Amount): WAmount => {
+  const amount: WAmount = { value: a.value, unit: a.unit };
+  if (a.upperValue != null) amount.upper_value = a.upperValue;
+  return amount;
+};
 
 /** The inverse of {@link toWAmount}, for amounts the engine hands back. */
-export const fromWAmount = (a: WAmount): Amount => ({
-  value: a.value,
-  unit: a.unit,
-  ...(a.upper_value != null ? { upperValue: a.upper_value } : {}),
-});
+export const fromWAmount = (a: WAmount): Amount => {
+  const amount: Amount = { value: a.value, unit: a.unit };
+  if (a.upper_value != null) amount.upperValue = a.upper_value;
+  return amount;
+};
 
 const toWRow = (
   row: CostingRow,
@@ -300,42 +297,47 @@ const nutrientsToResult = (n: WNutrientsResult): Result<NutrientsPer100> => {
  * bindgen emits `undefined` for Rust `None`, so the nullable contract fields
  * are normalized to explicit null here.
  */
-const toRowDiagnostic = (r: WRowResult): RowDiagnostic => ({
-  id: r.id,
-  name: r.name,
-  sectionName: r.sectionName ?? null,
-  kind: r.kind,
-  usage: r.usage,
-  measured: r.measured,
-  plan: r.plan,
-  basisGrams: r.basisGrams ?? null,
-  price: r.price.ok
-    ? { ok: true, value: r.price.value, unit: r.price.unit }
-    : { ok: false, error: r.price.error },
-  gram: r.gram.ok
-    ? { ok: true, value: r.gram.value, unit: r.gram.unit }
-    : { ok: false, error: r.gram.error },
-  nutrient: r.nutrients.ok
-    ? {
-        ok: true,
-        kcal:
-          r.nutrients.entries.find((e) => e.code === KCAL_CODE)?.value ?? null,
-        nutrientCount: r.nutrients.entries.length,
-      }
-    : { ok: false, error: r.nutrients.error },
-  missing: r.missing,
-  ...(r.paths
-    ? {
-        paths: {
-          money: r.paths.money ?? null,
-          weight: r.paths.weight ?? null,
-          calories: r.paths.calories ?? null,
-        },
-      }
-    : {}),
-});
+const toRowDiagnostic = (r: WRowResult): RowDiagnostic => {
+  const diagnostic: RowDiagnostic = {
+    id: r.id,
+    name: r.name,
+    sectionName: r.sectionName ?? null,
+    kind: r.kind,
+    usage: r.usage,
+    measured: r.measured,
+    plan: r.plan,
+    basisGrams: r.basisGrams ?? null,
+    price: r.price.ok
+      ? { ok: true, value: r.price.value, unit: r.price.unit }
+      : { ok: false, error: r.price.error },
+    gram: r.gram.ok
+      ? { ok: true, value: r.gram.value, unit: r.gram.unit }
+      : { ok: false, error: r.gram.error },
+    nutrient: r.nutrients.ok
+      ? {
+          ok: true,
+          kcal:
+            r.nutrients.entries.find((e) => e.code === KCAL_CODE)?.value ??
+            null,
+          nutrientCount: r.nutrients.entries.length,
+        }
+      : { ok: false, error: r.nutrients.error },
+    missing: r.missing,
+  };
+  if (r.paths) {
+    diagnostic.paths = {
+      money: r.paths.money ?? null,
+      weight: r.paths.weight ?? null,
+      calories: r.paths.calories ?? null,
+    };
+  }
+  return diagnostic;
+};
 
-const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
+const projectRecipeCosting = (
+  w: WRecipeCosting,
+  rows: CostingRow[],
+): RecipeCosting => {
   const nutrients: NutrientsPer100 = {};
   const nutrientsUpper: NutrientsPer100 = {};
   let anyNutrientUpper = false;
@@ -347,22 +349,24 @@ const reshape = (w: WRecipeCosting, rows: CostingRow[]): RecipeCosting => {
     }
   }
 
-  return {
-    totals: {
-      price: w.price,
-      ...(w.price_upper != null ? { priceUpper: w.price_upper } : {}),
-      nutrients,
-      ...(anyNutrientUpper ? { nutrientsUpper } : {}),
-      weight: w.weight,
-      ...(w.weight_upper != null ? { weightUpper: w.weight_upper } : {}),
-      totalIngredients: w.total_ingredients,
-      missingByType: {
-        price: [...w.missing_by_type.price],
-        weight: [...w.missing_by_type.weight],
-        nutrients: [...w.missing_by_type.nutrients],
-      },
-      diagnostics: w.rows.map(toRowDiagnostic),
+  const totals: CalculateTotalsResult = {
+    price: w.price,
+    nutrients,
+    weight: w.weight,
+    totalIngredients: w.total_ingredients,
+    missingByType: {
+      price: [...w.missing_by_type.price],
+      weight: [...w.missing_by_type.weight],
+      nutrients: [...w.missing_by_type.nutrients],
     },
+    diagnostics: w.rows.map(toRowDiagnostic),
+  };
+  if (w.price_upper != null) totals.priceUpper = w.price_upper;
+  if (anyNutrientUpper) totals.nutrientsUpper = nutrientsUpper;
+  if (w.weight_upper != null) totals.weightUpper = w.weight_upper;
+
+  return {
+    totals,
     rows: rows.map((row, i) => {
       const r = w.rows[i];
       return {
@@ -435,7 +439,10 @@ export const computeRecipeCosting = (
   result.recipes.forEach((w, i) => {
     const recipe = recipes[i];
     if (recipe)
-      out.set(recipe.id, reshape(w, flattenSections(recipe.sections)));
+      out.set(
+        recipe.id,
+        projectRecipeCosting(w, flattenSections(recipe.sections)),
+      );
   });
   return out;
 };

@@ -219,7 +219,7 @@ export default function TableHeaderLayout<TData extends RowData>({
       modifiers={[restrictToHorizontalAxis]}
       onDragEnd={onDragEnd}
       accessibility={{
-        container: typeof document === "undefined" ? undefined : document.body,
+        container: globalThis.document?.body,
         screenReaderInstructions: cubbyDndScreenReaderInstructions,
         announcements: createDndAnnouncements({
           item: (id) => `${id} column`,

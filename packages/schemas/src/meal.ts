@@ -73,7 +73,7 @@ export const mealRecipeInput = z.object({
 });
 export type MealRecipeInput = z.infer<typeof mealRecipeInput>;
 
-const mealCreateShape = {
+const mealCreateFields = {
   date: mealDate,
   name: z.string().nullable().optional(),
   sortOrder: z.number().int().nullable().optional(),
@@ -90,10 +90,10 @@ const mealCreateShape = {
     ),
   recipes: z.array(mealRecipeInput).optional(),
 };
-export const mealCreateInput = z.object(mealCreateShape);
+export const mealCreateInput = z.object(mealCreateFields);
 export type MealCreateInput = z.infer<typeof mealCreateInput>;
 
-export const mealUpdateData = deriveUpdateData(mealCreateShape, {
+export const mealUpdateData = deriveUpdateData(mealCreateFields, {
   omit: ["recipes"],
 });
 export const mealUpdateInput = z.object({
@@ -196,6 +196,11 @@ const mealOutFields = {
 
 export const mealOut = z.object(mealOutFields);
 export type MealOut = z.infer<typeof mealOut>;
+
+/** Generic MCP entity result; MealRecipe rows have no public shortcode. */
+export const mealMcpEntityOut = mealOut.extend({
+  recipes: z.array(mealRecipeOut.omit({ id: true })),
+});
 
 /**
  * Slim MCP projection of a meal row: built from the same field map as

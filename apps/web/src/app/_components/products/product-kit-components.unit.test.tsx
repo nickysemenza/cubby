@@ -3,137 +3,20 @@ import type {
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
 import { testShortcode } from "@cubby/schemas/testing";
-import { flexRender } from "@tanstack/react-table";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks: {
-  components: { current: ProductComponentOut[] };
-  membership: { current: KitMembershipOut[] };
-} = vi.hoisted(() => ({
-  components: { current: [] },
-  membership: { current: [] },
-}));
+import { product as productOperations } from "~/app/products/product.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: { queryKey: unknown[] }) => ({
-    data:
-      options.queryKey[0] === "kitMembership"
-        ? mocks.membership.current
-        : options.queryKey[0] === "components"
-          ? mocks.components.current
-          : undefined,
-    isPending: false,
-  }),
-  useMutation: () => ({
-    mutate: vi.fn(),
-    mutateAsync: vi.fn(async () => undefined),
-    isPending: false,
-  }),
-  // The table resolves the product entity's registered actions now, and the
-  // "Add to inventory" one reads product detail to derive its kit warning —
-  // so this partial mock has to carry react-query's `queryOptions` too.
-  queryOptions: (options: unknown) => options,
-  // The descriptor builds its options through react-query's own
-  // `mutationOptions`, so this partial mock has to carry it too.
-  mutationOptions: (options: unknown) => options,
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
+import {
+  type ProductKitComponentsOperations,
+  ProductKitComponents,
+} from "./product-kit-components";
 
-vi.mock("~/app/products/product.functions", () => ({
-  product: {
-    components: {
-      queryOptions: (input: unknown) => ({
-        queryKey: ["components", input],
-      }),
-    },
-    kitMembership: {
-      queryOptions: (input: unknown) => ({
-        queryKey: ["kitMembership", input],
-      }),
-    },
-    search: {
-      queryOptions: (input: unknown) => ({ queryKey: ["search", input] }),
-    },
-    attachComponents: { mutationOptions: () => ({}) },
-    detachComponents: { mutationOptions: () => ({}) },
-  },
-}));
-
-// Keep the table shell lightweight while exercising the real column
-// definitions and TanStack row model used by the embedded roster.
-vi.mock("~/app/_components/data-table/Table", () => ({
-  default: ({
-    table,
-    emptyState,
-  }: {
-    table: {
-      getRowModel: () => {
-        rows: Array<{
-          id: string;
-          getVisibleCells: () => Array<{
-            id: string;
-            column: { columnDef: { cell?: unknown } };
-            getContext: () => never;
-          }>;
-        }>;
-      };
-    };
-    emptyState?: React.ReactNode;
-  }) => {
-    const rows = table.getRowModel().rows;
-    if (rows.length === 0) return emptyState;
-    return (
-      <table>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id}>
-                  {flexRender(
-                    cell.column.columnDef.cell as never,
-                    cell.getContext(),
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  },
-}));
-// The real link renders a hover-preview card that needs a query client; the
-// name and href are all this test asserts on.
-vi.mock("../EntityInlineLink", () => ({
-  EntityInlineLink: ({
-    entity,
-    data,
-  }: {
-    entity: string;
-    data: { id: string; name: string };
-  }) => (
-    <a href={`/${entity}s/${data.id}`} data-entity={entity}>
-      {data.name}
-    </a>
-  ),
-}));
-vi.mock("~/app/_components/table/TableLink", () => ({
-  TableLink: ({
-    to,
-    params,
-    children,
-  }: {
-    to: string;
-    params: { shortcode: string };
-    children: React.ReactNode;
-  }) => <a href={to.replace("$shortcode", params.shortcode)}>{children}</a>,
-}));
-
-import { ProductKitComponents } from "./product-kit-components";
-
-const DRILL_ID = testShortcode("product", "PRD-DRIL");
-const COMBO_ID = testShortcode("product", "PRD-COMB");
+const KIT_ID = testShortcode("product", "PRD-KT23");
+const DRILL_ID = testShortcode("product", "PRD-DR23");
+const COMBO_ID = testShortcode("product", "PRD-CMB2");
 
 /**
  * One component row. `onHandUnits` defaults to stocked so the existing cases
@@ -143,7 +26,7 @@ const COMBO_ID = testShortcode("product", "PRD-COMB");
 const component = (
   over: Partial<ProductComponentOut> & { productName: string },
 ): ProductComponentOut => ({
-  productId: testShortcode("product", "PRD-CMP1"),
+  productId: testShortcode("product", "PRD-CMP2"),
   manufacturer: "Milwaukee",
   quantity: 1,
   price: null,
@@ -153,17 +36,50 @@ const component = (
   ...over,
 });
 
-const renderWith = (
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function kitOperations(
+  components: ProductComponentOut[],
+  membership: KitMembershipOut[],
+): ProductKitComponentsOperations {
+  return {
+    // The production descriptors keep their schemas and cache metadata. These
+    // are the two remote reads a browser test cannot perform locally.
+    components: productOperations.components.withTransport(
+      async () => components,
+    ),
+    kitMembership: productOperations.kitMembership.withTransport(
+      async () => membership,
+    ),
+    search: productOperations.search,
+    attachComponents: productOperations.attachComponents,
+    detachComponents: productOperations.detachComponents,
+  };
+}
+
+function renderWith(
   components: ProductComponentOut[],
   membership: KitMembershipOut[] = [],
-) => {
-  mocks.components.current = components;
-  mocks.membership.current = membership;
-  return render(<ProductKitComponents productId="PRD-KIT1" />);
-};
+) {
+  return render(
+    <ProductKitComponents
+      productId={KIT_ID}
+      operations={kitOperations(components, membership)}
+    />,
+    { wrapper: harness.wrapper },
+  );
+}
 
 describe("ProductKitComponents", () => {
-  it("renders a kit with several components, each with its quantity", () => {
+  it("renders a kit with several components, each with its quantity", async () => {
     renderWith([
       {
         productId: DRILL_ID,
@@ -187,10 +103,9 @@ describe("ProductKitComponents", () => {
       },
     ]);
 
-    expect(screen.getByRole("link", { name: "Bare Drill" })).toHaveAttribute(
-      "href",
-      `/products/${DRILL_ID}`,
-    );
+    expect(
+      await screen.findByRole("link", { name: "Bare Drill" }),
+    ).toHaveAttribute("href", `/products/${DRILL_ID}`);
     expect(screen.getByRole("link", { name: "Battery Pack" })).toBeVisible();
     expect(screen.getByText("×1")).toBeInTheDocument();
     expect(screen.getByText("×2")).toBeInTheDocument();
@@ -198,20 +113,20 @@ describe("ProductKitComponents", () => {
       "src",
       "https://example.com/drill.png",
     );
-    expect(screen.queryByText("Not a kit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not a kit")).toBeNull();
     // No membership rows: this product isn't listed inside any other kit.
     expect(
       screen.queryByText("Kits this product is listed inside."),
-    ).not.toBeInTheDocument();
+    ).toBeNull();
   });
 
-  it("shows the empty state when the product has no components", () => {
+  it("shows the empty state when the product has no components", async () => {
     renderWith([]);
 
-    expect(screen.getByText("Not a kit")).toBeInTheDocument();
+    expect(await screen.findByText("Not a kit")).toBeVisible();
   });
 
-  it("shows the kits a product is listed inside, when it's part of one", () => {
+  it("shows the kits a product is listed inside, when it's part of one", async () => {
     renderWith(
       [],
       [
@@ -230,8 +145,8 @@ describe("ProductKitComponents", () => {
     );
 
     expect(
-      screen.getByText("Kits this product is listed inside."),
-    ).toBeInTheDocument();
+      await screen.findByText("Kits this product is listed inside."),
+    ).toBeVisible();
     expect(screen.getByRole("link", { name: "18V Combo Kit" })).toHaveAttribute(
       "href",
       `/products/${COMBO_ID}`,
@@ -247,7 +162,7 @@ describe("ProductKitComponents", () => {
    *
    * Every row is priced so the only `—` on screen is the one under test.
    */
-  it("renders each component's on-hand units, dashing only unanswerable ones", () => {
+  it("renders each component's on-hand units, dashing only unanswerable ones", async () => {
     renderWith([
       component({
         productId: testShortcode("product", "PRD-STKD"),
@@ -256,38 +171,39 @@ describe("ProductKitComponents", () => {
         onHandUnits: 2,
       }),
       component({
-        productId: testShortcode("product", "PRD-GONE"),
+        productId: testShortcode("product", "PRD-GNE2"),
         productName: "Unaccounted Part",
         price: 11,
         onHandUnits: 0,
       }),
       component({
-        productId: testShortcode("product", "PRD-MIXD"),
+        productId: testShortcode("product", "PRD-MXD2"),
         productName: "Mixed Unit Part",
         price: 12,
         onHandUnits: null,
       }),
     ]);
 
+    await screen.findByRole("link", { name: "Stocked Part" });
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(1);
   });
 
-  it("reports a fully-stocked kit as stocked by its components", () => {
+  it("reports a fully-stocked kit as stocked by its components", async () => {
     renderWith([
       component({
-        productId: testShortcode("product", "PRD-NST1"),
+        productId: testShortcode("product", "PRD-NST2"),
         productName: "Nightstand",
         quantity: 2,
         onHandUnits: 2,
       }),
     ]);
 
-    expect(screen.getByText("Stocked as its components")).toBeInTheDocument();
+    expect(await screen.findByText("Stocked as its components")).toBeVisible();
   });
 
-  it("counts the stocked parts when a kit is only partly accounted for", () => {
+  it("counts the stocked parts when a kit is only partly accounted for", async () => {
     renderWith([
       component({
         productId: testShortcode("product", "PRD-BRDG"),
@@ -302,10 +218,8 @@ describe("ProductKitComponents", () => {
       }),
     ]);
 
-    expect(screen.getByText("1 of 2 components stocked")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Stocked as its components"),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByText("1 of 2 components stocked")).toBeVisible();
+    expect(screen.queryByText("Stocked as its components")).toBeNull();
   });
 
   /**
@@ -313,19 +227,18 @@ describe("ProductKitComponents", () => {
    * a "0 of 2" chip would read as a defect badge on a kit that was simply sold
    * or consumed whole. The existing layout is already the right answer.
    */
-  it("stays silent when no component is stocked", () => {
+  it("stays silent when no component is stocked", async () => {
     renderWith([
       component({
-        productId: testShortcode("product", "PRD-DRY1"),
+        productId: testShortcode("product", "PRD-DRY2"),
         productName: "Dust Bags",
         onHandUnits: 0,
       }),
     ]);
 
-    expect(
-      screen.queryByText("Stocked as its components"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText(/components stocked/)).not.toBeInTheDocument();
+    await screen.findByRole("link", { name: "Dust Bags" });
+    expect(screen.queryByText("Stocked as its components")).toBeNull();
+    expect(screen.queryByText(/components stocked/)).toBeNull();
   });
 
   /**
@@ -333,7 +246,7 @@ describe("ProductKitComponents", () => {
    * stock is a different question with a different answer, so the column is off
    * — `KitMembershipOut` has no on-hand field to render in the first place.
    */
-  it("never shows an on-hand column on the memberships table", () => {
+  it("never shows an on-hand column on the memberships table", async () => {
     renderWith(
       [],
       [
@@ -351,6 +264,11 @@ describe("ProductKitComponents", () => {
       ],
     );
 
-    expect(screen.queryByText("On hand")).not.toBeInTheDocument();
+    await screen.findByRole("link", { name: "18V Combo Kit" });
+    expect(
+      within(
+        screen.getByRole("table", { name: "Kit memberships" }),
+      ).queryByText("On hand"),
+    ).toBeNull();
   });
 });

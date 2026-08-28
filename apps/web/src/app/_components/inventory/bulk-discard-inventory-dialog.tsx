@@ -110,7 +110,7 @@ export const BulkDiscardInventoryDialog: FC<
 
   const discard = useMutation(
     inventory.bulkDiscard.mutationOptions({
-      onError: (err: unknown) => setError(getErrorMessage(err)),
+      onError: (err) => setError(getErrorMessage(err)),
     }),
   );
 

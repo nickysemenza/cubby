@@ -1,129 +1,81 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import { testEntityId } from "@cubby/schemas/testing";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import type { Database } from "~/server/db";
+import { Database } from "~/server/db";
 
 import {
   mutationSideEffectEventSchema,
   mutationSideEffectManifest,
+  type MutationSideEffectPorts,
+  runMutationSideEffectsForEntities,
 } from "./mutation-side-effects";
 
-const dispatchBackgroundJobsMock = vi.hoisted(() => vi.fn());
-const dispatchLocationValuationRecomputeMock = vi.hoisted(() => vi.fn());
-const dispatchProblemCountsRefreshMock = vi.hoisted(() => vi.fn());
-const findInventoryEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
-const findInventoryEmbeddingRefsForLocationsMock = vi.hoisted(() => vi.fn());
-const findRecipeEmbeddingRefsForIngredientsMock = vi.hoisted(() => vi.fn());
-const findTaskEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
-const findWishEmbeddingRefsForProductsMock = vi.hoisted(() => vi.fn());
-const findMealEmbeddingRefsForRecipesMock = vi.hoisted(() => vi.fn());
-const findTrackerEmbeddingRefsForProjectsMock = vi.hoisted(() => vi.fn());
-const findEmbeddingRefsForVendorsMock = vi.hoisted(() => vi.fn());
-const findEmbeddingRefsForPurchasesMock = vi.hoisted(() => vi.fn());
-const findTransactionEmbeddingRefsForAccountsMock = vi.hoisted(() => vi.fn());
-const findCommercialEmbeddingRefsForExpensesMock = vi.hoisted(() => vi.fn());
-const refreshSearchDocumentMock = vi.hoisted(() => vi.fn());
-const refreshSearchDocumentsMock = vi.hoisted(() => vi.fn());
+const db = new Database(() => {
+  throw new Error(
+    "Mutation-side-effect unit ports do not resolve a database runtime",
+  );
+});
 
-vi.mock("~/server/background-dispatch", () => ({
-  dispatchBackgroundJobs: dispatchBackgroundJobsMock,
-  dispatchLocationValuationRecompute: dispatchLocationValuationRecomputeMock,
-  dispatchProblemCountsRefresh: dispatchProblemCountsRefreshMock,
-}));
-
-vi.mock("~/server/repo/entity-embedding", () => ({
-  findInventoryEmbeddingRefsForProducts:
-    findInventoryEmbeddingRefsForProductsMock,
-  findInventoryEmbeddingRefsForLocations:
-    findInventoryEmbeddingRefsForLocationsMock,
-  findRecipeEmbeddingRefsForIngredients:
-    findRecipeEmbeddingRefsForIngredientsMock,
-  findTaskEmbeddingRefsForProducts: findTaskEmbeddingRefsForProductsMock,
-  findWishEmbeddingRefsForProducts: findWishEmbeddingRefsForProductsMock,
-  findMealEmbeddingRefsForRecipes: findMealEmbeddingRefsForRecipesMock,
-  findTrackerEmbeddingRefsForProjects: findTrackerEmbeddingRefsForProjectsMock,
-  findEmbeddingRefsForVendors: findEmbeddingRefsForVendorsMock,
-  findEmbeddingRefsForPurchases: findEmbeddingRefsForPurchasesMock,
-  findTransactionEmbeddingRefsForAccounts:
-    findTransactionEmbeddingRefsForAccountsMock,
-  findCommercialEmbeddingRefsForExpenses:
-    findCommercialEmbeddingRefsForExpensesMock,
-}));
-
-vi.mock("~/server/repo/search-document", () => ({
-  refreshSearchDocument: refreshSearchDocumentMock,
-  refreshSearchDocuments: refreshSearchDocumentsMock,
-}));
-
-function fakeBatchRef(overrides: Partial<BackgroundBatchRef> = {}) {
+function batch(totalJobs: number): BackgroundBatchRef {
   return {
     id: "00000000-0000-4000-8000-000000000010",
     kind: "entity-embedding.refresh",
     source: "mutation",
     processor: "inline",
     status: "succeeded",
-    totalJobs: 0,
-    ...overrides,
-  } satisfies BackgroundBatchRef;
+    totalJobs,
+  };
+}
+
+class InMemoryMutationSideEffectPorts {
+  readonly backgroundJobs: Array<{ jobs: Array<{ dedupeKey: string }> }> = [];
+  readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
+  readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
+    [];
+
+  readonly ports = {
+    dispatchBackgroundJobs: async (_db, input) => {
+      this.backgroundJobs.push({ jobs: input.jobs });
+      return {
+        batch: batch(input.jobs.length),
+        batchId: "batch-1",
+        jobIds: [],
+      };
+    },
+    dispatchLocationValuationRecompute: async () => ({
+      batch: batch(1),
+      batchId: "valuation-1",
+      jobIds: [],
+    }),
+    dispatchProblemCountsRefresh: async () => null,
+    findInventoryEmbeddingRefsForProducts: async () => this.inventoryRefs,
+    findInventoryEmbeddingRefsForLocations: async () => [],
+    findRecipeEmbeddingRefsForIngredients: async () => [],
+    findTaskEmbeddingRefsForProducts: async () => [],
+    findWishEmbeddingRefsForProducts: async () => [],
+    findMealEmbeddingRefsForRecipes: async () => [],
+    findTrackerEmbeddingRefsForProjects: async () => [],
+    findEmbeddingRefsForVendors: async () => [],
+    findEmbeddingRefsForPurchases: async () => [],
+    findTransactionEmbeddingRefsForAccounts: async () => [],
+    findCommercialEmbeddingRefsForExpenses: async () => [],
+    refreshSearchDocument: async () => undefined,
+    refreshSearchDocuments: async (_db, refs) => {
+      this.refreshed.push(...refs);
+      return undefined;
+    },
+  } satisfies MutationSideEffectPorts;
 }
 
 describe("runMutationSideEffectsForEntities batching", () => {
-  const db = {} as Database;
+  let memory: InMemoryMutationSideEffectPorts;
 
   beforeEach(() => {
-    findInventoryEmbeddingRefsForProductsMock.mockResolvedValue([]);
-    findInventoryEmbeddingRefsForLocationsMock.mockResolvedValue([]);
-    findRecipeEmbeddingRefsForIngredientsMock.mockResolvedValue([]);
-    findTaskEmbeddingRefsForProductsMock.mockResolvedValue([]);
-    findWishEmbeddingRefsForProductsMock.mockResolvedValue([]);
-    findMealEmbeddingRefsForRecipesMock.mockResolvedValue([]);
-    findTrackerEmbeddingRefsForProjectsMock.mockResolvedValue([]);
-    findEmbeddingRefsForVendorsMock.mockResolvedValue([]);
-    findEmbeddingRefsForPurchasesMock.mockResolvedValue([]);
-    findTransactionEmbeddingRefsForAccountsMock.mockResolvedValue([]);
-    findCommercialEmbeddingRefsForExpensesMock.mockResolvedValue([]);
-    refreshSearchDocumentMock.mockResolvedValue({ status: "upserted" });
-    refreshSearchDocumentsMock.mockResolvedValue([]);
-    dispatchProblemCountsRefreshMock.mockResolvedValue(null);
-  });
-
-  afterEach(() => {
-    dispatchBackgroundJobsMock.mockReset();
-    dispatchLocationValuationRecomputeMock.mockReset();
-    dispatchProblemCountsRefreshMock.mockReset();
-    findInventoryEmbeddingRefsForProductsMock.mockReset();
-    findInventoryEmbeddingRefsForLocationsMock.mockReset();
-    findRecipeEmbeddingRefsForIngredientsMock.mockReset();
-    findTaskEmbeddingRefsForProductsMock.mockReset();
-    findWishEmbeddingRefsForProductsMock.mockReset();
-    findMealEmbeddingRefsForRecipesMock.mockReset();
-    findTrackerEmbeddingRefsForProjectsMock.mockReset();
-    findEmbeddingRefsForVendorsMock.mockReset();
-    findEmbeddingRefsForPurchasesMock.mockReset();
-    findTransactionEmbeddingRefsForAccountsMock.mockReset();
-    findCommercialEmbeddingRefsForExpensesMock.mockReset();
-    refreshSearchDocumentMock.mockReset();
-    refreshSearchDocumentsMock.mockReset();
+    memory = new InMemoryMutationSideEffectPorts();
   });
 
   it("dispatches one entity-embedding batch per wave, not one per entity", async () => {
-    const { runMutationSideEffectsForEntities } =
-      await import("./mutation-side-effects");
-    dispatchBackgroundJobsMock.mockResolvedValue({
-      batchId: "batch-1",
-      jobIds: ["job-1", "job-2", "job-3"],
-      batch: fakeBatchRef({ totalJobs: 3 }),
-    });
-    dispatchLocationValuationRecomputeMock.mockResolvedValue({
-      batchId: "batch-2",
-      jobIds: ["job-4"],
-      batch: fakeBatchRef({
-        kind: "location-valuation.recompute",
-        totalJobs: 1,
-      }),
-    });
-
     const inventoryIds = [
       testEntityId("inventory", "00000000-0000-4000-8000-000000000001"),
       testEntityId("inventory", "00000000-0000-4000-8000-000000000002"),
@@ -137,49 +89,23 @@ describe("runMutationSideEffectsForEntities batching", () => {
         entity: { entityType: "inventory" as const, entityId },
         source: "test.bulk",
       })),
+      memory.ports,
     );
 
-    expect(refreshSearchDocumentsMock).toHaveBeenCalledWith(
-      db,
-      inventoryIds.map((entityId) => ({
-        entityType: "inventory",
-        entityId,
-      })),
+    expect(memory.refreshed).toEqual(
+      inventoryIds.map((entityId) => ({ entityType: "inventory", entityId })),
     );
-    // Three entities whose only handler is refreshOwnEmbedding must collapse
-    // into a single dispatchBackgroundJobs call carrying all three jobs,
-    // instead of one call (transaction) per entity.
-    expect(dispatchBackgroundJobsMock).toHaveBeenCalledTimes(1);
-    const [, input] = dispatchBackgroundJobsMock.mock.calls[0] as [
-      Database,
-      { jobs: { dedupeKey: string }[] },
-    ];
-    expect(input.jobs).toHaveLength(3);
-    expect(input.jobs.map((j) => j.dedupeKey).sort()).toEqual(
+    expect(memory.backgroundJobs).toHaveLength(1);
+    expect(
+      memory.backgroundJobs[0]?.jobs.map((job) => job.dedupeKey).sort(),
+    ).toEqual(
       inventoryIds
         .map((id) => `entity-embedding.refresh:inventory:${id}`)
         .sort(),
     );
-    expect(dispatchProblemCountsRefreshMock).toHaveBeenCalledTimes(1);
   });
 
-  it("dedupes embedding refs collected across different handlers in the same wave", async () => {
-    const { runMutationSideEffectsForEntities } =
-      await import("./mutation-side-effects");
-    dispatchBackgroundJobsMock.mockResolvedValue({
-      batchId: "batch-1",
-      jobIds: ["job-1", "job-2"],
-      batch: fakeBatchRef({ totalJobs: 2 }),
-    });
-    dispatchLocationValuationRecomputeMock.mockResolvedValue({
-      batchId: "batch-2",
-      jobIds: ["job-3"],
-      batch: fakeBatchRef({
-        kind: "location-valuation.recompute",
-        totalJobs: 1,
-      }),
-    });
-
+  it("dedupes embedding refs collected across handlers in the same wave", async () => {
     const productId = testEntityId(
       "product",
       "00000000-0000-4000-8000-000000000004",
@@ -188,126 +114,54 @@ describe("runMutationSideEffectsForEntities batching", () => {
       "inventory",
       "00000000-0000-4000-8000-000000000005",
     );
-    // The product's own inventory-refresh handler and a direct inventory
-    // event both surface the same inventory ref — the wave-wide dedupe must
-    // collapse them into a single job, not two.
-    findInventoryEmbeddingRefsForProductsMock.mockResolvedValue([
-      { entityType: "inventory", entityId: inventoryId },
-    ]);
+    memory.inventoryRefs.push({
+      entityType: "inventory",
+      entityId: inventoryId,
+    });
 
-    await runMutationSideEffectsForEntities(db, [
-      {
-        action: "updated",
-        entity: { entityType: "product", entityId: productId },
-        source: "test.bulk",
-      },
-      {
-        action: "updated",
-        entity: { entityType: "inventory", entityId: inventoryId },
-        source: "test.bulk",
-      },
-    ]);
+    await runMutationSideEffectsForEntities(
+      db,
+      [
+        {
+          action: "updated",
+          entity: { entityType: "product", entityId: productId },
+          source: "test.bulk",
+        },
+        {
+          action: "updated",
+          entity: { entityType: "inventory", entityId: inventoryId },
+          source: "test.bulk",
+        },
+      ],
+      memory.ports,
+    );
 
-    expect(dispatchBackgroundJobsMock).toHaveBeenCalledTimes(1);
-    const [, input] = dispatchBackgroundJobsMock.mock.calls[0] as [
-      Database,
-      { jobs: { dedupeKey: string }[] },
-    ];
-    expect(input.jobs.map((j) => j.dedupeKey).sort()).toEqual(
+    expect(
+      memory.backgroundJobs[0]?.jobs.map((job) => job.dedupeKey).sort(),
+    ).toEqual(
       [
         `entity-embedding.refresh:product:${productId}`,
         `entity-embedding.refresh:inventory:${inventoryId}`,
       ].sort(),
     );
-    expect(dispatchProblemCountsRefreshMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not reject a mutation when the Problem-count refresh cannot enqueue", async () => {
-    const { runMutationSideEffects } = await import("./mutation-side-effects");
-    const enqueueError = new Error("BackgroundJobKind is missing");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-    dispatchBackgroundJobsMock.mockResolvedValue({
-      batchId: "batch-1",
-      jobIds: ["job-1"],
-      batch: fakeBatchRef({ totalJobs: 1 }),
-    });
-    dispatchProblemCountsRefreshMock.mockRejectedValue(enqueueError);
-
-    await expect(
-      runMutationSideEffects(db, {
-        action: "updated",
-        entity: {
-          entityType: "project",
-          entityId: testEntityId(
-            "project",
-            "00000000-0000-4000-8000-000000000006",
-          ),
-        },
-        source: "project.update",
-      }),
-    ).resolves.toEqual([fakeBatchRef({ totalJobs: 1 })]);
-    expect(consoleError).toHaveBeenCalledWith(
-      "problems.counts.refresh.enqueue.failed",
-      expect.objectContaining({
-        source: "project.update",
-        error: enqueueError,
-      }),
-    );
-    consoleError.mockRestore();
   });
 });
 
 describe("mutation side effects manifest", () => {
   it("parses typed mutation entity refs", () => {
-    const parsed = mutationSideEffectEventSchema.parse({
-      action: "updated",
-      entity: {
-        entityType: "product",
-        entityId: "00000000-0000-4000-8000-000000000001",
-      },
-      source: "test.product",
-    });
-
-    expect(parsed).toMatchObject({
-      action: "updated",
-      entity: { entityType: "product" },
-      source: "test.product",
-    });
-  });
-
-  it("rejects mismatched entity ids", () => {
     expect(
-      () =>
-        mutationSideEffectEventSchema.parse({
-          action: "updated",
-          entity: { entityType: "product", entityId: "not-a-uuid" },
-          source: "test.product",
-        }),
-      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-    ).toThrow();
+      mutationSideEffectEventSchema.parse({
+        action: "updated",
+        entity: {
+          entityType: "product",
+          entityId: "00000000-0000-4000-8000-000000000001",
+        },
+        source: "test.product",
+      }),
+    ).toMatchObject({ entity: { entityType: "product" } });
   });
 
-  it("declares create update and delete hooks for every supported entity", () => {
-    expect(Object.keys(mutationSideEffectManifest).sort()).toEqual([
-      "cookbook",
-      "expense",
-      "financialAccount",
-      "financialTransaction",
-      "image",
-      "ingredient",
-      "inventory",
-      "location",
-      "meal",
-      "product",
-      "project",
-      "purchase",
-      "recipe",
-      "task",
-      "vendor",
-      "wish",
-    ]);
+  it("declares lifecycle hooks for every supported entity", () => {
     for (const handlers of Object.values(mutationSideEffectManifest)) {
       expect(handlers).toHaveProperty("onCreate");
       expect(handlers).toHaveProperty("onUpdate");

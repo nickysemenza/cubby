@@ -2,40 +2,28 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { sampleLocations } from "~/app/docs/_data/samples";
-
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    to,
-    params,
-    children,
-    className,
-    title,
-    "aria-label": ariaLabel,
-  }: {
-    to: string;
-    params?: { shortcode?: string };
-    children?: ReactNode;
-    className?: string;
-    title?: string;
-    "aria-label"?: string;
-  }) => (
-    <a
-      href={to.replace("$shortcode", params?.shortcode ?? "")}
-      className={className}
-      title={title}
-      aria-label={ariaLabel}
-    >
-      {children}
-    </a>
-  ),
-}));
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { LocationTree } from "./location-tree-view";
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
+
+function renderTree(tree: React.ReactNode) {
+  return render(tree, { wrapper: harness.wrapper });
+}
 
 const FLOUR_ID = testShortcode("inventory", "INV-FLOUR");
 const RICE_ID = testShortcode("inventory", "INV-RICE");
@@ -111,7 +99,7 @@ function treeData(): InfLocation[] {
 describe("LocationTree", () => {
   it("renders an expanded navigable ledger with labeled rollups", () => {
     const data = treeData();
-    render(<LocationTree data={data} />);
+    renderTree(<LocationTree data={data} />);
 
     expect(screen.getByRole("link", { name: "Kitchen" })).toHaveAttribute(
       "href",
@@ -134,7 +122,7 @@ describe("LocationTree", () => {
   });
 
   it("supports branch and global disclosure controls", () => {
-    render(<LocationTree data={treeData()} />);
+    renderTree(<LocationTree data={treeData()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
     expect(
@@ -158,7 +146,7 @@ describe("LocationTree", () => {
   });
 
   it("keeps inventory opt-in without resetting disclosure state", () => {
-    render(<LocationTree data={treeData()} />);
+    renderTree(<LocationTree data={treeData()} />);
 
     expect(
       screen.queryByRole("link", { name: "Bread Flour" }),
@@ -186,7 +174,7 @@ describe("LocationTree", () => {
   });
 
   it("searches case-insensitively, retains ancestors, and restores expansion", () => {
-    render(<LocationTree data={treeData()} />);
+    renderTree(<LocationTree data={treeData()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse Pantry" }));
     const search = screen.getByRole("searchbox", { name: "Find a location" });
@@ -212,7 +200,7 @@ describe("LocationTree", () => {
   });
 
   it("searches visible inventory and explains empty results", () => {
-    render(<LocationTree data={treeData()} />);
+    renderTree(<LocationTree data={treeData()} />);
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Show inventory" }));
     const search = screen.getByRole("searchbox", {

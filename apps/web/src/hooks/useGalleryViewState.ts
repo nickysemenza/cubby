@@ -1,5 +1,6 @@
-import type { LocationType } from "@cubby/schemas/location";
+import { type LocationType, locationType } from "@cubby/schemas/location";
 import { useCallback, useMemo } from "react";
+import { z } from "zod";
 
 import { useLocalStorage } from "./useLocalStorage";
 
@@ -20,27 +21,38 @@ const DEFAULT_STATE: GalleryViewState = {
   emptyFilter: "all",
   hideNonMatching: false,
 };
+const emptyFilterSchema = z.enum(["all", "withItems", "empty"]);
+const locationTypeFilterSchema = locationType.nullable();
+const galleryBooleanSchema = z.boolean();
+const gallerySearchSchema = z.string();
 
 export function useGalleryViewState() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage<boolean>(
+  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage(
     "gallery-sidebar-collapsed",
+    galleryBooleanSchema,
     DEFAULT_STATE.sidebarCollapsed,
   );
 
-  const [searchTerm, setSearchTermRaw] = useLocalStorage<string>(
+  const [searchTerm, setSearchTermRaw] = useLocalStorage(
     "gallery-search-term",
+    gallerySearchSchema,
     "",
   );
-  const [locationTypeFilter, setLocationTypeFilterRaw] =
-    useLocalStorage<LocationType | null>("gallery-type-filter", null);
+  const [locationTypeFilter, setLocationTypeFilterRaw] = useLocalStorage(
+    "gallery-type-filter",
+    locationTypeFilterSchema,
+    null,
+  );
 
-  const [emptyFilter, setEmptyFilterRaw] = useLocalStorage<EmptyFilter>(
+  const [emptyFilter, setEmptyFilterRaw] = useLocalStorage(
     "gallery-empty-filter",
+    emptyFilterSchema,
     DEFAULT_STATE.emptyFilter,
   );
 
-  const [hideNonMatching, setHideNonMatchingRaw] = useLocalStorage<boolean>(
+  const [hideNonMatching, setHideNonMatchingRaw] = useLocalStorage(
     "gallery-hide-non-matching",
+    galleryBooleanSchema,
     DEFAULT_STATE.hideNonMatching,
   );
 

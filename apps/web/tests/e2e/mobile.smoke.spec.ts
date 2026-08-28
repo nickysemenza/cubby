@@ -27,15 +27,14 @@ test.describe("iPhone WebKit smoke", () => {
       pageErrors.push(`${error.name}: ${error.message}`);
     });
     await page.addInitScript(() => {
-      const trackedWindow = window as Window & {
-        __cubbyViewTransitionCalls?: number;
-      };
-      trackedWindow.__cubbyViewTransitionCalls = 0;
+      document.documentElement.dataset.cubbyViewTransitionCalls = "0";
       Object.defineProperty(document, "startViewTransition", {
         configurable: true,
         value: () => {
-          trackedWindow.__cubbyViewTransitionCalls =
-            (trackedWindow.__cubbyViewTransitionCalls ?? 0) + 1;
+          const root = document.documentElement;
+          root.dataset.cubbyViewTransitionCalls = String(
+            Number(root.dataset.cubbyViewTransitionCalls ?? "0") + 1,
+          );
           throw new DOMException(
             "Old view transition aborted by new view transition.",
             "AbortError",
@@ -66,10 +65,10 @@ test.describe("iPhone WebKit smoke", () => {
       "Something went wrong",
     );
     expect(
-      await page.evaluate(
-        () =>
-          (window as Window & { __cubbyViewTransitionCalls?: number })
-            .__cubbyViewTransitionCalls ?? 0,
+      await page.evaluate(() =>
+        Number(
+          document.documentElement.dataset.cubbyViewTransitionCalls ?? "0",
+        ),
       ),
     ).toBe(0);
     expect(

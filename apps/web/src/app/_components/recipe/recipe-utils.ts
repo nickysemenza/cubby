@@ -125,10 +125,15 @@ export const perServingRange = (
   total: number,
   upper: number | undefined,
   divisor: number,
-): { value: number; upper: number | undefined } => ({
+): ServingRange => ({
   value: total / divisor,
   upper: upper != null ? upper / divisor : undefined,
 });
+
+interface ServingRange {
+  value: number;
+  upper: number | undefined;
+}
 
 /** Divide every value in a nutrients record by a per-serving divisor — the
  * same linear per-portion math as {@link perServingRange}, applied to a whole
@@ -150,10 +155,15 @@ export const divideNutrients = (
 export const coverageLabel = (
   covered: number | undefined,
   total: number,
-): { complete: boolean; fraction: string } => ({
+): CoverageLabel => ({
   complete: covered == null || covered >= total,
   fraction: `${covered ?? total}/${total}`,
 });
+
+interface CoverageLabel {
+  complete: boolean;
+  fraction: string;
+}
 
 /**
  * The recipe vitals line — "Makes X · Serves Y · $cost / serving · kcal · g
@@ -228,7 +238,7 @@ export function recipeMacroSegments(
   },
   basis: ServingBasis | null,
   opts?: { includeCost?: boolean },
-): { basisLabel: string; parts: string[] } {
+): RecipeMacroSegmentList {
   const head = recipeHeadlineTotals(totals);
   const fat = getNutrientValueByKey(totals.nutrients, "fat") || undefined;
   const carbs = getNutrientValueByKey(totals.nutrients, "carbs") || undefined;
@@ -249,6 +259,11 @@ export function recipeMacroSegments(
   if (carbs) parts.push(`${round(per(carbs))}g C`);
 
   return { basisLabel: basis ? `per ${basis.noun}` : "total", parts };
+}
+
+interface RecipeMacroSegmentList {
+  basisLabel: string;
+  parts: string[];
 }
 
 /** Structured cost + macro numbers (per-serving when a basis is given, else

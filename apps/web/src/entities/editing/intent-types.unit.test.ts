@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import type { EntityEditRequest } from "./types";
+import type { EntityEditCommand, EntityEditRequest } from "./types";
 
 describe("typed entity edit requests", () => {
   it("derives operation, intent, record, and seed types from the entity", () => {
@@ -48,5 +48,26 @@ describe("typed entity edit requests", () => {
     };
     expect(invalidIntent.entity).toBe("task");
     expect(invalidSeed.entity).toBe("meal");
+  });
+
+  it("keeps mutation payloads correlated with their entity and operation", () => {
+    const taskUpdate = {
+      entity: "task",
+      operation: "update",
+      intent: "status",
+      id: "TSK-TYPED",
+      data: { status: "done" },
+    } satisfies EntityEditCommand<"task", "update">;
+    expect(taskUpdate.data.status).toBe("done");
+
+    const invalidMealUpdate: EntityEditCommand<"meal", "update"> = {
+      entity: "meal",
+      operation: "update",
+      intent: "calendar",
+      id: "MEA-TYPED",
+      // @ts-expect-error status is a Task mutation field, not a Meal field
+      data: { status: "done" },
+    };
+    expect(invalidMealUpdate.entity).toBe("meal");
   });
 });

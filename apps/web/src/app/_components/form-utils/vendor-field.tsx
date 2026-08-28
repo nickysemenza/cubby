@@ -58,7 +58,7 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
           control={form.control}
           name={name}
           render={({ field, fieldState }) => {
-            const vendor = (field.value as string | null) ?? "";
+            const vendor = String(field.value ?? "");
             return (
               <FormFieldGroup
                 htmlFor={name}
@@ -81,6 +81,9 @@ export function VendorField<TFieldValues extends FieldValues = FieldValues>({
                   // null vendor — the same thing emptying the old text input did.
                   setValue={(item) =>
                     field.onChange(
+                      // SAFETY: `name` is a caller-owned Path whose value is
+                      // the vendor-name string; RHF cannot derive that value
+                      // relationship from the generic form type here.
                       (item?.id ?? "") as PathValue<
                         TFieldValues,
                         Path<TFieldValues>

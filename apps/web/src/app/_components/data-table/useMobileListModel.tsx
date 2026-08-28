@@ -1,7 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { RowData } from "@tanstack/react-table";
+import type { CellData, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
+import { z } from "zod";
 
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, isBrowserRoutedEntity } from "~/entities/entities";
@@ -13,10 +14,6 @@ import type {
   CubbyTable as ITable,
   CubbyRow as Row,
 } from "./table-features";
-
-interface MobileCellMeta {
-  mobile?: MobileColumnMeta;
-}
 
 interface SlotValue {
   priority: number;
@@ -65,11 +62,21 @@ function humanizeColumnId(colId: string): string {
 export function mobileColumnLabel<TItem extends RowData>(
   column: Column<TItem, unknown>,
 ): string {
-  const meta = column.columnDef.meta as MobileCellMeta | undefined;
+  const meta = column.columnDef.meta;
   const header = column.columnDef.header;
   if (meta?.mobile?.label) return meta.mobile.label;
-  if (typeof header === "string" && header.trim().length > 0) return header;
+  if (isNonEmptyHeaderLabel(header)) return header;
   return humanizeColumnId(column.id);
+}
+
+function isNonEmptyHeaderLabel<TItem extends RowData>(
+  header: Column<TItem, unknown>["columnDef"]["header"],
+): header is string {
+  return typeof header === "string" && header.trim().length > 0;
+}
+
+function isObjectCellValue(value: CellData): value is object {
+  return typeof value === "object" && value !== null;
 }
 
 /**
@@ -80,10 +87,10 @@ export function mobileColumnLabel<TItem extends RowData>(
  * expense rendered a full `PRODUCT —` line, 30px of vertical space saying
  * there is no product.
  */
-function isEmptyCellValue(value: unknown): boolean {
+function isEmptyCellValue(value: CellData): boolean {
   if (value === null || value === undefined || value === "") return true;
   if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object") {
+  if (isObjectCellValue(value)) {
     return Object.values(value).every((v) => v === null || v === undefined);
   }
   return false;
@@ -95,6 +102,14 @@ function isEmptyCellValue(value: unknown): boolean {
  * pathological one would otherwise be walked per cell, per row, per render.
  */
 const BLANK_WALK_DEPTH = 4;
+
+function isTextNode(node: ReactNode): node is string {
+  return typeof node === "string";
+}
+
+function isNumericNode(node: ReactNode): node is number {
+  return typeof node === "number";
+}
 
 /**
  * Whether a rendered cell says nothing — the em-dash "no value" placeholder,
@@ -112,17 +127,17 @@ function isBlankNode(node: ReactNode, depth = 0): boolean {
   if (node === null || node === undefined || node === false || node === true) {
     return true;
   }
-  if (typeof node === "string") {
+  if (isTextNode(node)) {
     const trimmed = node.trim();
     return trimmed === "" || trimmed === "—" || trimmed === "–";
   }
-  if (typeof node === "number") return false;
+  if (isNumericNode(node)) return false;
   if (Array.isArray(node))
     return node.every((child) => isBlankNode(child, depth));
-  if (isValidElement(node)) {
+  if (isValidElement<{ children?: ReactNode }>(node)) {
     if (node.type === NoneValue) return true;
     if (depth >= BLANK_WALK_DEPTH) return false;
-    const { children } = node.props as { children?: ReactNode };
+    const { children } = node.props;
     if (children === undefined) return false;
     return isBlankNode(children, depth + 1);
   }
@@ -133,18 +148,37 @@ function hasRenderableContent(content: ReactNode): boolean {
   return !isBlankNode(content);
 }
 
+const mobileImageRowSchema = z.object({
+  images: z.array(z.unknown()).optional(),
+  imageUrl: z.string().nullish(),
+  product: z.object({ images: z.array(z.unknown()).optional() }).optional(),
+});
+
+const inventoryMobileRowSchema = z.object({
+  product: z.object({ name: z.string().optional() }).optional(),
+});
+
+const mobileRouteRowSchema = z.object({ id: z.string().optional() });
+
 /** Whether a row carries a real image, vs. the cell's placeholder glyph. */
-function rowHasImage(original: unknown): boolean {
-  if (!original || typeof original !== "object") return false;
-  const row = original as {
-    images?: unknown[];
-    imageUrl?: string | null;
-    product?: { images?: unknown[] };
-  };
+function rowHasImage(original: RowData): boolean {
+  const parsed = mobileImageRowSchema.safeParse(original);
+  if (!parsed.success) return false;
+  const row = parsed.data;
   if (Array.isArray(row.images) && row.images.length > 0) return true;
-  if (typeof row.imageUrl === "string" && row.imageUrl.length > 0) return true;
+  if (row.imageUrl && row.imageUrl.length > 0) return true;
   const nested = row.product?.images;
   return Array.isArray(nested) && nested.length > 0;
+}
+
+function inventoryProductName(original: RowData): string | undefined {
+  const parsed = inventoryMobileRowSchema.safeParse(original);
+  return parsed.success ? parsed.data.product?.name : undefined;
+}
+
+function mobileShortcode(original: RowData): string | undefined {
+  const parsed = mobileRouteRowSchema.safeParse(original);
+  return parsed.success ? parsed.data.id : undefined;
 }
 
 /**
@@ -163,7 +197,10 @@ function rowHasImage(original: unknown): boolean {
  * construction: anything not asked for is already hidden, and a column that
  * wants to opt out says `slot: "hidden"`.
  */
-function resolveSlot(colId: string, meta?: MobileCellMeta): MobileSlot {
+function resolveSlot(
+  colId: string,
+  meta?: { mobile?: MobileColumnMeta },
+): MobileSlot {
   if (colId === "image") return "image";
   if (colId === "actions") return "actions";
   if (colId === "name" || colId === "filename") return "title";
@@ -172,7 +209,7 @@ function resolveSlot(colId: string, meta?: MobileCellMeta): MobileSlot {
 }
 
 function getPriority(
-  meta: MobileCellMeta | undefined,
+  meta: { mobile?: MobileColumnMeta } | undefined,
   fallback: number,
 ): number {
   return meta?.mobile?.priority ?? fallback;
@@ -197,7 +234,7 @@ export function useMobileListModel<TItem extends RowData>({
       ? entities[entity].basePath
       : undefined;
   // Per-list, not per-row: see `MobileListRowModel.reserveImageSlot`.
-  const reserveImageSlot = mobileListShape(table).hasImage;
+  const reserveImageSlot = mobileListLayout(table).hasImage;
 
   return useMemo(
     () =>
@@ -207,9 +244,8 @@ export function useMobileListModel<TItem extends RowData>({
         // already rendered as the row subtitle, and the suffix forces the
         // product name to truncate mid-word.
         if (entity === "inventory") {
-          const product = (row.original as { product?: { name?: string } })
-            .product;
-          if (product?.name) title = product.name;
+          const productName = inventoryProductName(row.original);
+          if (productName) title = productName;
         }
         let imageSlot: ReactNode | undefined;
         let actionsContent: ReactNode | undefined;
@@ -221,7 +257,7 @@ export function useMobileListModel<TItem extends RowData>({
           const colId = cell.column.id;
           if (colId === "select") continue;
 
-          const meta = cell.column.columnDef.meta as MobileCellMeta | undefined;
+          const meta = cell.column.columnDef.meta;
           const slot = resolveSlot(colId, meta);
           if (slot === "hidden") continue;
 
@@ -255,7 +291,7 @@ export function useMobileListModel<TItem extends RowData>({
             continue;
           }
           if (slot === "title") {
-            if (typeof rendered === "string" && rendered.trim().length > 0) {
+            if (isTextNode(rendered) && rendered.trim().length > 0) {
               title = rendered;
             }
             continue;
@@ -314,11 +350,10 @@ export function useMobileListModel<TItem extends RowData>({
           interactive,
         }));
 
-        const rowData = row.original as Record<string, unknown>;
         // Detail routes are keyed on the PUBLIC id. A row without a shortcode
         // (image, usda-food) simply gets no details link rather than a uuid URL
         // that no longer resolves.
-        const shortcode = rowData.id as string | undefined;
+        const shortcode = mobileShortcode(row.original);
         const detailsHref =
           getDetailsHref?.(row.original) ??
           (basePath && shortcode ? `/${basePath}/${shortcode}` : undefined);
@@ -387,17 +422,7 @@ const specBlockHeight = (count: number, interactiveCount: number): number =>
  * during a fast scroll. This knows an expense missing its project renders one
  * fewer line, so `measureElement` corrects by a few px instead of ~100.
  */
-export function estimateMobileRowHeight(
-  model?: Pick<
-    MobileListRowModel<Record<string, unknown>>,
-    | "subtitle"
-    | "rightValues"
-    | "rightValueInteractive"
-    | "metaValues"
-    | "imageSlot"
-    | "reserveImageSlot"
-  >,
-): number {
+export function estimateMobileRowHeight(model?: MobileRowHeightInput): number {
   if (!model) return 56;
   const identity =
     model.subtitle || model.rightValues.length
@@ -414,22 +439,27 @@ export function estimateMobileRowHeight(
   return Math.max(ROW_CHROME + identity + spec, hasThumbGutter ? 61 : 41);
 }
 
+type MobileRowHeightInput = Pick<
+  MobileListRowModel<RowData>,
+  | "subtitle"
+  | "rightValues"
+  | "rightValueInteractive"
+  | "metaValues"
+  | "imageSlot"
+  | "reserveImageSlot"
+>;
+
 /**
  * The shape a table's mobile rows will take, for the loading skeleton — so it
  * renders the right number of lines and the list doesn't jump when real rows
  * replace it.
  */
-export function mobileListShape<TItem extends RowData>(
-  table: ITable<TItem>,
-): {
-  metaLines: number;
-  hasImage: boolean;
-} {
+export function mobileListLayout<TItem extends RowData>(table: ITable<TItem>) {
   let metaCols = 0;
   let subtitleCols = 0;
   let hasImage = false;
   for (const column of table.getVisibleLeafColumns()) {
-    const meta = column.columnDef.meta as MobileCellMeta | undefined;
+    const meta = column.columnDef.meta;
     const slot = resolveSlot(column.id, meta);
     if (slot === "image") hasImage = true;
     else if (slot === "subtitle") subtitleCols += 1;

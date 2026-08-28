@@ -1,16 +1,12 @@
 import type { FullConfig } from "@playwright/test";
-import type { TestHarness } from "wrangler";
-import type { E2EDatabase } from "./e2e-database";
+
+import "./e2e-runtime-state";
 
 async function globalTeardown(_config: FullConfig): Promise<void> {
   console.log("[E2E Teardown] Cleaning up...");
 
-  const harness = (globalThis as Record<string, unknown>).__E2E_HARNESS__ as
-    | TestHarness
-    | undefined;
-  const database = (globalThis as Record<string, unknown>).__E2E_DATABASE__ as
-    | E2EDatabase
-    | undefined;
+  const harness = globalThis.__E2E_HARNESS__;
+  const database = globalThis.__E2E_DATABASE__;
 
   try {
     if (harness) {
@@ -25,8 +21,8 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
       console.log("[E2E Teardown] Database stopped");
     }
 
-    delete (globalThis as Record<string, unknown>).__E2E_HARNESS__;
-    delete (globalThis as Record<string, unknown>).__E2E_DATABASE__;
+    globalThis.__E2E_HARNESS__ = undefined;
+    globalThis.__E2E_DATABASE__ = undefined;
     delete process.env.E2E_DATABASE_URL;
   }
 

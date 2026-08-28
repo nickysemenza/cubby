@@ -1,13 +1,28 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { entityPreviewQueryOptions } from "~/entities/entity-query";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { AiUsageTableStatus, UsageEntityLink } from "./ai-usage-page";
 
-vi.mock("~/app/_components/EntityInlineLinkById", () => ({
-  EntityInlineLinkById: ({ entityId }: { entityId: string }) => (
-    <div data-testid="entity-link">{entityId}</div>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function seedProduct(id: string, name: string) {
+  const options = entityPreviewQueryOptions("product", id);
+  harness.queryClient.setQueryDefaults(options.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(options.queryKey, { id, name });
+}
 
 describe("UsageEntityLink", () => {
   it("renders the fallback, not a link, when entityId is a raw uuid", () => {
@@ -21,32 +36,39 @@ describe("UsageEntityLink", () => {
           entityId: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         }}
       />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.queryByTestId("entity-link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByText(/^product · 3fa85f64/)).toBeInTheDocument();
   });
 
-  it("renders the link when entityId is a shortcode matching entityType", () => {
+  it("renders a real entity detail link for a matching public shortcode", () => {
+    seedProduct("PRD-4K7M", "Fixture product");
+
     render(
       <UsageEntityLink row={{ entityType: "product", entityId: "PRD-4K7M" }} />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.getByTestId("entity-link")).toHaveTextContent("PRD-4K7M");
+    expect(
+      screen.getByRole("link", { name: "Fixture product" }),
+    ).toHaveAttribute("href", "/products/PRD-4K7M");
   });
 
   it("renders the fallback when the shortcode's type does not match entityType", () => {
     render(
       <UsageEntityLink row={{ entityType: "product", entityId: "LOC-4K7M" }} />,
+      { wrapper: harness.wrapper },
     );
 
-    expect(screen.queryByTestId("entity-link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });
 
 describe("AiUsageTableStatus", () => {
   it("keeps a failed query distinct from a valid empty result", () => {
-    const onRetry = vi.fn();
+    let retries = 0;
     render(
       <table>
         <tbody>
@@ -56,10 +78,13 @@ describe("AiUsageTableStatus", () => {
             isEmpty
             emptyLabel="No recent calls"
             retryLabel="Retry recent calls"
-            onRetry={onRetry}
+            onRetry={() => {
+              retries += 1;
+            }}
           />
         </tbody>
       </table>,
+      { wrapper: harness.wrapper },
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -67,6 +92,6 @@ describe("AiUsageTableStatus", () => {
     );
     expect(screen.queryByText("No recent calls")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Retry recent calls" }));
-    expect(onRetry).toHaveBeenCalledOnce();
+    expect(retries).toBe(1);
   });
 });

@@ -1,7 +1,10 @@
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import { processBackgroundJob } from "~/server/background-queue";
+import {
+  processBackgroundJob,
+  type BackgroundQueueEmbeddingPort,
+} from "~/server/background-queue";
 import { createBackgroundBatchWithJobs } from "~/server/repo/background-jobs";
 import {
   createProductFixture as createProduct,
@@ -9,20 +12,25 @@ import {
   updateProductNameFixtureRaw,
 } from "~/server/repo/repo.fixtures";
 import { refreshSearchDocument } from "~/server/repo/search-document";
+import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 
 // Configured-on, so the gate is what decides whether a provider call happens.
 // The rest of the semantic suite deliberately runs UNCONFIGURED (every refresh
 // skips before reaching the provider), which cannot tell "skipped because the
 // text is unchanged" apart from "skipped because embeddings are off" — the very
 // distinction these cases exist to pin.
-const embedTextsMock = vi.hoisted(() => vi.fn());
-vi.mock("~/server/semantic/embeddings", () => ({
-  embedTexts: embedTextsMock,
-  semanticEmbeddingsConfigured: () => true,
-}));
-
 const vector = (seed = 1): number[] =>
   Array.from({ length: 1536 }, (_, index) => ((index + seed) % 100) / 100);
+
+const embeddedTextBatches: string[][] = [];
+const configuredEmbeddingPort: BackgroundQueueEmbeddingPort = {
+  configured: () => true,
+  config: getSemanticEmbeddingConfig,
+  embed: async (texts) => {
+    embeddedTextBatches.push([...texts]);
+    return [vector()];
+  },
+};
 
 /**
  * Guards the ordering in background-queue's entity-embedding.refresh handler:
@@ -35,8 +43,7 @@ describe("entity-embedding refresh provider gate", () => {
   const ctx = withTestDb();
 
   beforeEach(() => {
-    embedTextsMock.mockReset();
-    embedTextsMock.mockResolvedValue([vector()]);
+    embeddedTextBatches.length = 0;
   });
 
   const runRefresh = async (entityId: string) => {
@@ -57,6 +64,7 @@ describe("entity-embedding refresh provider gate", () => {
       ctx.db,
       jobId,
       "entity-embedding.refresh",
+      configuredEmbeddingPort,
     );
   };
 
@@ -69,13 +77,13 @@ describe("entity-embedding refresh provider gate", () => {
     await refreshSearchDocument(ctx.db, "product", product.entityId);
 
     expect(await runRefresh(product.entityId)).toBe("succeeded");
-    expect(embedTextsMock).toHaveBeenCalledTimes(1);
+    expect(embeddedTextBatches).toHaveLength(1);
 
     // The mutation-sourced payload carries no expectedEmbeddingHash, so this is
     // the fan-out case: an unrelated edit re-projects the document and re-enqueues
     // a refresh whose embedded text is byte-identical.
     expect(await runRefresh(product.entityId)).toBe("skipped");
-    expect(embedTextsMock).toHaveBeenCalledTimes(1);
+    expect(embeddedTextBatches).toHaveLength(1);
   });
 
   it("embeds again once the embedded text actually changes", async () => {
@@ -86,7 +94,7 @@ describe("entity-embedding refresh provider gate", () => {
     );
     await refreshSearchDocument(ctx.db, "product", product.entityId);
     expect(await runRefresh(product.entityId)).toBe("succeeded");
-    expect(embedTextsMock).toHaveBeenCalledTimes(1);
+    expect(embeddedTextBatches).toHaveLength(1);
 
     await updateProductNameFixtureRaw(
       ctx.db,
@@ -96,6 +104,6 @@ describe("entity-embedding refresh provider gate", () => {
     await refreshSearchDocument(ctx.db, "product", product.entityId);
 
     expect(await runRefresh(product.entityId)).toBe("succeeded");
-    expect(embedTextsMock).toHaveBeenCalledTimes(2);
+    expect(embeddedTextBatches).toHaveLength(2);
   });
 });

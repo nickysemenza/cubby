@@ -3,6 +3,7 @@ import { wishCreateInput, wishOut } from "@cubby/schemas/wish";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -10,6 +11,9 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { registerEntityTools } from "./tools/entity.tools";
+import type { ToolArguments } from "./tools/tool-registration";
+
+const wishResultSchema = z.object({ item: wishOut });
 
 describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
@@ -20,7 +24,7 @@ describe("MCP entity kernel boundary", () => {
         auth: { userId: testUserId("test-user-id") },
       }),
     );
-    const callEntity = (command: Record<string, unknown>) => {
+    const callEntity = (command: ToolArguments) => {
       const server = new McpServer({ name: "test", version: "1.0.0" });
       registerEntityTools(server);
       return callMcpTool(server, "entity", { command }, {}, { entityKernel });
@@ -34,9 +38,7 @@ describe("MCP entity kernel boundary", () => {
       }),
     });
     expect(created.isError).not.toBe(true);
-    const createdWish = wishOut.parse(
-      (created.structuredContent as { item: unknown }).item,
-    );
+    const createdWish = wishResultSchema.parse(created.structuredContent).item;
 
     const fetched = await callEntity({
       action: "get",
@@ -44,9 +46,9 @@ describe("MCP entity kernel boundary", () => {
       id: createdWish.id,
     });
     expect(fetched.isError).not.toBe(true);
-    expect(
-      wishOut.parse((fetched.structuredContent as { item: unknown }).item).name,
-    ).toBe("MCP kernel boundary wish");
+    expect(wishResultSchema.parse(fetched.structuredContent).item.name).toBe(
+      "MCP kernel boundary wish",
+    );
 
     const wrongPrefix = await callEntity({
       action: "get",

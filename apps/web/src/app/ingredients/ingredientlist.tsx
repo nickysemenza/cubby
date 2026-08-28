@@ -8,7 +8,10 @@ import { uniq } from "es-toolkit";
 import { Scale, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -180,78 +183,92 @@ export function IngredientList() {
   // Memoize columns to prevent recreating on every render
   // Note: updateIngredientMutation is NOT in dependencies because useMutation returns a new object every render
   const columns = useMemo(
-    () => [
-      createImageColumn(columnHelper, {
-        entity: "ingredient",
-        // An ingredient has no images of its own, so this borrows the photo of
-        // a product it maps to — the images are already joined for the Product
-        // column's pill. Without it every row rendered the carrot placeholder.
-        getImages: (ingredient) => {
-          const cover = ingredientCoverImage(ingredient);
-          return cover ? [cover] : [];
-        },
+    () =>
+      createCubbyColumnCollection<IngredientListItem>((add) => {
+        add(
+          createImageColumn(columnHelper, {
+            entity: "ingredient",
+            // An ingredient has no images of its own, so this borrows the photo of
+            // a product it maps to — the images are already joined for the Product
+            // column's pill. Without it every row rendered the carrot placeholder.
+            getImages: (ingredient) => {
+              const cover = ingredientCoverImage(ingredient);
+              return cover ? [cover] : [];
+            },
+          }),
+        );
+        add(
+          createNameColumn(columnHelper, "ingredient", "name", {
+            // Cap the name (it would otherwise absorb all leftover width under the
+            // fixed layout and leave a big gap); the flex space goes to Recipes +
+            // Product below, whose content actually benefits from it.
+            className: "w-56",
+            editable: {
+              onSave: async (newName, ingredient) => {
+                await updateIngredientMutation.mutateAsync({
+                  id: ingredient.id,
+                  data: { name: newName },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("aliases", {
+            header: "Aliases",
+            meta: {
+              className: "w-48",
+              mobile: { slot: "subtitle", priority: 20 },
+            },
+            cell: (info) => (
+              <TruncatedList
+                items={info.getValue()}
+                maxItems={2}
+                renderItem={(alias: string) => (
+                  <span key={alias} className="truncate text-xs">
+                    {alias}
+                  </span>
+                )}
+              />
+            ),
+          }),
+        );
+        add(
+          columnHelper.accessor("appearsInRecipes", {
+            id: "appearsInRecipes",
+            header: "Recipes",
+            meta: {
+              // Generous fixed widths on the content-rich columns (vs the old w-48):
+              // under the fixed layout all columns scale proportionally, so giving
+              // Recipes/Product more weight than Name steers leftover space here
+              // instead of into a ballooning Name column.
+              className: "w-56 overflow-hidden",
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: (info) => <RecipeUsageCell ingredient={info.row.original} />,
+          }),
+        );
+        add(
+          columnHelper.accessor("product", {
+            id: "product",
+            header: "Product",
+            meta: {
+              className: "w-72 overflow-hidden",
+              mobile: { slot: "subtitle", priority: 10 },
+            },
+            cell: (info) => (
+              <ProductPillsCell products={info.getValue() ?? []} />
+            ),
+          }),
+        );
       }),
-      createNameColumn(columnHelper, "ingredient", "name", {
-        // Cap the name (it would otherwise absorb all leftover width under the
-        // fixed layout and leave a big gap); the flex space goes to Recipes +
-        // Product below, whose content actually benefits from it.
-        className: "w-56",
-        editable: {
-          onSave: async (newName, ingredient) => {
-            await updateIngredientMutation.mutateAsync({
-              id: ingredient.id,
-              data: { name: newName },
-            });
-          },
-        },
-      }),
-      columnHelper.accessor("aliases", {
-        header: "Aliases",
-        meta: {
-          className: "w-48",
-          mobile: { slot: "subtitle", priority: 20 },
-        },
-        cell: (info) => (
-          <TruncatedList
-            items={info.getValue()}
-            maxItems={2}
-            renderItem={(alias: string) => (
-              <span key={alias} className="truncate text-xs">
-                {alias}
-              </span>
-            )}
-          />
-        ),
-      }),
-      columnHelper.accessor("appearsInRecipes", {
-        id: "appearsInRecipes",
-        header: "Recipes",
-        meta: {
-          // Generous fixed widths on the content-rich columns (vs the old w-48):
-          // under the fixed layout all columns scale proportionally, so giving
-          // Recipes/Product more weight than Name steers leftover space here
-          // instead of into a ballooning Name column.
-          className: "w-56 overflow-hidden",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        cell: (info) => <RecipeUsageCell ingredient={info.row.original} />,
-      }),
-      columnHelper.accessor("product", {
-        id: "product",
-        header: "Product",
-        meta: {
-          className: "w-72 overflow-hidden",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
-        cell: (info) => <ProductPillsCell products={info.getValue() ?? []} />,
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateIngredientMutation changes every render but is functionally stable
     [columnHelper],
   );
 
   const { workbench, data, totalCount } = useEntityList({
     entity: "ingredient",
+    queryOptions: entityListFor("ingredient").listQueryPlan,
     onInspectRow: inspectRow,
     getMappings: getIngredientListMappings,
     columns,

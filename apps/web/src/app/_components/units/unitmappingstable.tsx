@@ -24,15 +24,13 @@ import { wasm } from "~/lib/wasm";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { KindIcon } from "./kind-icon";
 
-const BASE_KIND_SET: ReadonlySet<string> = new Set(BASE_KINDS);
-
 // The base measurement kind a unit belongs to, or null for nutrient:* / other:*
 // units (which `kindIconMap` has no icon for). `amount_kind` is a cheap, cached
 // WASM probe; it never throws today, but guard defensively.
 const baseKindForUnit = (unit: string): BaseKind | null => {
   try {
     const k = wasm.amount_kind({ value: 1, unit });
-    return BASE_KIND_SET.has(k) ? (k as BaseKind) : null;
+    return BASE_KINDS.find((kind) => kind === k) ?? null;
   } catch {
     return null;
   }

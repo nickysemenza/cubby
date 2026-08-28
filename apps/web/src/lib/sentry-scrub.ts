@@ -10,6 +10,8 @@
 // the two places the SDK serializes the request URL. The calendar feed puts its
 // credential in the *path*, so paths are scrubbed too.
 
+import { z } from "zod";
+
 import { httpRouteTemplate } from "./http-route-template";
 
 const REDACTED = "[REDACTED]";
@@ -86,12 +88,13 @@ export function scrubSentryEvent<
   const request = event.request;
   if (!request) return event;
 
-  if (typeof request.url === "string") {
+  if (request.url !== undefined) {
     request.url = redactUrl(request.url);
   }
 
-  if (typeof request.query_string === "string") {
-    request.query_string = redactQueryString(request.query_string);
+  const queryString = z.string().safeParse(request.query_string);
+  if (queryString.success) {
+    request.query_string = redactQueryString(queryString.data);
   }
 
   return event;

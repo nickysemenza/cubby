@@ -13,12 +13,12 @@ import {
 import { CoverageChips, MacroChips } from "./CoverageChips";
 import { KindIcon } from "./kind-icon";
 
-const TIER_LABEL: Record<CoverageTier, string> = {
+const TIER_LABEL = {
   complete: "Complete",
   good: "Good",
   partial: "Partial",
   none: "None",
-};
+} satisfies Record<CoverageTier, string>;
 
 const TIER_TONE = {
   complete: "positive",

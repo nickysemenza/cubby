@@ -121,7 +121,7 @@ export const findFuzzyMergeCandidates = async (
 
   // Already ordered best-first per source; keep the top `perRow` for each.
   const out = new Map<IngredientShortcode, FuzzyMergeCandidate[]>();
-  for (const r of res.rows as unknown as Row[]) {
+  for (const r of res.rows) {
     const key = parseShortcodeFor("ingredient", r.source_shortcode);
     const arr = out.get(key) ?? [];
     if (arr.length >= perRow) continue;

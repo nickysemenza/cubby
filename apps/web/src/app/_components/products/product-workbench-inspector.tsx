@@ -14,10 +14,11 @@ import {
   EntityInspectorFrame,
   type InspectorTab,
 } from "~/app/_components/inspector-frame";
+import { product as productOperations } from "~/app/products/product.functions";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { entityPreviewQueryOptions } from "~/entities/entity-query";
+import { entityDetail } from "~/entities/entity-detail.functions";
 import { formatCurrency } from "~/lib/utils";
 
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -25,8 +26,19 @@ import { CategoryLabel } from "./CategoryLabel";
 import { heroPresence } from "./product-hero-presence";
 import {
   ProductRelationshipRouteContent,
+  type ProductRelationshipRouteOperations,
   useProductRelationshipRoute,
 } from "./product-relationship-route";
+
+/** Remote reads that make the inspector useful after its local frame mounts. */
+export interface ProductWorkbenchInspectorOperations extends ProductRelationshipRouteOperations {
+  productDetail: typeof entityDetail.detail;
+}
+
+const productionOperations: ProductWorkbenchInspectorOperations = {
+  productDetail: entityDetail.detail.forEntity("product"),
+  relationshipRoute: productOperations.relationshipRoute,
+};
 
 const Field: FC<{ label: string; children: ReactNode }> = ({
   label,
@@ -197,12 +209,14 @@ const Relations: FC<{
 function ProductInspectorContent({
   product,
   onClose,
+  operations,
 }: {
   product: ProductWithFoodOut;
   onClose?: () => void;
+  operations: ProductWorkbenchInspectorOperations;
 }) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
-  const relationshipQuery = useProductRelationshipRoute(product.id);
+  const relationshipQuery = useProductRelationshipRoute(product.id, operations);
   const coverImage = product.images.find(isDisplayableImageFile);
 
   return (
@@ -277,19 +291,21 @@ function ProductInspectorState({
 export function ProductWorkbenchInspector({
   productId,
   onClose,
+  operations = productionOperations,
 }: {
   productId: string;
   onClose?: () => void;
+  operations?: ProductWorkbenchInspectorOperations;
 }) {
   const queryOptions = useMemo(
-    () => entityPreviewQueryOptions("product", productId),
-    [productId],
+    () =>
+      operations.productDetail.queryOptions({
+        entity: "product",
+        shortcode: productId,
+      }),
+    [operations.productDetail, productId],
   );
-  // `entityPreviewQueryOptions` is deliberately a cross-entity union. Its
-  // runtime entity is fixed above, but TanStack cannot recover that narrowing
-  // from the generated query-options union.
-  // oxlint-disable-next-line typescript/no-explicit-any -- useQuery cannot narrow the generated cross-entity options union
-  const query = useQuery(queryOptions as any);
+  const query = useQuery(queryOptions);
   const parsedProduct = productWithFoodOut.safeParse(query.data);
   const product = parsedProduct.success ? parsedProduct.data : undefined;
 
@@ -336,5 +352,11 @@ export function ProductWorkbenchInspector({
     );
   }
 
-  return <ProductInspectorContent product={product} onClose={onClose} />;
+  return (
+    <ProductInspectorContent
+      product={product}
+      onClose={onClose}
+      operations={operations}
+    />
+  );
 }

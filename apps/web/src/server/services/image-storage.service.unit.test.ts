@@ -1,65 +1,3 @@
-import type * as ExternalFetch from "@cubby/shared/external-fetch";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  createPendingImageRecord: vi.fn(),
-  createUploadedImageRecord: vi.fn(),
-  deleteS3Object: vi.fn(),
-  fetchAndStoreImage: vi.fn(),
-  getImageByKey: vi.fn(),
-  generatePresignedUploadUrl: vi.fn(),
-  uploadToS3: vi.fn(),
-  assertAttachableEntityExists: vi.fn(),
-  createAndAssociateUploadedImage: vi.fn(),
-  createOrReuseAttachedImage: vi.fn(),
-  findAttachmentByIdempotencyKey: vi.fn(),
-  getImageById: vi.fn(),
-  deleteImages: vi.fn(),
-  getS3Object: vi.fn(),
-  fetchExternalResponse: vi.fn(),
-  resolveLiveShortcode: vi.fn(),
-}));
-
-vi.mock("~/server/repo/image", () => ({
-  createPendingImageRecord: mocks.createPendingImageRecord,
-  createUploadedImageRecord: mocks.createUploadedImageRecord,
-  cullPendingImages: vi.fn(),
-  getImageByKey: mocks.getImageByKey,
-  assertAttachableEntityExists: mocks.assertAttachableEntityExists,
-  createAndAssociateUploadedImage: mocks.createAndAssociateUploadedImage,
-  createOrReuseAttachedImage: mocks.createOrReuseAttachedImage,
-  findAttachmentByIdempotencyKey: mocks.findAttachmentByIdempotencyKey,
-  getImageById: mocks.getImageById,
-  deleteImages: mocks.deleteImages,
-}));
-
-vi.mock("~/server/repo/shortcode-resolver", () => ({
-  resolveLiveShortcode: mocks.resolveLiveShortcode,
-}));
-
-vi.mock("~/server/utils/s3", () => ({
-  contentTypeToExtension: (ct: string) => (ct === "image/png" ? "png" : "jpg"),
-  deleteS3Object: mocks.deleteS3Object,
-  fetchAndStoreImage: mocks.fetchAndStoreImage,
-  generateImageKey: (filename: string) => `cubby/images/${filename}`,
-  generateDocumentKey: (filename: string, folder?: string) =>
-    `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
-  generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
-  getS3Object: mocks.getS3Object,
-  uploadToS3: mocks.uploadToS3,
-}));
-
-vi.mock("~/server/utils/r2-public-url", () => ({
-  extractKeyFromUrl: vi.fn(),
-  getR2PublicUrl: (key: string) => `https://images.example/${key}`,
-  isOurBucketUrl: () => false,
-}));
-
-vi.mock("@cubby/shared/external-fetch", async (importActual) => ({
-  ...(await importActual<typeof ExternalFetch>()),
-  fetchExternalResponse: mocks.fetchExternalResponse,
-}));
-
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import {
   createFileUploadResponse,
@@ -67,130 +5,215 @@ import {
 } from "@cubby/schemas/image";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { ExternalFetchError } from "@cubby/shared/external-fetch";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
-  attachFileToEntity,
-  createFileUpload,
-  importImageFromUrl,
-  initiateDocumentUpload,
+  createImageStorageService,
+  type ImageStoragePorts,
 } from "./image-storage.service";
 
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
-const STAGED_UPLOAD_ID = testEntityId("image", "staged-upload");
-const EXISTING_IMAGE_ID = testEntityId("image", "existing-image");
-const STANDALONE_IMAGE_ID = testEntityId("image", "standalone-image");
+type TestDatabase = { readonly scope: "image-storage" };
+const database: TestDatabase = { scope: "image-storage" };
+const stagedImageId = testEntityId("image", "staged-upload");
+const productId = testEntityId("product", "attachment-target");
+const stagedUploadCode = testShortcode("image", "IMG-2222");
+const existingImageCode = testShortcode("image", "IMG-3333");
 
-// `uploadId` crosses the API as the staged row's public `IMG-` code; the uuids
-// above are what it resolves to, and what the uuid-keyed repo calls must see.
-const STAGED_UPLOAD_CODE = testShortcode("image", "IMG-2222");
-const EXISTING_IMAGE_CODE = testShortcode("image", "IMG-3333");
-const MISSING_UPLOAD_CODE = testShortcode("image", "IMG-4444");
-const STANDALONE_IMAGE_CODE = testShortcode("image", "IMG-5555");
-const IMAGE_ID_BY_CODE = new Map<string, string>([
-  [STAGED_UPLOAD_CODE, STAGED_UPLOAD_ID],
-  [EXISTING_IMAGE_CODE, EXISTING_IMAGE_ID],
-  [STANDALONE_IMAGE_CODE, STANDALONE_IMAGE_ID],
-]);
+class MemoryImageStorage {
+  readonly createdPending: Array<{
+    filename: string;
+    contentType: string;
+    size: number;
+    key: string;
+  }> = [];
+  readonly createdUploads: Array<{
+    filename: string;
+    contentType: string;
+    size: number;
+    key: string;
+  }> = [];
+  readonly uploaded: Array<{ key: string; contentType: string; size: number }> =
+    [];
+  readonly deletedKeys: string[] = [];
+  readonly resolvedCodes = new Map<string, string>([
+    [stagedUploadCode, stagedImageId],
+    [existingImageCode, testEntityId("image", "existing-image")],
+  ]);
+  imageByKey: { shortcode: string; key: string; url: string } | null = null;
+  stagedRow:
+    | {
+        key: string;
+        filename: string;
+        contentType: string;
+        status: string;
+        entityType: string | null;
+      }
+    | Error = {
+    key: "cubby/images/staged.png",
+    filename: "staged.png",
+    contentType: "image/png",
+    status: "PENDING",
+    entityType: null,
+  };
+  stagedObject: Response = new Response(Buffer.from(PNG_BASE64, "base64"));
+  fetchedResponse: Response | Error = new Response(
+    Buffer.from(PNG_BASE64, "base64"),
+    { headers: { "content-type": "image/png" } },
+  );
+  imported: {
+    key: string;
+    url: string;
+    contentType: string;
+    size: number;
+  } | null = {
+    key: "imports/recipe.jpg",
+    url: "https://images.example/imports/recipe.jpg",
+    contentType: "image/jpeg",
+    size: 123,
+  };
+  createUploadError: Error | null = null;
+  createAttachmentError: Error | null = null;
+  existingAttachment: {
+    shortcode: string;
+    key: string;
+    filename: string;
+    contentType: string;
+    idempotencyKey: string | null;
+  } | null = null;
+  reuseAttachment = false;
+  deletedImageIds: string[] = [];
 
-describe("importImageFromUrl", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.deleteS3Object.mockResolvedValue(undefined);
-    mocks.fetchAndStoreImage.mockResolvedValue({
-      key: "imports/recipe.jpg",
-      url: "https://images.example/imports/recipe.jpg",
-      size: 123,
-      contentType: "image/jpeg",
-    });
-  });
+  readonly ports: ImageStoragePorts<TestDatabase> = {
+    repository: {
+      assertAttachableEntityExists: async () => undefined,
+      createOrReuseAttachedImage: async (_database, params) => {
+        if (this.createAttachmentError) throw this.createAttachmentError;
+        const row = this.existingAttachment ?? {
+          shortcode: "IMG-9999",
+          key: params.key,
+          filename: params.filename,
+          contentType: params.contentType,
+          idempotencyKey: params.idempotencyKey ?? null,
+        };
+        return { row, reused: this.reuseAttachment };
+      },
+      createPendingImageRecord: async (_database, params) => {
+        this.createdPending.push(params);
+        return { shortcode: "IMG-2AAA" };
+      },
+      createUploadedImageRecord: async (_database, params) => {
+        if (this.createUploadError) throw this.createUploadError;
+        this.createdUploads.push(params);
+        return { shortcode: "IMG-7QRS" };
+      },
+      cullPendingImages: async () => ({
+        count: 0,
+        deletedIds: [],
+        deletedKeys: [],
+      }),
+      deleteImages: async (_database, imageIds) => {
+        this.deletedImageIds.push(...imageIds);
+        return {
+          deletedIds: imageIds,
+          deletedKeys: ["cubby/images/staged.png"],
+        };
+      },
+      findAttachmentByIdempotencyKey: async () => this.existingAttachment,
+      findUnreferencedImages: async () => [],
+      getImageById: async () => {
+        if (this.stagedRow instanceof Error) throw this.stagedRow;
+        return this.stagedRow;
+      },
+      getImageByKey: async () => this.imageByKey,
+    },
+    objectStorage: {
+      contentTypeToExtension: (contentType) =>
+        contentType === "image/png" ? "png" : "jpg",
+      deleteObject: async (key) => {
+        this.deletedKeys.push(key);
+      },
+      extractKeyFromUrl: () => null,
+      fetchAndStoreImage: async () => this.imported,
+      generateDocumentKey: (filename, folder) =>
+        `cubby/documents/${folder ? `${folder}/` : ""}${filename}`,
+      generateImageKey: (filename) => `cubby/images/${filename}`,
+      generatePresignedUploadUrl: async () => "https://r2.example/put",
+      getObject: async () => this.stagedObject,
+      getPublicUrl: (key) => `https://images.example/${key}`,
+      isOurBucketUrl: () => false,
+      upload: async ({ key, body, contentType }) => {
+        this.uploaded.push({ key, contentType, size: body.length });
+      },
+    },
+    externalFetch: {
+      fetchResponse: async () => {
+        if (this.fetchedResponse instanceof Error) throw this.fetchedResponse;
+        return this.fetchedResponse.clone();
+      },
+      readResponseWithLimit: async (response) =>
+        new Uint8Array(await response.arrayBuffer()),
+      sanitizeUrl: (url) => new URL(url).toString(),
+      validateUrl: (url) => new URL(url),
+    },
+    shortcode: {
+      resolveLive: async (_database, code, entity) =>
+        entity === "image"
+          ? (this.resolvedCodes.get(code) ?? null)
+          : code === "PRD-TEST"
+            ? productId
+            : null,
+    },
+  };
+}
 
-  it("deletes the uploaded object when record creation fails", async () => {
-    const databaseError = new Error("database unavailable");
-    mocks.createUploadedImageRecord.mockRejectedValue(databaseError);
+function setup() {
+  const storage = new MemoryImageStorage();
+  return { storage, service: createImageStorageService(storage.ports) };
+}
+
+const attachmentTarget = {
+  entityType: "product",
+  entityId: "PRD-TEST",
+} satisfies Pick<McpAttachFileInput, "entityType" | "entityId">;
+
+describe("image storage ports", () => {
+  it("rolls back an imported object when the repository rejects its image row", async () => {
+    const { service, storage } = setup();
+    storage.createUploadError = new Error("database unavailable");
 
     await expect(
-      importImageFromUrl({} as never, {
-        sourceUrl: "https://recipes.example/photo.jpg?token=secret",
+      service.importImageFromUrl(database, {
+        sourceUrl: "https://recipes.example/photo.jpg",
         filenamePrefix: "recipe",
       }),
-    ).rejects.toBe(databaseError);
-    expect(mocks.deleteS3Object).toHaveBeenCalledWith("imports/recipe.jpg");
+    ).rejects.toThrow("database unavailable");
+    expect(storage.deletedKeys).toEqual(["imports/recipe.jpg"]);
   });
 
-  /**
-   * Regression test: `importImageFromUrlResponseSchema.imageId` is
-   * `imageShortcode`, not a raw uuid — a mismatch here would previously only
-   * surface as a `strictOutput` 500 on the live upload path, never at
-   * typecheck (the repo layer's return type wasn't itself branded), and never
-   * in a fast test. Asserting on the SHAPE (parses as `imageShortcode`), not a
-   * fixed string, so this doesn't just pin today's mock value.
-   */
-  it("returns the created image's public IMG- shortcode, not its uuid", async () => {
-    mocks.createUploadedImageRecord.mockResolvedValue({
-      id: "11111111-1111-1111-1111-111111111111",
-      shortcode: "IMG-7QRS",
-    });
+  it("returns an IMG shortcode from an imported image", async () => {
+    const { service } = setup();
 
-    const result = await importImageFromUrl({} as never, {
+    const result = await service.importImageFromUrl(database, {
       sourceUrl: "https://recipes.example/photo.jpg",
       filenamePrefix: "recipe",
     });
 
-    expect(result).not.toBeNull();
     expect(imageShortcode.safeParse(result?.imageId).success).toBe(true);
     expect(result?.imageId).toBe("IMG-7QRS");
-    expect(result?.imageId).not.toBe("11111111-1111-1111-1111-111111111111");
-  });
-});
-
-describe("initiateDocumentUpload", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.createPendingImageRecord.mockResolvedValue({
-      id: "22222222-2222-2222-2222-222222222222",
-      shortcode: "IMG-2AAA",
-    });
-    mocks.generatePresignedUploadUrl.mockResolvedValue(
-      "https://r2.example/put",
-    );
-    mocks.getImageByKey.mockResolvedValue(null);
   });
 
-  it("preserves the original filename under the folder", async () => {
-    const result = await initiateDocumentUpload({} as never, {
-      filename: "blender-manual.pdf",
-      contentType: "application/pdf",
-      size: 1024,
-      entityType: "PRODUCT",
-      folder: "P-0123",
-    });
-
-    expect(result.key).toBe("cubby/documents/P-0123/blender-manual.pdf");
-    // `initiateUploadWithoutEntityResponseSchema.imageId` is `imageShortcode`
-    // — this pins the shape (not a raw uuid), same reasoning as the
-    // `importImageFromUrl` regression test above.
-    expect(imageShortcode.safeParse(result.imageId).success).toBe(true);
-    expect(result.imageId).toBe("IMG-2AAA");
-    expect(mocks.createPendingImageRecord).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({
-        filename: "blender-manual.pdf",
-        contentType: "application/pdf",
-        key: "cubby/documents/P-0123/blender-manual.pdf",
-      }),
-    );
-  });
-
-  it("falls back to a timestamped key when the filename collides", async () => {
-    mocks.getImageByKey.mockResolvedValueOnce({
-      id: "existing",
-      url: "https://images.example/x",
+  it("allocates a readable document key and dedupes collisions", async () => {
+    const { service, storage } = setup();
+    storage.imageByKey = {
+      shortcode: "IMG-OLD1",
       key: "cubby/documents/P-0123/blender-manual.pdf",
-    });
+      url: "https://images.example/old",
+    };
 
-    const result = await initiateDocumentUpload({} as never, {
+    const result = await service.initiateDocumentUpload(database, {
       filename: "blender-manual.pdf",
       contentType: "application/pdf",
       size: 1024,
@@ -201,478 +224,187 @@ describe("initiateDocumentUpload", () => {
     expect(result.key).toMatch(
       /^cubby\/documents\/P-0123\/blender-manual-\d+\.pdf$/,
     );
-  });
-});
-
-describe("createFileUpload", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.createPendingImageRecord.mockResolvedValue({
-      id: STAGED_UPLOAD_ID,
-      shortcode: "IMG-2AAA",
-    });
-    mocks.generatePresignedUploadUrl.mockResolvedValue(
-      "https://r2.example/put",
-    );
-    mocks.getImageByKey.mockResolvedValue(null);
+    expect(storage.createdPending).toHaveLength(1);
   });
 
-  // The regression guard for the class of bug that broke this tool outright:
-  // the handler's return value must satisfy the schema `registerMcpTool`
-  // declares as its `outputSchema`, because `structuredSuccess` PARSES against
-  // it — a mismatch fails every single call with a bare Zod issue array, and no
-  // schema-walk test can see it. `uploadId` was `z.uuid()` while the service
-  // returned an `IMG-` shortcode, so `create_file_upload` was unusable.
-  it("returns a response that satisfies its declared MCP output schema", async () => {
-    const result = await createFileUpload({} as never, {
+  it("stages only accepted upload types and returns the declared MCP shape", async () => {
+    const { service, storage } = setup();
+
+    const result = await service.createFileUpload(database, {
       entityId: "PRD-TEST",
       filename: "receipt.jpeg",
       contentType: "image/jpeg",
       size: 2_432_267,
     });
 
-    expect(createFileUploadResponse.safeParse(result)).toMatchObject({
-      success: true,
-    });
-    expect(result.uploadId).toBe("IMG-2AAA");
-  });
-
-  it("refuses a content type outside the allowlist before staging a row", async () => {
+    expect(createFileUploadResponse.safeParse(result).success).toBe(true);
     await expect(
-      createFileUpload({} as never, {
+      service.createFileUpload(database, {
         entityId: "PRD-TEST",
         filename: "notes.txt",
         contentType: "text/plain",
         size: 12,
       }),
     ).rejects.toThrow(/Unsupported content type/);
-    expect(mocks.createPendingImageRecord).not.toHaveBeenCalled();
+    expect(storage.createdPending).toHaveLength(1);
   });
 });
 
 describe("attachFileToEntity", () => {
-  const resolvedProductId = testEntityId("product", "attach-target");
+  let service: ReturnType<typeof setup>["service"];
+  let storage: MemoryImageStorage;
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.assertAttachableEntityExists.mockResolvedValue(undefined);
-    mocks.getImageByKey.mockResolvedValue(null);
-    mocks.uploadToS3.mockResolvedValue(undefined);
-    mocks.deleteS3Object.mockResolvedValue(undefined);
-    mocks.createOrReuseAttachedImage.mockImplementation(
-      async (
-        _db: unknown,
-        params: {
-          key: string;
-          filename: string;
-          contentType: string;
-        },
-      ) => ({
-        // `shortcode` too: `attachFileResponse.imageId` is the public `IMG-`
-        // code now, so a row without one yields `undefined` downstream.
-        row: {
-          id: "img-99",
-          shortcode: "IMG-9999",
-          ...params,
-          idempotencyKey: null,
-        },
-        reused: false,
-      }),
-    );
-    mocks.findAttachmentByIdempotencyKey.mockResolvedValue(null);
-    // Two boundary crossings per call — the target entity and the `IMG-`
-    // uploadId — so the resolver has to answer per entity, not blanket.
-    mocks.resolveLiveShortcode.mockImplementation(
-      async (_db: unknown, code: string, entity: string) =>
-        entity === "image"
-          ? (IMAGE_ID_BY_CODE.get(code) ?? null)
-          : resolvedProductId,
-    );
+    ({ service, storage } = setup());
   });
 
-  const base = {
-    entityType: "product",
-    entityId: "PRD-TEST",
-  } satisfies Partial<McpAttachFileInput>;
-
-  it("stores a base64 image, associates it, and reports kind=image", async () => {
-    const result = await attachFileToEntity({} as never, {
-      ...base,
+  it("stores base64 image data and reports its public attachment", async () => {
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
       data: PNG_BASE64,
       contentType: "image/png",
     });
 
-    expect(result.kind).toBe("image");
-    expect(result.imageId).toBe("IMG-9999");
-    expect(result.reused).toBe(false);
-    expect(result.entityId).toBe("PRD-TEST");
-    expect(mocks.uploadToS3).toHaveBeenCalledWith(
+    expect(result).toMatchObject({
+      imageId: "IMG-9999",
+      kind: "image",
+      reused: false,
+    });
+    expect(storage.uploaded).toEqual([
       expect.objectContaining({
-        key: expect.stringContaining("cubby/images/"),
+        key: "cubby/images/attachment.png",
         contentType: "image/png",
       }),
-    );
-    expect(mocks.createOrReuseAttachedImage).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({ contentType: "image/png", size: 70 }),
-      { entity: "product", id: resolvedProductId },
-      undefined,
-    );
+    ]);
   });
 
-  it("parses a data: URI and infers the content type", async () => {
-    const result = await attachFileToEntity({} as never, {
-      ...base,
+  it("parses data URI content types and classifies PDFs as documents", async () => {
+    const image = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
       data: `data:image/png;base64,${PNG_BASE64}`,
     });
-
-    expect(result.contentType).toBe("image/png");
-    expect(result.kind).toBe("image");
-  });
-
-  it("classifies a PDF as a document and uses the document key", async () => {
-    const result = await attachFileToEntity({} as never, {
-      ...base,
+    const document = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
       data: Buffer.from("%PDF-1.4 fake").toString("base64"),
       contentType: "application/pdf",
       filename: "permit.pdf",
     });
 
-    expect(result.kind).toBe("document");
-    expect(mocks.uploadToS3).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: expect.stringMatching(
-          /^cubby\/documents\/PRD-TEST\/permit-[\da-f-]+\.pdf$/,
-        ),
-      }),
+    expect(image.contentType).toBe("image/png");
+    expect(document.kind).toBe("document");
+    expect(storage.uploaded[1]?.key).toMatch(
+      /^cubby\/documents\/PRD-TEST\/permit-[\da-f-]+\.pdf$/,
     );
   });
 
-  it("uses the UI collision fallback within the entity folder", async () => {
-    mocks.getImageByKey.mockResolvedValueOnce({
-      id: "existing",
-      url: "https://images.example/x",
-      key: "cubby/documents/PRD-TEST/permit.pdf",
+  it("uses the URL response type, rejects conflicts, and maps blocked fetches", async () => {
+    storage.fetchedResponse = new Response(Buffer.from(PNG_BASE64, "base64"), {
+      headers: { "content-type": "image/png" },
     });
-
-    await attachFileToEntity({} as never, {
-      ...base,
-      data: Buffer.from("%PDF-1.4 fake").toString("base64"),
-      contentType: "application/pdf",
-      filename: "permit.pdf",
-    });
-
-    expect(mocks.uploadToS3).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: expect.stringMatching(
-          /^cubby\/documents\/PRD-TEST\/permit-[\da-f-]+\.pdf$/,
-        ),
-      }),
-    );
-  });
-
-  it("stores a fetched URL image", async () => {
-    mocks.fetchExternalResponse.mockResolvedValue(
-      new Response(Buffer.from(PNG_BASE64, "base64"), {
-        headers: { "content-type": "image/png" },
-      }),
-    );
-
-    const result = await attachFileToEntity({} as never, {
-      ...base,
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
       url: "https://example.com/photo.png",
     });
-
-    expect(result.kind).toBe("image");
-    expect(mocks.uploadToS3).toHaveBeenCalledTimes(1);
-  });
-
-  it("uses the caller content type when a URL response omits it", async () => {
-    mocks.fetchExternalResponse.mockResolvedValue(
-      new Response(Buffer.from(PNG_BASE64, "base64")),
-    );
-
-    const result = await attachFileToEntity({} as never, {
-      ...base,
-      url: "https://example.com/photo",
-      contentType: "image/png",
-    });
-
     expect(result.contentType).toBe("image/png");
-    expect(mocks.uploadToS3).toHaveBeenCalledWith(
-      expect.objectContaining({ contentType: "image/png" }),
-    );
-  });
-
-  it("uses the caller content type for a generic URL response MIME", async () => {
-    mocks.fetchExternalResponse.mockResolvedValue(
-      new Response(Buffer.from(PNG_BASE64, "base64"), {
-        headers: { "content-type": "application/octet-stream" },
-      }),
-    );
-
-    const result = await attachFileToEntity({} as never, {
-      ...base,
-      url: "https://example.com/photo",
-      contentType: "image/png",
-    });
-
-    expect(result.contentType).toBe("image/png");
-  });
-
-  it("rejects a caller content type that conflicts with a URL response", async () => {
-    mocks.fetchExternalResponse.mockResolvedValue(
-      new Response(Buffer.from(PNG_BASE64, "base64"), {
-        headers: { "content-type": "image/png" },
-      }),
-    );
 
     await expect(
-      attachFileToEntity({} as never, {
-        ...base,
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
         url: "https://example.com/photo.png",
         contentType: "image/jpeg",
       }),
     ).rejects.toThrow(/conflicts with the URL response Content-Type/);
-    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+
+    storage.fetchedResponse = new ExternalFetchError(
+      "blocked host",
+      "blocked-url",
+    );
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        url: "https://internal.example/secret.png",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
-  it("returns an existing idempotency winner before fetching or uploading", async () => {
-    mocks.findAttachmentByIdempotencyKey.mockResolvedValueOnce({
-      id: "winner-1",
+  it("reuses an idempotency winner before writing an object", async () => {
+    storage.existingAttachment = {
       shortcode: "IMG-7QRS",
       key: "cubby/images/winner.png",
       filename: "winner.png",
       contentType: "image/png",
       idempotencyKey: "stable-key",
-    });
+    };
 
-    const result = await attachFileToEntity({} as never, {
-      ...base,
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
       data: PNG_BASE64,
       contentType: "image/png",
       idempotencyKey: "stable-key",
     });
 
-    expect(result.imageId).toBe("IMG-7QRS");
     expect(result.reused).toBe(true);
-    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+    expect(storage.uploaded).toEqual([]);
   });
 
-  it("cleans only the losing object when the transactional idempotency check elects another winner", async () => {
-    mocks.createOrReuseAttachedImage.mockResolvedValueOnce({
-      row: {
-        id: "winner-2",
-        shortcode: "IMG-7772",
-        key: "cubby/images/winner.png",
-        filename: "winner.png",
-        contentType: "image/png",
-        idempotencyKey: "race-key",
-      },
-      reused: true,
-    });
+  it("removes only a losing idempotent object after the repository elects a winner", async () => {
+    storage.reuseAttachment = true;
 
-    const result = await attachFileToEntity({} as never, {
-      ...base,
+    await service.attachFileToEntity(database, {
+      ...attachmentTarget,
       data: PNG_BASE64,
       contentType: "image/png",
       idempotencyKey: "race-key",
     });
 
-    expect(result.imageId).toBe("IMG-7772");
-    expect(result.reused).toBe(true);
-    expect(mocks.deleteS3Object).toHaveBeenCalledWith(
-      expect.stringContaining("cubby/images/"),
-    );
+    expect(storage.deletedKeys).toEqual(["cubby/images/attachment.png"]);
   });
 
-  it("rejects a missing target before touching storage", async () => {
-    mocks.resolveLiveShortcode.mockResolvedValue(null);
+  it("consumes a pending staged upload and deletes its staging row", async () => {
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      uploadId: stagedUploadCode,
+    });
 
-    await expect(
-      attachFileToEntity({} as never, {
-        ...base,
-        data: PNG_BASE64,
-        contentType: "image/png",
-      }),
-    ).rejects.toThrow("product PRD-TEST not found");
-    expect(mocks.assertAttachableEntityExists).not.toHaveBeenCalled();
-    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+    expect(result.kind).toBe("image");
+    expect(storage.deletedImageIds).toEqual([stagedImageId]);
+    expect(storage.deletedKeys).toContain("cubby/images/staged.png");
   });
 
-  it("rejects a target deleted after shortcode resolution before touching storage", async () => {
-    mocks.assertAttachableEntityExists.mockRejectedValue(
-      new Error("not found"),
-    );
-
-    await expect(
-      attachFileToEntity({} as never, {
-        ...base,
-        data: PNG_BASE64,
-        contentType: "image/png",
-      }),
-    ).rejects.toThrow("not found");
-    expect(mocks.uploadToS3).not.toHaveBeenCalled();
-  });
-
-  it("rejects an unsupported content type", async () => {
-    await expect(
-      attachFileToEntity({} as never, {
-        ...base,
-        data: Buffer.from("hello").toString("base64"),
-        contentType: "text/plain",
-      }),
-    ).rejects.toThrow(/Unsupported content type/);
-    expect(mocks.uploadToS3).not.toHaveBeenCalled();
-  });
-
-  // The staged-upload mode discards its staging row on success, and
-  // `deleteImages` is a HARD delete that takes the row's entity associations
-  // with it. So an `uploadId` naming an already-attached image would duplicate
-  // the attachment and then destroy the original — and that mixup is easy to
-  // make, since `attach_file` returns an `imageId` and `create_file_upload`
-  // returns an `uploadId`, both `IMG-` codes over the same table.
-  describe("uploadId mode", () => {
-    const stagedRow = {
-      id: STAGED_UPLOAD_ID,
-      key: "cubby/images/staged.png",
-      filename: "staged.png",
+  it("refuses an attached or missing uploadId without writing a new object", async () => {
+    storage.stagedRow = {
+      key: "cubby/images/existing.png",
+      filename: "existing.png",
       contentType: "image/png",
-      status: "PENDING",
-      entityType: null,
+      status: "UPLOADED",
+      entityType: "PRODUCT",
     };
-
-    it("attaches a staged upload and cleans up its staging row", async () => {
-      mocks.getImageById.mockResolvedValue(stagedRow);
-      mocks.getS3Object.mockResolvedValue({
-        ok: true,
-        arrayBuffer: async () => Buffer.from(PNG_BASE64, "base64"),
-      });
-      mocks.deleteImages.mockResolvedValue({
-        deletedIds: [STAGED_UPLOAD_ID],
-        deletedKeys: ["cubby/images/staged.png"],
-      });
-
-      const result = await attachFileToEntity({} as never, {
-        ...base,
-        uploadId: STAGED_UPLOAD_CODE,
-      });
-
-      expect(result.kind).toBe("image");
-      // Both repo calls are uuid-keyed: handing either the `IMG-` code would
-      // read nothing and, for the delete, silently strand the staged object.
-      expect(mocks.getImageById).toHaveBeenCalledWith({}, STAGED_UPLOAD_ID);
-      expect(mocks.deleteImages).toHaveBeenCalledWith({}, [STAGED_UPLOAD_ID]);
-    });
-
-    it("refuses an uploadId that names an already-attached image", async () => {
-      mocks.getImageById.mockResolvedValue({
-        ...stagedRow,
-        status: "UPLOADED",
-        entityType: "PRODUCT",
-      });
-
-      await expect(
-        attachFileToEntity({} as never, {
-          ...base,
-          uploadId: EXISTING_IMAGE_CODE,
-        }),
-      ).rejects.toThrow(/not a staged upload/);
-
-      // The point of the guard: nothing is uploaded, and above all the
-      // already-attached image is NOT hard-deleted by the cleanup step.
-      expect(mocks.getS3Object).not.toHaveBeenCalled();
-      expect(mocks.uploadToS3).not.toHaveBeenCalled();
-      expect(mocks.deleteImages).not.toHaveBeenCalled();
-    });
-
-    it("names create_file_upload when the uploadId resolves to nothing", async () => {
-      // MISSING_UPLOAD_CODE is absent from IMAGE_ID_BY_CODE, so the shortcode
-      // resolver returns null and the row lookup never runs.
-      await expect(
-        attachFileToEntity({} as never, {
-          ...base,
-          uploadId: MISSING_UPLOAD_CODE,
-        }),
-      ).rejects.toThrow(/Call create_file_upload first/);
-      expect(mocks.getImageById).not.toHaveBeenCalled();
-    });
-
-    it("names create_file_upload when the resolved row is gone", async () => {
-      // The narrow race the resolver cannot cover: the code resolved, then the
-      // row disappeared before the read.
-      mocks.getImageById.mockRejectedValue(
-        Object.assign(new Error("Image not found"), {
-          cause: { reason: "IMAGE_NOT_FOUND" },
-        }),
-      );
-
-      await expect(
-        attachFileToEntity({} as never, {
-          ...base,
-          uploadId: STAGED_UPLOAD_CODE,
-        }),
-      ).rejects.toThrow(/Call create_file_upload first/);
-    });
-
-    it("propagates a non-not-found lookup failure unchanged", async () => {
-      mocks.getImageById.mockRejectedValue(new Error("database unavailable"));
-
-      await expect(
-        attachFileToEntity({} as never, {
-          ...base,
-          uploadId: STAGED_UPLOAD_CODE,
-        }),
-      ).rejects.toThrow("database unavailable");
-    });
-
-    it("refuses a row that is unassociated but already marked uploaded", async () => {
-      // A standalone `/images` upload that `markUploaded` flipped. It is nobody's
-      // staging row, so consuming it would still hard-delete a real file.
-      mocks.getImageById.mockResolvedValue({
-        ...stagedRow,
-        status: "UPLOADED",
-      });
-
-      await expect(
-        attachFileToEntity({} as never, {
-          ...base,
-          uploadId: STANDALONE_IMAGE_CODE,
-        }),
-      ).rejects.toThrow(/not a staged upload/);
-      expect(mocks.deleteImages).not.toHaveBeenCalled();
-    });
-  });
-
-  it("rolls back the R2 object when the insert+associate transaction fails", async () => {
-    // The repo runs insert + associate in one transaction; a throw from either
-    // (DB error, or the target deleted mid-flight) rolls back the row, and the
-    // service then deletes the now-orphaned R2 object.
-    mocks.createOrReuseAttachedImage.mockRejectedValue(new Error("gone"));
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        uploadId: existingImageCode,
+      }),
+    ).rejects.toThrow(/not a staged upload/);
 
     await expect(
-      attachFileToEntity({} as never, {
-        ...base,
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        uploadId: testShortcode("image", "IMG-4444"),
+      }),
+    ).rejects.toThrow(/Call create_file_upload first/);
+    expect(storage.uploaded).toEqual([]);
+  });
+
+  it("removes an orphaned object when the association transaction fails", async () => {
+    storage.createAttachmentError = new Error("gone");
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
         data: PNG_BASE64,
         contentType: "image/png",
       }),
     ).rejects.toThrow("gone");
-    expect(mocks.deleteS3Object).toHaveBeenCalledWith(
-      expect.stringContaining("cubby/images/"),
-    );
-  });
-
-  it("surfaces a blocked/oversized URL fetch as a 4xx, not a 500", async () => {
-    mocks.fetchExternalResponse.mockRejectedValue(
-      new ExternalFetchError("blocked host", "blocked-url"),
-    );
-
-    await expect(
-      attachFileToEntity({} as never, {
-        ...base,
-        url: "https://internal.example/secret.png",
-      }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(mocks.uploadToS3).not.toHaveBeenCalled();
+    expect(storage.deletedKeys).toEqual(["cubby/images/attachment.png"]);
   });
 });

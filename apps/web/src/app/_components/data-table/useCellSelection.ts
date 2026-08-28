@@ -82,12 +82,14 @@ const FIREFOX_PASTE_FALLBACK_MS = 150;
 const PASTE_CELL_CAP = 100;
 
 /** Arrow key → native v9 cell-selection direction. */
-const ARROW_DIRECTION: Record<string, "up" | "down" | "left" | "right"> = {
-  ArrowUp: "up",
-  ArrowDown: "down",
-  ArrowLeft: "left",
-  ArrowRight: "right",
-};
+type CellMoveDirection = "up" | "down" | "left" | "right";
+
+const ARROW_DIRECTION = new Map<string, CellMoveDirection>([
+  ["ArrowUp", "up"],
+  ["ArrowDown", "down"],
+  ["ArrowLeft", "left"],
+  ["ArrowRight", "right"],
+] as const);
 
 function emitPasteToast(summary: PasteSummary): void {
   match(summary.variant)
@@ -509,7 +511,7 @@ export function useCellSelection<TItem extends RowData>({
         return;
       }
 
-      const dir = ARROW_DIRECTION[e.key] ?? null;
+      const dir = ARROW_DIRECTION.get(e.key) ?? null;
 
       if (dir && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();

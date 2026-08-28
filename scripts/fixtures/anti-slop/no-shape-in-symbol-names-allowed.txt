@@ -1,0 +1,9 @@
+import { ZodRawShape as SchemaFields } from "zod";
+import * as z from "zod";
+
+declare const schema: { shape: SchemaFields };
+
+export type Fields = z.ZodRawShape;
+export const fields = schema.shape;
+export const payload = { shape: fields };
+export const { shape: projectedFields } = schema;

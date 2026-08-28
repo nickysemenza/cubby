@@ -15,9 +15,9 @@ import {
  * graph the specs (and their unit test) have no business loading. Same reason
  * `tradeOptions` sits in its own module rather than in `app/projects/shared`.
  */
-export const KIND_ICONS: Record<CalendarItemKind, LucideIcon> = {
+export const KIND_ICONS = {
   meal: CookingPot,
   task: CheckSquare,
   expense: CircleDollarSign,
   project: CalendarRange,
-};
+} satisfies Record<CalendarItemKind, LucideIcon>;

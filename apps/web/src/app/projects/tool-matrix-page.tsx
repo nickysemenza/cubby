@@ -80,14 +80,14 @@ const CELL_SETTLE_MS = 400;
 
 const COST_FLOORS = [0, 100, 250, 500] as const;
 
-const KIND_LABELS: Record<ProjectKind, string> = {
+const KIND_LABELS = {
   furniture: "Furniture",
   workshop: "Workshop",
   household: "Household",
   renovation: "Renovation",
   garden: "Garden",
   trip: "Trip",
-};
+} satisfies Record<ProjectKind, string>;
 
 const MATRIX_PAGE_SIZE = 16;
 const PROJECT_COLUMN_WIDTH = 44;

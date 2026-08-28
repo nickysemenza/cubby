@@ -9,7 +9,11 @@ import {
   type UseEntityListReturn,
   useEntityList,
 } from "../hooks/useEntityList";
-import { useEntityPreview } from "../hooks/useEntityPreview";
+import {
+  type EntityPreviewRowData,
+  type PreviewIdField,
+  useEntityPreview,
+} from "../hooks/useEntityPreview";
 import { ListWorkbench, type ListWorkbenchProps } from "./ListWorkbench";
 
 /** The `ListWorkbench` props a page still gets to decide for itself. */
@@ -28,18 +32,29 @@ type WorkbenchProps<TData extends BaseListRow> = Pick<
   | "verticalAlign"
 >;
 
+export type EntityListPreview = false | { idField?: PreviewIdField };
+
+export function entityListPreviewOptions(
+  preview: EntityListPreview | undefined,
+) {
+  return preview === false
+    ? undefined
+    : { idField: preview?.idField, responsiveInspector: true };
+}
+
 export interface EntityListPageProps<
-  TData extends BaseListRow,
-  TFilters,
-  TRow extends BaseListRow = TData,
+  TData extends BaseListRow & EntityPreviewRowData,
+  TFilters extends object,
 >
-  extends UseEntityListOptions<TData, TFilters, TRow>, WorkbenchProps<TData> {
+  extends
+    Omit<UseEntityListOptions<TData, TFilters, TData>, "tree">,
+    WorkbenchProps<TData> {
   /**
    * Row-preview sheet. Defaults to the entity's own preview keyed on `id`;
    * pass `{ idField }` for a list whose row id lives elsewhere (USDA's
    * `fdc_id`), or `false` for a list that must not open one.
    */
-  preview?: false | { idField?: string };
+  preview?: EntityListPreview;
   /**
    * Dialogs and other page-level chrome rendered under the table.
    *
@@ -51,7 +66,18 @@ export interface EntityListPageProps<
    */
   children?:
     | ReactNode
-    | ((list: UseEntityListReturn<TData, TFilters, TRow>) => ReactNode);
+    | ((list: UseEntityListReturn<TData, TFilters, TData>) => ReactNode);
+}
+
+function isListChromeRenderer<
+  TData extends BaseListRow & EntityPreviewRowData,
+  TFilters extends object,
+>(
+  children: EntityListPageProps<TData, TFilters>["children"],
+): children is (
+  list: UseEntityListReturn<TData, TFilters, TData>,
+) => ReactNode {
+  return typeof children === "function";
 }
 
 /**
@@ -70,9 +96,8 @@ export interface EntityListPageProps<
  * model as an argument, but only for chrome rendered UNDER the table.
  */
 export function EntityListPage<
-  TData extends BaseListRow,
-  TFilters = unknown,
-  TRow extends BaseListRow = TData,
+  TData extends BaseListRow & EntityPreviewRowData,
+  TFilters extends object = object,
 >({
   actions,
   ariaLabel,
@@ -87,7 +112,7 @@ export function EntityListPage<
   preview,
   children,
   ...listOptions
-}: EntityListPageProps<TData, TFilters, TRow>) {
+}: EntityListPageProps<TData, TFilters>) {
   const { entity } = listOptions;
   const {
     onRowClick: previewClick,
@@ -98,30 +123,17 @@ export function EntityListPage<
     preview: currentPreview,
     dockedInspector,
     inspectorToggle,
-  } = useEntityPreview(
-    entity,
-    preview === false
-      ? undefined
-      : { idField: preview?.idField, responsiveInspector: true },
-  );
-  // `useEntityPreview`'s handlers are generic over any `{ original }` row; at a
-  // concrete call site TS resolves that against the row type, but `TData` is
-  // still open here, so the row shape is asserted rather than inferred.
-  type RowHandler = NonNullable<WorkbenchProps<TData>["onRowClick"]>;
-  const rowClick = preview === false ? undefined : (previewClick as RowHandler);
-  const rowHover = preview === false ? undefined : (previewHover as RowHandler);
-  const rowHoverEnd =
-    preview === false ? undefined : (previewHoverEnd as RowHandler);
+  } = useEntityPreview(entity, entityListPreviewOptions(preview));
+  const rowClick = preview === false ? undefined : previewClick;
+  const rowHover = preview === false ? undefined : previewHover;
+  const rowHoverEnd = preview === false ? undefined : previewHoverEnd;
 
   // `deletable` defaults ON here, unlike the hook: a top-level list page owns
   // its entity's rows, where an embedded relationship ledger does not.
-  const list = useEntityList<TData, TFilters, TRow>({
+  const list = useEntityList<TData, TFilters>({
     deletable: true,
     ...listOptions,
-    onInspectRow:
-      preview === false
-        ? undefined
-        : (inspectRow as (row: { id?: string; original: TData }) => void),
+    onInspectRow: preview === false ? undefined : inspectRow,
   });
   usePageCount(list.totalCount);
 
@@ -144,7 +156,7 @@ export function EntityListPage<
         onRowHover={onRowHover ?? rowHover}
         onRowHoverEnd={onRowHoverEnd ?? rowHoverEnd}
       />
-      {typeof children === "function" ? children(list) : children}
+      {isListChromeRenderer(children) ? children(list) : children}
       {preview === false ? null : <PreviewSheet />}
     </div>
   );

@@ -37,7 +37,7 @@ type ErrorCategory =
   | "navigation"
   | "generic";
 
-const FRIENDLY_MESSAGES: Record<ErrorCategory, string> = {
+const FRIENDLY_MESSAGES = {
   auth: "You need to sign in to view this page",
   notFound: "The item you're looking for doesn't exist or has been deleted",
   validation: "The request contained invalid data",
@@ -46,13 +46,13 @@ const FRIENDLY_MESSAGES: Record<ErrorCategory, string> = {
     "Cubby couldn't load this version of the page. Reload to update the app.",
   navigation: "Navigation was interrupted. Reload the app to continue.",
   generic: "Something went wrong",
-};
+} satisfies Record<ErrorCategory, string>;
 
 const categorizeError = (
   code: string | undefined,
   reason: string | undefined,
   message: string,
-  error: unknown,
+  error: Error,
 ): ErrorCategory => {
   // Auth errors
   if (code === "UNAUTHORIZED" || reason === "UNAUTHORIZED") {

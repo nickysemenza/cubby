@@ -1,3 +1,4 @@
+import { flexRender, type RowSelectionState } from "@tanstack/react-table";
 import {
   act,
   fireEvent,
@@ -5,57 +6,62 @@ import {
   renderHook,
   screen,
 } from "@testing-library/react";
-import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { buildSelectColumn, reconcileRowSelection } from "./row-selection";
-import type {
-  CubbyColumnDef as ColumnDef,
-  CubbyRow as Row,
-  CubbyTable as Table,
-} from "./table-features";
+import type { CubbyRow as Row } from "./table-features";
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
 
 interface TestRow {
   id: string;
+  selectable?: boolean;
 }
 
-const fakeRow = (
-  id: string,
-  canSelect: boolean,
-  selected = false,
-  onToggle?: (event: unknown) => void,
-) =>
-  ({
-    id,
-    original: { id },
-    getCanSelect: () => canSelect,
-    getIsSelected: () => selected,
-    getToggleSelectedHandler: () => onToggle ?? (() => {}),
-  }) as unknown as Row<TestRow>;
+const columnHelper = createCubbyColumnHelper<TestRow>();
+const dataColumns = columnHelper.columns([
+  buildSelectColumn<TestRow>(),
+  columnHelper.accessor("id", { id: "id", header: "ID" }),
+]);
+
+function useTestTable(
+  data: TestRow[],
+  initialRowSelection?: RowSelectionState,
+) {
+  return useCubbyTable({
+    data,
+    columns: dataColumns,
+    getRowId: (row) => row.id,
+    enableRowSelection: (row) => row.original.selectable ?? true,
+    initialState: { rowSelection: initialRowSelection },
+  });
+}
 
 /**
  * Render the select column's cell for a row.
  */
-function renderSelectCell({ row }: { row: Row<TestRow> }) {
-  const column = buildSelectColumn<TestRow>() as ColumnDef<TestRow> & {
-    cell: (ctx: { row: Row<TestRow> }) => ReactElement;
-  };
-
-  render(<div>{column.cell({ row })}</div>);
+function renderSelectCell(row: Row<TestRow>) {
+  const cell = row.getVisibleCells()[0];
+  if (!cell) throw new Error("Select cell was not created");
+  render(
+    <div>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>,
+  );
 }
 
-function renderSelectHeader({ some, all }: { some: boolean; all: boolean }) {
-  const column = buildSelectColumn<TestRow>();
+function renderSelectHeader() {
+  const { result } = renderHook(() =>
+    useTestTable(
+      [
+        { id: "first", selectable: true },
+        { id: "second", selectable: true },
+      ],
+      { first: true, second: true },
+    ),
+  );
+  const header = result.current.getHeaderGroups()[0]?.headers[0];
+  if (!header) throw new Error("Select column header was not created");
   render(
     <div>
-      {(column.header as (context: unknown) => ReactElement)({
-        table: {
-          getIsSomePageRowsSelected: () => some,
-          getIsAllPageRowsSelected: () => all,
-          toggleAllPageRowsSelected: () => {},
-        } as unknown as Table<TestRow>,
-      })}
+      {flexRender(header.column.columnDef.header, header.getContext())}
     </div>,
   );
 }
@@ -65,40 +71,35 @@ describe("buildSelectColumn", () => {
     // A heterogeneous tree's foreign child (see `EntityListTreeConfig.
     // rowIsEntity`). A rendered-but-inert checkbox reads as an affordance
     // that silently does nothing.
-    renderSelectCell({
-      row: fakeRow("candidate", false),
-    });
+    const { result } = renderHook(() =>
+      useTestTable([{ id: "candidate", selectable: false }]),
+    );
+    renderSelectCell(result.current.getRow("candidate"));
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("renders a checkbox for a selectable row", () => {
-    renderSelectCell({
-      row: fakeRow("wish", true),
-    });
+    const { result } = renderHook(() => useTestTable([{ id: "wish" }]));
+    renderSelectCell(result.current.getRow("wish"));
     expect(screen.getByRole("checkbox")).toBeInTheDocument();
   });
 
   it("does not mark a fully selected page indeterminate", () => {
-    renderSelectHeader({ some: true, all: true });
+    renderSelectHeader();
     expect(screen.getByRole("checkbox")).not.toHaveAttribute(
       "data-indeterminate",
     );
   });
 
   it("forwards the native shift event to v9 range selection", () => {
-    let received: unknown;
-    renderSelectCell({
-      row: fakeRow("wish-b", true, false, (event) => {
-        received = event;
-      }),
-    });
+    const { result } = renderHook(() => useTestTable([{ id: "wish-b" }]));
+    renderSelectCell(result.current.getRow("wish-b"));
 
     fireEvent.click(screen.getByRole("checkbox"), { shiftKey: true });
 
-    expect(received).toMatchObject({
-      target: { checked: true },
-      nativeEvent: { shiftKey: true },
-    });
+    const selection = result.current.atoms.rowSelection;
+    if (!selection) throw new Error("Row selection atom was not created");
+    expect(selection.get()).toEqual({ "wish-b": true });
   });
 
   it("skips unselectable intermediate rows in a native Shift range", () => {

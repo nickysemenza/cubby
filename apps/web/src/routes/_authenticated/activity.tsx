@@ -85,9 +85,7 @@ function EntityTypeFilter({
       <NativeSelect
         value={value ?? ""}
         onChange={(e) =>
-          onChange(
-            e.target.value ? (e.target.value as AuditEntityType) : undefined,
-          )
+          onChange(auditEntitySchema.safeParse(e.target.value).data)
         }
       >
         <option value="">All entities</option>
@@ -120,7 +118,7 @@ function SourceFilter({
       <NativeSelect
         value={value ?? ""}
         onChange={(e) =>
-          onChange(e.target.value ? (e.target.value as AuditSource) : undefined)
+          onChange(auditSourceSchema.safeParse(e.target.value).data)
         }
       >
         <option value="">All sources</option>

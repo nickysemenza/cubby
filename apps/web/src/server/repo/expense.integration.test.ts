@@ -7,9 +7,12 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   type ExpenseCreateInput,
+  type ExpenseMatchInput,
+  type ExpenseMatchRow,
   type ExpenseOut,
   expenseCreateInput,
   expenseMatchInput,
+  expenseUpdateData,
   HOUSEHOLD_PROJECT_SHORTCODE,
   projectCreateInput,
 } from "@cubby/schemas/project";
@@ -17,6 +20,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   householdDaysAgo,
@@ -75,6 +79,30 @@ import {
 
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
+
+const auditChangeSchema = z
+  .record(
+    z.string(),
+    z.object({ from: z.string().nullish(), to: z.string().nullish() }),
+  )
+  .nullish();
+
+const auditChangeFor = <TChanges>(changes: TChanges, field: string) => {
+  const parsed = auditChangeSchema.safeParse(changes);
+  return parsed.success ? parsed.data?.[field] : undefined;
+};
+
+const expenseBulkUpdateData = expenseUpdateData
+  .pick({ projectId: true, trade: true, costType: true })
+  .strict();
+const expenseBulkUpdateCommand = z.object({
+  action: z.literal("bulkUpdate"),
+  entity: z.literal("expense"),
+  ids: z.array(z.string().min(1)),
+  data: expenseBulkUpdateData,
+});
+type ExpenseBulkUpdateAttempt = Partial<ExpenseCreateInput>;
+type ExpenseCreateSeed = z.input<typeof expenseCreateInput>;
 
 const createExpenseWorkflowCaller = (db: Database) => ({
   chartData: (input: Parameters<typeof expenseChartDataWorkflow>[1]) =>
@@ -254,20 +282,14 @@ describe("expense repository — CRUD", () => {
       limit: 20,
     });
     expect(
-      audit.entries.some(
-        (entry) =>
+      audit.entries.some((entry) => {
+        const lineKindChange = auditChangeFor(entry.changes, "lineKind");
+        return (
           entry.action === "update" &&
-          (
-            entry.changes as {
-              lineKind?: { from: unknown; to: unknown };
-            } | null
-          )?.lineKind?.from === "tax" &&
-          (
-            entry.changes as {
-              lineKind?: { from: unknown; to: unknown };
-            } | null
-          )?.lineKind?.to === "fee",
-      ),
+          lineKindChange?.from === "tax" &&
+          lineKindChange?.to === "fee"
+        );
+      }),
     ).toBe(true);
 
     const discount = await unwrap(
@@ -778,19 +800,18 @@ describe("expense repository — expenseList filters", () => {
 
   it("filters by costMin/costMax (inclusive boundary, outside window, null-cost excluded)", async () => {
     const mk = (name: string, cost: number | undefined) =>
-      unwrap(
-        createExpense(
-          ctx.db,
-          expenseCreateInput.parse({
-            date: "2024-01-15",
-            trade: "other",
-            costType: "materials",
-            name,
-            ...(cost === undefined ? {} : { cost }),
-          }),
-          ctx.actor,
-        ),
-      );
+      (() => {
+        const input: ExpenseCreateSeed = {
+          date: "2024-01-15",
+          trade: "other",
+          costType: "materials",
+          name,
+        };
+        if (cost !== undefined) input.cost = cost;
+        return unwrap(
+          createExpense(ctx.db, expenseCreateInput.parse(input), ctx.actor),
+        );
+      })();
 
     const lowerBoundary = await mk("cost on lower boundary", 100);
     const inWindow = await mk("cost in window", 250);
@@ -959,7 +980,7 @@ describe("expense repository — expenseList filters", () => {
       makeProductInput({ name: "signed quantity product" }),
       ctx.actor,
     );
-    const mk = (data: Record<string, unknown>) =>
+    const mk = (data: Partial<ExpenseCreateInput>) =>
       createExpense(
         ctx.db,
         expenseCreateInput.parse({
@@ -1365,17 +1386,14 @@ describe("expense workflow", () => {
         ["other project", projB.id],
         ["needs a project", undefined],
       ] as const) {
-        await createExpense(
-          ctx.db,
-          expenseCreateInput.parse({
-            date: "2024-01-15",
-            trade: "drywall",
-            costType: "tools",
-            name,
-            ...(projectId ? { projectId } : {}),
-          }),
-          ctx.actor,
-        );
+        const input: ExpenseCreateSeed = {
+          date: "2024-01-15",
+          trade: "drywall",
+          costType: "tools",
+          name,
+        };
+        if (projectId !== undefined) input.projectId = projectId;
+        await createExpense(ctx.db, expenseCreateInput.parse(input), ctx.actor);
       }
       return { projA, projB };
     };
@@ -1582,15 +1600,17 @@ describe("expense kernel — bulkUpdate", () => {
     requireActor(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-  // The patch shape is exactly what is under test, so it stays a loose record
-  // here and the command is asserted onto the mutation union.
-  const bulkUpdate = async (ids: string[], data: Record<string, unknown>) => {
-    const result = await executeEntity(kernelContext(), {
+  const bulkUpdate = async (ids: string[], data: ExpenseBulkUpdateAttempt) => {
+    const command = expenseBulkUpdateCommand.parse({
       action: "bulkUpdate",
       entity: "expense",
       ids,
       data,
-    } as EntityMutationCommand);
+    });
+    const result = await executeEntity(
+      kernelContext(),
+      command satisfies EntityMutationCommand,
+    );
     if (result.action !== "bulkUpdate") throw new Error("unreachable");
     return result;
   };
@@ -1733,16 +1753,13 @@ describe("expense repository — moveExpenses", () => {
       auditP1.entries.some(
         (e) =>
           e.action === "update" &&
-          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectB.id,
+          auditChangeFor(e.changes, "projectId")?.to === projectB.id,
       ),
     ).toBe(true);
     // And never the raw uuid the DB column actually stores.
     expect(
       auditP1.entries.some(
-        (e) =>
-          (e.changes as { projectId?: { from: unknown; to: unknown } } | null)
-            ?.projectId?.to === projectBId,
+        (e) => auditChangeFor(e.changes, "projectId")?.to === projectBId,
       ),
     ).toBe(false);
   });
@@ -1878,13 +1895,10 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       })
     ).entries.filter((e) => e.action === "update");
 
-  const changeOf = (
-    entry: { changes: unknown } | undefined,
+  const changeOf = <TEntry extends { changes: TChanges }, TChanges>(
+    entry: TEntry | undefined,
     field: "trade" | "costType",
-  ) =>
-    (entry?.changes as Record<string, { from: unknown; to: unknown }> | null)?.[
-      field
-    ];
+  ) => (entry ? auditChangeFor(entry.changes, field) : undefined);
 
   it("setExpensesTrade writes the trade over the listed ids only, and audits just the rows that changed", async () => {
     const { output: a, entityId: aId } = await line("bulk trade a", {
@@ -2232,21 +2246,20 @@ describe("expense repository — expenseAnalytics", () => {
 
   it("groups byVendor through the charge, and does NOT sum to summary.net", async () => {
     const mk = (name: string, cost: number, vendor?: string) =>
-      unwrap(
-        createExpense(
-          ctx.db,
-          expenseCreateInput.parse({
-            trade: "other",
-            costType: "tools",
-            name,
-            cost,
-            future: false,
-            date: "2026-04-01",
-            ...(vendor ? { vendor } : {}),
-          }),
-          ctx.actor,
-        ),
-      );
+      (() => {
+        const input: ExpenseCreateSeed = {
+          trade: "other",
+          costType: "tools",
+          name,
+          cost,
+          future: false,
+          date: "2026-04-01",
+        };
+        if (vendor !== undefined) input.vendor = vendor;
+        return unwrap(
+          createExpense(ctx.db, expenseCreateInput.parse(input), ctx.actor),
+        );
+      })();
 
     const acmeA = await mk("vendor acme a", 100, "Analytics Acme");
     const acmeB = await mk("vendor acme b", 25, "Analytics Acme");
@@ -3523,8 +3536,7 @@ describe("expense repository — charge resolution on update", () => {
       chargeAudit.entries.some(
         (e) =>
           e.action === "update" &&
-          (e.changes as { orderId?: { from: unknown; to: unknown } } | null)
-            ?.orderId?.to === "WN63446464",
+          auditChangeFor(e.changes, "orderId")?.to === "WN63446464",
       ),
     ).toBe(true);
 
@@ -3733,13 +3745,13 @@ describe("expense repository — matchExpenses", () => {
   const ctx = withTestDb();
 
   const run = (
-    rows: Array<Record<string, unknown>>,
-    overrides: Record<string, unknown> = {},
+    rows: ExpenseMatchRow[],
+    overrides: Partial<Omit<ExpenseMatchInput, "rows">> = {},
   ) => matchExpenses(ctx.db, expenseMatchInput.parse({ rows, ...overrides }));
 
   const line = (
     name: string,
-    extra: Record<string, unknown> = {},
+    extra: Partial<ExpenseCreateInput> = {},
   ): Promise<ExpenseOut> =>
     unwrap(
       createExpense(

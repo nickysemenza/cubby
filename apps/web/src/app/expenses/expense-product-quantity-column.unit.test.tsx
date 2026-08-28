@@ -1,12 +1,10 @@
 import type { ExpenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
-
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
-
 import { expenseProductQuantityColumn } from "~/app/projects/shared";
 
 const EXPENSE: ExpenseOut = {
@@ -49,18 +47,28 @@ const buildColumn = (save = vi.fn(async () => undefined)) => ({
   save,
 });
 
+function isExpenseQuantityRenderer(
+  cell: ReturnType<typeof buildColumn>["column"]["cell"],
+): cell is (context: {
+  row: { original: ExpenseOut };
+  getValue: () => number | null;
+}) => ReactNode {
+  return typeof cell === "function";
+}
+
 const renderCell = (
   expense: ExpenseOut,
   save = vi.fn(async () => undefined),
 ) => {
   const { column } = buildColumn(save);
-  if (typeof column.cell !== "function")
-    throw new Error("expected cell renderer");
+  if (!isExpenseQuantityRenderer(column.cell)) {
+    throw new Error("Expected an expense quantity cell renderer.");
+  }
   render(
     column.cell({
       row: { original: expense },
       getValue: () => expense.productQuantity,
-    } as never),
+    }),
   );
   return save;
 };

@@ -1,24 +1,23 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { lookupUPCitemdb } from "./upcitemdb";
+import { describe, expect, it } from "vitest";
+import { lookupUPCitemdb, type UPCitemdbRuntime } from "./upcitemdb";
 
-function mockFetch(impl: () => Promise<Response> | Response) {
-  vi.stubGlobal("fetch", vi.fn(impl));
-}
+const runtimeFor = (
+  request: () => Promise<Response> | Response,
+): UPCitemdbRuntime => ({
+  fetch: async () => request(),
+  timeoutSignal: () => new AbortController().signal,
+});
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse<TBody>(body: TBody, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
   });
 }
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("lookupUPCitemdb status mapping", () => {
   it("returns found with data on a populated 200", async () => {
-    mockFetch(() =>
+    const runtime = runtimeFor(() =>
       jsonResponse({
         code: "OK",
         total: 1,
@@ -27,7 +26,7 @@ describe("lookupUPCitemdb status mapping", () => {
       }),
     );
 
-    const result = await lookupUPCitemdb("012345678905");
+    const result = await lookupUPCitemdb("012345678905", runtime);
 
     expect(result.status).toBe("found");
     if (result.status === "found") {
@@ -43,7 +42,7 @@ describe("lookupUPCitemdb status mapping", () => {
     // schema previously required a string, so every offer-bearing response
     // failed parse → transient `error` → the UPC was cached as neither a
     // product nor a miss. See types.ts upcitemdbOfferSchema.
-    mockFetch(() =>
+    const runtime = runtimeFor(() =>
       jsonResponse({
         code: "OK",
         total: 1,
@@ -72,7 +71,7 @@ describe("lookupUPCitemdb status mapping", () => {
       }),
     );
 
-    const result = await lookupUPCitemdb("049206116313");
+    const result = await lookupUPCitemdb("049206116313", runtime);
 
     expect(result.status).toBe("found");
     if (result.status === "found") {
@@ -86,51 +85,63 @@ describe("lookupUPCitemdb status mapping", () => {
   it("returns error (not a miss) on a malformed 200 payload", async () => {
     // Item present but `title` is the wrong type — the schema rejects it, so we
     // must surface a transient error rather than caching the UPC as missing.
-    mockFetch(() =>
+    const runtime = runtimeFor(() =>
       jsonResponse({ code: "OK", total: 1, offset: 0, items: [{ title: 42 }] }),
     );
-    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+      status: "error",
+    });
   });
 
   it("returns error (not a miss) on a 200 whose shape lacks items entirely", async () => {
     // A wholesale response-shape change (no `items` key) must fail parse and
     // surface as transient — not be cached as a not_found miss.
-    mockFetch(() => jsonResponse({ code: "OK", total: 0, offset: 0 }));
-    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+    const runtime = runtimeFor(() =>
+      jsonResponse({ code: "OK", total: 0, offset: 0 }),
+    );
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+      status: "error",
+    });
   });
 
   it("returns not_found on a 200 with no items", async () => {
-    mockFetch(() =>
+    const runtime = runtimeFor(() =>
       jsonResponse({ code: "OK", total: 0, offset: 0, items: [] }),
     );
-    expect(await lookupUPCitemdb("012345678905")).toEqual({
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
       status: "not_found",
     });
   });
 
   it("returns not_found on a 404", async () => {
-    mockFetch(() => jsonResponse({}, 404));
-    expect(await lookupUPCitemdb("012345678905")).toEqual({
+    const runtime = runtimeFor(() => jsonResponse({}, 404));
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
       status: "not_found",
     });
   });
 
   it("returns error (not a miss) on a 429 rate limit", async () => {
-    mockFetch(() => jsonResponse({}, 429));
-    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+    const runtime = runtimeFor(() => jsonResponse({}, 429));
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+      status: "error",
+    });
   });
 
   it("returns error on a 5xx", async () => {
-    mockFetch(() => jsonResponse({}, 503));
-    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+    const runtime = runtimeFor(() => jsonResponse({}, 503));
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+      status: "error",
+    });
   });
 
   it("returns error on a network/timeout failure", async () => {
-    mockFetch(() => {
+    const runtime = runtimeFor(() => {
       const err = new Error("aborted");
       err.name = "AbortError";
       return Promise.reject(err);
     });
-    expect(await lookupUPCitemdb("012345678905")).toEqual({ status: "error" });
+    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+      status: "error",
+    });
   });
 });

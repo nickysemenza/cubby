@@ -2,14 +2,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 const PORCELAIN_CANVAS = "#f7f9fc";
 
 describe("PWA Porcelain color metadata", () => {
   it("keeps document, manifest, and offline colors synchronized", () => {
-    const manifest = JSON.parse(
-      readFileSync(resolve("public/manifest.json"), "utf8"),
-    ) as { theme_color: string; background_color: string };
+    const manifest = z
+      .object({ theme_color: z.string(), background_color: z.string() })
+      .parse(JSON.parse(readFileSync(resolve("public/manifest.json"), "utf8")));
     const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
     const offline = readFileSync(resolve("public/offline.html"), "utf8");
 

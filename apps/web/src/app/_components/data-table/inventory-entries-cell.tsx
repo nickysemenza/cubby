@@ -68,6 +68,23 @@ export interface InventoryEntriesCellProps<
   inlineEdit?: InventoryEntriesInlineEditConfig<T, TEntry>;
 }
 
+type LocationRelatedEntity = Extract<
+  InventoryRelatedEntity,
+  { entity: "location" }
+>["data"];
+type ProductRelatedEntity = Extract<
+  InventoryRelatedEntity,
+  { entity: "product" }
+>["data"];
+
+const isLocationRelatedEntity = (
+  related: InventoryRelatedEntity["data"],
+): related is LocationRelatedEntity => "type" in related;
+
+const isProductRelatedEntity = (
+  related: InventoryRelatedEntity["data"],
+): related is ProductRelatedEntity => "manufacturer" in related;
+
 /**
  * Cell body for `createInventoryEntriesColumn` (extracted so the
  * entity==="location" + layout==="inline" path can use hooks): 0/1-entry rows
@@ -88,6 +105,30 @@ export function InventoryEntriesCell<
   onQuickEdit,
   inlineEdit,
 }: InventoryEntriesCellProps<T, TEntry, TEntity>) {
+  const renderRelatedEntity = (related: InventoryRelatedEntity["data"]) => {
+    if (entity === "location" && isLocationRelatedEntity(related)) {
+      return (
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="location"
+          data={related}
+          compact
+        />
+      );
+    }
+    if (entity === "product" && isProductRelatedEntity(related)) {
+      return (
+        <EntityInlineLink
+          displayImage={undefined}
+          entity="product"
+          data={related}
+          compact
+        />
+      );
+    }
+    throw new Error(`Unexpected ${entity} inventory relation`);
+  };
+
   const renderEntry = (entry: TEntry) => {
     const related = getRelatedEntity(entry);
     if (!related) return null;
@@ -97,12 +138,7 @@ export function InventoryEntriesCell<
           {tryFormatAmount(entry.amount)}
         </span>
         <span className="text-muted-foreground/50">@</span>
-        <EntityInlineLink
-          displayImage={undefined}
-          entity={entity}
-          data={related as never}
-          compact
-        />
+        {renderRelatedEntity(related)}
       </span>
     );
   };
@@ -212,9 +248,28 @@ export function InventoryEntriesCell<
   }
 
   // Stacked layout: amounts grouped, then pills grouped
-  const relatedEntities = entries
-    .map((entry) => getRelatedEntity(entry) as never)
-    .filter(Boolean);
+  const relatedEntities: InventoryRelatedEntity["data"][] = entries.flatMap(
+    (entry) => {
+      const related = getRelatedEntity(entry);
+      return related ? [related] : [];
+    },
+  );
+  const relatedList = (() => {
+    if (entity === "location") {
+      const locations = relatedEntities.filter(isLocationRelatedEntity);
+      if (locations.length !== relatedEntities.length) {
+        throw new Error("Unexpected product in a location inventory cell");
+      }
+      return (
+        <EntityInlineLinkList entity="location" items={locations} compact />
+      );
+    }
+    const products = relatedEntities.filter(isProductRelatedEntity);
+    if (products.length !== relatedEntities.length) {
+      throw new Error("Unexpected location in a product inventory cell");
+    }
+    return <EntityInlineLinkList entity="product" items={products} compact />;
+  })();
   return (
     <Stack gap="tight">
       <Stack gap="tight" className="text-xs">
@@ -222,11 +277,7 @@ export function InventoryEntriesCell<
           <div key={entry.id}>{tryFormatAmount(entry.amount)}</div>
         ))}
       </Stack>
-      <EntityInlineLinkList
-        entity={entity}
-        items={relatedEntities as never}
-        compact
-      />
+      {relatedList}
     </Stack>
   );
 }

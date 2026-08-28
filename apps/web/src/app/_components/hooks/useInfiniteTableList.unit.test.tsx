@@ -1,7 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 import type { TableStateReturn } from "../data-table/useTableState";
 import { useInfiniteTableList } from "./useInfiniteTableList";
@@ -15,10 +18,10 @@ interface TestFilters {
   scope: string;
 }
 
-const tableState = {
+const tableState = fromPartial<TableStateReturn>({
   pagination: { pageIndex: 0, pageSize: 1 },
   getSorts: () => [{ orderBy: "name", direction: "asc" as const }],
-} as TableStateReturn;
+});
 
 const page = (
   id: string,
@@ -55,11 +58,42 @@ afterEach(() => {
 });
 
 describe("useInfiniteTableList", () => {
+  it("keeps operation cache tags on the infinite query", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+    });
+    clients.push(client);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const queryFn = vi.fn(async () => page("expense-1", 0, 1));
+    const cacheTags = [["entity", "list"], ["expense"]] as const;
+    const queryOptions = () => ({
+      queryKey: ["operation", "entity.list", { entity: "expense", input: {} }],
+      meta: { cacheTags },
+      execute: () => queryFn(),
+    });
+
+    renderHook(
+      () =>
+        useInfiniteTableList<TestFilters, TestRow>({
+          queryOptions,
+          buildFilters: () => ({ scope: "same" }),
+          tableState,
+        }),
+      { wrapper },
+    );
+
+    await waitFor(() => expect(queryFn).toHaveBeenCalledOnce());
+    await invalidateOperationTags(client, [["expense"]]);
+    await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
+  });
+
   it("forwards TanStack cancellation to the list transport", async () => {
     let receivedSignal: AbortSignal | undefined;
     const queryOptions = () => ({
       queryKey: ["table-abort"],
-      queryFn: ({ signal }: { signal?: AbortSignal }) => {
+      execute: (signal: AbortSignal) => {
         receivedSignal = signal;
         return new Promise<ListQueryResponse<TestRow>>(() => {});
       },
@@ -84,7 +118,7 @@ describe("useInfiniteTableList", () => {
     const queryOptions = vi.fn(
       ({ pagination }: { pagination: { pageIndex: number } }) => ({
         queryKey: ["table-list", "same", pagination.pageIndex],
-        queryFn: async () => {
+        execute: async () => {
           calls.set(
             pagination.pageIndex,
             (calls.get(pagination.pageIndex) ?? 0) + 1,
@@ -127,7 +161,7 @@ describe("useInfiniteTableList", () => {
       pagination: { pageIndex: number };
     }) => ({
       queryKey: ["table-transition", filters.scope, pagination.pageIndex],
-      queryFn: async () => {
+      execute: async () => {
         requested.push(`${filters.scope}:${pagination.pageIndex}`);
         if (filters.scope === "new" && pagination.pageIndex === 0) {
           return nextFirstPage.promise;

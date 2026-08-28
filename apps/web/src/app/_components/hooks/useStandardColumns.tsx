@@ -1,5 +1,6 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
@@ -23,9 +24,11 @@ import {
   rowImages,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
-import type {
-  CubbyColumnDef as ColumnDef,
-  CubbyColumnHelper as ColumnHelper,
+import {
+  createCubbyColumnCollection,
+  type CubbyColumnCollection,
+  type CubbyColumnDef,
+  type CubbyColumnHelper as ColumnHelper,
 } from "../data-table/table-features";
 import type { RuntimeFilterOptions } from "./filter-option-types";
 
@@ -40,8 +43,9 @@ interface FilterDef {
 /** Simple filter definition - string expands to text filter with placeholder */
 export type FilterInput = string | FilterDef;
 
-// oxlint-disable-next-line typescript/no-explicit-any -- intentional
-type AnyColumnDef<TData extends BaseListRow> = ColumnDef<TData, any>;
+function isFilterId(value: FilterInput): value is string {
+  return typeof value === "string";
+}
 
 /** Base interface for entities in list views */
 interface BaseListRow {
@@ -57,7 +61,7 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   /** Column helper instance (must be memoized) */
   columnHelper: ColumnHelper<TData>;
   /** Custom columns (inserted between standard columns) */
-  customColumns: AnyColumnDef<TData>[];
+  customColumns: CubbyColumnCollection<TData>;
   /**
    * Fallback filter definitions for columns the manifest doesn't cover
    * (client-only tables, one-off embedded tables). Entities in
@@ -124,6 +128,16 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   hiddenFilterColumns?: string[];
 }
 
+function columnIdentifier<TData extends BaseListRow, TValue extends CellData>(
+  column: CubbyColumnDef<TData, TValue>,
+): string | null {
+  if (column.id) return column.id;
+  if ("accessorKey" in column && column.accessorKey != null) {
+    return String(column.accessorKey);
+  }
+  return null;
+}
+
 /**
  * Hook for building standard columns array for entity list tables.
  *
@@ -152,7 +166,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   namePrefix,
   expandable,
   hiddenFilterColumns,
-}: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
+}: UseStandardColumnsOptions<TData>): CubbyColumnCollection<TData> {
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
   const filtersKey = JSON.stringify(filters);
@@ -183,194 +197,195 @@ export function useStandardColumns<TData extends BaseListRow>({
   }, [entity, hasUnitMappings]);
 
   // Build columns array with standard columns - memoized to prevent infinite re-renders
-  return useMemo(() => {
-    // The filter manifest is the source of truth for what a column can be
-    // filtered by; a page-supplied `filters` entry is the fallback for columns
-    // (and client-only tables) the manifest doesn't cover.
-    const getFilterConfig = (columnId: string): FilterConfig | undefined => {
-      if (hiddenFilterColumnSet.has(columnId)) return undefined;
+  return useMemo(
+    () =>
+      createCubbyColumnCollection<TData>((add) => {
+        // The filter manifest is the source of truth for what a column can be
+        // filtered by; a page-supplied `filters` entry is the fallback for columns
+        // (and client-only tables) the manifest doesn't cover.
+        const getFilterConfig = (
+          columnId: string,
+        ): FilterConfig | undefined => {
+          if (hiddenFilterColumnSet.has(columnId)) return undefined;
 
-      const fromManifest = manifestFilterConfig(
-        entity,
-        columnId,
-        filterOptions,
-      );
-      if (fromManifest) return fromManifest;
-
-      const filterDef = stableFilters.find((f) =>
-        typeof f === "string" ? f === columnId : f.id === columnId,
-      );
-      if (!filterDef) return undefined;
-      if (typeof filterDef === "string") {
-        return { placeholder: `Filter by ${filterDef}...` };
-      }
-      return {
-        placeholder: filterDef.placeholder,
-        filterType: filterDef.filterType,
-        options: filterDef.options,
-      };
-    };
-
-    /**
-     * Overlay the manifest's filter control onto one column def.
-     *
-     * Applies to the columns this hook APPENDS (image, unit mappings) as well
-     * as the caller's own — they're real, filterable columns, and a manifest
-     * spec pointing at one used to render nothing at all, silently, because
-     * only the caller's columns went through the overlay.
-     */
-    const withManifestFilter = (
-      col: AnyColumnDef<TData>,
-      colId: string,
-    ): AnyColumnDef<TData> => {
-      const manifestConfig = getFilterConfig(colId);
-      if (!manifestConfig) return col;
-      const meta = (col.meta ?? {}) as Record<string, unknown>;
-      return {
-        ...col,
-        // Client-side tables would otherwise resolve a filterFn from the ROW
-        // value's type and silently match nothing against an array. Harmless
-        // on server-filtered tables, which never run it.
-        ...(manifestConfig.filterType === "multiselect"
-          ? { filterFn: multiSelectFilterFn }
-          : {}),
-        meta: { ...meta, filterConfig: manifestConfig },
-      };
-    };
-
-    const cols: AnyColumnDef<TData>[] = [];
-
-    // Prepend select column if row selection is enabled
-    if (enableRowSelection) {
-      cols.push(buildSelectColumn<TData>());
-    }
-
-    // Prepend standard columns
-    if (standardColumns.includes("image")) {
-      cols.push(
-        withManifestFilter(
-          createImageColumn(columnHelper, {
+          const fromManifest = manifestFilterConfig(
             entity,
-            // The one asserted `rowImages`. `TData` is unbound here, so a
-            // conditional "optional only when the row has images" would defer
-            // and fail to resolve; the assertion holds because only `product`
-            // and `recipe` declare `standardColumns: ["image"]`, and both carry
-            // a required `images` on their list row. Any new entity opting in
-            // must add one too — or pass its own cascade resolver.
-            getImages: rowImages as (
-              row: TData,
-            ) => ReturnType<typeof rowImages>,
+            columnId,
+            filterOptions,
+          );
+          if (fromManifest) return fromManifest;
+
+          const filterDef = stableFilters.find((filter) =>
+            isFilterId(filter) ? filter === columnId : filter.id === columnId,
+          );
+          if (!filterDef) return undefined;
+          if (isFilterId(filterDef)) {
+            return { placeholder: `Filter by ${filterDef}...` };
+          }
+          return {
+            placeholder: filterDef.placeholder,
+            filterType: filterDef.filterType,
+            options: filterDef.options,
+          };
+        };
+
+        /**
+         * Overlay the manifest's filter control onto one column def.
+         *
+         * Applies to the columns this hook APPENDS (image, unit mappings) as well
+         * as the caller's own — they're real, filterable columns, and a manifest
+         * spec pointing at one used to render nothing at all, silently, because
+         * only the caller's columns went through the overlay.
+         */
+        const withManifestFilter = <TValue extends CellData>(
+          col: CubbyColumnDef<TData, TValue>,
+          colId: string,
+        ): CubbyColumnDef<TData, TValue> => {
+          const manifestConfig = getFilterConfig(colId);
+          if (!manifestConfig) return col;
+          const nextColumn = {
+            ...col,
+            // Client-side tables would otherwise resolve a filterFn from the ROW
+            // value's type and silently match nothing against an array. Harmless
+            // on server-filtered tables, which never run it.
+            meta: { ...col.meta, filterConfig: manifestConfig },
+          };
+          if (manifestConfig.filterType === "multiselect") {
+            nextColumn.filterFn = multiSelectFilterFn;
+          }
+          return nextColumn;
+        };
+
+        // Prepend select column if row selection is enabled
+        if (enableRowSelection) {
+          add(buildSelectColumn<TData>());
+        }
+
+        // Prepend standard columns
+        if (standardColumns.includes("image")) {
+          add(
+            withManifestFilter(
+              createImageColumn(columnHelper, {
+                entity,
+                // The one asserted `rowImages`. `TData` is unbound here, so a
+                // conditional "optional only when the row has images" would defer
+                // and fail to resolve; the assertion holds because only `product`
+                // and `recipe` declare `standardColumns: ["image"]`, and both carry
+                // a required `images` on their list row. Any new entity opting in
+                // must add one too — or pass its own cascade resolver.
+                // SAFETY: the manifest allows the standard image column only for
+                // Product and Recipe list rows, which require their own images.
+                getImages: rowImages as (
+                  row: TData,
+                ) => ReturnType<typeof rowImages>,
+              }),
+              "image",
+            ),
+          );
+        }
+        if (standardColumns.includes("name")) {
+          const nameFilterConfig = getFilterConfig("name");
+          const nameColumnOptions = {
+            filterConfig: nameFilterConfig,
+            className: nameClassName,
+            editable: nameEditable,
+            nameSuffix,
+            namePrefix,
+            expandable,
+            rowLink,
+          };
+          add(
+            createNameColumn(columnHelper, entity, "name", nameColumnOptions),
+          );
+        }
+
+        // Custom columns get two things applied from the registries: sorting from
+        // `sortableFields`, and their filter control from the manifest.
+        const sortableFields = getSortableFields(entity);
+        customColumns
+          // Audit timestamps have one canonical position: after every domain and
+          // related column, immediately before Actions. A few older custom tables
+          // supplied Created in the middle; drop that copy before appending the
+          // shared pair below.
+          .filter((col) => {
+            const colId = columnIdentifier(col);
+            return colId !== "createdAt" && colId !== "updatedAt";
+          })
+          .visit((col) => {
+            const colId = columnIdentifier(col);
+
+            // Auto-disable sorting for columns not in sortableFields; an explicit
+            // enableSorting on the column def still wins.
+            const enableSorting =
+              col.enableSorting !== undefined
+                ? col.enableSorting
+                : colId
+                  ? sortableFields.includes(colId)
+                  : false;
+
+            // Manifest config overlays whatever the column factory baked in. The
+            // factories' own `filterConfig` (e.g. createFilterableSelectColumn
+            // deriving one from its editor options) stays as the fallback for
+            // columns and tables the manifest doesn't cover.
+            const withSorting = { ...col, enableSorting };
+            add(colId ? withManifestFilter(withSorting, colId) : withSorting);
+          });
+
+        // Append unit mappings column if configured
+        if (shouldUseMappings && mappingsMap) {
+          // The product id stays "unitMappingQuality" — it's what the manifest's
+          // presence filter hangs on. NOT sortable: the cell grades conversion
+          // COVERAGE (a graph reachability run through the unit engine, over
+          // USDA-derived edges the server never loads), which no SQL ORDER BY can
+          // reproduce. The old sort ordered by an edge-count proxy instead, i.e.
+          // by a quantity that isn't on screen.
+          const mappingsColId =
+            entity === "product" ? "unitMappingQuality" : "unitMappings";
+          add(
+            withManifestFilter(
+              createUnitMappingsColumn(columnHelper, mappingsMap, {
+                id: mappingsColId,
+                enableSorting: false,
+              }),
+              mappingsColId,
+            ),
+          );
+        }
+
+        // Every Cubby entity read shape carries both timestamps. Keep the audit
+        // pair together at the end; list hooks make both default-hidden while the
+        // View menu lets users opt them in.
+        add(createCreatedAtColumn(columnHelper));
+        add(createUpdatedAtColumn(columnHelper));
+
+        // Append actions column (always last)
+        add(
+          createActionsColumn(columnHelper, entity, {
+            extraActions: combinedExtraActions,
+            rowLink,
+            subject,
           }),
-          "image",
-        ),
-      );
-    }
-    if (standardColumns.includes("name")) {
-      const nameFilterConfig = getFilterConfig("name");
-      cols.push(
-        createNameColumn(columnHelper, entity, "name" as keyof TData, {
-          ...(nameFilterConfig ? { filterConfig: nameFilterConfig } : {}),
-          className: nameClassName,
-          editable: nameEditable,
-          nameSuffix,
-          namePrefix,
-          expandable,
-          rowLink,
-        }),
-      );
-    }
-
-    // Custom columns get two things applied from the registries: sorting from
-    // `sortableFields`, and their filter control from the manifest.
-    const sortableFields = getSortableFields(entity);
-    const processedColumns = customColumns
-      // Audit timestamps have one canonical position: after every domain and
-      // related column, immediately before Actions. A few older custom tables
-      // supplied Created in the middle; drop that copy before appending the
-      // shared pair below.
-      .filter((col) => {
-        const accessorCol = col as { accessorKey?: string };
-        const colId = col.id ?? accessorCol.accessorKey ?? null;
-        return colId !== "createdAt" && colId !== "updatedAt";
-      })
-      .map((col) => {
-        // Get column id from id or accessorKey (need to cast for accessorKey access)
-        const accessorCol = col as { accessorKey?: string };
-        const colId = col.id ?? accessorCol.accessorKey ?? null;
-
-        // Auto-disable sorting for columns not in sortableFields; an explicit
-        // enableSorting on the column def still wins.
-        const enableSorting =
-          col.enableSorting !== undefined
-            ? col.enableSorting
-            : colId
-              ? sortableFields.includes(colId)
-              : false;
-
-        // Manifest config overlays whatever the column factory baked in. The
-        // factories' own `filterConfig` (e.g. createFilterableSelectColumn
-        // deriving one from its editor options) stays as the fallback for
-        // columns and tables the manifest doesn't cover.
-        const withSorting = { ...col, enableSorting };
-        return colId ? withManifestFilter(withSorting, colId) : withSorting;
-      });
-    cols.push(...processedColumns);
-
-    // Append unit mappings column if configured
-    if (shouldUseMappings && mappingsMap) {
-      // The product id stays "unitMappingQuality" — it's what the manifest's
-      // presence filter hangs on. NOT sortable: the cell grades conversion
-      // COVERAGE (a graph reachability run through the unit engine, over
-      // USDA-derived edges the server never loads), which no SQL ORDER BY can
-      // reproduce. The old sort ordered by an edge-count proxy instead, i.e.
-      // by a quantity that isn't on screen.
-      const mappingsColId =
-        entity === "product" ? "unitMappingQuality" : "unitMappings";
-      cols.push(
-        withManifestFilter(
-          createUnitMappingsColumn(columnHelper, mappingsMap, {
-            id: mappingsColId,
-            enableSorting: false,
-          }),
-          mappingsColId,
-        ),
-      );
-    }
-
-    // Every Cubby entity read shape carries both timestamps. Keep the audit
-    // pair together at the end; list hooks make both default-hidden while the
-    // View menu lets users opt them in.
-    cols.push(createCreatedAtColumn(columnHelper));
-    cols.push(createUpdatedAtColumn(columnHelper));
-
-    // Append actions column (always last)
-    cols.push(
-      createActionsColumn(columnHelper, entity, {
-        extraActions: combinedExtraActions,
-        rowLink,
-        subject,
+        );
       }),
-    );
-
-    return cols;
-  }, [
-    columnHelper,
-    customColumns,
-    entity,
-    shouldUseMappings,
-    standardColumns,
-    mappingsMap,
-    stableFilters,
-    filterOptions,
-    enableRowSelection,
-    combinedExtraActions,
-    rowLink,
-    subject,
-    nameClassName,
-    nameEditable,
-    nameSuffix,
-    namePrefix,
-    expandable,
-    hiddenFilterColumnSet,
-  ]);
+    [
+      columnHelper,
+      customColumns,
+      entity,
+      shouldUseMappings,
+      standardColumns,
+      mappingsMap,
+      stableFilters,
+      filterOptions,
+      enableRowSelection,
+      combinedExtraActions,
+      rowLink,
+      subject,
+      nameClassName,
+      nameEditable,
+      nameSuffix,
+      namePrefix,
+      expandable,
+      hiddenFilterColumnSet,
+    ],
+  );
 }

@@ -15,7 +15,10 @@ import type { UserId } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import {
+  type CallToolResult,
+  CallToolResultSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -26,6 +29,8 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { createMcpServer } from "./server";
+import { splitExpenseMcpOut } from "./tools/purchase.tools";
+import type { ToolArguments } from "./tools/tool-registration";
 import {
   createMcpWorkflowCaller,
   type McpWorkflowCaller,
@@ -33,7 +38,7 @@ import {
 
 async function callTool(
   name: string,
-  args: Record<string, unknown>,
+  args: ToolArguments,
   caller: McpWorkflowCaller,
   entityKernel: EntityKernelContext,
 ): Promise<CallToolResult> {
@@ -60,14 +65,16 @@ async function callTool(
   ]);
 
   try {
-    return (await client.callTool({ name, arguments: args })) as CallToolResult;
+    return CallToolResultSchema.parse(
+      await client.callTool({ name, arguments: args }),
+    );
   } finally {
     await Promise.allSettled([client.close(), server.close()]);
   }
 }
 
-function structured(result: CallToolResult): Record<string, unknown> {
-  return result.structuredContent as Record<string, unknown>;
+function structured(result: CallToolResult) {
+  return splitExpenseMcpOut.parse(result.structuredContent);
 }
 
 function errorText(result: CallToolResult): string {
@@ -157,7 +164,7 @@ describe("split_expense MCP tool — originalCost/partsSum/delta", () => {
     expect(out.partsSum).toBe(85);
     expect(out.delta).toBe(-15);
     // Not a gate: both parts were still created despite the mismatch.
-    expect((out.items as unknown[]).length).toBe(2);
+    expect(out.items).toHaveLength(2);
   });
 
   it("returns null originalCost/delta when the original has no recorded cost", async () => {

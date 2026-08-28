@@ -138,6 +138,7 @@ export function NetBarBreakdown<T extends BarDatum>({
       indexBy={indexBy}
       margin={margin}
       padding={0.25}
+      // SAFETY: Nivo invokes this callback with the same row objects supplied in `data`.
       colors={({ data: d }) => colorFor(d as T)}
       {...nivoBarChrome}
       axisBottom={
@@ -159,8 +160,10 @@ export function NetBarBreakdown<T extends BarDatum>({
       labelTextColor={showValueLabel ? "var(--background)" : undefined}
       enableGridX
       enableGridY={false}
+      // SAFETY: Nivo's bar datum is the original generic row from `data`.
       onClick={onClick ? (bar) => onClick(bar.data as T) : undefined}
       tooltip={({ data: d }) => {
+        // SAFETY: Nivo's tooltip datum is the original generic row from `data`.
         const row = d as T;
         if (tooltip) return <>{tooltip(row)}</>;
         return (
@@ -343,9 +346,7 @@ export function SpendTrend({
               {slice.points[0]?.data.xFormatted}
             </div>
             {slice.points
-              .filter(
-                (point) => !filterZeroValues || (point.data.y as number) > 0,
-              )
+              .filter((point) => !filterZeroValues || Number(point.data.y) > 0)
               .map((point) => (
                 <div key={point.id} className="flex items-center gap-2">
                   <div
@@ -354,7 +355,7 @@ export function SpendTrend({
                   />
                   <span className={seriesLabelClassName}>{point.seriesId}</span>
                   <strong className="ml-auto">
-                    {formatCurrency(point.data.y as number, 0)}
+                    {formatCurrency(Number(point.data.y), 0)}
                   </strong>
                 </div>
               ))}

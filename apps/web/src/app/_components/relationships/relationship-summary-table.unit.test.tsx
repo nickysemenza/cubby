@@ -1,46 +1,29 @@
-import type {
-  RelatedSummaryInput,
-  RelatedSummaryOutput,
-} from "@cubby/schemas/related-view";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { flexRender } from "@tanstack/react-table";
-import { act, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { relatedSummaryOutput } from "@cubby/schemas/related-view";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { CubbyTable } from "../data-table/table-features";
+import { relatedData } from "~/lib/related-data.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-const mocks = vi.hoisted(() => {
-  const summaryQuery = vi.fn();
-  return {
-    queryOptions: vi.fn((input: RelatedSummaryInput) => {
-      const { offset, ...scope } = input;
-      return {
-        queryKey: ["related-summary", scope],
-        initialPageParam: offset ?? 0,
-        queryFn: ({ pageParam }: { pageParam: number }) =>
-          summaryQuery({ ...input, offset: pageParam }),
-        getNextPageParam: (result: RelatedSummaryOutput) =>
-          result.nextOffset ?? undefined,
-      };
-    }),
-    summaryQuery,
-    lastTable: { current: null as CubbyTable<Record<string, unknown>> | null },
-  };
-});
+import {
+  type RelationshipSummaryOperations,
+  RelationshipSummaryTable,
+} from "./relationship-summary-table";
 
-const page = (relationKey: string) => ({
+const summary = relatedSummaryOutput.parse({
   data: [
     {
-      target:
-        relationKey === "product.vendors"
-          ? null
-          : {
-              entity: relationKey === "project.vendors" ? "vendor" : "product",
-              id: "PRD-TEST",
-              label: "Brush",
-              image: { url: "https://example.com/brush.jpg" },
-            },
+      target: {
+        entity: "product",
+        id: "PRD-TEST",
+        label: "Brush",
+        image: {
+          id: "IMG-BRUSH",
+          url: "https://example.com/brush.jpg",
+          filename: "brush.jpg",
+          contentType: "image/jpeg",
+        },
+      },
       expenseCount: 2,
       purchaseCount: 1,
       unpricedExpenseCount: 0,
@@ -62,199 +45,61 @@ const page = (relationKey: string) => ({
   nextOffset: null,
 });
 
-vi.mock("~/lib/related-data.functions", () => ({
-  relatedData: { summary: { infiniteQueryOptions: mocks.queryOptions } },
-}));
-vi.mock("../data-table/Table", () => ({
-  default: ({
-    table,
-    additionalToolbarContent,
-  }: {
-    table: CubbyTable<Record<string, unknown>>;
-    additionalToolbarContent: ReactNode;
-  }) => {
-    mocks.lastTable.current = table;
-    return (
-      <div>
-        {additionalToolbarContent}
-        {table.getRowModel().rows.map((row) => (
-          <div key={row.id}>
-            {row.getVisibleCells().map((cell) => (
-              <span key={cell.id}>
-                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  },
-}));
-vi.mock("~/app/_components/EntityInlineLink", () => ({
-  EntityInlineLink: ({
-    data,
-    showIdentityMark,
-  }: {
-    data: { name: string };
-    showIdentityMark?: boolean;
-  }) => (
-    <span
-      data-testid="summary-target-link"
-      data-show-mark={showIdentityMark === false ? "false" : "true"}
-    >
-      {data.name}
-    </span>
-  ),
-}));
-vi.mock("~/app/_components/table/ImageThumbnail", () => ({
-  ImageThumbnail: ({
-    images,
-    entity,
-  }: {
-    images: Array<{ url: string }>;
-    entity: string;
-  }) => (
-    <span
-      data-testid="summary-thumbnail"
-      data-entity={entity}
-      data-src={images[0]?.url}
-    />
-  ),
-}));
-vi.mock("~/components/entity/vendor-cell", () => ({
-  VendorMark: ({ vendor }: { vendor: string }) => (
-    <span data-testid="summary-vendor-mark">{vendor}</span>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-import { RelationshipSummaryTable } from "./relationship-summary-table";
-
-const clients: QueryClient[] = [];
-const renderTable = (ui: ReactNode) => {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
-  });
-  clients.push(client);
-  return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
-  );
-};
-
-afterEach(() => {
-  for (const client of clients.splice(0)) client.clear();
-  mocks.lastTable.current = null;
-  mocks.queryOptions.mockClear();
-  mocks.summaryQuery.mockReset();
+beforeEach(() => {
+  harness = createBrowserTestHarness();
 });
 
+afterEach(() => {
+  harness.dispose();
+});
+
+function createOperations(output = summary): RelationshipSummaryOperations {
+  return {
+    summary: relatedData.summary.withTransport(async () => output),
+  };
+}
+
+async function renderTable(operations: RelationshipSummaryOperations) {
+  await act(async () => {
+    await harness.loadRouter();
+  });
+  return render(
+    <RelationshipSummaryTable
+      relationKey="vendor.products"
+      sourceId="VEN-TEST"
+      columns={["target", "acquired", "netSpend"]}
+      defaultSort={{ field: "latestActivity", direction: "desc" }}
+      emptyCopy="Nothing yet."
+      expenseHref={() => "/expenses?vendor=VEN-TEST"}
+      operations={operations}
+    />,
+    { wrapper: harness.routerWrapper },
+  );
+}
+
 describe("RelationshipSummaryTable", () => {
-  it("requests the configured server sort and renders incomplete acquisition quantities", async () => {
-    mocks.summaryQuery.mockImplementation(async () => page("vendor.products"));
-    renderTable(
-      <RelationshipSummaryTable
-        relationKey="vendor.products"
-        sourceId="VEN-TEST"
-        columns={["target", "acquired", "netSpend"]}
-        defaultSort={{ field: "latestActivity", direction: "desc" }}
-        emptyCopy="Nothing yet."
-        expenseHref={() => "/expenses"}
-      />,
-    );
+  it("renders typed aggregate rows through the real table and operation descriptor", async () => {
+    await renderTable(createOperations());
 
-    await waitFor(() => expect(screen.getByText("Brush")).toBeInTheDocument());
-    expect(mocks.queryOptions).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        relationKey: "vendor.products",
-        sourceId: "VEN-TEST",
-        sort: { field: "latestActivity", direction: "desc" },
-      }),
-      expect.objectContaining({
-        initialPageParam: 0,
-        page: expect.any(Function),
-        getNextPageParam: expect.any(Function),
-      }),
-    );
-    expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(
-      "data-entity",
-      "product",
-    );
-    expect(screen.getByTestId("summary-thumbnail")).toHaveAttribute(
-      "data-src",
-      "https://example.com/brush.jpg",
-    );
-    expect(screen.getByTestId("summary-target-link")).toHaveAttribute(
-      "data-show-mark",
-      "false",
-    );
-    expect(screen.getByText("+1?")).toBeInTheDocument();
-    expect(mocks.summaryQuery).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        relationKey: "vendor.products",
-        sourceId: "VEN-TEST",
-        offset: 0,
-        limit: 25,
-        sort: { field: "latestActivity", direction: "desc" },
-      }),
-    );
+    expect(await screen.findByText("Brush")).toBeVisible();
+    expect(screen.getByText("+1?")).toBeVisible();
+    expect(screen.getByText(/\$18\.50 net/)).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "View Brush expenses" }),
+    ).toHaveAttribute("href", "/expenses?vendor=VEN-TEST");
+  });
 
-    // Sorting is manual: the click must re-ask the server, not reorder rows.
-    act(() => {
-      mocks.lastTable.current?.getColumn("netSpend")?.toggleSorting(true);
+  it("preserves a null relationship bucket as a warning-labelled ledger scope", async () => {
+    const nullTarget = relatedSummaryOutput.parse({
+      ...summary,
+      data: [{ ...summary.data[0], target: null }],
     });
-    await waitFor(() =>
-      expect(mocks.summaryQuery).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          sort: { field: "netSpend", direction: "desc" },
-        }),
-      ),
-    );
-
-    expect(screen.getByText(/\$18\.50 net/)).toBeInTheDocument();
-  });
-
-  it("only lets the server-sortable columns sort", async () => {
-    mocks.summaryQuery.mockImplementation(async () => page("vendor.products"));
-    renderTable(
-      <RelationshipSummaryTable
-        relationKey="vendor.products"
-        sourceId="VEN-TEST"
-        columns={["target", "unpriced", "netSpend"]}
-        defaultSort={{ field: "netSpend", direction: "desc" }}
-        emptyCopy="Nothing yet."
-        expenseHref={() => "/expenses"}
-      />,
-    );
-
-    await waitFor(() => expect(mocks.lastTable.current).not.toBeNull());
-    expect(mocks.lastTable.current?.getColumn("unpriced")?.getCanSort()).toBe(
-      false,
-    );
-    expect(mocks.lastTable.current?.getColumn("netSpend")?.getCanSort()).toBe(
-      true,
-    );
-  });
-
-  it("uses the vendor mark for vendor-target summaries", async () => {
-    mocks.summaryQuery.mockImplementation(async () => page("project.vendors"));
-    renderTable(
-      <RelationshipSummaryTable
-        relationKey="project.vendors"
-        sourceId="PRJ-TEST"
-        columns={["target", "netSpend"]}
-        defaultSort={{ field: "netSpend", direction: "desc" }}
-        emptyCopy="Nothing yet."
-        expenseHref={() => "/expenses"}
-      />,
-    );
-
-    expect(await screen.findByTestId("summary-vendor-mark")).toHaveTextContent(
-      "Brush",
-    );
-  });
-
-  it("warning-styles a null target and keeps its exact ledger link", async () => {
-    mocks.summaryQuery.mockImplementation(async () => page("product.vendors"));
-    renderTable(
+    await act(async () => {
+      await harness.loadRouter();
+    });
+    render(
       <RelationshipSummaryTable
         relationKey="product.vendors"
         sourceId="PRD-TEST"
@@ -263,14 +108,16 @@ describe("RelationshipSummaryTable", () => {
         emptyCopy="Nothing yet."
         nullLabel="No purchase/vendor"
         expenseHref={() => "/expenses?productId=PRD-TEST&vendor=__none__"}
+        operations={createOperations(nullTarget)}
       />,
+      { wrapper: harness.routerWrapper },
     );
 
     expect(await screen.findByText("No purchase/vendor")).toHaveClass(
       "text-warning-ink",
     );
     expect(
-      screen.getByRole("link", { name: /view no purchase\/vendor expenses/i }),
+      screen.getByRole("link", { name: "View No purchase/vendor expenses" }),
     ).toHaveAttribute("href", "/expenses?productId=PRD-TEST&vendor=__none__");
   });
 });

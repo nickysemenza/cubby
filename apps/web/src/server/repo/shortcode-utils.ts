@@ -27,6 +27,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 
@@ -67,6 +68,14 @@ export const SHORTCODE_TABLE = GENERATED_SHORTCODE_TABLE satisfies Record<
 export type ShortcodeTableFor<T extends ShortcodeType> =
   (typeof SHORTCODE_TABLE)[T];
 
+export interface ShortcodeGeneratorPort {
+  readonly generate: typeof generateShortcode;
+}
+
+const productionShortcodeGeneratorPort: ShortcodeGeneratorPort = {
+  generate: generateShortcode,
+};
+
 export type ShortcodeRowFor<T extends ShortcodeType> = Omit<
   InferSelectModel<ShortcodeTableFor<T>>,
   "shortcode"
@@ -105,10 +114,11 @@ const shortcodeTaken = async (
 export async function generateUniqueShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
   entity: T,
+  generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<ShortcodeFor<T>> {
   const table = SHORTCODE_TABLE[entity];
   for (let i = 0; i < MAX_RETRIES; i++) {
-    const code = generateShortcode(entity);
+    const code = generator.generate(entity);
     if (!(await shortcodeTaken(db, table, code))) {
       return code;
     }
@@ -127,26 +137,39 @@ export async function generateUniqueShortcode<T extends ShortcodeType>(
  * `constraint` — off `.cause`. Reading only the top-level error means never
  * recognizing a collision, which silently turns the retry below into dead code.
  */
-const isShortcodeCollision = (error: unknown, tableName: string): boolean => {
+const databaseErrorNodeSchema = z
+  .object({
+    code: z.string().optional(),
+    constraint: z.string().optional(),
+    message: z.string().optional(),
+    cause: z
+      .union([z.instanceof(Error), z.object({}).passthrough()])
+      .optional(),
+  })
+  .passthrough();
+
+const isShortcodeCollision = <TError>(
+  error: TError,
+  tableName: string,
+  depth = 0,
+): boolean => {
+  if (depth >= 6) return false;
+  const parsedError = databaseErrorNodeSchema.safeParse(error);
+  if (!parsedError.success) return false;
+
   const indexName = `${tableName}_shortcode_unique`;
-  for (let cursor = error; cursor && typeof cursor === "object";) {
-    const { code, constraint, message, cause } = cursor as {
-      code?: string;
-      constraint?: string;
-      message?: string;
-      cause?: unknown;
-    };
-    if (
-      code === "23505" &&
-      // `constraint` is populated by node-postgres; the message check covers a
-      // driver or wrapper that only preserves the text.
-      (constraint === indexName || (message?.includes(indexName) ?? false))
-    ) {
-      return true;
-    }
-    cursor = cause;
+  const { code, constraint, message, cause } = parsedError.data;
+  if (
+    code === "23505" &&
+    // `constraint` is populated by node-postgres; the message check covers a
+    // driver or wrapper that only preserves the text.
+    (constraint === indexName || (message?.includes(indexName) ?? false))
+  ) {
+    return true;
   }
-  return false;
+  return cause === undefined
+    ? false
+    : isShortcodeCollision(cause, tableName, depth + 1);
 };
 
 /**
@@ -194,7 +217,11 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
       | Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">
       | Promise<Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">>;
   },
+  generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<{ row: ShortcodeRowFor<T>; created: boolean }> {
+  // SAFETY: Drizzle cannot retain the correlation between generic entity T and
+  // the generated table map's indexed union, while every generated member is
+  // checked against ShortcodeTable at the declaration above.
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -204,13 +231,15 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
     const result = await findOrCreate(db, table, {
       where: opts.where,
       values: async () => {
-        mintedShortcode = await generateUniqueShortcode(db, entity);
+        mintedShortcode = await generateUniqueShortcode(db, entity, generator);
+        // SAFETY: opts.values is the insert model for the same generic table;
+        // this adapter adds its only omitted required field, shortcode.
         return {
           ...(await opts.values()),
           shortcode: mintedShortcode,
         } as InferInsertModel<ShortcodeTable>;
       },
-    }).catch(async (error: unknown) => {
+    }).catch(async (error) => {
       if (!(error instanceof FindOrCreateConflictError)) throw error;
       if (mintedShortcode && (await shortcodeTaken(db, table, mintedShortcode)))
         return null; // the code we minted is gone — retry with a fresh one
@@ -221,6 +250,8 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
     });
     if (result) {
       return {
+        // SAFETY: findOrCreate used SHORTCODE_TABLE[entity]; its returned row
+        // therefore has the select model correlated with this same entity T.
         row: parseShortcodeRow(
           entity,
           result.row as InferSelectModel<ShortcodeTableFor<T>>,
@@ -238,13 +269,19 @@ export async function insertWithShortcode<T extends ShortcodeType>(
   db: Database | DrizzleTransaction,
   entity: T,
   values: Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">,
+  generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<ShortcodeRowFor<T>> {
+  // SAFETY: Drizzle cannot retain the correlation between generic entity T and
+  // the generated table map's indexed union, while every generated member is
+  // checked against ShortcodeTable at the declaration above.
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
   const tableName = getTableName(table);
 
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const shortcode = await generateUniqueShortcode(db, entity);
+    const shortcode = await generateUniqueShortcode(db, entity, generator);
+    // SAFETY: values is the insert model for this generic entity with only its
+    // shortcode omitted; adding the schema-parsed branded shortcode completes it.
     const row = { ...values, shortcode } as InferInsertModel<ShortcodeTable>;
     try {
       const created = isTransaction(db)
@@ -252,6 +289,8 @@ export async function insertWithShortcode<T extends ShortcodeType>(
             insertAndReturn(savepoint, table, row),
           )
         : await insertAndReturn(db, table, row);
+      // SAFETY: insertAndReturn used SHORTCODE_TABLE[entity], so the selected
+      // row remains correlated with the same generic entity T.
       return parseShortcodeRow(
         entity,
         created as InferSelectModel<ShortcodeTableFor<T>>,

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { numberCellData } from "./cell-data";
 import { getCellSelectionStats } from "./cell-selection-stats";
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import { attachCubbyColumnMeta } from "./table-meta";
 
 interface Row {
   id: string;
@@ -20,11 +21,15 @@ const rows: Row[] = [
 const columns = helper.columns([
   helper.accessor("cost", {
     id: "cost",
-    meta: { cellData: numberCellData("currency", (row) => row.cost) },
+    meta: attachCubbyColumnMeta({
+      cellData: numberCellData("currency", (row: Row) => row.cost),
+    }),
   }),
   helper.accessor("quantity", {
     id: "quantity",
-    meta: { cellData: numberCellData("number", (row) => row.quantity) },
+    meta: attachCubbyColumnMeta({
+      cellData: numberCellData("number", (row: Row) => row.quantity),
+    }),
   }),
   helper.accessor("name", { id: "name" }),
 ]);

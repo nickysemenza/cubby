@@ -38,7 +38,7 @@ export interface ProblemCountsCacheAdapter {
 
 let cfEnv: Env | undefined;
 
-export const setCfEnv = (env: Env): void => {
+export const setCfEnv = (env?: Env): void => {
   cfEnv = env;
 };
 
@@ -49,19 +49,29 @@ export const setCfEnv = (env: Env): void => {
  * surface shared by production and tests.
  */
 export const getBackgroundQueue = (): BackgroundQueueProducer | undefined => {
+  // SAFETY: Wrangler generates Env bindings structurally from configuration;
+  // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.BACKGROUND_QUEUE as BackgroundQueueProducer | undefined;
 };
 
 /** The low-priority telemetry queue, or undefined in the Node dev server. */
 export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
+  // SAFETY: Wrangler generates Env bindings structurally from configuration;
+  // this adapter narrows that generated queue binding to Cubby's owned port.
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
 /** KV-backed derived Problem-count snapshot, absent in plain Node dev/tests. */
 export const getProblemCountsCache = ():
   | ProblemCountsCacheAdapter
-  | undefined =>
-  cfEnv?.PROBLEM_COUNTS_KV as ProblemCountsCacheAdapter | undefined;
+  | undefined => {
+  const binding = cfEnv?.PROBLEM_COUNTS_KV;
+  if (!binding) return undefined;
+  return {
+    get: (key) => binding.get(key),
+    put: (key, value) => binding.put(key, value),
+  };
+};
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in
@@ -90,7 +100,9 @@ export const getBindingFetcher = (
   const binding = cfEnv?.[name];
   if (!binding) return undefined;
   // Wrap in an arrow — Fetcher["fetch"] isn't directly assignable to the
-  // global fetch type.
+  // global fetch type. SAFETY: this is the single Cloudflare Fetcher/global
+  // fetch overload boundary; both accept the same runtime Request inputs and
+  // return a Promise<Response>.
   return ((input, init) =>
     binding.fetch(input as never, init as never)) as typeof fetch;
 };

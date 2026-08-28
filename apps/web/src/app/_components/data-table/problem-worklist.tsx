@@ -1,11 +1,17 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useSearch } from "@tanstack/react-router";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
+import { z } from "zod";
 
 import { Badge } from "~/components/ui/badge";
-import { problemQuery } from "~/entities/problem-registry";
+import { problemQueryDeclarations } from "~/entities/problem-registry";
 
-const sameValue = (actual: unknown, expected: string | string[]): boolean =>
+const filterValueSchema = z.union([z.string(), z.array(z.string())]);
+
+const sameValue = (
+  actual: string | string[] | undefined,
+  expected: string | string[],
+): boolean =>
   Array.isArray(expected)
     ? Array.isArray(actual) &&
       actual.length === expected.length &&
@@ -15,12 +21,14 @@ const sameValue = (actual: unknown, expected: string | string[]): boolean =>
 /** Whether visible URL state still exactly represents the originating Problem. */
 export function problemWorklistState(
   entity: Entity,
-  worklist: unknown,
+  worklist: string | undefined,
   filters: ColumnFiltersState,
   sorting: SortingState,
 ) {
-  if (typeof worklist !== "string") return undefined;
-  const query = problemQuery(worklist as Parameters<typeof problemQuery>[0]);
+  if (!worklist) return undefined;
+  const query = problemQueryDeclarations().find(
+    (candidate) => candidate.key === worklist,
+  );
   if (query?.source.kind !== "entity" || query.source.entity !== entity) {
     return undefined;
   }
@@ -29,7 +37,9 @@ export function problemWorklistState(
     filters.length === query.source.filters.length &&
     query.source.filters.every((filter) =>
       sameValue(
-        filters.find((candidate) => candidate.id === filter.id)?.value,
+        filterValueSchema.safeParse(
+          filters.find((candidate) => candidate.id === filter.id)?.value,
+        ).data,
         filter.value,
       ),
     );
@@ -54,7 +64,9 @@ export function ProblemWorklistStatus({
   filters: ColumnFiltersState;
   sorting: SortingState;
 }) {
-  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const search = z
+    .object({ worklist: z.string().optional() })
+    .parse(useSearch({ strict: false }));
   const state = problemWorklistState(entity, search.worklist, filters, sorting);
   if (!state) return null;
   return (

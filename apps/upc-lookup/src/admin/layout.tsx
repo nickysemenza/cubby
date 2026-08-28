@@ -101,15 +101,20 @@ export const Card: FC<{ class?: string; children?: Child }> = ({
   </div>
 );
 
-const SOURCE_BADGE_CLASS: Record<string, string> = {
+const SOURCE_BADGE_CLASS = {
   upcitemdb: "bg-blue-50 text-blue-700 ring-blue-600/20",
   manual: "bg-amber-50 text-amber-700 ring-amber-600/20",
-};
+} as const satisfies Record<string, string>;
+type SourceBadgeName = keyof typeof SOURCE_BADGE_CLASS;
+const isSourceBadgeName = (source: string): source is SourceBadgeName =>
+  Object.hasOwn(SOURCE_BADGE_CLASS, source);
 
 export const SourceBadge: FC<{ source: string }> = ({ source }) => (
   <span
     class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
-      SOURCE_BADGE_CLASS[source] ?? "bg-zinc-100 text-zinc-600 ring-zinc-500/20"
+      isSourceBadgeName(source)
+        ? SOURCE_BADGE_CLASS[source]
+        : "bg-zinc-100 text-zinc-600 ring-zinc-500/20"
     }`}
   >
     {source}

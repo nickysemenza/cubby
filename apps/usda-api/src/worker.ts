@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/cloudflare";
+import type { ExecutionContext } from "@cloudflare/workers-types";
 import {
   CUBBY_SENTRY_DSN,
   registerSentryErrorCapture,
@@ -12,11 +13,20 @@ let app: ReturnType<typeof createUsdaApp> | undefined;
 type WorkerBindings = EdgeBindings & { SENTRY_ENVIRONMENT: string };
 
 const handler = {
-  fetch(request: Request, env: WorkerBindings, executionContext: unknown) {
+  fetch(
+    request: Request,
+    env: WorkerBindings,
+    executionContext: ExecutionContext,
+  ) {
     if (!app) {
-      app = createUsdaApp(createEdgeUsdaDataSource(env), {
-        logRequests: true,
-      });
+      app = createUsdaApp(
+        createEdgeUsdaDataSource(env, {
+          cache: globalThis.caches?.default ?? null,
+        }),
+        {
+          logRequests: true,
+        },
+      );
       // Hono catches route throws and returns a 500 without rethrowing, so
       // `Sentry.withSentry`'s throw-only auto-capture below never sees them.
       registerSentryErrorCapture(app, Sentry.captureException);
@@ -31,7 +41,9 @@ const handler = {
     return withSpan(
       "usda.request",
       async (span) => {
-        const res = await app!.fetch(request, env, executionContext as never);
+        const currentApp = app;
+        if (!currentApp) throw new Error("USDA app failed to initialize");
+        const res = await currentApp.fetch(request, env, executionContext);
         span.setAttribute("http.response.status_code", res.status);
         return res;
       },

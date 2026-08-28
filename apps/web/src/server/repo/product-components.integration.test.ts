@@ -11,6 +11,7 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   auditLog,
@@ -38,6 +39,13 @@ import {
   makeProductInput,
 } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
+
+const componentProductIdsAuditChange = z.object({
+  componentProductIds: z.object({
+    from: z.array(z.string()),
+    to: z.array(z.string()),
+  }),
+});
 import { findOrCreateVendor } from "./vendor";
 
 describe("product ⟷ product component links (kit composition)", () => {
@@ -234,14 +242,10 @@ describe("product ⟷ product component links (kit composition)", () => {
       );
 
     const linkChange = entries.find(
-      (e) =>
-        (e.changes as { componentProductIds?: { to?: string[] } } | null)
-          ?.componentProductIds !== undefined,
+      (e) => componentProductIdsAuditChange.safeParse(e.changes).success,
     );
     expect(linkChange).toBeDefined();
-    const changes = linkChange?.changes as {
-      componentProductIds: { from: string[]; to: string[] };
-    };
+    const changes = componentProductIdsAuditChange.parse(linkChange?.changes);
     expect(changes.componentProductIds.from).toEqual([]);
     expect(changes.componentProductIds.to).toHaveLength(1);
   });

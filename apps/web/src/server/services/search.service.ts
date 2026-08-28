@@ -6,10 +6,11 @@ import {
   type SearchableEntity,
   type SearchHit,
   type SearchQueryInput,
+  searchHitSchema,
   searchableEntities,
 } from "@cubby/schemas/search";
 import { type SQL, sql } from "drizzle-orm";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import {
@@ -33,10 +34,25 @@ import {
 import { normalizeSearchText } from "~/server/semantic/text";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-type Candidate = Omit<SearchHit, "imageUrl"> & { entityId: string };
+const candidateSchema = searchHitSchema.omit({ imageUrl: true }).extend({
+  entityId: z.uuid(),
+});
+type Candidate = z.output<typeof candidateSchema>;
 export type InternalSearchHit = SearchHit & { entityId: string };
 type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
   limit?: number;
+};
+
+export interface RelatedSearchPort {
+  readonly configured: () => boolean;
+  readonly embed: typeof embedQuery;
+  readonly config: typeof getSemanticEmbeddingConfig;
+}
+
+const productionRelatedSearchPort: RelatedSearchPort = {
+  configured: semanticEmbeddingsConfigured,
+  embed: embedQuery,
+  config: getSemanticEmbeddingConfig,
 };
 
 export const searchTerms = (query: string): string[] =>
@@ -91,18 +107,18 @@ type SearchDocumentRepairMetadataInput = z.input<
   typeof searchDocumentRepairCoordinatorPayloadSchema
 >;
 
-const readSearchDocumentRepairMetadata = (
-  value: unknown,
+const readSearchDocumentRepairMetadata = <Payload>(
+  value: Payload,
 ): SearchDocumentRepairMetadata | null => {
   const parsed = searchDocumentRepairCoordinatorPayloadSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 };
 
 /** Process one bounded document-repair audit page. */
-export async function continueSearchDocumentRepairWorkflow(
+export async function continueSearchDocumentRepairWorkflow<Payload>(
   db: Database,
   batchId: string,
-  payload: unknown,
+  payload: Payload,
 ): Promise<"succeeded" | "skipped"> {
   const metadata = readSearchDocumentRepairMetadata(payload);
   if (!metadata || metadata.workflow.state === "complete") return "skipped";
@@ -278,8 +294,9 @@ export async function findSearchHits(
   const rows = await withTrace(
     TraceNames.service("search", "lexicalCandidates"),
     async (span) => {
-      const candidates = await executeSearchDocumentSql<Candidate>(
+      const candidates = await executeSearchDocumentSql(
         db,
+        candidateSchema,
         sql`
     WITH q AS (SELECT to_tsquery('simple', ${tsQuery}) AS query),
     fuzzy AS (
@@ -375,18 +392,20 @@ export async function findSearchHits(
 
 /** Semantic candidates remain a separate section and never block lexical hits. */
 export async function findRelatedSearchHits(
-  db: Database,
+  db: Database | undefined,
   input: ServiceSearchQueryInput,
+  port: RelatedSearchPort = productionRelatedSearchPort,
 ): Promise<RelatedSearchOut> {
   if (
     input.query.trim().length < SEMANTIC_MIN_QUERY_LENGTH ||
-    !semanticEmbeddingsConfigured()
+    !port.configured()
   )
     return { status: "unavailable", results: [] };
+  if (!db) throw new Error("Configured related search requires a database.");
   try {
-    const embedding = await embedQuery(input.query, { db });
+    const embedding = await port.embed(input.query, { db });
     if (!embedding) return { status: "unavailable", results: [] };
-    const config = getSemanticEmbeddingConfig();
+    const config = port.config();
     const limit = Math.min(Math.max(input.limit ?? 5, 1), 12);
     const entityTypes = scopes(input.entityTypes);
     const matchTerms = textArray(searchTerms(input.query));
@@ -397,8 +416,9 @@ export async function findRelatedSearchHits(
     // Keep this literal in lockstep with EntityEmbedding's partial HNSW index;
     // a bound parameter prevents PostgreSQL proving that index predicate.
     const dimensionsFilter = sql.raw(`ee."dimensions" = ${config.dimensions}`);
-    const rows = await executeSearchDocumentSql<Candidate>(
+    const rows = await executeSearchDocumentSql(
       db,
+      candidateSchema,
       sql`
       SELECT sd."entityId"::text AS "entityId", sd."shortcode" AS id, sd."entityType", sd.title, sd.subtitle, sd."typeHint",
         'semantic' AS "matchKind", 'embedding' AS "matchField",
@@ -443,8 +463,9 @@ export async function hydrateSearchHitRefs(
     ),
     sql`, `,
   );
-  const rows = await executeSearchDocumentSql<Candidate>(
+  const rows = await executeSearchDocumentSql(
     db,
+    candidateSchema,
     sql`
       WITH refs("entityType", "entityId", ordinal) AS (VALUES ${values})
       SELECT sd."entityId"::text AS "entityId", sd."shortcode" AS id,

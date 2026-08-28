@@ -1,60 +1,71 @@
+import { mealOut } from "@cubby/schemas/meal";
+import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { MealTable } from "./meal-table";
+import type { ListQueryResponse } from "~/app/_components/hooks/usePaginatedTableCore";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-const mocks = vi.hoisted(() => ({
-  listWorkbench: vi.fn(),
-  useEntityPreview: vi.fn(),
-}));
+import { type MealTableOperations, MealTable } from "./meal-table";
 
-vi.mock("../_components/hooks/useEntityPreview", () => ({
-  useEntityPreview: (...args: unknown[]) => {
-    mocks.useEntityPreview(...args);
-    return {
-      onRowClick: vi.fn(),
-      onRowHover: vi.fn(),
-      onRowHoverEnd: vi.fn(),
-      PreviewSheet: () => <div>Intermediate meal preview</div>,
-      preview: { entityType: "meal", id: "ML-4K7M", rowKey: "ML-4K7M" },
-      dockedInspector: <aside>Meal inspector</aside>,
-    };
+const meal = mealOut.parse({
+  id: testShortcode("meal", "ML-4K7M"),
+  date: "2026-08-18",
+  name: "Weeknight Supper",
+  sortOrder: null,
+  mealType: "dinner",
+  mealKind: "cooked",
+  recipes: [],
+  totals: {
+    costTotal: 18.5,
+    caloriesTotal: 640,
+    pending: false,
   },
-}));
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+});
 
-vi.mock("../_components/hooks/useEntityList", () => ({
-  useEntityList: () => ({ workbench: { entity: "meal", table: {} } }),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
-vi.mock("../_components/hooks/useUpdateMutation", () => ({
-  useUpdateMutation: () => ({ mutateAsync: vi.fn() }),
-}));
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
 
-vi.mock("../_components/hooks/useDeletableConfig", () => ({
-  useDeletableConfig: () => ({}),
-}));
+afterEach(() => {
+  harness.dispose();
+});
 
-vi.mock("../_components/data-table/ListWorkbench", () => ({
-  ListWorkbench: (props: Record<string, unknown>) => {
-    mocks.listWorkbench(props);
-    return <>{props.desktopInspector as ReactNode}</>;
-  },
-}));
+function mealOperations(
+  response: ListQueryResponse<typeof meal>,
+): MealTableOperations {
+  return {
+    // The table's filter and pagination state stays real; this is only the
+    // unavailable server list operation for the browser test.
+    list: (params) => ({
+      queryKey: ["browser-test", "meal-list", params],
+      execute: async () => response,
+    }),
+  };
+}
 
-describe("MealTable inspector composition", () => {
-  it("keeps the meal table in context while the responsive inspector owns the selected record", () => {
-    render(<MealTable />);
+describe("MealTable", () => {
+  it("renders server-backed meal rows with their filterable classifications", async () => {
+    render(
+      <MealTable
+        operations={mealOperations({
+          items: [meal],
+          meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+        })}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
-    const props = mocks.listWorkbench.mock.lastCall?.[0] as Record<
-      string,
-      unknown
-    >;
-    expect(mocks.useEntityPreview).toHaveBeenCalledWith("meal", {
-      responsiveInspector: true,
-    });
-    expect(props.currentRowId).toBe("ML-4K7M");
-    expect(screen.getByText("Meal inspector")).toBeInTheDocument();
-    expect(screen.getByText("Intermediate meal preview")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("link", { name: "Weeknight Supper" }),
+    ).toHaveAttribute("href", `/meals/${meal.id}`);
+    expect(screen.getByRole("table", { name: "Meals Table" })).toBeVisible();
+    expect(screen.getByText("Dinner")).toBeVisible();
+    expect(screen.getByText("Cooked")).toBeVisible();
+    expect(screen.getByText("$18.50")).toBeVisible();
   });
 });

@@ -66,11 +66,11 @@ const depthRule = (depth: number): string =>
 
 type SpecVariant = "detail" | "export";
 
-const rowGrid: Record<SpecVariant, string> = {
+const rowGrid = {
   detail:
     "grid grid-cols-[minmax(0,1fr)_4.5rem_4rem_3.5rem] items-baseline gap-x-2",
   export: "grid grid-cols-[minmax(0,1fr)_5rem_3.5rem] items-baseline gap-x-2",
-};
+} satisfies Record<SpecVariant, string>;
 
 /** Per-node base override: recipe id → the row chosen as that node's 100% base. */
 type BaseOverrides = Map<string, string>;

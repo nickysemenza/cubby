@@ -1,6 +1,6 @@
-import type { SearchableEntity } from "@cubby/schemas/search";
+import { searchableEntitySchema } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { entityDetail } from "~/entities/entity-detail.functions";
 import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
@@ -28,6 +28,12 @@ import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
 import { throwIfStartOperationAborted } from "~/server/start-operation.server";
 
+const searchDocumentCountRowSchema = z.object({
+  entityType: searchableEntitySchema,
+  documents: z.number().int().nonnegative(),
+  embeddings: z.number().int().nonnegative(),
+});
+
 /**
  * The client declares type-only `z.custom` schemas for the generic entity
  * operations; the server owns runtime validation via `input`/`output`
@@ -45,7 +51,10 @@ export const entityListHandlers = implementOperationDomain(entityList, {
       if (result.action !== "list") {
         throw new Error("Entity kernel returned the wrong action");
       }
-      return { items: result.items, meta: result.meta };
+      return getEntityListOutputSchema(input.entity).parse({
+        items: result.items,
+        meta: result.meta,
+      });
     },
   },
 });
@@ -66,7 +75,9 @@ export const entityDetailHandlers = implementOperationDomain(entityDetail, {
       if (result.action !== "get") {
         throw new Error("Entity kernel returned the wrong action");
       }
-      return result.item;
+      return result.item === null
+        ? null
+        : getEntityDetailOutputSchema(input.entity).parse(result.item);
     },
   },
 });
@@ -82,13 +93,12 @@ export const entityMutationHandlers = implementOperationDomain(entityMutation, {
   mutate: {
     input: entityBrowserMutationCommandSchema,
     output: entityBrowserMutationResultSchema,
-    // The client declares the pre-parse command type; the `input` override
-    // above guarantees the runtime value is the schema's parsed output.
-    run: (context, command) =>
-      executeEntity(
-        context,
-        command as z.output<typeof entityBrowserMutationCommandSchema>,
-      ),
+    run: async (context, input) => {
+      const command = entityBrowserMutationCommandSchema.parse(input);
+      return entityBrowserMutationResultSchema.parse(
+        await executeEntity(context, command),
+      );
+    },
   },
 });
 
@@ -100,12 +110,9 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
       run: async (context) => {
         const [counts, rows] = await Promise.all([
           getEntityCounts(context.db),
-          executeSearchDocumentSql<{
-            entityType: SearchableEntity;
-            documents: number;
-            embeddings: number;
-          }>(
+          executeSearchDocumentSql(
             context.db,
+            searchDocumentCountRowSchema,
             drizzle.sql`
               SELECT
                 sd."entityType" AS "entityType",

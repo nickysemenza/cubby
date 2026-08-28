@@ -1,7 +1,7 @@
 export {
   dbIngredientToAPI,
   dbIngredientToListAPI,
-  dbIngredientToTopLevelShape,
+  dbIngredientToTopLevel,
   mapIngredientProducts,
   mapIngredientProductsLean,
 } from "./internal-types";

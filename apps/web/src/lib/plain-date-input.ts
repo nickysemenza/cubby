@@ -10,30 +10,30 @@ export type PlainDateInputResult =
   | { ok: true; value: string | null }
   | { ok: false; error: string };
 
-const NUMBER_WORDS: Readonly<Record<string, number>> = {
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  eleven: 11,
-  twelve: 12,
-};
+const NUMBER_WORDS = new Map<string, number>([
+  ["one", 1],
+  ["two", 2],
+  ["three", 3],
+  ["four", 4],
+  ["five", 5],
+  ["six", 6],
+  ["seven", 7],
+  ["eight", 8],
+  ["nine", 9],
+  ["ten", 10],
+  ["eleven", 11],
+  ["twelve", 12],
+]);
 
-const WEEKDAYS: Readonly<Record<string, Weekday>> = {
-  sunday: 0,
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-};
+const WEEKDAYS = new Map<string, Weekday>([
+  ["sunday", 0],
+  ["monday", 1],
+  ["tuesday", 2],
+  ["wednesday", 3],
+  ["thursday", 4],
+  ["friday", 5],
+  ["saturday", 6],
+]);
 
 const FROM_WEEKDAY_PATTERN =
   /^(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(days?|weeks?|months?|years?)\s+from\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)$/i;
@@ -50,7 +50,7 @@ const TIME_COMPONENTS: readonly Component[] = [
 function parseNumber(value: string): number | null {
   const numeric = Number.parseInt(value, 10);
   if (Number.isFinite(numeric)) return numeric;
-  return NUMBER_WORDS[value.toLowerCase()] ?? null;
+  return NUMBER_WORDS.get(value.toLowerCase()) ?? null;
 }
 
 /**
@@ -72,7 +72,7 @@ function parseDurationFromWeekday(
   if (!amountText || !unit || !weekdayText) return null;
 
   const amount = parseNumber(amountText);
-  const weekday = WEEKDAYS[weekdayText];
+  const weekday = WEEKDAYS.get(weekdayText);
   if (amount === null || weekday === undefined) return null;
 
   const base = nextDay(referenceDate, weekday);

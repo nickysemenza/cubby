@@ -1,22 +1,10 @@
 import type { ImageAssociation } from "@cubby/schemas/image";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ImageAssociationLinks } from "./image-associations";
-
-vi.mock("~/app/_components/EntityInlineLink", () => ({
-  EntityInlineLink: ({
-    entity,
-    data,
-  }: {
-    entity: string;
-    data: { id: string; name?: string; orderId?: string | null };
-  }) => (
-    <a href={`/${entity}s/${data.id}`}>
-      {data.name ?? data.orderId ?? data.id}
-    </a>
-  ),
-}));
 
 const associations: ImageAssociation[] = [
   {
@@ -33,9 +21,21 @@ const associations: ImageAssociation[] = [
   },
 ];
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
 describe("ImageAssociationLinks", () => {
   it("links every direct association and identifies each relationship role", () => {
-    render(<ImageAssociationLinks associations={associations} showRole />);
+    render(<ImageAssociationLinks associations={associations} showRole />, {
+      wrapper: harness.wrapper,
+    });
 
     expect(screen.getByRole("link", { name: "Home Depot" })).toHaveAttribute(
       "href",
@@ -50,7 +50,9 @@ describe("ImageAssociationLinks", () => {
   });
 
   it("renders the ordinary empty value when nothing references an image", () => {
-    render(<ImageAssociationLinks associations={[]} />);
-    expect(document.querySelector("a")).toBeNull();
+    render(<ImageAssociationLinks associations={[]} />, {
+      wrapper: harness.wrapper,
+    });
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

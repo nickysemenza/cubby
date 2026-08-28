@@ -1,4 +1,5 @@
 import { renderHook } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import type { CubbyRow as Row } from "./table-features";
@@ -9,7 +10,7 @@ interface Item {
 }
 
 const row = (group: string, index: number) =>
-  ({ original: { group }, index }) as Row<Item>;
+  fromPartial<Row<Item>>({ original: { group }, index });
 
 const groupConfig = {
   field: "group",

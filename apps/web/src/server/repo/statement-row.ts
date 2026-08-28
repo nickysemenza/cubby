@@ -128,8 +128,9 @@ const columns = {
   transactionShortcode: matchedTransaction,
 } as const;
 
+type StatementRowSqlValue = string | number | Date | null;
 type StatementRowRow = {
-  [K in keyof typeof columns]: unknown;
+  [K in keyof typeof columns]: StatementRowSqlValue;
 };
 
 /**
@@ -138,10 +139,10 @@ type StatementRowRow = {
  * Date objects, numerics as strings. Coerce here so the output contract is the
  * same whichever way a row was fetched.
  */
-const asDate = (value: unknown): Date =>
+const asDate = (value: StatementRowSqlValue): Date =>
   value instanceof Date ? value : new Date(String(value));
 
-const asPlainDate = (value: unknown): string => {
+const asPlainDate = (value: StatementRowSqlValue): string => {
   if (!(value instanceof Date)) return String(value).slice(0, 10);
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
@@ -543,8 +544,8 @@ export async function findStatementRowDrift(
   const { rows } = await unwrapDb(db).execute<{
     source: string;
     accountDescriptor: string;
-    statementDate: unknown;
-    providerAmount: unknown;
+    statementDate: StatementRowSqlValue;
+    providerAmount: StatementRowSqlValue;
     crossBatch: boolean;
     externalId: string;
     rawDescription: string;
@@ -552,7 +553,7 @@ export async function findStatementRowDrift(
     providerStatus: string | null;
     disposition: string;
     importFingerprint: string;
-    createdAt: unknown;
+    createdAt: StatementRowSqlValue;
   }>(sql`
     WITH drifted AS (
       SELECT "source", "accountDescriptor", "statementDate", "providerAmount",
@@ -662,7 +663,7 @@ export async function updateStatementRows(
 ) {
   const { data, selector } = input;
   return withTransaction(db, async (tx) => {
-    const values: Record<string, unknown> = {};
+    const values: Partial<typeof statementRow.$inferInsert> = {};
     if (data.disposition !== undefined) values.disposition = data.disposition;
     if (data.dispositionReason !== undefined)
       values.dispositionReason = data.dispositionReason;

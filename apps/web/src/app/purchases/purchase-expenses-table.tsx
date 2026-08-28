@@ -8,7 +8,10 @@ import {
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
@@ -68,10 +71,8 @@ function PurchaseExpenseRows({
   purchaseId: PurchaseShortcode;
   kind: "principal" | "adjustment";
 }) {
-  const listQueryOptions: ListQueryOptionsFn<ExpenseFilters> = useCallback(
-    (params) => entityListFor("expense").queryOptions(params),
-    [],
-  );
+  const listQueryOptions: ListQueryOptionsFn<ExpenseFilters, ExpenseOut> =
+    useCallback((params) => entityListFor("expense").listQueryPlan(params), []);
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const scope = useMemo<Partial<ExpenseFilters>>(
     () => ({
@@ -93,61 +94,80 @@ function PurchaseExpenseRows({
     entityLabel: "Expense",
     entity: "expense",
   });
-  const columns = useMemo(() => {
-    const shared = [
-      expenseCostColumn(
-        helper,
-        async (cost, row) => {
-          await update.mutateAsync({ id: row.id, data: { cost } });
-        },
-        { signedTone: true },
-      ),
-      expenseDateColumn(helper, async (date, row) => {
-        if (date === null) return;
-        await update.mutateAsync({ id: row.id, data: { date } });
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ExpenseOut>((add) => {
+        if (kind !== "adjustment") {
+          add(createExpenseProductImageColumn(helper));
+        }
+        add(
+          expenseCostColumn(
+            helper,
+            async (cost, row) => {
+              await update.mutateAsync({ id: row.id, data: { cost } });
+            },
+            { signedTone: true },
+          ),
+        );
+        add(
+          expenseDateColumn(helper, async (date, row) => {
+            if (date === null) return;
+            await update.mutateAsync({ id: row.id, data: { date } });
+          }),
+        );
+        add(
+          expenseLineKindColumn(helper, async (lineKind, row) => {
+            await update.mutateAsync({ id: row.id, data: { lineKind } });
+          }),
+        );
+        add(
+          expenseFutureColumn(helper, async (future, row) => {
+            await update.mutateAsync({ id: row.id, data: { future } });
+          }),
+        );
+        add(
+          createProjectLinkColumn(helper, {
+            className: "w-48",
+            editable: {
+              onSave: async (projectId, row) => {
+                await update.mutateAsync({ id: row.id, data: { projectId } });
+              },
+            },
+          }),
+        );
+        if (kind === "adjustment") return;
+        add(
+          expenseCostTypeColumn(helper, async (costType, row) => {
+            await update.mutateAsync({ id: row.id, data: { costType } });
+          }),
+        );
+        add(
+          expenseTradeColumn(helper, async (trade, row) => {
+            await update.mutateAsync({ id: row.id, data: { trade } });
+          }),
+        );
+        add(
+          createProductLinkColumn(helper, {
+            className: "w-48",
+            editable: {
+              onSave: async (productId, row) => {
+                await update.mutateAsync({ id: row.id, data: { productId } });
+              },
+            },
+          }),
+        );
+        add(
+          expenseProductQuantityColumn(helper, async (productQuantity, row) => {
+            await update.mutateAsync({
+              id: row.id,
+              data: { productQuantity },
+            });
+          }),
+        );
       }),
-      expenseLineKindColumn(helper, async (lineKind, row) => {
-        await update.mutateAsync({ id: row.id, data: { lineKind } });
-      }),
-      expenseFutureColumn(helper, async (future, row) => {
-        await update.mutateAsync({ id: row.id, data: { future } });
-      }),
-      createProjectLinkColumn(helper, {
-        className: "w-48",
-        editable: {
-          onSave: async (projectId, row) => {
-            await update.mutateAsync({ id: row.id, data: { projectId } });
-          },
-        },
-      }),
-    ];
-    if (kind === "adjustment") return shared;
-    return [
-      createExpenseProductImageColumn(helper),
-      ...shared,
-      expenseCostTypeColumn(helper, async (costType, row) => {
-        await update.mutateAsync({ id: row.id, data: { costType } });
-      }),
-      expenseTradeColumn(helper, async (trade, row) => {
-        await update.mutateAsync({ id: row.id, data: { trade } });
-      }),
-      createProductLinkColumn(helper, {
-        className: "w-48",
-        editable: {
-          onSave: async (productId, row) => {
-            await update.mutateAsync({ id: row.id, data: { productId } });
-          },
-        },
-      }),
-      expenseProductQuantityColumn(helper, async (productQuantity, row) => {
-        await update.mutateAsync({
-          id: row.id,
-          data: { productQuantity },
-        });
-      }),
-    ];
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrappers are functionally stable
-  }, [helper, kind]);
+    [helper, kind],
+  );
   const list = useEntityList<ExpenseOut, ExpenseFilters>({
     entity: "expense",
     queryOptions: listQueryOptions,

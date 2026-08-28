@@ -7,6 +7,9 @@ const transactionShortcode = (seed: string) =>
   testShortcode("financialTransaction", seed);
 const accountShortcode = (seed: string) =>
   testShortcode("financialAccount", seed);
+const partyShortcode = (seed: string) => testShortcode("ledgerParty", seed);
+const memberPartyId = partyShortcode("LPY-A");
+const householdPartyId = partyShortcode("LPY-HOUSEHOLD");
 
 describe("buildFinancialTransferPairSuggestions", () => {
   it("suggests one opposite, different-account evidence leg", () => {
@@ -19,7 +22,11 @@ describe("buildFinancialTransferPairSuggestions", () => {
           accountShortcode: accountShortcode("FAC-A"),
           amount: 120,
           date: "2026-08-20",
-          party: { kind: "member", id: "LPY-A" as never, name: "Alex" },
+          party: {
+            kind: "member",
+            id: memberPartyId,
+            name: "Alex",
+          },
         },
       ],
       [
@@ -32,7 +39,7 @@ describe("buildFinancialTransferPairSuggestions", () => {
           date: "2026-08-22",
           party: {
             kind: "household",
-            id: "LPY-HOUSEHOLD" as never,
+            id: householdPartyId,
             name: "Household",
           },
         },
@@ -51,10 +58,10 @@ describe("buildFinancialTransferPairSuggestions", () => {
             dateDistanceDays: 2,
             fromAccountId: accountShortcode("FAC-A"),
             toAccountId: accountShortcode("FAC-B"),
-            from: { kind: "member", id: "LPY-A", name: "Alex" },
+            from: { kind: "member", id: memberPartyId, name: "Alex" },
             to: {
               kind: "household",
-              id: "LPY-HOUSEHOLD",
+              id: householdPartyId,
               name: "Household",
             },
           }),

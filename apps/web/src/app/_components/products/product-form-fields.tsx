@@ -4,13 +4,20 @@ import {
 } from "@cubby/schemas/external-id";
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import { normalizeIsbn } from "@cubby/schemas/isbn";
-import { hasFoodIndicators } from "@cubby/schemas/product";
+import { hasFoodIndicators, productCategory } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { isMiscProduct } from "@cubby/shared";
 import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type {
+  FieldPathByValue,
+  FieldValues,
+  Path,
+  PathValue,
+  UseFormReturn,
+} from "react-hook-form";
+import { z } from "zod";
 
 import { AliasesField } from "~/components/forms/aliases-field";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
@@ -25,6 +32,7 @@ import type { useImageState } from "~/hooks/useImageState";
 import { upc } from "~/lib/upc.functions";
 import { cn } from "~/lib/utils";
 
+import type { ComboboxItem } from "../combobox/combobox-types";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   NullableNumericField,
@@ -90,8 +98,95 @@ type ImageHandlers = Pick<
   | "handleRemovedDocumentsChange"
 >;
 
-interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
+type ProductTextPath<TFieldValues extends FieldValues> = FieldPathByValue<
+  TFieldValues,
+  string | null | undefined
+>;
+type ProductNumberPath<TFieldValues extends FieldValues> = FieldPathByValue<
+  TFieldValues,
+  number | null | undefined
+>;
+type ProductPickerPath<TFieldValues extends FieldValues> = FieldPathByValue<
+  TFieldValues,
+  ComboboxItem | null | undefined
+>;
+
+export interface ProductFormFieldPaths<TFieldValues extends FieldValues> {
+  name: ProductTextPath<TFieldValues>;
+  manufacturer: ProductTextPath<TFieldValues>;
+  model: ProductTextPath<TFieldValues>;
+  notes: ProductTextPath<TFieldValues>;
+  category: ProductTextPath<TFieldValues>;
+  upc: ProductTextPath<TFieldValues>;
+  isbn: ProductTextPath<TFieldValues>;
+  fdcId: ProductNumberPath<TFieldValues>;
+  expectedQuantity: ProductNumberPath<TFieldValues>;
+  price: ProductNumberPath<TFieldValues>;
+  ingredient: ProductPickerPath<TFieldValues>;
+  unitMappings: Path<TFieldValues>;
+  externalIds?: Path<TFieldValues>;
+  unitMapping: (index: number) => {
+    valueA: ProductNumberPath<TFieldValues>;
+    unitA: ProductTextPath<TFieldValues>;
+    valueB: ProductNumberPath<TFieldValues>;
+    unitB: ProductTextPath<TFieldValues>;
+    source: ProductTextPath<TFieldValues>;
+  };
+  externalId?: (index: number) => {
+    kind: ProductTextPath<TFieldValues>;
+    source: ProductTextPath<TFieldValues>;
+    externalId: ProductTextPath<TFieldValues>;
+    url: ProductTextPath<TFieldValues>;
+  };
+}
+
+function setProductField<
+  TFieldValues extends FieldValues,
+  TName extends Path<TFieldValues>,
+>(
+  form: UseFormReturn<TFieldValues>,
+  name: TName,
+  value: string | number | z.infer<typeof productCategory>,
+  options?: Parameters<UseFormReturn<TFieldValues>["setValue"]>[2],
+) {
+  // SAFETY: `ProductFormFieldPaths` pairs every mutation target with this
+  // product form's scalar domain; callers never route this helper to arrays.
+  form.setValue(name, value as PathValue<TFieldValues, TName>, options);
+}
+
+const observedProductFieldsSchema = z.object({
+  name: z.string(),
+  manufacturer: z.string(),
+  fdc_id: z.number().nullable(),
+  upc: z.string().nullable(),
+  isbn: z.string().nullable(),
+  ingredient: z.unknown(),
+});
+
+const ingredientReferenceSchema = z.object({ id: z.string() });
+
+export interface ProductFormFieldValues extends FieldValues {
+  name: string;
+  manufacturer: string;
+  model: string | null;
+  notes: string | null;
+  category: z.infer<typeof productCategory> | null;
+  upc: string | null;
+  isbn: string | null;
+  fdc_id: number | null;
+  expectedQuantity: number | null;
+  price: number | null;
+  ingredient: ComboboxItem | null;
+  unitMappings: UnitMappingInput[];
+  aliases?: string[];
+  tags?: string[];
+  collections?: string[];
+  externalIds?: ExternalIdInput[];
+}
+
+interface ProductFormFieldsProps<TFieldValues extends ProductFormFieldValues> {
   form: UseFormReturn<TFieldValues>;
+  paths: ProductFormFieldPaths<TFieldValues>;
   imageHandlers: ImageHandlers;
   existingImages?: PendingImage[];
   /** Already-attached PDF manuals (edit mode). */
@@ -115,8 +210,9 @@ interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
  *
  * Used by both ProductForm (full form) and QuickInventoryAdd (inline create mode).
  */
-export function ProductFormFields<TFieldValues extends FieldValues>({
+export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
   form,
+  paths,
   imageHandlers,
   existingImages = EMPTY_PENDING_IMAGES,
   existingDocuments,
@@ -128,22 +224,42 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 }: ProductFormFieldsProps<TFieldValues>) {
   const [lookupImageUrl, setLookupImageUrl] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const identityForm = {
+    setValue: (update: {
+      field: "name" | "manufacturer" | "model" | "category";
+      value: string | z.infer<typeof productCategory>;
+    }) => {
+      switch (update.field) {
+        case "name":
+          setProductField(form, paths.name, update.value);
+          return;
+        case "manufacturer":
+          setProductField(form, paths.manufacturer, update.value);
+          return;
+        case "category":
+          setProductField(form, paths.category, update.value);
+          return;
+        case "model":
+          setProductField(form, paths.model, update.value);
+      }
+    },
+  };
 
   // Watch fields for conditional rendering
-  const nameValue = form.watch("name" as Path<TFieldValues>) as string;
-  const manufacturerValue = form.watch(
-    "manufacturer" as Path<TFieldValues>,
-  ) as string;
-  const fdcValue = form.watch("fdc_id" as Path<TFieldValues>) as number | null;
-  const upcValue = form.watch("upc" as Path<TFieldValues>) as string | null;
-  const isbnValue = form.watch("isbn" as Path<TFieldValues>) as string | null;
-  const ingredientValue = form.watch("ingredient" as Path<TFieldValues>);
-  const ingredientId =
-    typeof ingredientValue === "object" &&
-    ingredientValue !== null &&
-    "id" in ingredientValue
-      ? ingredientShortcode.safeParse(ingredientValue.id).data
-      : undefined;
+  const observedFields = observedProductFieldsSchema.parse(form.watch());
+  const {
+    name: nameValue,
+    manufacturer: manufacturerValue,
+    fdc_id: fdcValue,
+    upc: upcValue,
+    isbn: isbnValue,
+  } = observedFields;
+  const ingredientReference = ingredientReferenceSchema.safeParse(
+    observedFields.ingredient,
+  );
+  const ingredientId = ingredientReference.success
+    ? ingredientShortcode.safeParse(ingredientReference.data.id).data
+    : undefined;
 
   const isMisc = isMiscProduct(nameValue);
   const isFoodForced = hasFoodIndicators({
@@ -155,17 +271,11 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
   useEffect(() => {
     if (!isBookForced) return;
-    form.setValue(
-      "category" as Path<TFieldValues>,
-      "books" as TFieldValues[Path<TFieldValues>],
-      { shouldDirty: true },
-    );
-  }, [form, isBookForced]);
+    setProductField(form, paths.category, "books", { shouldDirty: true });
+  }, [form, isBookForced, paths.category]);
 
   const handleUpcLookup = async () => {
-    const upcValue = form.getValues("upc" as Path<TFieldValues>) as
-      | string
-      | null;
+    const upcValue = observedProductFieldsSchema.parse(form.getValues()).upc;
     if (!upcValue) return;
 
     setIsLookingUp(true);
@@ -173,27 +283,15 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
       const result = await upc.lookup.call({ upc: upcValue });
       if (result) {
         if (result.name) {
-          form.setValue(
-            "name" as Path<TFieldValues>,
-            result.name as TFieldValues[Path<TFieldValues>],
-          );
+          setProductField(form, paths.name, result.name);
         }
         if (result.manufacturer) {
-          form.setValue(
-            "manufacturer" as Path<TFieldValues>,
-            result.manufacturer as TFieldValues[Path<TFieldValues>],
-          );
+          setProductField(form, paths.manufacturer, result.manufacturer);
         } else if (result.brand) {
-          form.setValue(
-            "manufacturer" as Path<TFieldValues>,
-            result.brand as TFieldValues[Path<TFieldValues>],
-          );
+          setProductField(form, paths.manufacturer, result.brand);
         }
         if (result.priceDollars) {
-          form.setValue(
-            "price" as Path<TFieldValues>,
-            result.priceDollars as TFieldValues[Path<TFieldValues>],
-          );
+          setProductField(form, paths.price, result.priceDollars);
         }
         if (result.imageUrl) {
           setLookupImageUrl(result.imageUrl);
@@ -211,16 +309,12 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   // conversions at read time, so we don't store those mappings. We deliberately
   // don't touch `upc` — that's the product's own barcode, not the food's.
   const handleUsdaSelect = (food: FoodSummaryWithLinkedProducts) => {
-    form.setValue(
-      "fdc_id" as Path<TFieldValues>,
-      food.fdc_id as TFieldValues[Path<TFieldValues>],
-    );
-    const currentName = form.getValues("name" as Path<TFieldValues>) as string;
+    setProductField(form, paths.fdcId, food.fdc_id);
+    const currentName = observedProductFieldsSchema.parse(
+      form.getValues(),
+    ).name;
     if (!currentName) {
-      form.setValue(
-        "name" as Path<TFieldValues>,
-        food.foodInfo.description as TFieldValues[Path<TFieldValues>],
-      );
+      setProductField(form, paths.name, food.foodInfo.description ?? "");
     }
   };
 
@@ -230,7 +324,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         <div className="flex-1">
           <UnifiedTextField
             form={form}
-            name={"upc" as Path<TFieldValues>}
+            name={paths.upc}
             label="UPC (Optional)"
             placeholder="12-digit UPC code"
             nullable={true}
@@ -240,7 +334,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           type="button"
           variant="outline"
           onClick={handleUpcLookup}
-          disabled={isLookingUp || !form.watch("upc" as Path<TFieldValues>)}
+          disabled={isLookingUp || !upcValue}
         >
           {isLookingUp ? <Spinner /> : <Search className="size-4" />}
           <span className="ml-1">Lookup</span>
@@ -269,14 +363,14 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           <SideBySideFields>
             <UnifiedTextField
               form={form}
-              name={"model" as Path<TFieldValues>}
+              name={paths.model}
               label="Model Number"
               placeholder="Enter model number"
               nullable={true}
             />
             <UnifiedTextField
               form={form}
-              name={"name" as Path<TFieldValues>}
+              name={paths.name}
               label="Product Name"
               placeholder="Enter product name"
               nullable={false}
@@ -286,7 +380,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
 
         <NullableTextareaField
           form={form}
-          name={"notes" as Path<TFieldValues>}
+          name={paths.notes}
           label="Notes"
           placeholder="Notes, URLs, etc. — Markdown supported"
         />
@@ -295,14 +389,14 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           <SideBySideFields>
             <UnifiedTextField
               form={form}
-              name={"manufacturer" as Path<TFieldValues>}
+              name={paths.manufacturer}
               label="Manufacturer"
               placeholder="Enter manufacturer"
               nullable={false}
             />
             <CategoryFieldWithAI
               form={form}
-              name={"category" as Path<TFieldValues>}
+              name={paths.category}
               productName={nameValue}
               manufacturer={manufacturerValue}
               disabled={isFoodForced || isBookForced}
@@ -352,7 +446,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 <NullableNumericField
                   form={form}
                   step="1"
-                  name={"expectedQuantity" as Path<TFieldValues>}
+                  name={paths.expectedQuantity}
                   label={
                     compact
                       ? "Expected Qty"
@@ -365,7 +459,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 <NullableNumericField
                   form={form}
                   step="1"
-                  name={"fdc_id" as Path<TFieldValues>}
+                  name={paths.fdcId}
                   label={compact ? "FDC ID" : "USDA FDC ID (Optional)"}
                   placeholder={compact ? "FDC id" : "set via USDA search above"}
                 />
@@ -375,14 +469,14 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
                 <NullableNumericField
                   form={form}
                   step="1"
-                  name={"expectedQuantity" as Path<TFieldValues>}
+                  name={paths.expectedQuantity}
                   label="Expected Quantity (1 for unique items)"
                   placeholder="Leave empty for unlimited"
                 />
                 <NullableNumericField
                   form={form}
                   step="0.01"
-                  name={"price" as Path<TFieldValues>}
+                  name={paths.price}
                   label="Price Override per Item"
                   placeholder="Leave empty to derive from expenses"
                   prefix="$"
@@ -395,7 +489,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
             <SideBySideFields>
               <UnifiedTextField
                 form={form}
-                name={"isbn" as Path<TFieldValues>}
+                name={paths.isbn}
                 label="ISBN (Optional)"
                 placeholder="ISBN-10 or ISBN-13"
                 nullable={true}
@@ -416,7 +510,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
               <NullableNumericField
                 form={form}
                 step="1"
-                name={"fdc_id" as Path<TFieldValues>}
+                name={paths.fdcId}
                 label="USDA FDC ID (Optional)"
                 placeholder="set via USDA search above"
               />
@@ -436,7 +530,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           <FormSection title="Ingredient" compact={compact}>
             <ComboboxFieldWithSearch
               form={form}
-              name={"ingredient" as Path<TFieldValues>}
+              name={paths.ingredient}
               label="Linked ingredient"
               searchType="ingredient"
             />
@@ -456,7 +550,10 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         />
 
         {pendingImages.length > 0 && (
-          <IdentifyProductButton form={form} pendingImages={pendingImages} />
+          <IdentifyProductButton
+            form={identityForm}
+            pendingImages={pendingImages}
+          />
         )}
 
         {/* PDF manuals — hidden in compact mode (QuickInventoryAdd). */}
@@ -476,7 +573,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
       {!isMisc && (
         <ArrayFieldManager<UnitMappingInput, TFieldValues>
           form={form}
-          name={"unitMappings" as Path<TFieldValues>}
+          name={paths.unitMappings}
           title="Unit conversions"
           addButtonText="Add conversion"
           emptyValue={{
@@ -485,69 +582,82 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
             source: null,
           }}
         >
-          {(_, index) => (
-            <UnitMappingPairField
-              form={form}
-              path={`unitMappings.${index}`}
-              showSource
-            />
-          )}
+          {(_, index) => {
+            const mappingPaths = paths.unitMapping(index);
+            return (
+              <UnitMappingPairField
+                form={form}
+                valueAPath={mappingPaths.valueA}
+                unitAPath={mappingPaths.unitA}
+                valueBPath={mappingPaths.valueB}
+                unitBPath={mappingPaths.unitB}
+                sourcePath={mappingPaths.source}
+                showSource
+              />
+            );
+          }}
         </ArrayFieldManager>
       )}
 
-      <ArrayFieldManager<ExternalIdInput, TFieldValues>
-        form={form}
-        name={"externalIds" as Path<TFieldValues>}
-        title="External IDs"
-        addButtonText="Add External ID"
-        emptyValue={{
-          source: "",
-          kind: "legacy_unspecified",
-          externalId: "",
-          url: undefined,
-        }}
-      >
-        {(_, index) => (
-          <>
-            <div className="min-w-[8rem] flex-1">
-              <SelectField
-                form={form}
-                name={`externalIds.${index}.kind` as Path<TFieldValues>}
-                label="Kind"
-                options={externalIdKind.options.map((kind) => ({
-                  value: kind,
-                  label: kind.replaceAll("_", " "),
-                }))}
-              />
-            </div>
-            <div className="min-w-[8rem] flex-1">
-              <UnifiedTextField
-                form={form}
-                name={`externalIds.${index}.source` as Path<TFieldValues>}
-                label="Source"
-                placeholder="e.g. amazon, mcmaster"
-              />
-            </div>
-            <div className="min-w-[8rem] flex-1">
-              <UnifiedTextField
-                form={form}
-                name={`externalIds.${index}.externalId` as Path<TFieldValues>}
-                label="Identifier"
-                placeholder="e.g. B08N5WRWNW"
-              />
-            </div>
-            <div className="min-w-[10rem] flex-1">
-              <UnifiedTextField
-                form={form}
-                name={`externalIds.${index}.url` as Path<TFieldValues>}
-                label="URL"
-                placeholder="https://..."
-                nullable={true}
-              />
-            </div>
-          </>
-        )}
-      </ArrayFieldManager>
+      {paths.externalIds && paths.externalId && (
+        <ArrayFieldManager<ExternalIdInput, TFieldValues>
+          form={form}
+          name={paths.externalIds}
+          title="External IDs"
+          addButtonText="Add External ID"
+          emptyValue={{
+            source: "",
+            kind: "legacy_unspecified",
+            externalId: "",
+            url: undefined,
+          }}
+        >
+          {(_, index) => {
+            const externalIdPaths = paths.externalId?.(index);
+            if (!externalIdPaths) return null;
+            return (
+              <>
+                <div className="min-w-[8rem] flex-1">
+                  <SelectField
+                    form={form}
+                    name={externalIdPaths.kind}
+                    label="Kind"
+                    options={externalIdKind.options.map((kind) => ({
+                      value: kind,
+                      label: kind.replaceAll("_", " "),
+                    }))}
+                  />
+                </div>
+                <div className="min-w-[8rem] flex-1">
+                  <UnifiedTextField
+                    form={form}
+                    name={externalIdPaths.source}
+                    label="Source"
+                    placeholder="e.g. amazon, mcmaster"
+                  />
+                </div>
+                <div className="min-w-[8rem] flex-1">
+                  <UnifiedTextField
+                    form={form}
+                    name={externalIdPaths.externalId}
+                    label="Identifier"
+                    placeholder="e.g. B08N5WRWNW"
+                  />
+                </div>
+                <div className="min-w-[10rem] flex-1">
+                  <UnifiedTextField
+                    form={form}
+                    name={externalIdPaths.url}
+                    label="URL"
+                    placeholder="https://..."
+                    nullable={true}
+                  />
+                </div>
+              </>
+            );
+          }}
+        </ArrayFieldManager>
+      )}
     </>
   );
 

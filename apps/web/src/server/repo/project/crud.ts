@@ -30,6 +30,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
+  type AuditChangeMap,
   computeChanges,
   diffUnorderedIdSet,
   logAuditEntry,
@@ -307,7 +308,7 @@ export const updateProject = async (
       );
     }
 
-    const changes: Record<string, { from: unknown; to: unknown }> = {
+    const changes: AuditChangeMap = {
       ...computeChanges(before, updated, [...AUDIT_FIELDS]),
     };
     if (resolvedBlockedByIds !== undefined) {

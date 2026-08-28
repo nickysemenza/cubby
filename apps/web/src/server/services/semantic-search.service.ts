@@ -46,14 +46,6 @@ type SemanticBackfillWorkflowMetadataInput = z.input<
   typeof entityEmbeddingBackfillCoordinatorPayloadSchema
 >;
 
-const readSemanticBackfillWorkflowMetadata = (
-  value: unknown,
-): SemanticBackfillWorkflowMetadata | null => {
-  const parsed =
-    entityEmbeddingBackfillCoordinatorPayloadSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-};
-
 export interface SemanticProductCandidate {
   item: SearchHit & { entityId: string; name: string };
   similarity: number;
@@ -151,10 +143,9 @@ export async function enqueueEntityEmbeddingBackfill(
 export async function continueEntityEmbeddingBackfillWorkflow(
   db: Database,
   batchId: string,
-  payload: unknown,
+  metadata: SemanticBackfillWorkflowMetadata,
 ): Promise<"succeeded" | "skipped"> {
-  const metadata = readSemanticBackfillWorkflowMetadata(payload);
-  if (!metadata || metadata.workflow.state === "complete") return "skipped";
+  if (metadata.workflow.state === "complete") return "skipped";
   const page = await getStaleSearchDocumentEmbeddingTextPage(
     db,
     metadata.workflow.entityTypes,
@@ -223,7 +214,11 @@ export async function findSimilarEntitiesForPair(
   db: Database,
   input: SimilarEntitiesInput,
 ): Promise<SimilarEntitiesOut> {
-  const { source, target } = similarEntityPairs[input.pair];
+  const pair = similarEntityPairs[input.pair];
+  if (!pair) {
+    throw new Error(`Unsupported relatedness pair: ${input.pair}`);
+  }
+  const { source, target } = pair;
   const sourceEntityId = await resolveOrThrow(db, source, input.sourceId);
   const sourceRef = { entityType: source, entityId: sourceEntityId };
   const publicSource = { entityType: source, entityId: input.sourceId };

@@ -17,7 +17,7 @@ import { getCategoryColor, getCategoryIcon } from "../products/category-theme";
 
 export type { SearchHit } from "@cubby/schemas/search";
 
-export const entityTypeMap: Record<SearchableEntity, BrowserRoutedEntity> = {
+export const entityTypeMap = {
   product: "product",
   recipe: "recipe",
   ingredient: "ingredient",
@@ -33,7 +33,7 @@ export const entityTypeMap: Record<SearchableEntity, BrowserRoutedEntity> = {
   financialTransaction: "financialTransaction",
   expense: "expense",
   wish: "wish",
-};
+} satisfies Record<SearchableEntity, BrowserRoutedEntity>;
 
 function getSearchResultEntity(item: SearchHit): BrowserRoutedEntity {
   return entityTypeMap[item.entityType];

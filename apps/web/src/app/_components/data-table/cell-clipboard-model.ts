@@ -1,3 +1,5 @@
+import type { CellJsonValue } from "./cell-clipboard";
+
 /**
  * Pure, alias-free clipboard and paste-planning model
  * for data tables. No React, no `~/` imports — importable from vitest unit
@@ -47,7 +49,7 @@ export function selectionRect(sel: CellSelection): CellRect {
 export interface CopiedCell {
   kind: CellKind;
   text: string;
-  json: unknown;
+  json: CellJsonValue | undefined;
 }
 
 /** rows x cols, rectangular. */

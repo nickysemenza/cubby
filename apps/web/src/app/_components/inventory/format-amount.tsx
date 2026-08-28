@@ -16,6 +16,10 @@ import { renderValueOrError } from "~/misc/result";
 
 import ValidInvalidIcon from "../icons/valid-invalid";
 
+type FormatAmountRequest = Pick<WAmount, "value" | "unit"> & {
+  upper_value?: number;
+};
+
 /**
  * Helper function for displaying amount and price
  */
@@ -63,11 +67,12 @@ export const tryFormatAmountShopper = (
 ): string => {
   try {
     const upper = amount.upper_value ?? amount.upperValue;
-    const formatted = wasm.format_amount_shopper({
+    const request: FormatAmountRequest = {
       value: amount.value,
       unit: amount.unit,
-      ...(upper != null ? { upper_value: upper } : {}),
-    });
+    };
+    if (upper != null) request.upper_value = upper;
+    const formatted = wasm.format_amount_shopper(request);
     if (amount.unit === "each") {
       return `${formatted} each`;
     }
@@ -94,11 +99,12 @@ export const tryFormatAmount = (
 ): string => {
   try {
     const upper = amount.upper_value ?? amount.upperValue;
-    const formatted = wasm.format_amount({
+    const request: FormatAmountRequest = {
       value: amount.value,
       unit: amount.unit,
-      ...(upper != null ? { upper_value: upper } : {}),
-    });
+    };
+    if (upper != null) request.upper_value = upper;
+    const formatted = wasm.format_amount(request);
     // "each" parses to Unit::Whole, which renders unit-less ("3", "2 - 4");
     // re-attach the user's "each" so it stays visible ("3 each", "2 - 4 each").
     if (amount.unit === "each") {

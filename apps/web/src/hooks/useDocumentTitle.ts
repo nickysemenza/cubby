@@ -1,7 +1,12 @@
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { z } from "zod";
 
 import { DEFAULT_TITLE, pageTitle, TITLE_SEPARATOR } from "~/lib/page-title";
+
+const routeMetaSchema = z.array(
+  z.object({ title: z.string().min(1).optional() }).passthrough(),
+);
 
 /**
  * The title the router's `head` meta currently wants, deepest match first.
@@ -13,10 +18,11 @@ import { DEFAULT_TITLE, pageTitle, TITLE_SEPARATOR } from "~/lib/page-title";
 const routerTitle = (matches: ReadonlyArray<{ meta?: unknown }>): string => {
   for (let i = matches.length - 1; i >= 0; i--) {
     const meta = matches[i]?.meta;
-    if (!Array.isArray(meta)) continue;
-    for (let j = meta.length - 1; j >= 0; j--) {
-      const title = (meta[j] as { title?: unknown } | undefined)?.title;
-      if (typeof title === "string" && title) return title;
+    const parsedMeta = routeMetaSchema.safeParse(meta);
+    if (!parsedMeta.success) continue;
+    for (let j = parsedMeta.data.length - 1; j >= 0; j--) {
+      const title = parsedMeta.data[j]?.title;
+      if (title) return title;
     }
   }
   return DEFAULT_TITLE;

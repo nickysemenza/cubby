@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { entityEditRegistry } from "./definitions";
 import { buildEntityEdit, resolveEntityEdit } from "./kernel";
-import type { EditableEntity, EntityEditIntentDefinition } from "./types";
+import type { EditableEntity } from "./types";
 
 const editableEntities = allEntities.filter(
   (entity): entity is EditableEntity =>
@@ -32,17 +32,14 @@ describe("entity edit definitions", () => {
       expect(definition.operations.update, `${entity} update`).toBeDefined();
       expect(definition.operations.delete, `${entity} delete`).toBeDefined();
 
-      for (const [operation, declaration] of Object.entries(
-        definition.operations,
-      )) {
+      for (const operation of ["create", "update", "delete"] as const) {
+        const declaration = definition.operations[operation];
         expect(declaration, `${entity} ${operation}`).toBeDefined();
         if (!declaration) continue;
         expect(declaration.intents[declaration.defaultIntent]).toBeDefined();
         for (const [intent, capability] of Object.entries(
           declaration.intents,
-        ) as Array<
-          [string, EntityEditIntentDefinition<EditableEntity, never>]
-        >) {
+        )) {
           if (operation !== "delete") {
             // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
             expect(

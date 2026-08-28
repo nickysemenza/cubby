@@ -36,6 +36,12 @@ const densityOptions: {
   { value: "dense", label: "Dense", icon: AlignJustify },
 ];
 
+const isTableDensity = (value: string): value is TableDensity =>
+  densityOptions.some((option) => option.value === value);
+
+const isStringHeader = (value: unknown): value is string =>
+  typeof value === "string";
+
 interface DataTableViewOptionsProps<TData extends RowData> {
   table: Table<TData>;
   defaultDensity?: TableDensity;
@@ -56,7 +62,7 @@ export function columnLabel<TData extends RowData>(
   column: Column<TData, unknown>,
 ): string {
   const header = column.columnDef.header;
-  return typeof header === "string" ? header : humanize(column.id);
+  return isStringHeader(header) ? header : humanize(column.id);
 }
 
 export function DataTableViewOptions<TData extends RowData>({
@@ -125,7 +131,7 @@ export function DataTableViewOptions<TData extends RowData>({
                 Customized layout — restore defaults below
               </p>
             )}
-            <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
+            <TableLayoutCustomizer table={table} />
           </div>
         </ResponsiveSheet>
       </>
@@ -153,7 +159,9 @@ export function DataTableViewOptions<TData extends RowData>({
           <DropdownMenuLabel>Density</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={density}
-            onValueChange={(v) => setDensity(v as TableDensity)}
+            onValueChange={(value) => {
+              if (isTableDensity(value)) setDensity(value);
+            }}
           >
             {densityOptions.map((opt) => (
               <DropdownMenuRadioItem key={opt.value} value={opt.value}>
@@ -169,7 +177,7 @@ export function DataTableViewOptions<TData extends RowData>({
             Customized layout — restore defaults below
           </DropdownMenuLabel>
         )}
-        <TableLayoutCustomizer table={table as unknown as Table<RowData>} />
+        <TableLayoutCustomizer table={table} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

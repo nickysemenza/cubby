@@ -10,7 +10,7 @@ import {
 import { type BadgeVariant, badgeVariantColor } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 
-const KIND_LABELS: Record<FinancialTransactionKind, string> = {
+const KIND_LABELS = {
   purchase: "Purchase",
   refund: "Refund",
   account_transfer: "Account transfer",
@@ -20,7 +20,7 @@ const KIND_LABELS: Record<FinancialTransactionKind, string> = {
   income: "Income",
   adjustment: "Adjustment",
   other: "Other",
-};
+} satisfies Record<FinancialTransactionKind, string>;
 
 /**
  * Labels and tone for `FinancialTransaction.kind`.
@@ -30,7 +30,7 @@ const KIND_LABELS: Record<FinancialTransactionKind, string> = {
  * follows the money direction the schema already documents: inflows (`refund`,
  * `income`) read positive, movement between our own accounts stays neutral.
  */
-const KIND_TONE: Record<FinancialTransactionKind, BadgeVariant> = {
+const KIND_TONE = {
   purchase: "default",
   refund: "positive",
   income: "positive",
@@ -40,7 +40,7 @@ const KIND_TONE: Record<FinancialTransactionKind, BadgeVariant> = {
   interest: "warning",
   adjustment: "secondary",
   other: "outline",
-};
+} satisfies Record<FinancialTransactionKind, BadgeVariant>;
 
 export const financialTransactionKindOptions: FilterableComboboxItem[] =
   financialTransactionKind.options.map((value) => ({
@@ -49,12 +49,12 @@ export const financialTransactionKindOptions: FilterableComboboxItem[] =
     color: badgeVariantColor[KIND_TONE[value]],
   }));
 
-const STATUS_LABELS: Record<FinancialTransactionStatus, string> = {
+const STATUS_LABELS = {
   expected: "Expected",
   pending: "Pending",
   posted: "Posted",
   void: "Void",
-};
+} satisfies Record<FinancialTransactionStatus, string>;
 
 /**
  * Labels and tone for `FinancialTransaction.status`.
@@ -63,12 +63,12 @@ const STATUS_LABELS: Record<FinancialTransactionStatus, string> = {
  * `pending` are in-flight rather than wrong, so they stay neutral, and only
  * `void` is tinted as a problem.
  */
-const STATUS_TONE: Record<FinancialTransactionStatus, BadgeVariant> = {
+const STATUS_TONE = {
   expected: "outline",
   pending: "slate",
   posted: "positive",
   void: "destructive",
-};
+} satisfies Record<FinancialTransactionStatus, BadgeVariant>;
 
 export const financialTransactionStatusOptions: FilterableComboboxItem[] =
   financialTransactionStatus.options.map((value) => ({

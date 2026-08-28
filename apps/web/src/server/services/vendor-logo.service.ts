@@ -34,16 +34,49 @@ type LogoCandidate = {
   source: "apple-touch-icon" | "google-favicon";
 };
 
-type CandidateDependencies = {
-  fetchResponse?: typeof fetchExternalResponse;
-  inspect?: typeof inspectImageFile;
-};
+type VendorLogoReplacementInput = Parameters<typeof replaceVendorLogo>[1];
+
+export interface VendorLogoCandidatePorts {
+  fetchResponse: typeof fetchExternalResponse;
+  inspect: typeof inspectImageFile;
+}
+
+export interface VendorLogoPorts<
+  TDatabase,
+  TActor,
+  TOutput,
+  TEntityId,
+> extends VendorLogoCandidatePorts {
+  contentTypeToExtension: typeof contentTypeToExtension;
+  deleteStoredObjects: typeof deleteStoredObjects;
+  deleteUploadedObject: typeof deleteS3Object;
+  filenameForContentType: typeof filenameForContentType;
+  generateImageKey: typeof generateImageKey;
+  getVendor: (
+    database: TDatabase,
+    id: VendorShortcode,
+  ) => Promise<{ website: string | null } | null>;
+  replaceVendorLogo: (
+    database: TDatabase,
+    input: VendorLogoReplacementInput,
+    actor: TActor,
+  ) => Promise<{
+    output: TOutput;
+    entityId: TEntityId;
+    detachedImageKeys: string[];
+  }>;
+  upload: typeof uploadToS3;
+}
+
+export interface NormalizedVendorWebsite {
+  hostname: string;
+  origin: string;
+}
 
 /** Normalize free-text website input into a safe public origin and hostname. */
-export function normalizeVendorWebsite(website: string): {
-  origin: string;
-  hostname: string;
-} {
+export function normalizeVendorWebsite(
+  website: string,
+): NormalizedVendorWebsite {
   const raw = website.trim();
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//iu.test(raw)
     ? raw
@@ -71,12 +104,10 @@ export function normalizeVendorWebsite(website: string): {
 async function readCandidate(
   url: string,
   source: LogoCandidate["source"],
-  dependencies: CandidateDependencies,
+  ports: VendorLogoCandidatePorts,
 ): Promise<LogoCandidate | null> {
   try {
-    const response = await (
-      dependencies.fetchResponse ?? fetchExternalResponse
-    )(url);
+    const response = await ports.fetchResponse(url);
     if (!response.ok) return null;
     const contentType = assertResponseContentType(
       response,
@@ -86,10 +117,7 @@ async function readCandidate(
       await readResponseWithLimit(response, MAX_IMAGE_UPLOAD_BYTES),
     );
     if (bytes.length === 0) return null;
-    const inspected = await (dependencies.inspect ?? inspectImageFile)(
-      bytes,
-      contentType,
-    );
+    const inspected = await ports.inspect(bytes, contentType);
     return { bytes, inspected, source };
   } catch {
     return null;
@@ -97,21 +125,21 @@ async function readCandidate(
 }
 
 /** Fetch the best Workers-decodable logo candidate without writing anything. */
-export async function fetchVendorLogoCandidate(
+async function fetchVendorLogoCandidateWithPorts(
   website: string,
-  dependencies: CandidateDependencies = {},
+  ports: VendorLogoCandidatePorts,
 ): Promise<LogoCandidate | null> {
   const { origin, hostname } = normalizeVendorWebsite(website);
   const candidates = await Promise.all([
     readCandidate(
       new URL("/apple-touch-icon.png", origin).toString(),
       "apple-touch-icon",
-      dependencies,
+      ports,
     ),
     readCandidate(
       `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=128`,
       "google-favicon",
-      dependencies,
+      ports,
     ),
   ]);
   return (
@@ -126,12 +154,18 @@ export async function fetchVendorLogoCandidate(
 }
 
 /** Fetch, verify, store, and attach one vendor logo from its recorded website. */
-export async function fetchAndAttachVendorLogo(
-  db: Database,
+async function fetchAndAttachVendorLogoWithPorts<
+  TDatabase,
+  TActor,
+  TOutput,
+  TEntityId,
+>(
+  database: TDatabase,
   id: VendorShortcode,
-  actor: ActorContext,
-): Promise<{ output: VendorOut; entityId: VendorId }> {
-  const current = await getVendorByShortcode(db, id);
+  actor: TActor,
+  ports: VendorLogoPorts<TDatabase, TActor, TOutput, TEntityId>,
+): Promise<{ output: TOutput; entityId: TEntityId }> {
+  const current = await ports.getVendor(database, id);
   if (!current) {
     throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
   }
@@ -142,7 +176,10 @@ export async function fetchAndAttachVendorLogo(
     );
   }
 
-  const candidate = await fetchVendorLogoCandidate(current.website);
+  const candidate = await fetchVendorLogoCandidateWithPorts(
+    current.website,
+    ports,
+  );
   if (!candidate) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
@@ -150,21 +187,23 @@ export async function fetchAndAttachVendorLogo(
     );
   }
 
-  const extension = contentTypeToExtension(candidate.inspected.contentType);
-  const filename = filenameForContentType(
+  const extension = ports.contentTypeToExtension(
+    candidate.inspected.contentType,
+  );
+  const filename = ports.filenameForContentType(
     `vendor-${id}.${extension}`,
     candidate.inspected.contentType,
   );
-  const key = generateImageKey(filename);
-  await uploadToS3({
+  const key = ports.generateImageKey(filename);
+  await ports.upload({
     key,
     body: candidate.bytes,
     contentType: candidate.inspected.contentType,
   });
 
   try {
-    const result = await replaceVendorLogo(
-      db,
+    const result = await ports.replaceVendorLogo(
+      database,
       {
         id,
         expectedWebsite: current.website,
@@ -177,12 +216,49 @@ export async function fetchAndAttachVendorLogo(
       },
       actor,
     );
-    await deleteStoredObjects(result.detachedImageKeys);
+    await ports.deleteStoredObjects(result.detachedImageKeys);
     return { output: result.output, entityId: result.entityId };
   } catch (error) {
-    await deleteS3Object(key).catch((cleanupError) => {
+    await ports.deleteUploadedObject(key).catch((cleanupError) => {
       console.error("Failed to roll back vendor logo object:", cleanupError);
     });
     throw error;
   }
 }
+
+const productionVendorLogoPorts: VendorLogoPorts<
+  Database,
+  ActorContext,
+  VendorOut,
+  VendorId
+> = {
+  contentTypeToExtension,
+  deleteStoredObjects,
+  deleteUploadedObject: deleteS3Object,
+  fetchResponse: fetchExternalResponse,
+  filenameForContentType,
+  generateImageKey,
+  getVendor: getVendorByShortcode,
+  inspect: inspectImageFile,
+  replaceVendorLogo,
+  upload: uploadToS3,
+};
+
+/** Bind the logo workflow to real infrastructure or an explicit in-memory port. */
+export function createVendorLogoService<TDatabase, TActor, TOutput, TEntityId>(
+  ports: VendorLogoPorts<TDatabase, TActor, TOutput, TEntityId>,
+) {
+  return {
+    fetchAndAttachVendorLogo: (
+      database: TDatabase,
+      id: VendorShortcode,
+      actor: TActor,
+    ) => fetchAndAttachVendorLogoWithPorts(database, id, actor, ports),
+    fetchVendorLogoCandidate: (website: string) =>
+      fetchVendorLogoCandidateWithPorts(website, ports),
+  };
+}
+
+const productionVendorLogo = createVendorLogoService(productionVendorLogoPorts);
+export const fetchAndAttachVendorLogo =
+  productionVendorLogo.fetchAndAttachVendorLogo;

@@ -114,7 +114,7 @@ export type ShoppingMealGroup = {
 export const buildShoppingColumns = (
   data: Pick<ShoppingListOut, "meals" | "items">,
   excluded: ReadonlySet<string>,
-): { columns: ShoppingLineColumn[]; groups: ShoppingMealGroup[] } => {
+) => {
   // Widened to plain string: these are lookup/display keys, and the column
   // model deliberately isn't branded.
   const mealOrder = new Map<string, number>(

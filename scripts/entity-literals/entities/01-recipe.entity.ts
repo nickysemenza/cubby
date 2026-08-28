@@ -12,6 +12,10 @@ export default literalEntity({
     update: { module: "@cubby/schemas/recipe", export: "recipeUpdateData" },
     output: { module: "@cubby/schemas/recipe", export: "recipeOut" },
     list: { module: "@cubby/schemas/recipe", export: "recipeListItemOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/recipe",
+      export: "recipeMcpEntityOut",
+    },
   },
   filters: {
     audit: true,

@@ -35,10 +35,11 @@ export const TIER1_NUTRIENTS = {
 export type NutrientKey = keyof typeof TIER1_NUTRIENTS;
 
 export type NutrientInfo = (typeof TIER1_NUTRIENTS)[NutrientKey];
+export type NutrientCode = NutrientInfo["code"];
 
-export const TIER1_CODES = Object.values(TIER1_NUTRIENTS).map(
-  (n) => n.code,
-) as string[];
+export const TIER1_CODES: readonly string[] = Object.values(
+  TIER1_NUTRIENTS,
+).map((n) => n.code);
 
 /**
  * The key nutrients shown in summaries, the recipe table, and the unit-mapping
@@ -71,17 +72,16 @@ const CODE_TO_NUTRIENT: Record<string, NutrientInfo> = Object.fromEntries(
   Object.values(TIER1_NUTRIENTS).map((n) => [n.code, n]),
 );
 
-const CODE_TO_KEY: Record<string, NutrientKey> = Object.fromEntries(
-  Object.entries(TIER1_NUTRIENTS).map(([key, n]) => [
-    n.code,
-    key as NutrientKey,
-  ]),
+const CODE_TO_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(TIER1_NUTRIENTS).map(([key, n]) => [n.code, key]),
 );
 
 export function getNutrientUnit(code: string): string {
   return CODE_TO_NUTRIENT[code]?.unit ?? "G";
 }
 
+export function getNutrientKey(code: NutrientCode): NutrientKey;
+export function getNutrientKey(code: string): string;
 export function getNutrientKey(code: string): string {
   return CODE_TO_KEY[code] ?? code;
 }
@@ -94,7 +94,7 @@ export function getNutrientInfo(code: string): NutrientInfo | undefined {
   return CODE_TO_NUTRIENT[code];
 }
 
-export function isTier1Nutrient(code: string): boolean {
+export function isTier1Nutrient(code: string): code is NutrientCode {
   return code in CODE_TO_NUTRIENT;
 }
 
@@ -131,10 +131,19 @@ export function buildNutrients(
 ): NutrientsPer100 {
   const out: NutrientsPer100 = {};
   for (const [key, value] of Object.entries(values)) {
-    if (value) out[TIER1_NUTRIENTS[key as NutrientKey].code] = value;
+    if (value && isNutrientKey(key)) {
+      out[TIER1_NUTRIENTS[key].code] = value;
+    }
   }
   return out;
 }
+
+export const isNutrientKey = (key: string): key is NutrientKey =>
+  Object.hasOwn(TIER1_NUTRIENTS, key);
+
+/** Every tier-1 nutrient key, derived from the authoritative catalog. */
+export const TIER1_NUTRIENT_KEYS =
+  Object.keys(TIER1_NUTRIENTS).filter(isNutrientKey);
 
 /**
  * Get the canonical unit string for a nutrient (e.g., "g protein", "kcal").
@@ -152,7 +161,7 @@ export function getNutrientUnitString(key: NutrientKey): string {
  * kcal's 2000 is the label footnote reference amount, not a %DV. Every TIER1
  * nutrient has an official 2016-rule DV, so this is a total `Record` — no
  * `Partial` needed. */
-export const DAILY_VALUES: Record<NutrientKey, number> = {
+export const DAILY_VALUES = {
   protein: 50,
   fat: 78,
   carbs: 275,
@@ -175,7 +184,7 @@ export const DAILY_VALUES: Record<NutrientKey, number> = {
   folate: 400,
   cholesterol: 300,
   saturated_fat: 20,
-};
+} as const satisfies Record<NutrientKey, number>;
 
 /**
  * A nutrient amount's percent Daily Value, FDA label style (e.g. 18g fat →

@@ -1,48 +1,82 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { publicImpactItemSchema } from "@cubby/schemas/entity-integrity";
+import { productTopLevelOut } from "@cubby/schemas/product";
+import { testShortcode } from "@cubby/schemas/testing";
+import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const { executeEntityMutation } = vi.hoisted(() => ({
-  executeEntityMutation: vi.fn(),
-}));
-
-vi.mock("~/entities/entity-mutation.functions", () => ({
-  executeEntityMutation,
-  flattenEntityMutationResult: (result: unknown) => result,
-  // `useEntityCommands` spreads the kernel descriptor's options so the global
-  // MutationCache sees `meta`; the stub only has to be spreadable.
-  entityMutation: {
-    mutate: {
-      forEntity: () => ({ mutationOptions: () => ({}) }),
-    },
-  },
-}));
-
+import { entityMutation } from "~/entities/entity-mutation.functions";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { mock } from "~/lib/test/mock-schema";
+import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
-import { useEntityCommands } from "./use-entity-commands";
+import {
+  createEntityMutationPort,
+  type EntityMutationOperations,
+  useEntityCommands,
+} from "./use-entity-commands";
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider
-    client={
-      new QueryClient({ defaultOptions: { mutations: { retry: false } } })
-    }
-  >
-    {children}
-  </QueryClientProvider>
-);
+function refusalPort(error: StartOperationError) {
+  const mutation = entityMutation.mutate.withTransport(async () => {
+    throw error;
+  });
+  const operations: EntityMutationOperations = { mutation };
+  return createEntityMutationPort(operations);
+}
 
-const removeAndReadIssues = async () => {
-  const { result } = renderHook(() => useEntityCommands("task"), { wrapper });
+async function removeAndReadIssues(error: StartOperationError) {
+  const harness = createBrowserTestHarness();
+  const BrowserWrapper = harness.wrapper;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <BrowserWrapper>{children}</BrowserWrapper>
+  );
+  const { result, unmount } = renderHook(
+    () => useEntityCommands("task", { mutationPort: refusalPort(error) }),
+    { wrapper },
+  );
   const outcome = await result.current.remove(["TSK-4K7M"]);
-  await waitFor(() => expect(outcome.ok).toBe(false));
+  unmount();
+  harness.dispose();
   return outcome.ok ? [] : outcome.issues;
-};
+}
 
 describe("useEntityCommands structured refusals", () => {
+  it("retains side effects on schema-correlated create and update results", async () => {
+    const sideEffects = { backgroundBatches: [] };
+    const item = mock(productTopLevelOut, {
+      seed: 31,
+      overrides: {
+        id: testShortcode("product", "PRD-4K7M"),
+        externalIds: [],
+      },
+    });
+    const mutation = entityMutation.mutate.withTransport(async () =>
+      entityBrowserMutationResultSchema.parse({
+        action: "update",
+        entity: "product",
+        item,
+        sideEffects,
+      }),
+    );
+    const port = createEntityMutationPort({ mutation });
+
+    const execution = await port.execute({
+      entity: "product",
+      operation: "update",
+      intent: "full",
+      id: item.id,
+      data: { name: item.name },
+    });
+
+    expect(execution.result).toMatchObject({
+      id: item.id,
+      sideEffects,
+    });
+  });
+
   it("attaches each validation issue to the field the server named", async () => {
-    executeEntityMutation.mockRejectedValue(
+    const issues = await removeAndReadIssues(
       new StartOperationError({
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
@@ -52,8 +86,6 @@ describe("useEntityCommands structured refusals", () => {
         ],
       }),
     );
-
-    const issues = await removeAndReadIssues();
 
     expect(issues).toContainEqual({
       field: "name",
@@ -67,25 +99,22 @@ describe("useEntityCommands structured refusals", () => {
   });
 
   it("reports each lifecycle blocker instead of one flattened sentence", async () => {
-    executeEntityMutation.mockRejectedValue(
+    const blocker = publicImpactItemSchema.parse({
+      code: "task-has-subtasks",
+      effect: "block",
+      label: "Subtasks",
+      description: "3 subtasks still reference this task.",
+      total: 3,
+      byTargetId: { "TSK-4K7M": 3 },
+    });
+    const issues = await removeAndReadIssues(
       new StartOperationError({
         code: "PRECONDITION_FAILED",
         reason: "DELETE_BLOCKED",
         message: "Task cannot be deleted",
-        blockers: [
-          {
-            code: "task-has-subtasks",
-            effect: "block",
-            label: "Subtasks",
-            description: "3 subtasks still reference this task.",
-            total: 3,
-            byTargetId: { "TSK-4K7M": 3 },
-          },
-        ] as never,
+        blockers: [blocker],
       }),
     );
-
-    const issues = await removeAndReadIssues();
 
     expect(issues.map((issue) => issue.message)).toEqual([
       "Task cannot be deleted",
@@ -95,29 +124,27 @@ describe("useEntityCommands structured refusals", () => {
   });
 
   it("surfaces an authorization refusal as its own message", async () => {
-    executeEntityMutation.mockRejectedValue(
-      new StartOperationError({
-        code: "UNAUTHORIZED",
-        reason: "NOT_AUTHENTICATED",
-        message: "Please sign in to continue",
-      }),
-    );
-
-    expect(await removeAndReadIssues()).toEqual([
-      { message: "Please sign in to continue", source: "server" },
-    ]);
+    expect(
+      await removeAndReadIssues(
+        new StartOperationError({
+          code: "UNAUTHORIZED",
+          reason: "NOT_AUTHENTICATED",
+          message: "Please sign in to continue",
+        }),
+      ),
+    ).toEqual([{ message: "Please sign in to continue", source: "server" }]);
   });
 
   it("keeps a redacted unknown failure redacted", async () => {
-    executeEntityMutation.mockRejectedValue(
-      new StartOperationError({
-        code: "INTERNAL_SERVER_ERROR",
-        reason: "UNKNOWN_ERROR",
-        message: "The operation could not be completed",
-      }),
-    );
-
-    expect(await removeAndReadIssues()).toEqual([
+    expect(
+      await removeAndReadIssues(
+        new StartOperationError({
+          code: "INTERNAL_SERVER_ERROR",
+          reason: "UNKNOWN_ERROR",
+          message: "The operation could not be completed",
+        }),
+      ),
+    ).toEqual([
       { message: "The operation could not be completed", source: "server" },
     ]);
   });

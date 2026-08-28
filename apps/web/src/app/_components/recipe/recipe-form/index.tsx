@@ -12,6 +12,7 @@ import {
 import { type FC, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
 import { Row, Stack } from "~/components/layout";
@@ -221,8 +222,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     // Set yield if available. The scraper returns structured {value, unit};
     // a freeform string (other sources) is parsed via WASM.
     const ry = result.meta.recipe_yield;
-    const yieldStruct =
-      typeof ry === "string" ? wasm.parse_yield(ry).recipe_yield : ry;
+    const yieldText = z.string().safeParse(ry);
+    const yieldStruct = yieldText.success
+      ? wasm.parse_yield(yieldText.data).recipe_yield
+      : z.object({ value: z.number(), unit: z.string() }).nullable().parse(ry);
     if (yieldStruct) {
       form.setValue("yield", {
         value: yieldStruct.value,

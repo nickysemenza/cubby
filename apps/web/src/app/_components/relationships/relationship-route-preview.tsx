@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import {
   type RelatedPreviewGroup,
   type RelatedPreviewItem,
@@ -9,6 +8,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
+import { z } from "zod";
 
 import { formatDate } from "~/app/projects/project-formatting";
 import { EntityIdentityMark } from "~/components/entity/entity-identity-mark";
@@ -27,6 +27,24 @@ import { TableLink } from "../table/TableLink";
 
 const ROUTE_PREVIEW_LIMIT = 3;
 const NO_PREVIEW_GROUPS: readonly RelatedPreviewGroup[] = [];
+const relationshipSourceRecordSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+    date: z.string().optional(),
+    description: z.string().optional(),
+    filename: z.string().optional(),
+  })
+  .passthrough();
+type RelationshipSourceRecord = z.output<typeof relationshipSourceRecordSchema>;
+
+export interface RelationshipPreviewOperations {
+  previews: typeof relatedData.previews;
+}
+
+const productionRelationshipPreviewOperations: RelationshipPreviewOperations = {
+  previews: relatedData.previews,
+};
 
 export interface RelationshipRoutePreviewModel {
   source: {
@@ -97,18 +115,16 @@ export function relationshipRoutePreviewModel({
  */
 export function relationshipRouteSourceFromRecord(
   entity: Entity,
-  rawData: unknown,
+  record: RelationshipSourceRecord,
   fallbackId?: string,
 ): RelationshipRouteSource | null {
-  if (!rawData || typeof rawData !== "object") return null;
-  const record = rawData as Record<string, unknown>;
-  const id = typeof record.id === "string" ? record.id : fallbackId;
+  const id = record.id ?? fallbackId;
   if (!id) return null;
-  const title = record[entityInspectorMetadata[entity].titleField];
+  const title = titleForRelationshipSource(entity, record);
   const label =
-    typeof title === "string" && title.trim().length > 0
+    title && title.trim().length > 0
       ? title
-      : entity === "meal" && typeof record.date === "string"
+      : entity === "meal" && record.date
         ? formatDate(record.date)
         : null;
   if (!label) return null;
@@ -117,6 +133,15 @@ export function relationshipRouteSourceFromRecord(
     id,
     label,
   };
+}
+
+function titleForRelationshipSource(
+  entity: Entity,
+  record: RelationshipSourceRecord,
+): string | undefined {
+  if (entity === "usda-food") return record.description;
+  if (entity === "image") return record.filename;
+  return record.name;
 }
 
 /**
@@ -128,11 +153,12 @@ export function useRelationshipRoutePreview(
   entity: Entity,
   sourceId: string | undefined,
   source?: RelationshipRouteSource | null,
+  operations: RelationshipPreviewOperations = productionRelationshipPreviewOperations,
 ) {
   const views = useMemo(() => relatedViewsFor(entity), [entity]);
   const relationKeys = useMemo(() => views.map((view) => view.key), [views]);
   const query = useQuery({
-    ...relatedData.previews.queryOptions({
+    ...operations.previews.queryOptions({
       source: entity,
       sourceIds: sourceId ? [sourceId] : [],
       relationKeys,
@@ -164,14 +190,18 @@ export function useRelationshipRouteSource(
   entity: Entity,
   sourceId: string | undefined,
 ) {
+  // SAFETY: dynamic entity selection chooses one generated query-options member,
+  // but React Query cannot retain that correlated union through this call.
   const query = useQuery({
     ...entityPreviewQueryOptions(entity, sourceId ?? ""),
     enabled: false,
   } as never);
-  return useMemo(
-    () => relationshipRouteSourceFromRecord(entity, query.data, sourceId),
-    [entity, query.data, sourceId],
-  );
+  return useMemo(() => {
+    const parsed = relationshipSourceRecordSchema.safeParse(query.data);
+    return parsed.success
+      ? relationshipRouteSourceFromRecord(entity, parsed.data, sourceId)
+      : null;
+  }, [entity, query.data, sourceId]);
 }
 
 function SourcePreview({ source }: { source: RelationshipRouteSource }) {
@@ -196,6 +226,7 @@ function SourcePreview({ source }: { source: RelationshipRouteSource }) {
 
   return (
     <TableLink
+      // SAFETY: isBrowserRoutedEntity narrows this generated manifest key to a detail route.
       to={entities[source.entity].routes.detail as EntityDetailRoute}
       params={entityDetailParams(source.id)}
       className={className}
@@ -231,6 +262,7 @@ function EndpointPreview({ endpoint }: { endpoint: RelatedPreviewItem }) {
 
   return (
     <TableLink
+      // SAFETY: isBrowserRoutedEntity narrows this generated manifest key to a detail route.
       to={entities[endpoint.entity].routes.detail as EntityDetailRoute}
       params={entityDetailParams(endpoint.id)}
       className={className}
@@ -248,6 +280,7 @@ export function RelationshipRoutePreview({
   source,
   className,
   onViewAll,
+  operations,
 }: {
   entity: Entity;
   sourceId: string | undefined;
@@ -255,6 +288,7 @@ export function RelationshipRoutePreview({
   className?: string;
   /** Inspector-owned mode switch; detail pages already expose the Relations tab. */
   onViewAll?: () => void;
+  operations?: RelationshipPreviewOperations;
 }) {
   const cachedSource = useRelationshipRouteSource(entity, sourceId);
   const resolvedSource = source ?? cachedSource;
@@ -262,6 +296,7 @@ export function RelationshipRoutePreview({
     entity,
     sourceId,
     resolvedSource,
+    operations,
   );
   // The detail-preview owns unavailable/deleted state. Until it has supplied
   // an honest identity, the relationship station must not imply one.

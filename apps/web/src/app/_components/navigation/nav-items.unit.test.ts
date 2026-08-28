@@ -125,7 +125,9 @@ describe("workspace navigation contract", () => {
 // covered vendor/purchase/wish at all). Deriving from `desktopNav` instead
 // means an entity list route can't silently point nowhere or somewhere wrong.
 describe("getEntityNavGroup", () => {
-  const entityKeys = Object.keys(entities) as BrowserRoutedEntity[];
+  const entityKeys = Object.keys(entities).filter(
+    (entity): entity is BrowserRoutedEntity => entity in entities,
+  );
 
   it("covers every entity defined in entities.tsx", () => {
     expect(entityKeys.length).toBeGreaterThan(0);
@@ -152,7 +154,7 @@ describe("getEntityNavGroup", () => {
   // entity's list route to a different group is a visible, intentional test
   // change rather than a silent breadcrumb drift.
   it("derives the expected group label for every entity", () => {
-    const expected: Record<BrowserRoutedEntity, string> = {
+    const expected = {
       recipe: "Cook",
       cookbook: "Cook",
       ingredient: "Cook",
@@ -170,7 +172,7 @@ describe("getEntityNavGroup", () => {
       purchase: "Finance",
       financialAccount: "Finance",
       financialTransaction: "Finance",
-    };
+    } satisfies Record<BrowserRoutedEntity, string>;
 
     for (const entity of entityKeys) {
       // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.

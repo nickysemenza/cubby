@@ -6,6 +6,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { Search } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
+import { z } from "zod";
 
 import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
@@ -21,7 +22,10 @@ import { search } from "~/lib/search.functions";
 import { cn } from "~/lib/utils";
 
 import { getRecents, pushRecent } from "../command-menu/recents";
-import { useEntityPreview } from "../hooks/useEntityPreview";
+import {
+  type EntityPreviewRowData,
+  useEntityPreview,
+} from "../hooks/useEntityPreview";
 import {
   entityTypeMap,
   getSearchMatchText,
@@ -36,10 +40,17 @@ interface SearchPageProps {
   type: SearchType;
 }
 
+interface SearchPreviewRow {
+  original: SearchHit & EntityPreviewRowData;
+}
+
+type SearchPreviewHandler = (row: SearchPreviewRow) => void;
+const recentSearchesSchema = z.array(z.string());
+
 const filterOptions: Array<{ value: SearchType; label: string }> = [
   { value: "all", label: "All" },
   ...searchableEntities.map((entityType) => ({
-    value: entityType as SearchType,
+    value: entityType,
     label: entities[entityTypeMap[entityType]].label,
   })),
 ];
@@ -53,7 +64,11 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const relatedHeadingId = useId();
   const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
   const [relatedDraft] = useDebouncedValue(draft, { wait: 450 });
-  const entityTypes = type === "all" ? undefined : [type as SearchableEntity];
+  const entityTypes: SearchableEntity[] | undefined =
+    type === "all" ? undefined : [type];
+  const primaryShouldSearch = debouncedDraft.trim().length > 0;
+  const relatedShouldSearch =
+    relatedDraft.trim().length > 0 && relatedDraft === draft;
 
   useEffect(() => setDraft(query), [query]);
   useEffect(() => {
@@ -70,20 +85,21 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
 
   const primary = useQuery({
     ...search.find.queryOptions({
-      query: debouncedDraft,
+      // Disabled queries still construct and validate their options.
+      query: primaryShouldSearch ? debouncedDraft : "inactive-search",
       entityTypes,
       limit: 50,
     }),
-    enabled: debouncedDraft.trim().length > 0,
+    enabled: primaryShouldSearch,
     placeholderData: keepPreviousData,
   });
   const related = useQuery({
     ...search.related.queryOptions({
-      query: relatedDraft,
+      query: relatedShouldSearch ? relatedDraft : "inactive-search",
       entityTypes,
       limit: 12,
     }),
-    enabled: relatedDraft.trim().length > 0 && relatedDraft === draft,
+    enabled: relatedShouldSearch,
     placeholderData: keepPreviousData,
   });
   // A placeholder belongs to the prior draft. Never let it appear beneath a
@@ -110,8 +126,9 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     relatedDraft,
   ]);
   const jumps = useMemo(() => getRecents(), []);
-  const [recents, setRecents] = useLocalStorage<string[]>(
+  const [recents, setRecents] = useLocalStorage(
     "cubby:recent-searches",
+    recentSearchesSchema,
     [],
   );
   const hasQuery = draft.trim().length > 0;
@@ -273,11 +290,9 @@ function SearchResults({
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
-  onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
-  onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
-  onPrefetchEnd: <T extends Record<string, unknown>>(row: {
-    original: T;
-  }) => void;
+  onPreview: SearchPreviewHandler;
+  onPrefetch: SearchPreviewHandler;
+  onPrefetchEnd: SearchPreviewHandler;
 }) {
   const feedback = getSearchResultsFeedback({
     isLoading,
@@ -308,15 +323,11 @@ function SearchRow({
   onPrefetchEnd,
 }: {
   item: SearchHit;
-  onPreview: <T extends Record<string, unknown>>(row: { original: T }) => void;
-  onPrefetch: <T extends Record<string, unknown>>(row: { original: T }) => void;
-  onPrefetchEnd: <T extends Record<string, unknown>>(row: {
-    original: T;
-  }) => void;
+  onPreview: SearchPreviewHandler;
+  onPrefetch: SearchPreviewHandler;
+  onPrefetchEnd: SearchPreviewHandler;
 }) {
-  const previewRow = {
-    original: item as SearchHit & Record<string, unknown>,
-  };
+  const previewRow = { original: item };
   return (
     <div className="group flex items-center gap-4 border-b border-border px-2 py-2 last:border-b-0 hover:bg-muted/45">
       <SearchResultMedia item={item} variant="list" />
@@ -344,9 +355,7 @@ function SearchRow({
       </div>
       <button
         type="button"
-        onClick={() =>
-          onPreview({ original: item as SearchHit & Record<string, unknown> })
-        }
+        onClick={() => onPreview(previewRow)}
         className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
       >
         Preview

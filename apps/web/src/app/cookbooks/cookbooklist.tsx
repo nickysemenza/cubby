@@ -11,7 +11,10 @@ import {
   createNameColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { usePageCount } from "~/components/page/Page";
@@ -45,56 +48,65 @@ export function CookbookList() {
   } = useEntityPreview("cookbook", { responsiveInspector: true });
 
   const columns = useMemo(
-    () => [
-      createImageColumn(columnHelper, {
-        entity: "cookbook",
-        // Falls back to the physical copy on the shelf: reading only
-        // `row.coverUrl` placeholdered every cookbook whose sole photograph
-        // lived on its linked Product.
-        getImages: (row) => {
-          const cover = cookbookCoverImage(row);
-          return cover ? [{ id: row.id, url: cover }] : [];
-        },
+    () =>
+      createCubbyColumnCollection<CookbookSummary>((add) => {
+        add(
+          createImageColumn(columnHelper, {
+            entity: "cookbook",
+            // Falls back to the physical copy on the shelf: reading only
+            // `row.coverUrl` placeholdered every cookbook whose sole photograph
+            // lived on its linked Product.
+            getImages: (row) => {
+              const cover = cookbookCoverImage(row);
+              return cover ? [{ id: row.id, url: cover }] : [];
+            },
+          }),
+        );
+        add(
+          createNameColumn(columnHelper, "cookbook", "book", {
+            header: "Title",
+            emptyLabel: () => "Untitled",
+            filterConfig: { placeholder: "Filter by title..." },
+          }),
+        );
+        add(
+          columnHelper.accessor((row) => row.author.join(", "), {
+            id: "author",
+            header: "Author",
+            meta: {
+              className: "w-48",
+              mobile: { slot: "subtitle", priority: 10 },
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("recipeCount", {
+            id: "recipeCount",
+            header: "Recipes",
+            meta: {
+              numeric: true,
+              className: "w-32",
+              mobile: { slot: "meta", priority: 20 },
+            },
+            // `sourceRecipeCount` is how many recipes the EPUB extraction holds;
+            // `recipeCount` is how many have actually been imported. Show the
+            // partial fraction while there are still recipes to import, else a
+            // plain count once everything (or more) is in.
+            cell: (info) => {
+              const row = info.row.original;
+              const allImported = row.sourceRecipeCount <= row.recipeCount;
+              return (
+                <span className="tabular-nums">
+                  {allImported
+                    ? row.recipeCount
+                    : `${row.recipeCount} / ${row.sourceRecipeCount}`}
+                </span>
+              );
+            },
+          }),
+        );
+        add(createActionsColumn(columnHelper, "cookbook"));
       }),
-      createNameColumn(columnHelper, "cookbook", "book", {
-        header: "Title",
-        emptyLabel: () => "Untitled",
-        filterConfig: { placeholder: "Filter by title..." },
-      }),
-      columnHelper.accessor((row) => row.author.join(", "), {
-        id: "author",
-        header: "Author",
-        meta: {
-          className: "w-48",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
-      }),
-      columnHelper.accessor("recipeCount", {
-        id: "recipeCount",
-        header: "Recipes",
-        meta: {
-          numeric: true,
-          className: "w-32",
-          mobile: { slot: "meta", priority: 20 },
-        },
-        // `sourceRecipeCount` is how many recipes the EPUB extraction holds;
-        // `recipeCount` is how many have actually been imported. Show the
-        // partial fraction while there are still recipes to import, else a
-        // plain count once everything (or more) is in.
-        cell: (info) => {
-          const row = info.row.original;
-          const allImported = row.sourceRecipeCount <= row.recipeCount;
-          return (
-            <span className="tabular-nums">
-              {allImported
-                ? row.recipeCount
-                : `${row.recipeCount} / ${row.sourceRecipeCount}`}
-            </span>
-          );
-        },
-      }),
-      createActionsColumn(columnHelper, "cookbook"),
-    ],
     [columnHelper],
   );
 

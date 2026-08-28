@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
@@ -384,15 +384,16 @@ export function EnrichmentEditor({
     [row, food, price, priceQty, priceUnit, convRows],
   );
 
-  const createProduct = useActionMutation({
+  const createProduct = useEntityActionMutation({
     entity: "product",
+    operation: "create",
     mutationFn: productCreateMutationOptions,
     success: (d) =>
       savedWithBackgroundWork(d.sideEffects, `Enriched ${d.name}`),
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to create product: ${getErrorMessage(err)}`,
   });
-  const updateProduct = useActionMutation({
+  const updateProduct = useEntityActionMutation({
     entity: "product",
     operation: "update",
     intent: "full",
@@ -401,7 +402,7 @@ export function EnrichmentEditor({
     onSuccess: () => onSaved?.(),
     error: (err) => `Failed to update: ${getErrorMessage(err)}`,
   });
-  const updateIngredient = useActionMutation({
+  const updateIngredient = useEntityActionMutation({
     entity: "ingredient",
     operation: "update",
     intent: "full",

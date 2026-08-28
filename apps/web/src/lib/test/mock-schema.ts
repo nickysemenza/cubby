@@ -61,16 +61,67 @@ export function mock<T extends z.ZodType>(
   return schema.parse(merged);
 }
 
-// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-type AnyDef = { type: string; [k: string]: any };
-const defOf = (s: z.ZodType): AnyDef =>
-  // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-  (s as any)._zod.def;
+type MockValue =
+  | bigint
+  | boolean
+  | Date
+  | Map<MockValue, MockValue>
+  | MockValue[]
+  | null
+  | number
+  | object
+  | Set<MockValue>
+  | string
+  | symbol
+  | undefined;
+type RuntimeCheck = {
+  _zod?: { def: RuntimeCheck };
+  check?: string;
+  format?: string;
+  minimum?: number;
+  maximum?: number;
+  length?: number;
+  value?: number;
+  pattern?: RegExp;
+};
+type RuntimeDefinition = {
+  type: string;
+  format?: string;
+  checks?: readonly RuntimeCheck[];
+  entries?: Readonly<Record<string, string | number>>;
+  values?: readonly MockValue[];
+  shape?: Readonly<Record<string, z.ZodType>>;
+  element?: z.ZodType;
+  items?: readonly z.ZodType[];
+  innerType?: z.ZodType;
+  options?: readonly z.ZodType[];
+  left?: z.ZodType;
+  right?: z.ZodType;
+  in?: z.ZodType;
+  keyType?: z.ZodType;
+  valueType?: z.ZodType;
+  defaultValue?: MockValue | (() => MockValue);
+  getter?: () => z.ZodType;
+};
+
+// SAFETY: Zod 4 exposes the discriminated runtime definition through `_zod.def`;
+// RuntimeDefinition names only the fields this generator reads from that public core contract.
+const defOf = (s: z.ZodType): RuntimeDefinition =>
+  s._zod.def as RuntimeDefinition;
+
+const isMockValue = <TValue>(value: TValue): value is TValue & MockValue =>
+  value === undefined || value === null || typeof value !== "function";
+
+const isStringValue = <TValue>(value: TValue): value is TValue & string =>
+  typeof value === "string";
+const isDefaultFactory = <TValue>(
+  value: TValue,
+): value is TValue & (() => MockValue) => typeof value === "function";
 
 /** Read a `{ mock }` string hint off a schema's metadata, if present. */
 const mockHint = (s: z.ZodType): string | undefined => {
   const m = s.meta?.()?.mock;
-  return typeof m === "string" ? m : undefined;
+  return isStringValue(m) ? m : undefined;
 };
 
 /**
@@ -87,25 +138,44 @@ const mockHint = (s: z.ZodType): string | undefined => {
  * Stays a plain literal, never a faker path, so `@cubby/schemas` remains
  * faker-free (see the header note).
  */
-const mockValueHint = (s: z.ZodType): unknown => s.meta?.()?.mockValue;
+const mockValueHint = (s: z.ZodType): MockValue | undefined => {
+  const value = s.meta?.()?.mockValue;
+  return isMockValue(value) ? value : undefined;
+};
 
 /** Resolve a faker dot-path like "food.ingredient" and call it (preserving `this`). */
-function callFakerPath(path: string): unknown {
+type FakerFunction = () => MockValue;
+type FakerPathValue = MockValue | FakerFunction;
+const isFakerFunction = <TValue>(
+  value: TValue,
+): value is TValue & FakerFunction => typeof value === "function";
+interface FakerOwner {}
+const readFakerMember = (
+  owner: FakerOwner,
+  key: string,
+): FakerPathValue | undefined =>
+  Object.getOwnPropertyDescriptor(owner, key)?.value;
+
+function callFakerPath(path: string): MockValue | undefined {
   const parts = path.split(".");
-  // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-  let ctx: any = faker;
-  // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-  let parent: any = faker;
-  for (const p of parts) {
+  let ctx: FakerOwner = faker;
+  let parent: FakerOwner = faker;
+  for (const [index, part] of parts.entries()) {
     parent = ctx;
-    ctx = ctx?.[p];
-    if (ctx == null) return undefined;
+    const value = readFakerMember(ctx, part);
+    if (value == null) return undefined;
+    if (index === parts.length - 1)
+      return isFakerFunction(value) ? value.call(parent) : value;
+    if (!isFakerOwner(value)) return undefined;
+    ctx = value;
   }
-  return typeof ctx === "function" ? ctx.call(parent) : ctx;
+  return undefined;
 }
 
-// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-const readChecks = (checks: any[] | undefined) => {
+const isFakerOwner = <TValue>(value: TValue): value is TValue & FakerOwner =>
+  typeof value === "object" && value !== null;
+
+const readChecks = (checks: readonly RuntimeCheck[] | undefined) => {
   let intFmt = false;
   let minLen: number | undefined;
   let maxLen: number | undefined;
@@ -113,7 +183,7 @@ const readChecks = (checks: any[] | undefined) => {
   let lt: number | undefined;
   let regex: RegExp | undefined;
   for (const c of checks ?? []) {
-    const d = c?._zod?.def ?? c;
+    const d = c._zod?.def ?? c;
     if (d.check === "number_format" && String(d.format).includes("int"))
       intFmt = true;
     if (d.check === "min_length") minLen = d.minimum;
@@ -257,7 +327,7 @@ function genFromRegex(pattern: RegExp): string {
   return out;
 }
 
-function genString(def: AnyDef): string {
+function genString(def: RuntimeDefinition): string {
   switch (def.format) {
     case "uuid":
     case "guid":
@@ -285,7 +355,7 @@ function genString(def: AnyDef): string {
   return s;
 }
 
-function genNumber(def: AnyDef): number {
+function genNumber(def: RuntimeDefinition): number {
   const { intFmt, gt, lt } = readChecks([def, ...(def.checks ?? [])]);
   const min = gt != null ? gt + (intFmt ? 1 : 0.01) : 1;
   const max = lt != null ? lt - (intFmt ? 1 : 0.01) : min + 1000;
@@ -298,7 +368,7 @@ function gen(
   schema: z.ZodType,
   depth: number,
   fillOptionals: boolean,
-): unknown {
+): MockValue | undefined {
   // An explicit literal wins over everything — it exists precisely because the
   // type-driven path cannot satisfy the schema's own constraints.
   const literal = mockValueHint(schema);
@@ -334,9 +404,9 @@ function gen(
     case "date":
       return faker.date.recent();
     case "enum":
-      return faker.helpers.arrayElement(Object.values(def.entries));
+      return faker.helpers.arrayElement(Object.values(def.entries ?? {}));
     case "literal":
-      return def.values[0];
+      return def.values?.[0];
     case "null":
       return null;
     case "undefined":
@@ -348,60 +418,68 @@ function gen(
     case "nan":
       return Number.NaN;
     case "object": {
-      const out: Record<string, unknown> = {};
-      for (const [key, child] of Object.entries(
-        def.shape as Record<string, z.ZodType>,
-      )) {
+      const entries: Array<readonly [string, MockValue]> = [];
+      for (const [key, child] of Object.entries(def.shape ?? {})) {
         const v = recurse(child);
-        if (v !== undefined) out[key] = v; // omit optionals (undefined)
+        if (v !== undefined) entries.push([key, v]); // omit optionals (undefined)
       }
-      return out;
+      return Object.fromEntries(entries);
     }
     case "array": {
       const { minLen } = readChecks(def.checks);
       const n = Math.max(minLen ?? 1, 1);
-      return Array.from({ length: n }, () => recurse(def.element));
+      const element = def.element;
+      return element ? Array.from({ length: n }, () => recurse(element)) : [];
     }
     case "tuple":
-      return (def.items ?? []).map((it: z.ZodType) => recurse(it));
+      return (def.items ?? []).map((it) => recurse(it));
     case "optional":
-      return fillOptionals ? recurse(def.innerType) : undefined;
+      return fillOptionals && def.innerType
+        ? recurse(def.innerType)
+        : undefined;
     case "nullable":
     case "nullish":
       return null;
     case "default":
     case "prefault": {
       const dv = def.defaultValue;
-      return typeof dv === "function" ? dv() : dv;
+      return isDefaultFactory(dv) ? dv() : dv;
     }
     case "catch":
-      return recurse(def.innerType);
+      return def.innerType ? recurse(def.innerType) : undefined;
     case "readonly":
-      return recurse(def.innerType);
+      return def.innerType ? recurse(def.innerType) : undefined;
     case "lazy":
-      return depth >= MAX_DEPTH ? undefined : recurse(def.getter(), depth + 1);
+      return depth >= MAX_DEPTH || def.getter === undefined
+        ? undefined
+        : recurse(def.getter(), depth + 1);
     case "union": // discriminated unions report type "union"; first option is deterministic
-      return recurse(def.options[0]);
+      return def.options?.[0] ? recurse(def.options[0]) : undefined;
     case "intersection": {
-      const a = recurse(def.left);
-      const b = recurse(def.right);
+      const a = def.left ? recurse(def.left) : undefined;
+      const b = def.right ? recurse(def.right) : undefined;
       return isPlain(a) && isPlain(b) ? { ...a, ...b } : (b ?? a);
     }
     case "record": {
-      const k = String(recurse(def.keyType) ?? "key");
-      return { [k]: recurse(def.valueType) };
+      const k = String(def.keyType ? recurse(def.keyType) : "key");
+      return { [k]: def.valueType ? recurse(def.valueType) : undefined };
     }
     case "map":
-      return new Map([[recurse(def.keyType), recurse(def.valueType)]]);
+      return new Map([
+        [
+          def.keyType ? recurse(def.keyType) : undefined,
+          def.valueType ? recurse(def.valueType) : undefined,
+        ],
+      ]);
     case "set":
-      return new Set([recurse(def.valueType)]);
+      return new Set([def.valueType ? recurse(def.valueType) : undefined]);
     case "pipe": {
       // Coercions / transforms: generate the input side, then run the whole
       // schema to apply the transform. Fall back to the raw input on failure.
-      const input = recurse(def.in);
+      const input = def.in ? recurse(def.in) : undefined;
       try {
-        // oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-        return (schema as any).parse(input);
+        const parsed = schema.safeParse(input);
+        return parsed.success && isMockValue(parsed.data) ? parsed.data : input;
       } catch {
         return input;
       }
@@ -413,19 +491,27 @@ function gen(
   }
 }
 
-// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-const isPlain = (v: any): v is Record<string, unknown> =>
-  typeof v === "object" &&
-  v !== null &&
-  (v.constructor === Object || v.constructor === undefined);
+const isPlain = <TValue>(value: TValue): value is TValue & object =>
+  typeof value === "object" &&
+  value !== null &&
+  (Object.getPrototypeOf(value) === Object.prototype ||
+    Object.getPrototypeOf(value) === null);
 
 /** Deep-merge overrides onto a generated base. Plain objects recurse; arrays,
  * dates, class instances and primitives replace wholesale. */
-// oxlint-disable-next-line typescript/no-explicit-any -- The test double crosses an intentionally untyped runtime boundary.
-function deepMerge(base: any, over: any): any {
-  if (over === undefined) return base;
-  if (!isPlain(over) || !isPlain(base)) return over;
-  const out: Record<string, unknown> = { ...base };
-  for (const k of Object.keys(over)) out[k] = deepMerge(base[k], over[k]);
-  return out;
+function deepMerge<TBase, TOverride>(
+  base: TBase,
+  over: TOverride,
+): MockValue | undefined {
+  if (over === undefined) return isMockValue(base) ? base : undefined;
+  if (!isPlain(over) || !isPlain(base))
+    return isMockValue(over) ? over : undefined;
+  const values = new Map<string, MockValue>();
+  for (const [key, value] of Object.entries(base))
+    if (isMockValue(value)) values.set(key, value);
+  for (const [key, value] of Object.entries(over)) {
+    const merged = deepMerge(values.get(key), value);
+    if (merged !== undefined) values.set(key, merged);
+  }
+  return Object.fromEntries(values);
 }

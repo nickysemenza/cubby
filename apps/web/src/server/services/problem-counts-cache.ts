@@ -9,6 +9,14 @@ import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { findProblemCounts } from "~/server/services/problems.service";
 
+export interface ProblemCountsPort {
+  countProblems: typeof findProblemCounts;
+}
+
+const productionProblemCountsPort: ProblemCountsPort = {
+  countProblems: findProblemCounts,
+};
+
 const PROBLEM_COUNTS_CACHE_KEY = "problem-counts:v1";
 
 const problemCountsSnapshotSchema = z.object({
@@ -57,6 +65,7 @@ export async function getCachedProblemCounts(
   db: Database,
   upcLookupClient: UPCLookupClient,
   cache?: ProblemCountsCacheAdapter,
+  port: ProblemCountsPort = productionProblemCountsPort,
 ): Promise<ProblemsCount> {
   if (cache) {
     const snapshot = await readProblemCountsSnapshot(cache);
@@ -64,7 +73,7 @@ export async function getCachedProblemCounts(
   }
 
   const requestedAt = new Date().toISOString();
-  const counts = await findProblemCounts(db, upcLookupClient);
+  const counts = await port.countProblems(db, upcLookupClient);
   if (cache) {
     try {
       await writeProblemCountsSnapshot(cache, counts, requestedAt);
@@ -83,6 +92,7 @@ export async function refreshCachedProblemCounts(
   upcLookupClient: UPCLookupClient,
   cache: ProblemCountsCacheAdapter,
   requestedAt: string,
+  port: ProblemCountsPort = productionProblemCountsPort,
 ): Promise<"succeeded" | "skipped"> {
   const previous = await readProblemCountsSnapshot(cache);
   if (
@@ -91,7 +101,7 @@ export async function refreshCachedProblemCounts(
   ) {
     return "skipped";
   }
-  const counts = await findProblemCounts(db, upcLookupClient);
+  const counts = await port.countProblems(db, upcLookupClient);
   await writeProblemCountsSnapshot(cache, counts, requestedAt);
   return "succeeded";
 }

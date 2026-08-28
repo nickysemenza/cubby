@@ -66,11 +66,10 @@ describe("EntityPicker", () => {
 
     const popup = document.querySelector("[data-combobox-popup]");
     expect(popup).toBeInstanceOf(HTMLElement);
+    if (!(popup instanceof HTMLElement)) return;
+    expect(within(popup).queryByText("PRD-2ABC")).not.toBeInTheDocument();
     expect(
-      within(popup as HTMLElement).queryByText("PRD-2ABC"),
-    ).not.toBeInTheDocument();
-    expect(
-      within(popup as HTMLElement).getByRole("option", {
+      within(popup).getByRole("option", {
         name: /Cordless Drill Makita PRD-2ABC/,
       }),
     ).toHaveAttribute("aria-selected", "true");

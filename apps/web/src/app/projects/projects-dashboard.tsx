@@ -13,11 +13,13 @@ import {
   type MouseEvent,
   type ReactNode,
   Suspense,
+  useCallback,
   useMemo,
 } from "react";
 
 import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
 import {
+  createCubbyColumnCollection,
   type CubbyRow,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
@@ -29,6 +31,7 @@ import {
   useEntityPreview,
 } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { ProjectMark } from "~/app/projects/project-mark";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
@@ -57,6 +60,7 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { image, type ProjectImageSummaries } from "~/entities/image.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
@@ -684,18 +688,23 @@ function ServerProjectGallery({
     })),
   });
   const columns = useMemo(
-    () => [
-      helper.accessor("status", { id: "status" }),
-      helper.accessor("kind", { id: "kind" }),
-      helper.accessor("locations", { id: "locations" }),
-      helper.accessor("parentProjectName", { id: "parent" }),
-      helper.accessor("startDate", { id: "startDate" }),
-    ],
+    () =>
+      createCubbyColumnCollection<ProjectOut>((add) => {
+        add(helper.accessor("status", { id: "status" }));
+        add(helper.accessor("kind", { id: "kind" }));
+        add(helper.accessor("locations", { id: "locations" }));
+        add(helper.accessor("parentProjectName", { id: "parent" }));
+        add(helper.accessor("startDate", { id: "startDate" }));
+      }),
     [helper],
   );
+  const listQueryOptions = useCallback<
+    ListQueryOptionsFn<ProjectFilters, ProjectOut>
+  >((params) => entityListFor("project").listQueryPlan(params), []);
   const list = useEntityList<ProjectOut, ProjectFilters>({
     entity: "project",
     onInspectRow: inspectRow,
+    queryOptions: listQueryOptions,
     columns,
     filterOptions,
     layoutKey: "project:gallery",

@@ -55,9 +55,7 @@ let lastResolvedAuthed = true;
  * resolved value (optimistic `true` on a cold start).
  */
 export const getClientAuthed = (): boolean => {
-  const state = authClient.$store.atoms.session?.get() as
-    | { data?: { user?: unknown } | null; isPending?: boolean }
-    | undefined;
+  const state = authClient.$store.atoms.session?.get();
   if (state && state.isPending !== true) {
     lastResolvedAuthed = !!state.data?.user;
   }

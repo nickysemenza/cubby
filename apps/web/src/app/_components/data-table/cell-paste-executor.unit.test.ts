@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
+import type { CellJsonValue } from "./cell-clipboard";
 import type { CellRect, CopiedCell, PasteOp } from "./cell-clipboard-model";
 import type { ColumnCellData } from "./cell-data";
 import {
@@ -28,7 +30,8 @@ function nameCol(
         : { text: row.name, json: row.name },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const raw = typeof json === "string" ? json : (text ?? "");
+          const parsed = z.string().safeParse(json);
+          const raw = parsed.success ? parsed.data : (text ?? "");
           const next = raw.trim() === "" ? null : raw.trim();
           await save(row, next);
           return next;
@@ -47,8 +50,10 @@ function qtyCol(
       row.qty == null ? null : { text: String(row.qty), json: row.qty },
     applyPaste: save
       ? async (row, { json, text }) => {
-          const num =
-            typeof json === "number" ? json : Number.parseFloat(text ?? "");
+          const parsed = z.number().safeParse(json);
+          const num = parsed.success
+            ? parsed.data
+            : Number.parseFloat(text ?? "");
           if (Number.isNaN(num))
             throw new Error("Pasted value is not a number");
           await save(row, num);
@@ -150,7 +155,7 @@ describe("alignExternalGrid", () => {
 });
 
 describe("isOpUnchanged", () => {
-  const cell = (json: unknown): CopiedCell => ({
+  const cell = (json: CellJsonValue | undefined): CopiedCell => ({
     kind: "text",
     text: "x",
     json,

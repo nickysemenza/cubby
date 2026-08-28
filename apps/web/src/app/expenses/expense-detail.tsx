@@ -1,8 +1,4 @@
-import type {
-  ExpenseLineBasis,
-  ExpenseLineKind,
-} from "@cubby/schemas/expense-line-kind";
-import type { CostType, ExpenseOut, Trade } from "@cubby/schemas/project";
+import type { ExpenseOut } from "@cubby/schemas/project";
 import { Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
 
@@ -70,7 +66,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
 
   // Common sections from entity config (History) — editMode/mappings unused
   // here since Overview is edited via inline EditableCell fields, not a Form.
-  const { commonSections } = useEntityDetail<ExpenseOut, never>({
+  const { commonSections } = useEntityDetail<"expense", ExpenseOut, never>({
     entity: "expense",
     data: expense,
   });
@@ -138,17 +134,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             if (!lineKind) return;
             await updateMutation.mutateAsync({
               id: expense.id,
-              data: { lineKind: lineKind as ExpenseLineKind },
+              data: { lineKind },
             });
           }}
           renderValue={(lineKind) =>
             lineKind ? (
-              <Badge
-                variant={
-                  expenseLineKindBadgeVariant[lineKind as ExpenseLineKind]
-                }
-              >
-                {expenseLineKindLabels[lineKind as ExpenseLineKind]}
+              <Badge variant={expenseLineKindBadgeVariant[lineKind]}>
+                {expenseLineKindLabels[lineKind]}
               </Badge>
             ) : (
               <NoneValue />
@@ -175,13 +167,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             if (!costType) return;
             await updateMutation.mutateAsync({
               id: expense.id,
-              data: { costType: costType as CostType },
+              data: { costType },
             });
           }}
           renderValue={(ct) =>
             ct ? (
-              <Badge variant={costTypeBadgeVariant[ct as CostType]}>
-                {costTypeLabels[ct as CostType]}
+              <Badge variant={costTypeBadgeVariant[ct]}>
+                {costTypeLabels[ct]}
               </Badge>
             ) : (
               <NoneValue />
@@ -208,7 +200,7 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
             if (!trade) return;
             await updateMutation.mutateAsync({
               id: expense.id,
-              data: { trade: trade as Trade },
+              data: { trade },
             });
           }}
           renderValue={(v) => renderOptionCell(v, tradeOptions)}
@@ -496,19 +488,13 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
                   if (!lineBasis) return;
                   await updateMutation.mutateAsync({
                     id: expense.id,
-                    data: { lineBasis: lineBasis as ExpenseLineBasis },
+                    data: { lineBasis },
                   });
                 }}
                 renderValue={(lineBasis) =>
                   lineBasis ? (
-                    <Badge
-                      variant={
-                        expenseLineBasisBadgeVariant[
-                          lineBasis as ExpenseLineBasis
-                        ]
-                      }
-                    >
-                      {expenseLineBasisLabels[lineBasis as ExpenseLineBasis]}
+                    <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
+                      {expenseLineBasisLabels[lineBasis]}
                     </Badge>
                   ) : (
                     <NoneValue />

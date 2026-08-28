@@ -96,6 +96,8 @@ export function TextField<T extends FieldValues>({
   return (
     <Controller
       control={form.control}
+      // SAFETY: TextField deliberately accepts a caller-owned path string;
+      // React Hook Form cannot correlate that dynamic path with T here.
       name={name as never}
       render={({ field, fieldState }) => (
         <FormFieldGroup
@@ -138,6 +140,8 @@ export function SelectField<T extends FieldValues>({
   return (
     <Controller
       control={form.control}
+      // SAFETY: SelectField deliberately accepts a caller-owned path string;
+      // React Hook Form cannot correlate that dynamic path with T here.
       name={name as never}
       render={({ field, fieldState }) => (
         <FormFieldGroup

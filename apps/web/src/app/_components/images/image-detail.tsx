@@ -17,7 +17,7 @@ import { Image } from "~/components/ui/image";
 import { image as imageOperations } from "~/entities/image.functions";
 
 import { EditableCell } from "../data-table/editable-cell";
-import { useUpdateMutation } from "../hooks/useUpdateMutation";
+import { useImageUpdateMutation } from "../hooks/useUpdateMutation";
 
 interface ImageDetailProps {
   image: ImageWithEntity;
@@ -51,9 +51,8 @@ export function ImageDetailMedia({ image }: ImageDetailProps) {
 }
 
 export function ImageDetail({ image }: ImageDetailProps) {
-  const updateMutation = useUpdateMutation({
+  const updateMutation = useImageUpdateMutation({
     mutationFn: () => imageOperations.update.mutationOptions(),
-    entity: "image",
   });
 
   const sections: DetailSection[] = [

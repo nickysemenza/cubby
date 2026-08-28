@@ -1,40 +1,70 @@
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
+import { type JSONType, z } from "zod";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { listMcpToolCatalog } from "./server";
 import { registerMcpTool, stripMockFromJsonSchema } from "./tools/_shared";
 
-function schemaHasMock(value: unknown): boolean {
-  if (!value || typeof value !== "object") return false;
-  if (Array.isArray(value)) return value.some(schemaHasMock);
-  const object = value as Record<string, unknown>;
-  return "mock" in object || Object.values(object).some(schemaHasMock);
+type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
+
+interface IdField {
+  path: string;
+  node: JSONType;
 }
 
-function stringSchemas(node: unknown): Array<Record<string, unknown>> {
-  if (!node || typeof node !== "object") return [];
-  const object = node as Record<string, unknown>;
-  if (object.type === "string") return [object];
-  if (object.type === "array") return stringSchemas(object.items);
-  return [object.anyOf, object.oneOf, object.allOf]
-    .filter(Array.isArray)
-    .flatMap((branches) => branches.flatMap(stringSchemas));
+function isJsonObject(value: JSONType): value is JsonObject {
+  return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+function isString(value: JSONType): value is string {
+  return typeof value === "string";
+}
+
+function parseJson<T>(value: T): JSONType {
+  return z.json().parse(value);
+}
+
+function parseJsonObject<T>(value: T): JsonObject {
+  const parsed = parseJson(value);
+  if (!isJsonObject(parsed)) throw new Error("Expected a JSON object");
+  return parsed;
+}
+
+function jsonHasMock(value: JSONType): boolean {
+  if (Array.isArray(value)) return value.some(jsonHasMock);
+  if (!isJsonObject(value)) return false;
+  return "mock" in value || Object.values(value).some(jsonHasMock);
+}
+
+function schemaHasMock<T>(value: T): boolean {
+  const parsed = z.json().safeParse(value);
+  return parsed.success && jsonHasMock(parsed.data);
+}
+
+function stringSchemas(node: JSONType): JsonObject[] {
+  if (Array.isArray(node)) return node.flatMap(stringSchemas);
+  if (!isJsonObject(node)) return [];
+  if (node.type === "string") return [node];
+  if (node.type === "array" && node.items !== undefined) {
+    return stringSchemas(node.items);
+  }
+  return [node.anyOf, node.oneOf, node.allOf].flatMap((branches) =>
+    branches === undefined ? [] : stringSchemas(branches),
+  );
 }
 
 function collectIdFields(
-  schema: unknown,
+  schema: JSONType,
   path: string,
-  out: Array<{ path: string; node: unknown }>,
-  definitions: Record<string, unknown>,
+  out: IdField[],
+  definitions: JsonObject,
   stack = new Set<string>(),
 ): void {
-  if (!schema || typeof schema !== "object") return;
-  const object = schema as Record<string, unknown>;
-  if (typeof object.$ref === "string") {
-    const name = object.$ref.split("/").at(-1);
+  if (!isJsonObject(schema)) return;
+  if (schema.$ref !== undefined && isString(schema.$ref)) {
+    const name = schema.$ref.split("/").at(-1);
     if (!name || stack.has(name) || !definitions[name]) return;
     collectIdFields(
       definitions[name],
@@ -45,10 +75,8 @@ function collectIdFields(
     );
     return;
   }
-  if (object.properties && typeof object.properties === "object") {
-    for (const [key, value] of Object.entries(
-      object.properties as Record<string, unknown>,
-    )) {
+  if (schema.properties && isJsonObject(schema.properties)) {
+    for (const [key, value] of Object.entries(schema.properties)) {
       const next = path ? `${path}.${key}` : key;
       const strings = stringSchemas(value);
       if (
@@ -60,14 +88,22 @@ function collectIdFields(
       collectIdFields(value, next, out, definitions, stack);
     }
   }
-  if (object.items)
-    collectIdFields(object.items, `${path}[]`, out, definitions, stack);
-  for (const branches of [object.anyOf, object.oneOf, object.allOf]) {
+  if (schema.items)
+    collectIdFields(schema.items, `${path}[]`, out, definitions, stack);
+  for (const branches of [schema.anyOf, schema.oneOf, schema.allOf]) {
     if (Array.isArray(branches)) {
       for (const branch of branches)
         collectIdFields(branch, path, out, definitions, stack);
     }
   }
+}
+
+function schemaProperties<T>(value: T): JsonObject | undefined {
+  const parsed = z.json().safeParse(value);
+  if (!parsed.success || !isJsonObject(parsed.data)) return undefined;
+  return parsed.data.properties && isJsonObject(parsed.data.properties)
+    ? parsed.data.properties
+    : undefined;
 }
 
 describe("MCP catalog schemas", () => {
@@ -98,6 +134,7 @@ describe("MCP catalog schemas", () => {
     registerMcpTool(server, {
       name: "union_out",
       description: "returns a union",
+      inputSchema: z.object({}),
       outputSchema: output,
       annotations: { readOnlyHint: true },
       handler: async () => ({ total: 3 }),
@@ -116,15 +153,9 @@ describe("MCP catalog schemas", () => {
       "list_actionable_tasks",
       "get_task_summary",
     ]);
-    const looseOutputs = new Set([
-      "entity",
-      "list_problems",
-      "get_usda_food",
-      "find_usda_food",
-    ]);
-    const emptyProperties = (schema: unknown) => {
-      const properties = (schema as { properties?: Record<string, unknown> })
-        ?.properties;
+    const looseOutputs = new Set(["entity", "list_problems"]);
+    const emptyProperties = <TSchema>(schema: TSchema) => {
+      const properties = schemaProperties(schema);
       return properties !== undefined && Object.keys(properties).length === 0;
     };
 
@@ -147,8 +178,7 @@ describe("MCP catalog schemas", () => {
             !noArgumentInputs.has(tool.name) &&
             (emptyProperties(tool.inputSchema) ||
               tool.inputSchema === undefined ||
-              (tool.inputSchema as Record<string, unknown>).properties ===
-                undefined),
+              schemaProperties(tool.inputSchema) === undefined),
         )
         .map((tool) => tool.name),
     ).toEqual([]);
@@ -158,8 +188,7 @@ describe("MCP catalog schemas", () => {
           (tool) =>
             !looseOutputs.has(tool.name) &&
             (emptyProperties(tool.outputSchema) ||
-              (tool.outputSchema as Record<string, unknown>).properties ===
-                undefined),
+              schemaProperties(tool.outputSchema) === undefined),
         )
         .map((tool) => tool.name),
     ).toEqual([]);
@@ -191,21 +220,23 @@ describe("MCP catalog schemas", () => {
     const violations: string[] = [];
     const stillExceptional = new Set<string>();
     for (const tool of (await listMcpToolCatalog()).tools) {
-      const schema = tool.inputSchema as Record<string, unknown>;
+      const schema = parseJsonObject(tool.inputSchema);
+      const definitionsCandidate = schema.$defs ?? schema.definitions;
       const definitions =
-        (schema.$defs as Record<string, unknown> | undefined) ??
-        (schema.definitions as Record<string, unknown> | undefined) ??
-        {};
-      const fields: Array<{ path: string; node: unknown }> = [];
+        definitionsCandidate && isJsonObject(definitionsCandidate)
+          ? definitionsCandidate
+          : {};
+      const fields: IdField[] = [];
       collectIdFields(schema, "", fields, definitions);
       for (const { path, node } of fields) {
         const key = `${tool.name}.${path}`;
         const leaf = path.split(".").at(-1)?.replaceAll("[]", "") ?? "";
         if (freeTextIds.has(leaf)) continue;
-        const missingPattern = stringSchemas(node).some((string) => {
-          const pattern = string.pattern;
+        const missingPattern = stringSchemas(node).some((stringSchema) => {
+          const pattern = stringSchema.pattern;
           return (
-            typeof pattern !== "string" ||
+            pattern === undefined ||
+            !isString(pattern) ||
             !PUBLIC_SHORTCODE_PREFIXES.some((prefix) =>
               pattern.includes(prefix),
             )

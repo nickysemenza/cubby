@@ -21,7 +21,7 @@ import {
  * detector nobody wrote an assertion for.
  */
 describe("PROBLEM_CLASS", () => {
-  const EXPECTED: Record<string, ProblemClass> = {
+  const EXPECTED = {
     blockedWorkProjects: "defect",
     duplicateFinancialAccountSourceAliases: "defect",
     duplicateFinancialTransactionSourceRefs: "defect",
@@ -76,7 +76,7 @@ describe("PROBLEM_CLASS", () => {
     staleLocations: "coverage",
     unvaluedBucketProducts: "coverage",
     vendorsWithoutLogos: "coverage",
-  };
+  } satisfies Record<keyof typeof PROBLEM_CLASS, ProblemClass>;
 
   it("classes every detector exactly as pinned here", () => {
     expect(PROBLEM_CLASS).toEqual(EXPECTED);

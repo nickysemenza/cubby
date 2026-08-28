@@ -1,17 +1,23 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { LocationId } from "@cubby/schemas/identifiers";
+import {
+  locationId as locationIdSchema,
+  type LocationId,
+  parseShortcodeFor,
+  productId as productIdSchema,
+} from "@cubby/schemas/identifiers";
 /**
  * Location tree and hierarchy operations.
  * Build location trees, type counts, and import updates.
  */
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import type {
-  InfLocation,
-  InventoryItemForTree,
-  LocationAncestorOut,
-  LocationInventoryBreakdownOut,
+import {
+  type InfLocation,
+  type InventoryItemForTree,
+  type LocationAncestorOut,
+  type LocationInventoryBreakdownOut,
+  locationValuation,
 } from "@cubby/schemas/location";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -39,6 +45,41 @@ import type { LocationWithParentChild } from "./internal-types";
 /** Depth cap shared by both recursive walks over the location tree. */
 const MAX_TREE_DEPTH = 10;
 
+const locationTreeRowSchema = z.object({
+  id: locationIdSchema,
+  shortcode: z.string(),
+  name: z.string(),
+  aliases: z.array(z.string()),
+  tags: z.array(z.string()),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
+  lastBulkInventory: z.coerce.date().nullable(),
+  parentId: locationIdSchema.nullable(),
+  productId: productIdSchema.nullable(),
+  type: z.string().nullable(),
+  aiDescription: z.string().nullable(),
+  valuation: locationValuation.nullable(),
+  depth: z.coerce.number().int().nonnegative(),
+});
+
+const ancestorRowSchema = z.object({
+  root: locationIdSchema,
+  locationId: locationIdSchema,
+  depth: z.coerce.number().int().nonnegative(),
+  shortcode: z.string(),
+  name: z.string(),
+  type: z.string().nullable(),
+});
+
+const breakdownLocationRowSchema = z.object({
+  id: locationIdSchema,
+  parentId: locationIdSchema.nullable(),
+  shortcode: z.string(),
+  name: z.string(),
+  type: z.string().nullable(),
+});
+
 /**
  * Build the location hierarchy as `InfLocation` roots.
  *
@@ -51,7 +92,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
   // Excludes soft-deleted locations
-  const res = await getDb(db).execute<LocationWithParentChild>(sql`
+  const res = await getDb(db).execute(sql`
     WITH RECURSIVE location_tree AS (
       -- Base case: the anchor location, or every root (excludes soft-deleted)
       SELECT
@@ -74,10 +115,10 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     ORDER BY depth, name
   `);
 
-  const locationsMap = new Map<string, LocationWithParentChild>();
+  const locationsMap = new Map<LocationId, LocationWithParentChild>();
   const rootLocations: LocationWithParentChild[] = [];
 
-  const locationRows = res.rows as unknown as (typeof location.$inferSelect)[];
+  const locationRows = z.array(locationTreeRowSchema).parse(res.rows);
 
   // Every tree row may be a physical instance of a Product. Hydrate those
   // identity products (and their displayable cover) as one batch rather than
@@ -126,7 +167,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       : [];
 
   const imagesByLocationId = new Map<
-    string,
+    LocationId,
     Array<{ image: typeof image.$inferSelect }>
   >();
   for (const locImg of allLocationImages) {
@@ -163,8 +204,8 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           .orderBy(product.name)
       : [];
 
-  const inventoryByLocationId = new Map<string, InventoryItemForTree[]>();
-  const countsByLocationId = new Map<string, number>();
+  const inventoryByLocationId = new Map<LocationId, InventoryItemForTree[]>();
+  const countsByLocationId = new Map<LocationId, number>();
   for (const entry of allInventoryEntries) {
     const existing = inventoryByLocationId.get(entry.locationId) ?? [];
     existing.push({
@@ -183,26 +224,6 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
       ...loc,
-      createdAt:
-        loc.createdAt instanceof Date
-          ? loc.createdAt
-          : new Date(loc.createdAt as string),
-      updatedAt:
-        loc.updatedAt instanceof Date
-          ? loc.updatedAt
-          : new Date(loc.updatedAt as string),
-      deletedAt:
-        loc.deletedAt instanceof Date
-          ? loc.deletedAt
-          : loc.deletedAt
-            ? new Date(loc.deletedAt as string)
-            : null,
-      lastBulkInventory:
-        loc.lastBulkInventory instanceof Date
-          ? loc.lastBulkInventory
-          : loc.lastBulkInventory
-            ? new Date(loc.lastBulkInventory as string)
-            : null,
       children: [],
       parent: null,
       product: loc.productId ? (productsById.get(loc.productId) ?? null) : null,
@@ -215,7 +236,10 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
 
   // Second pass: build parent-child relationships
   for (const loc of locationRows) {
-    const current = locationsMap.get(loc.id)!;
+    const current = locationsMap.get(loc.id);
+    if (!current) {
+      throw new Error(`Parsed location tree row was not indexed: ${loc.id}`);
+    }
 
     if (loc.parentId) {
       const parent = locationsMap.get(loc.parentId);
@@ -244,18 +268,6 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   return tree;
 };
 
-// A type alias, not an interface: `execute<T>` constrains T to
-// `Record<string, unknown>`, which an interface can't satisfy implicitly.
-type AncestorRow = {
-  root: LocationId;
-  /** The rung's own private id, for batch helpers that key on uuid. */
-  locationId: LocationId;
-  depth: number;
-  shortcode: string;
-  name: string;
-  type: string;
-};
-
 /**
  * An ancestor rung plus its private id. `LocationAncestorOut` is the wire shape
  * and deliberately carries only the public shortcode, but a caller that wants
@@ -264,14 +276,6 @@ type AncestorRow = {
  */
 export type LocationAncestorRung = LocationAncestorOut & {
   locationId: LocationId;
-};
-
-type BreakdownLocationRow = {
-  id: LocationId;
-  parentId: LocationId | null;
-  shortcode: string;
-  name: string;
-  type: string | null;
 };
 
 /**
@@ -284,7 +288,7 @@ export const getLocationInventoryBreakdown = async (
   rootId: LocationId,
 ): Promise<LocationInventoryBreakdownOut | null> => {
   const dbClient = getDb(db);
-  const treeResult = await dbClient.execute<BreakdownLocationRow>(sql`
+  const treeResult = await dbClient.execute(sql`
     WITH RECURSIVE location_tree AS (
       SELECT l."id", l."parentId", l."shortcode", l."name", l."type", 0 AS depth
       FROM ${location} l
@@ -300,7 +304,7 @@ export const getLocationInventoryBreakdown = async (
     SELECT "id", "parentId", "shortcode", "name", "type"
     FROM location_tree
   `);
-  const rows = treeResult.rows;
+  const rows = z.array(breakdownLocationRowSchema).parse(treeResult.rows);
   if (rows.length === 0) return null;
 
   const ids = rows.map((row) => row.id);
@@ -398,7 +402,7 @@ export const loadLocationAncestorsWithIds = async (
   const byId = new Map<LocationId, LocationAncestorRung[]>();
   if (ids.length === 0) return byId;
 
-  const res = await getDb(db).execute<AncestorRow>(sql`
+  const res = await getDb(db).execute(sql`
     WITH RECURSIVE ancestors AS (
       -- Base case: the seed rows themselves, carrying their own id as \`root\`
       -- so every ancestor stays attributable to the row that asked for it.
@@ -439,7 +443,7 @@ export const loadLocationAncestorsWithIds = async (
 
   // `depth DESC` already puts the outermost ancestor first, so each group is
   // root → immediate parent in arrival order.
-  for (const row of res.rows) {
+  for (const row of z.array(ancestorRowSchema).parse(res.rows)) {
     const chain = byId.get(row.root);
     const rung: LocationAncestorRung = {
       locationId: row.locationId,

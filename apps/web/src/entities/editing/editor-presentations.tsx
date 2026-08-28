@@ -9,7 +9,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Controller, type UseFormReturn } from "react-hook-form";
+import {
+  Controller,
+  type FieldValues,
+  type UseFormReturn,
+} from "react-hook-form";
+import { z } from "zod";
 
 import {
   WithProductSearch,
@@ -52,13 +57,15 @@ import { Switch } from "~/components/ui/switch";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 
+import type { EntityEditResultFor } from "./intent-types";
 import type {
   EntityEditContext,
   EntityEditOperation,
   EntityEditRecord,
+  EditableEntity,
 } from "./types";
 
-type EntityEditorForm = UseFormReturn<Record<string, unknown>>;
+type EntityEditorForm = UseFormReturn<FieldValues>;
 
 interface EntityEditorFieldsProps {
   form: EntityEditorForm;
@@ -66,7 +73,7 @@ interface EntityEditorFieldsProps {
   record?: EntityEditRecord;
 }
 
-export interface EntityEditorPresentation {
+export interface EntityEditorPresentation<E extends EditableEntity> {
   title(input: {
     context: EntityEditContext;
     record?: EntityEditRecord;
@@ -78,17 +85,17 @@ export interface EntityEditorPresentation {
   submitLabel?: string;
   size?: ComponentProps<typeof ResponsiveDialog>["size"];
   Fields: ComponentType<EntityEditorFieldsProps>;
-  successMessage(result: unknown): string;
+  successMessage(result: EntityEditResultFor<E>): string;
 }
 
-const resultRecord = (result: unknown): Record<string, unknown> =>
-  result && typeof result === "object"
-    ? (result as Record<string, unknown>)
-    : {};
-
-const resultName = (result: unknown, fallback: string) => {
-  const name = resultRecord(result).name;
-  return typeof name === "string" && name ? name : fallback;
+const resultName = (
+  result: EntityEditResultFor<EditableEntity>,
+  fallback: string,
+) => {
+  const parsed = z
+    .object({ name: z.string().nullable().optional() })
+    .parse(result);
+  return parsed.name || fallback;
 };
 
 function MealCaptureFields({ form }: EntityEditorFieldsProps) {
@@ -145,7 +152,7 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         options={tradeOptions}
         nullable
       />
-      <EntityValueField<Record<string, unknown>, "project">
+      <EntityValueField<FieldValues, "project">
         form={form}
         name="projectId"
         entity="project"
@@ -153,7 +160,7 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         SearchProvider={WithProjectSearch}
         clearable
       />
-      <EntityValueField<Record<string, unknown>, "product">
+      <EntityValueField<FieldValues, "product">
         form={form}
         name="subjectProductId"
         entity="product"
@@ -168,7 +175,8 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
 
 function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
   const productId = form.watch("productId");
-  const hasProduct = typeof productId === "string" && productId.length > 0;
+  const parsedProductId = z.string().safeParse(productId);
+  const hasProduct = parsedProductId.success && parsedProductId.data.length > 0;
   const disposition = context.disposition === true;
   return (
     <>
@@ -255,7 +263,7 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
         label="Order #"
         placeholder="Vendor order #"
       />
-      <EntityValueField<Record<string, unknown>, "project">
+      <EntityValueField<FieldValues, "project">
         form={form}
         name="projectId"
         entity="project"
@@ -333,7 +341,7 @@ function VendorCaptureFields({ form }: EntityEditorFieldsProps) {
 function PurchaseCaptureFields({ form }: EntityEditorFieldsProps) {
   return (
     <>
-      <EntityValueField<Record<string, unknown>, "vendor">
+      <EntityValueField<FieldValues, "vendor">
         form={form}
         name="vendorId"
         entity="vendor"
@@ -377,11 +385,11 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
   const creating = !record;
   return (
     <>
-      <TextField form={form as never} name="name" label="Name" />
+      <TextField form={form} name="name" label="Name" />
       {creating ? (
         <>
           <FinanceSelectField
-            form={form as never}
+            form={form}
             name="kind"
             label="Identity kind"
             values={[
@@ -394,9 +402,9 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
           />
           {kind === "credit_card" ? (
             <>
-              <TextField form={form as never} name="issuer" label="Issuer" />
+              <TextField form={form} name="issuer" label="Issuer" />
               <FinanceSelectField
-                form={form as never}
+                form={form}
                 name="network"
                 label="Network"
                 values={["visa", "mastercard", "amex", "discover", "other"]}
@@ -405,13 +413,9 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
           ) : null}
           {kind === "bank_account" ? (
             <>
-              <TextField
-                form={form as never}
-                name="institution"
-                label="Institution"
-              />
+              <TextField form={form} name="institution" label="Institution" />
               <FinanceSelectField
-                form={form as never}
+                form={form}
                 name="accountType"
                 label="Account type"
                 values={["checking", "savings", "money_market", "other"]}
@@ -419,21 +423,17 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
             </>
           ) : null}
           {kind === "stored_value" ? (
-            <TextField form={form as never} name="provider" label="Provider" />
+            <TextField form={form} name="provider" label="Provider" />
           ) : null}
           {kind === "other" ? (
-            <TextField
-              form={form as never}
-              name="institution"
-              label="Institution"
-            />
+            <TextField form={form} name="institution" label="Institution" />
           ) : null}
           {kind !== "cash" ? (
-            <TextField form={form as never} name="last4" label="Last four" />
+            <TextField form={form} name="last4" label="Last four" />
           ) : null}
         </>
       ) : null}
-      <SourceAliasesField form={form as never} />
+      <SourceAliasesField form={form} />
       <NullableTextareaField
         form={form}
         name="notes"
@@ -445,11 +445,10 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
 }
 
 function FinancialTransactionFields({ form }: EntityEditorFieldsProps) {
-  return (
-    <FinancialTransactionFormFields
-      form={form as unknown as UseFormReturn<FinancialTransactionFormValues>}
-    />
-  );
+  const transactionForm = z
+    .custom<UseFormReturn<FinancialTransactionFormValues>>()
+    .parse(form);
+  return <FinancialTransactionFormFields form={transactionForm} />;
 }
 
 type CandidateOption = {
@@ -457,6 +456,9 @@ type CandidateOption = {
   name: string;
   manufacturer: string;
 };
+const candidateOptions = z.array(
+  z.object({ id: z.string(), name: z.string(), manufacturer: z.string() }),
+);
 
 function WishFields({ form, record }: EntityEditorFieldsProps) {
   const [productSearch, setProductSearch] = useState("");
@@ -467,21 +469,14 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
     wait: 300,
   });
   const idPrefix = useId();
-  const candidateIds = (form.watch("candidateProductIds") as string[]) ?? [];
+  const candidateIds = z
+    .array(z.string())
+    .catch([])
+    .parse(form.watch("candidateProductIds"));
   const recordCandidates =
     record && "candidates" in record ? record.candidates : undefined;
   const candidates = useMemo(
-    () =>
-      Array.isArray(recordCandidates)
-        ? recordCandidates.filter(
-            (candidate): candidate is CandidateOption =>
-              Boolean(candidate) &&
-              typeof candidate === "object" &&
-              "id" in candidate &&
-              "name" in candidate &&
-              "manufacturer" in candidate,
-          )
-        : [],
+    () => candidateOptions.catch([]).parse(recordCandidates),
     [recordCandidates],
   );
 
@@ -606,6 +601,21 @@ type EntityEditorPresentationKey =
   | "wish:create:full"
   | "wish:update:full";
 
+interface PresentationEntityByKey {
+  "meal:create:capture": "meal";
+  "task:create:capture": "task";
+  "expense:create:capture": "expense";
+  "project:create:capture": "project";
+  "vendor:create:capture": "vendor";
+  "purchase:create:capture": "purchase";
+  "financialAccount:create:capture": "financialAccount";
+  "financialAccount:update:full": "financialAccount";
+  "financialTransaction:create:capture": "financialTransaction";
+  "financialTransaction:update:full": "financialTransaction";
+  "wish:create:full": "wish";
+  "wish:update:full": "wish";
+}
+
 const presentations = {
   "meal:create:capture": {
     title: () => "New Meal",
@@ -613,13 +623,10 @@ const presentations = {
       "Plan a meal onto the calendar — add recipes once it's created.",
     Fields: MealCaptureFields,
     successMessage: (result) => {
-      const record = resultRecord(result);
-      if (typeof record.name === "string" && record.name) {
-        return `Added "${record.name}"`;
+      if (result.name) {
+        return `Added "${result.name}"`;
       }
-      return typeof record.date === "string"
-        ? `Added meal for ${format(parseISO(record.date), "EEE, MMM d")}`
-        : "Meal added";
+      return `Added meal for ${format(parseISO(result.date), "EEE, MMM d")}`;
     },
   },
   "task:create:capture": {
@@ -659,12 +666,7 @@ const presentations = {
     description: () =>
       "One vendor order or receipt event. Its Expenses are the categorized spend lines added afterward, and every dollar lives on them.",
     Fields: PurchaseCaptureFields,
-    successMessage: (result) => {
-      const record = resultRecord(result);
-      return "vendor" in record && "date" in record
-        ? `Logged "${purchaseLabel(record as never)}"`
-        : "Purchase logged";
-    },
+    successMessage: (result) => `Logged "${purchaseLabel(result)}"`,
   },
   "financialAccount:create:capture": {
     title: () => "New Account",
@@ -713,16 +715,25 @@ const presentations = {
     Fields: WishFields,
     successMessage: () => "Wishlist updated",
   },
-} satisfies Record<EntityEditorPresentationKey, EntityEditorPresentation>;
+} satisfies {
+  [K in EntityEditorPresentationKey]: EntityEditorPresentation<
+    PresentationEntityByKey[K]
+  >;
+};
 
-export function getEntityEditorPresentation(input: {
-  entity: string;
+export function getEntityEditorPresentation<E extends EditableEntity>(input: {
+  entity: E;
   operation: EntityEditOperation;
   intent: string;
-}): EntityEditorPresentation {
+}): EntityEditorPresentation<E> {
   const key = `${input.entity}:${input.operation}:${input.intent}`;
-  const presentation = presentations[key as keyof typeof presentations];
-  if (!presentation)
-    throw new Error(`No entity editor presentation for ${key}`);
-  return presentation;
+  const presentation = Object.entries(presentations).find(
+    ([candidate]) => candidate === key,
+  )?.[1];
+  return z
+    .custom<EntityEditorPresentation<E>>(
+      (candidate) => candidate !== undefined,
+      `No entity editor presentation for ${key}`,
+    )
+    .parse(presentation);
 }

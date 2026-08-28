@@ -40,10 +40,10 @@ interface ClientTreeConfig<TData extends BaseListRow> {
 /**
  * The option fields `useClientEntityList` shares with `useEntityList`. Derived
  * from `UseEntityListOptions` (not re-declared) so the two hooks can't drift.
- * `TFilters` is irrelevant to the picked fields, hence `unknown`.
+ * `TFilters` is irrelevant to the picked fields, hence the empty object contract.
  */
 type SharedListOptions<TData extends BaseListRow> = Pick<
-  UseEntityListOptions<TData, unknown>,
+  UseEntityListOptions<TData, object>,
   | "entity"
   | "columns"
   | "deletable"

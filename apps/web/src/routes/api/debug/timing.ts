@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { env } from "~/env";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -9,16 +10,19 @@ import {
   pingDb,
 } from "~/server/repo/debug";
 
-export type TimingResult = {
-  label: string;
-  durationMs: number;
-  error?: string;
-};
+export const timingResultSchema = z.object({
+  label: z.string(),
+  durationMs: z.number(),
+  error: z.string().optional(),
+});
 
-export type TimingResponse = {
-  results: TimingResult[];
-  totalMs: number;
-};
+export const timingResponseSchema = z.object({
+  results: z.array(timingResultSchema),
+  totalMs: z.number(),
+});
+
+export type TimingResult = z.infer<typeof timingResultSchema>;
+export type TimingResponse = z.infer<typeof timingResponseSchema>;
 
 async function measure(
   label: string,

@@ -12,7 +12,8 @@ import type { EntityActionSubject } from "../actions/entity-actions";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
+  type CubbyColumnCollection,
   createCubbyColumnHelper,
 } from "../data-table/table-features";
 import {
@@ -35,9 +36,12 @@ import {
 } from "./useRelatedPreviewColumns";
 import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 
-// oxlint-disable-next-line typescript/no-explicit-any -- column accessors intentionally vary.
-type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 const NO_FILTERS: FilterInput[] = [];
+type SelectionScope = object;
+type ListTreeNode = {
+  id: string;
+  subRows?: readonly ListTreeNode[];
+};
 
 /** Shared state/action half: it must run before a server adapter fetches rows. */
 export function useEntityListPresentationState<TData extends BaseListRow>({
@@ -59,7 +63,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   onInspectRow?: (row: { id?: string; original: TData }) => void;
   includeCatalogActions?: boolean;
   deleteEmptyLabel?: (row: TData) => string;
-  selectionScope: (tableState: TableStateReturn) => unknown;
+  selectionScope: (tableState: TableStateReturn) => SelectionScope;
 }) {
   const { deleteActionDefinition, deleteDialog, requestDelete } =
     useOptimisticDelete<TData>({
@@ -154,7 +158,7 @@ export function useEntityListPresentation<TData extends BaseListRow>({
 }: {
   entity: BrowserRoutedEntity;
   data: readonly { id: string }[];
-  columns: AnyColumnDef<TData>[];
+  columns: CubbyColumnCollection<TData>;
   filters?: FilterInput[];
   filterOptions?: RuntimeFilterOptions;
   initialColumnVisibility?: Record<string, boolean>;
@@ -206,11 +210,10 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   );
   const sourceIds = useMemo(() => {
     const ids: string[] = [];
-    const visit = (rows: readonly { id: string }[]) => {
+    const visit = (rows: readonly ListTreeNode[]) => {
       for (const row of rows) {
         ids.push(row.id);
-        const children = (row as { subRows?: readonly { id: string }[] })
-          .subRows;
+        const children = row.subRows;
         if (children) visit(children);
       }
     };
@@ -227,7 +230,11 @@ export function useEntityListPresentation<TData extends BaseListRow>({
     relatedStateRef,
   });
   const combinedCustomColumns = useMemo(
-    () => [...customColumns, ...relatedColumns],
+    () =>
+      createCubbyColumnCollection<TData>((add) => {
+        customColumns.visit(add);
+        for (const column of relatedColumns) add(column);
+      }),
     [customColumns, relatedColumns],
   );
   const guardedExtraActions = useMemo(

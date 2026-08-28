@@ -3,7 +3,7 @@ import type {
   OperationDisposition,
   OperationEffect,
 } from "@cubby/schemas/entity-integrity";
-import { type AnyColumn, and, count, inArray, type SQL } from "drizzle-orm";
+import { and, count, getTableColumns, inArray, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { sum } from "es-toolkit";
 
@@ -57,9 +57,9 @@ export async function countByTarget(
   if (!opts.includeDeleted) {
     // Guarded rather than assumed: `ProjectDependency`/`TaskDependency` are
     // hard-delete-only and have no column to filter on.
-    const deletedAt = (
-      table as unknown as Record<string, AnyColumn | undefined>
-    ).deletedAt;
+    const deletedAt = Object.entries(getTableColumns(table)).find(
+      ([columnName]) => columnName === "deletedAt",
+    )?.[1];
     if (!deletedAt) {
       throw new Error(
         `countByTarget: ${String(column.name)}'s table has no deletedAt — pass includeDeleted for a hard-delete-only table.`,
@@ -93,15 +93,16 @@ export function impact(args: {
 }): ImpactItem | null {
   const total = sum(Object.values(args.byTargetId));
   if (total === 0) return null;
-  return {
+  const item: ImpactItem = {
     code: args.disposition.code,
     effect: args.disposition.effect,
-    ...(args.edgeKey ? { edgeKey: args.edgeKey } : {}),
     label: args.label,
     description: args.disposition.description,
     total,
     byTargetId: args.byTargetId,
   };
+  if (args.edgeKey) item.edgeKey = args.edgeKey;
+  return item;
 }
 
 /**

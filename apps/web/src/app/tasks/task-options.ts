@@ -13,25 +13,25 @@ import { getStatusChartColor } from "~/lib/status-colors";
  * variant maps below without a circular import; shared.tsx re-exports it for
  * its existing consumers.
  */
-export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+export const TASK_STATUS_LABELS = {
   not_started: "Not started",
   later: "Later",
   in_progress: "In progress",
   blocked: "Blocked",
   done: "Done",
-};
+} satisfies Record<TaskStatus, string>;
 
 /** Badge tone per status — Porcelain semantic tokens, not raw colors. */
-export const taskStatusBadgeVariant: Record<
-  TaskStatus,
-  "secondary" | "outline" | "warning" | "destructive" | "positive"
-> = {
+export const taskStatusBadgeVariant = {
   not_started: "secondary",
   later: "outline",
   in_progress: "warning",
   blocked: "destructive",
   done: "positive",
-};
+} satisfies Record<
+  TaskStatus,
+  "secondary" | "outline" | "warning" | "destructive" | "positive"
+>;
 
 /**
  * `{value,label,color}` options for the status filter/inline-edit select. Not

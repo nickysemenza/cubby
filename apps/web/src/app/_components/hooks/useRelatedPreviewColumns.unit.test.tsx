@@ -1,94 +1,96 @@
-import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import type { RelatedPreviewGroup } from "@cubby/schemas/related-view";
+import { relatedViewsFor } from "@cubby/schemas/related-view";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { relatedData } from "~/lib/related-data.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { createCubbyColumnHelper } from "../data-table/table-features";
-
-const queryState = vi.hoisted(() => ({
-  current: { data: undefined as unknown, isLoading: true },
-  queryOptions: vi.fn((input: unknown) => ({
-    queryKey: ["related-previews", input],
-  })),
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => queryState.current,
-}));
-vi.mock("~/lib/related-data.functions", () => ({
-  relatedData: { previews: { queryOptions: queryState.queryOptions } },
-}));
-vi.mock("~/entities/entities", () => ({
-  getSortableFields: () => [],
-}));
-vi.mock("~/entities/filter-manifest", () => ({
-  manifestFilterConfig: () => undefined,
-}));
-
-import { useRelatedPreviewColumns } from "./useRelatedPreviewColumns";
+import {
+  type RelatedPreviewOperations,
+  useRelatedPreviewColumns,
+} from "./useRelatedPreviewColumns";
 
 interface TestRow {
   id: string;
 }
 
 const columnHelper = createCubbyColumnHelper<TestRow>();
-const relatedViews = [
+const relatedViews = relatedViewsFor("product").filter(
+  (view) => view.key === "product.vendors",
+);
+const result: RelatedPreviewGroup[] = [
   {
-    key: "product.vendors",
-    source: "product" as const,
-    target: "vendor" as const,
-    label: "Vendors",
-    defaultVisible: true,
-    order: "alphabetical" as const,
-    path: [],
+    sourceId: "PRD-TEST",
+    relationKey: "product.vendors",
+    totalCount: 1,
+    items: [
+      {
+        entity: "vendor",
+        id: "VEN-TEST",
+        label: "Moore Newton",
+        displayImage: null,
+      },
+    ],
   },
 ];
 
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+interface RelatedPreviewTestAdapter {
+  operations: RelatedPreviewOperations;
+  resolve: () => void;
+}
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+function createOperations(): RelatedPreviewTestAdapter {
+  let deliver: ((groups: RelatedPreviewGroup[]) => void) | undefined;
+  return {
+    operations: {
+      previews: relatedData.previews.withTransport(
+        async () =>
+          await new Promise<RelatedPreviewGroup[]>((resolve) => {
+            deliver = resolve;
+          }),
+      ),
+    },
+    resolve: () => deliver?.(result),
+  };
+}
+
 describe("useRelatedPreviewColumns", () => {
-  it("keeps columns stable while preview loading resolves through its render version", () => {
-    const { result, rerender } = renderHook(() =>
-      useRelatedPreviewColumns({
-        entity: "product",
-        sourceIds: ["PRD-TEST"],
-        visibleRelationKeys: ["product.vendors"],
-        relatedViews,
-        columnHelper,
-        supportsServerSorting: true,
-      }),
-    );
-    const loadingColumns = result.current.relatedColumns;
-    const loadingVersion = result.current.rowContentVersion;
-
-    queryState.current = {
-      isLoading: false,
-      data: [
-        {
-          sourceId: "PRD-TEST",
-          relationKey: "product.vendors",
-          totalCount: 1,
-          items: [{ entity: "vendor", id: "VEN-TEST", label: "Moore Newton" }],
-        },
-      ],
-    };
-    rerender();
-
-    expect(queryState.queryOptions).toHaveBeenLastCalledWith({
-      source: "product",
-      sourceIds: ["PRD-TEST"],
-      relationKeys: ["product.vendors"],
-    });
-    expect(result.current.relatedColumns).toBe(loadingColumns);
-    expect(result.current.rowContentVersion).not.toBe(loadingVersion);
-    const cell = result.current.relatedColumns[0]?.cell;
-    expect(typeof cell).toBe("function");
-    const rendered = (cell as (context: unknown) => { props: unknown })({
-      row: { original: { id: "PRD-TEST" } },
-    });
-    expect(rendered.props).toEqual(
-      expect.objectContaining({
-        loading: false,
-        group: expect.objectContaining({
-          items: [expect.objectContaining({ label: "Moore Newton" })],
+  it("keeps definitions stable while its real preview operation resolves", async () => {
+    const adapter = createOperations();
+    const { result: hook } = renderHook(
+      () =>
+        useRelatedPreviewColumns({
+          entity: "product",
+          sourceIds: ["PRD-TEST"],
+          visibleRelationKeys: ["product.vendors"],
+          relatedViews,
+          columnHelper,
+          supportsServerSorting: true,
+          operations: adapter.operations,
         }),
-      }),
+      { wrapper: harness.wrapper },
     );
+    const columnsWhileLoading = hook.current.relatedColumns;
+    const versionWhileLoading = hook.current.rowContentVersion;
+
+    act(adapter.resolve);
+    await waitFor(() =>
+      expect(hook.current.rowContentVersion).not.toBe(versionWhileLoading),
+    );
+
+    expect(hook.current.relatedColumns).toBe(columnsWhileLoading);
+    expect(hook.current.relatedColumns).toHaveLength(1);
   });
 });

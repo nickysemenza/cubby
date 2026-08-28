@@ -39,6 +39,7 @@ import type {
 } from "@cubby/schemas/project";
 import {
   TRADE_LABELS,
+  tradeSchema,
   tradeValues,
   UNASSIGNED_TRADE_LABEL,
   UNKNOWN_MANUFACTURER_LABEL,
@@ -172,7 +173,9 @@ async function deriveToolTrades(
 function groupSortKey(groupBy: "trade" | "manufacturer", key: string): number {
   if (key === "") return Number.MAX_SAFE_INTEGER; // unassigned always last
   if (groupBy === "manufacturer") return 0;
-  const index = tradeValues.indexOf(key as Trade);
+  const parsedTrade = tradeSchema.safeParse(key);
+  if (!parsedTrade.success) return Number.MAX_SAFE_INTEGER - 1;
+  const index = tradeValues.indexOf(parsedTrade.data);
   return index === -1 ? Number.MAX_SAFE_INTEGER - 1 : index;
 }
 
@@ -182,7 +185,9 @@ function groupLabel(groupBy: "trade" | "manufacturer", key: string): string {
       ? UNASSIGNED_TRADE_LABEL
       : UNKNOWN_MANUFACTURER_LABEL;
   }
-  return groupBy === "trade" ? TRADE_LABELS[key as Trade] : key;
+  if (groupBy === "manufacturer") return key;
+  const parsedTrade = tradeSchema.safeParse(key);
+  return parsedTrade.success ? TRADE_LABELS[parsedTrade.data] : key;
 }
 
 export async function projectToolMatrix(

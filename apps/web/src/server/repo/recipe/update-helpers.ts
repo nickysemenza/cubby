@@ -18,7 +18,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   ingredient,
   recipe,
-  recipeImage,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
@@ -26,6 +25,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   applyImageOrder,
   associatePendingImages,
+  imageJoinBindings,
   insertAndReturn,
   nextImageSortOrder,
   notDeleted,
@@ -259,13 +259,7 @@ export async function updateRecipeImages(
   // matching today's silent no-op for a uuid naming no live row.
   if (updates.imageOrder && updates.imageOrder.length > 0) {
     const orderedIds = await resolveAllPresent(tx, "image", updates.imageOrder);
-    await applyImageOrder(
-      tx,
-      recipeImage,
-      recipeImage.recipeId,
-      recipeId,
-      orderedIds,
-    );
+    await applyImageOrder(tx, imageJoinBindings.recipe, recipeId, orderedIds);
   }
 
   if (updates.removeImageIds && updates.removeImageIds.length > 0) {
@@ -289,14 +283,12 @@ export async function updateRecipeImages(
     );
     const startSortOrder = await nextImageSortOrder(
       tx,
-      recipeImage,
-      recipeImage.recipeId,
+      imageJoinBindings.recipe,
       recipeId,
     );
     await associatePendingImages(
       tx,
-      recipeImage,
-      "recipeId",
+      imageJoinBindings.recipe,
       recipeId,
       resolvedPendingImageIds,
       startSortOrder,
@@ -459,12 +451,11 @@ async function updateExistingSection(
 ): Promise<void> {
   // Always stamp the section's position from its index in the update array —
   // this is what persists reorders (and backfills legacy null rows on edit).
+  const values: Partial<typeof recipeSection.$inferInsert> = { sortOrder };
+  if (sectionUpdate.name !== undefined) values.name = sectionUpdate.name;
   await tx
     .update(recipeSection)
-    .set({
-      sortOrder,
-      ...(sectionUpdate.name !== undefined ? { name: sectionUpdate.name } : {}),
-    })
+    .set(values)
     .where(eq(recipeSection.id, sectionUpdate.id));
 
   if (sectionUpdate.ingredients) {

@@ -15,7 +15,13 @@
  */
 
 import { Flashlight, FlashlightOff } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -59,7 +65,7 @@ const SCAN_CHIP_VARIANT = {
   failed: "destructive",
 } as const satisfies Record<ScanFeedbackEntry["status"], string>;
 
-interface PersistentScannerProps {
+export interface PersistentScannerProps {
   onScan: (barcode: string) => void;
   onError?: (error: string) => void;
   enabled?: boolean;
@@ -82,6 +88,16 @@ interface PersistentScannerProps {
   /** Newest-first recently-scanned chips (the caller caps the length). */
   recentScans?: readonly ScanFeedbackEntry[];
 }
+
+export interface PersistentScannerPort {
+  readonly Scanner: ComponentType<PersistentScannerProps>;
+  readonly formats: PersistentScannerProps["formatsToSupport"];
+}
+
+export const productionPersistentScannerPort: PersistentScannerPort = {
+  Scanner: PersistentScanner,
+  formats: UNIVERSAL_SCAN_FORMATS,
+};
 
 export function PersistentScanner({
   onScan,

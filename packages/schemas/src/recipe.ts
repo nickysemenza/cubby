@@ -103,6 +103,9 @@ export const recipeUsageOut = z.object({
 });
 export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 
+/** Public entity-tool projection; the usage row has no public shortcode. */
+export const recipeUsageMcpEntityOut = recipeUsageOut.omit({ id: true });
+
 export const sectionLineFields = {
   // Declared exception: a recipe section/line id has no shortcode.
   id: z.uuid(),
@@ -114,19 +117,29 @@ export const sectionLineFields = {
   ...timestampedFields,
 };
 
+const ingredientSectionLineOut = z.object({
+  ...sectionLineFields,
+  type: z.literal("ingredient"),
+  recipe: z.null(),
+  ingredient: sectionIngredientIngredientOut,
+});
+
+const recipeSectionLineOut = z.object({
+  ...sectionLineFields,
+  type: z.literal("recipe"),
+  recipe: recipeTopLevel,
+  ingredient: z.null(),
+});
+
 export const sectionIngredientOut = z.discriminatedUnion("type", [
-  z.object({
-    ...sectionLineFields,
-    type: z.literal("ingredient"),
-    recipe: z.null(),
-    ingredient: sectionIngredientIngredientOut,
-  }),
-  z.object({
-    ...sectionLineFields,
-    type: z.literal("recipe"),
-    recipe: recipeTopLevel,
-    ingredient: z.null(),
-  }),
+  ingredientSectionLineOut,
+  recipeSectionLineOut,
+]);
+
+/** Public entity-tool projection; section-line rows have no public shortcode. */
+export const sectionIngredientMcpEntityOut = z.discriminatedUnion("type", [
+  ingredientSectionLineOut.omit({ id: true }),
+  recipeSectionLineOut.omit({ id: true }),
 ]);
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
@@ -143,6 +156,11 @@ export const recipeSectionOut = z.object({
   ...recipeSectionFields,
   ingredients: z.array(sectionIngredientOut),
 });
+
+/** Public entity-tool projection; section rows have no public shortcode. */
+export const recipeSectionMcpEntityOut = recipeSectionOut
+  .omit({ id: true, ingredients: true })
+  .extend({ ingredients: z.array(sectionIngredientMcpEntityOut) });
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
@@ -163,6 +181,11 @@ export const recipeOutFields = {
 };
 
 export const recipeOut = z.object(recipeOutFields);
+
+/** Full recipe output with storage-only section and line identifiers removed. */
+export const recipeMcpEntityOut = recipeOut.extend({
+  sections: z.array(recipeSectionMcpEntityOut),
+});
 
 export const recipeWithSideEffectsOut = z.object({
   ...recipeOutFields,
@@ -351,9 +374,9 @@ export const recipeListFilterFields = {
   nameFilter: recipeFilterFields.nameFilter,
 };
 
-// Descriptions surface to MCP clients through the explicit `mcpRecipe*Shape`
+// Descriptions surface to MCP clients through the explicit `mcpRecipe*Fields`
 // exports below; keep create-required fields and update-optional fields separate.
-const recipeWritableShape = {
+const recipeWritableFields = {
   name: requiredName("Recipe name").describe("Recipe name"),
   meta: recipeMeta.describe("Source metadata, e.g. { url } of the web source"),
   yield: recipeYieldSchema
@@ -376,16 +399,16 @@ const recipeWritableShape = {
     ),
 };
 
-const recipeCreateShape = {
-  ...recipeWritableShape,
+const recipeCreateFields = {
+  ...recipeWritableFields,
   // Public `IMG-` shortcode, like `removeImageIds`/`imageOrder` below —
   // `Image` mints a shortcode at insert time, so the repo layer resolves this
   // to a uuid before the join-table write rather than taking a raw uuid.
   pendingImageIds: z.array(imageShortcode).optional(),
 };
-export const recipeCreateInput = z.object(recipeCreateShape);
+export const recipeCreateInput = z.object(recipeCreateFields);
 
-export const recipeUpdateData = deriveUpdateData(recipeCreateShape, {
+export const recipeUpdateData = deriveUpdateData(recipeCreateFields, {
   extend: {
     // Public `IMG-` codes, as returned by `RecipeOut.images[].id` — resolved to
     // uuids in the repo before they reach the `RecipeImage` join table. MCP has
@@ -436,10 +459,10 @@ export const recipeIdInput = z.object({
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
 export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
 
-export const mcpRecipeCreateInput = z.object(recipeWritableShape);
+export const mcpRecipeCreateInput = z.object(recipeWritableFields);
 const mcpRecipeUpdateFields = {
   id: recipeShortcode.describe("Recipe ID"),
-  ...deriveUpdateFields(recipeWritableShape),
+  ...deriveUpdateFields(recipeWritableFields),
 };
 export const mcpRecipeUpdateInput = z.object(mcpRecipeUpdateFields);
 

@@ -1,15 +1,23 @@
-import type {
-  ExpenseLineBasis,
-  ExpenseLineKind,
+import {
+  expenseLineBasisSchema,
+  expenseLineKindSchema,
+  type ExpenseLineBasis,
+  type ExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
-import type {
-  CostType,
-  ExpenseOut,
-  ProjectOut,
-  ProjectStatus,
-  TaskOut,
-  TaskStatus,
-  Trade,
+import {
+  costTypeSchema,
+  type CostType,
+  projectKindSchema,
+  type ExpenseOut,
+  type ProjectFilters,
+  type ProjectOut,
+  type ProjectStatus,
+  projectStatusSchema,
+  type TaskOut,
+  type TaskStatus,
+  taskStatusSchema,
+  type Trade,
+  tradeSchema,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -19,7 +27,14 @@ import type {
 } from "@tanstack/react-table";
 import { partition } from "es-toolkit";
 import { ListFilter, ListTodo, ShoppingCart } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { z } from "zod";
 
 import {
@@ -56,12 +71,13 @@ import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyColumnHelper as ColumnHelper,
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyFilterFn as FilterFn,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
+import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
@@ -71,6 +87,7 @@ import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useOptimisticDelete } from "~/app/_components/hooks/useOptimisticDelete";
+import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { TableLink } from "~/app/_components/table/TableLink";
@@ -104,8 +121,9 @@ import {
 } from "~/components/ui/view-switcher";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { multiSelectFilterFnBy } from "~/entities/filters";
+import { multiSelectFilterFnBy, type FilterValue } from "~/entities/filters";
 import { image } from "~/entities/image.functions";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -169,6 +187,7 @@ export function taskStatusColumn(
     filterConfig: manifestFilterConfig("task", "status"),
     mobile: opts?.mobile,
     editable: {
+      parseValue: (value) => taskStatusSchema.parse(value),
       onSave: async (newStatus, task) => {
         await save(newStatus, task);
       },
@@ -195,6 +214,7 @@ export function taskTradeColumn(
         : renderOptionCell(trade, tradeOptions),
     mobile: opts?.mobile,
     editable: {
+      parseValue: (value) => tradeSchema.parse(value),
       onSave: async (newTrade, task) => {
         // Required field — a cleared select is a no-op, not a null write.
         if (!newTrade) return;
@@ -298,26 +318,31 @@ export function TaskList({
     enabled: subjectProductIds.length > 0,
   });
 
-  const columns = useMemo<CubbyColumnDef<TaskOut>[]>(
-    () => [
-      ...selection.selectColumns,
-      taskStatusColumn(
-        taskHelper,
-        async (status, task) => {
-          await updateTaskMutation.mutateAsync({
-            id: task.id,
-            data: { status },
-          });
-        },
-        { mobile: { slot: "subtitle", priority: 10 } },
-      ),
-      createNameColumn(taskHelper, "task", "name", {
-        header: "Task",
-        editable: nameEditable,
-        nameSuffix: subtaskCountSuffix,
-      }),
-      ...(showProjectColumn
-        ? [
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<TaskOut>((add) => {
+        selection.selectColumns.forEach(add);
+        add(
+          taskStatusColumn(
+            taskHelper,
+            async (status, task) => {
+              await updateTaskMutation.mutateAsync({
+                id: task.id,
+                data: { status },
+              });
+            },
+            { mobile: { slot: "subtitle", priority: 10 } },
+          ),
+        );
+        add(
+          createNameColumn(taskHelper, "task", "name", {
+            header: "Task",
+            editable: nameEditable,
+            nameSuffix: subtaskCountSuffix,
+          }),
+        );
+        if (showProjectColumn) {
+          add(
             createProjectLinkColumn(taskHelper, {
               className: "w-40",
               mobile: { slot: "meta", priority: 30, interactive: true },
@@ -330,67 +355,78 @@ export function TaskList({
                 },
               },
             }),
-          ]
-        : []),
-      createSubjectProductLinkColumn(taskHelper, {
-        className: "w-40",
-        mobile: { slot: "meta", priority: 35, interactive: true },
-        editable: {
-          onSave: async (subjectProductId, task) => {
-            await updateTaskMutation.mutateAsync({
-              id: task.id,
-              data: { subjectProductId },
-            });
-          },
-        },
-      }),
-      taskHelper.display({
-        id: "productLocation",
-        header: "Stored at",
-        meta: {
-          className: "min-w-0 w-40 max-w-56",
-          mobile: { slot: "meta", priority: 36, interactive: true },
-        },
-        cell: ({ row }) => {
-          const productId = row.original.subjectProductId;
-          return (
-            <InventoryEntriesCell
-              entries={
-                (productId ? inventoryByProduct?.[productId] : undefined) ?? []
-              }
-              entity="location"
-              getRelatedEntity={(entry) => entry.location}
-              layout="inline"
-              row={row.original}
-            />
           );
-        },
+        }
+        add(
+          createSubjectProductLinkColumn(taskHelper, {
+            className: "w-40",
+            mobile: { slot: "meta", priority: 35, interactive: true },
+            editable: {
+              onSave: async (subjectProductId, task) => {
+                await updateTaskMutation.mutateAsync({
+                  id: task.id,
+                  data: { subjectProductId },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          taskHelper.display({
+            id: "productLocation",
+            header: "Stored at",
+            meta: {
+              className: "min-w-0 w-40 max-w-56",
+              mobile: { slot: "meta", priority: 36, interactive: true },
+            },
+            cell: ({ row }) => {
+              const productId = row.original.subjectProductId;
+              return (
+                <InventoryEntriesCell
+                  entries={
+                    (productId ? inventoryByProduct?.[productId] : undefined) ??
+                    []
+                  }
+                  entity="location"
+                  getRelatedEntity={(entry) => entry.location}
+                  layout="inline"
+                  row={row.original}
+                />
+              );
+            },
+          }),
+        );
+        add(
+          taskTradeColumn(
+            taskHelper,
+            async (trade, task) => {
+              await updateTaskMutation.mutateAsync({
+                id: task.id,
+                data: { trade },
+              });
+            },
+            { emptyAsNull: true, mobile: { slot: "meta", priority: 50 } },
+          ),
+        );
+        add(
+          taskDueColumn(
+            taskHelper,
+            async (dueDate, task) => {
+              await updateTaskMutation.mutateAsync({
+                id: task.id,
+                data: { dueDate },
+              });
+            },
+            { mobile: { slot: "meta", priority: 40, interactive: true } },
+          ),
+        );
+        add(createCreatedAtColumn(taskHelper));
+        add(
+          createActionsColumn(taskHelper, "task", {
+            extraActions: combinedExtraActions,
+          }),
+        );
       }),
-      taskTradeColumn(
-        taskHelper,
-        async (trade, task) => {
-          await updateTaskMutation.mutateAsync({
-            id: task.id,
-            data: { trade },
-          });
-        },
-        { emptyAsNull: true, mobile: { slot: "meta", priority: 50 } },
-      ),
-      taskDueColumn(
-        taskHelper,
-        async (dueDate, task) => {
-          await updateTaskMutation.mutateAsync({
-            id: task.id,
-            data: { dueDate },
-          });
-        },
-        { mobile: { slot: "meta", priority: 40, interactive: true } },
-      ),
-      createCreatedAtColumn(taskHelper),
-      createActionsColumn(taskHelper, "task", {
-        extraActions: combinedExtraActions,
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateTaskMutation changes every render but is functionally stable
     [
       showProjectColumn,
@@ -480,6 +516,7 @@ export function expenseLineKindColumn(
     filterConfig: manifestFilterConfig("expense", "lineKind"),
     mobile: opts?.mobile,
     editable: {
+      parseValue: (value) => expenseLineKindSchema.parse(value),
       onSave: async (newLineKind, expense) => {
         if (!newLineKind) return;
         await save(newLineKind, expense);
@@ -502,6 +539,7 @@ export function expenseLineBasisColumn(
     filterConfig: manifestFilterConfig("expense", "lineBasis"),
     mobile: opts?.mobile,
     editable: {
+      parseValue: (value) => expenseLineBasisSchema.parse(value),
       onSave: async (newLineBasis, expense) => {
         if (!newLineBasis) return;
         await save(newLineBasis, expense);
@@ -523,6 +561,7 @@ export function expenseCostTypeColumn(
     filterConfig: manifestFilterConfig("expense", "costType"),
     mobile: opts?.mobile,
     editable: {
+      parseValue: (value) => costTypeSchema.parse(value),
       onSave: async (newCostType, expense) => {
         // Required field — a cleared select is a no-op, not a null write.
         if (!newCostType) return;
@@ -554,6 +593,7 @@ export function expenseTradeColumn(
         : renderOptionCell(trade, tradeOptions),
     mobile: opts?.mobile,
     editable: {
+      parseValue: (value) => tradeSchema.parse(value),
       onSave: async (newTrade, expense) => {
         // Required field — a cleared select is a no-op, not a null write.
         if (!newTrade) return;
@@ -615,13 +655,13 @@ export function expenseProductQuantityColumn(
     id: "productQuantity",
     header: "Quantity",
     enableSorting: true,
-    meta: {
+    meta: attachCubbyColumnMeta({
       numeric: true,
       className: "w-24",
       mobile: opts?.mobile,
       filterConfig: opts?.filterConfig,
       cellData,
-    },
+    }),
     cell: (info) => {
       const row = info.row.original;
       if (!row.productId) return <NoneValue />;
@@ -684,7 +724,9 @@ export function expenseFutureColumn(
 }
 
 /** Match id-valued Vendor options against `row.vendorId`, not the displayed name. */
-const matchesVendorId = multiSelectFilterFnBy((v) => v as string | null);
+const matchesVendorId = multiSelectFilterFnBy<string | null, FilterValue>(
+  (v) => v,
+);
 const vendorIdFilterFn: FilterFn<ExpenseOut> = (row, columnId, filterValue) =>
   matchesVendorId(
     { getValue: () => row.original.vendorId },
@@ -718,7 +760,7 @@ export function expenseVendorColumn(
     id: "vendor",
     header: opts?.asPurchase ? "Purchase" : "Vendor",
     filterFn: vendorIdFilterFn,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: opts?.asPurchase ? "w-56" : "w-40",
       mobile: opts?.mobile,
       filterConfig: manifestFilterConfig(
@@ -727,7 +769,7 @@ export function expenseVendorColumn(
         opts?.vendorOptions ? { vendor: opts.vendorOptions } : undefined,
       ),
       cellData,
-    },
+    }),
     cell: (info) => {
       const expense = info.row.original;
       const vendor = info.getValue();
@@ -913,23 +955,26 @@ export function ExpenseList({
     deleteBulkAction,
   });
 
-  const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
-    () => [
-      ...selection.selectColumns,
-      createExpenseProductImageColumn(expenseHelper),
-      createNameColumn(expenseHelper, "expense", "name", {
-        header: "Expense",
-        editable: nameEditable,
-        // The vendor link must not open the cell editor.
-        nameSuffix: (expense) =>
-          expense.url ? (
-            <ExternalLinkIcon href={expense.url} label="Open vendor link" />
-          ) : null,
-      }),
-      // The inline move-to-sub-project affordance — omitted on leaf projects
-      // where every row shares the one project (see `showProjectColumn`).
-      ...(showProjectColumn
-        ? [
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ExpenseOut>((add) => {
+        selection.selectColumns.forEach(add);
+        add(createExpenseProductImageColumn(expenseHelper));
+        add(
+          createNameColumn(expenseHelper, "expense", "name", {
+            header: "Expense",
+            editable: nameEditable,
+            // The vendor link must not open the cell editor.
+            nameSuffix: (expense) =>
+              expense.url ? (
+                <ExternalLinkIcon href={expense.url} label="Open vendor link" />
+              ) : null,
+          }),
+        );
+        // The inline move-to-sub-project affordance — omitted on leaf projects
+        // where every row shares the one project (see `showProjectColumn`).
+        if (showProjectColumn) {
+          add(
             createProjectLinkColumn(expenseHelper, {
               className: "w-40",
               mobile: { slot: "meta", priority: 40, interactive: true },
@@ -942,106 +987,128 @@ export function ExpenseList({
                 },
               },
             }),
-          ]
-        : []),
-      expenseCostTypeColumn(
-        expenseHelper,
-        async (costType, expense) => {
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { costType },
-          });
-        },
-        { mobile: { slot: "meta", priority: 20 } },
-      ),
-      // Negative rows are credits/contributions, not spend.
-      expenseTradeColumn(
-        expenseHelper,
-        async (trade, expense) => {
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { trade },
-          });
-        },
-        {
-          emptyAsNull: true,
-          mobile: { slot: "meta", priority: 60 },
-        },
-      ),
-      expenseCostColumn(
-        expenseHelper,
-        async (cost, expense) => {
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { cost },
-          });
-        },
-        {
-          className: "w-20",
-          decimals: 0,
-          signedTone: true,
-          mobile: { slot: "trailing", priority: 10, interactive: true },
-        },
-      ),
-      expenseDateColumn(
-        expenseHelper,
-        async (date, expense) => {
-          if (date === null) return;
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { date },
-          });
-        },
-        { mobile: { slot: "subtitle", priority: 15 } },
-      ),
-      expenseFutureColumn(
-        expenseHelper,
-        async (future, expense) => {
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { future },
-          });
-        },
-        { mobile: { slot: "meta", priority: 50 } },
-      ),
-      // Sparse relationship columns remain available through the column menu.
-      createProductLinkColumn(expenseHelper, {
-        className: "w-40",
-        filterConfig: manifestFilterConfig("expense", "product"),
+          );
+        }
+        add(
+          expenseCostTypeColumn(
+            expenseHelper,
+            async (costType, expense) => {
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { costType },
+              });
+            },
+            { mobile: { slot: "meta", priority: 20 } },
+          ),
+        );
+        // Negative rows are credits/contributions, not spend.
+        add(
+          expenseTradeColumn(
+            expenseHelper,
+            async (trade, expense) => {
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { trade },
+              });
+            },
+            {
+              emptyAsNull: true,
+              mobile: { slot: "meta", priority: 60 },
+            },
+          ),
+        );
+        add(
+          expenseCostColumn(
+            expenseHelper,
+            async (cost, expense) => {
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { cost },
+              });
+            },
+            {
+              className: "w-20",
+              decimals: 0,
+              signedTone: true,
+              mobile: { slot: "trailing", priority: 10, interactive: true },
+            },
+          ),
+        );
+        add(
+          expenseDateColumn(
+            expenseHelper,
+            async (date, expense) => {
+              if (date === null) return;
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { date },
+              });
+            },
+            { mobile: { slot: "subtitle", priority: 15 } },
+          ),
+        );
+        add(
+          expenseFutureColumn(
+            expenseHelper,
+            async (future, expense) => {
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { future },
+              });
+            },
+            { mobile: { slot: "meta", priority: 50 } },
+          ),
+        );
+        // Sparse relationship columns remain available through the column menu.
+        add(
+          createProductLinkColumn(expenseHelper, {
+            className: "w-40",
+            filterConfig: manifestFilterConfig("expense", "product"),
+          }),
+        );
+        add(
+          expenseProductQuantityColumn(
+            expenseHelper,
+            async (productQuantity, expense) => {
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { productQuantity },
+              });
+            },
+            {
+              filterConfig: manifestFilterConfig("expense", "productQuantity"),
+            },
+          ),
+        );
+        add(
+          expenseVendorColumn(
+            expenseHelper,
+            async (vendor, expense) => {
+              await updateExpenseMutation.mutateAsync({
+                id: expense.id,
+                data: { vendor },
+              });
+            },
+            // Roster (and counts) from the rows on screen, so the picklist describes
+            // THIS project's spend rather than the whole ledger.
+            { vendorOptions: rowVendorOptions },
+          ),
+        );
+        add(
+          expenseOrderIdColumn(expenseHelper, async (orderId, expense) => {
+            await updateExpenseMutation.mutateAsync({
+              id: expense.id,
+              data: { orderId },
+            });
+          }),
+        );
+        add(createCreatedAtColumn(expenseHelper));
+        add(
+          createActionsColumn(expenseHelper, "expense", {
+            extraActions: combinedExtraActions,
+          }),
+        );
       }),
-      expenseProductQuantityColumn(
-        expenseHelper,
-        async (productQuantity, expense) => {
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { productQuantity },
-          });
-        },
-        { filterConfig: manifestFilterConfig("expense", "productQuantity") },
-      ),
-      expenseVendorColumn(
-        expenseHelper,
-        async (vendor, expense) => {
-          await updateExpenseMutation.mutateAsync({
-            id: expense.id,
-            data: { vendor },
-          });
-        },
-        // Roster (and counts) from the rows on screen, so the picklist describes
-        // THIS project's spend rather than the whole ledger.
-        { vendorOptions: rowVendorOptions },
-      ),
-      expenseOrderIdColumn(expenseHelper, async (orderId, expense) => {
-        await updateExpenseMutation.mutateAsync({
-          id: expense.id,
-          data: { orderId },
-        });
-      }),
-      createCreatedAtColumn(expenseHelper),
-      createActionsColumn(expenseHelper, "expense", {
-        extraActions: combinedExtraActions,
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable
     [
       showProjectColumn,
@@ -1138,13 +1205,6 @@ const projectIconPrefix = (row: ProjectOut): ReactNode => (
   <ProjectMark icon={row.icon} />
 );
 
-/** Flat and tree modes share server-selected membership and ordering. */
-const PROJECT_TREE_CONFIG = {
-  nest: buildProjectTree,
-  getSubRows: (row: ProjectTreeRow) => row.subRows,
-  expandable: true,
-};
-
 const PROJECT_ROWS_RENDERER_OPTIONS: ViewSwitcherOption<ProjectRowsRenderer>[] =
   [
     { value: "flat", label: "Flat" },
@@ -1163,6 +1223,17 @@ export function ProjectTable({
   onModeChange: (mode: ProjectRowsRenderer) => void;
 }) {
   const isTree = mode === "tree";
+  const projectRowsConfig = useMemo(
+    () => ({
+      nest: (rows: ProjectOut[]): ProjectTreeRow[] =>
+        isTree
+          ? buildProjectTree(rows)
+          : rows.map((project) => ({ ...project, subRows: [] })),
+      getSubRows: (row: ProjectTreeRow) => row.subRows,
+      expandable: isTree,
+    }),
+    [isTree],
+  );
   // ProjectTreeRow satisfies both invariant ColumnDef modes.
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ProjectTreeRow>(),
@@ -1210,148 +1281,193 @@ export function ProjectTable({
   });
 
   const columns = useMemo(
-    () => [
-      createImageColumn(columnHelper, {
-        entity: "project",
-        getImages: (project) => projectImages?.[project.id] ?? [],
+    () =>
+      createCubbyColumnCollection<ProjectTreeRow>((add) => {
+        add(
+          createImageColumn(columnHelper, {
+            entity: "project",
+            getImages: (project) => projectImages?.[project.id] ?? [],
+          }),
+        );
+        add(
+          createFilterableSelectColumn(columnHelper, "status", {
+            header: "Status",
+            className: "w-32",
+            placeholder: "Filter by status...",
+            selectOptions: PROJECT_STATUS_OPTIONS,
+            mobile: { slot: "subtitle", priority: 10 },
+            editable: {
+              parseValue: (value) => projectStatusSchema.parse(value),
+              onSave: async (newStatus, project) => {
+                await updateProjectMutation.mutateAsync({
+                  id: project.id,
+                  data: { status: newStatus },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          createFilterableSelectColumn(columnHelper, "kind", {
+            header: "Kind",
+            className: "w-32",
+            placeholder: "Filter by kind...",
+            selectOptions: projectKindOptions,
+            mobile: { slot: "meta", priority: 20 },
+            editable: {
+              parseValue: (value) => projectKindSchema.nullable().parse(value),
+              onSave: async (newKind, project) => {
+                await updateProjectMutation.mutateAsync({
+                  id: project.id,
+                  data: { kind: newKind },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          createCurrencyColumn(columnHelper, "costEstimate", {
+            header: "Estimate",
+            mobile: { slot: "meta", priority: 30, interactive: true },
+            editable: {
+              onSave: async (newEstimate, project) => {
+                await updateProjectMutation.mutateAsync({
+                  id: project.id,
+                  data: { costEstimate: newEstimate },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("locations", {
+            id: "locations",
+            header: "Location",
+            enableSorting: false,
+            meta: {
+              className: "w-40",
+              mobile: { slot: "meta", priority: 40 },
+            },
+            cell: ({ getValue }) => {
+              const locs = getValue();
+              if (locs.length === 0) return <NoneValue />;
+              return (
+                <Row wrap gap="xs">
+                  {locs.map((loc) => (
+                    <Badge key={loc} variant="outline">
+                      {loc}
+                    </Badge>
+                  ))}
+                </Row>
+              );
+            },
+          }),
+        );
+        add(
+          createParentLinkColumn(
+            columnHelper,
+            "project",
+            "parentProjectId",
+            "parentProjectName",
+          ),
+        );
+        add(
+          columnHelper.accessor((row) => row.rollup.subtree.actualSpent, {
+            id: "actual",
+            header: "Actual",
+            // A rollup isn't a stored Project sort field. Keep membership and
+            // ordering honest by not pretending this can be sorted in-browser.
+            enableSorting: false,
+            meta: { numeric: true, className: "w-24" },
+            cell: ({ row }) => {
+              const { subtree } = row.original.rollup;
+              // Actual spend rolls up all live descendants, independent of view filters.
+              const actual = subtree.actualSpent;
+              if (actual === 0) return <NoneValue />;
+              const est = subtree.costEstimate;
+              const over = est != null && est > 0 && actual > est;
+              return (
+                <span
+                  className={
+                    over ? "font-medium text-destructive" : "text-positive"
+                  }
+                >
+                  {formatCurrency(actual, 0)}
+                </span>
+              );
+            },
+          }),
+        );
+        // Show effective dates while editing raw overrides; derived values stay muted.
+        add(
+          createPlainDateColumn(columnHelper, "startDate", {
+            header: "Start",
+            className: "w-28",
+            mobile: { slot: "meta", priority: 50 },
+            displayValue: (project) => ({
+              value: project.dates.effectiveStart,
+              muted: project.dates.startSource === "derived",
+            }),
+            editable: {
+              onSave: async (newStartDate, project) => {
+                await updateProjectMutation.mutateAsync({
+                  id: project.id,
+                  data: { startDate: newStartDate },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          createPlainDateColumn(columnHelper, "endDate", {
+            header: "End",
+            className: "w-28",
+            mobile: { slot: "meta", priority: 60 },
+            displayValue: (project) => ({
+              value: project.dates.effectiveEnd,
+              muted: project.dates.endSource === "derived",
+            }),
+            editable: {
+              onSave: async (newEndDate, project) => {
+                await updateProjectMutation.mutateAsync({
+                  id: project.id,
+                  data: { endDate: newEndDate },
+                });
+              },
+            },
+          }),
+        );
       }),
-      createFilterableSelectColumn(columnHelper, "status", {
-        header: "Status",
-        className: "w-32",
-        placeholder: "Filter by status...",
-        selectOptions: PROJECT_STATUS_OPTIONS,
-        mobile: { slot: "subtitle", priority: 10 },
-        editable: {
-          onSave: async (newStatus, project) => {
-            await updateProjectMutation.mutateAsync({
-              id: project.id,
-              data: { status: newStatus },
-            });
-          },
-        },
-      }),
-      createFilterableSelectColumn(columnHelper, "kind", {
-        header: "Kind",
-        className: "w-32",
-        placeholder: "Filter by kind...",
-        selectOptions: projectKindOptions,
-        mobile: { slot: "meta", priority: 20 },
-        editable: {
-          onSave: async (newKind, project) => {
-            await updateProjectMutation.mutateAsync({
-              id: project.id,
-              data: { kind: newKind },
-            });
-          },
-        },
-      }),
-      createCurrencyColumn(columnHelper, "costEstimate", {
-        header: "Estimate",
-        mobile: { slot: "meta", priority: 30, interactive: true },
-        editable: {
-          onSave: async (newEstimate, project) => {
-            await updateProjectMutation.mutateAsync({
-              id: project.id,
-              data: { costEstimate: newEstimate },
-            });
-          },
-        },
-      }),
-      columnHelper.accessor("locations", {
-        id: "locations",
-        header: "Location",
-        enableSorting: false,
-        meta: { className: "w-40", mobile: { slot: "meta", priority: 40 } },
-        cell: ({ getValue }) => {
-          const locs = getValue();
-          if (locs.length === 0) return <NoneValue />;
-          return (
-            <Row wrap gap="xs">
-              {locs.map((loc) => (
-                <Badge key={loc} variant="outline">
-                  {loc}
-                </Badge>
-              ))}
-            </Row>
-          );
-        },
-      }),
-      createParentLinkColumn(
-        columnHelper,
-        "project",
-        "parentProjectId",
-        "parentProjectName",
-      ),
-      columnHelper.accessor((row) => row.rollup.subtree.actualSpent, {
-        id: "actual",
-        header: "Actual",
-        // A rollup isn't a stored Project sort field. Keep membership and
-        // ordering honest by not pretending this can be sorted in-browser.
-        enableSorting: false,
-        meta: { numeric: true, className: "w-24" },
-        cell: ({ row }) => {
-          const { subtree } = row.original.rollup;
-          // Actual spend rolls up all live descendants, independent of view filters.
-          const actual = subtree.actualSpent;
-          if (actual === 0) return <NoneValue />;
-          const est = subtree.costEstimate;
-          const over = est != null && est > 0 && actual > est;
-          return (
-            <span
-              className={
-                over ? "font-medium text-destructive" : "text-positive"
-              }
-            >
-              {formatCurrency(actual, 0)}
-            </span>
-          );
-        },
-      }),
-      // Show effective dates while editing raw overrides; derived values stay muted.
-      createPlainDateColumn(columnHelper, "startDate", {
-        header: "Start",
-        className: "w-28",
-        mobile: { slot: "meta", priority: 50 },
-        displayValue: (project) => ({
-          value: project.dates.effectiveStart,
-          muted: project.dates.startSource === "derived",
-        }),
-        editable: {
-          onSave: async (newStartDate, project) => {
-            await updateProjectMutation.mutateAsync({
-              id: project.id,
-              data: { startDate: newStartDate },
-            });
-          },
-        },
-      }),
-      createPlainDateColumn(columnHelper, "endDate", {
-        header: "End",
-        className: "w-28",
-        mobile: { slot: "meta", priority: 60 },
-        displayValue: (project) => ({
-          value: project.dates.effectiveEnd,
-          muted: project.dates.endSource === "derived",
-        }),
-        editable: {
-          onSave: async (newEndDate, project) => {
-            await updateProjectMutation.mutateAsync({
-              id: project.id,
-              data: { endDate: newEndDate },
-            });
-          },
-        },
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateProjectMutation changes every render but is functionally stable
     [columnHelper, projectImages],
   );
 
+  const listQueryOptions = useCallback<
+    ListQueryOptionsFn<ProjectFilters, ProjectOut>
+  >(
+    (params) => {
+      if (!isTree) return entityListFor("project").listQueryPlan(params);
+
+      const input = project.tree.definition.input.parse(params);
+      const policy = project.tree.policy(input);
+      return {
+        queryKey: project.tree.queryKey(input),
+        meta: policy.meta,
+        execute: (signal) => project.tree.call(input, { signal }),
+      };
+    },
+    [isTree],
+  );
+
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
-  const { workbench, data, totalCount } = useEntityList({
+  const { workbench, data, totalCount } = useEntityList<
+    ProjectTreeRow,
+    ProjectFilters,
+    ProjectOut
+  >({
     entity: "project",
     onInspectRow: inspectRow,
-    queryOptions: isTree ? project.tree.queryOptions : undefined,
+    queryOptions: listQueryOptions,
     columns,
     filterOptions,
     deletable: deletableConfig,
@@ -1359,7 +1475,7 @@ export function ProjectTable({
     namePrefix: projectIconPrefix,
     nameSuffix: subProjectCountSuffix,
     tableStateOptions,
-    tree: isTree ? PROJECT_TREE_CONFIG : undefined,
+    tree: projectRowsConfig,
   });
   const { table } = workbench;
 

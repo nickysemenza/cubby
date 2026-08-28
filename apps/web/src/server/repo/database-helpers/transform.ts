@@ -105,10 +105,7 @@ export const mapImages = (
  * Handles null/undefined and returns empty array by default.
  * Automatically filters out soft-deleted records if they have a deletedAt field.
  */
-export const mapRelation = <
-  TIn extends { deletedAt?: Date | null } | Record<string, unknown>,
-  TOut,
->(
+export const mapRelation = <TIn extends object, TOut>(
   records: TIn[] | undefined | null,
   mapper: (record: TIn) => TOut,
 ): TOut[] => {
@@ -130,15 +127,15 @@ export const mapRelation = <
  * This helper consolidates the pattern of conditionally building update objects
  * for database updates where only provided fields should be updated.
  */
-export function buildPartialUpdateValues<T extends Record<string, unknown>>(
+export function buildPartialUpdateValues<T extends object>(
   data: T,
-): Partial<{ [K in keyof T]: NonNullable<T[K]> }> {
-  const result: Partial<{ [K in keyof T]: NonNullable<T[K]> }> = {};
+): Partial<T> {
+  const result: Partial<T> = {};
 
-  for (const key of Object.keys(data) as Array<keyof T>) {
-    if (data[key] !== undefined) {
-      result[key] = data[key] as NonNullable<T[typeof key]>;
-    }
+  for (const key in data) {
+    if (!Object.hasOwn(data, key)) continue;
+    const value = data[key];
+    if (value !== undefined) result[key] = value;
   }
 
   return result;
@@ -172,7 +169,7 @@ export const resolveLiveJoinShortcode = (
  * Consolidates the repeated pattern of parsing amount JSON columns.
  */
 export const parseInventoryAmount = (
-  rawAmount: unknown,
+  rawAmount: z.input<typeof amount>,
   entryId: string,
 ): z.infer<typeof amount> => {
   return parseWithContext(amount, rawAmount, {

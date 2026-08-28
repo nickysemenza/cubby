@@ -10,9 +10,9 @@
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
 
-import { normalizedImportSignatureShape } from "~/lib/import-recipe-normalizer";
+import { normalizedImportSignatureContent } from "~/lib/import-recipe-normalizer";
 
-type SignatureShape = {
+type RecipeSignatureContent = {
   yield: { value: number; unit: string } | null;
   servings: number | null;
   tags: string[];
@@ -24,7 +24,8 @@ type SignatureShape = {
   }[];
 };
 
-const signature = (shape: SignatureShape): string => JSON.stringify(shape);
+const signature = (content: RecipeSignatureContent): string =>
+  JSON.stringify(content);
 
 /** Signature of an already-imported recipe, from its stored content. */
 export function recipeOutSignature(recipe: RecipeOut | RecipeGraphOut): string {
@@ -54,5 +55,5 @@ export function importRecipeSignature(
   cr: ImportRecipe,
   tags: string[] = [],
 ): string {
-  return signature(normalizedImportSignatureShape(cr, tags));
+  return signature(normalizedImportSignatureContent(cr, tags));
 }

@@ -1,66 +1,52 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  queryOptions: vi.fn(),
-  refetch: vi.fn(),
-  useQuery: vi.fn(),
-}));
+import { meal } from "~/app/meals/meal.functions";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: (options: unknown) => {
-    mocks.useQuery(options);
-    return {
-      data: undefined,
-      isError: true,
-      isLoading: false,
-      refetch: mocks.refetch,
-    };
+import type { HomeAsOfWindow } from "./home-as-of-window";
+import { type TodayMealsOperations, TodayMeals } from "./MealsCard";
+
+const AS_OF: HomeAsOfWindow = {
+  meals: { from: "2026-08-26", to: "2026-09-01" },
+  spend: {
+    months: [],
+    filters: {
+      dateFrom: "2026-08-01",
+      dateTo: "2026-08-31",
+      future: false,
+    },
   },
-}));
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children, ...props }: { children?: ReactNode }) => (
-    <a {...props} href="/meals">
-      {children}
-    </a>
-  ),
-}));
-vi.mock("~/app/meals/meal.functions", () => ({
-  meal: { upcomingSummary: { queryOptions: mocks.queryOptions } },
-}));
+};
 
-import { TodayMeals } from "./MealsCard";
+let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
-  mocks.queryOptions.mockReset();
-  mocks.queryOptions.mockReturnValue({ queryKey: ["upcoming-meals"] });
-  mocks.refetch.mockReset();
-  mocks.useQuery.mockReset();
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
 });
 
 describe("TodayMeals", () => {
-  it("offers a thumb-sized retry when its query fails", () => {
-    render(
-      <TodayMeals
-        asOf={{
-          meals: { from: "2026-08-26", to: "2026-09-01" },
-          spend: {
-            months: [],
-            filters: {
-              dateFrom: "2026-08-01",
-              dateTo: "2026-08-31",
-              future: false,
-            },
-          },
-        }}
-      />,
-    );
+  it("offers a thumb-sized retry when its real operation adapter fails", async () => {
+    const requests: string[] = [];
+    const operations = {
+      upcomingSummary: meal.upcomingSummary.withTransport(async () => {
+        requests.push("upcoming-summary");
+        throw new Error("unavailable");
+      }),
+    } satisfies TodayMealsOperations;
 
-    const retry = screen.getByRole("button", { name: "Retry" });
+    render(<TodayMeals asOf={AS_OF} operations={operations} />, {
+      wrapper: harness.routerWrapper,
+    });
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
     expect(retry).toHaveClass("min-h-11");
 
     fireEvent.click(retry);
-    expect(mocks.refetch).toHaveBeenCalledOnce();
+    await waitFor(() => expect(requests).toHaveLength(2));
   });
 });

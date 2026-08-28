@@ -32,7 +32,7 @@ export type LocationType = (typeof locationTypeValues)[number];
  * else. Grouped families share a rung so related types read together; matte,
  * off the warm axis, distinguished by value not hue.
  */
-export const locationTypeColors: Record<LocationType, string> = {
+export const locationTypeColors = {
   house: "var(--chart-1)",
   room: "var(--chart-1)",
   area: "var(--chart-2)",
@@ -46,7 +46,7 @@ export const locationTypeColors: Record<LocationType, string> = {
 
   box: "var(--chart-6)",
   bag: "var(--chart-8)",
-};
+} as const satisfies Record<LocationType, string>;
 
 /**
  * A location linked to a Product carries no `type` of its own — the SKU is its

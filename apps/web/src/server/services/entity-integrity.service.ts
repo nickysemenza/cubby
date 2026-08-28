@@ -15,21 +15,17 @@ import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-regist
 function physicalEdgesFor(
   entity: (typeof allEntities)[number],
 ): PhysicalEdge[] {
-  const edges = INCOMING_EDGES[entity] as Record<
-    string,
-    { column: unknown; unconstrained?: true }
-  >;
-  const semantics = ENTITY_EDGE_SEMANTICS[entity] as Record<
-    string,
-    PhysicalEdge["semantics"]
-  >;
+  const edges = INCOMING_EDGES[entity];
+  const semantics = ENTITY_EDGE_SEMANTICS[entity];
 
   return Object.entries(edges).map(([edgeKey, edge]) => {
-    const column = edge.column as { table: unknown; name: string };
+    const column = edge.column;
     if (!is(column.table, PgTable)) {
       throw new Error(`Edge "${edgeKey}" is not attached to a PgTable.`);
     }
-    const entry = semantics[edgeKey];
+    const entry = Object.entries(semantics).find(
+      ([semanticsKey]) => semanticsKey === edgeKey,
+    )?.[1];
     if (!entry) {
       throw new Error(`Edge "${edgeKey}" has no ENTITY_EDGE_SEMANTICS entry.`);
     }

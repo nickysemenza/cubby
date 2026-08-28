@@ -19,7 +19,7 @@ export function useLocationParentOptions() {
   const options = useMemo<FilterableComboboxItem[]>(
     () =>
       data?.map((location) => ({
-        value: location.id as string,
+        value: location.id,
         label: location.name,
         detail: location.ancestors.map((a) => a.name).join(" › ") || undefined,
       })) ?? NO_PARENT_LOCATION_OPTIONS,

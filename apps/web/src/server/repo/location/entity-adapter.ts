@@ -1,9 +1,4 @@
-import {
-  infLocation,
-  locationFiltersSchema,
-  locationListItemOut,
-  locationSortableFields,
-} from "@cubby/schemas/location";
+import { locationSortableFields } from "@cubby/schemas/location";
 
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -30,9 +25,6 @@ const locationShortcodes = bindShortcodeResolver("location");
 export const locationEntityAdapter = defineEntityAdapter({
   entity: "location",
   sideEffects: false,
-  filters: locationFiltersSchema,
-  detailOutput: infLocation,
-  listOutput: locationListItemOut,
   sort: {
     fields: locationSortableFields,
     default: "createdAt",

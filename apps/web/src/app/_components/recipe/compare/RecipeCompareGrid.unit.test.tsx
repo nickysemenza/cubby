@@ -1,15 +1,25 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { type ComparedRecipe, RecipeCompareGrid } from "./RecipeCompareGrid";
 
-vi.mock("@tanstack/react-router", () => ({
-  Link: ({ children }: { children: ReactNode }) => (
-    <a href="#recipe">{children}</a>
-  ),
-}));
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  cleanup();
+  harness.dispose();
+});
+
+function renderGrid(grid: React.ReactNode) {
+  return render(grid, { wrapper: harness.wrapper });
+}
 
 const comparedRecipe: ComparedRecipe = {
   recipe: {
@@ -34,7 +44,7 @@ const comparedRecipe: ComparedRecipe = {
 
 describe("RecipeCompareGrid", () => {
   it("exposes each comparison label as a row header", () => {
-    render(
+    renderGrid(
       <RecipeCompareGrid compared={[comparedRecipe]} onRemove={vi.fn()} />,
     );
 
@@ -49,7 +59,7 @@ describe("RecipeCompareGrid", () => {
   });
 
   it("labels each remove control with the recipe name", () => {
-    render(
+    renderGrid(
       <RecipeCompareGrid compared={[comparedRecipe]} onRemove={vi.fn()} />,
     );
 

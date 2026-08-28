@@ -14,7 +14,7 @@ import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -50,6 +50,19 @@ import { formatCurrency } from "~/lib/utils";
 type ProjectUse = ProductProjectUsesOut["projects"][number];
 /** `id`/`name` are what the shared list hook keys and links rows by. */
 type ProjectUseRow = ProjectUse & { id: ProjectShortcode; name: string };
+
+/** Product/project operations used by this relationship surface. */
+export interface ProductProjectUsesOperations {
+  projectUses: typeof productOperations.projectUses;
+  setProjectUses: typeof productOperations.setProjectUses;
+  setToolUsage: typeof project.setToolUsage;
+}
+
+const productionOperations: ProductProjectUsesOperations = {
+  projectUses: productOperations.projectUses,
+  setProjectUses: productOperations.setProjectUses,
+  setToolUsage: project.setToolUsage,
+};
 
 /**
  * Project-use history survives a Product recategorization. Current reusable
@@ -91,16 +104,20 @@ const HIDDEN_RELATED_COLUMNS = {
  * replacement, one product-keyed audit entry) rather than N per-project
  * attaches, which could half-apply and would log N entries for one action.
  */
-export function ProductProjectUses({ productId }: { productId: string }) {
+export function ProductProjectUses({
+  productId,
+  operations = productionOperations,
+}: {
+  productId: string;
+  operations?: ProductProjectUsesOperations;
+}) {
   const [editing, setEditing] = useState(false);
-  const query = useQuery(
-    productOperations.projectUses.queryOptions({ productId }),
-  );
+  const query = useQuery(operations.projectUses.queryOptions({ productId }));
   const data = query.data;
   const canEdit = data?.canEdit ?? false;
 
   const detach = useActionMutation({
-    mutationFn: project.setToolUsage.mutationOptions,
+    mutationFn: operations.setToolUsage.mutationOptions,
     success: "Removed from project",
   });
 
@@ -117,21 +134,24 @@ export function ProductProjectUses({ productId }: { productId: string }) {
   const helper = useMemo(() => createCubbyColumnHelper<ProjectUseRow>(), []);
   const category = data?.category;
   const columns = useMemo(
-    () => [
-      helper.accessor((row) => row.status, {
-        id: "status",
-        header: "Status",
-        meta: { className: "w-32" },
-        cell: (info) => {
-          const { label, className } = getStatusBadgeProps(
-            "project",
-            info.getValue(),
-          );
-          return <Badge className={className}>{label}</Badge>;
-        },
-      }),
-      ...(category === "software"
-        ? [
+    () =>
+      createCubbyColumnCollection<ProjectUseRow>((add) => {
+        add(
+          helper.accessor((row) => row.status, {
+            id: "status",
+            header: "Status",
+            meta: { className: "w-32" },
+            cell: (info) => {
+              const { label, className } = getStatusBadgeProps(
+                "project",
+                info.getValue(),
+              );
+              return <Badge className={className}>{label}</Badge>;
+            },
+          }),
+        );
+        if (category === "software") {
+          add(
             helper.accessor((row) => row.sharedWindow, {
               id: "sharedSpend",
               header: "Shared spend",
@@ -157,18 +177,22 @@ export function ProductProjectUses({ productId }: { productId: string }) {
                 );
               },
             }),
-          ]
-        : [
+          );
+        } else {
+          add(
             createCurrencyColumn(helper, "projectPurchaseCost", {
               header: "Bought here",
               className: "w-28",
             }),
-          ]),
-      createTimestampColumn(helper, "attachedAt", {
-        header: "Attached",
-        className: "w-32",
+          );
+        }
+        add(
+          createTimestampColumn(helper, "attachedAt", {
+            header: "Attached",
+            className: "w-32",
+          }),
+        );
       }),
-    ],
     [helper, category],
   );
 
@@ -229,6 +253,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
         {canEdit ? (
           <ProjectUsesDialog
             productId={productId}
+            operations={operations}
             open={editing}
             onOpenChange={setEditing}
             selectedIds={[]}
@@ -272,6 +297,7 @@ export function ProductProjectUses({ productId }: { productId: string }) {
       {canEdit && editing && (
         <ProjectUsesDialog
           productId={productId}
+          operations={operations}
           open
           onOpenChange={setEditing}
           selectedIds={data.projects.map((project) => project.projectId)}
@@ -283,11 +309,13 @@ export function ProductProjectUses({ productId }: { productId: string }) {
 
 function ProjectUsesDialog({
   productId,
+  operations,
   open,
   onOpenChange,
   selectedIds,
 }: {
   productId: string;
+  operations: ProductProjectUsesOperations;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedIds: string[];
@@ -313,7 +341,7 @@ function ProjectUsesDialog({
   };
 
   const save = useActionMutation({
-    mutationFn: productOperations.setProjectUses.mutationOptions,
+    mutationFn: operations.setProjectUses.mutationOptions,
     success: "Project uses updated",
     onSuccess: () => resetAndClose(false),
   });
@@ -328,8 +356,9 @@ function ProjectUsesDialog({
     [selected],
   );
   const onRowSelectionChange = (updater: Updater<RowSelectionState>) => {
-    const next =
-      typeof updater === "function" ? updater(rowSelection) : updater;
+    const next = isRowSelectionUpdater(updater)
+      ? updater(rowSelection)
+      : updater;
     setSelected(
       new Set(
         Object.entries(next)
@@ -340,32 +369,44 @@ function ProjectUsesDialog({
   };
   type ProjectOptionRow = (typeof rows)[number];
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOptionRow>(), []);
-  const columns = useMemo<CubbyColumnDef<ProjectOptionRow>[]>(
-    () => [
-      buildSelectColumn<ProjectOptionRow>(),
-      helper.display({
-        id: "mark",
-        header: "",
-        meta: { className: "w-10", mobile: { slot: "image" } },
-        cell: (info) => <ProjectMark icon={info.row.original.icon} size={20} />,
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ProjectOptionRow>((add) => {
+        add(buildSelectColumn<ProjectOptionRow>());
+        add(
+          helper.display({
+            id: "mark",
+            header: "",
+            meta: { className: "w-10", mobile: { slot: "image" } },
+            cell: (info) => (
+              <ProjectMark icon={info.row.original.icon} size={20} />
+            ),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.name, {
+            id: "name",
+            header: "Project",
+            meta: { className: "w-64", mobile: { slot: "title" } },
+          }),
+        );
+        add(
+          helper.accessor((row) => row, {
+            id: "effectiveDates",
+            header: "Effective dates",
+            enableSorting: false,
+            meta: {
+              className: "w-48",
+              mobile: { slot: "meta", label: "Dates" },
+            },
+            cell: (info) => {
+              const row = info.row.original;
+              if (!row.effectiveStart && !row.effectiveEnd) return "—";
+              return `${row.effectiveStart ?? "…"} – ${row.effectiveEnd ?? "…"}`;
+            },
+          }),
+        );
       }),
-      helper.accessor((row) => row.name, {
-        id: "name",
-        header: "Project",
-        meta: { className: "w-64", mobile: { slot: "title" } },
-      }),
-      helper.accessor((row) => row, {
-        id: "effectiveDates",
-        header: "Effective dates",
-        enableSorting: false,
-        meta: { className: "w-48", mobile: { slot: "meta", label: "Dates" } },
-        cell: (info) => {
-          const row = info.row.original;
-          if (!row.effectiveStart && !row.effectiveEnd) return "—";
-          return `${row.effectiveStart ?? "…"} – ${row.effectiveEnd ?? "…"}`;
-        },
-      }),
-    ],
     [helper],
   );
   const layout = useCubbyTableLayout({
@@ -434,4 +475,10 @@ function ProjectUsesDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function isRowSelectionUpdater(
+  updater: Updater<RowSelectionState>,
+): updater is (previous: RowSelectionState) => RowSelectionState {
+  return typeof updater === "function";
 }
