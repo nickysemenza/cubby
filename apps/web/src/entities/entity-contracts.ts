@@ -184,7 +184,10 @@ function deleteMutationOptions<E extends StandardEntity>(
       );
       if (result.entity !== entity || result.action !== "delete")
         throw new Error("Entity mutation result did not match its command");
-      return { deleted: result.deleted, sideEffects: result.sideEffects };
+      return {
+        deleted: result.deletedReferences.length,
+        sideEffects: result.sideEffects,
+      };
     },
   };
 }
@@ -208,7 +211,10 @@ function bulkUpdateMutationOptions<E extends StandardEntity>(
       );
       if (result.entity !== entity || result.action !== "bulkUpdate")
         throw new Error("Entity mutation result did not match its command");
-      return { updated: result.updated, sideEffects: result.sideEffects };
+      return {
+        updated: result.updatedReferences.length,
+        sideEffects: result.sideEffects,
+      };
     },
   };
 }

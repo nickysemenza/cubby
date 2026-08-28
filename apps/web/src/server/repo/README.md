@@ -10,12 +10,12 @@ The repository layer follows a strict access control pattern using TypeScript's 
 ┌─────────────┐
 │   Workflow  │  (Start functions / MCP adapters)
 └──────┬──────┘
-       │ passes Database (opaque)
+       │ passes Database (request-scoped handle)
        ▼
 ┌─────────────┐
 │  Service    │  (business logic)
 └──────┬──────┘
-       │ passes Database (opaque)
+       │ passes Database (request-scoped handle)
        ▼
 ┌─────────────┐
 │    Repo     │  ← ONLY layer that can access database methods
@@ -26,14 +26,17 @@ The repository layer follows a strict access control pattern using TypeScript's 
 
 ### What is it?
 
-The `Database` type is a **branded/opaque type** that prevents direct access to database methods outside of repo files:
+`Database` is a **request-scoped handle** without query methods of its own.
+Repository helpers resolve its Drizzle client; services and routers keep the
+handle at the boundary and do not resolve it directly:
 
 ```typescript
-// In ~/server/db/index.ts
-export type Database = DrizzleClient & { readonly __brand: unique symbol };
+// In ~/server/db/database.ts
+export class Database { /* runtime handle; no query methods */ }
 ```
 
-This prevents code like this from compiling outside of repo files:
+This keeps code like this out of routers and services by convention and API
+locality:
 
 ```typescript
 // ❌ This will NOT compile in routers or services:
@@ -53,7 +56,7 @@ Use the `getDb()` helper to unwrap the opaque type:
 import { getDb } from "~/server/repo/database-helpers";
 
 export const getUserById = async (db: Database, id: string) => {
-  // Unwrap the Database to get access to methods
+  // Resolve the request-scoped handle only at the repository boundary
   const result = await getDb(db).query.user.findFirst({
     where: eq(user.id, id),
   });

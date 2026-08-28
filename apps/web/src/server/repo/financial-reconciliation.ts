@@ -1,6 +1,7 @@
 import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 
+import { cents } from "~/server/repo/money";
 import type { PurchaseFinancialAggregate } from "~/server/repo/purchase-financial-aggregates";
 
 /**
@@ -203,8 +204,6 @@ export const settlementReferenceAbsentSql = (purchaseAlias: string) =>
       AND sr_a."deletedAt" IS NULL
       AND ${settlementReferencePredicate("sr_ft", "sr_fa")}
   )`;
-
-const cents = (value: number) => Math.round(value * 100);
 
 /**
  * Compute settlement status from already-aggregated live, non-void rows.

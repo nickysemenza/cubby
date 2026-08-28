@@ -3,6 +3,7 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
+  type ImageShortcode,
   parseEntityId,
   parseShortcodeFor,
   type RecipeId,
@@ -1014,8 +1015,13 @@ export const deleteRecipes = async (
   dbOrTx: Database | DrizzleTransaction,
   ids: RecipeId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
-  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
+): Promise<{
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+  deleted: number;
+}> => {
+  if (ids.length === 0)
+    return { detachedImageKeys: [], deletedImageShortcodes: [], deleted: 0 };
 
   return await withTransactionOn(dbOrTx, async (tx) => {
     // Lock live rows before cascading so concurrent deletes cannot interleave.

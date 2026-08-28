@@ -67,6 +67,7 @@ import {
 } from "~/server/repo/purchase";
 import { removeEntity } from "~/server/repo/removal";
 import {
+  resolveAllOrThrow,
   resolveAllPresent,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
@@ -140,6 +141,100 @@ const resolveLiveExpenseIds = (
   tx: DrizzleTransaction,
   shortcodes: ExpenseShortcode[],
 ): Promise<ExpenseId[]> => resolveAllPresent(tx, "expense", shortcodes);
+
+type ExpenseBulkPatch = Pick<
+  ExpenseUpdateData,
+  "projectId" | "trade" | "costType"
+>;
+
+export const updateExpensesInBulk = async (
+  db: Database,
+  shortcodes: ExpenseShortcode[],
+  data: ExpenseBulkPatch,
+  actor: ActorContext,
+): Promise<{
+  updatedIds: ExpenseId[];
+  updatedShortcodes: ExpenseShortcode[];
+}> => {
+  if (new Set(shortcodes).size !== shortcodes.length) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Bulk expense IDs must be unique.",
+    );
+  }
+  if (
+    data.projectId === undefined &&
+    data.trade === undefined &&
+    data.costType === undefined
+  ) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A bulk expense patch must supply at least one field.",
+    );
+  }
+
+  return await withTransaction(db, async (tx) => {
+    const projectId =
+      data.projectId === undefined
+        ? undefined
+        : data.projectId === null
+          ? null
+          : await resolveLiveProjectId(tx, data.projectId);
+    const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
+    const before = await tx
+      .select({
+        id: expense.id,
+        shortcode: expense.shortcode,
+        projectId: expense.projectId,
+        trade: expense.trade,
+        costType: expense.costType,
+      })
+      .from(expense)
+      .where(and(inArray(expense.id, ids), notDeleted(expense)))
+      .for("update");
+    if (before.length !== ids.length) {
+      throw createAppError(
+        "EXPENSE_NOT_FOUND",
+        "One or more expenses are missing.",
+      );
+    }
+
+    const values = buildPartialUpdateValues({
+      projectId,
+      trade: data.trade,
+      costType: data.costType,
+    });
+    await tx
+      .update(expense)
+      .set(values)
+      .where(and(inArray(expense.id, ids), notDeleted(expense)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { ...row, ...values }, [
+        "projectId",
+        "trade",
+        "costType",
+      ]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "expense",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return {
+      updatedIds: before.map((row) => row.id),
+      updatedShortcodes: before.map((row) =>
+        parseShortcodeFor("expense", row.shortcode),
+      ),
+    };
+  });
+};
 
 const fetchExpenseById = (
   db: Database | DrizzleTransaction,
@@ -879,7 +974,7 @@ export const deleteExpensesWithPurchaseEffects = async (
   }
 
   return await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveExpenseIds(tx, shortcodes);
+    const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
     await lockAndValidateForDelete(tx, expense, ids, "Expense");
 
     const qualityTargets = await tx.query.expense.findMany({

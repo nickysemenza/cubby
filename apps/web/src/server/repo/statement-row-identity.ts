@@ -1,3 +1,5 @@
+import { cents } from "./money";
+
 /**
  * The identity function for a provider statement row.
  *
@@ -20,9 +22,6 @@
  */
 const canonical = (value: string) =>
   value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
-
-/** Integer cents, so 10.1 and 10.10 cannot hash differently. */
-const cents = (value: number) => Math.round(value * 100);
 
 /**
  * NUL, not a printable delimiter: a descriptor that happened to contain the

@@ -9,6 +9,7 @@ import {
   tradeSchema,
   type Trade,
 } from "@cubby/schemas/project";
+import { MAX_SPLIT_EXPENSE_PARTS } from "@cubby/schemas/purchase";
 import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { Plus, X } from "lucide-react";
@@ -145,19 +146,23 @@ export function SplitExpenseDialog({
     );
 
   const addPart = () =>
-    setParts((prev) => [
-      ...prev,
-      {
-        key: `part-${keyCounter.current++}`,
-        name: "",
-        cost: "",
-        costType: expense.costType,
-        trade: expense.trade,
-        projectId: expense.projectId,
-        keepProduct: false,
-        productQuantity: "",
-      },
-    ]);
+    setParts((prev) =>
+      prev.length >= MAX_SPLIT_EXPENSE_PARTS
+        ? prev
+        : [
+            ...prev,
+            {
+              key: `part-${keyCounter.current++}`,
+              name: "",
+              cost: "",
+              costType: expense.costType,
+              trade: expense.trade,
+              projectId: expense.projectId,
+              keepProduct: false,
+              productQuantity: "",
+            },
+          ],
+    );
 
   const removePart = (key: string) =>
     setParts((prev) =>
@@ -186,6 +191,7 @@ export function SplitExpenseDialog({
   // The only blocking validation is the schema's own: every part needs a name.
   // The sum is deliberately NOT part of this.
   const missingName = parts.some((part) => part.name.trim() === "");
+  const atSplitLimit = parts.length >= MAX_SPLIT_EXPENSE_PARTS;
 
   const productLabel = expense.productName ?? "the linked product";
 
@@ -353,10 +359,22 @@ export function SplitExpenseDialog({
         </Stack>
 
         <Row align="center" justify="between" gap="sm">
-          <Button variant="outline" size="sm" onClick={addPart}>
-            <Plus />
-            Add part
-          </Button>
+          <Stack gap="tight">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addPart}
+              disabled={atSplitLimit}
+            >
+              <Plus />
+              Add part
+            </Button>
+            {atSplitLimit ? (
+              <Description size="2xs">
+                A split can contain at most {MAX_SPLIT_EXPENSE_PARTS} parts.
+              </Description>
+            ) : null}
+          </Stack>
           {expense.productId && (
             <Description size="2xs">
               "Product" hands {productLabel} to one part; the rest start with no

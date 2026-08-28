@@ -1,6 +1,9 @@
 import { inventorySortableFields } from "@cubby/schemas/inventory";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 
@@ -72,11 +75,7 @@ export const inventoryEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await inventoryShortcodes.all(ctx.db, shortcodes);
-      const { deleted } = await deleteInventoryEntries(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
+      await deleteInventoryEntries(ctx.db, ids, ctx.actorContext);
       const backgroundBatches = await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
@@ -85,7 +84,10 @@ export const inventoryEntityAdapter = defineEntityAdapter({
           source: "inventory.delete",
         })),
       );
-      return { deleted, backgroundBatches };
+      return {
+        deletedReferences: entityMutationReferences("inventory", shortcodes),
+        backgroundBatches,
+      };
     },
   },
 });

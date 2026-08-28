@@ -13,6 +13,7 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 export type PairingRow = {
@@ -26,8 +27,6 @@ export type PairingRow = {
   /** False for a requested row that cannot itself become transfer evidence. */
   eligible?: boolean;
 };
-
-const cents = (value: number) => Math.round(value * 100);
 
 const daysBetween = (a: string, b: string) =>
   Math.round(

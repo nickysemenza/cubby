@@ -9,6 +9,7 @@ import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
   type FinancialTransactionId,
+  type ImageShortcode,
   type ProductId,
   type PurchaseId,
   type PurchaseShortcode,
@@ -108,7 +109,7 @@ import {
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
-  resolveDefaultProjectId,
+  resolveDefaultProjectIds,
 } from "~/server/repo/expense/helpers";
 import {
   calculateFinancialReconciliation,
@@ -125,13 +126,13 @@ import {
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
-import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
   repointEdge,
   resolveMergeTargets,
 } from "~/server/repo/merge";
+import { syncChangedEffectivePrices } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
   emptyPurchaseFinancialAggregate,
@@ -1118,26 +1119,120 @@ export const splitExpense = async (
         );
       }
 
-      const productShortcodes = parts
-        .map((part) => part.productId)
-        .filter((code): code is NonNullable<typeof code> => code !== null);
+      const productShortcodes = uniq(
+        parts
+          .map((part) => part.productId)
+          .filter((code): code is NonNullable<typeof code> => code !== null),
+      );
       const resolvedProductIds = await resolveAllOrThrow(
         tx,
         "product",
         productShortcodes,
       );
-      const productIds = new Map(
-        productShortcodes.map((code, i) => {
-          return [code, resolvedProductIds[i]!] as const;
+      if (resolvedProductIds.length !== productShortcodes.length) {
+        throw new Error("Product shortcode resolution lost its correlation");
+      }
+      const productIds = new Map<
+        (typeof productShortcodes)[number],
+        ProductId
+      >();
+      productShortcodes.forEach((code, index) => {
+        const resolvedId = resolvedProductIds[index];
+        if (!resolvedId) {
+          throw new Error(`Product shortcode resolution lost ${code}`);
+        }
+        productIds.set(code, resolvedId);
+      });
+
+      const projectShortcodes = uniq(
+        parts
+          .map((part) => part.projectId)
+          .filter((code): code is NonNullable<typeof code> => code !== null),
+      );
+      const resolvedProjectIds = await resolveAllOrThrow(
+        tx,
+        "project",
+        projectShortcodes,
+      );
+      if (resolvedProjectIds.length !== projectShortcodes.length) {
+        throw new Error("Project shortcode resolution lost its correlation");
+      }
+      const explicitProjectIds = new Map<
+        (typeof projectShortcodes)[number],
+        (typeof resolvedProjectIds)[number]
+      >();
+      projectShortcodes.forEach((code, index) => {
+        const resolvedId = resolvedProjectIds[index];
+        if (!resolvedId) {
+          throw new Error(`Project shortcode resolution lost ${code}`);
+        }
+        explicitProjectIds.set(code, resolvedId);
+      });
+      const partProductIds = parts.map((part) => {
+        if (!part.productId) return null;
+        const productId = productIds.get(part.productId);
+        if (!productId) {
+          throw new Error(
+            `Product shortcode resolution lost ${part.productId}`,
+          );
+        }
+        return productId;
+      });
+      const projectIds = await resolveDefaultProjectIds(
+        tx,
+        parts.map((part, index) => {
+          const projectId = part.projectId
+            ? explicitProjectIds.get(part.projectId)
+            : null;
+          if (projectId === undefined) {
+            throw new Error(
+              `Project shortcode resolution lost ${String(part.projectId)}`,
+            );
+          }
+          return {
+            projectId,
+            productId: partProductIds[index] ?? null,
+          };
         }),
       );
+      if (projectIds.length !== parts.length) {
+        throw new Error("Default project resolution lost its correlation");
+      }
+      const preparedParts = parts.map((part, index) => {
+        const productId = partProductIds[index] ?? null;
+        const projectId = projectIds[index];
+        if (projectId === undefined) {
+          throw new Error(
+            `Default project resolution lost part ${String(index + 1)}`,
+          );
+        }
+        const lineKind =
+          part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
+        if (lineKind !== "principal" && productId !== null) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Only principal Expenses may link a Product.",
+          );
+        }
+        if (part.productQuantity !== null && productId === null) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Product quantity requires a linked product.",
+          );
+        }
+        assertQuantitySignMatchesCost(part.cost, part.productQuantity);
+        return {
+          part,
+          productId,
+          projectId,
+          lineKind,
+        };
+      });
 
       const pricingCandidates = uniq(
         [
           original.productId,
-          ...parts.map((part) =>
-            part.productId ? (productIds.get(part.productId) ?? null) : null,
-          ),
+          ...preparedParts.map((part) => part.productId),
         ].filter((value): value is ProductId => value !== null),
       );
       const pricesBefore = await loadEffectiveProductPricesById(
@@ -1159,32 +1254,7 @@ export const splitExpense = async (
       }
 
       const inserted: ExpenseId[] = [];
-      for (const part of parts) {
-        const productId = part.productId
-          ? (productIds.get(part.productId) ?? null)
-          : null;
-        const explicitProjectId = part.projectId
-          ? await resolveOrThrow(tx, "project", part.projectId)
-          : null;
-        const projectId = await resolveDefaultProjectId(tx, {
-          projectId: explicitProjectId,
-          productId,
-        });
-        const lineKind =
-          part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
-        if (lineKind !== "principal" && productId !== null) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Only principal Expenses may link a Product.",
-          );
-        }
-        if (part.productQuantity !== null && productId === null) {
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Product quantity requires a linked product.",
-          );
-        }
-        assertQuantitySignMatchesCost(part.cost, part.productQuantity);
+      for (const { part, productId, projectId, lineKind } of preparedParts) {
         const row = await insertWithShortcode(tx, "expense", {
           name: part.name,
           cost: part.cost,
@@ -1201,20 +1271,19 @@ export const splitExpense = async (
           purchaseId: chargeId,
         });
         inserted.push(row.id);
+      }
 
-        if (
-          attributionPolicy === "inherit" &&
-          originalAttributions.length > 0
-        ) {
-          await tx.insert(expenseAttribution).values(
+      if (attributionPolicy === "inherit" && originalAttributions.length > 0) {
+        await tx.insert(expenseAttribution).values(
+          inserted.flatMap((createdExpenseId) =>
             originalAttributions.map((attribution) => ({
-              expenseId: row.id,
+              expenseId: createdExpenseId,
               role: attribution.role,
               ledgerPartyId: attribution.ledgerPartyId,
               weight: attribution.weight,
             })),
-          );
-        }
+          ),
+        );
       }
 
       // NO `notDeleted` guard here, deliberately. The `original` read above uses
@@ -1241,26 +1310,17 @@ export const splitExpense = async (
       await touchDataQualityTargets(tx, {
         productIds: [
           original.productId,
-          ...parts.map((part) =>
-            part.productId ? (productIds.get(part.productId) ?? null) : null,
-          ),
+          ...preparedParts.map((part) => part.productId),
         ].filter((value): value is ProductId => value !== null),
         purchaseIds: [chargeId],
       });
 
       await logAuditEntries(tx, actor, auditEntries);
 
-      const pricesAfter = await loadEffectiveProductPricesById(
+      const priceAffectedProductIds = await syncChangedEffectivePrices(
         tx,
-        pricingCandidates,
+        pricesBefore,
       );
-      const priceAffectedProductIds = pricingCandidates.filter(
-        (productId) =>
-          pricesBefore.get(productId) !== pricesAfter.get(productId),
-      );
-      for (const productId of priceAffectedProductIds) {
-        await syncInventoryValuationsForProduct(tx, productId);
-      }
 
       return { createdIds: inserted, priceAffectedProductIds };
     },
@@ -1741,6 +1801,7 @@ const deletePurchasesWithPolicy = async (
   financialTransactionIds: FinancialTransactionId[];
   /** R2 objects the image cascade reaped; drop them after this commit. */
   detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
   deleted: number;
 }> => {
   if (shortcodes.length === 0)
@@ -1748,6 +1809,7 @@ const deletePurchasesWithPolicy = async (
       expenseIds: [],
       financialTransactionIds: [],
       detachedImageKeys: [],
+      deletedImageShortcodes: [],
       deleted: 0,
     };
 
@@ -1856,24 +1918,25 @@ const deletePurchasesWithPolicy = async (
 
     // `{actor}`, not a caller-owned buffer: the detach `update` entries above
     // were already flushed, and the delete entries must follow them.
-    const { detachedImageKeys, deleted } = await removeEntity(tx, {
-      entity: "purchase",
-      ids,
-      removal: "soft",
-      actor,
-      children: [
-        {
-          table: purchaseProduct,
-          parentColumns: [purchaseProduct.purchaseId],
-          auditKey: "cascadedPurchaseProducts",
-        },
-        {
-          table: purchaseImage,
-          parentColumns: [purchaseImage.purchaseId],
-          auditKey: "cascadedPurchaseImages",
-        },
-      ],
-    });
+    const { detachedImageKeys, deletedImageShortcodes, deleted } =
+      await removeEntity(tx, {
+        entity: "purchase",
+        ids,
+        removal: "soft",
+        actor,
+        children: [
+          {
+            table: purchaseProduct,
+            parentColumns: [purchaseProduct.purchaseId],
+            auditKey: "cascadedPurchaseProducts",
+          },
+          {
+            table: purchaseImage,
+            parentColumns: [purchaseImage.purchaseId],
+            auditKey: "cascadedPurchaseImages",
+          },
+        ],
+      });
 
     return {
       expenseIds: detaching.map((row) => row.id),
@@ -1882,6 +1945,7 @@ const deletePurchasesWithPolicy = async (
       // carries the vendor and order id resolved through its purchase.
       financialTransactionIds: affectedTransactionIds,
       detachedImageKeys,
+      deletedImageShortcodes,
       deleted,
     };
   });

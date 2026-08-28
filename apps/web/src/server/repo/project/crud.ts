@@ -9,7 +9,11 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ImageShortcode,
+  ProjectId,
+  ProjectShortcode,
+} from "@cubby/schemas/identifiers";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectCreateInput,
@@ -383,8 +387,13 @@ export const deleteProjects = async (
   db: Database,
   shortcodes: ProjectShortcode[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
-  if (shortcodes.length === 0) return { detachedImageKeys: [], deleted: 0 };
+): Promise<{
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+  deleted: number;
+}> => {
+  if (shortcodes.length === 0)
+    return { detachedImageKeys: [], deletedImageShortcodes: [], deleted: 0 };
 
   const ids = await resolveAllOrThrow(db, "project", shortcodes);
 

@@ -91,7 +91,7 @@ import type {
   InventoryEntryDeepDB,
   UpdateInventoryEntryData,
 } from "./types";
-import { loadValuationGraph } from "./valuation";
+import { loadValuationGraph, loadValuationGraphs } from "./valuation";
 
 const loadInventoryEntryPricing = async (
   db: Database,
@@ -130,27 +130,25 @@ export const computeValuationForEntry = async (
  * is noise in the data-quality fingerprints and can trip the `INVENTORY_STALE`
  * guard in `bulk.ts` for a recount session that changed nothing.
  */
-export const syncInventoryValuationsForProduct = async (
+export const syncInventoryValuationsForProducts = async (
   db: Database | DrizzleTransaction,
-  productId: ProductId,
+  productIds: readonly ProductId[],
 ): Promise<number> => {
   const client = unwrapDb(db);
+  const ids = [...new Set(productIds)];
+  if (ids.length === 0) return 0;
 
   const entries = await client.query.inventoryEntry.findMany({
     where: and(
-      eq(inventoryEntry.productId, productId),
+      inArray(inventoryEntry.productId, ids),
       notDeleted(inventoryEntry),
     ),
-    columns: { id: true, amount: true, valuation: true },
+    columns: { id: true, productId: true, amount: true, valuation: true },
   });
 
   if (entries.length === 0) return 0;
 
-  const mappings = await loadValuationGraph(db, productId);
-  const valuations = computeInventoryValuations(
-    entries.map((entry) => parseInventoryAmount(entry.amount, entry.id)),
-    mappings,
-  );
+  const graphs = await loadValuationGraphs(db, ids);
 
   // Compared with `===` against a value read back from a `real` (float4)
   // column, which looks fragile and isn't: Postgres emits floats as the
@@ -164,14 +162,31 @@ export const syncInventoryValuationsForProduct = async (
   // switches to scientific notation. The failure is benign — the row is
   // rewritten with the number it already had — so this stays a plain compare
   // rather than a cents-scaled one that would imply the equality is unsound.
-  const updates = entries.flatMap((entry, index) => {
-    const valuation = valuations[index] ?? null;
-    return entry.valuation === valuation ? [] : [{ id: entry.id, valuation }];
+  const entriesByProduct = new Map<ProductId, typeof entries>();
+  for (const entry of entries) {
+    const group = entriesByProduct.get(entry.productId) ?? [];
+    group.push(entry);
+    entriesByProduct.set(entry.productId, group);
+  }
+  const updates = [...entriesByProduct].flatMap(([productId, rows]) => {
+    const valuations = computeInventoryValuations(
+      rows.map((entry) => parseInventoryAmount(entry.amount, entry.id)),
+      graphs.get(productId) ?? [],
+    );
+    return rows.flatMap((entry, index) => {
+      const valuation = valuations[index] ?? null;
+      return entry.valuation === valuation ? [] : [{ id: entry.id, valuation }];
+    });
   });
   if (updates.length === 0) return 0;
 
   return batchUpdateWithCaseWhen(client, inventoryEntry, updates);
 };
+
+export const syncInventoryValuationsForProduct = async (
+  db: Database | DrizzleTransaction,
+  productId: ProductId,
+): Promise<number> => syncInventoryValuationsForProducts(db, [productId]);
 
 export const checkUniqueProductDuplicate = async (
   db: Database,

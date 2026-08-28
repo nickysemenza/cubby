@@ -1644,7 +1644,12 @@ describe("expense kernel — bulkUpdate", () => {
     const p2 = await make("kernel bulk move expense 2");
 
     const toB = await bulkUpdate([p1.id, p2.id], { projectId: projectB.id });
-    expect(toB.updated).toBe(2);
+    expect(toB.updatedReferences).toEqual(
+      expect.arrayContaining([
+        { entity: "expense", id: p1.id },
+        { entity: "expense", id: p2.id },
+      ]),
+    );
     // The kernel does NOT run side effects for bulkUpdate; the repository does.
     expect(toB.sideEffects).toBeDefined();
     expect((await getExpenseByShortcode(ctx.db, p1.id))?.projectId).toBe(
@@ -1652,7 +1657,7 @@ describe("expense kernel — bulkUpdate", () => {
     );
 
     const toInbox = await bulkUpdate([p1.id, p2.id], { projectId: null });
-    expect(toInbox.updated).toBe(2);
+    expect(toInbox.updatedReferences).toHaveLength(2);
     expect((await getExpenseByShortcode(ctx.db, p2.id))?.projectId).toBeNull();
   });
 
@@ -1670,11 +1675,33 @@ describe("expense kernel — bulkUpdate", () => {
 
     expect(
       (await bulkUpdate([e.id], { trade: "drywall", costType: "services" }))
-        .updated,
-    ).toBe(1);
+        .updatedReferences,
+    ).toEqual([{ entity: "expense", id: e.id }]);
     const reread = await getExpenseByShortcode(ctx.db, e.id);
     expect(reread?.trade).toBe("drywall");
     expect(reread?.costType).toBe("services");
+  });
+
+  it("rejects a partially missing selection before changing any expense", async () => {
+    const { output: expense } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2024-01-15",
+        trade: "other",
+        costType: "materials",
+        name: "atomic expense patch",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      bulkUpdate([expense.id, testShortcode("expense", "EXP-ZZZZ")], {
+        trade: "drywall",
+      }),
+    ).rejects.toMatchObject({ reason: "EXPENSE_NOT_FOUND" });
+    expect((await getExpenseByShortcode(ctx.db, expense.id))?.trade).toBe(
+      "other",
+    );
   });
 
   it("refuses a field the entity never declared as bulk-updatable", async () => {

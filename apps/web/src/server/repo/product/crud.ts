@@ -7,6 +7,7 @@ import {
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type {
+  ImageShortcode,
   IngredientId,
   LocationId,
   ProductId,
@@ -127,7 +128,10 @@ import {
   relatedWhereConditions,
 } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
-import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveAllPresent,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -1705,7 +1709,7 @@ export const setProductsStockTracked = async (
   const { stockTracked } = input;
 
   const updatedShortcodes = await withTransaction(db, async (tx) => {
-    const ids = await resolveAllPresent(tx, "product", input.ids);
+    const ids = await resolveAllOrThrow(tx, "product", input.ids);
     const before = await tx.query.product.findMany({
       where: and(inArray(product.id, ids), notDeleted(product)),
       columns: { id: true, shortcode: true, stockTracked: true },
@@ -2130,13 +2134,32 @@ export const deleteProducts = async (
   db: Database,
   ids: ProductId[],
   actor: ActorContext,
-): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
-  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
+): Promise<{
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+  deleted: number;
+  ingredientIds: IngredientId[];
+}> => {
+  if (ids.length === 0)
+    return {
+      detachedImageKeys: [],
+      deletedImageShortcodes: [],
+      deleted: 0,
+      ingredientIds: [],
+    };
 
   return await withTransaction(db, async (tx) => {
     // Lock products and validate they exist and aren't already deleted
     // Prevents race conditions by acquiring row-level locks
     await lockAndValidateForDelete(tx, product, ids, "Product");
+    const ingredientIds = uniq(
+      (
+        await tx.query.product.findMany({
+          where: inArray(product.id, ids),
+          columns: { ingredientId: true },
+        })
+      ).flatMap((row) => row.ingredientId ?? []),
+    );
 
     /** Product deletion must reject live acquisition/history evidence through the shared incoming-edge policy. */
     for (const key of Object.keys(PRODUCT_RETAINING_DEPENDENTS)) {
@@ -2174,7 +2197,7 @@ export const deleteProducts = async (
       .delete(productConversionCoverage)
       .where(inArray(productConversionCoverage.productId, ids));
 
-    return await removeEntity(tx, {
+    const removal = await removeEntity(tx, {
       entity: "product",
       ids,
       removal: "soft",
@@ -2202,6 +2225,7 @@ export const deleteProducts = async (
         },
       ],
     });
+    return { ...removal, ingredientIds };
   });
 };
 

@@ -329,6 +329,38 @@ describe("product repository", () => {
     );
   });
 
+  it("returns linked ingredient IDs with a bulk delete", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Deleted Product Ingredient", aliases: [] },
+      ctx.actor,
+    );
+    const first = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Deleted Product Ingredient First",
+        ingredientId: ingredient.id,
+      }),
+      ctx.actor,
+    );
+    const second = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Deleted Product Ingredient Second",
+        ingredientId: ingredient.id,
+      }),
+      ctx.actor,
+    );
+
+    const result = await deleteProducts(
+      ctx.db,
+      [first.entityId, second.entityId],
+      ctx.actor,
+    );
+
+    expect(result.ingredientIds).toEqual([ingredient.entityId]);
+  });
+
   it("uses explicit food identifiers while retaining external IDs", async () => {
     const product = await createProduct(
       ctx.db,
@@ -3597,7 +3629,12 @@ describe("product repository", () => {
       });
       await expect(
         deleteProducts(ctx.db, [prod.entityId], ctx.actor),
-      ).resolves.toMatchObject({ detachedImageKeys: [imageKeyBefore!.key] });
+      ).resolves.toMatchObject({
+        detachedImageKeys: [imageKeyBefore!.key],
+        deletedImageShortcodes: [
+          parseShortcodeFor("image", pendingImage.shortcode),
+        ],
+      });
 
       const extIdAfter = await getDb(ctx.db).query.productExternalId.findFirst({
         where: eq(productExternalId.id, extIdBefore!.id),
@@ -3914,7 +3951,7 @@ describe("product repository — setProductsStockTracked", () => {
     expect(restored?.stockTracked).toBeNull();
   });
 
-  it("is a no-op on a soft-deleted product rather than resurrecting it", async () => {
+  it("rejects a soft-deleted product without resurrecting it", async () => {
     const gone = await createProduct(
       ctx.db,
       makeProductInput({ name: "sweep deleted" }),
@@ -3922,13 +3959,13 @@ describe("product repository — setProductsStockTracked", () => {
     );
     await deleteProducts(ctx.db, [gone.entityId], ctx.actor);
 
-    const updated = await setProductsStockTracked(
-      ctx.db,
-      { ids: [gone.id], stockTracked: false },
-      ctx.actor,
-    );
-
-    expect(updated).toEqual([]);
+    await expect(
+      setProductsStockTracked(
+        ctx.db,
+        { ids: [gone.id], stockTracked: false },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ reason: "PRODUCT_NOT_FOUND" });
   });
 });
 

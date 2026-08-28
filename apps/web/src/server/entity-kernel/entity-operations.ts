@@ -231,12 +231,11 @@ export const defineEntityOperations = <
     });
   },
   delete: async (ctx: EntityKernelContext, idInputs: string[]) => {
-    void binding.lifecycle.delete;
     const ids = idInputs.map((id) =>
       parseSchema<S["id"], string>(binding.schemas.id, id),
     );
     const {
-      deleted,
+      deletedReferences,
       detachedImageKeys = [],
       backgroundBatches = [],
       affectedEdges,
@@ -245,8 +244,7 @@ export const defineEntityOperations = <
     return entityMutationResultSchema.parse({
       action: "delete",
       entity: binding.entity,
-      deleted,
-      deletedReferences: idInputs.map((id) => ({ entity: binding.entity, id })),
+      deletedReferences,
       affectedEdges:
         affectedEdges ??
         Object.entries(binding.lifecycle.delete).map(([edge, disposition]) => ({
@@ -274,7 +272,7 @@ export const defineEntityOperations = <
       parseSchema<S["id"], string>(binding.schemas.id, id),
     );
     const {
-      updated,
+      updatedReferences,
       detachedImageKeys = [],
       backgroundBatches = [],
     } = await bulkUpdate(
@@ -286,8 +284,7 @@ export const defineEntityOperations = <
     return entityMutationResultSchema.parse({
       action: "bulkUpdate",
       entity: binding.entity,
-      updated,
-      updatedIds: idInputs,
+      updatedReferences,
       sideEffects: { backgroundBatches },
     });
   },

@@ -33,7 +33,19 @@ export const imageEntityAdapter = defineEntityAdapter({
     delete: async (ctx, shortcodes) => {
       const ids = await imageShortcodes.all(ctx.db, shortcodes);
       const { deletedIds, deletedKeys } = await deleteImages(ctx.db, ids);
-      return { deleted: deletedIds.length, detachedImageKeys: deletedKeys };
+      const shortcodeById = new Map<string, (typeof shortcodes)[number]>(
+        ids.map((id, index) => [id, shortcodes[index]!]),
+      );
+      return {
+        deletedReferences: deletedIds.map((id) => {
+          const shortcode = shortcodeById.get(id);
+          if (!shortcode) {
+            throw new Error("Image delete returned an ID outside its request");
+          }
+          return { entity: "image", id: shortcode };
+        }),
+        detachedImageKeys: deletedKeys,
+      };
     },
   },
 });

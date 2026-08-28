@@ -525,6 +525,111 @@ const resolveLiveTaskProjectId = (
   shortcode: ProjectShortcode,
 ): Promise<ProjectId> => resolveOrThrow(tx, "project", shortcode);
 
+type TaskBulkPatch = Pick<
+  TaskUpdateData,
+  "projectId" | "status" | "trade" | "dueDate" | "dueEndDate"
+>;
+
+export const updateTasksInBulk = async (
+  db: Database,
+  shortcodes: TaskShortcode[],
+  data: TaskBulkPatch,
+  actor: ActorContext,
+): Promise<{ updatedIds: TaskId[]; updatedShortcodes: TaskShortcode[] }> => {
+  if (new Set(shortcodes).size !== shortcodes.length) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Bulk task IDs must be unique.",
+    );
+  }
+  if (data.dueDate !== undefined || data.dueEndDate !== undefined) {
+    if (data.dueDate === undefined || data.dueEndDate === undefined) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A bulk due-date patch must supply both dueDate and dueEndDate.",
+      );
+    }
+  }
+
+  const hasPatch =
+    data.projectId !== undefined ||
+    data.status !== undefined ||
+    data.trade !== undefined ||
+    data.dueDate !== undefined ||
+    data.dueEndDate !== undefined;
+  if (!hasPatch) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A bulk task patch must supply at least one field.",
+    );
+  }
+
+  return await withTransaction(db, async (tx) => {
+    const projectId =
+      data.projectId === undefined
+        ? undefined
+        : data.projectId === null
+          ? null
+          : await resolveLiveTaskProjectId(tx, data.projectId);
+    const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
+    const before = await tx
+      .select({
+        id: task.id,
+        shortcode: task.shortcode,
+        projectId: task.projectId,
+        status: task.status,
+        trade: task.trade,
+        dueDate: task.dueDate,
+        dueEndDate: task.dueEndDate,
+      })
+      .from(task)
+      .where(and(inArray(task.id, ids), notDeleted(task)))
+      .for("update");
+    if (before.length !== ids.length) {
+      throw createAppError("TASK_NOT_FOUND", "One or more tasks are missing.");
+    }
+
+    const values = buildPartialUpdateValues({
+      projectId,
+      status: data.status,
+      trade: data.trade,
+      dueDate: data.dueDate,
+      dueEndDate: data.dueEndDate,
+    });
+    await tx
+      .update(task)
+      .set(values)
+      .where(and(inArray(task.id, ids), notDeleted(task)));
+
+    const auditEntries: AuditEntryInput[] = [];
+    for (const row of before) {
+      const changes = computeChanges(row, { ...row, ...values }, [
+        "projectId",
+        "status",
+        "trade",
+        "dueDate",
+        "dueEndDate",
+      ]);
+      if (changes) {
+        auditEntries.push({
+          entityType: "task",
+          entityId: row.id,
+          action: "update",
+          changes,
+        });
+      }
+    }
+    await logAuditEntries(tx, actor, auditEntries);
+
+    return {
+      updatedIds: before.map((row) => row.id),
+      updatedShortcodes: before.map((row) =>
+        parseShortcodeFor("task", row.shortcode),
+      ),
+    };
+  });
+};
+
 /**
  * Bulk "move to project" — a plain `projectId` column write over `ids`, one
  * transaction, one audit entry per row that actually changed. `projectId:
@@ -809,7 +914,7 @@ type TaskQueryClient = DrizzleClient | DrizzleTransaction;
 const fetchLiveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
   dbc.query.task.findMany({
     where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
-    columns: { id: true, parentTaskId: true },
+    columns: { id: true, shortcode: true, parentTaskId: true },
   });
 
 /**
@@ -822,23 +927,20 @@ export const deleteTasks = async (
   db: Database,
   shortcodes: TaskShortcode[],
   actor: ActorContext,
-): Promise<{ deleted: number }> => {
-  if (shortcodes.length === 0) return { deleted: 0 };
+): Promise<{ deletedShortcodes: TaskShortcode[] }> => {
+  if (shortcodes.length === 0) return { deletedShortcodes: [] };
 
   return await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIds(tx, shortcodes);
+    const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
     await lockAndValidateForDelete(tx, task, ids, "Task");
 
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);
     const allIds = [...ids, ...liveSubtasks.map((t) => t.id)];
 
-    // Over `allIds`, not `ids`: the cascaded subtasks are removals too. Read
-    // `deleted` off `removeEntity`'s return rather than `shortcodes.length` (or
-    // even `allIds.length`, which is trivially the same number here) — this is
-    // the one delete in the entity manifest that removes MORE rows than were
-    // requested, which is exactly the case that makes a caller-asserted count
-    // wrong. See `removeEntity`'s note on its own return.
-    const { deleted } = await removeEntity(tx, {
+    // Over `allIds`, not `ids`: the cascaded subtasks are removals too. Their
+    // public shortcodes are returned below so callers report what was actually
+    // deleted rather than projecting the request into an incomplete result.
+    await removeEntity(tx, {
       entity: "task",
       ids: allIds,
       removal: "soft",
@@ -856,6 +958,11 @@ export const deleteTasks = async (
         },
       ],
     });
-    return { deleted };
+    return {
+      deletedShortcodes: [
+        ...shortcodes,
+        ...liveSubtasks.map((row) => parseShortcodeFor("task", row.shortcode)),
+      ],
+    };
   });
 };

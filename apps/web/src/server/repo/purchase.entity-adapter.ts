@@ -4,7 +4,10 @@ import {
   purchaseSortableFields,
 } from "@cubby/schemas/purchase";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 
@@ -53,7 +56,10 @@ export const purchaseEntityAdapter = defineEntityAdapter({
         ],
       );
       return {
-        deleted: detached.deleted,
+        deletedReferences: [
+          ...entityMutationReferences("purchase", ids),
+          ...entityMutationReferences("image", detached.deletedImageShortcodes),
+        ],
         detachedImageKeys: detached.detachedImageKeys,
         backgroundBatches,
       };

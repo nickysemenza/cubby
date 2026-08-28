@@ -97,9 +97,15 @@ export function flattenEntityMutationResult(
   if ("item" in result)
     return { ...result.item, sideEffects: result.sideEffects };
   if (result.action === "delete")
-    return { deleted: result.deleted, sideEffects: result.sideEffects };
+    return {
+      deleted: result.deletedReferences.length,
+      sideEffects: result.sideEffects,
+    };
   if (result.action === "bulkUpdate")
-    return { updated: result.updated, sideEffects: result.sideEffects };
+    return {
+      updated: result.updatedReferences.length,
+      sideEffects: result.sideEffects,
+    };
   return result.result;
 }
 

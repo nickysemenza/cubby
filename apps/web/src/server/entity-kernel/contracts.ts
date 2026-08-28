@@ -200,7 +200,6 @@ export const entityQueryResultSchema = z.discriminatedUnion("action", [
 export const entityDeleteResultSchema = z.object({
   action: z.literal("delete"),
   entity: entityKernelEntitySchema,
-  deleted: z.number().int().nonnegative(),
   deletedReferences: z.array(
     z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
   ),
@@ -216,8 +215,9 @@ export const entityDeleteResultSchema = z.object({
 export const entityBulkUpdateResultSchema = z.object({
   action: z.literal("bulkUpdate"),
   entity: entityKernelEntitySchema,
-  updated: z.number().int().nonnegative(),
-  updatedIds: z.array(z.string().min(1)),
+  updatedReferences: z.array(
+    z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
+  ),
   sideEffects: mutationSideEffectsSchema,
 });
 export const entityRelationMutationResultSchema = z.object({

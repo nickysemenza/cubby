@@ -1,6 +1,9 @@
 import { wishSortableFields } from "@cubby/schemas/wish";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 
 import {
   createWish,
@@ -21,6 +24,9 @@ export const wishEntityAdapter = defineEntityAdapter({
       wishList(ctx.db, filters, sorts, pagination),
     create: (ctx, data) => createWish(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) => updateWish(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) => deleteWishes(ctx.db, ids, ctx.actorContext),
+    delete: async (ctx, ids) => {
+      await deleteWishes(ctx.db, ids, ctx.actorContext);
+      return { deletedReferences: entityMutationReferences("wish", ids) };
+    },
   },
 });

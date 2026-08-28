@@ -39,6 +39,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type EntityId,
+  type ImageShortcode,
   imageId as imageIdSchema,
 } from "@cubby/schemas/identifiers";
 import { and, inArray, or, type SQL } from "drizzle-orm";
@@ -217,8 +218,11 @@ const collectCascadingImageIds = async (
  * accounted for 50 of the 133 orphans found in production. So any image the
  * cascade orphaned is deleted here too, and its R2 key comes back in
  * `detachedImageKeys` for the caller to drop **after the commit** (an object
- * delete has no rollback). Callers that own no images get an empty array and
- * can ignore it; a caller that owns images and discards it leaks the object.
+ * delete has no rollback). Their public ids come back in
+ * `deletedImageShortcodes`, so the mutation boundary can report every public
+ * entity the cascade actually removed. Callers that own no images get empty
+ * arrays and can ignore them; a caller that owns images and discards the keys
+ * leaks the object.
  */
 export const removeEntity = async <E extends RemovableEntity>(
   dbOrTx: Database | DrizzleTransaction,
@@ -231,9 +235,19 @@ export const removeEntity = async <E extends RemovableEntity>(
     /** Counts the caller computed itself, merged over the derived ones. */
     extraCounts?: CascadeCounts;
   },
-): Promise<{ detachedImageKeys: string[]; deleted: number }> => {
+): Promise<{
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+  deleted: number;
+}> => {
   const { entity, ids, removal, actor, children = [], extraCounts } = args;
-  if (ids.length === 0) return { detachedImageKeys: [], deleted: 0 };
+  if (ids.length === 0) {
+    return {
+      detachedImageKeys: [],
+      deletedImageShortcodes: [],
+      deleted: 0,
+    };
+  }
 
   return await withTransactionOn(dbOrTx, async (tx) => {
     // Every count is taken before any statement runs: counting between removals
@@ -295,6 +309,10 @@ export const removeEntity = async <E extends RemovableEntity>(
     // to delete one parent task can remove several rows. Reporting the caller's
     // input length instead understates those cascades — see `deleteHandler`,
     // which had no measured count to report and asserted `ids.length`.
-    return { detachedImageKeys: reaped.deletedKeys, deleted: ids.length };
+    return {
+      detachedImageKeys: reaped.deletedKeys,
+      deletedImageShortcodes: reaped.deletedShortcodes,
+      deleted: ids.length,
+    };
   });
 };

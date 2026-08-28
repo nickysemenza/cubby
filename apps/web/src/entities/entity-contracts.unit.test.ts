@@ -99,8 +99,7 @@ describe("kernel browser transport", () => {
       entityBrowserMutationResultSchema.parse({
         action: "delete",
         entity: "product",
-        deleted: 1,
-        deletedReferences: [],
+        deletedReferences: [{ entity: "product", id: "PRD-4K7M" }],
         affectedEdges: [],
         sideEffects: { backgroundBatches: [] },
       }),

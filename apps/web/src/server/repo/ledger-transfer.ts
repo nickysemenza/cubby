@@ -47,6 +47,7 @@ import {
   replaceLedgerSourceClaims,
   softDeleteLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
+import { cents } from "~/server/repo/money";
 import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
@@ -68,8 +69,6 @@ export const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
     description: "Transfer-owned normalized claims are retired.",
   },
 } as const satisfies IncomingEdgePolicy<"ledgerTransfer", OperationDisposition>;
-
-const cents = (value: number) => Math.round(value * 100);
 
 const columns = {
   id: ledgerTransfer.id,

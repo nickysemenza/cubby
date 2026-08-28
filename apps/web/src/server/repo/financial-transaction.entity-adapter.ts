@@ -1,6 +1,9 @@
 import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
 
-import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
+import {
+  defineEntityAdapter,
+  entityMutationReferences,
+} from "~/server/entity-kernel/adapter";
 
 import {
   createFinancialTransaction,
@@ -26,7 +29,14 @@ export const financialTransactionEntityAdapter = defineEntityAdapter({
       createFinancialTransaction(ctx.db, data, ctx.actorContext),
     update: (ctx, id, data) =>
       updateFinancialTransaction(ctx.db, id, data, ctx.actorContext),
-    delete: (ctx, ids) =>
-      deleteFinancialTransactions(ctx.db, ids, ctx.actorContext),
+    delete: async (ctx, ids) => {
+      await deleteFinancialTransactions(ctx.db, ids, ctx.actorContext);
+      return {
+        deletedReferences: entityMutationReferences(
+          "financialTransaction",
+          ids,
+        ),
+      };
+    },
   },
 });

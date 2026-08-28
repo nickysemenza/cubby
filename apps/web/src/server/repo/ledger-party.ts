@@ -46,7 +46,10 @@ import {
   resolveMergeTargets,
 } from "~/server/repo/merge/core";
 import { removeEntity } from "~/server/repo/removal/entity";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
@@ -293,11 +296,7 @@ export async function deleteLedgerParties(
   shortcodes: LedgerPartyShortcode[],
   actor: ActorContext,
 ) {
-  const ids = uniq(
-    await Promise.all(
-      shortcodes.map((id) => resolveOrThrow(db, "ledgerParty", id)),
-    ),
-  );
+  const ids = uniq(await resolveAllOrThrow(db, "ledgerParty", shortcodes));
   return withTransaction(db, async (tx) => {
     const parties = await tx
       .select(columns)

@@ -7,7 +7,7 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 /**
- * Get the underlying Drizzle client from the opaque Database type.
+ * Get the underlying Drizzle client from the request-scoped Database handle.
  * This should ONLY be used within repo files to access the database.
  * Services and routers should never call this - they just pass Database around.
  */
@@ -18,9 +18,10 @@ export const getDb = (db: Database): DrizzleClient => {
 /**
  * Is this handle an already-open transaction rather than the pooled Database?
  *
- * The `"rollback"` sniff lives here and nowhere else: `Database` is opaque (it
- * declares no methods at all) while a `DrizzleTransaction` carries `rollback`,
- * so presence of that key is the only structural signal separating them.
+ * The `"rollback"` sniff lives here and nowhere else: repository code receives
+ * either the request-scoped Database handle or a DrizzleTransaction, and the
+ * transaction carries `rollback`, so presence of that key is the structural
+ * signal separating them.
  * Centralized so the two consumers ({@link unwrapDb},
  * {@link withTransactionOn}) can't drift on it.
  */
@@ -31,7 +32,7 @@ export const isTransaction = (
 /**
  * Safely unwrap Database or use DrizzleTransaction directly.
  * Detects if the input is already a DrizzleTransaction and returns it,
- * otherwise unwraps the branded Database type.
+ * otherwise resolves the Database handle's repository client.
  */
 export const unwrapDb = (
   db: Database | DrizzleTransaction,
