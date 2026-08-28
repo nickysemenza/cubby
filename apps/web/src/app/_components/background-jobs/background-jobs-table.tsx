@@ -30,6 +30,7 @@ import RTable from "~/app/_components/data-table/Table";
 import {
   type CubbyCellContext,
   type CubbyFilterFn,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -391,122 +392,145 @@ function BackgroundJobsTable(props: BackgroundJobsTableProps) {
     },
     [props.selectedBatchId],
   );
-  const columns = [
-    helper.accessor(
-      (row) =>
-        row.rowType === "batch" ? batchFilterText(row.batch) : undefined,
-      {
-        id: "search",
-        header: "Search",
-        filterFn: batchFilter,
-        enableSorting: false,
-        enableHiding: false,
-        meta: {
-          mobile: { slot: "hidden" },
-          filterConfig: { placeholder: "Filter source, entity, or id" },
-        },
-      },
-    ),
-    ...SELECT_FILTERS.map(([id, field, header, values]) =>
+  const columns = createCubbyColumnCollection<BackgroundJobTableRow>((add) => {
+    add(
       helper.accessor(
-        (row) => (row.rowType === "batch" ? row.batch[field] : undefined),
+        (row) =>
+          row.rowType === "batch" ? batchFilterText(row.batch) : undefined,
         {
-          id,
-          header,
+          id: "search",
+          header: "Search",
           filterFn: batchFilter,
           enableSorting: false,
           enableHiding: false,
           meta: {
             mobile: { slot: "hidden" },
-            filterConfig: {
-              placeholder: `All ${header.toLowerCase()}s`,
-              filterType: "select",
-              options: values.map((value) => ({ label: value, value })),
-            },
+            filterConfig: { placeholder: "Filter source, entity, or id" },
           },
         },
       ),
-    ),
-    helper.accessor("name", {
-      id: "record",
-      header: "Record",
-      size: 180,
-      enableCellSelection: false,
-      meta: { mono: true, mobile: { slot: "title", priority: 0 } },
-      cell: RecordCell,
-    }),
-    helper.accessor("work", {
-      ...COLUMN_DEFAULTS,
-      header: "Work",
-      size: 260,
-      meta: { mobile: { slot: "subtitle", priority: 10 } },
-      cell: ({ row, getValue }) =>
-        row.original.rowType === "job" ? (
-          <JobTarget row={row.original} />
-        ) : (
-          getValue()
+    );
+    for (const [id, field, header, values] of SELECT_FILTERS) {
+      add(
+        helper.accessor(
+          (row) => (row.rowType === "batch" ? row.batch[field] : undefined),
+          {
+            id,
+            header,
+            filterFn: batchFilter,
+            enableSorting: false,
+            enableHiding: false,
+            meta: {
+              mobile: { slot: "hidden" },
+              filterConfig: {
+                placeholder: `All ${header.toLowerCase()}s`,
+                filterType: "select",
+                options: values.map((value) => ({ label: value, value })),
+              },
+            },
+          },
         ),
-    }),
-    helper.accessor("route", {
-      ...COLUMN_DEFAULTS,
-      header: "Route",
-      size: 190,
-      meta: { mobile: { slot: "meta", priority: 30 } },
-      cell: ({ row, getValue }) =>
-        row.original.rowType === "batch" ? (
-          <Row gap="xs">
-            <span>{row.original.batch.processor}</span>
-            <span>·</span>
-            <OriginLink batch={row.original.batch} />
-          </Row>
-        ) : (
-          getValue()
-        ),
-    }),
-    helper.accessor("status", {
-      ...COLUMN_DEFAULTS,
-      header: "Status",
-      size: 170,
-      meta: { mobile: { slot: "trailing", priority: 10 } },
-      cell: ({ row, getValue }) =>
-        getValue() ? (
-          <Row gap="xs">
-            <Badge variant={STATUS_TONE[getValue()!]}>{getValue()}</Badge>
-            <span className="font-mono text-2xs text-muted-foreground">
-              {row.original.progress}
-            </span>
-          </Row>
-        ) : null,
-    }),
-    helper.accessor("timing", {
-      ...COLUMN_DEFAULTS,
-      header: "Timing",
-      size: 150,
-      meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
-    }),
-    helper.accessor("createdAt", {
-      ...COLUMN_DEFAULTS,
-      header: "Created",
-      size: 190,
-      sortFn: (left, right, id) =>
-        (left.getValue<Date | null>(id)?.getTime() ?? 0) -
-        (right.getValue<Date | null>(id)?.getTime() ?? 0),
-      meta: { mono: true, mobile: { slot: "meta", priority: 60 } },
-      cell: ({ getValue }) => (getValue() ? formatDate(getValue()!) : null),
-    }),
-    helper.display({
-      id: "actions",
-      header: "",
-      size: 96,
-      minSize: 40,
-      maxSize: 160,
-      enableSorting: false,
-      enableHiding: false,
-      enableCellSelection: false,
-      meta: { mobile: { slot: "actions", priority: 100 } },
-      cell: ({ row }) => <RowActions row={row.original} {...props} />,
-    }),
-  ];
+      );
+    }
+    add(
+      helper.accessor("name", {
+        id: "record",
+        header: "Record",
+        size: 180,
+        enableCellSelection: false,
+        meta: { mono: true, mobile: { slot: "title", priority: 0 } },
+        cell: RecordCell,
+      }),
+    );
+    add(
+      helper.accessor("work", {
+        ...COLUMN_DEFAULTS,
+        header: "Work",
+        size: 260,
+        meta: { mobile: { slot: "subtitle", priority: 10 } },
+        cell: ({ row, getValue }) =>
+          row.original.rowType === "job" ? (
+            <JobTarget row={row.original} />
+          ) : (
+            getValue()
+          ),
+      }),
+    );
+    add(
+      helper.accessor("route", {
+        ...COLUMN_DEFAULTS,
+        header: "Route",
+        size: 190,
+        meta: { mobile: { slot: "meta", priority: 30 } },
+        cell: ({ row, getValue }) =>
+          row.original.rowType === "batch" ? (
+            <Row gap="xs">
+              <span>{row.original.batch.processor}</span>
+              <span>·</span>
+              <OriginLink batch={row.original.batch} />
+            </Row>
+          ) : (
+            getValue()
+          ),
+      }),
+    );
+    add(
+      helper.accessor("status", {
+        ...COLUMN_DEFAULTS,
+        header: "Status",
+        size: 170,
+        meta: { mobile: { slot: "trailing", priority: 10 } },
+        cell: ({ row, getValue }) => {
+          const status = getValue();
+          return status ? (
+            <Row gap="xs">
+              <Badge variant={STATUS_TONE[status]}>{status}</Badge>
+              <span className="font-mono text-2xs text-muted-foreground">
+                {row.original.progress}
+              </span>
+            </Row>
+          ) : null;
+        },
+      }),
+    );
+    add(
+      helper.accessor("timing", {
+        ...COLUMN_DEFAULTS,
+        header: "Timing",
+        size: 150,
+        meta: { mono: true, mobile: { slot: "meta", priority: 40 } },
+      }),
+    );
+    add(
+      helper.accessor("createdAt", {
+        ...COLUMN_DEFAULTS,
+        header: "Created",
+        size: 190,
+        sortFn: (left, right, id) =>
+          (left.getValue<Date | null>(id)?.getTime() ?? 0) -
+          (right.getValue<Date | null>(id)?.getTime() ?? 0),
+        meta: { mono: true, mobile: { slot: "meta", priority: 60 } },
+        cell: ({ getValue }) => {
+          const createdAt = getValue();
+          return createdAt ? formatDate(createdAt) : null;
+        },
+      }),
+    );
+    add(
+      helper.display({
+        id: "actions",
+        header: "",
+        size: 96,
+        minSize: 40,
+        maxSize: 160,
+        enableSorting: false,
+        enableHiding: false,
+        enableCellSelection: false,
+        meta: { mobile: { slot: "actions", priority: 100 } },
+        cell: ({ row }) => <RowActions row={row.original} {...props} />,
+      }),
+    );
+  });
   const layout = useCubbyTableLayout({
     key: "background-jobs",
     columns,

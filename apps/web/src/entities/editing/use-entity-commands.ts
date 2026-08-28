@@ -18,6 +18,11 @@ import {
   isResolvedEntityEdit,
   resolveEntityEdit,
 } from "./kernel";
+import {
+  parseEntityEditBulkUpdateInput,
+  parseEntityEditCreateInput,
+  parseEntityEditUpdateInput,
+} from "./mutation-data";
 import type {
   EntityActionData,
   EntityActionVariables,
@@ -27,10 +32,11 @@ import type {
   EntityEditBuildResult,
   EntityEditCommand,
   EntityEditCommandInput,
+  EntityEditDraftData,
   EntityEditIssue,
-  EntityEditMutationData,
   EntityEditRecord,
   EntityEditResult,
+  EntityEditValueSource,
   EntityMutationPort,
   EntityMutationExecution,
   RuntimeEntityEditRequest,
@@ -205,15 +211,8 @@ export interface EntityCommands<E extends EditableEntity> {
   ): Promise<EntityBulkUpdateOutcome>;
   commitFields(input: {
     record: EntityEditRecord;
-    values: Readonly<Partial<EntityEditDraft<E>>>;
+    values: EntityEditDraftData<E>;
     intent?: EntityEditIntent<E, "update">;
-    surface?: "cell" | "detail" | "preview" | "calendar";
-  }): Promise<EntityEditResult<E>>;
-  /** Runtime adapter after a UI-selected field set has been correlated to E. */
-  commitRuntimeFields(input: {
-    record: EntityEditRecord;
-    values: EntityEditMutationData<E>;
-    intent?: string;
     surface?: "cell" | "detail" | "preview" | "calendar";
   }): Promise<EntityEditResult<E>>;
   commitField(input: {
@@ -445,7 +444,7 @@ export function useEntityCommands<E extends EditableEntity>(
     [commit, entity],
   );
 
-  const commitFields = useCallback(
+  const commitFieldValues = useCallback(
     async ({
       record,
       values,
@@ -453,7 +452,7 @@ export function useEntityCommands<E extends EditableEntity>(
       surface = "cell",
     }: {
       record: EntityEditRecord;
-      values: EntityEditMutationData<E>;
+      values: EntityEditValueSource<E>;
       intent?: string;
       surface?: "cell" | "detail" | "preview" | "calendar";
     }): Promise<EntityEditResult<E>> => {
@@ -496,6 +495,16 @@ export function useEntityCommands<E extends EditableEntity>(
     [commit, entity],
   );
 
+  const commitFields = useCallback(
+    async (input: {
+      record: EntityEditRecord;
+      values: EntityEditDraftData<E>;
+      intent?: EntityEditIntent<E, "update">;
+      surface?: "cell" | "detail" | "preview" | "calendar";
+    }) => await commitFieldValues(input),
+    [commitFieldValues],
+  );
+
   const commitField = useCallback(
     async <K extends Extract<keyof EntityEditDraft<E>, string>>({
       field,
@@ -508,11 +517,11 @@ export function useEntityCommands<E extends EditableEntity>(
       intent?: EntityEditIntent<E, "update">;
       surface?: "cell" | "detail" | "preview" | "calendar";
     }) =>
-      await commitFields({
+      await commitFieldValues({
         ...input,
         values: entityEditValueBagSchema.parse({ [field]: value }),
       }),
-    [commitFields],
+    [commitFieldValues],
   );
 
   return {
@@ -525,7 +534,6 @@ export function useEntityCommands<E extends EditableEntity>(
     executeDeleteAction,
     bulkUpdate,
     commitFields,
-    commitRuntimeFields: commitFields,
     commitField,
   };
 }
@@ -541,11 +549,10 @@ export function useEntityActionCommands<E extends StandardEntity>(
       data: EntityActionVariables<E, "create">,
       intent: string,
     ): Promise<EntityActionData<E, "create">> => {
-      const parsedData = entityEditValueBagSchema.parse(data);
       const execution = await commands.submit({
         operation: "create",
         intent,
-        data: parsedData,
+        data: parseEntityEditCreateInput(entity, data),
       });
       if (execution.operation !== "create") {
         throw new Error(`${entity} create returned ${execution.operation}.`);
@@ -560,22 +567,16 @@ export function useEntityActionCommands<E extends StandardEntity>(
       variables: EntityActionVariables<E, "update">,
       intent: string,
     ): Promise<EntityActionData<E, "update">> => {
-      const { id, data } = z
-        .object({ id: z.string(), data: entityEditValueBagSchema })
-        .parse(variables);
-      const result = await commands.commitRuntimeFields({
-        record: { id },
-        values: data,
+      const execution = await commands.submit({
+        operation: "update",
         intent,
-        surface: "detail",
+        id: z.string().parse(variables.id),
+        data: parseEntityEditUpdateInput(entity, variables.data),
       });
-      if (!result.ok) {
-        throw new Error(result.issues[0]?.message ?? "Update failed");
+      if (execution.operation !== "update") {
+        throw new Error(`${entity} update returned ${execution.operation}.`);
       }
-      if (result.result === undefined) {
-        throw new Error(`${entity} update returned no mutation result.`);
-      }
-      return result.result;
+      return execution.result;
     },
     [commands, entity],
   );
@@ -589,9 +590,8 @@ export function useEntityActionCommands<E extends StandardEntity>(
 
   const bulkUpdateAction = useCallback(
     async (variables: EntityActionVariables<E, "bulkUpdate">) => {
-      const { ids, data } = z
-        .object({ ids: z.array(z.string()), data: entityEditValueBagSchema })
-        .parse(variables);
+      const ids = z.array(z.string()).parse(variables.ids);
+      const data = parseEntityEditBulkUpdateInput(entity, variables.data);
       const result = await commands.bulkUpdate(ids, data);
       if (!result.ok) {
         throw new Error(result.issues[0]?.message ?? "Bulk update failed");
@@ -601,7 +601,7 @@ export function useEntityActionCommands<E extends StandardEntity>(
         sideEffects: result.result.sideEffects,
       };
     },
-    [commands],
+    [commands, entity],
   );
 
   return { createAction, updateAction, deleteAction, bulkUpdateAction };

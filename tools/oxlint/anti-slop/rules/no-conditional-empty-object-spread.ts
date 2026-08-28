@@ -44,6 +44,11 @@ export const noConditionalEmptyObjectSpreadRule = defineRule({
           context.report({ node, messageId: "avoid" });
         }
       },
+      JSXSpreadAttribute(node) {
+        if (isConditionalEmptyObjectSpread(node.argument)) {
+          context.report({ node, messageId: "avoid" });
+        }
+      },
     };
   },
 });

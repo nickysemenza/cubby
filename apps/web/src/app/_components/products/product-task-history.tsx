@@ -19,6 +19,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
 import { ShelfEmpty } from "../data-table/shelf";
 import {
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
@@ -63,32 +64,40 @@ export const ProductTaskHistory: FC<{ product: ProductWithFoodOut }> = ({
   const nameEditable = useNameEditable<TaskOut>(update.mutateAsync);
   const columns = useMemo(
     () =>
-      helper.columns([
-        createNameColumn(helper, "task", "name", {
-          header: "Task",
-          editable: nameEditable,
-        }),
-        taskStatusColumn(helper, async (status, task) => {
-          await update.mutateAsync({ id: task.id, data: { status } });
-        }),
-        taskDueColumn(
-          helper,
-          async (dueDate, task, field) => {
-            await update.mutateAsync({
-              id: task.id,
-              data: { [field]: dueDate },
-            });
-          },
-          { effective: true },
-        ),
-        createProjectLinkColumn(helper, {
-          editable: {
-            onSave: async (projectId, task) => {
-              await update.mutateAsync({ id: task.id, data: { projectId } });
+      createCubbyColumnCollection<TaskOut>((add) => {
+        add(
+          createNameColumn(helper, "task", "name", {
+            header: "Task",
+            editable: nameEditable,
+          }),
+        );
+        add(
+          taskStatusColumn(helper, async (status, task) => {
+            await update.mutateAsync({ id: task.id, data: { status } });
+          }),
+        );
+        add(
+          taskDueColumn(
+            helper,
+            async (dueDate, task, field) => {
+              await update.mutateAsync({
+                id: task.id,
+                data: { [field]: dueDate },
+              });
             },
-          },
-        }),
-      ]),
+            { effective: true },
+          ),
+        );
+        add(
+          createProjectLinkColumn(helper, {
+            editable: {
+              onSave: async (projectId, task) => {
+                await update.mutateAsync({ id: task.id, data: { projectId } });
+              },
+            },
+          }),
+        );
+      }),
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, nameEditable],
   );

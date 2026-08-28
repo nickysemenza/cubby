@@ -26,8 +26,8 @@ describe("seedEntity completeness", () => {
     const hasKernelCreate = (entity: (typeof shortcodeEntities)[number]) =>
       kernelEntities.has(entity) && ENTITY_BINDINGS[entity].crud !== null;
 
-    const candidates = shortcodeEntities.filter(
-      (entity) => declaresCreate(entity) || hasKernelCreate(entity),
+    const candidates = ENTITY_KERNEL_ENTITIES.filter((entity) =>
+      hasKernelCreate(entity),
     );
     expect(candidates.length).toBeGreaterThanOrEqual(14);
 
@@ -35,15 +35,11 @@ describe("seedEntity completeness", () => {
     // no kernel binding (or vice versa) is exactly the drift `seedEntity`'s
     // own "not kernel-creatable" error exists to catch, and this asserts
     // it can never happen silently.
-    for (const entity of candidates) {
+    for (const entity of shortcodeEntities) {
       expect(
-        {
-          entity,
-          declares: declaresCreate(entity),
-          live: hasKernelCreate(entity),
-        },
+        declaresCreate(entity),
         `${entity}: manifest and kernel disagree on whether create exists`,
-      ).toEqual({ entity, declares: true, live: true });
+      ).toBe(hasKernelCreate(entity));
     }
 
     // Independent prerequisites, seeded first so the few entities with a

@@ -17,6 +17,14 @@ import { getProductByID } from "~/server/repo/product";
 /** Bound prompt size; tell the model when candidates are omitted. */
 const MAX_LOCATION_CANDIDATES = 400;
 
+export interface LocationSuggestionAiPort {
+  suggestLocation: ReturnType<typeof getAnthropicClient>["suggestLocation"];
+}
+
+const productionLocationSuggestionAiPort: LocationSuggestionAiPort = {
+  suggestLocation: (...args) => getAnthropicClient().suggestLocation(...args),
+};
+
 /** `Garage > Shelving Unit > Shelf 3`, or just the name at top level. */
 const candidatePath = (candidate: LocationPutAwayCandidate): string =>
   [...candidate.ancestors.map((a) => a.name), candidate.name].join(" > ");
@@ -82,6 +90,7 @@ export const resolveSuggestedLocation = (
 export const suggestLocationForProduct = async (
   db: Database,
   productId: ProductId,
+  ai: LocationSuggestionAiPort = productionLocationSuggestionAiPort,
 ): Promise<LocationSuggestion> => {
   const product = await getProductByID(db, productId);
   if (!product) {
@@ -106,7 +115,7 @@ export const suggestLocationForProduct = async (
     product.tags.length > 0 ? `Tags: ${product.tags.join(", ")}` : null,
   ].filter((line): line is string => line !== null);
 
-  const result = await getAnthropicClient().suggestLocation(
+  const result = await ai.suggestLocation(
     facts.join("\n"),
     formatLocationCandidates(candidates),
     {

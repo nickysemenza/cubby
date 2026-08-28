@@ -7,7 +7,8 @@ import type {
 import { useMemo, useState } from "react";
 
 import {
-  type CubbyColumnDef,
+  materializeCubbyColumns,
+  type CubbyColumnCollection,
   type CubbyRow,
   type CubbyTable,
   cubbyStructuralTableStateSelector,
@@ -19,11 +20,7 @@ import type { TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData extends RowData> {
   data: TData[];
-  // Note: ColumnDef is invariant in TValue; columns often mix TValue types across accessors.
-  // Using `any` here intentionally erases TValue to allow heterogeneous columns while keeping TData strict.
-  // This mirrors TanStack's guidance for consumer-facing helpers that don't operate on TValue.
-  // oxlint-disable-next-line typescript/no-explicit-any -- intentional
-  columns: CubbyColumnDef<TData, any>[];
+  columns: CubbyColumnCollection<TData>;
   tableState: TableStateReturn;
   totalCount: number;
   manualPagination?: boolean;
@@ -125,7 +122,7 @@ export function useTableConfig<TData extends RowData>({
   const columnVisibility = controlledVisibility ?? internalVisibility;
   const setColumnVisibility =
     controlledOnVisibilityChange ?? setInternalVisibility;
-  const tableColumns = layout?.columns ?? columns;
+  const tableColumns = layout?.columns ?? materializeCubbyColumns(columns);
 
   // Memoize table options to prevent recreating on every render
   const tableOptions = useMemo(() => {

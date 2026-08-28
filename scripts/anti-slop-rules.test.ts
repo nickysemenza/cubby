@@ -30,7 +30,9 @@ function lintFixture(
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "cubby-anti-slop-"));
   const fixturePath = join(
     temporaryDirectory,
-    fixtureName.replace(/\.txt$/, ".ts"),
+    fixtureName.endsWith(".tsx.txt")
+      ? fixtureName.replace(/\.txt$/, "")
+      : fixtureName.replace(/\.txt$/, ".ts"),
   );
   writeFileSync(fixturePath, source);
 
@@ -111,5 +113,17 @@ test("shape naming applies to owned symbols but not external property names", ()
   assert.deepEqual(
     rejected.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [1, 3, 4, 6, 10, 11, 14],
+  );
+});
+
+test("conditional empty spreads are rejected in JSX as well as object literals", () => {
+  const diagnostics = lintFixture(
+    "no-conditional-empty-object-spread",
+    "no-conditional-empty-object-spread-jsx.tsx.txt",
+  );
+
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [3],
   );
 });

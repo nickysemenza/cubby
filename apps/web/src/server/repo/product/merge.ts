@@ -1201,6 +1201,8 @@ export const mergeProducts = async (
     summary.imagesMoved = await foldAssociation(tx, {
       column: "productId",
       table: productImage,
+      repointValues: (productId) => ({ productId }),
+      softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.images.rows,
       keepId,
       slotKey: (row) => row.imageId,
@@ -1233,6 +1235,8 @@ export const mergeProducts = async (
     summary.projectUsesMoved = await foldAssociation(tx, {
       column: "productId",
       table: projectToolUsage,
+      repointValues: (productId) => ({ productId }),
+      softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.projectUses.rows,
       keepId,
       slotKey: (row) => row.projectId,
@@ -1242,6 +1246,8 @@ export const mergeProducts = async (
     summary.purchaseLinksMoved = await foldAssociation(tx, {
       column: "productId",
       table: purchaseProduct,
+      repointValues: (productId) => ({ productId }),
+      softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.purchases.rows,
       keepId,
       slotKey: (row) => row.purchaseId,
@@ -1251,6 +1257,8 @@ export const mergeProducts = async (
     summary.wishCandidatesMoved = await foldAssociation(tx, {
       column: "productId",
       table: wishCandidate,
+      repointValues: (productId) => ({ productId }),
+      softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows: plan.wishes.rows,
       keepId,
       slotKey: (row) => row.wishId,

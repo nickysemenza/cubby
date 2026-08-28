@@ -5,6 +5,7 @@ import { withDatabaseOperationMetrics } from "./db-observability";
 import {
   createPoolConnectAdapter,
   createPoolQueryAdapter,
+  createObservedQuery,
   createTracedQuery,
   type PgPoolConnectImplementation,
   type PgQueryImplementation,
@@ -90,5 +91,18 @@ describe("node-postgres tracing adapters", () => {
 
     await expect(connect()).rejects.toBe(sentinel);
     expect(acquire).toHaveBeenCalledWith(true);
+  });
+
+  it("observes queries through the overload bridge", async () => {
+    const result = queryResult();
+    const rawQuery: PgQueryImplementation = () => Promise.resolve(result);
+    const statements: string[] = [];
+    const query = createObservedQuery(rawQuery, (statement) =>
+      statements.push(statement),
+    );
+
+    await expect(query("select 1")).resolves.toBe(result);
+
+    expect(statements).toEqual(["select 1"]);
   });
 });

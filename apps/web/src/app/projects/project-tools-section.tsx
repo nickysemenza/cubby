@@ -28,7 +28,7 @@ import {
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -150,62 +150,86 @@ function ResourcesTable({
     bulkActions,
   });
   const helper = useMemo(() => createCubbyColumnHelper<ResourceRow>(), []);
-  const columns = useMemo<CubbyColumnDef<ResourceRow>[]>(
-    () => [
-      ...selection.selectColumns,
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", { header: "Product" }),
-      helper.accessor((row) => row.category, {
-        id: "type",
-        header: "Type",
-        meta: { className: "w-24", mobile: { slot: "subtitle" } },
-        cell: (info) => (info.getValue() === "software" ? "Software" : "Tool"),
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ResourceRow>((add) => {
+        selection.selectColumns.forEach(add);
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(createNameColumn(helper, "product", "name", { header: "Product" }));
+        add(
+          helper.accessor((row) => row.category, {
+            id: "type",
+            header: "Type",
+            meta: { className: "w-24", mobile: { slot: "subtitle" } },
+            cell: (info) =>
+              info.getValue() === "software" ? "Software" : "Tool",
+          }),
+        );
+        add(
+          helper.accessor((row) => row.uses, {
+            id: "uses",
+            header: "Uses",
+            meta: {
+              className: "w-20",
+              numeric: true,
+              mobile: { slot: "meta" },
+            },
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "lifetimeCost", {
+            header: "Lifetime cost",
+            mobile: { slot: "meta", priority: 20 },
+          }),
+        );
+        add(
+          helper.accessor((row) => row, {
+            id: "effectiveCost",
+            header: "Cost / use or project",
+            enableSorting: false,
+            meta: {
+              className: "w-44",
+              numeric: true,
+              mobile: { slot: "meta", priority: 30, label: "Effective" },
+            },
+            cell: (info) => {
+              const row = info.row.original;
+              if (row.sharedSpend)
+                return <Description size="xs">{row.sharedSpend}</Description>;
+              if (
+                row.projectPurchaseCost != null &&
+                row.projectPurchaseCost > 0
+              ) {
+                return `${formatCurrency(row.projectPurchaseCost)} bought here`;
+              }
+              return row.costPerUse == null
+                ? "Cost/use pending"
+                : `${formatCurrency(row.costPerUse)} / use`;
+            },
+          }),
+        );
+        add(
+          createActionsColumn(helper, "product", {
+            extraActions: (row) => (
+              <>
+                <VerbMenuItem
+                  verb="removeFromProject"
+                  disabled={detach.isPending}
+                  onSelect={(event) => {
+                    event.stopPropagation();
+                    detach.mutate({ projectId, productIds: [row.id] });
+                  }}
+                />
+              </>
+            ),
+          }),
+        );
       }),
-      helper.accessor((row) => row.uses, {
-        id: "uses",
-        header: "Uses",
-        meta: { className: "w-20", numeric: true, mobile: { slot: "meta" } },
-      }),
-      createCurrencyColumn(helper, "lifetimeCost", {
-        header: "Lifetime cost",
-        mobile: { slot: "meta", priority: 20 },
-      }),
-      helper.accessor((row) => row, {
-        id: "effectiveCost",
-        header: "Cost / use or project",
-        enableSorting: false,
-        meta: {
-          className: "w-44",
-          numeric: true,
-          mobile: { slot: "meta", priority: 30, label: "Effective" },
-        },
-        cell: (info) => {
-          const row = info.row.original;
-          if (row.sharedSpend)
-            return <Description size="xs">{row.sharedSpend}</Description>;
-          if (row.projectPurchaseCost != null && row.projectPurchaseCost > 0) {
-            return `${formatCurrency(row.projectPurchaseCost)} bought here`;
-          }
-          return row.costPerUse == null
-            ? "Cost/use pending"
-            : `${formatCurrency(row.costPerUse)} / use`;
-        },
-      }),
-      createActionsColumn(helper, "product", {
-        extraActions: (row) => (
-          <>
-            <VerbMenuItem
-              verb="removeFromProject"
-              disabled={detach.isPending}
-              onSelect={(event) => {
-                event.stopPropagation();
-                detach.mutate({ projectId, productIds: [row.id] });
-              }}
-            />
-          </>
-        ),
-      }),
-    ],
     [detach, helper, projectId, selection.selectColumns],
   );
   const layout = useCubbyTableLayout({ key: "project:resources", columns });
@@ -276,13 +300,19 @@ function SelectableResourceTable({
     );
   };
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
-  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
-    () => [
-      buildSelectColumn<PickerRow>(),
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", { header: "Product" }),
-      ...(suggested
-        ? [
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<PickerRow>((add) => {
+        add(buildSelectColumn<PickerRow>());
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(createNameColumn(helper, "product", "name", { header: "Product" }));
+        if (suggested) {
+          add(
             helper.accessor((row) => row.reasons, {
               id: "reasons",
               header: "Reasons / trade",
@@ -301,6 +331,8 @@ function SelectableResourceTable({
                 </Row>
               ),
             }),
+          );
+          add(
             helper.accessor((row) => row.uses, {
               id: "uses",
               header: "Uses",
@@ -310,10 +342,14 @@ function SelectableResourceTable({
                 mobile: { slot: "meta" },
               },
             }),
+          );
+          add(
             createCurrencyColumn(helper, "lifetimeCost", {
               header: "Lifetime cost",
               mobile: { slot: "meta", priority: 20 },
             }),
+          );
+          add(
             helper.accessor((row) => row, {
               id: "effectiveCost",
               header: "Cost / use",
@@ -333,8 +369,9 @@ function SelectableResourceTable({
                     : formatCurrency(row.costPerUse);
               },
             }),
-          ]
-        : [
+          );
+        } else {
+          add(
             helper.accessor((row) => row.manufacturer, {
               id: "manufacturer",
               header: "Manufacturer",
@@ -347,13 +384,16 @@ function SelectableResourceTable({
                   ? "—"
                   : info.getValue(),
             }),
+          );
+          add(
             helper.accessor((row) => row.category, {
               id: "category",
               header: "Category",
               meta: { className: "w-32", mobile: { slot: "meta" } },
             }),
-          ]),
-    ],
+          );
+        }
+      }),
     [helper, suggested],
   );
   const layoutKey = suggested

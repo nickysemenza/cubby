@@ -22,6 +22,11 @@
  */
 
 import { inArray } from "drizzle-orm";
+import type {
+  AnyPgColumn,
+  PgTable,
+  PgUpdateSetSource,
+} from "drizzle-orm/pg-core";
 
 import type { DrizzleTransaction } from "~/server/db";
 
@@ -119,15 +124,20 @@ export const planSlotCollisions = <Row>(args: {
  * for the unslotted edges — aborts the whole transaction the moment the
  * destination already has a row in that slot.
  */
-export const foldAssociation = async <Row extends { id: string }>(
+export const foldAssociation = async <
+  Row extends { id: string },
+  TTable extends PgTable & { id: AnyPgColumn },
+  OwnerKey extends keyof Row,
+>(
   tx: DrizzleTransaction,
   args: {
-    // oxlint-disable-next-line typescript/no-explicit-any -- One helper serves several structurally-identical join tables.
-    table: any;
+    table: TTable;
     /** Property name of the FK being re-pointed, e.g. `"productId"`. */
-    column: keyof Row;
+    column: OwnerKey;
+    repointValues: (keepId: Row[OwnerKey]) => PgUpdateSetSource<TTable>;
+    softDeleteValues: (now: Date) => PgUpdateSetSource<TTable>;
     rows: Row[];
-    keepId: string;
+    keepId: Row[OwnerKey];
     slotKey: (row: Row) => string;
     now: Date;
     /**
@@ -148,7 +158,7 @@ export const foldAssociation = async <Row extends { id: string }>(
   if (plan.repoint.length > 0) {
     await tx
       .update(args.table)
-      .set({ [args.column]: args.keepId })
+      .set(args.repointValues(args.keepId))
       .where(
         inArray(
           args.table.id,
@@ -159,7 +169,7 @@ export const foldAssociation = async <Row extends { id: string }>(
   if (plan.absorb.length > 0) {
     await tx
       .update(args.table)
-      .set({ deletedAt: args.now })
+      .set(args.softDeleteValues(args.now))
       .where(
         inArray(
           args.table.id,

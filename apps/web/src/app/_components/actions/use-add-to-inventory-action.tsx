@@ -107,18 +107,32 @@ export function useAddToInventoryAction(): EntityActionHandles {
     // mixed selection has nothing to suggest from. Anything more gets the
     // grid, where the shared location is the whole point.
     dialog: soleWithDetail ? (
-      <ProductAddToInventoryDialog
-        open
-        onOpenChange={(open) => {
-          if (!open) setStaged([]);
-        }}
-        product={{
-          id: soleWithDetail.id,
-          name: soleWithDetail.name,
-          manufacturer: soleWithDetail.manufacturer ?? "",
-        }}
-        {...(accounting ? { accounting } : {})}
-      />
+      accounting ? (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStaged([]);
+          }}
+          product={{
+            id: soleWithDetail.id,
+            name: soleWithDetail.name,
+            manufacturer: soleWithDetail.manufacturer ?? "",
+          }}
+          accounting={accounting}
+        />
+      ) : (
+        <ProductAddToInventoryDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setStaged([]);
+          }}
+          product={{
+            id: soleWithDetail.id,
+            name: soleWithDetail.name,
+            manufacturer: soleWithDetail.manufacturer ?? "",
+          }}
+        />
+      )
     ) : (
       <ProductBulkAddToInventoryDialog
         open={staged.length > 1}

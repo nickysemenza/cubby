@@ -23,6 +23,14 @@ import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
+export interface IngredientMergeAiPort {
+  getTextAdapter: ReturnType<typeof getAnthropicClient>["getTextAdapter"];
+}
+
+const productionIngredientMergeAiPort: IngredientMergeAiPort = {
+  getTextAdapter: (...args) => getAnthropicClient().getTextAdapter(...args),
+};
+
 export interface IngredientMergeSuggestion {
   target: {
     id: IngredientId;
@@ -69,8 +77,9 @@ Default to null when unsure. A wrong merge is destructive, so be conservative.`;
 export async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
+  ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
 ): Promise<IngredientMergeSuggestion> {
-  const adapter = getAnthropicClient().getTextAdapter({
+  const adapter = ai.getTextAdapter({
     feature: "ingredient-merge",
     ingredient: source.name,
     env: IS_CF_WORKERS ? "prod" : "dev",

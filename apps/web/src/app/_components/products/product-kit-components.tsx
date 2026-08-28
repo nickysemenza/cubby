@@ -28,7 +28,7 @@ import {
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -164,35 +164,49 @@ function KitTable({
     bulkActions,
   });
   const helper = useMemo(() => createCubbyColumnHelper<ProductRow>(), []);
-  const columns = useMemo<CubbyColumnDef<ProductRow>[]>(
-    () => [
-      ...selection.selectColumns,
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", {
-        header: nameHeader,
-      }),
-      helper.accessor((row) => row.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", priority: 10, label: "Maker" },
-        },
-        cell: (info) =>
-          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
-      }),
-      helper.accessor((row) => row.quantity, {
-        id: "quantity",
-        header: "Quantity",
-        meta: {
-          className: "w-24",
-          numeric: true,
-          mobile: { slot: "meta", priority: 20, label: "Qty" },
-        },
-        cell: (info) => `×${info.getValue()}`,
-      }),
-      ...(showOnHand
-        ? [
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ProductRow>((add) => {
+        selection.selectColumns.forEach(add);
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(
+          createNameColumn(helper, "product", "name", {
+            header: nameHeader,
+          }),
+        );
+        add(
+          helper.accessor((row) => row.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", priority: 10, label: "Maker" },
+            },
+            cell: (info) =>
+              isUnspecifiedManufacturer(info.getValue())
+                ? "—"
+                : info.getValue(),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.quantity, {
+            id: "quantity",
+            header: "Quantity",
+            meta: {
+              className: "w-24",
+              numeric: true,
+              mobile: { slot: "meta", priority: 20, label: "Qty" },
+            },
+            cell: (info) => `×${info.getValue()}`,
+          }),
+        );
+        if (showOnHand) {
+          add(
             helper.accessor((row) => row.onHandUnits, {
               id: "onHandUnits",
               header: "On hand",
@@ -205,19 +219,19 @@ function KitTable({
               // zero is a real, load-bearing answer: that part is unaccounted.
               cell: (info) => info.getValue() ?? "—",
             }),
-          ]
-        : []),
-      ...(showPrice
-        ? [
+          );
+        }
+        if (showPrice) {
+          add(
             createCurrencyColumn(helper, "price", {
               header: "Price",
               className: "w-32",
               mobile: { slot: "meta", priority: 30 },
             }),
-          ]
-        : []),
-      createActionsColumn(helper, "product", { extraActions: action }),
-    ],
+          );
+        }
+        add(createActionsColumn(helper, "product", { extraActions: action }));
+      }),
     [
       action,
       helper,
@@ -330,64 +344,78 @@ function AddComponentsDialog({
   };
 
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
-  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
-    () => [
-      buildSelectColumn<PickerRow>(),
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", { header: "Product" }),
-      helper.accessor((row) => row.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", label: "Maker" },
-        },
-        cell: (info) =>
-          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<PickerRow>((add) => {
+        add(buildSelectColumn<PickerRow>());
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(createNameColumn(helper, "product", "name", { header: "Product" }));
+        add(
+          helper.accessor((row) => row.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", label: "Maker" },
+            },
+            cell: (info) =>
+              isUnspecifiedManufacturer(info.getValue())
+                ? "—"
+                : info.getValue(),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "price", {
+            header: "Price",
+            className: "w-28",
+            mobile: { slot: "meta", priority: 20 },
+          }),
+        );
+        add(
+          helper.accessor((row) => selected.get(row.id), {
+            id: "quantity",
+            header: "Quantity",
+            enableSorting: false,
+            meta: {
+              className: "w-24",
+              numeric: true,
+              mobile: {
+                slot: "meta",
+                priority: 30,
+                interactive: true,
+                label: "Qty",
+              },
+            },
+            cell: (info) => {
+              const quantity = selected.get(info.row.original.id);
+              return quantity === undefined ? null : (
+                <Input
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={quantity}
+                  aria-label={`Quantity of ${info.row.original.name}`}
+                  className="h-7 w-20"
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => {
+                    const next = Math.max(1, Number(event.target.value) || 1);
+                    setSelected((previous) => {
+                      const quantities = new Map(previous);
+                      quantities.set(info.row.original.id, next);
+                      return quantities;
+                    });
+                  }}
+                />
+              );
+            },
+          }),
+        );
       }),
-      createCurrencyColumn(helper, "price", {
-        header: "Price",
-        className: "w-28",
-        mobile: { slot: "meta", priority: 20 },
-      }),
-      helper.accessor((row) => selected.get(row.id), {
-        id: "quantity",
-        header: "Quantity",
-        enableSorting: false,
-        meta: {
-          className: "w-24",
-          numeric: true,
-          mobile: {
-            slot: "meta",
-            priority: 30,
-            interactive: true,
-            label: "Qty",
-          },
-        },
-        cell: (info) => {
-          const quantity = selected.get(info.row.original.id);
-          return quantity === undefined ? null : (
-            <Input
-              type="number"
-              min={1}
-              max={9999}
-              value={quantity}
-              aria-label={`Quantity of ${info.row.original.name}`}
-              className="h-7 w-20"
-              onClick={(event) => event.stopPropagation()}
-              onChange={(event) => {
-                const next = Math.max(1, Number(event.target.value) || 1);
-                setSelected((previous) => {
-                  const quantities = new Map(previous);
-                  quantities.set(info.row.original.id, next);
-                  return quantities;
-                });
-              }}
-            />
-          );
-        },
-      }),
-    ],
     [helper, selected],
   );
   const layout = useCubbyTableLayout({

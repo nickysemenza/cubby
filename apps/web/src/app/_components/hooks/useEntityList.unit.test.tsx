@@ -1,10 +1,10 @@
-import { queryOptions } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import { createCubbyColumnCollection } from "../data-table/table-features";
 import { useEntityList } from "./useEntityList";
 
 interface TestRow {
@@ -12,6 +12,7 @@ interface TestRow {
 }
 
 const TEST_ROWS: TestRow[] = [{ id: "PRD-ONE" }, { id: "PRD-TWO" }];
+const NO_COLUMNS = createCubbyColumnCollection<TestRow>(() => undefined);
 const SELECTABLE_ROWS: BulkActionsConfig<TestRow> = {
   actions: [
     {
@@ -22,17 +23,16 @@ const SELECTABLE_ROWS: BulkActionsConfig<TestRow> = {
   ],
 };
 
-const listQueryOptions = () =>
-  queryOptions({
-    queryKey: ["test", "entity-list"],
-    queryFn: async () => ({
-      items: TEST_ROWS,
-      // The returned page intentionally has more rows than its page size. The
-      // server list hook owns accumulation, while the table must render every
-      // accumulated row rather than applying client pagination a second time.
-      meta: { pageIndex: 0, pageSize: 1, totalCount: 500 },
-    }),
-  });
+const listQueryOptions = () => ({
+  queryKey: ["test", "entity-list"],
+  execute: async () => ({
+    items: TEST_ROWS,
+    // The returned page intentionally has more rows than its page size. The
+    // server list hook owns accumulation, while the table must render every
+    // accumulated row rather than applying client pagination a second time.
+    meta: { pageIndex: 0, pageSize: 1, totalCount: 500 },
+  }),
+});
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -55,7 +55,7 @@ describe("useEntityList", () => {
           entity: "product",
           queryOptions: listQueryOptions,
           buildFilters: () => ({}),
-          columns: [],
+          columns: NO_COLUMNS,
         }),
       { wrapper: harness.routerWrapper },
     );
@@ -75,7 +75,7 @@ describe("useEntityList", () => {
           entity: "product",
           queryOptions: listQueryOptions,
           buildFilters: () => ({}),
-          columns: [],
+          columns: NO_COLUMNS,
         }),
       { wrapper: harness.routerWrapper },
     );
@@ -95,7 +95,7 @@ describe("useEntityList", () => {
           queryOptions: listQueryOptions,
           buildFilters: () => ({ scope }),
           bulkActions: SELECTABLE_ROWS,
-          columns: [],
+          columns: NO_COLUMNS,
         }),
       { initialProps: { scope: "first" }, wrapper: harness.routerWrapper },
     );

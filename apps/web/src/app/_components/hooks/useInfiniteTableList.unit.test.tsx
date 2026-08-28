@@ -67,10 +67,11 @@ describe("useInfiniteTableList", () => {
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
     const queryFn = vi.fn(async () => page("expense-1", 0, 1));
+    const cacheTags = [["entity", "list"], ["expense"]] as const;
     const queryOptions = () => ({
       queryKey: ["operation", "entity.list", { entity: "expense", input: {} }],
-      queryFn,
-      meta: { cacheTags: [["entity", "list"], ["expense"]] },
+      meta: { cacheTags },
+      execute: () => queryFn(),
     });
 
     renderHook(
@@ -92,7 +93,7 @@ describe("useInfiniteTableList", () => {
     let receivedSignal: AbortSignal | undefined;
     const queryOptions = () => ({
       queryKey: ["table-abort"],
-      queryFn: ({ signal }: { signal?: AbortSignal }) => {
+      execute: (signal: AbortSignal) => {
         receivedSignal = signal;
         return new Promise<ListQueryResponse<TestRow>>(() => {});
       },
@@ -117,7 +118,7 @@ describe("useInfiniteTableList", () => {
     const queryOptions = vi.fn(
       ({ pagination }: { pagination: { pageIndex: number } }) => ({
         queryKey: ["table-list", "same", pagination.pageIndex],
-        queryFn: async () => {
+        execute: async () => {
           calls.set(
             pagination.pageIndex,
             (calls.get(pagination.pageIndex) ?? 0) + 1,
@@ -160,7 +161,7 @@ describe("useInfiniteTableList", () => {
       pagination: { pageIndex: number };
     }) => ({
       queryKey: ["table-transition", filters.scope, pagination.pageIndex],
-      queryFn: async () => {
+      execute: async () => {
         requested.push(`${filters.scope}:${pagination.pageIndex}`);
         if (filters.scope === "new" && pagination.pageIndex === 0) {
           return nextFirstPage.promise;

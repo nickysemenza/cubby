@@ -8,17 +8,12 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { browserEntityDefinition, entities } from "~/entities/entities";
-import { entityListFor } from "~/entities/entity-list.functions";
 import { getEntityFilters } from "~/entities/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
   summarizeListState,
 } from "~/entities/filters";
-import {
-  type ListEntity,
-  listEntities,
-} from "~/entities/generated/entity-lists.gen";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
@@ -27,7 +22,7 @@ import type { RowLinkResolver } from "../data-table/columnHelpers";
 import type { ServerListWorkbenchModel } from "../data-table/ListWorkbench";
 import { problemWorklistState } from "../data-table/problem-worklist";
 import { reconcileRowSelection } from "../data-table/row-selection";
-import type { CubbyColumnDef } from "../data-table/table-features";
+import type { CubbyColumnCollection } from "../data-table/table-features";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
 import type {
@@ -55,9 +50,6 @@ export interface BaseListRow {
   updatedAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
 }
-
-// oxlint-disable-next-line typescript/no-explicit-any -- intentional
-type AnyColumnDef<TData extends BaseListRow> = CubbyColumnDef<TData, any>;
 
 const routeSearchSchema = z.record(
   z.string(),
@@ -114,7 +106,8 @@ export interface UseEntityListOptions<
   TRow extends BaseListRow = TData,
 > {
   entity: BrowserRoutedEntity;
-  queryOptions?: ListQueryOptionsFn<TFilters>;
+  /** The descriptor-bound plan that supplies this table's exact row type. */
+  queryOptions: ListQueryOptionsFn<TFilters, TRow>;
   buildFilters?: (tableState: TableStateReturn) => TFilters;
   /**
    * Contextual scope imposed by the surrounding page (for example, expenses
@@ -123,7 +116,7 @@ export interface UseEntityListOptions<
    * manifest-derived filters. MUST be referentially stable.
    */
   scopeFilters?: Partial<TFilters>;
-  columns: AnyColumnDef<TData>[];
+  columns: CubbyColumnCollection<TData>;
   filters?: FilterInput[];
   /** Runtime roster options; must be referentially stable. */
   filterOptions?: RuntimeFilterOptions;
@@ -259,19 +252,6 @@ export function useEntityList<
     setGrouped(value);
   }, []);
 
-  // SAFETY: `listEntities` is the generated roster of browser-routed entities
-  // that expose the default list operation.
-  if (!queryOptions && !listEntities.includes(entity as ListEntity)) {
-    throw new Error(`${entity} requires an explicit list transport`);
-  }
-  const defaultQueryOptions = useCallback(
-    (params: Parameters<ListQueryOptionsFn<TFilters>>[0]) =>
-      // SAFETY: the guard above establishes this entity is a generated list
-      // entity; explicit transports bypass this fallback entirely.
-      entityListFor(entity as ListEntity).queryOptions(params as never),
-    [entity],
-  );
-  const effectiveQueryOptions = queryOptions ?? defaultQueryOptions;
   const effectiveDeletable = useContractDeletable(entity, deletable);
 
   const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
@@ -344,7 +324,7 @@ export function useEntityList<
   );
 
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
-    queryOptions: effectiveQueryOptions,
+    queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy: groupByField,

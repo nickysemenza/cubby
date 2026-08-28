@@ -3,13 +3,23 @@ import type {
   ColumnPinningState,
   ColumnSizingState,
   ColumnVisibilityState,
+  CellData,
   RowData,
 } from "@tanstack/react-table";
 import { type Atom, batch, createAtom } from "@tanstack/store";
 import { type CSSProperties, useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
 
-import type { CubbyColumnDef } from "./table-features";
+import {
+  materializeCubbyColumns,
+  type CubbyColumnCollection,
+  type CubbyColumnDef,
+} from "./table-features";
+
+type MaterializedColumnDef<TData extends RowData> = CubbyColumnDef<
+  TData,
+  CellData
+>;
 
 const MIN_COLUMN_WIDTH = 48;
 const MAX_COLUMN_WIDTH = 1200;
@@ -213,7 +223,7 @@ export interface CubbyTableLayoutController<TData extends RowData = RowData> {
   key: string | undefined;
   defaultLayout: CubbyTableLayoutV1;
   /** Definitions normalized to v9 numeric sizing at the platform boundary. */
-  columns: CubbyColumnDef<TData>[];
+  columns: MaterializedColumnDef<TData>[];
   reset: () => void;
   applySavedLayout: (layout: CubbySavedTableLayout) => void;
 }
@@ -234,7 +244,7 @@ export function isTableLayoutCustomized(
 interface TableLayoutOptions<TData extends RowData> {
   /** Undefined creates an in-memory layout for tables that opt out of persistence. */
   key?: string;
-  columns: CubbyColumnDef<TData>[];
+  columns: CubbyColumnCollection<TData>;
   initialColumnVisibility?: ColumnVisibilityState;
   /** Legacy suffixes without the `table-columns:` / `table-sizes:` prefix. */
   legacyVisibilityKey?: string;
@@ -363,10 +373,10 @@ export function normalizeTableLayout(
 }
 
 function columnIdsFromDefs<TData extends RowData>(
-  columns: CubbyColumnDef<TData>[],
+  columns: MaterializedColumnDef<TData>[],
 ): string[] {
   const result: string[] = [];
-  const visit = (defs: CubbyColumnDef<TData>[]) => {
+  const visit = (defs: MaterializedColumnDef<TData>[]) => {
     for (const def of defs) {
       if ("columns" in def && Array.isArray(def.columns)) {
         visit(def.columns);
@@ -388,10 +398,10 @@ function columnIdsFromDefs<TData extends RowData>(
 }
 
 function columnSizeBoundsFromDefs<TData extends RowData>(
-  columns: CubbyColumnDef<TData>[],
+  columns: MaterializedColumnDef<TData>[],
 ) {
   const result: ColumnSizeBounds = {};
-  const visit = (defs: CubbyColumnDef<TData>[]) => {
+  const visit = (defs: MaterializedColumnDef<TData>[]) => {
     for (const def of defs) {
       if ("columns" in def && Array.isArray(def.columns)) {
         visit(def.columns);
@@ -427,8 +437,8 @@ function tailwindWidth(className: string, prefix: "w" | "min-w" | "max-w") {
  * v9 numeric sizes then own rendering, sticky offsets, resizing, and storage.
  */
 function normalizeColumnDefinitions<TData extends RowData>(
-  columns: CubbyColumnDef<TData>[],
-): CubbyColumnDef<TData>[] {
+  columns: MaterializedColumnDef<TData>[],
+): MaterializedColumnDef<TData>[] {
   return columns.map((definition) => {
     if ("columns" in definition && Array.isArray(definition.columns)) {
       return {
@@ -595,7 +605,7 @@ export function useCubbyTableLayout<TData extends RowData>({
   legacySizingKey = key,
 }: TableLayoutOptions<TData>): CubbyTableLayoutController<TData> {
   const normalizedColumns = useMemo(
-    () => normalizeColumnDefinitions(columns),
+    () => normalizeColumnDefinitions(materializeCubbyColumns(columns)),
     [columns],
   );
   const columnIds = useMemo(

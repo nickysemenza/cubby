@@ -55,6 +55,14 @@ type CookbookChunkRequest = z.output<typeof chunkRequestInput>;
 const cookbookChunkOutputSchema = z.record(z.string(), z.json());
 type CookbookChunkOutput = z.output<typeof cookbookChunkOutputSchema>;
 
+export interface CookbookLlmPort {
+  getTextAdapter: ReturnType<typeof getAnthropicClient>["getTextAdapter"];
+}
+
+const productionCookbookLlmPort: CookbookLlmPort = {
+  getTextAdapter: (...args) => getAnthropicClient().getTextAdapter(...args),
+};
+
 // `outputSchema` accepts a raw JSON Schema object; `chunk_epub` builds one but
 // types it loosely, so narrow at the boundary.
 type OutputSchema = Parameters<typeof chat>[0]["outputSchema"];
@@ -68,12 +76,13 @@ type OutputSchema = Parameters<typeof chat>[0]["outputSchema"];
 export async function extractCookbookChunk(
   req: CookbookChunkRequest,
   opts?: { db?: Database },
+  ai: CookbookLlmPort = productionCookbookLlmPort,
 ): Promise<CookbookChunkOutput> {
   const t0 = performance.now();
   // Reuse the shared client's adapter (gateway binding in prod / REST in dev).
   // Escalated chunks use the stronger model; the default stays Haiku.
   const model = req.escalate ? COOKBOOK_ESCALATION_MODEL : DEFAULT_CHAT_MODEL;
-  const adapter = getAnthropicClient().getTextAdapter(undefined, model);
+  const adapter = ai.getTextAdapter(undefined, model);
   const out = await withTimeout(
     chat({
       adapter,

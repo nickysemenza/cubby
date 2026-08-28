@@ -4,7 +4,12 @@ import type {
   RelatedSummaryRelationKey,
 } from "@cubby/schemas/related-view";
 import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
-import type { OnChangeFn, SortingState, Updater } from "@tanstack/react-table";
+import type {
+  CellData,
+  OnChangeFn,
+  SortingState,
+  Updater,
+} from "@tanstack/react-table";
 import { ImageIcon, Search } from "lucide-react";
 import { type FC, useCallback, useMemo, useRef, useState } from "react";
 import { z } from "zod";
@@ -21,8 +26,9 @@ import { formatCurrency } from "~/lib/utils";
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
+  type CubbyColumnDef,
   useCubbyTable,
 } from "../data-table/table-features";
 import { useCubbyTableLayout } from "../data-table/table-layout";
@@ -214,119 +220,153 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
   expenseHrefRef.current = expenseHref;
   const columnsKey = columns.join(",");
 
-  const tableColumns = useMemo<CubbyColumnDef<SummaryTableRow>[]>(() => {
-    const build = (column: Column) => {
+  const tableColumns = useMemo(() => {
+    const build = (
+      column: Column,
+      add: <TValue extends CellData>(
+        definition: CubbyColumnDef<SummaryTableRow, TValue>,
+      ) => void,
+    ) => {
       switch (column) {
         case "target":
-          return helper.accessor((row) => row.target, {
-            id: "target",
-            header: COLUMN_LABELS.target,
-            meta: { className: "min-w-0 w-48" },
-            cell: (info) => {
-              const target = info.getValue();
-              if (!target) {
+          add({
+            ...helper.accessor((row) => row.target, {
+              id: "target",
+              header: COLUMN_LABELS.target,
+              meta: { className: "min-w-0 w-48" },
+              cell: (info) => {
+                const target = info.getValue();
+                if (!target) {
+                  return (
+                    <span className="font-medium text-warning-ink">
+                      {nullLabel}
+                    </span>
+                  );
+                }
                 return (
-                  <span className="font-medium text-warning-ink">
-                    {nullLabel}
-                  </span>
+                  <EntityInlineLink
+                    entity={target.entity}
+                    data={{ id: target.id, name: target.label }}
+                    displayImage={
+                      target.image ? { url: target.image.url } : null
+                    }
+                    showIdentityMark={false}
+                    truncate
+                  />
                 );
-              }
-              return (
-                <EntityInlineLink
-                  entity={target.entity}
-                  data={{ id: target.id, name: target.label }}
-                  displayImage={target.image ? { url: target.image.url } : null}
-                  showIdentityMark={false}
-                  truncate
-                />
-              );
-            },
+              },
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
+          return;
         case "acquired":
-          return helper.accessor((row) => row.knownAcquiredUnits, {
-            id: "acquired",
-            header: COLUMN_LABELS.acquired,
-            meta: { className: "w-20", numeric: true, mono: true },
-            cell: (info) => (
-              <span>
-                {info.getValue()}
-                {info.row.original.unknownAcquisitionQuantityCount > 0 && (
-                  <span className="text-warning-ink">
-                    {` +${info.row.original.unknownAcquisitionQuantityCount}?`}
-                  </span>
-                )}
-              </span>
-            ),
+          add({
+            ...helper.accessor((row) => row.knownAcquiredUnits, {
+              id: "acquired",
+              header: COLUMN_LABELS.acquired,
+              meta: { className: "w-20", numeric: true, mono: true },
+              cell: (info) => (
+                <span>
+                  {info.getValue()}
+                  {info.row.original.unknownAcquisitionQuantityCount > 0 && (
+                    <span className="text-warning-ink">
+                      {` +${info.row.original.unknownAcquisitionQuantityCount}?`}
+                    </span>
+                  )}
+                </span>
+              ),
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
+          return;
         case "purchases":
-          return helper.accessor((row) => row.purchaseCount, {
-            id: "purchases",
-            header: COLUMN_LABELS.purchases,
-            meta: { className: "w-20", numeric: true, mono: true },
+          add({
+            ...helper.accessor((row) => row.purchaseCount, {
+              id: "purchases",
+              header: COLUMN_LABELS.purchases,
+              meta: { className: "w-20", numeric: true, mono: true },
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
+          return;
         case "expenses":
-          return helper.accessor((row) => row.expenseCount, {
-            id: "expenses",
-            header: COLUMN_LABELS.expenses,
-            meta: { className: "w-20", numeric: true, mono: true },
+          add({
+            ...helper.accessor((row) => row.expenseCount, {
+              id: "expenses",
+              header: COLUMN_LABELS.expenses,
+              meta: { className: "w-20", numeric: true, mono: true },
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
+          return;
         case "unpriced":
-          return helper.accessor((row) => row.unpricedExpenseCount, {
-            id: "unpriced",
-            header: COLUMN_LABELS.unpriced,
-            meta: { className: "w-20", numeric: true, mono: true },
-            // A count, never null — zero unpriced expenses is a real answer.
-            cell: (info) => info.getValue(),
+          add({
+            ...helper.accessor((row) => row.unpricedExpenseCount, {
+              id: "unpriced",
+              header: COLUMN_LABELS.unpriced,
+              meta: { className: "w-20", numeric: true, mono: true },
+              // A count, never null — zero unpriced expenses is a real answer.
+              cell: (info) => info.getValue(),
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
+          return;
         case "netSpend":
-          return createCurrencyColumn(helper, "netSpend", {
-            header: COLUMN_LABELS.netSpend,
-            className: "w-24",
+          add({
+            ...createCurrencyColumn(helper, "netSpend", {
+              header: COLUMN_LABELS.netSpend,
+              className: "w-24",
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
+          return;
         case "latestActivity":
-          return helper.accessor((row) => row.latestActivity, {
-            id: "latestActivity",
-            header: COLUMN_LABELS.latestActivity,
-            meta: { className: "w-24", numeric: true, mono: true },
-            cell: (info) => info.getValue() ?? "—",
+          add({
+            ...helper.accessor((row) => row.latestActivity, {
+              id: "latestActivity",
+              header: COLUMN_LABELS.latestActivity,
+              meta: { className: "w-24", numeric: true, mono: true },
+              cell: (info) => info.getValue() ?? "—",
+            }),
+            enableSorting: sortFieldForColumn(column) !== undefined,
           });
       }
     };
 
-    return [
-      helper.display({
-        id: "image",
-        header: () => <ImageIcon className="size-3 text-muted-foreground" />,
-        meta: { className: "h-px w-16 overflow-hidden px-0 py-0" },
-        cell: (info) => targetImage(info.row.original.target, targetEntity),
-      }),
-      ...columns.map((column) => {
-        const built = build(column);
+    return createCubbyColumnCollection<SummaryTableRow>((add) => {
+      add(
+        helper.display({
+          id: "image",
+          header: () => <ImageIcon className="size-3 text-muted-foreground" />,
+          meta: { className: "h-px w-16 overflow-hidden px-0 py-0" },
+          cell: (info) => targetImage(info.row.original.target, targetEntity),
+        }),
+      );
+      for (const column of columns) {
         // Only the columns the server can order by are sortable; the rest would
         // silently do nothing under `manualSorting`.
-        return {
-          ...built,
-          enableSorting: sortFieldForColumn(column) !== undefined,
-        };
-      }),
-      helper.display({
-        id: "ledger",
-        header: "",
-        meta: { className: "w-16" },
-        cell: (info) => {
-          const target = info.row.original.target;
-          return (
-            <a
-              href={expenseHrefRef.current(target)}
-              className="text-primary hover:underline"
-              aria-label={`View ${target?.label ?? nullLabel} expenses`}
-            >
-              Ledger
-            </a>
-          );
-        },
-      }),
-    ];
+        build(column, add);
+      }
+      add(
+        helper.display({
+          id: "ledger",
+          header: "",
+          meta: { className: "w-16" },
+          cell: (info) => {
+            const target = info.row.original.target;
+            return (
+              <a
+                href={expenseHrefRef.current(target)}
+                className="text-primary hover:underline"
+                aria-label={`View ${target?.label ?? nullLabel} expenses`}
+              >
+                Ledger
+              </a>
+            );
+          },
+        }),
+      );
+    });
     // oxlint-disable-next-line react/exhaustive-deps -- columnsKey is the deep-compare stand-in for `columns`; expenseHref is read through a ref
   }, [helper, columnsKey, targetEntity, nullLabel]);
 

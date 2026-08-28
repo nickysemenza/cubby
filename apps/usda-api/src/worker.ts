@@ -19,9 +19,14 @@ const handler = {
     executionContext: ExecutionContext,
   ) {
     if (!app) {
-      app = createUsdaApp(createEdgeUsdaDataSource(env), {
-        logRequests: true,
-      });
+      app = createUsdaApp(
+        createEdgeUsdaDataSource(env, {
+          cache: globalThis.caches?.default ?? null,
+        }),
+        {
+          logRequests: true,
+        },
+      );
       // Hono catches route throws and returns a 500 without rethrowing, so
       // `Sentry.withSentry`'s throw-only auto-capture below never sees them.
       registerSentryErrorCapture(app, Sentry.captureException);

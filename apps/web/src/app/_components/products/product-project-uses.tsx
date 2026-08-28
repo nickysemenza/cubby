@@ -14,7 +14,7 @@ import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -134,21 +134,24 @@ export function ProductProjectUses({
   const helper = useMemo(() => createCubbyColumnHelper<ProjectUseRow>(), []);
   const category = data?.category;
   const columns = useMemo(
-    () => [
-      helper.accessor((row) => row.status, {
-        id: "status",
-        header: "Status",
-        meta: { className: "w-32" },
-        cell: (info) => {
-          const { label, className } = getStatusBadgeProps(
-            "project",
-            info.getValue(),
-          );
-          return <Badge className={className}>{label}</Badge>;
-        },
-      }),
-      ...(category === "software"
-        ? [
+    () =>
+      createCubbyColumnCollection<ProjectUseRow>((add) => {
+        add(
+          helper.accessor((row) => row.status, {
+            id: "status",
+            header: "Status",
+            meta: { className: "w-32" },
+            cell: (info) => {
+              const { label, className } = getStatusBadgeProps(
+                "project",
+                info.getValue(),
+              );
+              return <Badge className={className}>{label}</Badge>;
+            },
+          }),
+        );
+        if (category === "software") {
+          add(
             helper.accessor((row) => row.sharedWindow, {
               id: "sharedSpend",
               header: "Shared spend",
@@ -174,18 +177,22 @@ export function ProductProjectUses({
                 );
               },
             }),
-          ]
-        : [
+          );
+        } else {
+          add(
             createCurrencyColumn(helper, "projectPurchaseCost", {
               header: "Bought here",
               className: "w-28",
             }),
-          ]),
-      createTimestampColumn(helper, "attachedAt", {
-        header: "Attached",
-        className: "w-32",
+          );
+        }
+        add(
+          createTimestampColumn(helper, "attachedAt", {
+            header: "Attached",
+            className: "w-32",
+          }),
+        );
       }),
-    ],
     [helper, category],
   );
 
@@ -362,32 +369,44 @@ function ProjectUsesDialog({
   };
   type ProjectOptionRow = (typeof rows)[number];
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOptionRow>(), []);
-  const columns = useMemo<CubbyColumnDef<ProjectOptionRow>[]>(
-    () => [
-      buildSelectColumn<ProjectOptionRow>(),
-      helper.display({
-        id: "mark",
-        header: "",
-        meta: { className: "w-10", mobile: { slot: "image" } },
-        cell: (info) => <ProjectMark icon={info.row.original.icon} size={20} />,
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ProjectOptionRow>((add) => {
+        add(buildSelectColumn<ProjectOptionRow>());
+        add(
+          helper.display({
+            id: "mark",
+            header: "",
+            meta: { className: "w-10", mobile: { slot: "image" } },
+            cell: (info) => (
+              <ProjectMark icon={info.row.original.icon} size={20} />
+            ),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.name, {
+            id: "name",
+            header: "Project",
+            meta: { className: "w-64", mobile: { slot: "title" } },
+          }),
+        );
+        add(
+          helper.accessor((row) => row, {
+            id: "effectiveDates",
+            header: "Effective dates",
+            enableSorting: false,
+            meta: {
+              className: "w-48",
+              mobile: { slot: "meta", label: "Dates" },
+            },
+            cell: (info) => {
+              const row = info.row.original;
+              if (!row.effectiveStart && !row.effectiveEnd) return "—";
+              return `${row.effectiveStart ?? "…"} – ${row.effectiveEnd ?? "…"}`;
+            },
+          }),
+        );
       }),
-      helper.accessor((row) => row.name, {
-        id: "name",
-        header: "Project",
-        meta: { className: "w-64", mobile: { slot: "title" } },
-      }),
-      helper.accessor((row) => row, {
-        id: "effectiveDates",
-        header: "Effective dates",
-        enableSorting: false,
-        meta: { className: "w-48", mobile: { slot: "meta", label: "Dates" } },
-        cell: (info) => {
-          const row = info.row.original;
-          if (!row.effectiveStart && !row.effectiveEnd) return "—";
-          return `${row.effectiveStart ?? "…"} – ${row.effectiveEnd ?? "…"}`;
-        },
-      }),
-    ],
     [helper],
   );
   const layout = useCubbyTableLayout({

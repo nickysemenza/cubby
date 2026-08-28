@@ -31,6 +31,17 @@ const streamFrameSchema = z.discriminatedUnion("kind", [
 
 type StreamFrame = z.infer<typeof streamFrameSchema>;
 
+/** The two browser edges the stream owns; tests supply a local runtime. */
+export interface WorkflowStreamRuntime {
+  fetch: typeof fetch;
+  markFreshReads: () => void;
+}
+
+const productionWorkflowStreamRuntime: WorkflowStreamRuntime = {
+  fetch,
+  markFreshReads,
+};
+
 const parseFrame = (line: string): StreamFrame => {
   const parsed = streamFrameSchema.safeParse(JSON.parse(line));
   if (parsed.success) return parsed.data;
@@ -80,14 +91,17 @@ async function* readFrames<EventSchema extends z.ZodTypeAny>(options: {
 export async function openWorkflowStream<
   Input,
   EventSchema extends z.ZodTypeAny,
->(options: {
-  operation: StartOperationIdOfKind<"subscription">;
-  kind: "query" | "mutation";
-  url: string;
-  input: Input;
-  eventSchema: EventSchema;
-  signal?: AbortSignal;
-}): Promise<AsyncIterable<z.output<EventSchema>>> {
+>(
+  options: {
+    operation: StartOperationIdOfKind<"subscription">;
+    kind: "query" | "mutation";
+    url: string;
+    input: Input;
+    eventSchema: EventSchema;
+    signal?: AbortSignal;
+  },
+  runtime: WorkflowStreamRuntime = productionWorkflowStreamRuntime,
+): Promise<AsyncIterable<z.output<EventSchema>>> {
   const observed = beginObservedOperation({
     kind: options.kind,
     transport: "start",
@@ -95,7 +109,7 @@ export async function openWorkflowStream<
     input: options.input,
   });
   try {
-    const response = await fetch(options.url, {
+    const response = await runtime.fetch(options.url, {
       method: "POST",
       credentials: "same-origin",
       headers: {
@@ -116,7 +130,7 @@ export async function openWorkflowStream<
         })) {
           yield event;
         }
-        if (options.kind === "mutation") markFreshReads();
+        if (options.kind === "mutation") runtime.markFreshReads();
         finishObservedOperation(observed, { result: "stream-complete" });
       } catch (error) {
         finishObservedOperation(observed, { error });

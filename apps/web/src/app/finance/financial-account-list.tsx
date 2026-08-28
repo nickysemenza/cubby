@@ -4,9 +4,13 @@ import type {
 } from "@cubby/schemas/financial-account";
 import { useMemo } from "react";
 
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 
 import {
   createBooleanColumn,
@@ -34,54 +38,64 @@ export function FinancialAccountList() {
     entity: "financialAccount",
   });
   const columns = useMemo(
-    () => [
-      helper.accessor("name", {
-        header: "Account",
-        meta: { className: "w-64", mobile: { slot: "title", priority: 0 } },
-        cell: (i) => (
-          <TableLink
-            to={entities.financialAccount.routes.detail}
-            params={entityDetailParams(i.row.original.id)}
-            className="block truncate"
-          >
-            {i.getValue()}
-          </TableLink>
-        ),
+    () =>
+      createCubbyColumnCollection<FinancialAccountOut>((add) => {
+        add(
+          helper.accessor("name", {
+            header: "Account",
+            meta: { className: "w-64", mobile: { slot: "title", priority: 0 } },
+            cell: (i) => (
+              <TableLink
+                to={entities.financialAccount.routes.detail}
+                params={entityDetailParams(i.row.original.id)}
+                className="block truncate"
+              >
+                {i.getValue()}
+              </TableLink>
+            ),
+          }),
+        );
+        add(
+          helper.accessor("identity", {
+            header: "Identity",
+            meta: { className: "w-40" },
+            cell: (i) =>
+              renderOptionCell(i.getValue().kind, accountIdentityKindOptions),
+          }),
+        );
+        add(
+          createBooleanColumn(helper, "provisional", {
+            header: "Status",
+            className: "w-28",
+            // The same roster the detail page renders from, so the two cannot drift.
+            trueFalseOptions: provisionalOptions,
+            editable: {
+              // `NOT NULL DEFAULT false`, so there is no undecided state to clear to
+              // and `next` is only ever a boolean.
+              onSave: async (provisional, account) => {
+                await updateAccountMutation.mutateAsync({
+                  id: account.id,
+                  data: { provisional: provisional ?? false },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          helper.accessor((r) => r.sourceAliases.length, {
+            id: "aliases",
+            header: "Aliases",
+            meta: { numeric: true, className: "w-24" },
+          }),
+        );
       }),
-      helper.accessor("identity", {
-        header: "Identity",
-        meta: { className: "w-40" },
-        cell: (i) =>
-          renderOptionCell(i.getValue().kind, accountIdentityKindOptions),
-      }),
-      createBooleanColumn(helper, "provisional", {
-        header: "Status",
-        className: "w-28",
-        // The same roster the detail page renders from, so the two cannot drift.
-        trueFalseOptions: provisionalOptions,
-        editable: {
-          // `NOT NULL DEFAULT false`, so there is no undecided state to clear to
-          // and `next` is only ever a boolean.
-          onSave: async (provisional, account) => {
-            await updateAccountMutation.mutateAsync({
-              id: account.id,
-              data: { provisional: provisional ?? false },
-            });
-          },
-        },
-      }),
-      helper.accessor((r) => r.sourceAliases.length, {
-        id: "aliases",
-        header: "Aliases",
-        meta: { numeric: true, className: "w-24" },
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
     [helper],
   );
   return (
     <EntityListPage<FinancialAccountOut, FinancialAccountFilters>
       entity="financialAccount"
+      queryOptions={entityListFor("financialAccount").listQueryPlan}
       columns={columns}
       deletable={deletable}
       ariaLabel="Financial accounts"

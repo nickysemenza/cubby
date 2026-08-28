@@ -909,6 +909,8 @@ export async function repointProjectUses(
     const repointed = await foldAssociation(tx, {
       table: projectToolUsage,
       column: "productId",
+      repointValues: (productId) => ({ productId }),
+      softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows,
       keepId: toProductId,
       slotKey: (row) => row.projectId,

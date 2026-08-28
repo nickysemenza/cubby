@@ -30,6 +30,11 @@ type BottomNavItemProps = {
   "aria-label"?: string;
 };
 
+interface LinkPreloadProps {
+  preload?: "intent";
+  preloadDelay?: number;
+}
+
 /**
  * The shared bottom-nav tab shape (icon over label, 48px touch target). Renders
  * a `Link` by default; `as="button"` covers the handler/trigger case. Extra
@@ -44,6 +49,12 @@ function BottomNavItem({
   className,
   ...rest
 }: BottomNavItemProps) {
+  const linkPreloadProps: LinkPreloadProps = {};
+  if (Comp === Link) {
+    linkPreloadProps.preload = "intent";
+    linkPreloadProps.preloadDelay = 0;
+  }
+
   return (
     <Comp
       className={cn(
@@ -56,9 +67,7 @@ function BottomNavItem({
         className,
       )}
       aria-current={active ? "page" : undefined}
-      {...(Comp === Link
-        ? { preload: "intent" as const, preloadDelay: 0 }
-        : {})}
+      {...linkPreloadProps}
       {...rest}
     >
       {Icon && <Icon className="size-5" aria-hidden="true" />}

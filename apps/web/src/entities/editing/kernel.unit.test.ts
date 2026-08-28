@@ -8,6 +8,10 @@ import {
   isResolvedEntityEdit,
   resolveEntityEdit,
 } from "./kernel";
+import {
+  parseEntityEditCreateInput,
+  parseEntityEditUpdateInput,
+} from "./mutation-data";
 import type { EntityEditRegistry } from "./registry";
 import type {
   EntityEditDefinition,
@@ -60,7 +64,7 @@ const taskDefinition = {
               entity: "task",
               operation: "create",
               intent: "capture",
-              data: patch,
+              data: parseEntityEditCreateInput("task", patch),
             },
           }),
         },
@@ -82,7 +86,7 @@ const taskDefinition = {
                     operation: "update" as const,
                     intent: "schedule",
                     id: record.id,
-                    data: patch,
+                    data: parseEntityEditUpdateInput("task", patch),
                   },
                 }
               : {

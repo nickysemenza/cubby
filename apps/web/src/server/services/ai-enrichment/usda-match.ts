@@ -24,6 +24,14 @@ import type { USDAService } from "~/server/services/usda.service";
 
 import { drainChat, IS_CF_WORKERS } from "./shared";
 
+export interface UsdaMatchAiPort {
+  getTextAdapter: ReturnType<typeof getAnthropicClient>["getTextAdapter"];
+}
+
+const productionUsdaMatchAiPort: UsdaMatchAiPort = {
+  getTextAdapter: (...args) => getAnthropicClient().getTextAdapter(...args),
+};
+
 export interface UsdaFoodSuggestion {
   food: FoodSummaryWithLinkedProducts | null;
   confidence: Confidence;
@@ -79,8 +87,9 @@ export async function suggestUsdaFood(
   db: Database,
   ingredientName: string,
   opts: { ingredientId?: IngredientId } = {},
+  ai: UsdaMatchAiPort = productionUsdaMatchAiPort,
 ): Promise<UsdaFoodSuggestion> {
-  const adapter = getAnthropicClient().getTextAdapter({
+  const adapter = ai.getTextAdapter({
     feature: "usda-food-suggest",
     ingredient: ingredientName,
     env: IS_CF_WORKERS ? "prod" : "dev",

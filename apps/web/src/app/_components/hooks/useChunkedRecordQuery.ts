@@ -1,4 +1,8 @@
-import { useQueries } from "@tanstack/react-query";
+import {
+  type QueryKey,
+  type UseQueryOptions,
+  useQueries,
+} from "@tanstack/react-query";
 import { chunk, uniq } from "es-toolkit";
 import { useMemo } from "react";
 
@@ -7,17 +11,20 @@ import { ID_CHUNK_SIZE } from "~/misc/array-helpers";
 const uniqueSortedIds = (ids: readonly string[]) =>
   uniq(ids.filter(Boolean)).sort();
 
-export function useChunkedRecordQuery<TRecord extends object>({
+export function useChunkedRecordQuery<
+  TRecord extends object,
+  TQueryResult,
+  TKey extends QueryKey,
+>({
   ids,
   empty,
   queryOptions,
 }: {
   ids: readonly string[];
   empty: TRecord;
-  // Transport queryOptions carry specialized error/query-key generics that don't
-  // reduce cleanly to React Query's public UseQueryOptions type.
-  // oxlint-disable-next-line typescript/no-explicit-any -- intentional queryOptions boundary
-  queryOptions: (ids: string[]) => any;
+  queryOptions: (
+    ids: string[],
+  ) => UseQueryOptions<TQueryResult, Error, TRecord, TKey>;
 }): TRecord {
   const idsKey = useMemo(() => uniqueSortedIds(ids).join(","), [ids]);
   const sortedIds = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
@@ -30,15 +37,16 @@ export function useChunkedRecordQuery<TRecord extends object>({
         ? { ...options, enabled: chunkIds.length > 0 }
         : options;
     }),
-    combine: (results) => {
+    combine: (results): TRecord => {
       if (results.every((result) => !result.data)) {
         return empty;
       }
 
-      return Object.assign(
-        { ...empty },
-        ...results.map((result) => result.data ?? empty),
-      );
+      const combined: TRecord = { ...empty };
+      for (const result of results) {
+        if (result.data) Object.assign(combined, result.data);
+      }
+      return combined;
     },
   });
 }

@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@cubby/design-tokens": "workspace:*",
-    "@modelcontextprotocol/ext-apps": "^1.7.5"
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "jsdom": "^30.0.0",

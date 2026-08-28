@@ -137,6 +137,7 @@ import {
 } from "./conversion-coverage";
 import {
   PRODUCT_DELETE_EDGE_POLICY,
+  isRetainingEdgeKey,
   type ProductRetainingEdgeKey,
 } from "./edge-roles";
 import {
@@ -2138,12 +2139,10 @@ export const deleteProducts = async (
     await lockAndValidateForDelete(tx, product, ids, "Product");
 
     /** Product deletion must reject live acquisition/history evidence through the shared incoming-edge policy. */
-    // SAFETY: Object.keys returns exactly the own keys of this complete,
-    // non-mutated Record<ProductRetainingEdgeKey, ...>; TypeScript erases that
-    // key correlation from its standard-library return type.
-    for (const key of Object.keys(
-      PRODUCT_RETAINING_DEPENDENTS,
-    ) as ProductRetainingEdgeKey[]) {
+    for (const key of Object.keys(PRODUCT_RETAINING_DEPENDENTS)) {
+      if (!isRetainingEdgeKey(key)) {
+        throw new Error(`Unexpected product retaining edge ${key}`);
+      }
       // Iterate `PRODUCT_RETAINING_DEPENDENTS`'s own keys — typed
       // `Record<ProductRetainingEdgeKey, ...>` (see ./edge-roles) — rather
       // than every policy entry, so `key` is provably in that type with no

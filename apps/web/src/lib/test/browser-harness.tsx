@@ -16,6 +16,7 @@ import {
   useContext,
   type ReactNode,
 } from "react";
+import { vi } from "vitest";
 
 class BrowserTestResizeObserver {
   constructor(readonly callback: ResizeObserverCallback) {}
@@ -74,7 +75,24 @@ interface BrowserTestRoute {
 interface BrowserTestHarnessOptions {
   readonly initialPath?: string;
   readonly route?: BrowserTestRoute;
+  /** Pin timer-driven UI behavior without leaking fake timers into later tests. */
+  readonly clock?: { now: number | Date };
 }
+
+/**
+ * Stateless binding of a real operation descriptor to a test transport.
+ *
+ * The descriptor still parses its input/output and owns cache invalidation;
+ * this helper deliberately stores no test-global operation registry.
+ */
+const browserOperationAdapter = {
+  bind<TTransport, TBound>(
+    descriptor: { withTransport: (transport: TTransport) => TBound },
+    transport: TTransport,
+  ): TBound {
+    return descriptor.withTransport(transport);
+  },
+};
 
 function installBrowserLayoutMetrics() {
   const originalOffsetWidth = Object.getOwnPropertyDescriptor(
@@ -160,6 +178,7 @@ function installBrowserMatchMedia() {
  * at their caller's existing interface instead of inventing another seam.
  */
 export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
+  if (options?.clock) vi.useFakeTimers({ now: options.clock.now });
   // jsdom deliberately omits layout observers. The real virtualized table is a
   // local module we exercise in browser tests, so install its no-op browser API
   // only for this harness and remove it during deterministic cleanup.
@@ -222,6 +241,15 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
   return {
     queryClient,
     router,
+    operationAdapter: browserOperationAdapter,
+    clock: options?.clock
+      ? {
+          now: () => Date.now(),
+          advanceBy: async (milliseconds: number) => {
+            await vi.advanceTimersByTimeAsync(milliseconds);
+          },
+        }
+      : undefined,
     loadRouter: () => router.load(),
     wrapper: BrowserTestProviders,
     routerWrapper: BrowserRouterTestProviders,
@@ -233,6 +261,7 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
       restoreMatchMedia();
       if (needsResizeObserver)
         Reflect.deleteProperty(globalThis, "ResizeObserver");
+      if (options?.clock) vi.useRealTimers();
     },
   };
 }

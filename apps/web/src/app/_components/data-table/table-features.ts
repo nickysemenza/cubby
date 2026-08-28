@@ -102,21 +102,18 @@ export type CubbyTable<TData extends RowData> = ReactTable<
 export type CubbyRow<TData extends RowData> = Row<CubbyTableFeatures, TData>;
 export type CubbyColumn<
   TData extends RowData,
-  // oxlint-disable-next-line typescript/no-explicit-any -- shared table chrome accepts heterogeneous accessor values
-  TValue extends CellData = any,
+  TValue extends CellData = CellData,
 > = Column<CubbyTableFeatures, TData, TValue>;
 export type CubbyColumnDef<
   TData extends RowData,
-  // oxlint-disable-next-line typescript/no-explicit-any -- column arrays intentionally erase heterogeneous TValue
-  TValue extends CellData = any,
+  TValue extends CellData = CellData,
 > = ColumnDef<CubbyTableFeatures, TData, TValue>;
 export type CubbyColumnHelper<TData extends RowData> = ReturnType<
   typeof cubbyTableHook.createAppColumnHelper<TData>
 >;
 export type CubbyCellContext<
   TData extends RowData,
-  // oxlint-disable-next-line typescript/no-explicit-any -- reusable renderers accept heterogeneous cell values
-  TValue extends CellData = any,
+  TValue extends CellData = CellData,
 > = CellContext<CubbyTableFeatures, TData, TValue>;
 export type CubbyFilterFn<TData extends RowData> = FilterFn<
   CubbyTableFeatures,
@@ -127,4 +124,91 @@ export function createCubbyColumnHelper<
   TData extends RowData,
 >(): CubbyColumnHelper<TData> {
   return cubbyTableHook.createAppColumnHelper<TData>();
+}
+
+/** A visitor preserves one column's captured accessor value type. */
+interface CubbyColumnEntry<TData extends RowData> {
+  visit<TResult>(
+    visitor: <TValue extends CellData>(
+      definition: CubbyColumnDef<TData, TValue>,
+    ) => TResult,
+  ): TResult;
+}
+
+class CapturedCubbyColumn<
+  TData extends RowData,
+  TValue extends CellData,
+> implements CubbyColumnEntry<TData> {
+  constructor(private readonly definition: CubbyColumnDef<TData, TValue>) {}
+
+  visit<TResult>(
+    visitor: <TValueForVisitor extends CellData>(
+      definition: CubbyColumnDef<TData, TValueForVisitor>,
+    ) => TResult,
+  ): TResult {
+    return visitor(this.definition);
+  }
+}
+
+/**
+ * Heterogeneous column collection. Each `add` call captures its own `TValue`;
+ * consumers can inspect definitions only through a generic visitor instead of
+ * widening every accessor to an uncorrelated array element type.
+ */
+export interface CubbyColumnCollection<TData extends RowData> {
+  readonly length: number;
+  visit<TResult>(
+    visitor: <TValue extends CellData>(
+      definition: CubbyColumnDef<TData, TValue>,
+    ) => TResult,
+  ): TResult[];
+  filter(
+    predicate: <TValue extends CellData>(
+      definition: CubbyColumnDef<TData, TValue>,
+    ) => boolean,
+  ): CubbyColumnCollection<TData>;
+}
+
+export function createCubbyColumnCollection<TData extends RowData>(
+  build: (
+    add: <TValue extends CellData>(
+      definition: CubbyColumnDef<TData, TValue>,
+    ) => void,
+  ) => void,
+): CubbyColumnCollection<TData> {
+  const entries: CubbyColumnEntry<TData>[] = [];
+  build((definition) => {
+    entries.push(new CapturedCubbyColumn(definition));
+  });
+  return {
+    length: entries.length,
+    visit: (visitor) => entries.map((entry) => entry.visit(visitor)),
+    filter: (predicate) =>
+      createCubbyColumnCollection<TData>((add) => {
+        for (const entry of entries) {
+          entry.visit((definition) => {
+            if (predicate(definition)) add(definition);
+          });
+        }
+      }),
+  };
+}
+
+/**
+ * The sole TanStack interop boundary for heterogeneous definitions.
+ *
+ * SAFETY: a collection only admits a `CubbyColumnDef<TData, TValue>` through
+ * its generic collector. TanStack stores every definition with that captured
+ * TValue but represents the outer list as one array, an existential type that
+ * TypeScript cannot express. No caller may inspect TValue after this point.
+ */
+export function materializeCubbyColumns<TData extends RowData>(
+  columns: CubbyColumnCollection<TData>,
+): ColumnDef<CubbyTableFeatures, TData, CellData>[] {
+  return columns.visit(
+    (definition) =>
+      // SAFETY: the generic collector captured this definition's TValue; TanStack
+      // consumes the outer array opaquely and never exposes a cross-column TValue.
+      definition as ColumnDef<CubbyTableFeatures, TData, CellData>,
+  );
 }

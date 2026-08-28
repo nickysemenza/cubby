@@ -36,7 +36,10 @@ import {
   renderOptionCell,
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
-import { createCubbyColumnHelper } from "../data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "../data-table/table-features";
 import { useCubbyTableLayout } from "../data-table/table-layout";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useTableState } from "../data-table/useTableState";
@@ -383,124 +386,147 @@ export function StatementRowList() {
   );
 
   const columns = useMemo(
-    () => [
-      createPlainDateColumn(columnHelper, "statementDate", {
-        header: "Date",
-        className: "w-24",
-      }),
-      columnHelper.accessor("accountDescriptor", {
-        id: "accountDescriptor",
-        header: "Account",
-        enableSorting: true,
-        meta: { className: "w-48" },
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <Stack gap="tight" className="min-w-0">
-              <span className="block truncate" title={row.accountDescriptor}>
-                {row.accountDescriptor}
-              </span>
-              {row.accountName && (
-                <span
-                  className="block truncate text-2xs text-muted-foreground"
-                  title={row.accountName}
-                >
-                  {row.accountName}
+    () =>
+      createCubbyColumnCollection<StatementRowOut>((add) => {
+        add(
+          createPlainDateColumn(columnHelper, "statementDate", {
+            header: "Date",
+            className: "w-24",
+          }),
+        );
+        add(
+          columnHelper.accessor("accountDescriptor", {
+            id: "accountDescriptor",
+            header: "Account",
+            enableSorting: true,
+            meta: { className: "w-48" },
+            cell: (info) => {
+              const row = info.row.original;
+              return (
+                <Stack gap="tight" className="min-w-0">
+                  <span
+                    className="block truncate"
+                    title={row.accountDescriptor}
+                  >
+                    {row.accountDescriptor}
+                  </span>
+                  {row.accountName && (
+                    <span
+                      className="block truncate text-2xs text-muted-foreground"
+                      title={row.accountName}
+                    >
+                      {row.accountName}
+                    </span>
+                  )}
+                </Stack>
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("rawDescription", {
+            id: "rawDescription",
+            header: "Description",
+            enableSorting: true,
+            meta: { className: "w-72" },
+            cell: (info) => (
+              <Tooltip>
+                <TooltipTrigger render={<span className="block truncate" />}>
+                  {info.getValue()}
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  {info.getValue()}
+                </TooltipContent>
+              </Tooltip>
+            ),
+          }),
+        );
+        add(
+          columnHelper.accessor("merchant", {
+            id: "merchant",
+            header: "Merchant",
+            enableSorting: false,
+            meta: { className: "w-40" },
+            cell: (info) => {
+              const value = info.getValue();
+              return value ? (
+                <span className="block truncate">{value}</span>
+              ) : (
+                <NoneValue />
+              );
+            },
+          }),
+        );
+        add(
+          createCurrencyColumn(columnHelper, "amount", {
+            header: "Amount",
+            className: "w-24",
+            signedTone: true,
+          }),
+        );
+        add(
+          columnHelper.accessor("matchState", {
+            id: "matchState",
+            header: "Match",
+            enableSorting: false,
+            meta: { className: "w-28" },
+            cell: (info) =>
+              renderOptionCell(info.getValue(), MATCH_STATE_OPTIONS),
+          }),
+        );
+        add(
+          columnHelper.accessor("source", {
+            id: "source",
+            header: "Source",
+            enableSorting: false,
+            meta: { className: "w-24", mono: true },
+            cell: (info) => info.getValue(),
+          }),
+        );
+        add(
+          columnHelper.accessor("disposition", {
+            id: "disposition",
+            header: "Disposition",
+            enableSorting: false,
+            meta: { className: "w-32" },
+            cell: (info) => {
+              const row = info.row.original;
+              // The reason stays a hover title — it is free-form prose, not part of
+              // the taxonomy label.
+              return (
+                <span title={row.dispositionReason ?? undefined}>
+                  {renderOptionCell(row.disposition, DISPOSITION_OPTIONS)}
                 </span>
-              )}
-            </Stack>
-          );
-        },
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("transactionId", {
+            id: "transactionId",
+            header: "Transaction",
+            enableSorting: false,
+            meta: { className: "w-28" },
+            // financialTransaction has no EntityInlineLink/hover-preview case (see
+            // apps/web/CLAUDE.md), so this is the plain truncated-link-with-title
+            // shape rather than EntityInlineLink.
+            cell: (info) => {
+              const transactionId = info.getValue();
+              if (!transactionId) return <NoneValue />;
+              return (
+                <Link
+                  to="/financial-transactions/$shortcode"
+                  params={{ shortcode: transactionId }}
+                  title={transactionId}
+                  className="block truncate font-mono text-primary hover:underline"
+                >
+                  {transactionId}
+                </Link>
+              );
+            },
+          }),
+        );
       }),
-      columnHelper.accessor("rawDescription", {
-        id: "rawDescription",
-        header: "Description",
-        enableSorting: true,
-        meta: { className: "w-72" },
-        cell: (info) => (
-          <Tooltip>
-            <TooltipTrigger render={<span className="block truncate" />}>
-              {info.getValue()}
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs">
-              {info.getValue()}
-            </TooltipContent>
-          </Tooltip>
-        ),
-      }),
-      columnHelper.accessor("merchant", {
-        id: "merchant",
-        header: "Merchant",
-        enableSorting: false,
-        meta: { className: "w-40" },
-        cell: (info) => {
-          const value = info.getValue();
-          return value ? (
-            <span className="block truncate">{value}</span>
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-      createCurrencyColumn(columnHelper, "amount", {
-        header: "Amount",
-        className: "w-24",
-        signedTone: true,
-      }),
-      columnHelper.accessor("matchState", {
-        id: "matchState",
-        header: "Match",
-        enableSorting: false,
-        meta: { className: "w-28" },
-        cell: (info) => renderOptionCell(info.getValue(), MATCH_STATE_OPTIONS),
-      }),
-      columnHelper.accessor("source", {
-        id: "source",
-        header: "Source",
-        enableSorting: false,
-        meta: { className: "w-24", mono: true },
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.accessor("disposition", {
-        id: "disposition",
-        header: "Disposition",
-        enableSorting: false,
-        meta: { className: "w-32" },
-        cell: (info) => {
-          const row = info.row.original;
-          // The reason stays a hover title — it is free-form prose, not part of
-          // the taxonomy label.
-          return (
-            <span title={row.dispositionReason ?? undefined}>
-              {renderOptionCell(row.disposition, DISPOSITION_OPTIONS)}
-            </span>
-          );
-        },
-      }),
-      columnHelper.accessor("transactionId", {
-        id: "transactionId",
-        header: "Transaction",
-        enableSorting: false,
-        meta: { className: "w-28" },
-        // financialTransaction has no EntityInlineLink/hover-preview case (see
-        // apps/web/CLAUDE.md), so this is the plain truncated-link-with-title
-        // shape rather than EntityInlineLink.
-        cell: (info) => {
-          const transactionId = info.getValue();
-          if (!transactionId) return <NoneValue />;
-          return (
-            <Link
-              to="/financial-transactions/$shortcode"
-              params={{ shortcode: transactionId }}
-              title={transactionId}
-              className="block truncate font-mono text-primary hover:underline"
-            >
-              {transactionId}
-            </Link>
-          );
-        },
-      }),
-    ],
     [],
   );
 

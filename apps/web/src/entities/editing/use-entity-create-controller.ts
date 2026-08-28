@@ -12,7 +12,7 @@ import { useEntityCommands } from "./use-entity-commands";
  * state. The form supplies one domain payload; commands own the write. */
 export function useEntityCreateController<
   E extends EditableEntity,
-  TData extends EntityEditMutationData<E>,
+  TData extends EntityEditMutationData<E, "create">,
 >(
   entity: E,
   callbacks?: {

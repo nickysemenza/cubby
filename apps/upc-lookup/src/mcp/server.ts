@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { type JSONType, z } from "zod";
 import type { Env } from "../types";
 import { createDb } from "../db";
 import type { NewProduct, Product } from "../db/schema";
@@ -21,7 +21,7 @@ type JsonResponse = {
   content: [{ type: "text"; text: string }];
 };
 
-function json<TData>(data: TData): JsonResponse {
+function json(data: JSONType): JsonResponse {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
   };

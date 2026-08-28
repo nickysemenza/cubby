@@ -8,7 +8,7 @@ import { useEntityCommands } from "./use-entity-commands";
 
 export interface EntityDetailUpdateInput<E extends EditableEntity> {
   id?: string;
-  data: EntityEditMutationData<E>;
+  data: EntityEditMutationData<E, "update">;
 }
 
 export interface EntityDetailController<TData> {

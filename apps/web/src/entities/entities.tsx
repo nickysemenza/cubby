@@ -5,8 +5,6 @@ import type {
 } from "@cubby/schemas/entity-manifest";
 import { entityNames } from "@cubby/schemas/entity-names";
 import { displayGtin } from "@cubby/schemas/external-id";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
-import type { VendorOut } from "@cubby/schemas/vendor";
 import {
   Apple,
   Barcode,
@@ -36,7 +34,76 @@ import { cn, formatCurrency } from "~/lib/utils";
 
 import { entityListFor } from "./entity-list.functions";
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
-import type { EntityColor, EntityDefinition } from "./types";
+import {
+  defineMergeableConfig,
+  type EntityColor,
+  type EntityDefinition,
+  type MergeDisplayRow,
+} from "./types";
+
+interface IngredientMergeRow extends MergeDisplayRow {
+  name: string;
+}
+
+interface ProductMergeRow extends IngredientMergeRow {
+  gtins: string[];
+  sources: string[];
+}
+
+interface VendorMergeRow extends MergeDisplayRow {
+  name: string;
+  purchaseCount: number;
+  spend: number;
+}
+
+interface PurchaseMergeRow extends MergeDisplayRow {
+  date: string;
+  displayLabel: string | null;
+  expenseCount: number;
+  expenseTotal: number;
+  orderId: string | null;
+  vendorId: string;
+  vendorName: string | null;
+}
+
+const isString = (value: unknown): value is string => typeof value === "string";
+
+const isIngredientMergeRow = (
+  row: MergeDisplayRow,
+): row is IngredientMergeRow => "name" in row && typeof row.name === "string";
+
+const isProductMergeRow = (row: MergeDisplayRow): row is ProductMergeRow =>
+  isIngredientMergeRow(row) &&
+  "gtins" in row &&
+  Array.isArray(row.gtins) &&
+  row.gtins.every(isString) &&
+  "sources" in row &&
+  Array.isArray(row.sources) &&
+  row.sources.every(isString);
+
+const isVendorMergeRow = (row: MergeDisplayRow): row is VendorMergeRow =>
+  "name" in row &&
+  typeof row.name === "string" &&
+  "purchaseCount" in row &&
+  typeof row.purchaseCount === "number" &&
+  "spend" in row &&
+  typeof row.spend === "number";
+
+const isPurchaseMergeRow = (row: MergeDisplayRow): row is PurchaseMergeRow =>
+  "vendorId" in row &&
+  typeof row.vendorId === "string" &&
+  "orderId" in row &&
+  (typeof row.orderId === "string" || row.orderId === null) &&
+  "displayLabel" in row &&
+  (typeof row.displayLabel === "string" || row.displayLabel === null) &&
+  "vendorName" in row &&
+  (typeof row.vendorName === "string" || row.vendorName === null) &&
+  "date" in row &&
+  typeof row.date === "string" &&
+  "expenseCount" in row &&
+  typeof row.expenseCount === "number" &&
+  "expenseTotal" in row &&
+  typeof row.expenseTotal === "number";
 
 /**
  * The four inks an entity can wear. `accent` feeds the `--page-accent` /
@@ -175,15 +242,14 @@ const entityDefinitions = withEntityNames({
     },
     // The caller supplies a duplicate group in a deterministic order; the
     // first ingredient starts as keeper, with a deliberate picker override.
-    mergeable: {
+    mergeable: defineMergeableConfig({
       keeperMode: "ranked",
-      rowLabel: (row: { id: string; name: string }) => (
-        <span className="truncate">{row.name}</span>
-      ),
+      isRow: isIngredientMergeRow,
+      rowLabel: (row) => <span className="truncate">{row.name}</span>,
       copy: {
         title: "Merge ingredients?",
       },
-    },
+    }),
   },
   product: {
     ...generatedBrowserRoutes.product,
@@ -228,12 +294,11 @@ const entityDefinitions = withEntityNames({
     },
     // The detector supplies duplicate rows in a stable order; the first starts
     // as keeper and the picker remains available for an intentional change.
-    mergeable: {
+    mergeable: defineMergeableConfig({
       keeperMode: "ranked",
-      rowLabel: (row: { id: string; name: string }) => (
-        <span className="truncate">{row.name}</span>
-      ),
-      rowStat: (row: { gtins: string[]; sources: string[] }) => (
+      isRow: isProductMergeRow,
+      rowLabel: (row) => <span className="truncate">{row.name}</span>,
+      rowStat: (row) => (
         <>
           {row.gtins.length > 0 && (
             <span>UPC {row.gtins.map(displayGtin).join(", ")}</span>
@@ -250,7 +315,7 @@ const entityDefinitions = withEntityNames({
         description:
           "These rows share the same manufacturer part number, split across retailers. Pick which one to keep — the rest merge into it.",
       },
-    },
+    }),
   },
   recipe: {
     ...generatedBrowserRoutes.recipe,
@@ -427,17 +492,18 @@ const entityDefinitions = withEntityNames({
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
     // mergePurchases' vendor-match check — any two vendors can fold together).
-    mergeable: {
+    mergeable: defineMergeableConfig({
       keeperMode: "fixed",
-      candidateQuery: (_keeper: VendorOut) =>
-        entityListFor("vendor").queryOptions({
+      isRow: isVendorMergeRow,
+      candidateQuery: () =>
+        entityListFor("vendor").listQueryPlan({
           filters: {},
           // Generous relative to the whole roster (~150 vendors), within
           // MAX_PAGE_SIZE — every other vendor is a merge candidate.
           pagination: { pageIndex: 0, pageSize: 200 },
         }),
-      rowLabel: (row: VendorOut) => row.name,
-      rowStat: (row: VendorOut) =>
+      rowLabel: (row) => row.name,
+      rowStat: (row) =>
         `${row.purchaseCount} purchase${row.purchaseCount === 1 ? "" : "s"} · ${formatCurrency(row.spend)}`,
       copy: {
         title: (keeperLabel) => <>Merge into {keeperLabel}</>,
@@ -446,7 +512,7 @@ const entityDefinitions = withEntityNames({
         emptyTitle: "Nothing to merge",
         emptyDescription: "No other vendors are on file.",
       },
-    },
+    }),
   },
   purchase: {
     ...generatedBrowserRoutes.purchase,
@@ -478,16 +544,17 @@ const entityDefinitions = withEntityNames({
     // OTHER purchase from the same vendor (mergePurchases refuses cross-vendor,
     // and separately refuses when both sides carry a non-null order id — that
     // refusal surfaces as the dialog's error toast, not pre-validated here).
-    mergeable: {
+    mergeable: defineMergeableConfig({
       keeperMode: "fixed",
-      candidateQuery: (keeper: PurchaseOut) =>
-        entityListFor("purchase").queryOptions({
+      isRow: isPurchaseMergeRow,
+      candidateQuery: (keeper) =>
+        entityListFor("purchase").listQueryPlan({
           filters: { vendorId: keeper.vendorId },
           // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
           pagination: { pageIndex: 0, pageSize: 200 },
         }),
-      rowLabel: (row: PurchaseOut) => purchaseLabel(row),
-      rowStat: (row: PurchaseOut) =>
+      rowLabel: (row) => purchaseLabel(row),
+      rowStat: (row) =>
         `${row.expenseCount} · ${formatCurrency(row.expenseTotal)}`,
       copy: {
         title: (keeperLabel) => <>Merge into {keeperLabel}</>,
@@ -498,7 +565,7 @@ const entityDefinitions = withEntityNames({
         caution:
           "One purchase is one vendor order or receipt event, never a contract — a payment schedule stays as separate purchases. Merge only rows that are genuinely the same transaction.",
       },
-    },
+    }),
   },
   expense: {
     ...generatedBrowserRoutes.expense,

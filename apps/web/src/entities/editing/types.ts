@@ -2,7 +2,10 @@ import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
 import type { JSONType } from "zod";
 
-import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
+import type {
+  EntityBrowserMutationCommand,
+  EntityBrowserMutationResult,
+} from "~/server/entity-kernel/contracts";
 
 import type {
   EntityMutationData,
@@ -12,8 +15,10 @@ import type {
 } from "../entity-contracts";
 import type {
   EntityEditDraft,
+  EntityEditCreateInput,
   EntityEditRecordFor,
   EntityEditResultFor,
+  EntityEditUpdateInput,
   TypedEditableEntity,
   EntityEditIntent as TypedEntityEditIntent,
   TypedEntityEditOperation,
@@ -80,9 +85,17 @@ export interface EntityEditIssue {
 /** Concrete runtime values accepted by semantic editor fields. */
 export type EntityEditValue = JSONType | Date | undefined;
 export type EntityEditValueBag = Record<string, EntityEditValue>;
-export type EntityEditMutationData<E extends EditableEntity> =
-  | Readonly<Partial<EntityEditDraft<E>>>
-  | EntityEditValueBag;
+export type EntityEditDraftData<E extends EditableEntity> = Readonly<
+  Partial<EntityEditDraft<E>>
+>;
+/** Internal normalized values or an owner-typed draft entering the kernel. */
+export type EntityEditValueSource<E extends EditableEntity> =
+  | EntityEditDraftData<E>
+  | Readonly<EntityEditValueBag>;
+export type EntityEditMutationData<
+  E extends EditableEntity,
+  O extends "create" | "update",
+> = O extends "create" ? EntityEditCreateInput<E> : EntityEditUpdateInput<E>;
 /** The minimum identity every update adapter needs. */
 export interface EntityEditRecord {
   id: string;
@@ -149,7 +162,7 @@ export type EntityEditCommand<
       entity: E;
       operation: O;
       intent: RuntimeEntityEditIntent;
-      data: EntityEditMutationData<E>;
+      data: EntityEditMutationData<E, "create">;
     }
   : O extends "update"
     ? {
@@ -157,7 +170,7 @@ export type EntityEditCommand<
         operation: O;
         intent: RuntimeEntityEditIntent;
         id: string;
-        data: EntityEditMutationData<E>;
+        data: EntityEditMutationData<E, "update">;
       }
     : {
         entity: E;
@@ -291,7 +304,7 @@ export type EntityEditResult<E extends EditableEntity> =
       entity: E;
       id: string;
       changed: boolean;
-      /** Raw mutation result for compatibility adapters and success callbacks. */
+      /** Schema-derived entity result consumed by success callbacks. */
       result?: EntityEditResultFor<E> & {
         sideEffects: MutationSideEffects;
       };
@@ -323,7 +336,10 @@ export interface EntityBulkUpdateCommand<E extends EditableEntity> {
   operation: "bulkUpdate";
   intent: RuntimeEntityEditIntent;
   ids: readonly string[];
-  data: EntityEditMutationData<E>;
+  data: Extract<
+    EntityBrowserMutationCommand,
+    { action: "bulkUpdate"; entity: E }
+  >["data"];
 }
 
 type EntityBulkUpdateResult = Extract<

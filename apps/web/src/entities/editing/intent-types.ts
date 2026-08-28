@@ -223,6 +223,10 @@ export type EntityEditIntent<
   : never;
 export type EntityEditDraft<E extends TypedEditableEntity> =
   EntityEditSpecification<E>["draft"];
+export type EntityEditCreateInput<E extends TypedEditableEntity> =
+  EntityEditSpecification<E>["createInput"];
+export type EntityEditUpdateInput<E extends TypedEditableEntity> =
+  EntityEditSpecification<E>["updateInput"];
 export type EntityEditRecordFor<E extends TypedEditableEntity> = {
   [
     K in keyof EntityEditSpecification<E>["record"]

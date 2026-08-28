@@ -4,7 +4,6 @@ import {
   type AuditSource,
   buildActorContext,
 } from "@cubby/schemas/context";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   testEntityId,
   testShortcode,
@@ -22,6 +21,10 @@ import {
   type DatabaseClient,
   type DatabaseRuntime,
 } from "../src/server/db/database";
+import {
+  mapPgPoolClients,
+  observePgClientQueries,
+} from "../src/server/db-pg-tracing";
 import * as schema from "../src/server/db/schema";
 import type {
   EntityCreateInput,
@@ -69,29 +72,14 @@ interface QueryMeasurement {
 }
 
 const queryMeasurement = new AsyncLocalStorage<QueryMeasurement>();
-const QUERY_COUNTED = Symbol("test-query-counted");
+const countedClients = new WeakSet<PoolClient>();
 
-type QueryTextInput = string | { text?: string } | undefined;
-
-const isQueryText = (value: QueryTextInput): value is string =>
-  typeof value === "string";
-
-type QueryCountedClient = Pick<PoolClient, "query"> & {
-  [QUERY_COUNTED]?: boolean;
-};
-
-const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
-  if (client[QUERY_COUNTED]) return client;
-  const query = client.query.bind(client);
-  const countedQuery = (...args: Parameters<PoolClient["query"]>) => {
+const countClientQueries = (client: PoolClient): PoolClient => {
+  if (countedClients.has(client)) return client;
+  observePgClientQueries(client, (text) => {
     const measurement = queryMeasurement.getStore();
     if (measurement) {
       measurement.count += 1;
-      // SAFETY: node-postgres exposes `query` as overloads; Parameters selects
-      // its callback overload even though every overload shares this runtime
-      // first argument contract.
-      const first = args[0] as QueryTextInput;
-      const text = isQueryText(first) ? first : (first?.text ?? "");
       // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
       // two measurements compares statement SHAPES, not page sizes.
       measurement.statements.push(
@@ -101,38 +89,13 @@ const countClientQueries = <T extends QueryCountedClient>(client: T): T => {
           .slice(0, 160),
       );
     }
-    return query(...args);
-  };
-  // SAFETY: preserve node-postgres's overloaded query method while wrapping
-  // its shared runtime implementation for measurement.
-  client.query = countedQuery as PoolClient["query"];
-  client[QUERY_COUNTED] = true;
+  });
+  countedClients.add(client);
   return client;
 };
 
-const countPoolQueries = (pool: Pool): Pool => {
-  const connect = pool.connect.bind(pool);
-  type ConnectCallback = (
-    error: Error | undefined,
-    client: PoolClient | undefined,
-    done: (release?: Error | boolean) => void,
-  ) => void;
-  const countedConnect = (callback?: ConnectCallback) => {
-    // `pool.query()` calls `connect(callback)` internally. Preserve that
-    // overload exactly; awaiting it would turn its `undefined` return into the
-    // "client" and break every ordinary Drizzle query.
-    if (callback) {
-      return connect((error, client, done) =>
-        callback(error, client ? countClientQueries(client) : client, done),
-      );
-    }
-    return connect().then((client) => countClientQueries(client));
-  };
-  // SAFETY: preserve node-postgres's promise and callback connect overloads
-  // while routing checked-out clients through the query counter.
-  pool.connect = countedConnect as typeof pool.connect;
-  return pool;
-};
+const countPoolQueries = (pool: Pool): Pool =>
+  mapPgPoolClients(pool, countClientQueries);
 
 /**
  * Count SQL statements issued by one operation against this integration
@@ -513,13 +476,14 @@ const remapDBConfig = (
 type SeedOverrides<E extends EntityKernelEntity> = Partial<
   EntityCreateInput<E>
 >;
-export async function seedEntity<E extends (typeof shortcodeEntities)[number]>(
+export async function seedEntity<E extends EntityKernelEntity>(
   db: Database,
   entity: E,
-  overrides?: SeedOverrides<Extract<E, EntityKernelEntity>>,
-): Promise<EntityPublicOutput<Extract<E, EntityKernelEntity>>> {
+  overrides?: SeedOverrides<E>,
+): Promise<EntityPublicOutput<E>> {
   const [
     { mock },
+    { parseEntityPublicOutput },
     { createTestRequestContext },
     { requireActor },
     { generatedEntityMutationCreateResultSchema },
@@ -527,6 +491,7 @@ export async function seedEntity<E extends (typeof shortcodeEntities)[number]>(
     { ENTITY_KERNEL_ENTITIES },
   ] = await Promise.all([
     import("../src/lib/test/mock-schema"),
+    import("../src/server/entity-kernel/adapter"),
     import("../src/server/testing/request-context"),
     import("../src/server/request-context"),
     import("../src/server/generated/entity-bindings.gen"),
@@ -535,8 +500,8 @@ export async function seedEntity<E extends (typeof shortcodeEntities)[number]>(
   ]);
 
   const entityKernelEntitySchema = z.enum(ENTITY_KERNEL_ENTITIES);
-  const kernelEntity = entityKernelEntitySchema.parse(entity);
-  const binding = ENTITY_KERNEL_BINDINGS[kernelEntity];
+  entityKernelEntitySchema.parse(entity);
+  const binding = ENTITY_KERNEL_BINDINGS[entity];
   if (!binding.schemas.createInput || !binding.repository.create) {
     throw new Error(`seedEntity: "${entity}" is not kernel-creatable`);
   }
@@ -546,15 +511,8 @@ export async function seedEntity<E extends (typeof shortcodeEntities)[number]>(
     auth: { userId: testUserId("test-user-id") },
   });
   const context: EntityKernelContext = requireActor(baseContext);
-  const created = await ENTITY_KERNEL_OPERATIONS[kernelEntity].create(
-    context,
-    input,
-  );
+  const created = await ENTITY_KERNEL_OPERATIONS[entity].create(context, input);
   const createdResult =
     generatedEntityMutationCreateResultSchema.parse(created);
-  // SAFETY: `kernelEntity` is parsed from the generated binding map and the
-  // output schema is that same binding's owner-derived public result schema.
-  return binding.schemas.output.parse(createdResult.item) as EntityPublicOutput<
-    Extract<E, EntityKernelEntity>
-  >;
+  return parseEntityPublicOutput(entity, createdResult.item);
 }

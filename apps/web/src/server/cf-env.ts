@@ -65,9 +65,12 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
 export const getProblemCountsCache = ():
   | ProblemCountsCacheAdapter
   | undefined => {
-  // SAFETY: Wrangler generates KVNamespace rather than this smaller owned
-  // cache port; the configured binding supplies both methods with these types.
-  return cfEnv?.PROBLEM_COUNTS_KV as ProblemCountsCacheAdapter | undefined;
+  const binding = cfEnv?.PROBLEM_COUNTS_KV;
+  if (!binding) return undefined;
+  return {
+    get: (key) => binding.get(key),
+    put: (key, value) => binding.put(key, value),
+  };
 };
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth

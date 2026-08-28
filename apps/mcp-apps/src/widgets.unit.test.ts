@@ -125,4 +125,25 @@ describe("USDA picker", () => {
     );
     expect(document.body.textContent).toContain("No USDA foods matched");
   });
+
+  it("rejects malformed structured and text tool payloads", async () => {
+    const app = await loadWidget();
+    app.ontoolresult?.({
+      structuredContent: { items: [{ fdc_id: "not-a-number" }] },
+      content: [{ type: "text", text: JSON.stringify({ items: "invalid" }) }],
+    });
+
+    expect(document.body.textContent).toContain(
+      "Could not read USDA results from the tool result.",
+    );
+  });
+
+  it("drops malformed tool input at the host boundary", async () => {
+    const app = await loadWidget();
+    app.ontoolinput?.({ arguments: { query: 42 } });
+    app.ontoolresult?.(result(usdaFixture));
+
+    expect(document.body.textContent).toContain("Search USDA foods");
+    expect(document.body.textContent).not.toContain("Searching for “42”");
+  });
 });

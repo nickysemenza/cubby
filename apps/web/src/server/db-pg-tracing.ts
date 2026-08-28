@@ -100,6 +100,58 @@ const isCallbackQuery = (
 const isStreamQuery = (args: QueryArguments): args is StreamQueryArguments =>
   args.length === 1 && isSubmittable(args[0]);
 
+const observableStatement = (head: QueryHead): string | undefined =>
+  isSubmittable(head) ? undefined : databaseStatementForTrace(head);
+
+const observedQuery = (
+  run: QueryBridge,
+  observe: (statement: string) => void,
+): QueryBridge => {
+  const implementation: PgQueryImplementation = (...args) => {
+    const statement = observableStatement(args[0]);
+    if (statement !== undefined) observe(statement);
+    if (isCallbackQuery(args)) return run(...args);
+    if (isStreamQuery(args)) return run(...args);
+    return run(...args);
+  };
+  return queryBridge(implementation);
+};
+
+/** Testable observation contract before pg overload restoration. */
+export const createObservedQuery = (
+  run: PgQueryImplementation,
+  observe: (statement: string) => void,
+): PgQueryImplementation =>
+  queryImplementationFor(observedQuery(queryBridge(run), observe));
+
+/** Instrument one pg client without reproducing its overload restoration. */
+export const observePgClientQueries = <T extends pg.PoolClient>(
+  client: T,
+  observe: (statement: string) => void,
+): T => {
+  client.query = observedQuery(queryBridge(client.query.bind(client)), observe);
+  return client;
+};
+
+/** Map every callback- or promise-acquired client from one pg pool. */
+export const mapPgPoolClients = (
+  pool: pg.Pool,
+  mapClient: (client: pg.PoolClient) => pg.PoolClient,
+): pg.Pool => {
+  const rawConnect = connectBridge(pool.connect.bind(pool));
+  const implementation: PgPoolConnectImplementation = (...args) => {
+    const callback = args[0];
+    if (callback) {
+      return rawConnect((error, client, release) =>
+        callback(error, client ? mapClient(client) : client, release),
+      );
+    }
+    return rawConnect().then(mapClient);
+  };
+  pool.connect = connectBridge(implementation);
+  return pool;
+};
+
 const traceQuery = (
   run: QueryBridge,
   getTransaction: () => boolean,

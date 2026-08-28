@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -48,6 +49,10 @@ function queueFor(sent: QueueMessage[][]): BackgroundQueueProducer {
       sent.push([...messages]);
     },
   };
+}
+
+function queueEnv(sent: QueueMessage[][]): Env {
+  return fromPartial<Env>({ BACKGROUND_QUEUE: queueFor(sent) });
 }
 
 describe("background job persistence", () => {
@@ -299,9 +304,7 @@ describe("background job persistence", () => {
 
   it("delivers 201 persisted queued jobs in queue-sized chunks", async () => {
     const sent: QueueMessage[][] = [];
-    // SAFETY: this fixture supplies the only Worker binding consumed by this
-    // dispatch path; all other Env properties are intentionally absent.
-    setCfEnv({ BACKGROUND_QUEUE: queueFor(sent) } as Env);
+    setCfEnv(queueEnv(sent));
     const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
       kind: "entity-embedding.refresh",
       source: "backfill",
@@ -509,9 +512,7 @@ describe("background job persistence", () => {
   describe("stranded job reconciliation", () => {
     const stubQueue = () => {
       const sent: QueueMessage[][] = [];
-      // SAFETY: this fixture supplies the only Worker binding consumed by this
-      // dispatch path; all other Env properties are intentionally absent.
-      setCfEnv({ BACKGROUND_QUEUE: queueFor(sent) } as Env);
+      setCfEnv(queueEnv(sent));
       return sent;
     };
 

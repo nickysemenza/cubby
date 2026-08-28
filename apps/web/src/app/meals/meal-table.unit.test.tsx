@@ -1,6 +1,5 @@
 import { mealOut } from "@cubby/schemas/meal";
 import { testShortcode } from "@cubby/schemas/testing";
-import { queryOptions } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -42,11 +41,10 @@ function mealOperations(
   return {
     // The table's filter and pagination state stays real; this is only the
     // unavailable server list operation for the browser test.
-    list: (params) =>
-      queryOptions({
-        queryKey: ["browser-test", "meal-list", params],
-        queryFn: async () => response,
-      }),
+    list: (params) => ({
+      queryKey: ["browser-test", "meal-list", params],
+      execute: async () => response,
+    }),
   };
 }
 

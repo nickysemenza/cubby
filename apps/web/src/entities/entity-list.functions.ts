@@ -148,6 +148,24 @@ export function entityListFor<E extends ListEntity>(entity: E) {
         ...policy.freshness,
       });
     },
+    /**
+     * The table pager consumes a finite plan, not raw React Query options.
+     * Keep that adapter beside the descriptor so table callers cannot erase a
+     * row type while reaching through `queryFn` themselves.
+     */
+    listQueryPlan: (input: EntityListParams<E>) => {
+      const wireInput = wireInputFor(input);
+      const keyInput = keyInputFor(wireInput);
+      const policy = operation.policy(keyInput);
+      return {
+        queryKey: queryKeyFor(keyInput),
+        meta: policy.meta,
+        execute: (signal: AbortSignal) =>
+          Promise.resolve(
+            call(parseEntityListInput(entity, wireInput), signal),
+          ),
+      };
+    },
     /** Query options shared by SSR loaders and the mounted infinite table. */
     infiniteQueryOptions: (input: EntityListParams<E>) => {
       const firstPage = firstPageOf(input);

@@ -231,8 +231,8 @@ export default defineConfig({
             // full safe TRUNCATE path documented in tooling/test-setup.ts.
             hookTimeout: 30000,
             // Integration stays on isolated forks: database clients and module
-            // caches are file-scoped, while shared registries make vi.mock order
-            // dependent. Larger IntegreSQL pools do not reduce CREATE latency.
+            // singletons are file-scoped, while shared registries must not cross
+            // test-file boundaries. Larger IntegreSQL pools do not reduce CREATE latency.
             sequence: { groupOrder: 2 },
           },
         },

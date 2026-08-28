@@ -19,7 +19,10 @@ import {
 } from "../data-table/columnHelpers";
 import { ListWorkbench } from "../data-table/ListWorkbench";
 import type { ShelfView } from "../data-table/shelf";
-import { createCubbyColumnHelper } from "../data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "../data-table/table-features";
 import { useEntityList } from "../hooks/useEntityList";
 import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
@@ -185,58 +188,73 @@ export function LocationInventoryTable({
   // every render, but the closure captures mutateAsync correctly and it's
   // functionally stable — see productlist.tsx for the same pattern.
   const columns = useMemo(
-    () => [
-      columnHelper.accessor((row) => row.product.id, {
-        id: "image",
-        header: () => <ImageIcon className="size-3 text-muted-foreground" />,
-        enableSorting: false,
-        meta: {
-          className: "h-px w-10 overflow-hidden px-0 py-0",
-          mobile: { slot: "image", priority: -10 },
-        },
-        cell: (info) => (
-          <InventoryProductImageCell productId={info.getValue()} />
-        ),
+    () =>
+      createCubbyColumnCollection<InventoryItem>((add) => {
+        add(
+          columnHelper.accessor((row) => row.product.id, {
+            id: "image",
+            header: () => (
+              <ImageIcon className="size-3 text-muted-foreground" />
+            ),
+            enableSorting: false,
+            meta: {
+              className: "h-px w-10 overflow-hidden px-0 py-0",
+              mobile: { slot: "image", priority: -10 },
+            },
+            cell: (info) => (
+              <InventoryProductImageCell productId={info.getValue()} />
+            ),
+          }),
+        );
+        add(
+          createSingleEntityInlineLinkColumn(
+            columnHelper,
+            "product",
+            "product",
+            {
+              header: "Product",
+              className: "min-w-0 w-64",
+            },
+          ),
+        );
+        add(
+          createEditableAmountColumn(columnHelper, "amount", {
+            onSave: async (newAmount, row) => {
+              await updateMutation.mutateAsync({
+                id: row.id,
+                data: { amount: newAmount },
+              });
+            },
+            getUnitMappings: (row) =>
+              unitMappingsByProductId[row.product.id] ?? [],
+            // The only click-through to the row's OWN entity — every other column
+            // here points at the product or location. Same treatment as the
+            // /inventory index list.
+            renderDisplay: (content, row) => (
+              <Link to="/inventory/$shortcode" params={{ shortcode: row.id }}>
+                {content}
+              </Link>
+            ),
+          }),
+        );
       }),
-
-      createSingleEntityInlineLinkColumn(columnHelper, "product", "product", {
-        header: "Product",
-        className: "min-w-0 w-64",
-      }),
-
-      createEditableAmountColumn(columnHelper, "amount", {
-        onSave: async (newAmount, row) => {
-          await updateMutation.mutateAsync({
-            id: row.id,
-            data: { amount: newAmount },
-          });
-        },
-        getUnitMappings: (row) => unitMappingsByProductId[row.product.id] ?? [],
-        // The only click-through to the row's OWN entity — every other column
-        // here points at the product or location. Same treatment as the
-        // /inventory index list.
-        renderDisplay: (content, row) => (
-          <Link to="/inventory/$shortcode" params={{ shortcode: row.id }}>
-            {content}
-          </Link>
-        ),
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
     [columnHelper, unitMappingsByProductId],
   );
 
   // Fixed parent scope merged with the table's live sort/pagination.
-  const listQueryOptions: ListQueryOptionsFn<Record<string, never>> =
-    useCallback(
-      (params) =>
-        entityListFor("inventory").queryOptions({
-          sort: params.sort,
-          pagination: params.pagination,
-          filters: { locationIdFilter: locationId, placementFilter: placement },
-        }),
-      [locationId, placement],
-    );
+  const listQueryOptions: ListQueryOptionsFn<
+    Record<string, never>,
+    InventoryItem
+  > = useCallback(
+    (params) =>
+      entityListFor("inventory").listQueryPlan({
+        sort: params.sort,
+        pagination: params.pagination,
+        filters: { locationIdFilter: locationId, placementFilter: placement },
+      }),
+    [locationId, placement],
+  );
 
   const { workbench, data } = useEntityList<
     InventoryItem,

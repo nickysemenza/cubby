@@ -6,9 +6,15 @@ import { parse } from "csv-parse";
 import { z } from "zod";
 import { db, sqlite } from "./client";
 import { rebuildFoodSearchFts } from "./fts";
+import {
+  type CsvRecord,
+  type DatabaseRecord,
+  drainCsvRecords,
+  readUsdaCsvFieldNames,
+  usdaInsertPlaceholders,
+} from "./import-usda-contract";
 import * as schema from "./schema";
-import { sql } from "drizzle-orm";
-import type { SQLiteInsertValue, SQLiteTable } from "drizzle-orm/sqlite-core";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
@@ -32,11 +38,6 @@ type DrizzlePreparedStatement = {
 };
 
 type FieldTransformValue = "string" | "number" | "integer";
-type CsvRecord = Record<string, string>;
-type DatabaseValue = string | number | null;
-type DatabaseRecord = Record<string, DatabaseValue>;
-const csvRecordSchema = z.record(z.string(), z.string());
-
 interface TableConfig<TSchema extends SQLiteTable> {
   tableName: string;
   csvFile: string;
@@ -169,40 +170,6 @@ function transformRecord<TSchema extends SQLiteTable>(
   return convertEmptyToNull(result);
 }
 
-async function getCsvFieldNames(filePath: string): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    const parser = parse({
-      columns: true,
-      to_line: 2,
-    });
-
-    let fieldNames: string[] = [];
-
-    parser.on("readable", () => {
-      const record = parser.read();
-      if (record && fieldNames.length === 0) {
-        fieldNames = Object.keys(csvRecordSchema.parse(record));
-      }
-    });
-
-    parser.on("end", () => {
-      resolve(fieldNames);
-    });
-
-    parser.on("error", (err) => {
-      reject(err);
-    });
-
-    const fileStream = fs.createReadStream(filePath);
-
-    fileStream.on("error", (err) => {
-      reject(err);
-    });
-
-    fileStream.pipe(parser);
-  });
-}
-
 function createImporter<TSchema extends SQLiteTable>(
   config: TableConfig<TSchema>,
 ) {
@@ -211,23 +178,17 @@ function createImporter<TSchema extends SQLiteTable>(
     const filePath = path.join(USDA_DATA_PATH, config.csvFile);
 
     try {
-      const csvFieldNames = await getCsvFieldNames(filePath);
-
-      const placeholderValues: Record<
-        string,
-        ReturnType<typeof sql.placeholder>
-      > = {};
-      for (const csvField of csvFieldNames) {
-        placeholderValues[csvField] = sql.placeholder(csvField);
-      }
+      const csvFieldNames = await readUsdaCsvFieldNames(
+        fs.createReadStream(filePath),
+      );
+      const placeholderValues = usdaInsertPlaceholders(
+        config.schema,
+        csvFieldNames,
+      );
 
       const drizzlePrepared = db
         .insert(config.schema)
-        .values(
-          // SAFETY: csv headers are validated against this table's columns by
-          // the prepared insert; placeholders use those exact header names.
-          placeholderValues as SQLiteInsertValue<TSchema>,
-        )
+        .values(placeholderValues)
         .onConflictDoNothing()
         .prepare();
 
@@ -322,30 +283,24 @@ async function streamCsvFile(
     };
 
     parser.on("readable", () => {
-      let record: CsvRecord | null = null;
-      const firstRecord = parser.read();
-      if (firstRecord !== null) record = csvRecordSchema.parse(firstRecord);
-      while (record !== null) {
-        try {
-          const transformedRecord = transformRecord(record);
-          if (shouldInclude && !shouldInclude(transformedRecord)) {
-            stats.skipped++;
-            stats.processed++;
-            continue;
-          }
-          batch.push(transformedRecord);
-
+      drainCsvRecords({
+        reader: parser,
+        transformRecord,
+        shouldInclude,
+        include: (record) => {
+          batch.push(record);
           if (batch.length >= batchSize) {
             processBatch();
           }
-        } catch (error) {
-          console.warn(`Skipping record due to transformation error:`, error);
+        },
+        skip: (error) => {
+          if (error) {
+            console.warn(`Skipping record due to transformation error:`, error);
+          }
           stats.skipped++;
           stats.processed++;
-        }
-        const nextRecord = parser.read();
-        record = nextRecord === null ? null : csvRecordSchema.parse(nextRecord);
-      }
+        },
+      });
     });
 
     parser.on("error", (err) => {

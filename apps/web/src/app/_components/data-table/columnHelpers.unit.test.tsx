@@ -26,8 +26,10 @@ import {
 import { EditableCell } from "./editable-cell";
 import {
   type CubbyColumnDef as ColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   cubbyTableFeatures,
+  materializeCubbyColumns,
   useCubbyTable,
 } from "./table-features";
 
@@ -44,11 +46,10 @@ afterEach(() => {
 
 function columnForTable<TRow extends RowData, TValue>(
   column: ColumnDef<TRow, TValue>,
-): ColumnDef<TRow, unknown> {
-  // SAFETY: TanStack's table options fix TValue to unknown, while the column
-  // helper preserves each cell's concrete value. The table only invokes the
-  // column against the same TRow and never reads a value as unknown here.
-  return column as ColumnDef<TRow, unknown>;
+): ColumnDef<TRow, unknown>[] {
+  return materializeCubbyColumns(
+    createCubbyColumnCollection<TRow>((add) => add(column)),
+  );
 }
 
 type TaskRow = {
@@ -76,7 +77,7 @@ function renderColumn<TRow extends RowData, TValue = ParentValue>(
     const table = useTable<typeof cubbyTableFeatures, TRow>({
       features: cubbyTableFeatures,
       data: [row],
-      columns: [columnForTable(column)],
+      columns: columnForTable(column),
     });
     const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
     if (!cell) throw new Error("expected one row with one cell");
@@ -248,7 +249,7 @@ function TreeNameHarness() {
         subRows: [{ id: "PRD-PART", name: "Nested component" }],
       },
     ],
-    columns: treeNameColumns.map((column) => columnForTable(column)),
+    columns: treeNameColumns.flatMap((column) => columnForTable(column)),
     getRowId: (row) => row.id,
     getSubRows: (row) => row.subRows,
     initialState: { expanded: true },
@@ -321,7 +322,7 @@ function ImageHarness({ images }: { images: ImagesByRowId }) {
   const table = useTable({
     features: cubbyTableFeatures,
     data: IMAGE_ROWS,
-    columns: useMemo(() => [columnForTable(column)], [column]),
+    columns: useMemo(() => columnForTable(column), [column]),
   });
   const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
   if (!cell) throw new Error("expected one row with one cell");
@@ -400,7 +401,7 @@ describe("createImageColumn", () => {
             ],
           },
         ],
-        columns: [columnForTable(column)],
+        columns: columnForTable(column),
       });
       const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
       if (!cell) throw new Error("expected one row with one cell");

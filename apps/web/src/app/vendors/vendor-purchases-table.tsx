@@ -9,7 +9,10 @@ import {
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -36,10 +39,11 @@ const EMBEDDED_TABLE_STATE = {
  * so this table and the global Purchase list render and filter them identically.
  */
 export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
-  const listQueryOptions: ListQueryOptionsFn<PurchaseFilters> = useCallback(
-    (params) => entityListFor("purchase").queryOptions(params),
-    [],
-  );
+  const listQueryOptions: ListQueryOptionsFn<PurchaseFilters, PurchaseOut> =
+    useCallback(
+      (params) => entityListFor("purchase").listQueryPlan(params),
+      [],
+    );
   const helper = useMemo(() => createCubbyColumnHelper<PurchaseOut>(), []);
   const scope = useMemo<Partial<PurchaseFilters>>(
     () => ({ vendorId: vendor.id }),
@@ -50,99 +54,121 @@ export function VendorPurchasesTable({ vendor }: { vendor: VendorOut }) {
     entity: "purchase",
   });
   const columns = useMemo(
-    () => [
-      createPlainDateColumn(helper, "date", {
-        header: "Date",
-        editable: {
-          onSave: async (date, purchase) => {
-            if (date === null) return;
-            await update.mutateAsync({ id: purchase.id, data: { date } });
-          },
-        },
-      }),
-      helper.display({
-        id: "purchase",
-        header: "Purchase",
-        meta: { className: "w-56" },
-        cell: (info) => (
-          <TableLink
-            to={entities.purchase.routes.detail}
-            params={entityDetailParams(info.row.original.id)}
-            className="block truncate"
-          >
-            {purchaseIdentityLabel(info.row.original)}
-          </TableLink>
-        ),
-      }),
-      createTextColumn(helper, "orderId", {
-        header: "Order #",
-        className: "w-40 font-mono",
-        // Pencil trigger so the link icon beside the id is clickable without
-        // the surrounding cell swallowing the click into the inline editor.
-        trigger: "pencil",
-        renderValue: (v, purchase) =>
-          v ? (
-            <Row align="center" gap="xs">
-              <span className="min-w-0 truncate">{v}</span>
-              <OrderIdLink
-                orderUrl={purchase.orderUrl}
-                orderId={v}
-                vendorName={purchase.vendorName}
+    () =>
+      createCubbyColumnCollection<PurchaseOut>((add) => {
+        add(
+          createPlainDateColumn(helper, "date", {
+            header: "Date",
+            editable: {
+              onSave: async (date, purchase) => {
+                if (date === null) return;
+                await update.mutateAsync({ id: purchase.id, data: { date } });
+              },
+            },
+          }),
+        );
+        add(
+          helper.display({
+            id: "purchase",
+            header: "Purchase",
+            meta: { className: "w-56" },
+            cell: (info) => (
+              <TableLink
+                to={entities.purchase.routes.detail}
+                params={entityDetailParams(info.row.original.id)}
+                className="block truncate"
+              >
+                {purchaseIdentityLabel(info.row.original)}
+              </TableLink>
+            ),
+          }),
+        );
+        add(
+          createTextColumn(helper, "orderId", {
+            header: "Order #",
+            className: "w-40 font-mono",
+            // Pencil trigger so the link icon beside the id is clickable without
+            // the surrounding cell swallowing the click into the inline editor.
+            trigger: "pencil",
+            renderValue: (v, purchase) =>
+              v ? (
+                <Row align="center" gap="xs">
+                  <span className="min-w-0 truncate">{v}</span>
+                  <OrderIdLink
+                    orderUrl={purchase.orderUrl}
+                    orderId={v}
+                    vendorName={purchase.vendorName}
+                  />
+                </Row>
+              ) : (
+                <NoneValue />
+              ),
+            editable: {
+              onSave: async (orderId, purchase) => {
+                await update.mutateAsync({
+                  id: purchase.id,
+                  data: { orderId },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          createTextColumn(helper, "displayLabel", {
+            header: "Display label",
+            placeholder: "e.g. pocket hole jig + bits",
+            className: "w-56",
+            editable: {
+              onSave: async (displayLabel, purchase) => {
+                await update.mutateAsync({
+                  id: purchase.id,
+                  data: { displayLabel },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          helper.accessor("expenseCount", {
+            header: "Expense count",
+            meta: { numeric: true, className: "w-24" },
+          }),
+        );
+        // Paperwork total is a per-order reconciliation cue, never spend; do
+        // not use createCurrencyColumn because that factory renders a sum footer.
+        add(
+          helper.accessor("statedTotal", {
+            header: "Stated",
+            meta: { numeric: true, className: "w-24" },
+            cell: (info) => (
+              <EditableCell
+                value={info.getValue()}
+                config={{ type: "currency" }}
+                onSave={async (statedTotal) => {
+                  const purchase = info.row.original;
+                  await update.mutateAsync({
+                    id: purchase.id,
+                    data: { statedTotal },
+                  });
+                }}
+                renderValue={(statedTotal) =>
+                  statedTotal == null ? (
+                    <NoneValue />
+                  ) : (
+                    formatCurrency(statedTotal)
+                  )
+                }
               />
-            </Row>
-          ) : (
-            <NoneValue />
-          ),
-        editable: {
-          onSave: async (orderId, purchase) => {
-            await update.mutateAsync({ id: purchase.id, data: { orderId } });
-          },
-        },
+            ),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "expenseTotal", {
+            header: "Expense total",
+            className: "w-28",
+          }),
+        );
       }),
-      createTextColumn(helper, "displayLabel", {
-        header: "Display label",
-        placeholder: "e.g. pocket hole jig + bits",
-        className: "w-56",
-        editable: {
-          onSave: async (displayLabel, purchase) => {
-            await update.mutateAsync({
-              id: purchase.id,
-              data: { displayLabel },
-            });
-          },
-        },
-      }),
-      helper.accessor("expenseCount", {
-        header: "Expense count",
-        meta: { numeric: true, className: "w-24" },
-      }),
-      // Paperwork total is a per-order reconciliation cue, never spend; do
-      // not use createCurrencyColumn because that factory renders a sum footer.
-      helper.accessor("statedTotal", {
-        header: "Stated",
-        meta: { numeric: true, className: "w-24" },
-        cell: (info) => (
-          <EditableCell
-            value={info.getValue()}
-            config={{ type: "currency" }}
-            onSave={async (statedTotal) => {
-              const purchase = info.row.original;
-              await update.mutateAsync({
-                id: purchase.id,
-                data: { statedTotal },
-              });
-            }}
-            renderValue={(statedTotal) =>
-              statedTotal == null ? <NoneValue /> : formatCurrency(statedTotal)
-            }
-          />
-        ),
-      }),
-      createCurrencyColumn(helper, "expenseTotal", {
-        header: "Expense total",
-        className: "w-28",
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper],
   );

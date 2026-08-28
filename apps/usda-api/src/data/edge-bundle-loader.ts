@@ -3,7 +3,7 @@ import { withSpan } from "@cubby/worker-tracing";
 import pMap from "p-map";
 import { z } from "zod";
 import { normalizeDataType } from "./artifact-layout.js";
-import type { EdgeBindings } from "./cloudflare-types.js";
+import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types.js";
 
 export interface HydrateStats {
   cacheHits: number;
@@ -55,6 +55,7 @@ export function normalizeUpc(upc: string): string {
 export function createFoodBundleLoader(
   env: EdgeBindings,
   r2Concurrency: number,
+  cache: EdgeCachePort | null,
 ) {
   // USDA bundle bytes are immutable, so the per-food range read is pure static
   // work that's repeated on every lookup. Cache the hydrated JSON in the
@@ -66,10 +67,6 @@ export function createFoodBundleLoader(
     stats?: HydrateStats,
     options: { skipCacheRead?: boolean } = {},
   ): Promise<{ text: string; fromCache: boolean } | null> {
-    // `caches.default` is a Cloudflare extension absent from the DOM
-    // CacheStorage type (mirrors the cast in the web USDA client); it's also
-    // absent under Node (unit tests), so guard before use and read R2 directly.
-    const cache = globalThis.caches?.default ?? null;
     const cacheKey = new Request(
       `https://usda-cache/food/${encodeURIComponent(row.bundle_key)}/${row.byte_offset}/${row.byte_length}`,
     );

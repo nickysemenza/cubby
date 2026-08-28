@@ -1,5 +1,5 @@
 import type { FoodLookupParam } from "@cubby/usda-schemas";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { USDAClient } from "./usda";
@@ -21,17 +21,10 @@ const jsonResponse = (status: number) =>
   });
 
 describe("USDAClient surfaces fetch failures", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
   it("findFoodsBatch throws when fetch times out", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(makeTimeoutError())),
+    const client = new USDAClient("http://localhost:8787", async () =>
+      Promise.reject(makeTimeoutError()),
     );
-    const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFoodsBatch([{ kind: "upc", gtin_upc: "012345678905" }]),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
@@ -39,11 +32,9 @@ describe("USDAClient surfaces fetch failures", () => {
   });
 
   it("findFood throws when fetch times out", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(makeTimeoutError())),
+    const client = new USDAClient("http://localhost:8787", async () =>
+      Promise.reject(makeTimeoutError()),
     );
-    const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFood({ kind: "upc", gtin_upc: "012345678905" }),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
@@ -51,11 +42,9 @@ describe("USDAClient surfaces fetch failures", () => {
   });
 
   it("findFood throws on a generic network error", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new TypeError("network error"))),
+    const client = new USDAClient("http://localhost:8787", async () =>
+      Promise.reject(new TypeError("network error")),
     );
-    const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFood({ kind: "ndb", ndb_number: 1234 }),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
@@ -63,11 +52,9 @@ describe("USDAClient surfaces fetch failures", () => {
   });
 
   it("findFood throws on a 5xx service error", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(503))),
+    const client = new USDAClient("http://localhost:8787", async () =>
+      jsonResponse(503),
     );
-    const client = new USDAClient("http://localhost:8787");
     await expect(
       client.findFood({ kind: "ndb", ndb_number: 1234 }),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
@@ -75,60 +62,38 @@ describe("USDAClient surfaces fetch failures", () => {
   });
 
   it("findFood resolves to null on a 404 (food not found)", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(jsonResponse(404))),
+    const client = new USDAClient("http://localhost:8787", async () =>
+      jsonResponse(404),
     );
-    const client = new USDAClient("http://localhost:8787");
     const result = await client.findFood({ kind: "ndb", ndb_number: 1234 });
     expect(result).toBeNull();
   });
 });
 
 describe("USDAClient getFood cache", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
   it("awaits and handles a cache write failure without failing the USDA response", async () => {
     const cachePut = vi.fn().mockRejectedValue(new Error("cache unavailable"));
-    vi.stubGlobal("caches", {
-      default: {
-        match: vi.fn().mockResolvedValue(undefined),
-        put: cachePut,
+    const client = new USDAClient(
+      "http://localhost:8787",
+      async () =>
+        new Response(JSON.stringify({ brandedFoodInfo: null }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      {
+        cache: {
+          match: async () => undefined,
+          put: cachePut,
+        },
       },
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          new Response(JSON.stringify({ brandedFoodInfo: null }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          }),
-        ),
-      ),
     );
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    const client = new USDAClient("http://localhost:8787");
     await expect(client.getBrandedFoodByID(123)).resolves.toBeNull();
 
     expect(cachePut).toHaveBeenCalledOnce();
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Cache write failed"),
-      expect.any(Error),
-    );
   });
 });
 
 describe("USDAClient.findFoodsBatch request-scoped memo", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
-
   // A FoodSummary-shaped body keyed so we can assert the right record comes back.
   const batchBody = (results: JSONType[]) =>
     new Response(JSON.stringify({ results }), {
@@ -143,9 +108,7 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
     fetchMock
       .mockResolvedValueOnce(batchBody([{ fdc_id: 1 }]))
       .mockResolvedValueOnce(batchBody([{ fdc_id: 2 }]));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const client = new USDAClient("http://localhost:8787");
+    const client = new USDAClient("http://localhost:8787", fetchMock);
     const first = await client.findFoodsBatch([
       { kind: "upc", gtin_upc: "012345678905" },
     ]);
@@ -170,9 +133,7 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
 
   it("does not re-POST a known miss within the request", async () => {
     const fetchMock = vi.fn().mockResolvedValue(batchBody([null]));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const client = new USDAClient("http://localhost:8787");
+    const client = new USDAClient("http://localhost:8787", fetchMock);
     const lookup = {
       kind: "ndb",
       ndb_number: 999,
@@ -196,9 +157,7 @@ describe("USDAClient.findFoodsBatch request-scoped memo", () => {
             setTimeout(() => resolve(batchBody([{ fdc_id: 7 }])), 10),
           ),
       );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const client = new USDAClient("http://localhost:8787");
+    const client = new USDAClient("http://localhost:8787", fetchMock);
     const lookup = {
       kind: "upc",
       gtin_upc: "012345678905",

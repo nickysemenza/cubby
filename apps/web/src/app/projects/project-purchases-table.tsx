@@ -9,7 +9,10 @@ import {
   type RowLinkResolver,
 } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { Row } from "~/components/layout";
@@ -76,10 +79,11 @@ export function ProjectPurchasesTable({
   /** The project's ledger rows — the subtree set the page already holds. */
   expenses: readonly ExpenseOut[];
 }) {
-  const listQueryOptions: ListQueryOptionsFn<PurchaseFilters> = useCallback(
-    (params) => entityListFor("purchase").queryOptions(params),
-    [],
-  );
+  const listQueryOptions: ListQueryOptionsFn<PurchaseFilters, PurchaseOut> =
+    useCallback(
+      (params) => entityListFor("purchase").listQueryPlan(params),
+      [],
+    );
   const helper = useMemo(
     () => createCubbyColumnHelper<ProjectPurchaseRow>(),
     [],
@@ -101,62 +105,73 @@ export function ProjectPurchasesTable({
   );
 
   const columns = useMemo(
-    () => [
-      createNameColumn(helper, "purchase", "name", {
-        header: "Purchase",
-        className: "w-72",
-        expandable: true,
-        rowLink,
-        // A purchase reaches this table because at least one of its lines is
-        // on this project; say when the rest of the charge went elsewhere.
-        nameSuffix: (row) =>
-          row.kind === "purchase" &&
-          row.linesOnProject > 0 &&
-          row.linesOnProject < row.purchase.expenseCount ? (
-            <Badge variant="outline" className="shrink-0">
-              {row.linesOnProject} of {row.purchase.expenseCount} lines
-            </Badge>
-          ) : null,
+    () =>
+      createCubbyColumnCollection<ProjectPurchaseRow>((add) => {
+        add(
+          createNameColumn(helper, "purchase", "name", {
+            header: "Purchase",
+            className: "w-72",
+            expandable: true,
+            rowLink,
+            // A purchase reaches this table because at least one of its lines is
+            // on this project; say when the rest of the charge went elsewhere.
+            nameSuffix: (row) =>
+              row.kind === "purchase" &&
+              row.linesOnProject > 0 &&
+              row.linesOnProject < row.purchase.expenseCount ? (
+                <Badge variant="outline" className="shrink-0">
+                  {row.linesOnProject} of {row.purchase.expenseCount} lines
+                </Badge>
+              ) : null,
+          }),
+        );
+        add(createPlainDateColumn(helper, "date", { header: "Date" }));
+        add(
+          helper.display({
+            id: "vendor",
+            header: "Vendor",
+            meta: { className: "w-40" },
+            cell: (info) => {
+              const row = info.row.original;
+              if (row.kind !== "purchase") return null;
+              return (
+                <span className="truncate">{row.purchase.vendorName}</span>
+              );
+            },
+          }),
+        );
+        add(
+          helper.accessor(
+            (row) =>
+              row.kind === "purchase" ? row.projectSpend : row.expense.cost,
+            {
+              id: "projectSpend",
+              header: "On this project",
+              meta: { className: "w-32", numeric: true, mono: true },
+              cell: (info) => {
+                const value = info.getValue();
+                return value == null ? <NoneValue /> : formatCurrency(value);
+              },
+            },
+          ),
+        );
+        add(
+          helper.display({
+            id: "charge",
+            header: "Whole charge",
+            meta: { className: "w-32", numeric: true, mono: true },
+            cell: (info) => {
+              const row = info.row.original;
+              if (row.kind !== "purchase") return null;
+              return (
+                <Row justify="end" gap="xs">
+                  <span>{formatCurrency(row.purchase.expenseTotal)}</span>
+                </Row>
+              );
+            },
+          }),
+        );
       }),
-      createPlainDateColumn(helper, "date", { header: "Date" }),
-      helper.display({
-        id: "vendor",
-        header: "Vendor",
-        meta: { className: "w-40" },
-        cell: (info) => {
-          const row = info.row.original;
-          if (row.kind !== "purchase") return null;
-          return <span className="truncate">{row.purchase.vendorName}</span>;
-        },
-      }),
-      helper.accessor(
-        (row) =>
-          row.kind === "purchase" ? row.projectSpend : row.expense.cost,
-        {
-          id: "projectSpend",
-          header: "On this project",
-          meta: { className: "w-32", numeric: true, mono: true },
-          cell: (info) => {
-            const value = info.getValue();
-            return value == null ? <NoneValue /> : formatCurrency(value);
-          },
-        },
-      ),
-      helper.display({
-        id: "charge",
-        header: "Whole charge",
-        meta: { className: "w-32", numeric: true, mono: true },
-        cell: (info) => {
-          const row = info.row.original;
-          if (row.kind !== "purchase") return null;
-          return (
-            <Row justify="end" gap="xs">
-              <span>{formatCurrency(row.purchase.expenseTotal)}</span>
-            </Row>
-          );
-        },
-      }),
-    ],
     [helper],
   );
 

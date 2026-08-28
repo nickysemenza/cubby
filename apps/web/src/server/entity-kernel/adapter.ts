@@ -72,6 +72,7 @@ interface EntityKernelBulkUpdateResult {
 }
 
 type SchemaOutput<S> = S extends ZodSchema ? ZodOutput<S> : never;
+type UnparsedEntityOutput = Parameters<ZodSchema["parse"]>[0];
 type SchemasFor<E extends EntitySchemaBindingEntity> =
   EntitySchemaBindingMap[E];
 export interface EntityBindingSchemas {
@@ -89,6 +90,17 @@ export type EntityCreateInput<E extends EntitySchemaBindingEntity> =
   SchemaOutput<SchemasFor<E>["createInput"]>;
 export type EntityPublicOutput<E extends EntitySchemaBindingEntity> =
   SchemaOutput<SchemasFor<E>["output"]>;
+
+/** Parse a public entity output through the schema owned by the same entity. */
+export function parseEntityPublicOutput<E extends EntitySchemaBindingEntity>(
+  entity: E,
+  value: UnparsedEntityOutput,
+): EntityPublicOutput<E> {
+  const parsed = ENTITY_SCHEMA_BINDINGS[entity].output.parse(value);
+  // SAFETY: E selects this exact entry in the generated schema binding map;
+  // `.parse` above applies that entry's transformations before restoration.
+  return parsed as EntityPublicOutput<E>;
+}
 
 export type EntityInternalId<E extends EntitySchemaBindingEntity> = EntityId<E>;
 

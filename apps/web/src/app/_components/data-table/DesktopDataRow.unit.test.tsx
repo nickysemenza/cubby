@@ -2,8 +2,13 @@ import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DesktopDataRow, type DesktopDataRowProps } from "./DesktopDataRow";
-import type { CubbyRow as Row, CubbyColumnDef } from "./table-features";
-import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import type { CubbyRow as Row } from "./table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  materializeCubbyColumns,
+  useCubbyTable,
+} from "./table-features";
 
 interface TestRow {
   id: string;
@@ -12,16 +17,18 @@ interface TestRow {
 const columnHelper = createCubbyColumnHelper<TestRow>();
 
 function useTestTable(cell?: () => string) {
-  const columns: CubbyColumnDef<TestRow>[] = [
-    columnHelper.accessor("id", {
-      id: "related:product.vendors",
-      header: "Vendors",
-      cell,
-    }),
-  ];
+  const columns = createCubbyColumnCollection<TestRow>((add) => {
+    add(
+      columnHelper.accessor("id", {
+        id: "related:product.vendors",
+        header: "Vendors",
+        cell,
+      }),
+    );
+  });
   return useCubbyTable({
     data: [{ id: "PRD-TEST" }],
-    columns,
+    columns: materializeCubbyColumns(columns),
     getRowId: (row) => row.id,
   });
 }

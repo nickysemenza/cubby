@@ -18,12 +18,22 @@ import { execFileSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { extremeMtime } from "./mtime.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ART = join(ROOT, "packages/wasm/recipebridge_bg.wasm");
 const PRUNE = new Set(["target", ".git", "node_modules"]);
 const WATCH_EXT = [".rs", ".toml", ".lock"];
+
+export const cargoMetadataSchema = z.object({
+  packages: z.array(
+    z.object({
+      manifest_path: z.string(),
+      source: z.string().nullable(),
+    }),
+  ),
+});
 
 const log = (msg: string) => process.stderr.write(`[ensure-wasm] ${msg}\n`);
 
@@ -51,7 +61,7 @@ const sourceRoots = () => {
         maxBuffer: 1 << 26,
       },
     );
-    for (const p of JSON.parse(out).packages) {
+    for (const p of cargoMetadataSchema.parse(JSON.parse(out)).packages) {
       if (p.source === null) roots.add(dirname(p.manifest_path));
     }
   } catch {
@@ -68,16 +78,25 @@ const newestMtime = (dir: string) =>
     extensions: WATCH_EXT,
   });
 
-if (!existsSync(ART)) {
-  log("no WASM build — building…");
+const main = () => {
+  if (!existsSync(ART)) {
+    log("no WASM build — building…");
+    build();
+    return;
+  }
+
+  const artMtime = statSync(ART).mtimeMs;
+  const stale = sourceRoots().some((r) => newestMtime(r) > artMtime);
+
+  if (!stale) return;
+
+  log("recipebridge or a local path-dep changed — building…");
   build();
-  process.exit(0);
+};
+
+if (
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main();
 }
-
-const artMtime = statSync(ART).mtimeMs;
-const stale = sourceRoots().some((r) => newestMtime(r) > artMtime);
-
-if (!stale) process.exit(0);
-
-log("recipebridge or a local path-dep changed — building…");
-build();

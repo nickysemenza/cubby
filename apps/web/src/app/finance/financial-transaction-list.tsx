@@ -7,7 +7,10 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import {
   financialAccount,
   financialTransaction,
@@ -15,6 +18,7 @@ import {
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityListFor } from "~/entities/entity-list.functions";
 import { presenceCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 
@@ -79,114 +83,137 @@ export function FinancialTransactionList() {
     entity: "financialTransaction",
   });
   const columns = useMemo(
-    () => [
-      helper.accessor((r) => r.merchant || r.rawDescription || r.id, {
-        id: "transaction",
-        header: "Transaction",
-        meta: { className: "w-64", mobile: { slot: "title", priority: 0 } },
-        cell: (i) => (
-          <TableLink
-            to={entities.financialTransaction.routes.detail}
-            params={entityDetailParams(i.row.original.id)}
-            className="block truncate"
-          >
-            {i.getValue()}
-          </TableLink>
-        ),
-      }),
-      helper.accessor("accountId", {
-        header: "Account",
-        meta: { className: "w-40" },
-        cell: (i) => (
-          <TableLink
-            to={entities.financialAccount.routes.detail}
-            params={entityDetailParams(i.getValue())}
-            className="block truncate"
-          >
-            {i.row.original.accountName ?? i.getValue()}
-          </TableLink>
-        ),
-      }),
-      // Through the factory, not a bare accessor: these were `createTextColumn`,
-      // which wires `meta.cellData` unconditionally, so hand-rolling the cell
-      // dropped them out of the range copy/paste engine (which reads cellData,
-      // never the rendered cell). `filterConfig: null` keeps `meta.filterConfig`
-      // undefined exactly as `createTextColumn` left it, so the manifest's
-      // multiselect control stays the one that attaches.
-      createFilterableSelectColumn(helper, "kind", {
-        header: "Kind",
-        className: "w-32",
-        placeholder: "Filter by kind...",
-        selectOptions: financialTransactionKindOptions,
-        filterConfig: null,
-      }),
-      createFilterableSelectColumn(helper, "status", {
-        header: "Status",
-        className: "w-24",
-        placeholder: "Filter by status...",
-        selectOptions: financialTransactionStatusOptions,
-        filterConfig: null,
-      }),
-      helper.accessor("amount", {
-        header: "Amount",
-        meta: {
-          numeric: true,
-          className: "w-28",
-          mobile: { slot: "trailing", priority: 1 },
-        },
-        cell: (i) => formatCurrency(i.getValue()),
-      }),
-      helper.accessor("purchaseId", {
-        header: "Purchase",
-        meta: { className: "w-32" },
-        cell: (i) => {
-          const purchaseId = i.getValue();
-          return purchaseId ? (
-            <TableLink
-              to={entities.purchase.routes.detail}
-              params={entityDetailParams(purchaseId)}
-              variant="mono"
-            >
-              {purchaseId}
-            </TableLink>
-          ) : (
-            "—"
-          );
-        },
-      }),
-      createPlainDateColumn(helper, "postedDate", { header: "Posted" }),
-      // Hidden by default: these exist so `purchasePresence`, `merchant` and
-      // `source` are column-backed specs rather than URL-only ones. A urlOnly
-      // spec can never round-trip through a header control — see
-      // `manifestFilterConfig`.
-      helper.accessor((r) => r.purchaseId, {
-        id: "purchasePresence",
-        header: "Linked",
-        enableSorting: false,
-        meta: { className: "w-24" },
-        cell: (i) =>
-          renderOptionCell(
-            i.getValue() ? "yes" : "no",
-            PURCHASE_PRESENCE_OPTIONS,
+    () =>
+      createCubbyColumnCollection<FinancialTransactionOut>((add) => {
+        add(
+          helper.accessor((r) => r.merchant || r.rawDescription || r.id, {
+            id: "transaction",
+            header: "Transaction",
+            meta: { className: "w-64", mobile: { slot: "title", priority: 0 } },
+            cell: (i) => (
+              <TableLink
+                to={entities.financialTransaction.routes.detail}
+                params={entityDetailParams(i.row.original.id)}
+                className="block truncate"
+              >
+                {i.getValue()}
+              </TableLink>
+            ),
+          }),
+        );
+        add(
+          helper.accessor("accountId", {
+            header: "Account",
+            meta: { className: "w-40" },
+            cell: (i) => (
+              <TableLink
+                to={entities.financialAccount.routes.detail}
+                params={entityDetailParams(i.getValue())}
+                className="block truncate"
+              >
+                {i.row.original.accountName ?? i.getValue()}
+              </TableLink>
+            ),
+          }),
+        );
+        // Through the factory, not a bare accessor: these were `createTextColumn`,
+        // which wires `meta.cellData` unconditionally, so hand-rolling the cell
+        // dropped them out of the range copy/paste engine (which reads cellData,
+        // never the rendered cell). `filterConfig: null` keeps `meta.filterConfig`
+        // undefined exactly as `createTextColumn` left it, so the manifest's
+        // multiselect control stays the one that attaches.
+        add(
+          createFilterableSelectColumn(helper, "kind", {
+            header: "Kind",
+            className: "w-32",
+            placeholder: "Filter by kind...",
+            selectOptions: financialTransactionKindOptions,
+            filterConfig: null,
+          }),
+        );
+        add(
+          createFilterableSelectColumn(helper, "status", {
+            header: "Status",
+            className: "w-24",
+            placeholder: "Filter by status...",
+            selectOptions: financialTransactionStatusOptions,
+            filterConfig: null,
+          }),
+        );
+        add(
+          helper.accessor("amount", {
+            header: "Amount",
+            meta: {
+              numeric: true,
+              className: "w-28",
+              mobile: { slot: "trailing", priority: 1 },
+            },
+            cell: (i) => formatCurrency(i.getValue()),
+          }),
+        );
+        add(
+          helper.accessor("purchaseId", {
+            header: "Purchase",
+            meta: { className: "w-32" },
+            cell: (i) => {
+              const purchaseId = i.getValue();
+              return purchaseId ? (
+                <TableLink
+                  to={entities.purchase.routes.detail}
+                  params={entityDetailParams(purchaseId)}
+                  variant="mono"
+                >
+                  {purchaseId}
+                </TableLink>
+              ) : (
+                "—"
+              );
+            },
+          }),
+        );
+        add(createPlainDateColumn(helper, "postedDate", { header: "Posted" }));
+        // Hidden by default: these exist so `purchasePresence`, `merchant` and
+        // `source` are column-backed specs rather than URL-only ones. A urlOnly
+        // spec can never round-trip through a header control — see
+        // `manifestFilterConfig`.
+        add(
+          helper.accessor((r) => r.purchaseId, {
+            id: "purchasePresence",
+            header: "Linked",
+            enableSorting: false,
+            meta: { className: "w-24" },
+            cell: (i) =>
+              renderOptionCell(
+                i.getValue() ? "yes" : "no",
+                PURCHASE_PRESENCE_OPTIONS,
+              ),
+          }),
+        );
+        add(
+          createTextColumn(helper, "merchant", {
+            header: "Merchant",
+            className: "w-40",
+          }),
+        );
+        add(
+          helper.accessor(
+            (r) => r.sourceRefs.map((ref) => ref.source).join(", "),
+            {
+              id: "source",
+              header: "Source",
+              enableSorting: false,
+              meta: { className: "w-32" },
+              cell: (i) => i.getValue() || <NoneValue />,
+            },
           ),
+        );
       }),
-      createTextColumn(helper, "merchant", {
-        header: "Merchant",
-        className: "w-40",
-      }),
-      helper.accessor((r) => r.sourceRefs.map((ref) => ref.source).join(", "), {
-        id: "source",
-        header: "Source",
-        enableSorting: false,
-        meta: { className: "w-32" },
-        cell: (i) => i.getValue() || <NoneValue />,
-      }),
-    ],
     [helper],
   );
   return (
     <EntityListPage<FinancialTransactionOut, FinancialTransactionFilters>
       entity="financialTransaction"
+      queryOptions={entityListFor("financialTransaction").listQueryPlan}
       columns={columns}
       deletable={deletable}
       filterOptions={filterOptions}

@@ -4,6 +4,10 @@ import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 
+import {
+  parseEntityEditCreateInput,
+  parseEntityEditUpdateInput,
+} from "./mutation-data";
 import type { EntityEditRegistry } from "./registry";
 import type {
   EditableEntity,
@@ -176,7 +180,12 @@ const makeIntent = <E extends EditableEntity>(
       return {
         ok: true,
         changed: true,
-        command: { entity, operation, intent: semanticIntent, data },
+        command: {
+          entity,
+          operation,
+          intent: semanticIntent,
+          data: parseEntityEditCreateInput(entity, data),
+        },
       };
     }
     if (!record) {
@@ -199,7 +208,7 @@ const makeIntent = <E extends EditableEntity>(
           operation,
           intent: semanticIntent,
           id: record.id,
-          data,
+          data: parseEntityEditUpdateInput(entity, data),
         },
       };
     }

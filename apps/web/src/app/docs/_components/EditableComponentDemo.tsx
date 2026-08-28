@@ -44,6 +44,8 @@ export function EditableComponentDemo<T>({
       return undefined;
     }
   }, [schema]);
+  // Runtime prop accepted by json-edit-react but absent from its published props.
+  type JsonEditorSchemaProps = { jsonSchema?: typeof jsonSchema };
 
   const handleUpdate = useCallback(
     (newData: JsonData) => {
@@ -63,6 +65,9 @@ export function EditableComponentDemo<T>({
     setData(defaultData);
     setError(null);
   }, [defaultData]);
+
+  const jsonEditorSchemaProps: JsonEditorSchemaProps = {};
+  if (jsonSchema) jsonEditorSchemaProps.jsonSchema = jsonSchema;
 
   return (
     <div className={cn("my-6", className)}>
@@ -114,7 +119,7 @@ export function EditableComponentDemo<T>({
               restrictDelete={false}
               restrictAdd={false}
               restrictTypeSelection={false}
-              {...(jsonSchema ? { jsonSchema } : {})}
+              {...jsonEditorSchemaProps}
             />
           </div>
           {error && (

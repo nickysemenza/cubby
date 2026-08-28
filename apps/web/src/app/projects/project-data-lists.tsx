@@ -13,7 +13,10 @@ import {
   createProjectLinkColumn,
 } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
@@ -50,10 +53,8 @@ export function ProjectDataTaskList({
 }: {
   projectScope: EmbeddedProjectScope;
 }) {
-  const listQueryOptions: ListQueryOptionsFn<TaskFilters> = useCallback(
-    (params) => entityListFor("task").queryOptions(params),
-    [],
-  );
+  const listQueryOptions: ListQueryOptionsFn<TaskFilters, TaskOut> =
+    useCallback((params) => entityListFor("task").listQueryPlan(params), []);
   const helper = useMemo(() => createCubbyColumnHelper<TaskOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const parentOptions = useDeferredFilterOptions("task");
@@ -79,29 +80,46 @@ export function ProjectDataTaskList({
     useEntityPreview("task");
 
   const columns = useMemo(
-    () => [
-      taskStatusColumn(helper, async (status, row) => {
-        await update.mutateAsync({ id: row.id, data: { status } });
+    () =>
+      createCubbyColumnCollection<TaskOut>((add) => {
+        add(
+          taskStatusColumn(helper, async (status, row) => {
+            await update.mutateAsync({ id: row.id, data: { status } });
+          }),
+        );
+        add(
+          createProjectLinkColumn(helper, {
+            editable: {
+              onSave: async (projectId, row) => {
+                await update.mutateAsync({ id: row.id, data: { projectId } });
+              },
+            },
+          }),
+        );
+        add(
+          createParentLinkColumn(
+            helper,
+            "task",
+            "parentTaskId",
+            "parentTaskName",
+            {
+              filterConfig: manifestFilterConfig("task", "parentTask", {
+                parentTask: parentOptions,
+              }),
+            },
+          ),
+        );
+        add(
+          taskDueColumn(helper, async (dueDate, row) => {
+            await update.mutateAsync({ id: row.id, data: { dueDate } });
+          }),
+        );
+        add(
+          taskTradeColumn(helper, async (trade, row) => {
+            await update.mutateAsync({ id: row.id, data: { trade } });
+          }),
+        );
       }),
-      createProjectLinkColumn(helper, {
-        editable: {
-          onSave: async (projectId, row) => {
-            await update.mutateAsync({ id: row.id, data: { projectId } });
-          },
-        },
-      }),
-      createParentLinkColumn(helper, "task", "parentTaskId", "parentTaskName", {
-        filterConfig: manifestFilterConfig("task", "parentTask", {
-          parentTask: parentOptions,
-        }),
-      }),
-      taskDueColumn(helper, async (dueDate, row) => {
-        await update.mutateAsync({ id: row.id, data: { dueDate } });
-      }),
-      taskTradeColumn(helper, async (trade, row) => {
-        await update.mutateAsync({ id: row.id, data: { trade } });
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, parentOptions],
   );
@@ -139,10 +157,8 @@ export function ProjectDataExpenseList({
 }: {
   projectScope: EmbeddedProjectScope;
 }) {
-  const listQueryOptions: ListQueryOptionsFn<ExpenseFilters> = useCallback(
-    (params) => entityListFor("expense").queryOptions(params),
-    [],
-  );
+  const listQueryOptions: ListQueryOptionsFn<ExpenseFilters, ExpenseOut> =
+    useCallback((params) => entityListFor("expense").listQueryPlan(params), []);
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
   const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({ project: projectOptions });
@@ -164,35 +180,48 @@ export function ProjectDataExpenseList({
     useEntityPreview("expense");
 
   const columns = useMemo(
-    () => [
-      expenseCostColumn(helper, async (cost, row) => {
-        await update.mutateAsync({ id: row.id, data: { cost } });
+    () =>
+      createCubbyColumnCollection<ExpenseOut>((add) => {
+        add(
+          expenseCostColumn(helper, async (cost, row) => {
+            await update.mutateAsync({ id: row.id, data: { cost } });
+          }),
+        );
+        add(
+          expenseDateColumn(helper, async (date, row) => {
+            if (date !== null)
+              await update.mutateAsync({ id: row.id, data: { date } });
+          }),
+        );
+        add(
+          expenseTradeColumn(helper, async (trade, row) => {
+            await update.mutateAsync({ id: row.id, data: { trade } });
+          }),
+        );
+        add(
+          createProjectLinkColumn(helper, {
+            editable: {
+              onSave: async (projectId, row) => {
+                await update.mutateAsync({ id: row.id, data: { projectId } });
+              },
+            },
+          }),
+        );
+        add(
+          createProductLinkColumn(helper, {
+            editable: {
+              onSave: async (productId, row) => {
+                await update.mutateAsync({ id: row.id, data: { productId } });
+              },
+            },
+          }),
+        );
+        add(
+          expenseFutureColumn(helper, async (future, row) => {
+            await update.mutateAsync({ id: row.id, data: { future } });
+          }),
+        );
       }),
-      expenseDateColumn(helper, async (date, row) => {
-        if (date !== null)
-          await update.mutateAsync({ id: row.id, data: { date } });
-      }),
-      expenseTradeColumn(helper, async (trade, row) => {
-        await update.mutateAsync({ id: row.id, data: { trade } });
-      }),
-      createProjectLinkColumn(helper, {
-        editable: {
-          onSave: async (projectId, row) => {
-            await update.mutateAsync({ id: row.id, data: { projectId } });
-          },
-        },
-      }),
-      createProductLinkColumn(helper, {
-        editable: {
-          onSave: async (productId, row) => {
-            await update.mutateAsync({ id: row.id, data: { productId } });
-          },
-        },
-      }),
-      expenseFutureColumn(helper, async (future, row) => {
-        await update.mutateAsync({ id: row.id, data: { future } });
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper],
   );

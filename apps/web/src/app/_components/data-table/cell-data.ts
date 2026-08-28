@@ -25,6 +25,7 @@
  */
 
 import { amount as amountSchema, type Amount } from "@cubby/schemas/codec";
+import type { CellData } from "@tanstack/react-table";
 import { z } from "zod";
 
 import { parsePlainDateInput } from "~/lib/plain-date-input";
@@ -46,7 +47,10 @@ import type { FilterableComboboxItem } from "./editable-cell";
  * row (not a value captured from a single rendered cell) so the range engine
  * can copy/paste against the whole row model, virtualized rows included.
  */
-export interface ColumnCellData<TData, TSaved = CellJsonValue | null | void> {
+export interface ColumnCellData<
+  TData = CellData,
+  TSaved = CellJsonValue | null | void,
+> {
   kind: CellKind;
   /**
    * Typed numeric projection for read-only selection statistics. This is

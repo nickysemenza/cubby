@@ -75,6 +75,9 @@ importers:
       '@modelcontextprotocol/ext-apps':
         specifier: ^1.7.5
         version: 1.7.5(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       jsdom:
         specifier: ^30.0.0
@@ -201,6 +204,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20260719.1
         version: 5.20260816.1
+      '@total-typescript/shoehorn':
+        specifier: ^0.1.2
+        version: 0.1.2
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13

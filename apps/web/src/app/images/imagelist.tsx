@@ -12,7 +12,10 @@ import {
   renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useFilenameEditable } from "~/app/_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -28,10 +31,17 @@ import { UploadImageDialog } from "./upload-image-dialog";
 type ImageListRow = Omit<ImageWithEntity, "entityType">;
 
 export default function ImageList() {
-  const queryOptions = useCallback<ListQueryOptionsFn<ImageListFilters>>(
-    (params) => image.list.queryOptions(imageBrowserListInput.parse(params)),
-    [],
-  );
+  const queryOptions = useCallback<
+    ListQueryOptionsFn<ImageListFilters, ImageListRow>
+  >((params) => {
+    const input = imageBrowserListInput.parse(params);
+    const policy = image.list.policy(input);
+    return {
+      queryKey: image.list.queryKey(input),
+      meta: policy.meta,
+      execute: (signal) => image.list.call(input, { signal }),
+    };
+  }, []);
   const columnHelper = useMemo(
     () => createCubbyColumnHelper<ImageListRow>(),
     [],
@@ -47,60 +57,73 @@ export default function ImageList() {
   // Memoize columns to prevent recreating on every render (feeds the
   // useStandardColumns columns memo, which now re-runs on identity change).
   const columns = useMemo(
-    () => [
-      // Filename column: links to the detail page, inline-editable.
-      createNameColumn(columnHelper, "image", "filename", {
-        header: "Filename",
-        editable: nameEditable,
-        filterConfig: { placeholder: "Filter by filename..." },
+    () =>
+      createCubbyColumnCollection<ImageListRow>((add) => {
+        // Filename column: links to the detail page, inline-editable.
+        add(
+          createNameColumn(columnHelper, "image", "filename", {
+            header: "Filename",
+            editable: nameEditable,
+            filterConfig: { placeholder: "Filter by filename..." },
+          }),
+        );
+        // Preview column
+        add(
+          createImageColumn(columnHelper, {
+            getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
+            entity: "image",
+          }),
+        );
+        // Content type
+        add(
+          columnHelper.accessor("contentType", {
+            header: "Type",
+            meta: {
+              className: "w-28",
+              mobile: { slot: "subtitle", priority: 10 },
+            },
+            cell: ({ getValue }) => <span>{getValue()}</span>,
+          }),
+        );
+        // File size
+        add(
+          columnHelper.accessor("size", {
+            header: "Size",
+            meta: {
+              numeric: true,
+              className: "w-24",
+              mobile: { slot: "trailing", priority: 5 },
+            },
+            cell: ({ getValue }) => <span>{prettyBytes(getValue())}</span>,
+          }),
+        );
+        // Status
+        add(
+          columnHelper.accessor("status", {
+            header: "Status",
+            meta: {
+              className: "w-28",
+              mobile: { slot: "meta", priority: 20 },
+            },
+            cell: ({ getValue }) =>
+              renderOptionCell(getValue(), imageStatusOptions),
+          }),
+        );
+        // Associated entity
+        add(
+          columnHelper.accessor("associations", {
+            id: "entity",
+            header: "Associated Entities",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: ({ getValue }) => (
+              <ImageAssociationLinks associations={getValue()} compact />
+            ),
+          }),
+        );
       }),
-      // Preview column
-      createImageColumn(columnHelper, {
-        getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
-        entity: "image",
-      }),
-      // Content type
-      columnHelper.accessor("contentType", {
-        header: "Type",
-        meta: {
-          className: "w-28",
-          mobile: { slot: "subtitle", priority: 10 },
-        },
-        cell: ({ getValue }) => <span>{getValue()}</span>,
-      }),
-      // File size
-      columnHelper.accessor("size", {
-        header: "Size",
-        meta: {
-          numeric: true,
-          className: "w-24",
-          mobile: { slot: "trailing", priority: 5 },
-        },
-        cell: ({ getValue }) => <span>{prettyBytes(getValue())}</span>,
-      }),
-      // Status
-      columnHelper.accessor("status", {
-        header: "Status",
-        meta: {
-          className: "w-28",
-          mobile: { slot: "meta", priority: 20 },
-        },
-        cell: ({ getValue }) =>
-          renderOptionCell(getValue(), imageStatusOptions),
-      }),
-      // Associated entity
-      columnHelper.accessor("associations", {
-        id: "entity",
-        header: "Associated Entities",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        cell: ({ getValue }) => (
-          <ImageAssociationLinks associations={getValue()} compact />
-        ),
-      }),
-    ],
     [columnHelper, nameEditable],
   );
 

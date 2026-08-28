@@ -9,9 +9,9 @@ import type {
   EntityEditDefinition,
   EntityEditIntentDefinition,
   EntityEditIssue,
-  EntityEditMutationData,
   EntityEditOperationDefinition,
   EntityEditRecord,
+  EntityEditValueSource,
   EntityEditValueBag,
   RuntimeEntityEditRequest,
 } from "./types";
@@ -147,7 +147,7 @@ export function initialEntityEditValues<E extends EditableEntity>(
 export function buildEntityEdit<E extends EditableEntity>(
   resolved: ResolvedEntityEdit<E>,
   request: RuntimeEntityEditRequest<E>,
-  values: EntityEditMutationData<E>,
+  values: EntityEditValueSource<E>,
 ): EntityEditBuildResult<E> {
   const parsedValues = entityEditValueBagSchema.parse(values);
   const intent = resolved.intentDefinition;

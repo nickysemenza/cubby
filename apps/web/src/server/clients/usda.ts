@@ -17,8 +17,13 @@ import { injectTraceContext, TraceNames, withTrace } from "~/server/tracing";
 // artifact mis-timed by workerd's frozen clock, since fixed; 15s is ample.)
 const USDA_FETCH_TIMEOUT_MS = 15_000;
 
+interface FoodCache {
+  match(request: RequestInfo | URL): Promise<Response | undefined>;
+  put(request: RequestInfo | URL, response: Response): Promise<void>;
+}
+
 interface CloudflareCacheStorage extends CacheStorage {
-  default: Cache;
+  default: FoodCache;
 }
 
 const hasDefaultCache = (
@@ -31,6 +36,7 @@ type UsdaOrderField = "description" | "data_type" | "fdc_id" | "relevance";
 export class USDAClient {
   private client;
   private fetcher: typeof fetch;
+  private cache: FoodCache | null;
   // Request-scoped memo of batch-resolved foods, keyed by canonical lookup. The
   // client is built per-request in ctx (see buildCrudServices), so this can't
   // serve cross-request stale data; it just stops the same product being
@@ -45,9 +51,16 @@ export class USDAClient {
   constructor(
     private baseUrl: string,
     fetcher?: typeof fetch,
+    runtime?: { cache: FoodCache | null },
   ) {
     // Service binding fetch in prod, global fetch (public URL) in dev
     this.fetcher = fetcher ?? fetch;
+    const cacheStorage = globalThis.caches;
+    this.cache = runtime
+      ? runtime.cache
+      : hasDefaultCache(cacheStorage)
+        ? cacheStorage.default
+        : null;
     // Helper to get trace context headers for each request (dev only — in the
     // CF Worker the platform propagates trace context across service bindings).
     const getTraceHeaders = () => {
@@ -66,10 +79,7 @@ export class USDAClient {
       },
       api: async (args) => {
         // Use CF Cache API for individual food lookups (GET /api/foods/:id)
-        const cacheStorage: CacheStorage | undefined = globalThis.caches;
-        const cache = hasDefaultCache(cacheStorage)
-          ? cacheStorage.default
-          : null;
+        const cache = this.cache;
         const isGetFood =
           args.method === "GET" && args.path.includes("/api/foods/");
 

@@ -7,7 +7,7 @@ import type {
   ExpenseFilters,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
-import type { SortingState } from "@tanstack/react-table";
+import type { CellData, SortingState } from "@tanstack/react-table";
 import {
   ArrowLeftRight,
   ClipboardCopy,
@@ -19,7 +19,9 @@ import { toast } from "sonner";
 
 import RTable from "~/app/_components/data-table/Table";
 import {
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
+  type CubbyColumnDef,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
 import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
@@ -431,31 +433,38 @@ function ExpenseAnalyzeOneDimension({
   const columns = useMemo(() => {
     const numericMeta = { numeric: true, mono: true } as const;
     const tail = data.reconciliation.tail;
-    const regularColumns = METRICS.map(({ value: accessor, label }) =>
-      helper.accessor((row) => row.current[accessor], {
-        id: accessor,
-        header: label,
-        size: accessor === "count" ? 88 : 128,
-        minSize: accessor === "count" ? 72 : 104,
-        meta: numericMeta,
-        cell: (info) => (
-          <AnalyzeLedgerValue
-            filter={expenseAnalyzeDrilldownFilter(
-              data,
-              "current",
-              info.row.original.filter,
-            )}
-            label={`Open current-period Ledger rows for ${info.row.original.label}`}
-            onOpenLedger={onOpenLedger}
-            className="w-full text-right"
-          >
-            {formatMetric(info.getValue(), accessor)}
-          </AnalyzeLedgerValue>
-        ),
-        footer: () => formatMetric(tail.current[accessor], accessor),
-        enableCellSelection: false,
-      }),
-    );
+    const addRegularColumn = (
+      add: <TValue extends CellData>(
+        definition: CubbyColumnDef<ExpenseAnalyzeTableRow, TValue>,
+      ) => void,
+      accessor: ExpenseAnalyzeMetric,
+      label: string,
+    ) =>
+      add(
+        helper.accessor((row) => row.current[accessor], {
+          id: accessor,
+          header: label,
+          size: accessor === "count" ? 88 : 128,
+          minSize: accessor === "count" ? 72 : 104,
+          meta: numericMeta,
+          cell: (info) => (
+            <AnalyzeLedgerValue
+              filter={expenseAnalyzeDrilldownFilter(
+                data,
+                "current",
+                info.row.original.filter,
+              )}
+              label={`Open current-period Ledger rows for ${info.row.original.label}`}
+              onOpenLedger={onOpenLedger}
+              className="w-full text-right"
+            >
+              {formatMetric(info.getValue(), accessor)}
+            </AnalyzeLedgerValue>
+          ),
+          footer: () => formatMetric(tail.current[accessor], accessor),
+          enableCellSelection: false,
+        }),
+      );
     const compareColumn = (
       id: string,
       header: string,
@@ -516,15 +525,18 @@ function ExpenseAnalyzeOneDimension({
       footer: () => tailLabel(data),
       enableCellSelection: false,
     });
-    if (comparison === "none")
-      return helper.columns([labelColumn, ...regularColumns]);
-    return helper.columns([
-      labelColumn,
-      compareColumn("current", "Current", "current"),
-      compareColumn("previous", "Previous", "previous"),
-      compareColumn("delta", "Delta", "delta"),
-      compareColumn("percent", "Delta %", "percent"),
-    ]);
+    return createCubbyColumnCollection<ExpenseAnalyzeTableRow>((add) => {
+      add(labelColumn);
+      if (comparison === "none") {
+        for (const { value, label } of METRICS)
+          addRegularColumn(add, value, label);
+        return;
+      }
+      add(compareColumn("current", "Current", "current"));
+      add(compareColumn("previous", "Previous", "previous"));
+      add(compareColumn("delta", "Delta", "delta"));
+      add(compareColumn("percent", "Delta %", "percent"));
+    });
   }, [comparison, data, metric, onOpenLedger]);
   const layout = useCubbyTableLayout({ key: "expense:analyze", columns });
   const table = useCubbyTable({

@@ -110,7 +110,11 @@ import type {
   CubbyColumnHelper as ColumnHelper,
   CubbyRow as TableRow,
 } from "./table-features";
-import type { FilterConfig, MobileColumnMeta } from "./table-meta";
+import {
+  attachCubbyColumnMeta,
+  type FilterConfig,
+  type MobileColumnMeta,
+} from "./table-meta";
 
 export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
 
@@ -260,13 +264,13 @@ export function createNameColumn<T extends BaseRow>(
   const config = {
     id: String(resolvedFieldName),
     enableSorting: true,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className ?? "w-64",
       surplus: true,
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
       cellData,
-    },
+    }),
     footer: (info: {
       table: {
         getFilteredRowModel: () => { rows: unknown[] };
@@ -422,7 +426,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
   return columnHelper.accessor((row) => row.createdAt, {
     id: "createdAt",
     header: "Created",
-    meta: {
+    meta: attachCubbyColumnMeta({
       // Relative timestamps are short ("5 months ago"); without a cap the
       // fixed-layout table hands this column an equal share of leftover width.
       className: "w-32",
@@ -431,7 +435,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
       // Copy-only: the display is relative ("5 months ago") but the copy
       // payload is the ISO date-time, which pastes usefully into a spreadsheet.
       cellData: timestampCellData<T>((row) => row.createdAt),
-    },
+    }),
     cell: (info) => {
       const value = info.getValue();
       return value ? <HoverableTimestamp timestamp={value} /> : <NoneValue />;
@@ -445,12 +449,12 @@ export function createUpdatedAtColumn<T extends BaseRow>(
   return columnHelper.accessor((row) => row.updatedAt, {
     id: "updatedAt",
     header: "Updated",
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: "w-32",
       mono: true,
       mobile: { slot: "hidden" },
       cellData: timestampCellData<T>((row) => row.updatedAt),
-    },
+    }),
     cell: (info) => {
       const value = info.getValue();
       return value ? <HoverableTimestamp timestamp={value} /> : <NoneValue />;
@@ -919,12 +923,12 @@ export function createTextColumn<
   const definition = {
     id: String(accessor),
     header: options?.header,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
-    },
+    }),
     cell: (info: CellContext<T, string>) => {
       const value = info.getValue() ?? null;
 
@@ -1030,12 +1034,12 @@ export function createCurrencyColumn<
   return columnHelper.accessor((row: T) => row[accessor] ?? null, {
     id: String(accessor),
     header: options?.header,
-    meta: {
+    meta: attachCubbyColumnMeta({
       numeric: true,
       className: cn(options?.className ?? defaultClassName, "truncate"),
       mobile: options?.mobile,
       cellData,
-    },
+    }),
     footer: (info) => {
       // Prefer the server's full-filtered-set aggregate — the client only
       // holds loaded pages, so a row reduction under-reports.
@@ -1325,12 +1329,12 @@ export function createSingleEntityInlineLinkColumn<
     id: String(accessor),
     header: options?.header ?? entityLabel(entity),
     enableSorting: options?.enableSorting ?? false,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
-    },
+    }),
     cell: (info) => {
       const item = info.getValue();
       const editable = options?.editable;
@@ -1572,12 +1576,12 @@ export function createBooleanColumn<
     id: String(accessor),
     header: options.header,
     enableSorting: false,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options.className,
       mobile: options.mobile,
       filterConfig,
       cellData,
-    },
+    }),
     cell: (info) => {
       const value = info.getValue();
 
@@ -1666,12 +1670,12 @@ export function createFilterableSelectColumn<
   const columnOptions = {
     id: String(accessor),
     header: options.header,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options.className,
       mobile: options.mobile,
       filterConfig,
       cellData,
-    },
+    }),
     cell: (info: CellContext<T, T[K]>) => {
       const value = info.row.original[accessor];
 
@@ -1745,13 +1749,13 @@ export function createExternalLinkColumn<
   return columnHelper.accessor((row: T) => row[accessor], {
     id: String(accessor),
     header: options?.header,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className,
       mono: variant === "mono",
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
-    },
+    }),
     cell: (info) => {
       const value = info.getValue();
 
@@ -1808,13 +1812,13 @@ export function createTimestampColumn<
   return columnHelper.accessor(valueFor, {
     id: String(accessor),
     header: options?.header,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className,
       mono: true,
       mobile: options?.mobile,
       // Copy-only ISO date-time (see createCreatedAtColumn).
       cellData: timestampCellData<T>(valueFor),
-    },
+    }),
     cell: (info) => {
       const value = info.getValue();
       return value ? <HoverableTimestamp timestamp={value} /> : fallback;
@@ -1850,12 +1854,12 @@ export function createEditableAmountColumn<
   return columnHelper.accessor(valueFor, {
     id: String(accessor),
     header: options.header ?? "Amount",
-    meta: {
+    meta: attachCubbyColumnMeta({
       numeric: true,
       className: cn("w-40", options.className),
       mobile: options.mobile,
       cellData,
-    },
+    }),
     cell: (info) => {
       const amount = info.getValue();
       const row = info.row.original;
@@ -1945,13 +1949,13 @@ export function createPlainDateColumn<
   return columnHelper.accessor(valueFor, {
     id: String(accessor),
     header: options?.header,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className ?? "w-28",
       mono: true,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
-    },
+    }),
     cell: (info) => {
       const value = info.getValue();
       const row = info.row.original;
@@ -2027,12 +2031,12 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
     id: "project",
     header: options?.header ?? "Project",
     sortFn: entityRefSortingFn,
-    meta: {
+    meta: attachCubbyColumnMeta({
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       cellData,
-    },
+    }),
     cell: (
       info: CellContext<T, { id: string | null; name: string | null }>,
     ) => {
@@ -2113,6 +2117,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
     };
   },
 ) {
+  const editable = options?.editable;
   const cellData = entityCellData<T, ProductShortcode>(
     "product",
     (value) => parseShortcodeFor("product", value),
@@ -2123,12 +2128,8 @@ export function createProductLinkColumn<T extends ProductRefRow>(
             name: row.productName,
           }
         : null,
-    options?.editable
-      ? (row, id) => options.editable!.onSave(id, row)
-      : undefined,
-    options?.editable
-      ? (row) => options.editable!.onSave(null, row)
-      : undefined,
+    editable ? (row, id) => editable.onSave(id, row) : undefined,
+    editable ? (row) => editable.onSave(null, row) : undefined,
   );
   return columnHelper.accessor(
     (row) => ({
@@ -2139,16 +2140,16 @@ export function createProductLinkColumn<T extends ProductRefRow>(
       id: "product",
       header: options?.header ?? "Product",
       sortFn: entityRefSortingFn,
-      meta: {
+      meta: attachCubbyColumnMeta({
         className: options?.className,
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
         cellData,
-      },
+      }),
       cell: (info) => {
         const { id, name } = info.getValue();
 
-        if (options?.editable) {
+        if (editable) {
           const current: ComboboxItem<ProductShortcode> | null =
             id && name ? { id: parseShortcodeFor("product", id), name } : null;
           const row = info.row.original;
@@ -2158,7 +2159,7 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               label="product"
               clearable
               trigger="pencil"
-              onSave={(newId) => options.editable!.onSave(newId, row)}
+              onSave={(newId) => editable.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProductSearch}
               renderValue={(v) =>
@@ -2202,6 +2203,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
     };
   },
 ) {
+  const editable = options?.editable;
   const cellData = entityCellData<T, ProductShortcode>(
     "product",
     (value) => parseShortcodeFor("product", value),
@@ -2212,12 +2214,8 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
             name: row.subjectProductName,
           }
         : null,
-    options?.editable
-      ? (row, id) => options.editable!.onSave(id, row)
-      : undefined,
-    options?.editable
-      ? (row) => options.editable!.onSave(null, row)
-      : undefined,
+    editable ? (row, id) => editable.onSave(id, row) : undefined,
+    editable ? (row) => editable.onSave(null, row) : undefined,
   );
 
   return columnHelper.accessor(
@@ -2229,16 +2227,16 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
       id: "subjectProduct",
       header: "For",
       sortFn: entityRefSortingFn,
-      meta: {
+      meta: attachCubbyColumnMeta({
         className: options?.className,
         mobile: options?.mobile,
         filterConfig: options?.filterConfig,
         cellData,
-      },
+      }),
       cell: (info) => {
         const { id, name } = info.getValue();
 
-        if (options?.editable) {
+        if (editable) {
           const current: ComboboxItem<ProductShortcode> | null =
             id && name ? { id: parseShortcodeFor("product", id), name } : null;
           const row = info.row.original;
@@ -2248,7 +2246,7 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               label="product"
               clearable
               trigger="pencil"
-              onSave={(newId) => options.editable!.onSave(newId, row)}
+              onSave={(newId) => editable.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
               SearchProvider={WithProductSearch}
               renderValue={(v) =>

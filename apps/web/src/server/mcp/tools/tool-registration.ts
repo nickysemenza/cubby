@@ -10,6 +10,7 @@ import type {
 import { z } from "zod";
 
 import { toPublicErrorPayload } from "~/server/errors/app-error";
+import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
 
 import { declareToolOutputSchema } from "./tool-catalog";
@@ -166,8 +167,9 @@ function callerFromExtra(
   key: "caller" | "readCaller",
 ): Caller | undefined {
   const candidate = extra.authInfo?.extra?.[key];
-  // SAFETY: the authenticated MCP route and in-process bridge inject only McpWorkflowCaller values at these two keys.
-  return candidate as Caller | undefined;
+  return candidate === undefined
+    ? undefined
+    : parseMcpWorkflowCaller(candidate);
 }
 
 export function getCaller(extra: ToolExtra): Caller {
@@ -218,7 +220,10 @@ export function registerMcpTool<
       annotations: config.annotations,
       _meta: uiToolMeta(config.name),
     },
-    // SAFETY: the adapter parses the SDK argument bag through this exact TInput before invoking the typed handler.
+    // SAFETY: the SDK's conditional ToolCallback type does not reduce for the
+    // generic TInput. This callback accepts the broader SDK argument bag, parses
+    // it through this exact inputSchema, preserves ToolExtra, and returns the
+    // required CallToolResult in every branch.
     callback as ToolCallback<TInput>,
   );
 }

@@ -17,6 +17,7 @@ import {
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
 import {
   type CubbyRow,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
@@ -177,67 +178,84 @@ export const ProductStockedAt: FC<{
   );
 
   const columns = useMemo(
-    () => [
-      createSingleEntityInlineLinkColumn(helper, "location", "location", {
-        header: "Location",
-        className: "w-56",
-        editable: {
-          isEditable: rowIsEntity,
-          onSave: async (locationId, entry) => {
-            if (!locationId || entry.kind !== "stock") return;
-            await update.mutateAsync({ id: entry.id, data: { locationId } });
-          },
-        },
+    () =>
+      createCubbyColumnCollection<StockedRow>((add) => {
+        add(
+          createSingleEntityInlineLinkColumn(helper, "location", "location", {
+            header: "Location",
+            className: "w-56",
+            editable: {
+              isEditable: rowIsEntity,
+              onSave: async (locationId, entry) => {
+                if (!locationId || entry.kind !== "stock") return;
+                await update.mutateAsync({
+                  id: entry.id,
+                  data: { locationId },
+                });
+              },
+            },
+          }),
+        );
+        add(
+          helper.accessor("kind", {
+            header: "Held as",
+            meta: { className: "w-32" },
+            cell: (info) =>
+              info.getValue() === "identity" ? (
+                <Badge variant="secondary">is this location</Badge>
+              ) : info.row.original.placement === "installed" ? (
+                <Badge variant="secondary">installed</Badge>
+              ) : (
+                <Badge variant="outline">stock</Badge>
+              ),
+          }),
+        );
+        add(
+          createEditableAmountColumn(helper, "amount", {
+            isEditable: rowIsEntity,
+            onSave: async (amount, entry) => {
+              if (entry.kind !== "stock") return;
+              await update.mutateAsync({ id: entry.id, data: { amount } });
+            },
+            getUnitMappings: () => product.unitMappings,
+            // The row's own entity — every other column here points at the
+            // location or the product. Same treatment as the location table.
+            renderDisplay: (content, entry) =>
+              entry.kind === "stock" ? (
+                <Link
+                  to="/inventory/$shortcode"
+                  params={{ shortcode: entry.id }}
+                >
+                  {content}
+                </Link>
+              ) : (
+                content
+              ),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "valuation", {
+            header: "Value",
+            className: "w-24",
+          }),
+        );
+        add(
+          helper.accessor("verifiedAt", {
+            header: "Verified",
+            meta: { className: "w-32" },
+            cell: (info) =>
+              // A location is not recounted as its own stock, so there is nothing
+              // to be stale about.
+              info.row.original.kind === "identity" ? null : (
+                <AuditedHint
+                  at={info.getValue()}
+                  label="verified"
+                  placement={info.row.original.placement}
+                />
+              ),
+          }),
+        );
       }),
-      helper.accessor("kind", {
-        header: "Held as",
-        meta: { className: "w-32" },
-        cell: (info) =>
-          info.getValue() === "identity" ? (
-            <Badge variant="secondary">is this location</Badge>
-          ) : info.row.original.placement === "installed" ? (
-            <Badge variant="secondary">installed</Badge>
-          ) : (
-            <Badge variant="outline">stock</Badge>
-          ),
-      }),
-      createEditableAmountColumn(helper, "amount", {
-        isEditable: rowIsEntity,
-        onSave: async (amount, entry) => {
-          if (entry.kind !== "stock") return;
-          await update.mutateAsync({ id: entry.id, data: { amount } });
-        },
-        getUnitMappings: () => product.unitMappings,
-        // The row's own entity — every other column here points at the
-        // location or the product. Same treatment as the location table.
-        renderDisplay: (content, entry) =>
-          entry.kind === "stock" ? (
-            <Link to="/inventory/$shortcode" params={{ shortcode: entry.id }}>
-              {content}
-            </Link>
-          ) : (
-            content
-          ),
-      }),
-      createCurrencyColumn(helper, "valuation", {
-        header: "Value",
-        className: "w-24",
-      }),
-      helper.accessor("verifiedAt", {
-        header: "Verified",
-        meta: { className: "w-32" },
-        cell: (info) =>
-          // A location is not recounted as its own stock, so there is nothing
-          // to be stale about.
-          info.row.original.kind === "identity" ? null : (
-            <AuditedHint
-              at={info.getValue()}
-              label="verified"
-              placement={info.row.original.placement}
-            />
-          ),
-      }),
-    ],
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrapper is functionally stable
     [helper, product.unitMappings],
   );

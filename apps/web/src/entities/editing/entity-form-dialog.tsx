@@ -10,7 +10,10 @@ import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import type { EntityEditResultFor } from "./intent-types";
-import type { EntityEditMutationData } from "./types";
+import {
+  parseEntityEditCreateInput,
+  type UnparsedEntityEditData,
+} from "./mutation-data";
 import { useEntityCommands } from "./use-entity-commands";
 
 type FormDialogEntity = "product" | "ingredient" | "location";
@@ -53,13 +56,13 @@ export function EntityFormDialog<E extends FormDialogEntity>({
   useEffect(() => {
     if (open) setError(undefined);
   }, [open]);
-  const submit = async (data: EntityEditMutationData<E>) => {
+  const submit = async (data: UnparsedEntityEditData) => {
     setError(undefined);
     try {
       const execution = await commands.submit({
         operation: "create",
         intent: "full",
-        data,
+        data: parseEntityEditCreateInput(entity, data),
       });
       if (execution.operation !== "create") {
         throw new Error(`${entity} create returned ${execution.operation}.`);

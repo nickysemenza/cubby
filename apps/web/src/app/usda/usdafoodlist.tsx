@@ -10,7 +10,10 @@ import {
 import { useCallback, useMemo } from "react";
 
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
@@ -93,7 +96,9 @@ export function USDAFoodList({
     idField: "fdc_id",
     responsiveInspector: true,
   });
-  const queryOptions = useCallback<ListQueryOptionsFn<USDAListFilters>>(
+  const queryOptions = useCallback<
+    ListQueryOptionsFn<USDAListFilters, USDAListRow>
+  >(
     (params) => {
       const searching = Boolean(params.filters.nameFilter);
       const listParams = {
@@ -101,7 +106,7 @@ export function USDAFoodList({
         pagination: params.pagination,
         sort: params.sort,
       };
-      const base = operations.list.queryOptions({
+      const input = operations.list.definition.input.parse({
         ...listParams,
         sort: searching
           ? [{ orderBy: "relevance", direction: "asc" }]
@@ -110,16 +115,12 @@ export function USDAFoodList({
               orderBy: USDA_SORT_FIELDS.get(sort.orderBy) ?? "fdc_id",
             })),
       });
-      if (!base.queryFn) {
-        throw new Error(
-          "USDA list query options must include a query function",
-        );
-      }
-      const queryFn = base.queryFn;
+      const policy = operations.list.policy(input);
       return {
-        ...base,
-        queryFn: async (context: Parameters<typeof queryFn>[0]) => {
-          const page = await queryFn(context);
+        queryKey: operations.list.queryKey(input),
+        meta: policy.meta,
+        execute: async (signal) => {
+          const page = await operations.list.call(input, { signal });
           return {
             ...page,
             items: page.items.map(withUSDAListIdentity),
@@ -135,142 +136,167 @@ export function USDAFoodList({
   );
 
   const columns = useMemo(
-    () => [
-      columnHelper.accessor("fdc_id", {
-        header: "FDC ID",
-        meta: {
-          className: "w-32 max-w-32",
-          mobile: { slot: "trailing", priority: 20 },
-        },
-        cell: (info) => (
-          <TableLink to="/usda/$id" params={{ id: String(info.getValue()) }}>
-            {info.getValue()}
-          </TableLink>
-        ),
-      }),
-      columnHelper.accessor("foodInfo.data_type", {
-        meta: {
-          className: "w-32 max-w-32",
-          mobile: { slot: "subtitle", priority: 10 },
-          filterConfig: {
-            placeholder: "Filter by type...",
-            filterType: "select" as const,
-            options: Object.values(dataTypeEnum.enum).map((type) => ({
-              value: type,
-              label: dataTypeLabel(type),
-              color: dataTypeColor(type),
-            })),
-          },
-        },
-        id: "foodInfo-data_type",
-        enableSorting: true,
-        header: "Type",
-        cell: (info) => {
-          const type = info.getValue();
-          return (
-            <span className="inline-flex items-center gap-2">
-              <UsdaDataTypeDot dataType={type} />
-              {dataTypeLabel(type)}
-            </span>
-          );
-        },
-      }),
-      columnHelper.accessor("foodInfo.description", {
-        meta: {
-          className: "w-72",
-          filterConfig: { placeholder: "Filter by description..." },
-        },
-        id: "foodinfo-description",
-        enableSorting: true,
-        header: "Description",
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.accessor("brandedFoodInfo", {
-        header: "Brand Info",
-        meta: {
-          className: "w-56",
-          mobile: { slot: "meta", priority: 20 },
-        },
-        cell: (info) => {
-          const brandedFood = info.getValue();
-          if (!brandedFood) return <NoneValue />;
+    () =>
+      createCubbyColumnCollection<USDAListRow>((add) => {
+        add(
+          columnHelper.accessor("fdc_id", {
+            header: "FDC ID",
+            meta: {
+              className: "w-32 max-w-32",
+              mobile: { slot: "trailing", priority: 20 },
+            },
+            cell: (info) => (
+              <TableLink
+                to="/usda/$id"
+                params={{ id: String(info.getValue()) }}
+              >
+                {info.getValue()}
+              </TableLink>
+            ),
+          }),
+        );
+        add(
+          columnHelper.accessor("foodInfo.data_type", {
+            meta: {
+              className: "w-32 max-w-32",
+              mobile: { slot: "subtitle", priority: 10 },
+              filterConfig: {
+                placeholder: "Filter by type...",
+                filterType: "select" as const,
+                options: Object.values(dataTypeEnum.enum).map((type) => ({
+                  value: type,
+                  label: dataTypeLabel(type),
+                  color: dataTypeColor(type),
+                })),
+              },
+            },
+            id: "foodInfo-data_type",
+            enableSorting: true,
+            header: "Type",
+            cell: (info) => {
+              const type = info.getValue();
+              return (
+                <span className="inline-flex items-center gap-2">
+                  <UsdaDataTypeDot dataType={type} />
+                  {dataTypeLabel(type)}
+                </span>
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("foodInfo.description", {
+            meta: {
+              className: "w-72",
+              filterConfig: { placeholder: "Filter by description..." },
+            },
+            id: "foodinfo-description",
+            enableSorting: true,
+            header: "Description",
+            cell: (info) => info.getValue(),
+          }),
+        );
+        add(
+          columnHelper.accessor("brandedFoodInfo", {
+            header: "Brand Info",
+            meta: {
+              className: "w-56",
+              mobile: { slot: "meta", priority: 20 },
+            },
+            cell: (info) => {
+              const brandedFood = info.getValue();
+              if (!brandedFood) return <NoneValue />;
 
-          return (
-            <div className="flex flex-col space-y-1">
-              <div className="text-sm">
-                {brandedFood.brand_owner || <NoneValue />}
-              </div>
-              {brandedFood.branded_food_category && (
-                <Description as="div" size="xs" className="truncate">
-                  {brandedFood.branded_food_category}
-                </Description>
-              )}
-              {brandedFood.gtin_upc && (
-                <div className="font-mono text-xs">
-                  UPC:{" "}
-                  <TableLink
-                    to="/usda/upc/$code"
-                    params={{ code: brandedFood.gtin_upc }}
-                    variant="mono"
-                  >
-                    {brandedFood.gtin_upc}
-                  </TableLink>
+              return (
+                <div className="flex flex-col space-y-1">
+                  <div className="text-sm">
+                    {brandedFood.brand_owner || <NoneValue />}
+                  </div>
+                  {brandedFood.branded_food_category && (
+                    <Description as="div" size="xs" className="truncate">
+                      {brandedFood.branded_food_category}
+                    </Description>
+                  )}
+                  {brandedFood.gtin_upc && (
+                    <div className="font-mono text-xs">
+                      UPC:{" "}
+                      <TableLink
+                        to="/usda/upc/$code"
+                        params={{ code: brandedFood.gtin_upc }}
+                        variant="mono"
+                      >
+                        {brandedFood.gtin_upc}
+                      </TableLink>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor("nutritionInfo", {
-        header: "Nutrition",
-        meta: {
-          className: "w-56",
-          mobile: { slot: "meta", priority: 30 },
-        },
-        cell: (info) => {
-          const nutritionInfo = info.getValue();
-          const total = nutrientCount(nutritionInfo.nutrientsPer100);
-          if (total === 0) return <NoneValue />;
-          return (
-            <Stack gap="sm" className="w-48">
-              <CoreNutrientCoverage nutrients={nutritionInfo.nutrientsPer100} />
-              <Description as="div" size="2xs">
-                {total} nutrients total
-              </Description>
-            </Stack>
-          );
-        },
-      }),
-      columnHelper.accessor("inferredUnitMappings", {
-        header: "Unit Mappings",
-        meta: { className: "w-48" },
-        cell: (info) => {
-          const inferredUnitMappings = info.getValue();
-          if (inferredUnitMappings.length === 0) return <NoneValue />;
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("nutritionInfo", {
+            header: "Nutrition",
+            meta: {
+              className: "w-56",
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: (info) => {
+              const nutritionInfo = info.getValue();
+              const total = nutrientCount(nutritionInfo.nutrientsPer100);
+              if (total === 0) return <NoneValue />;
+              return (
+                <Stack gap="sm" className="w-48">
+                  <CoreNutrientCoverage
+                    nutrients={nutritionInfo.nutrientsPer100}
+                  />
+                  <Description as="div" size="2xs">
+                    {total} nutrients total
+                  </Description>
+                </Stack>
+              );
+            },
+          }),
+        );
+        add(
+          columnHelper.accessor("inferredUnitMappings", {
+            header: "Unit Mappings",
+            meta: { className: "w-48" },
+            cell: (info) => {
+              const inferredUnitMappings = info.getValue();
+              if (inferredUnitMappings.length === 0) return <NoneValue />;
 
-          return (
-            <div className="w-full">
-              <UnitMappingDisplay
-                mappings={inferredUnitMappings}
-                title=""
-                kinds={USDA_KINDS}
-              />
-            </div>
-          );
-        },
+              return (
+                <div className="w-full">
+                  <UnitMappingDisplay
+                    mappings={inferredUnitMappings}
+                    title=""
+                    kinds={USDA_KINDS}
+                  />
+                </div>
+              );
+            },
+          }),
+        );
+        add(
+          createEntityInlineLinkColumn(
+            columnHelper,
+            "linkedProducts",
+            "product",
+            {
+              header: "Linked Products",
+              className: "w-48 max-w-48",
+              enableSorting: true,
+              mobile: { slot: "meta", priority: 40, interactive: true },
+              filterConfig: {
+                placeholder: "Filter linked...",
+                filterType: "select",
+                options: [{ value: "linked", label: "Linked products only" }],
+              },
+            },
+          ),
+        );
       }),
-      createEntityInlineLinkColumn(columnHelper, "linkedProducts", "product", {
-        header: "Linked Products",
-        className: "w-48 max-w-48",
-        enableSorting: true,
-        mobile: { slot: "meta", priority: 40, interactive: true },
-        filterConfig: {
-          placeholder: "Filter linked...",
-          filterType: "select",
-          options: [{ value: "linked", label: "Linked products only" }],
-        },
-      }),
-    ],
     [columnHelper],
   );
 

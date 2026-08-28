@@ -19,7 +19,7 @@ import {
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -128,26 +128,38 @@ export function LinkProductsDialog({
   };
 
   const helper = useMemo(() => createCubbyColumnHelper<PickerRow>(), []);
-  const columns = useMemo<CubbyColumnDef<PickerRow>[]>(
-    () => [
-      buildSelectColumn<PickerRow>(),
-      createImageColumn(helper, { entity: "product", getImages: rowImages }),
-      createNameColumn(helper, "product", "name", { header: "Product" }),
-      helper.accessor((row) => row.manufacturer, {
-        id: "manufacturer",
-        header: "Manufacturer",
-        meta: {
-          className: "w-40",
-          mobile: { slot: "subtitle", label: "Maker" },
-        },
-        cell: (info) =>
-          isUnspecifiedManufacturer(info.getValue()) ? "—" : info.getValue(),
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<PickerRow>((add) => {
+        add(buildSelectColumn<PickerRow>());
+        add(
+          createImageColumn(helper, {
+            entity: "product",
+            getImages: rowImages,
+          }),
+        );
+        add(createNameColumn(helper, "product", "name", { header: "Product" }));
+        add(
+          helper.accessor((row) => row.manufacturer, {
+            id: "manufacturer",
+            header: "Manufacturer",
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", label: "Maker" },
+            },
+            cell: (info) =>
+              isUnspecifiedManufacturer(info.getValue())
+                ? "—"
+                : info.getValue(),
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "price", {
+            header: "Price",
+            mobile: { slot: "meta", priority: 20 },
+          }),
+        );
       }),
-      createCurrencyColumn(helper, "price", {
-        header: "Price",
-        mobile: { slot: "meta", priority: 20 },
-      }),
-    ],
     [helper],
   );
   const layout = useCubbyTableLayout({

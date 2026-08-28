@@ -6,33 +6,42 @@
  * then hand that choice back to the agent. It never attaches the food itself.
  */
 import type { App } from "@modelcontextprotocol/ext-apps";
+import { z } from "zod/mini";
 import { readCubbyOrigin } from "./origin";
 
 /**
  * The subset of `usdaFoodMcpListOut` (packages/schemas/src/mcp.ts) this app
  * renders — not the full wire shape. Widen it when the UI needs more.
  */
-type Food = {
-  fdc_id: number;
-  description: string | null;
-  data_type: string | null;
-  brand_owner: string | null;
-  brand_name: string | null;
-  nutrientsPer100: Record<string, number> | null;
-  linkedProducts: Array<{ name: string }>;
-};
+const foodSchema = z.object({
+  fdc_id: z.number(),
+  description: z.nullable(z.string()),
+  data_type: z.nullable(z.string()),
+  brand_owner: z.nullable(z.string()),
+  brand_name: z.nullable(z.string()),
+  nutrientsPer100: z.nullable(z.record(z.string(), z.number())),
+  linkedProducts: z.array(z.object({ name: z.string() })),
+});
+type Food = z.infer<typeof foodSchema>;
 
-type SearchResult = {
-  meta?: { totalCount?: number; pageSize?: number };
-  items: Food[];
-};
+const searchResultSchema = z.object({
+  meta: z.optional(
+    z.object({
+      totalCount: z.optional(z.number()),
+      pageSize: z.optional(z.number()),
+    }),
+  ),
+  items: z.array(foodSchema),
+});
+type SearchResult = z.infer<typeof searchResultSchema>;
 
-type SearchInput = {
-  query?: string;
-  dataType?: string;
-  pageIndex?: number;
-  pageSize?: number;
-};
+const searchInputSchema = z.object({
+  query: z.optional(z.string()),
+  dataType: z.optional(z.string()),
+  pageIndex: z.optional(z.number()),
+  pageSize: z.optional(z.number()),
+});
+type SearchInput = z.infer<typeof searchInputSchema>;
 
 type FoodTypeDescription = { label: string; explanation: string };
 
@@ -197,96 +206,17 @@ function footer(...children: Node[]): HTMLElement {
   return root;
 }
 
-function isNullableString(value: unknown): value is string | null {
-  return typeof value === "string" || value === null;
-}
-
-function isNumber(value: unknown): value is number {
-  return typeof value === "number";
-}
-
-function isLinkedProduct(value: unknown): value is { name: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "name" in value &&
-    typeof value.name === "string"
-  );
-}
-
-function isNutrients(value: unknown): value is Record<string, number> | null {
-  return (
-    value === null ||
-    (typeof value === "object" &&
-      !Array.isArray(value) &&
-      Object.values(value).every(isNumber))
-  );
-}
-
-function isSearchMeta(value: unknown): value is SearchResult["meta"] {
-  return (
-    value === undefined ||
-    (typeof value === "object" &&
-      value !== null &&
-      (!("totalCount" in value) || typeof value.totalCount === "number") &&
-      (!("pageSize" in value) || typeof value.pageSize === "number"))
-  );
-}
-
-function isFood(value: unknown): value is Food {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "fdc_id" in value &&
-    typeof value.fdc_id === "number" &&
-    "description" in value &&
-    isNullableString(value.description) &&
-    "data_type" in value &&
-    isNullableString(value.data_type) &&
-    "brand_owner" in value &&
-    isNullableString(value.brand_owner) &&
-    "brand_name" in value &&
-    isNullableString(value.brand_name) &&
-    "nutrientsPer100" in value &&
-    isNutrients(value.nutrientsPer100) &&
-    "linkedProducts" in value &&
-    Array.isArray(value.linkedProducts) &&
-    value.linkedProducts.every(isLinkedProduct)
-  );
-}
-
-function isSearchResult(value: unknown): value is SearchResult {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "items" in value &&
-    Array.isArray(value.items) &&
-    value.items.every(isFood) &&
-    (!("meta" in value) || isSearchMeta(value.meta))
-  );
-}
-
-function isSearchInput(value: unknown): value is SearchInput {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (!("query" in value) || typeof value.query === "string") &&
-    (!("dataType" in value) || typeof value.dataType === "string") &&
-    (!("pageIndex" in value) || typeof value.pageIndex === "number") &&
-    (!("pageSize" in value) || typeof value.pageSize === "number")
-  );
-}
-
 function toolPayload(result: {
   structuredContent?: unknown;
   content?: Array<{ type: string; text?: string }>;
 }): SearchResult | null {
-  if (isSearchResult(result.structuredContent)) return result.structuredContent;
+  const structured = searchResultSchema.safeParse(result.structuredContent);
+  if (structured.success) return structured.data;
   const text = result.content?.find((content) => content.type === "text")?.text;
   if (!text) return null;
   try {
-    const parsed: unknown = JSON.parse(text);
-    return isSearchResult(parsed) ? parsed : null;
+    const parsed = searchResultSchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -601,9 +531,8 @@ export async function connectUsdaPicker(app: UsdaPickerApp): Promise<void> {
   // The host may push input/result immediately after initialization. Register
   // both handlers before connecting so a fast host cannot race past them.
   app.ontoolinput = (notification) => {
-    input = isSearchInput(notification.arguments)
-      ? notification.arguments
-      : null;
+    const parsed = searchInputSchema.safeParse(notification.arguments);
+    input = parsed.success ? parsed.data : null;
     mount();
   };
   app.ontoolresult = (result) => {

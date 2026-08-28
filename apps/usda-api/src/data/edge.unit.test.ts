@@ -1,3 +1,4 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import {
   createEdgeUsdaDataSource,
@@ -9,7 +10,7 @@ import {
   matchQualityCase,
   normalizeUpc,
 } from "./edge";
-import type { EdgeBindings } from "./cloudflare-types";
+import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types";
 
 type TestD1Row = Record<string, string | number | null>;
 type TestD1Result = { success: boolean; results: TestD1Row[] };
@@ -32,9 +33,7 @@ type TestBucket = {
 };
 
 function toEdgeBindings(db: TestDatabase, bucket: TestBucket): EdgeBindings {
-  // SAFETY: these named test ports implement every D1/R2 method exercised by
-  // createEdgeUsdaDataSource; uncalled platform methods are intentionally absent.
-  return { DB: db, USDA_BUNDLES: bucket } as EdgeBindings;
+  return fromPartial<EdgeBindings>({ DB: db, USDA_BUNDLES: bucket });
 }
 
 function requiredBinding(bindings: string[], index: number): string {
@@ -524,20 +523,18 @@ describe("createEdgeUsdaDataSource", () => {
 
   it("treats bundle Cache API read and write failures as R2 misses", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.stubGlobal("caches", {
-      default: {
-        match: async () => {
-          throw new Error("cache read failed");
-        },
-        put: async () => {
-          throw new Error("cache write failed");
-        },
+    const cache: EdgeCachePort = {
+      match: async () => {
+        throw new Error("cache read failed");
       },
-    });
+      put: async () => {
+        throw new Error("cache write failed");
+      },
+    };
 
     try {
       const { env, r2Get } = makeListHydrationEnv({ fdcId: 5 });
-      const dataSource = createEdgeUsdaDataSource(env);
+      const dataSource = createEdgeUsdaDataSource(env, { cache });
 
       const result = await dataSource.listFoods({
         pageIndex: 0,
@@ -550,7 +547,6 @@ describe("createEdgeUsdaDataSource", () => {
       expect(result.count).toBe(1);
       expect(r2Get).toHaveBeenCalledTimes(1);
     } finally {
-      vi.unstubAllGlobals();
       warn.mockRestore();
     }
   });
@@ -558,16 +554,14 @@ describe("createEdgeUsdaDataSource", () => {
   it("falls back to R2 when a cached bundle payload is unparseable", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const bundleText = validFoodText(6);
-    vi.stubGlobal("caches", {
-      default: {
-        match: async () => new Response("not json"),
-        put: vi.fn(),
-      },
-    });
+    const cache: EdgeCachePort = {
+      match: async () => new Response("not json"),
+      put: vi.fn(),
+    };
 
     try {
       const { env, r2Get } = makeListHydrationEnv({ fdcId: 6, bundleText });
-      const dataSource = createEdgeUsdaDataSource(env);
+      const dataSource = createEdgeUsdaDataSource(env, { cache });
 
       const result = await dataSource.listFoods({
         pageIndex: 0,
@@ -580,7 +574,6 @@ describe("createEdgeUsdaDataSource", () => {
       expect(result.count).toBe(1);
       expect(r2Get).toHaveBeenCalledTimes(1);
     } finally {
-      vi.unstubAllGlobals();
       warn.mockRestore();
     }
   });
@@ -598,57 +591,50 @@ describe("createEdgeUsdaDataSource", () => {
     const manifestText = JSON.stringify({ counts });
     let r2Reads = 0;
     const store = new Map<string, Response>();
-    // Minimal colo Cache API stand-in (absent under Node by default).
-    vi.stubGlobal("caches", {
-      default: {
-        match: async (req: Request) => store.get(req.url),
-        put: async (req: Request, res: Response) => {
-          store.set(req.url, res);
+    const cache: EdgeCachePort = {
+      match: async (req) => store.get(req.url),
+      put: async (req, res) => {
+        store.set(req.url, res);
+      },
+    };
+
+    const env = toEdgeBindings(
+      {
+        prepare(query: string) {
+          const stmt = {
+            bind() {
+              return stmt;
+            },
+            async first() {
+              if (query.includes("usda_edge_meta")) return { value: "vtest" };
+              return null;
+            },
+            async all() {
+              return { success: true, results: [] };
+            },
+            async run() {
+              return { success: true, results: [] };
+            },
+          };
+          return stmt;
+        },
+        async batch(statements: TestPreparedStatement[]) {
+          return Promise.all(statements.map((statement) => statement.all()));
         },
       },
-    });
-
-    try {
-      const env = toEdgeBindings(
-        {
-          prepare(query: string) {
-            const stmt = {
-              bind() {
-                return stmt;
-              },
-              async first() {
-                if (query.includes("usda_edge_meta")) return { value: "vtest" };
-                return null;
-              },
-              async all() {
-                return { success: true, results: [] };
-              },
-              async run() {
-                return { success: true, results: [] };
-              },
-            };
-            return stmt;
-          },
-          async batch(statements: TestPreparedStatement[]) {
-            return Promise.all(statements.map((statement) => statement.all()));
-          },
+      {
+        get: async () => {
+          r2Reads += 1;
+          return { text: async () => manifestText };
         },
-        {
-          get: async () => {
-            r2Reads += 1;
-            return { text: async () => manifestText };
-          },
-        },
-      );
+      },
+    );
 
-      const dataSource = createEdgeUsdaDataSource(env);
-      expect(await dataSource.getCounts()).toEqual(counts);
-      expect(r2Reads).toBe(1); // miss → one R2 read
-      expect(await dataSource.getCounts()).toEqual(counts);
-      expect(r2Reads).toBe(1); // hit → served from cache, no second R2 read
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const dataSource = createEdgeUsdaDataSource(env, { cache });
+    expect(await dataSource.getCounts()).toEqual(counts);
+    expect(r2Reads).toBe(1); // miss → one R2 read
+    expect(await dataSource.getCounts()).toEqual(counts);
+    expect(r2Reads).toBe(1); // hit → served from cache, no second R2 read
   });
 });
 

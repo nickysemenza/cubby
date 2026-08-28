@@ -3,7 +3,7 @@ import { useMemo } from "react";
 
 import RTable from "../data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
@@ -15,31 +15,38 @@ export const NutritionInfoTable: React.FC<{
   const { nutrientSummary } = n;
   const columnHelper = createCubbyColumnHelper<NutrientSummary>();
 
-  const columns = useMemo<CubbyColumnDef<NutrientSummary>[]>(
-    () => [
-      columnHelper.accessor("name", {
-        header: "Nutrient",
-        enableSorting: false,
-        size: 200,
-        minSize: 100,
-        maxSize: 300,
-        meta: { className: "min-w-[100px] max-w-[200px] truncate" },
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<NutrientSummary>((add) => {
+        add(
+          columnHelper.accessor("name", {
+            header: "Nutrient",
+            enableSorting: false,
+            size: 200,
+            minSize: 100,
+            maxSize: 300,
+            meta: { className: "min-w-[100px] max-w-[200px] truncate" },
+          }),
+        );
+        add(
+          columnHelper.accessor("amount", {
+            header: "Amount",
+            enableSorting: false,
+            size: 96,
+            minSize: 60,
+            meta: { className: "min-w-[60px] text-right" },
+          }),
+        );
+        add(
+          columnHelper.accessor("unit", {
+            header: "Unit",
+            enableSorting: false,
+            size: 64,
+            minSize: 40,
+            meta: { className: "min-w-[40px]" },
+          }),
+        );
       }),
-      columnHelper.accessor("amount", {
-        header: "Amount",
-        enableSorting: false,
-        size: 96,
-        minSize: 60,
-        meta: { className: "min-w-[60px] text-right" },
-      }),
-      columnHelper.accessor("unit", {
-        header: "Unit",
-        enableSorting: false,
-        size: 64,
-        minSize: 40,
-        meta: { className: "min-w-[40px]" },
-      }),
-    ],
     [columnHelper],
   );
 

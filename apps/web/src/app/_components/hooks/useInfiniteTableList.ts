@@ -18,8 +18,11 @@ import {
   usePaginatedTableCore,
 } from "./usePaginatedTableCore";
 
-interface UseInfiniteTableListOptions<TFilters> {
-  queryOptions: ListQueryOptionsFn<TFilters>;
+interface UseInfiniteTableListOptions<
+  TFilters,
+  TData extends IdentifiedListRow,
+> {
+  queryOptions: ListQueryOptionsFn<TFilters, TData>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   /** Shared table state, owned by the caller (one instance per page). */
   tableState: TableStateReturn;
@@ -74,8 +77,14 @@ export function useInfiniteTableList<
   buildFilters,
   tableState,
   groupBy,
-}: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
-  const { filters, sortParams, pagination } = usePaginatedTableCore({
+}: UseInfiniteTableListOptions<
+  TFilters,
+  TData
+>): UseInfiniteTableListReturn<TData> {
+  const { filters, sortParams, pagination } = usePaginatedTableCore<
+    TFilters,
+    TData
+  >({
     queryOptions,
     buildFilters,
     tableState,
@@ -144,20 +153,9 @@ export function useInfiniteTableList<
     // the descriptor metadata so root mutation invalidation can still match
     // its entity/cache tags; omitting it left every list permanently stale.
     meta: firstPageOptions.meta,
-    queryFn: async ({
-      pageParam,
-      signal,
-    }: {
-      pageParam: number;
-      signal: AbortSignal;
-    }) => {
+    queryFn: async ({ pageParam, signal }) => {
       const options = pageOptions(pageParam);
-      // SAFETY: list query options are the caller's typed TData contract, and
-      // every page adapter returns the corresponding list response shape.
-      return (await options.queryFn({
-        queryKey: options.queryKey,
-        signal,
-      })) as ListQueryResponse<TData>;
+      return options.execute(signal);
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage: ListQueryResponse<TData>) => {
@@ -167,24 +165,7 @@ export function useInfiniteTableList<
       const loaded = (pageIndex + 1) * meta.pageSize;
       return loaded < meta.totalCount ? pageIndex + 1 : undefined;
     },
-  }) as {
-    data:
-      | { pages: ListQueryResponse<TData>[]; pageParams: number[] }
-      | undefined;
-    isLoading: boolean;
-    error: Error | null;
-    // useInfiniteQuery's fetchNextPage resolves with the updated observer
-    // result (has .hasNextPage / .data) — awaited by loadAllPages below.
-    fetchNextPage: (options?: { cancelRefetch?: boolean }) => Promise<{
-      hasNextPage?: boolean;
-      data?: { pages: ListQueryResponse<TData>[] };
-    }>;
-    hasNextPage: boolean;
-    isFetchingNextPage: boolean;
-    isPlaceholderData: boolean;
-    isRefetching: boolean;
-    refetch: () => Promise<{ data?: { pages: ListQueryResponse<TData>[] } }>;
-  };
+  });
 
   // Flatten all pages into a single array, with a row-identity backstop for an
   // overlapping or refetched page.

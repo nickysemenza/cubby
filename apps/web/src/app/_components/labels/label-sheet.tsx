@@ -3,6 +3,13 @@ import { getCategoryColor } from "~/app/_components/products/category-theme";
 
 import type { LabelItem, SHEET_LAYOUTS, SheetFormat } from "./sheet-layouts";
 
+interface InteractiveLabelCellProps {
+  onClick?: () => void;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  role?: "button";
+  tabIndex?: number;
+}
+
 function getLabelColor(item: LabelItem): string {
   if (item.entityType === "location" && item.locationType) {
     return getLocationTypeColor(item.locationType);
@@ -27,6 +34,19 @@ function LabelCell({
   onToggle?: (shortcode: string) => void;
 }) {
   const color = getLabelColor(item);
+  const interactionProps: InteractiveLabelCellProps = {};
+  if (interactive && onToggle) {
+    interactionProps.onClick = () => onToggle(item.shortcode);
+    interactionProps.role = "button";
+    interactionProps.tabIndex = 0;
+    interactionProps.onKeyDown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        onToggle(item.shortcode);
+      }
+    };
+  }
+
   return (
     <div
       className={[
@@ -47,19 +67,7 @@ function LabelCell({
         borderLeftColor: color,
         borderLeftStyle: "solid",
       }}
-      {...(interactive && onToggle
-        ? {
-            onClick: () => onToggle(item.shortcode),
-            role: "button",
-            tabIndex: 0,
-            onKeyDown: (e: React.KeyboardEvent) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onToggle(item.shortcode);
-              }
-            },
-          }
-        : {})}
+      {...interactionProps}
     >
       <div className="flex shrink-0 flex-col items-center">
         {item.qrUrl ? (

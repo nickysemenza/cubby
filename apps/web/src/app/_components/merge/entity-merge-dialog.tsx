@@ -2,7 +2,6 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { useQuery } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
-import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -18,22 +17,16 @@ import {
 } from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
-import type { MergeableConfig } from "~/entities/types";
+import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
 
 /** Display text comes from `mergeable.rowLabel`/`rowStat`, not a hardcoded
  * `name` field — a row shape like `PurchaseOut` (no `name`) works here too. */
-interface MergeRow {
-  id: string;
-}
+type MergeRow = MergeDisplayRow;
 
 const isCopyFactory = (
   value: ReactNode | ((keeperLabel: ReactNode) => ReactNode),
 ): value is (keeperLabel: ReactNode) => ReactNode =>
   typeof value === "function";
-
-const mergeCandidatesSchema = z.object({
-  items: z.array(z.object({ id: z.string() })),
-});
 
 const resolveCopyText = (
   value: ReactNode | ((keeperLabel: ReactNode) => ReactNode) | undefined,
@@ -242,16 +235,23 @@ function FixedMergeDialog<T extends MergeRow>({
   isPending: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>(initialAliasIds ?? []);
+  const candidatePlan = config.candidateQuery?.(keeper);
   const candidatesQuery = useQuery({
-    ...config.candidateQuery?.(keeper),
-    enabled: open && !!config.candidateQuery,
+    queryKey: candidatePlan?.queryKey ?? ["merge-candidates", keeper.id],
+    meta: candidatePlan?.meta,
+    queryFn: async (context) => {
+      if (!candidatePlan) {
+        throw new Error("Merge configuration has no candidate plan");
+      }
+      return candidatePlan.execute(context.signal);
+    },
+    enabled: open && candidatePlan !== undefined,
   });
-  const candidates = useMemo(() => {
-    const parsed = mergeCandidatesSchema.safeParse(candidatesQuery.data);
-    return parsed.success
-      ? parsed.data.items.filter((row) => row.id !== keeper.id)
-      : [];
-  }, [candidatesQuery.data, keeper.id]);
+  const candidates = useMemo(
+    () =>
+      (candidatesQuery.data?.items ?? []).filter((row) => row.id !== keeper.id),
+    [candidatesQuery.data, keeper.id],
+  );
   const toggle = (id: string) =>
     setSelected((previous) =>
       previous.includes(id)

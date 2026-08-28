@@ -15,7 +15,7 @@ import {
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
 import RTable from "~/app/_components/data-table/Table";
 import {
-  type CubbyColumnDef,
+  createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
@@ -151,64 +151,81 @@ export function LinkExpensesDialog({
   };
 
   const helper = useMemo(() => createCubbyColumnHelper<ExpenseOut>(), []);
-  const columns = useMemo<CubbyColumnDef<ExpenseOut>[]>(
-    () => [
-      buildSelectColumn<ExpenseOut>(),
-      createNameColumn(helper, "expense", "name", { header: "Expense" }),
-      helper.accessor((row) => row.date, {
-        id: "date",
-        header: "Date",
-        meta: { className: "w-28", mono: true, mobile: { slot: "meta" } },
-        cell: (info) => info.getValue() ?? <NoneValue />,
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ExpenseOut>((add) => {
+        add(buildSelectColumn<ExpenseOut>());
+        add(createNameColumn(helper, "expense", "name", { header: "Expense" }));
+        add(
+          helper.accessor((row) => row.date, {
+            id: "date",
+            header: "Date",
+            meta: { className: "w-28", mono: true, mobile: { slot: "meta" } },
+            cell: (info) => info.getValue() ?? <NoneValue />,
+          }),
+        );
+        add(
+          createCurrencyColumn(helper, "cost", {
+            header: "Cost",
+            className: "w-28",
+            mobile: { slot: "trailing" },
+          }),
+        );
+        add(
+          helper.accessor((row) => row.trade, {
+            id: "trade",
+            header: "Trade",
+            meta: {
+              className: "w-36",
+              mobile: { slot: "meta", priority: 20 },
+            },
+            cell: (info) => <TradeBadge trade={info.getValue()} />,
+          }),
+        );
+        add(
+          helper.accessor((row) => row.projectName, {
+            id: "project",
+            header: "Project",
+            meta: {
+              className: "w-36",
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: (info) => {
+              const row = info.row.original;
+              return row.projectId && row.projectName ? (
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="project"
+                  data={{ id: row.projectId, name: row.projectName }}
+                  truncate
+                />
+              ) : (
+                <NoneValue />
+              );
+            },
+          }),
+        );
+        add(
+          helper.accessor((row) => row.purchaseId, {
+            id: "currentPurchase",
+            header: "Current purchase",
+            meta: {
+              className: "w-36",
+              mobile: { slot: "meta", priority: 40, label: "Purchase" },
+            },
+            cell: (info) =>
+              info.getValue() ? (
+                <span className="text-muted-foreground">
+                  {info.row.original.vendor ?? "another purchase"}
+                </span>
+              ) : (
+                <span className="font-mono text-2xs tracking-wider text-slate uppercase">
+                  unattached
+                </span>
+              ),
+          }),
+        );
       }),
-      createCurrencyColumn(helper, "cost", {
-        header: "Cost",
-        className: "w-28",
-        mobile: { slot: "trailing" },
-      }),
-      helper.accessor((row) => row.trade, {
-        id: "trade",
-        header: "Trade",
-        meta: { className: "w-36", mobile: { slot: "meta", priority: 20 } },
-        cell: (info) => <TradeBadge trade={info.getValue()} />,
-      }),
-      helper.accessor((row) => row.projectName, {
-        id: "project",
-        header: "Project",
-        meta: { className: "w-36", mobile: { slot: "meta", priority: 30 } },
-        cell: (info) => {
-          const row = info.row.original;
-          return row.projectId && row.projectName ? (
-            <EntityInlineLink
-              displayImage={undefined}
-              entity="project"
-              data={{ id: row.projectId, name: row.projectName }}
-              truncate
-            />
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-      helper.accessor((row) => row.purchaseId, {
-        id: "currentPurchase",
-        header: "Current purchase",
-        meta: {
-          className: "w-36",
-          mobile: { slot: "meta", priority: 40, label: "Purchase" },
-        },
-        cell: (info) =>
-          info.getValue() ? (
-            <span className="text-muted-foreground">
-              {info.row.original.vendor ?? "another purchase"}
-            </span>
-          ) : (
-            <span className="font-mono text-2xs tracking-wider text-slate uppercase">
-              unattached
-            </span>
-          ),
-      }),
-    ],
     [helper],
   );
   const layout = useCubbyTableLayout({
