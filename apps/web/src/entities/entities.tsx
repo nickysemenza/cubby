@@ -7,6 +7,7 @@ import { entityNames } from "@cubby/schemas/entity-names";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
   Apple,
+  ArrowLeftRight,
   Barcode,
   BookOpen,
   CalendarDays,
@@ -23,6 +24,7 @@ import {
   Receipt,
   ReceiptText,
   Store,
+  Users,
 } from "lucide-react";
 
 import {
@@ -592,6 +594,30 @@ const entityDefinitions = withEntityNames({
       standardColumns: ["name"],
     },
   },
+  ledgerParty: {
+    ...generatedBrowserRoutes.ledgerParty,
+    lucideIcon: Users,
+    color: INK.slate,
+    detail: { commonSections: ["history"] },
+    sortableFields: ["name", "kind", "createdAt", "updatedAt"],
+    list: {
+      defaultSort: "name",
+      // A name roster reads A→Z, same rationale as financialAccount below.
+      defaultSortDirection: "asc",
+      standardColumns: [],
+    },
+  },
+  ledgerTransfer: {
+    ...generatedBrowserRoutes.ledgerTransfer,
+    lucideIcon: ArrowLeftRight,
+    color: INK.primary,
+    detail: { commonSections: ["history"] },
+    sortableFields: ["date", "amount", "createdAt", "updatedAt"],
+    list: {
+      defaultSort: "date",
+      standardColumns: [],
+    },
+  },
   financialAccount: {
     dialogLabel: "Account",
     ...generatedBrowserRoutes.financialAccount,
@@ -704,23 +730,26 @@ export const browserEntityDefinition = (
   entity: BrowserRoutedEntity,
 ): EntityDefinition => entities[entity];
 
-/** Route-less entities have no sort contract to project. */
+/**
+ * Every entity now carries a browser route (`ledgerParty`/`ledgerTransfer`
+ * were the last holdouts), so this always resolves through the registry. Kept
+ * as its own accessor — rather than reading `entities[entity]` directly —
+ * because a future route-less entity is exactly the case
+ * `isBrowserRoutedEntity` exists to guard; a bare index would silently regress
+ * if one reappears.
+ */
 export const getSortableFields = (entity: Entity): readonly string[] =>
   isBrowserRoutedEntity(entity) ? entities[entity].sortableFields : [];
 
 /**
- * Human-readable labels for generic surfaces that include route-less entities.
- * Routed entities' `.label` is the manifest's own `names.singular`, stamped
- * from the key by `withEntityNames`, so it cannot drift from the server's
- * error prose — that derives from the same declaration. Route-less records
- * deliberately avoid growing a parallel browser registry just to appear in
- * audit tooling, so `ledgerParty`/`ledgerTransfer` fall back to a sentence-case
- * literal, which is what the audit-log prose they appear in wants.
+ * Human-readable label for any entity. `.label` is the manifest's own
+ * `names.singular`, stamped from the key by `withEntityNames`, so it cannot
+ * drift from the server's error prose — that derives from the same
+ * declaration. See {@link getSortableFields} for why this still guards
+ * rather than indexing `entities` directly.
  */
-export const entityLabel = (entity: Entity): string => {
-  if (isBrowserRoutedEntity(entity)) return entities[entity].label;
-  return entity === "ledgerParty" ? "Ledger party" : "Ledger transfer";
-};
+export const entityLabel = (entity: Entity): string =>
+  isBrowserRoutedEntity(entity) ? entities[entity].label : entity;
 
 /** Concise noun for confirmation dialogs and destructive-action feedback. */
 export const entityDialogLabel = (entity: Entity): string =>

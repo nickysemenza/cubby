@@ -1368,29 +1368,52 @@ describe("consolidated household ledger", () => {
       projectId: parseShortcodeFor("project", unknown.shortcode),
       includeSubprojects: true,
     });
+    // The $10 "unknown" expense has no attribution on either role and no
+    // Purchase. Its BENEFICIARY therefore falls to the assumed-household
+    // default (this fixture has a household party); its FUNDER stays unknown,
+    // because there is no payment chain to derive one from. The $8 sibling
+    // keeps explicit null attributions on both roles, so it is still
+    // `partial_*` on both — explicit always wins over both derivation paths.
     expect(unknownReport).toMatchObject({
       wholeGroupCost: 18,
       householdInitialExposure: 0,
       guestInitialFunding: 0,
-      unattributedConsumption: 18,
+      unattributedConsumption: 8,
       unattributedInitialFunding: 18,
-      householdConsumed: 0,
-      parties: [],
+      householdConsumed: 10,
+      parties: [
+        expect.objectContaining({
+          party: expect.objectContaining({ id: household.output.id }),
+          consumed: 10,
+        }),
+      ],
       funders: [],
     });
     expect(unknownReport.gaps.map((gap) => gap.code)).toEqual(
       expect.arrayContaining([
-        "missing_beneficiaries",
+        "beneficiary_assumed_household",
         "missing_funders",
         "partial_beneficiaries",
         "partial_funders",
       ]),
     );
+    // The assumption is aggregated, not enumerated: one entry carrying a count
+    // rather than one row per expense.
+    expect(
+      unknownReport.gaps.find(
+        (gap) => gap.code === "beneficiary_assumed_household",
+      ),
+    ).toMatchObject({ amount: 10, count: 1, targetIds: [] });
+    expect(unknownReport.gaps.map((gap) => gap.code)).not.toContain(
+      "missing_beneficiaries",
+    );
 
     const ledger = await householdContributionLedger(ctx.db, {
       asOf: "2026-08-20",
     });
-    expect(ledger.unattributed).toEqual({ consumption: 18, funding: 18 });
+    // Consumption drops by the $10 now assumed to be the household's; funding
+    // is untouched because no fixture expense has a Purchase to derive from.
+    expect(ledger.unattributed).toEqual({ consumption: 8, funding: 18 });
     expect(ledger.checks).toMatchObject({
       expenseTotal: 248,
       transferNet: 0,
@@ -1398,12 +1421,14 @@ describe("consolidated household ledger", () => {
     expect(
       ledger.parties.find((row) => row.party.id === household.output.id),
     ).toMatchObject({
-      consumed: 100,
+      // +10 over the pre-derivation figure: the unattributed expense's
+      // beneficiary now defaults to this party, which also moves `position`.
+      consumed: 110,
       initiallyOutlaid: 160,
       transfersSent: 17,
       transfersReceived: 32,
       netContribution: 145,
-      position: 45,
+      position: 35,
     });
     expect(
       ledger.parties.find((row) => row.party.id === first.output.id),
@@ -1423,11 +1448,24 @@ describe("consolidated household ledger", () => {
     ).toMatchObject({ consumed: 30, netContribution: 30, position: 0 });
     expect(ledger.gaps).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: "missing_beneficiaries", amount: 10 }),
+        expect.objectContaining({
+          code: "beneficiary_assumed_household",
+          amount: 10,
+          count: 1,
+        }),
         expect.objectContaining({ code: "missing_funders", amount: 10 }),
         expect.objectContaining({ code: "partial_beneficiaries", amount: 8 }),
         expect.objectContaining({ code: "partial_funders", amount: 8 }),
       ]),
+    );
+    // The funder side of this fixture has no payment evidence anywhere, so
+    // derivation must not have invented one. This is the sharpest guard on the
+    // arm-B / residual split: if either fired wrongly, these move.
+    expect(ledger.checks.fundedTotal + ledger.unattributed.funding).toBe(
+      ledger.checks.expenseTotal,
+    );
+    expect(ledger.checks.consumedTotal + ledger.unattributed.consumption).toBe(
+      ledger.checks.expenseTotal,
     );
   });
 });

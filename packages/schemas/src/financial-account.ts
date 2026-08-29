@@ -152,6 +152,12 @@ export type FinancialAccountSortField =
 export const financialAccountOut = z.object({
   id: financialAccountShortcode,
   ...financialAccountFields,
+  /**
+   * Display name for `ledgerPartyId`, resolved server-side — same read-only
+   * companion pattern as `financialTransactionOut.accountName`. Never an input:
+   * ownership is written through `ledgerPartyId` alone.
+   */
+  ledgerPartyName: z.string().nullable(),
   transactionCount: z.number().int().nonnegative(),
   ...timestampedFields,
 });

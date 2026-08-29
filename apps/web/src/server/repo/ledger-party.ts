@@ -9,6 +9,7 @@ import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
   LedgerPartyKind,
+  LedgerPartyOptionsOut,
   LedgerPartyOut,
   LedgerPartyUpdateData,
 } from "@cubby/schemas/ledger-party";
@@ -193,6 +194,35 @@ export async function listLedgerParties(
   );
   return { data: data.map(toOut), count };
 }
+
+/**
+ * The ledger-party picklist — feeds the accounts table's Owner editor.
+ *
+ * Deliberately eager and unpaginated, unlike the search-as-you-type pickers in
+ * `financial-selectors.tsx`: the household has a handful of parties, so the
+ * whole roster is cheaper to ship than a query per keystroke. `kind` rides
+ * along because the editor labels a party by it (Member / Guest / Household)
+ * rather than by name alone.
+ */
+export const ledgerPartyOptions = async (
+  db: Database,
+): Promise<LedgerPartyOptionsOut> => {
+  const rows = await getDb(db)
+    .select({
+      shortcode: ledgerParty.shortcode,
+      name: ledgerParty.name,
+      kind: ledgerParty.kind,
+    })
+    .from(ledgerParty)
+    .where(notDeleted(ledgerParty))
+    .orderBy(asc(ledgerParty.name));
+
+  return rows.map((row) => ({
+    id: parseShortcodeFor("ledgerParty", row.shortcode),
+    name: row.name,
+    kind: row.kind,
+  }));
+};
 
 export async function createLedgerParty(
   db: Database,

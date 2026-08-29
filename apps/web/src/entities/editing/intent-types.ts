@@ -15,6 +15,14 @@ import type {
   inventoryCreatePayloadData,
 } from "@cubby/schemas/inventory";
 import type {
+  LedgerPartyCreateInput,
+  LedgerPartyUpdateData,
+} from "@cubby/schemas/ledger-party";
+import type {
+  LedgerTransferCreateInput,
+  LedgerTransferUpdateData,
+} from "@cubby/schemas/ledger-transfer";
+import type {
   LocationCreateInput,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
@@ -79,6 +87,8 @@ interface EntityEditDraftMap {
   expense: Partial<ExpenseCreateInput & ExpenseUpdateData> & {
     lineKind?: ExpenseCreateInput["lineKind"] | "auto";
   };
+  ledgerParty: Partial<LedgerPartyCreateInput & LedgerPartyUpdateData>;
+  ledgerTransfer: Partial<LedgerTransferCreateInput & LedgerTransferUpdateData>;
   vendor: Partial<VendorCreateInput & UpdateData<VendorUpdateInput>>;
   purchase: Partial<PurchaseCreateInput & PurchaseUpdateData>;
   financialAccount: Partial<
@@ -153,6 +163,23 @@ interface EntityEditIntentCatalog {
     update: "full" | "identity";
     delete: "delete";
   };
+  /**
+   * Ledger records are browsable and kernel-writable but have no editor UI
+   * yet: only the `delete` intent is reachable from the browser, and
+   * create/update stay on MCP. The entries exist so the shared action and
+   * command chrome — which runs for every browser-routed entity — stays
+   * type-exhaustive rather than special-casing two entities at ~12 call sites.
+   */
+  ledgerParty: {
+    create: "full";
+    update: "full";
+    delete: "delete";
+  };
+  ledgerTransfer: {
+    create: "full";
+    update: "full";
+    delete: "delete";
+  };
   financialTransaction: {
     create: "capture" | "full";
     update: "full" | "settlement";
@@ -179,6 +206,8 @@ interface EntityEditCreateInputMap {
   purchase: PurchaseCreateInput;
   financialAccount: FinancialAccountCreateInput;
   financialTransaction: FinancialTransactionCreateInput;
+  ledgerParty: LedgerPartyCreateInput;
+  ledgerTransfer: LedgerTransferCreateInput;
   wish: WishCreateInput;
 }
 
@@ -196,6 +225,8 @@ interface EntityEditUpdateInputMap {
   purchase: PurchaseUpdateData;
   financialAccount: FinancialAccountUpdateData;
   financialTransaction: FinancialTransactionUpdateData;
+  ledgerParty: LedgerPartyUpdateData;
+  ledgerTransfer: LedgerTransferUpdateData;
   wish: WishUpdateData;
 }
 

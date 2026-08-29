@@ -321,6 +321,8 @@ const defineEntityEdits = (
     builders.financialTransaction,
   ),
   wish: buildDefinition("wish", builders.wish),
+  ledgerParty: buildDefinition("ledgerParty", builders.ledgerParty),
+  ledgerTransfer: buildDefinition("ledgerTransfer", builders.ledgerTransfer),
 });
 
 const requiredDate =
@@ -669,6 +671,13 @@ const semanticFields = {
     full: ["name", "notes", "candidateProductIds", "acquired"],
     identity: ["name", "notes", "candidateProductIds"],
     acquisition: ["acquired"],
+  },
+  // Browsable and kernel-writable, but no editor UI yet: only `delete` is
+  // reachable from the browser, and create/update stay on MCP. The entries
+  // exist so the shared action and command chrome stays type-exhaustive.
+  ledgerParty: { full: ["name", "kind", "notes"] },
+  ledgerTransfer: {
+    full: ["fromPartyId", "toPartyId", "amount", "date", "notes"],
   },
 } satisfies Record<EditableEntity, Record<string, readonly string[]>>;
 
@@ -1102,5 +1111,35 @@ export const entityEditRegistry = defineEntityEdits({
       identity: {},
       acquisition: {},
     },
+  }),
+  // No editor is rendered for these yet — create/update stay on MCP — but the
+  // builders must exist for the registry to be exhaustive over EditableEntity.
+  ledgerParty: (f) => ({
+    fields: [f.trimmedName(), f("kind"), f.nullableText("notes")],
+    create: {
+      full: { defaults: { name: "", kind: "member", notes: null } },
+    },
+    update: { full: { acceptsSeed: true } },
+  }),
+  ledgerTransfer: (f) => ({
+    fields: [
+      f("fromPartyId", { required: true }),
+      f("toPartyId", { required: true }),
+      f("amount", { required: true }),
+      f("date", { required: true }),
+      f.nullableText("notes"),
+    ],
+    create: {
+      full: {
+        defaults: {
+          fromPartyId: "",
+          toPartyId: "",
+          amount: 0,
+          date: "",
+          notes: null,
+        },
+      },
+    },
+    update: { full: { acceptsSeed: true } },
   }),
 });

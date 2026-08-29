@@ -95,6 +95,9 @@ const columns = {
   ledgerPartyShortcode: sql<
     string | null
   >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
+  ledgerPartyName: sql<
+    string | null
+  >`(SELECT name FROM "LedgerParty" WHERE id = "FinancialAccount"."ledgerPartyId")`,
   notes: financialAccount.notes,
   createdAt: financialAccount.createdAt,
   updatedAt: financialAccount.updatedAt,
@@ -107,6 +110,7 @@ type FinancialAccountRow = Omit<
 > & {
   transactionCount: number;
   ledgerPartyShortcode: string | null;
+  ledgerPartyName: string | null;
 };
 
 const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
@@ -119,6 +123,7 @@ const toOut = (row: FinancialAccountRow): FinancialAccountOut =>
     ledgerPartyId: row.ledgerPartyShortcode
       ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
       : null,
+    ledgerPartyName: row.ledgerPartyName,
     notes: row.notes,
     transactionCount: Number(row.transactionCount),
     createdAt: row.createdAt,

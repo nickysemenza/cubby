@@ -67,6 +67,8 @@ export const DOMAIN_WAYFINDING = {
       "vendor",
       "financialAccount",
       "financialTransaction",
+      "ledgerParty",
+      "ledgerTransfer",
     ],
     routeRoots: [
       "/expenses",
@@ -76,6 +78,8 @@ export const DOMAIN_WAYFINDING = {
       "/financial-transactions",
       "/household-contribution",
       "/statement-rows",
+      "/ledger-parties",
+      "/ledger-transfers",
     ],
   },
 } as const satisfies Record<WayfindingDomain, DomainWayfinding>;

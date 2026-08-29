@@ -48,9 +48,12 @@ describe("entity manifest", () => {
     }
   });
 
-  it("derives browser-routed entities and excludes route-less ledger entities", () => {
-    expect(browserRoutedEntities).not.toContain("ledgerParty");
-    expect(browserRoutedEntities).not.toContain("ledgerTransfer");
+  it("derives browser-routed entities, now including the ledger pair", () => {
+    // `ledgerParty`/`ledgerTransfer` were the last route-less entities; every
+    // entity in the manifest now carries a browser route.
+    expect(browserRoutedEntities).toContain("ledgerParty");
+    expect(browserRoutedEntities).toContain("ledgerTransfer");
+    expect(browserRoutedEntities.length).toBe(allEntities.length);
     for (const entity of browserRoutedEntities) {
       expect(descriptor(entity).browserRoutes).not.toBe(false);
     }

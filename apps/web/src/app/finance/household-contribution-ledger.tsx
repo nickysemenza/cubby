@@ -1,5 +1,6 @@
 import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -133,9 +134,25 @@ export function HouseholdContributionLedgerReport({
           <h2 id={partyHeadingId} className="my-0 eyebrow">
             Household contribution by party
           </h2>
-          <span className="font-mono text-2xs text-muted-foreground">
-            {data.parties.length} parties
-          </span>
+          <Row align="center" gap="sm">
+            {/* This report is the numbers; the records behind them live on
+                their own pages. */}
+            <Link
+              to="/ledger-parties"
+              className="text-2xs text-primary hover:underline"
+            >
+              Parties
+            </Link>
+            <Link
+              to="/ledger-transfers"
+              className="text-2xs text-primary hover:underline"
+            >
+              Transfers
+            </Link>
+            <span className="font-mono text-2xs text-muted-foreground">
+              {data.parties.length} parties
+            </span>
+          </Row>
         </div>
         <Table containerClassName="border border-border">
           <TableHeader>
@@ -227,7 +244,13 @@ export function HouseholdContributionLedgerReport({
                   </TableCell>
                   <MoneyCell value={gap.amount} empty="—" />
                   <TableCell className="font-mono text-2xs text-muted-foreground">
-                    <ContributionGapTargets targetIds={gap.targetIds} />
+                    {/* Aggregated codes stand for many expenses and carry no
+                        targets — a count is the honest thing to show. */}
+                    {gap.count === undefined ? (
+                      <ContributionGapTargets targetIds={gap.targetIds} />
+                    ) : (
+                      `${gap.count} expenses`
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

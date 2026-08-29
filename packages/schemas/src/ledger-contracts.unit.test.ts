@@ -132,6 +132,7 @@ describe("ledger contracts", () => {
       householdConsumed: 0,
       parties: [],
       funders: [],
+      gapsTruncated: false,
     };
     expect(
       projectContributionOut.safeParse({

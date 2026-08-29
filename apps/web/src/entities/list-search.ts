@@ -9,6 +9,7 @@ import {
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { ImageStatus } from "@cubby/schemas/image";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import {
   costTypeSchema,
   plainDate,
@@ -509,6 +510,30 @@ export const purchaseSearchDefaults = {
   dataGaps: undefined,
   lineTotalMin: undefined,
   lineTotalMax: undefined,
+} as const;
+
+export const ledgerPartySearchSchema = listSearchSchema("ledgerParty", {
+  q: urlStringParam,
+  kind: urlEnumListParam(ledgerPartyKind),
+});
+
+export const ledgerPartySearchDefaults = {
+  q: undefined,
+  kind: undefined,
+} as const;
+
+export const ledgerTransferSearchSchema = listSearchSchema("ledgerTransfer", {
+  fromPartyId: urlShortcodeListParam("ledgerParty"),
+  toPartyId: urlShortcodeListParam("ledgerParty"),
+  dateFrom: urlStringParam,
+  dateTo: urlStringParam,
+});
+
+export const ledgerTransferSearchDefaults = {
+  fromPartyId: undefined,
+  toPartyId: undefined,
+  dateFrom: undefined,
+  dateTo: undefined,
 } as const;
 
 export const financialAccountSearchSchema = listSearchSchema(

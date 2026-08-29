@@ -2,8 +2,8 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "ledgerParty",
-  names: { singular: "Ledger Party" },
-  route: null,
+  names: { singular: "Ledger Party", plural: "Ledger Parties" },
+  route: { basePath: "ledger-parties" },
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-", legacy: null },
   presentation: { titleField: "name" },
@@ -18,7 +18,32 @@ export default literalEntity({
     },
     output: { module: "@cubby/schemas/ledger-party", export: "ledgerPartyOut" },
   },
-  filters: { descriptors: [] },
+  filters: {
+    audit: true,
+    schema: {
+      module: "@cubby/schemas/ledger-party",
+      export: "ledgerPartyFilterFields",
+    },
+    descriptors: [
+      {
+        columnId: "name",
+        field: "search",
+        urlKey: "q",
+        kind: "text",
+        placeholder: "Search ledger parties...",
+      },
+      {
+        columnId: "kind",
+        kind: "multiselect",
+        placeholder: "Filter by kind...",
+        options: [
+          { value: "member", label: "Member" },
+          { value: "guest", label: "Guest" },
+          { value: "household", label: "Household" },
+        ],
+      },
+    ],
+  },
   relations: [
     {
       key: "expenses",

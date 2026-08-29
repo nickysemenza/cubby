@@ -172,6 +172,8 @@ describe("getEntityNavGroup", () => {
       purchase: "Finance",
       financialAccount: "Finance",
       financialTransaction: "Finance",
+      ledgerParty: "Finance",
+      ledgerTransfer: "Finance",
     } satisfies Record<BrowserRoutedEntity, string>;
 
     for (const entity of entityKeys) {
