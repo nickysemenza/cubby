@@ -24,6 +24,7 @@ import {
   entityListParamsFromParsed,
   entityListInputFor,
   getEntityListOutputSchema,
+  listEntities,
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
@@ -45,6 +46,7 @@ export const entityList = defineOperationDomain("entity", {
   list: query({
     input: z.custom<EntityListInputByEntity[ListEntity]>(),
     output: z.custom<EntityListResultByEntity[ListEntity]>(),
+    observability: { entities: listEntities },
     parse: (result, input) =>
       getEntityListOutputSchema(input.entity).parse(result),
     tags: [["entity", "list"]],

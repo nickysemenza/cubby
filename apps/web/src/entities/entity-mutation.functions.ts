@@ -14,7 +14,10 @@ import type {
 
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
-import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
+import {
+  entityMutationOutputEntities,
+  parseEntityMutationOutput,
+} from "./generated/entity-mutation-results.gen";
 
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<
@@ -54,6 +57,14 @@ export const entityMutation = defineOperationDomain("entity", {
   mutate: mutation({
     input: z.custom<EntityBrowserMutationInput>(),
     output: z.custom<EntityBrowserMutationResult>(),
+    observability: {
+      entities: [
+        ...entityMutationOutputEntities,
+        "ledgerParty",
+        "ledgerTransfer",
+        "image",
+      ],
+    },
     /**
      * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
      * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,

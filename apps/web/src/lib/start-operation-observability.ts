@@ -18,17 +18,8 @@ const START_OPERATION_ENTITY_HEADER = "x-cubby-operation-entity";
 export type StartOperationKind = "query" | "mutation" | "subscription";
 export type { StartOperationId };
 
-const PRODUCT_DETAIL_PHASES = [
-  "resolve",
-  "base",
-  "pricing",
-  "quantity",
-  "breadcrumbs",
-  "quality",
-  "recipe_usages",
-  "food",
-] as const;
-export type ProductDetailPhase = (typeof PRODUCT_DETAIL_PHASES)[number];
+export type ProductDetailPhase =
+  (typeof START_OPERATIONS)["entity.detail"]["productPhases"][number];
 
 export type StartOperationDefinition<
   Id extends StartOperationId = StartOperationId,
@@ -72,15 +63,20 @@ export const isStartOperationEntity = (
   value: string | null | undefined,
 ): value is string =>
   value != null &&
-  new Set<string>(START_OPERATIONS[operation].entities).has(value);
+  new Set<string>(startOperationDefinition(operation).entities).has(value);
 
 export const startOperationDefinition = <Id extends StartOperationId>(
   operation: Id,
-): StartOperationDefinition<Id> =>
-  ({
+): StartOperationDefinition<Id> => {
+  const registered = START_OPERATIONS[operation];
+  return {
     id: operation,
-    ...START_OPERATIONS[operation],
-  }) satisfies StartOperationDefinition<Id>;
+    kind: registeredStartOperationKind(operation),
+    entities: "entities" in registered ? registered.entities : [],
+    productPhases:
+      "productPhases" in registered ? registered.productPhases : [],
+  } satisfies StartOperationDefinition<Id>;
+};
 
 /**
  * Build the only semantic dimensions a browser Start call may send to tracing.

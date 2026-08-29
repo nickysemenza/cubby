@@ -9,6 +9,7 @@ import {
 } from "~/integrations/tanstack-query/operation-catalog";
 
 import {
+  detailEntities,
   type DetailEntity,
   type EntityDetailByEntity,
   type EntityDetailInputByEntity,
@@ -47,6 +48,19 @@ export const entityDetail = defineOperationDomain("entity", {
   detail: query({
     input: z.custom<EntityDetailInputByEntity[DetailEntity]>(),
     output: z.custom<EntityDetailByEntity[DetailEntity] | null>(),
+    observability: {
+      entities: detailEntities,
+      productPhases: [
+        "resolve",
+        "base",
+        "pricing",
+        "quantity",
+        "breadcrumbs",
+        "quality",
+        "recipe_usages",
+        "food",
+      ],
+    },
     parse: (result, input) =>
       result === null
         ? null

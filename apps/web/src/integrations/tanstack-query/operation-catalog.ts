@@ -37,6 +37,10 @@ type SharedDefinition<
 > = {
   input: Input;
   output: Output;
+  observability?: {
+    entities?: readonly string[];
+    productPhases?: readonly string[];
+  };
   parse?: {
     bivarianceHack(
       data: RawOperationValue,
