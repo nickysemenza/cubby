@@ -61,9 +61,9 @@ export function useBulkActionMutation<Vars, Result>({
   const queryClient = useQueryClient();
   const { start, running, progress } = useBulkStream<unknown, Result>();
 
-  const mutate = useCallback(
+  const mutateAsync = useCallback(
     (vars: Vars) =>
-      void start(() => Promise.resolve(run(vars)), {
+      start(() => Promise.resolve(run(vars)), {
         onDone: (data) => {
           toast.success(
             isSuccessMessageFactory(success) ? success(data) : success,
@@ -81,5 +81,12 @@ export function useBulkActionMutation<Vars, Result>({
     [start, run, queryClient, success, invalidateTags, onSuccess, error],
   );
 
-  return { mutate, isPending: running, progress };
+  const mutate = useCallback(
+    (vars: Vars) => {
+      void mutateAsync(vars);
+    },
+    [mutateAsync],
+  );
+
+  return { mutate, mutateAsync, isPending: running, progress };
 }

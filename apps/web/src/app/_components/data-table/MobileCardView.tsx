@@ -27,7 +27,7 @@ import {
   isNarrowed,
 } from "./entity-empty-states";
 import { SectionHeader } from "./SectionHeader";
-import type { CubbyTable as ITable } from "./table-features";
+import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { useGroupedList } from "./useGroupedList";
 import {
@@ -71,9 +71,11 @@ function VirtualRow({
 
 interface MobileCardViewProps<TItem extends RowData> {
   table: ITable<TItem>;
+  onRowClick?: (row: Row<TItem>) => void;
   /** Entity type for navigation - when provided, cards show a view button */
   entity?: Entity;
   getDetailsHref?: (item: TItem) => string | undefined;
+  disableDetailsHref?: boolean;
   /** Infinite scroll controls — when provided, auto-loads more at bottom */
   infiniteScroll?: InfiniteScrollControls;
   /** Group configuration for section headers */
@@ -88,8 +90,10 @@ interface MobileCardViewProps<TItem extends RowData> {
 
 export function MobileCardView<TItem extends RowData>({
   table,
+  onRowClick,
   entity,
   getDetailsHref,
+  disableDetailsHref,
   infiniteScroll,
   groupConfig,
   grouped = false,
@@ -102,6 +106,7 @@ export function MobileCardView<TItem extends RowData>({
     table,
     entity,
     getDetailsHref,
+    disableDetailsHref,
     rowContentVersion,
   });
 
@@ -310,7 +315,9 @@ export function MobileCardView<TItem extends RowData>({
           // hitting a 20px checkbox instead of the row you're looking at.
           selectionMode
             ? () => row.toggleSelected(!row.getIsSelected())
-            : undefined
+            : !model.detailsHref && onRowClick
+              ? () => onRowClick(row)
+              : undefined
         }
       >
         {debugContent}

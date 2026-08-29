@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { shouldShowEnrichmentEmptyState } from "./enrichment-workbench";
+import {
+  canMarkAllSelectedNoUsda,
+  shouldShowEnrichmentEmptyState,
+} from "./enrichment-workbench";
+
+const markableRow = {
+  hasProduct: true,
+  hasUsdaLink: false,
+};
 
 describe("shouldShowEnrichmentEmptyState", () => {
   it("does not show success-empty copy when the query failed without cached rows", () => {
@@ -28,5 +36,27 @@ describe("shouldShowEnrichmentEmptyState", () => {
         rowCount: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("canMarkAllSelectedNoUsda", () => {
+  it("requires every selected ingredient to own an unlinked product", () => {
+    expect(canMarkAllSelectedNoUsda([markableRow])).toBe(true);
+    expect(
+      canMarkAllSelectedNoUsda([
+        markableRow,
+        { hasProduct: false, hasUsdaLink: false },
+      ]),
+    ).toBe(false);
+    expect(
+      canMarkAllSelectedNoUsda([
+        markableRow,
+        { hasProduct: true, hasUsdaLink: true },
+      ]),
+    ).toBe(false);
+  });
+
+  it("does not offer the action for an empty selection", () => {
+    expect(canMarkAllSelectedNoUsda([])).toBe(false);
   });
 });

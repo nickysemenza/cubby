@@ -1,15 +1,25 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity-core";
 import type {
+  McpUsageActivityOut,
   McpToolUsageStatus,
   McpUsageDashboardOut,
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
 import { ResponsiveBar } from "@nivo/bar";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { AlertTriangle } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
+import RTable from "~/app/_components/data-table/Table";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  useCubbyTable,
+} from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
+import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -17,14 +27,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import { mcp } from "~/lib/mcp.functions";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
 import { formatCount } from "~/lib/utils";
@@ -93,6 +95,23 @@ type ToolSort =
   | "periodCalls"
   | "lifetimeCalls"
   | "lastUsedAt";
+
+type ActivityRow = McpUsageActivityOut["entries"][number];
+
+const DEFAULT_TOOL_SORT = {
+  key: "periodCalls",
+  descending: true,
+} satisfies { key: ToolSort; descending: boolean };
+
+function isToolSort(value: string): value is ToolSort {
+  return (
+    value === "toolName" ||
+    value === "status" ||
+    value === "periodCalls" ||
+    value === "lifetimeCalls" ||
+    value === "lastUsedAt"
+  );
+}
 
 export function filterAndSortMcpTools(
   tools: ToolRow[],
@@ -282,6 +301,205 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
   );
 }
 
+function ToolRosterTable({
+  tools,
+  sort,
+  onSortChange,
+  selectedTool,
+  onSelectTool,
+  search,
+  additionalToolbarContent,
+}: {
+  tools: ToolRow[];
+  sort: { key: ToolSort; descending: boolean };
+  onSortChange: (next: { key: ToolSort; descending: boolean }) => void;
+  selectedTool: string | null;
+  onSelectTool: (toolName: string) => void;
+  search: string;
+  additionalToolbarContent: ReactNode;
+}) {
+  const helper = useMemo(() => createCubbyColumnHelper<ToolRow>(), []);
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ToolRow>((add) => {
+        add(
+          helper.accessor("toolName", {
+            header: "Tool",
+            size: 240,
+            meta: {
+              mono: true,
+              mobile: { slot: "title", priority: 0 },
+            },
+          }),
+        );
+        add(
+          helper.accessor("status", {
+            header: "Status",
+            size: 120,
+            meta: { mobile: { slot: "subtitle", priority: 0 } },
+            cell: ({ getValue }) => <StatusBadge status={getValue()} />,
+          }),
+        );
+        add(
+          helper.accessor("periodCalls", {
+            header: "Window",
+            size: 100,
+            meta: {
+              numeric: true,
+              mobile: { slot: "trailing", priority: 0 },
+            },
+            cell: ({ getValue }) => formatCount(getValue()),
+          }),
+        );
+        add(
+          helper.accessor("lifetimeCalls", {
+            header: "Lifetime",
+            size: 100,
+            meta: {
+              numeric: true,
+              mobile: { slot: "trailing", priority: 10 },
+            },
+            cell: ({ getValue }) => formatCount(getValue()),
+          }),
+        );
+        add(
+          helper.accessor(
+            (row) =>
+              row.periodCalls === 0
+                ? "—"
+                : `${((row.periodSuccesses / row.periodCalls) * 100).toFixed(1)}%`,
+            {
+              id: "success",
+              header: "Success",
+              size: 100,
+              enableSorting: false,
+              meta: { mobile: { slot: "meta", priority: 10 } },
+            },
+          ),
+        );
+        add(
+          helper.accessor("firstUsedAt", {
+            header: "First used",
+            size: 190,
+            enableSorting: false,
+            meta: { mobile: { slot: "meta", priority: 20 } },
+            cell: ({ getValue }) => formatDate(getValue()),
+          }),
+        );
+        add(
+          helper.accessor("lastUsedAt", {
+            header: "Last used",
+            size: 190,
+            sortDescFirst: true,
+            sortFn: (left, right, id) =>
+              (left.getValue<Date | null>(id)?.getTime() ?? 0) -
+              (right.getValue<Date | null>(id)?.getTime() ?? 0),
+            meta: { mobile: { slot: "meta", priority: 30 } },
+            cell: ({ getValue }) => formatDate(getValue()),
+          }),
+        );
+        add(
+          helper.accessor("lastRelease", {
+            header: "Release",
+            size: 120,
+            enableSorting: false,
+            meta: {
+              mono: true,
+              mobile: { slot: "meta", priority: 40 },
+            },
+            cell: ({ getValue }) => getValue()?.slice(0, 10) ?? "—",
+          }),
+        );
+        add(
+          helper.accessor((row) => row.users.length, {
+            id: "users",
+            header: "Users",
+            size: 90,
+            enableSorting: false,
+            meta: {
+              numeric: true,
+              mobile: { slot: "meta", priority: 50 },
+            },
+            cell: ({ getValue }) => getValue() || "—",
+          }),
+        );
+        add(
+          helper.accessor(
+            (row) =>
+              row.clients
+                .map((client) => client.name ?? client.id ?? "Unknown")
+                .join(", "),
+            {
+              id: "clients",
+              header: "Clients",
+              size: 220,
+              enableSorting: false,
+              meta: { mobile: { slot: "meta", priority: 60 } },
+              cell: ({ getValue }) => getValue() || "—",
+            },
+          ),
+        );
+      }),
+    [helper],
+  );
+  const layout = useCubbyTableLayout({
+    key: "mcp-usage-tools",
+    columns,
+    legacySizingKey: "mcp-usage-tools",
+  });
+  const sorting = useMemo<SortingState>(
+    () => [{ id: sort.key, desc: sort.descending }],
+    [sort],
+  );
+  const onSortingChange = useCallback<OnChangeFn<SortingState>>(
+    (updater) => {
+      // TanStack's controlled updater is a value-or-function by contract.
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      const active = next[0];
+      if (!active || !isToolSort(active.id)) {
+        onSortChange(DEFAULT_TOOL_SORT);
+        return;
+      }
+      onSortChange({
+        key: active.id,
+        descending: active.desc,
+      });
+    },
+    [onSortChange, sorting],
+  );
+  const table = useCubbyTable({
+    data: tools,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
+    getRowId: (row) => row.toolName,
+    manualFiltering: true,
+    manualSorting: true,
+    enableSortingRemoval: false,
+    enableRowSelection: false,
+    enableCellSelection: false,
+    state: { sorting },
+    onSortingChange,
+  });
+
+  return (
+    <RTable
+      table={table}
+      ariaLabel="MCP tool pruning worklist"
+      embedded
+      showColumnMenu
+      defaultDensity="compact"
+      additionalToolbarContent={additionalToolbarContent}
+      onRowClick={(row) => onSelectTool(row.original.toolName)}
+      currentRowId={selectedTool ?? undefined}
+      emptyState={
+        search ? "No tools match this search." : "No registered tools."
+      }
+    />
+  );
+}
+
 function ActivityTable({
   window,
   toolName,
@@ -291,12 +509,15 @@ function ActivityTable({
   toolName: string | null;
   entity: Entity | null;
 }) {
-  const activityScope = {
-    window,
-    toolName: toolName ?? undefined,
-    entity: entity ?? undefined,
-    limit: 25,
-  };
+  const activityScope = useMemo(
+    () => ({
+      window,
+      toolName: toolName ?? undefined,
+      entity: entity ?? undefined,
+      limit: 25,
+    }),
+    [entity, toolName, window],
+  );
   const query = useInfiniteQuery(
     mcp.usageActivity.infiniteQueryOptions(activityScope, {
       pageParamSchema: z.nullable(z.string()),
@@ -309,7 +530,139 @@ function ActivityTable({
       getNextPageParam: (page) => page.nextCursor ?? undefined,
     }),
   );
-  const entries = query.data?.pages.flatMap((page) => page.entries) ?? [];
+  const entries = useMemo(
+    () => query.data?.pages.flatMap((page) => page.entries) ?? [],
+    [query.data],
+  );
+  const helper = useMemo(() => createCubbyColumnHelper<ActivityRow>(), []);
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<ActivityRow>((add) => {
+        add(
+          helper.accessor("occurredAt", {
+            header: "Time",
+            size: 190,
+            enableSorting: false,
+            meta: {
+              mono: true,
+              mobile: { slot: "subtitle", priority: 0 },
+            },
+            cell: ({ getValue }) => formatDate(getValue()),
+          }),
+        );
+        add(
+          helper.accessor("toolName", {
+            header: "Tool",
+            size: 220,
+            enableSorting: false,
+            meta: {
+              mono: true,
+              mobile: { slot: "title", priority: 0 },
+            },
+          }),
+        );
+        add(
+          helper.accessor("entity", {
+            header: "Entity",
+            size: 130,
+            enableSorting: false,
+            meta: {
+              mono: true,
+              mobile: { slot: "meta", priority: 10 },
+            },
+            cell: ({ getValue }) => getValue() ?? "—",
+          }),
+        );
+        add(
+          helper.accessor("outcome", {
+            header: "Outcome",
+            size: 110,
+            enableSorting: false,
+            meta: { mobile: { slot: "trailing", priority: 0 } },
+            cell: ({ getValue }) => (
+              <Badge
+                variant={getValue() === "success" ? "outline" : "destructive"}
+              >
+                {getValue()}
+              </Badge>
+            ),
+          }),
+        );
+        add(
+          helper.accessor((row) => row.user.name ?? row.user.email, {
+            id: "user",
+            header: "User",
+            size: 190,
+            enableSorting: false,
+            meta: { mobile: { slot: "meta", priority: 20 } },
+          }),
+        );
+        add(
+          helper.accessor(
+            (row) => row.client.name ?? row.client.id ?? "Unknown",
+            {
+              id: "client",
+              header: "Client",
+              size: 170,
+              enableSorting: false,
+              meta: { mobile: { slot: "meta", priority: 30 } },
+            },
+          ),
+        );
+        add(
+          helper.accessor((row) => row.surface.replaceAll("_", " "), {
+            id: "surface",
+            header: "Surface",
+            size: 150,
+            enableSorting: false,
+            meta: { mobile: { slot: "meta", priority: 40 } },
+          }),
+        );
+        add(
+          helper.accessor("release", {
+            header: "Release",
+            size: 120,
+            enableSorting: false,
+            meta: {
+              mono: true,
+              mobile: { slot: "meta", priority: 50 },
+            },
+            cell: ({ getValue }) => getValue().slice(0, 10),
+          }),
+        );
+      }),
+    [helper],
+  );
+  const layout = useCubbyTableLayout({
+    key: "mcp-usage-activity",
+    columns,
+    legacySizingKey: "mcp-usage-activity",
+  });
+  const table = useCubbyTable({
+    data: entries,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
+    getRowId: (row) => row.id,
+    manualFiltering: true,
+    manualPagination: true,
+    enableSorting: false,
+    enableRowSelection: false,
+    enableCellSelection: false,
+  });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = query;
+  const infiniteScroll = useMemo<InfiniteScrollControls<ActivityRow>>(
+    () => ({
+      fetchNextPage: () => {
+        void fetchNextPage();
+      },
+      hasNextPage,
+      isFetchingNextPage,
+      isTransitioning: false,
+      loadAllPages: async () => entries,
+    }),
+    [entries, fetchNextPage, hasNextPage, isFetchingNextPage],
+  );
 
   return (
     <Card>
@@ -318,70 +671,19 @@ function ActivityTable({
           {toolName ? `Recent calls · ${toolName}` : "Global activity"}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 overflow-x-auto">
-        {query.isLoading ? (
-          <Spinner />
-        ) : query.error ? (
-          <Description className="text-destructive">
-            Failed to load activity: {query.error.message}
-          </Description>
-        ) : entries.length === 0 ? (
-          <Description>No captured calls.</Description>
-        ) : (
-          <Table className="table-auto">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Tool</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Outcome</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Surface</TableHead>
-                <TableHead>Release</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="whitespace-nowrap">
-                    {formatDate(entry.occurredAt)}
-                  </TableCell>
-                  <TableCell className="font-mono">{entry.toolName}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {entry.entity ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        entry.outcome === "success" ? "outline" : "destructive"
-                      }
-                    >
-                      {entry.outcome}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{entry.user.name ?? entry.user.email}</TableCell>
-                  <TableCell>
-                    {entry.client.name ?? entry.client.id ?? "Unknown"}
-                  </TableCell>
-                  <TableCell>{entry.surface.replaceAll("_", " ")}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {entry.release.slice(0, 10)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-        {query.hasNextPage ? (
-          <Button
-            variant="outline"
-            onClick={() => query.fetchNextPage()}
-            disabled={query.isFetchingNextPage}
-          >
-            {query.isFetchingNextPage ? "Loading…" : "Load more"}
-          </Button>
-        ) : null}
+      <CardContent className="space-y-4">
+        <RTable
+          table={table}
+          ariaLabel={
+            toolName ? `Recent calls for ${toolName}` : "Global activity"
+          }
+          embedded
+          showColumnMenu
+          isLoading={query.isLoading}
+          error={query.error}
+          infiniteScroll={infiniteScroll}
+          emptyState="No captured calls."
+        />
       </CardContent>
     </Card>
   );
@@ -396,7 +698,7 @@ export function McpUsageDashboard() {
   const [sort, setSort] = useState<{
     key: ToolSort;
     descending: boolean;
-  }>({ key: "periodCalls", descending: true });
+  }>(DEFAULT_TOOL_SORT);
   const query = useQuery(mcp.usageDashboard.queryOptions({ window }));
   const data = query.data;
   const tools = useMemo(() => {
@@ -464,120 +766,36 @@ export function McpUsageDashboard() {
         <CardHeader>
           <CardTitle>Tool pruning worklist</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 overflow-x-auto">
-          <div className="flex flex-wrap gap-2">
-            <Input
-              className="max-w-sm"
-              placeholder="Search tools…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            {(["all", "active", "inactive", "never", "retired"] as const).map(
-              (value) => (
-                <Button
-                  key={value}
-                  variant={status === value ? "secondary" : "outline"}
-                  onClick={() => setStatus(value)}
-                >
-                  {value}
-                </Button>
-              ),
-            )}
-          </div>
-          <Table className="table-auto">
-            <TableHeader>
-              <TableRow>
+        <CardContent className="space-y-4">
+          <ToolRosterTable
+            tools={tools}
+            sort={sort}
+            onSortChange={setSort}
+            selectedTool={selectedTool}
+            onSelectTool={setSelectedTool}
+            search={search}
+            additionalToolbarContent={
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  className="max-w-sm"
+                  placeholder="Search tools…"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
                 {(
-                  [
-                    ["toolName", "Tool"],
-                    ["status", "Status"],
-                    ["periodCalls", "Window"],
-                    ["lifetimeCalls", "Lifetime"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <TableHead key={key}>
-                    <button
-                      type="button"
-                      className="font-medium"
-                      onClick={() =>
-                        setSort((current) => ({
-                          key,
-                          descending:
-                            current.key === key ? !current.descending : false,
-                        }))
-                      }
-                    >
-                      {label}
-                      {sort.key === key ? (sort.descending ? " ↓" : " ↑") : ""}
-                    </button>
-                  </TableHead>
-                ))}
-                <TableHead>Success</TableHead>
-                <TableHead>First used</TableHead>
-                <TableHead>
-                  <button
-                    type="button"
-                    className="font-medium"
-                    onClick={() =>
-                      setSort((current) => ({
-                        key: "lastUsedAt",
-                        descending:
-                          current.key === "lastUsedAt"
-                            ? !current.descending
-                            : true,
-                      }))
-                    }
+                  ["all", "active", "inactive", "never", "retired"] as const
+                ).map((value) => (
+                  <Button
+                    key={value}
+                    variant={status === value ? "secondary" : "outline"}
+                    onClick={() => setStatus(value)}
                   >
-                    Last used
-                    {sort.key === "lastUsedAt"
-                      ? sort.descending
-                        ? " ↓"
-                        : " ↑"
-                      : ""}
-                  </button>
-                </TableHead>
-                <TableHead>Release</TableHead>
-                <TableHead>Users</TableHead>
-                <TableHead>Clients</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tools.map((tool) => (
-                <TableRow
-                  key={tool.toolName}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedTool(tool.toolName)}
-                >
-                  <TableCell className="font-mono">{tool.toolName}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={tool.status} />
-                  </TableCell>
-                  <TableCell>{formatCount(tool.periodCalls)}</TableCell>
-                  <TableCell>{formatCount(tool.lifetimeCalls)}</TableCell>
-                  <TableCell>
-                    {tool.periodCalls === 0
-                      ? "—"
-                      : `${((tool.periodSuccesses / tool.periodCalls) * 100).toFixed(1)}%`}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {formatDate(tool.firstUsedAt)}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {formatDate(tool.lastUsedAt)}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {tool.lastRelease?.slice(0, 10) ?? "—"}
-                  </TableCell>
-                  <TableCell>{tool.users.length || "—"}</TableCell>
-                  <TableCell>
-                    {tool.clients
-                      .map((client) => client.name ?? client.id ?? "Unknown")
-                      .join(", ") || "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    {value}
+                  </Button>
+                ))}
+              </div>
+            }
+          />
         </CardContent>
       </Card>
 

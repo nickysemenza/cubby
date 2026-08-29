@@ -1,6 +1,6 @@
 import { financialTransactionListResponse } from "@cubby/schemas/financial-transaction";
 import { render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entityListFor } from "~/entities/entity-list.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -11,38 +11,47 @@ import {
 } from "./linked-transactions";
 
 const transactionList = entityListFor("financialTransaction");
-const linkedTransactionResponse = financialTransactionListResponse.parse({
-  items: [
-    {
-      id: "FTX-2345",
-      accountId: "FAC-2345",
-      purchaseId: null,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      transactionDate: "2026-08-16",
-      postedDate: "2026-08-16",
-      merchant: "Neighborhood Market",
-      rawDescription: null,
-      sourceCategory: null,
-      sourceRefs: [],
-      notes: null,
-      allocations: [],
-      ledgerTransferId: null,
-      accountName: "Household Card",
-      createdAt: new Date("2026-08-16T00:00:00.000Z"),
-      updatedAt: new Date("2026-08-16T00:00:00.000Z"),
-    },
-  ],
-  meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
-});
 
-const operations: LinkedTransactionsOperations = {
-  list: (params) => ({
-    ...transactionList.queryOptions(params),
-    queryFn: async () => linkedTransactionResponse,
-  }),
-};
+function transactionResponse({
+  allocations = [],
+}: {
+  allocations?: Array<{ purchaseId: string; amount: number }>;
+} = {}) {
+  return financialTransactionListResponse.parse({
+    items: [
+      {
+        id: "FTX-2345",
+        accountId: "FAC-2345",
+        purchaseId: null,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        transactionDate: "2026-08-16",
+        postedDate: "2026-08-16",
+        merchant: "Neighborhood Market",
+        rawDescription: null,
+        sourceCategory: null,
+        sourceRefs: [],
+        notes: null,
+        allocations,
+        ledgerTransferId: null,
+        accountName: "Household Card",
+        createdAt: new Date("2026-08-16T00:00:00.000Z"),
+        updatedAt: new Date("2026-08-16T00:00:00.000Z"),
+      },
+    ],
+    meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+  });
+}
+
+function operationsFor(response: ReturnType<typeof transactionResponse>) {
+  return {
+    list: (params) => ({
+      ...transactionList.listQueryPlan(params),
+      execute: async () => response,
+    }),
+  } satisfies LinkedTransactionsOperations;
+}
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -55,20 +64,18 @@ afterEach(() => {
 });
 
 describe("LinkedTransactions", () => {
-  it("keeps every fixed-layout column readable and renders shared status labels", async () => {
-    render(
-      <LinkedTransactions accountId="FAC-2345" operations={operations} />,
-      {
-        wrapper: harness.wrapper,
-      },
-    );
+  it("uses the embedded list contract and omits redundant account context", async () => {
+    const operations = operationsFor(transactionResponse());
+    const list = vi.fn(operations.list);
+    render(<LinkedTransactions accountId="FAC-2345" operations={{ list }} />, {
+      wrapper: harness.wrapper,
+    });
 
     expect(
       await screen.findByRole("columnheader", { name: "Transaction" }),
     ).toHaveClass("w-40");
-    expect(screen.getByRole("columnheader", { name: "Account" })).toHaveClass(
-      "w-32",
-    );
+    expect(screen.queryByRole("columnheader", { name: "Account" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Vendor" })).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Status" })).toHaveClass(
       "w-24",
     );
@@ -80,7 +87,7 @@ describe("LinkedTransactions", () => {
       "text-right",
     );
 
-    const transactionLink = screen.getByRole("link", {
+    const transactionLink = await screen.findByRole("link", {
       name: "Neighborhood Market",
     });
     expect(transactionLink).toHaveAttribute(
@@ -89,13 +96,41 @@ describe("LinkedTransactions", () => {
     );
     expect(transactionLink).toHaveClass("block", "truncate");
     expect(transactionLink).toHaveAttribute("title", "Neighborhood Market");
-
-    const accountLink = screen.getByRole("link", { name: "Household Card" });
-    expect(accountLink).toHaveAttribute("href", "/financial-accounts/FAC-2345");
     const row = transactionLink.closest("tr");
-    if (!row) throw new Error("Expected transaction row");
-    const statusCell = within(row).getAllByRole("cell")[2];
+    expect(row).not.toBeNull();
+    const statusCell = within(row!).getAllByRole("cell")[1];
     expect(statusCell).toHaveTextContent("Posted");
     expect(statusCell).not.toHaveTextContent(/^posted$/);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sort: [{ orderBy: "postedDate", direction: "desc" }],
+      }),
+    );
+  });
+
+  it("keeps account comparison and the allocated purchase slice", async () => {
+    render(
+      <LinkedTransactions
+        purchaseId="PUR-2345"
+        operations={operationsFor(
+          transactionResponse({
+            allocations: [
+              { purchaseId: "PUR-2345", amount: 20 },
+              { purchaseId: "PUR-9999", amount: 22.5 },
+            ],
+          }),
+        )}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByRole("columnheader", { name: "Account" }),
+    ).toHaveClass("w-32");
+    expect(
+      await screen.findByRole("link", { name: "Household Card" }),
+    ).toHaveAttribute("href", "/financial-accounts/FAC-2345");
+    expect(screen.getByText("$20.00")).toBeInTheDocument();
+    expect(screen.getByText("of $42.50")).toBeInTheDocument();
   });
 });

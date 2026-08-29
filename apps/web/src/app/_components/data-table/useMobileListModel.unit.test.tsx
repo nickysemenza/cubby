@@ -94,4 +94,35 @@ describe("useMobileListModel", () => {
 
     expect(result.current[0]?.detailsHref).toBe("/products/PRD-TWO");
   });
+
+  it("suppresses implicit entity routes for specialist mobile interactions", () => {
+    const column = {
+      id: "name",
+      columnDef: { header: "Name", cell: () => "Ingredient" },
+      accessorFn: () => "Ingredient",
+    };
+    const table = fromPartial<Table<TestRow>>({
+      getVisibleLeafColumns: () => [column],
+      getRowModel: () => ({
+        rows: [
+          {
+            id: "ING-ONE",
+            original: { id: "ING-ONE", name: "Ingredient" },
+            getVisibleCells: () => [],
+          },
+        ],
+      }),
+    });
+
+    const { result } = renderHook(() =>
+      useMobileListModel({
+        table,
+        entity: "ingredient",
+        getDetailsHref: () => "/ingredients/ING-ONE",
+        disableDetailsHref: true,
+      }),
+    );
+
+    expect(result.current[0]?.detailsHref).toBeUndefined();
+  });
 });

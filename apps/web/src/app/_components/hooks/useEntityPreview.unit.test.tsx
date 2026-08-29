@@ -330,6 +330,24 @@ describe("useEntityPreview intent prefetch", () => {
     expect(screen.queryByTestId("workbench-inspector")).not.toBeInTheDocument();
   });
 
+  it("lets a specialist workbench opt into its custom inspector on mobile", () => {
+    const { result } = renderPreviewHook("ingredient", {
+      responsiveInspector: true,
+      mobileBehavior: "sheet",
+    });
+
+    act(() => result.current.inspectRow(row("ING-4K7M")));
+    render(<result.current.PreviewSheet />);
+
+    expect(browserOperations.navigations).toEqual([]);
+    expect(screen.getByRole("dialog")).toContainElement(
+      screen.getByTestId("workbench-inspector"),
+    );
+    expect(screen.getByTestId("workbench-inspector")).toHaveTextContent(
+      "ingredient:ING-4K7M",
+    );
+  });
+
   it("moves an open preview between dock and Sheet when the viewport changes", () => {
     presentationPort.set("dock");
     const { result } = renderPreviewHook("product", {

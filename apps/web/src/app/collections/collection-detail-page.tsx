@@ -1,16 +1,29 @@
-import type { CollectionSlug } from "@cubby/schemas/collection";
+import type {
+  CollectionProductOut,
+  CollectionSlug,
+} from "@cubby/schemas/collection";
 import { formatCollectionLabel } from "@cubby/shared/collection-tag";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
-  ChevronLeft,
-  ChevronRight,
-  MapPin,
-  PackageSearch,
-  Search,
-} from "lucide-react";
-import { useId } from "react";
+  functionalUpdate,
+  type OnChangeFn,
+  type PaginationState,
+} from "@tanstack/react-table";
+import { MapPin, PackageSearch, Search } from "lucide-react";
+import { useCallback, useId, useMemo } from "react";
 
+import {
+  createImageColumn,
+  createNameColumn,
+} from "~/app/_components/data-table/columnHelpers";
+import RTable from "~/app/_components/data-table/Table";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  useCubbyTable,
+} from "~/app/_components/data-table/table-features";
+import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -27,6 +40,214 @@ import {
 import { collection as collectionOperations } from "./collection.functions";
 
 const PAGE_SIZE = 50;
+const PRODUCT_TABLE_LAYOUT_KEY = "collection:detail-products";
+const productColumnHelper = createCubbyColumnHelper<CollectionProductOut>();
+
+export type CollectionDetailOperations = Pick<
+  typeof collectionOperations,
+  "detail"
+>;
+
+function CollectionMembership({
+  direct,
+  inherited,
+}: Pick<CollectionProductOut, "direct" | "inherited">) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {direct && <Badge variant="outline">Direct</Badge>}
+      {inherited && <Badge variant="secondary">From location</Badge>}
+    </div>
+  );
+}
+
+function CollectionProductsTable({
+  products,
+  totalCount,
+  search,
+  page,
+  onSearchChange,
+}: {
+  products: CollectionProductOut[];
+  totalCount: number;
+  search?: string;
+  page: number;
+  onSearchChange: (next: { q?: string; page?: number }) => void;
+}) {
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<CollectionProductOut>((add) => {
+        add(
+          createImageColumn(productColumnHelper, {
+            entity: "product",
+            getImages: (product) =>
+              product.imageUrl
+                ? [{ id: product.id, url: product.imageUrl }]
+                : [],
+          }),
+        );
+        add(
+          createNameColumn(productColumnHelper, "product", "name", {
+            header: "Product",
+            nameSuffix: (product) => <CopyableShortcode code={product.id} />,
+          }),
+        );
+        add(
+          productColumnHelper.accessor("manufacturer", {
+            header: "Manufacturer",
+            enableSorting: false,
+            meta: {
+              className: "w-40",
+              mobile: { slot: "subtitle", priority: 10 },
+            },
+            cell: (info) => (
+              <span className="truncate text-muted-foreground">
+                {info.getValue()}
+              </span>
+            ),
+          }),
+        );
+        add(
+          productColumnHelper.display({
+            id: "membership",
+            header: "Membership",
+            enableSorting: false,
+            enableCellSelection: false,
+            meta: {
+              className: "w-32",
+              mobile: { slot: "meta", priority: 20, label: "Membership" },
+            },
+            cell: ({ row }) => <CollectionMembership {...row.original} />,
+          }),
+        );
+        add(
+          productColumnHelper.display({
+            id: "placements",
+            header: "Current locations",
+            enableSorting: false,
+            enableCellSelection: false,
+            meta: {
+              className: "w-36",
+              mobile: {
+                slot: "meta",
+                priority: 30,
+                label: "Locations",
+                interactive: true,
+              },
+            },
+            cell: ({ row }) => (
+              <ProductPlacementsPopover placements={row.original.placements} />
+            ),
+          }),
+        );
+        add(
+          productColumnHelper.display({
+            id: "purchases",
+            header: "Purchase history",
+            enableSorting: false,
+            enableCellSelection: false,
+            meta: {
+              className: "w-44",
+              mobile: {
+                slot: "meta",
+                priority: 40,
+                label: "Purchases",
+                interactive: true,
+              },
+            },
+            cell: ({ row }) => (
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <ProductPurchasesPopover purchases={row.original.purchases} />
+                <ProductTradeBadges purchases={row.original.purchases} />
+              </div>
+            ),
+          }),
+        );
+      }),
+    [],
+  );
+  const layout = useCubbyTableLayout({
+    key: PRODUCT_TABLE_LAYOUT_KEY,
+    columns,
+  });
+  const pagination = useMemo<PaginationState>(
+    () => ({ pageIndex: page - 1, pageSize: PAGE_SIZE }),
+    [page],
+  );
+  const onPaginationChange = useCallback<OnChangeFn<PaginationState>>(
+    (updater) => {
+      const next = functionalUpdate(updater, pagination);
+      if (next.pageIndex === pagination.pageIndex) return;
+      onSearchChange({ page: next.pageIndex + 1 });
+    },
+    [onSearchChange, pagination],
+  );
+  const table = useCubbyTable({
+    data: products,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    getRowId: (product) => product.id,
+    enableSorting: false,
+    enableRowSelection: false,
+    enableCellSelection: false,
+    manualFiltering: true,
+    manualPagination: true,
+    rowCount: totalCount,
+    state: { pagination },
+    onPaginationChange,
+    meta: {
+      defaultLayout: layout.defaultLayout,
+      scrollRestorationId: PRODUCT_TABLE_LAYOUT_KEY,
+    },
+  });
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalCount);
+  const toolbar = (
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <div className="relative min-w-52 flex-1 sm:max-w-72">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          type="search"
+          className="h-7 pl-7"
+          value={search ?? ""}
+          onChange={(event) =>
+            onSearchChange({ q: event.target.value || undefined, page: 1 })
+          }
+          placeholder="Search name or manufacturer"
+          aria-label="Search products"
+        />
+      </div>
+      <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
+        {rangeStart}–{rangeEnd} of {totalCount}
+      </span>
+    </div>
+  );
+
+  return (
+    <RTable
+      table={table}
+      ariaLabel="Collection products"
+      embedded
+      showColumnMenu
+      additionalToolbarContent={toolbar}
+      getMobileDetailsHref={(product) => `/products/${product.id}`}
+      emptyState={
+        <div className="py-6 text-center">
+          <PackageSearch
+            className="mx-auto size-5 text-muted-foreground"
+            aria-hidden
+          />
+          <p className="mt-2 font-medium">No matching products</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Try a product name or manufacturer.
+          </p>
+        </div>
+      }
+    />
+  );
+}
 
 function CollectionDetailLoading() {
   return (
@@ -51,16 +272,19 @@ export function CollectionDetailPage({
   search,
   page,
   onSearchChange,
+  operations = collectionOperations,
 }: {
   collection: CollectionSlug;
   search?: string;
   page: number;
   onSearchChange: (next: { q?: string; page?: number }) => void;
+  /** Remote Collection operations; production uses the shared catalog. */
+  operations?: CollectionDetailOperations;
 }) {
   const rootsHeadingId = useId();
   const productsHeadingId = useId();
   const result = useQuery(
-    collectionOperations.detail.queryOptions({
+    operations.detail.queryOptions({
       collection,
       search,
       pagination: { pageIndex: page - 1, pageSize: PAGE_SIZE },
@@ -68,9 +292,6 @@ export function CollectionDetailPage({
   );
   const data = result.data;
   const totalCount = data?.totalCount ?? 0;
-  const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(page * PAGE_SIZE, totalCount);
 
   if (result.isLoading) return <CollectionDetailLoading />;
   if (result.error)
@@ -102,6 +323,7 @@ export function CollectionDetailPage({
         <Button
           variant="outline"
           size="sm"
+          nativeButton={false}
           render={<Link to="/collections/assignments" />}
         >
           Manage assignments
@@ -174,174 +396,22 @@ export function CollectionDetailPage({
       </section>
 
       <section aria-labelledby={productsHeadingId}>
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 id={productsHeadingId} className="text-sm font-semibold">
-              {formatCollectionLabel(collection)} products
-            </h2>
-            <p className="mt-1 font-mono text-2xs text-muted-foreground tabular-nums">
-              Showing {rangeStart}–{rangeEnd} of {totalCount}
-            </p>
-          </div>
-          <div className="relative w-full sm:w-72">
-            <Search
-              className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              type="search"
-              className="pl-8"
-              value={search ?? ""}
-              onChange={(event) =>
-                onSearchChange({ q: event.target.value || undefined, page: 1 })
-              }
-              placeholder="Search name or manufacturer"
-              aria-label="Search products"
-            />
-          </div>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h2 id={productsHeadingId} className="text-sm font-semibold">
+            {formatCollectionLabel(collection)} products
+          </h2>
+          <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+            {totalCount} total
+          </span>
         </div>
 
-        {data.products.length ? (
-          <div className="border-y border-border">
-            <div className="hidden grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] items-center gap-x-2 border-b border-border bg-card px-2 py-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase lg:grid">
-              <span aria-hidden />
-              <span>Product</span>
-              <span>Current locations</span>
-              <span>Purchase history</span>
-            </div>
-            <div>
-              {data.products.map((product) => (
-                <article
-                  key={product.id}
-                  className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-x-2 gap-y-2 border-b border-border p-2 transition-colors last:border-b-0 odd:bg-card hover:bg-muted/30 lg:grid-cols-[3.5rem_minmax(12rem,0.85fr)_minmax(14rem,1.15fr)_minmax(10rem,0.8fr)] lg:items-center"
-                >
-                  <EntityCover
-                    images={
-                      product.imageUrl
-                        ? [{ id: product.id, url: product.imageUrl }]
-                        : []
-                    }
-                    entity="product"
-                    alt={`${product.name} cover`}
-                    size={56}
-                    preview
-                    lazyPreview
-                    className="border border-border bg-card"
-                  />
-
-                  <div className="min-w-0 self-center">
-                    <Link
-                      to="/products/$shortcode"
-                      params={{ shortcode: product.id }}
-                      title={product.name}
-                      className="line-clamp-2 leading-tight font-medium hover:text-primary hover:underline"
-                    >
-                      {product.name}
-                    </Link>
-                    {product.manufacturer && (
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {product.manufacturer}
-                      </p>
-                    )}
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      <CopyableShortcode code={product.id} />
-                      {product.direct && (
-                        <Badge variant="outline">Direct</Badge>
-                      )}
-                      {product.inherited && (
-                        <Badge variant="secondary">From location</Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-start-2 min-w-0 lg:col-start-auto">
-                    <p className="mb-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase lg:sr-only">
-                      Current locations
-                    </p>
-                    {product.placements.length ? (
-                      <div className="flex flex-col items-start gap-1">
-                        {product.placements.slice(0, 2).map((placement) => (
-                          <Link
-                            key={placement.id}
-                            to="/locations/$shortcode"
-                            params={{ shortcode: placement.id }}
-                            title={placement.path.join(" / ")}
-                            className="inline-flex min-w-0 items-center gap-1 text-xs hover:text-primary hover:underline"
-                          >
-                            <MapPin
-                              className="size-3 shrink-0 text-muted-foreground"
-                              aria-hidden
-                            />
-                            <span className="line-clamp-1">
-                              {placement.path.join(" / ")}
-                            </span>
-                          </Link>
-                        ))}
-                        {product.placements.length > 2 && (
-                          <ProductPlacementsPopover
-                            placements={product.placements}
-                          />
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Not currently placed
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="col-start-2 min-w-0 lg:col-start-auto">
-                    <p className="mb-1 font-mono text-2xs tracking-wider text-muted-foreground uppercase lg:sr-only">
-                      Purchase history
-                    </p>
-                    <ProductPurchasesPopover purchases={product.purchases} />
-                    <ProductTradeBadges
-                      purchases={product.purchases}
-                      className="mt-2"
-                    />
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="border-y border-border py-6 text-center">
-            <PackageSearch
-              className="mx-auto size-5 text-muted-foreground"
-              aria-hidden
-            />
-            <p className="mt-2 font-medium">No matching products</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Try a product name or manufacturer.
-            </p>
-          </div>
-        )}
-
-        {pageCount > 1 && (
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Previous page"
-              disabled={page <= 1}
-              onClick={() => onSearchChange({ page: page - 1 })}
-            >
-              <ChevronLeft />
-            </Button>
-            <span className="font-mono text-2xs tabular-nums">
-              {page} / {pageCount}
-            </span>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Next page"
-              disabled={page >= pageCount}
-              onClick={() => onSearchChange({ page: page + 1 })}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-        )}
+        <CollectionProductsTable
+          products={data.products}
+          totalCount={totalCount}
+          search={search}
+          page={page}
+          onSearchChange={onSearchChange}
+        />
       </section>
     </Stack>
   );

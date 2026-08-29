@@ -20,11 +20,9 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { presenceCellOptions } from "~/lib/select-options";
-import { formatCurrency } from "~/lib/utils";
 
 import {
   createFilterableSelectColumn,
-  createPlainDateColumn,
   createTextColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
@@ -33,9 +31,13 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { TableLink } from "../_components/table/TableLink";
 import {
-  financialTransactionKindOptions,
-  financialTransactionStatusOptions,
-} from "./financial-transaction-kind-options";
+  createFinancialTransactionAccountColumn,
+  createFinancialTransactionAmountColumn,
+  createFinancialTransactionIdentityColumn,
+  createFinancialTransactionPostedDateColumn,
+  createFinancialTransactionStatusColumn,
+} from "./financial-transaction-columns";
+import { financialTransactionKindOptions } from "./financial-transaction-kind-options";
 import { PossibleVendor } from "./possible-vendor";
 
 const PURCHASE_PRESENCE_OPTIONS = presenceCellOptions("purchase");
@@ -87,37 +89,8 @@ export function FinancialTransactionList() {
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<FinancialTransactionOut>((add) => {
-        add(
-          helper.accessor((r) => r.merchant || r.rawDescription || r.id, {
-            id: "transaction",
-            header: "Transaction",
-            meta: { className: "w-64", mobile: { slot: "title", priority: 0 } },
-            cell: (i) => (
-              <TableLink
-                to={entities.financialTransaction.routes.detail}
-                params={entityDetailParams(i.row.original.id)}
-                className="block truncate"
-              >
-                {i.getValue()}
-              </TableLink>
-            ),
-          }),
-        );
-        add(
-          helper.accessor("accountId", {
-            header: "Account",
-            meta: { className: "w-40" },
-            cell: (i) => (
-              <TableLink
-                to={entities.financialAccount.routes.detail}
-                params={entityDetailParams(i.getValue())}
-                className="block truncate"
-              >
-                {i.row.original.accountName ?? i.getValue()}
-              </TableLink>
-            ),
-          }),
-        );
+        add(createFinancialTransactionIdentityColumn(helper));
+        add(createFinancialTransactionAccountColumn(helper));
         // Through the factory, not a bare accessor: these were `createTextColumn`,
         // which wires `meta.cellData` unconditionally, so hand-rolling the cell
         // dropped them out of the range copy/paste engine (which reads cellData,
@@ -133,26 +106,8 @@ export function FinancialTransactionList() {
             filterConfig: null,
           }),
         );
-        add(
-          createFilterableSelectColumn(helper, "status", {
-            header: "Status",
-            className: "w-24",
-            placeholder: "Filter by status...",
-            selectOptions: financialTransactionStatusOptions,
-            filterConfig: null,
-          }),
-        );
-        add(
-          helper.accessor("amount", {
-            header: "Amount",
-            meta: {
-              numeric: true,
-              className: "w-28",
-              mobile: { slot: "trailing", priority: 1 },
-            },
-            cell: (i) => formatCurrency(i.getValue()),
-          }),
-        );
+        add(createFinancialTransactionStatusColumn(helper));
+        add(createFinancialTransactionAmountColumn(helper));
         add(
           helper.accessor("purchaseId", {
             header: "Purchase",
@@ -173,7 +128,7 @@ export function FinancialTransactionList() {
             },
           }),
         );
-        add(createPlainDateColumn(helper, "postedDate", { header: "Posted" }));
+        add(createFinancialTransactionPostedDateColumn(helper));
         // Hidden by default: these exist so `purchasePresence`, `merchant` and
         // `source` are column-backed specs rather than URL-only ones. A urlOnly
         // spec can never round-trip through a header control — see

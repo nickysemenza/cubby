@@ -159,6 +159,14 @@ const inventoryMobileRowSchema = z.object({
 });
 
 const mobileRouteRowSchema = z.object({ id: z.string().optional() });
+const mobileTitleSchema = z.string().trim().min(1);
+
+function mobileTitleText(rendered: ReactNode, rawValue: CellData) {
+  const renderedTitle = mobileTitleSchema.safeParse(rendered);
+  if (renderedTitle.success) return renderedTitle.data;
+  const accessorTitle = mobileTitleSchema.safeParse(rawValue);
+  return accessorTitle.success ? accessorTitle.data : undefined;
+}
 
 /** Whether a row carries a real image, vs. the cell's placeholder glyph. */
 function rowHasImage(original: RowData): boolean {
@@ -248,7 +256,9 @@ function collectMobileSlots<TItem extends RowData>(
       continue;
     }
     if (slot === "title") {
-      if (isTextNode(rendered) && rendered.trim().length > 0) title = rendered;
+      // Linked desktop identities render a component, but their accessor is
+      // still the authoritative plain-text label for the mobile card.
+      title = mobileTitleText(rendered, cell.getValue()) ?? title;
       continue;
     }
 
@@ -324,20 +334,26 @@ export function useMobileListModel<TItem extends RowData>({
   table,
   entity,
   getDetailsHref,
+  disableDetailsHref,
   rowContentVersion,
 }: {
   table: ITable<TItem>;
   entity?: Entity;
   /** Per-row canonical route for heterogeneous rosters. */
   getDetailsHref?: (item: TItem) => string | undefined;
+  /** Suppress both canonical and per-row links for specialist interactions. */
+  disableDetailsHref?: boolean;
   /** External cell-render state snapshot; see useTableConfig. */
   rowContentVersion?: unknown;
 }): MobileListRowModel<TItem>[] {
   const rows = table.getRowModel().rows;
   const basePath =
-    entity && isBrowserRoutedEntity(entity)
+    !disableDetailsHref && entity && isBrowserRoutedEntity(entity)
       ? entities[entity].basePath
       : undefined;
+  const resolvedGetDetailsHref = disableDetailsHref
+    ? undefined
+    : getDetailsHref;
   // Per-list, not per-row: see `MobileListRowModel.reserveImageSlot`.
   const reserveImageSlot = mobileListLayout(table).hasImage;
 
@@ -351,14 +367,14 @@ export function useMobileListModel<TItem extends RowData>({
         row,
         entity,
         basePath,
-        getDetailsHref,
+        getDetailsHref: resolvedGetDetailsHref,
         reserveImageSlot,
       }),
     );
   }, [
     basePath,
     entity,
-    getDetailsHref,
+    resolvedGetDetailsHref,
     reserveImageSlot,
     rowContentVersion,
     rows,

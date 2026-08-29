@@ -139,7 +139,9 @@ export interface RTableProps<TItem extends RowData> {
   actionDialogs?: ReactNode;
   /** Canonical mobile destination for rows whose entity type varies by row. */
   getMobileDetailsHref?: (item: TItem) => string | undefined;
-  /** Callback when a row is clicked */
+  /** Suppress implicit entity links when cards use a specialist row interaction. */
+  disableMobileDetailsHref?: boolean;
+  /** Callback when a row is clicked in either the desktop table or mobile card. */
   onRowClick?: (row: Row<TItem>) => void;
   /**
    * Record presently shown in the desktop inspector. This intentionally stays
@@ -862,6 +864,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     timing,
     entity,
     getMobileDetailsHref,
+    disableMobileDetailsHref,
     onRowClick,
     currentRowId,
     defaultDensity,
@@ -1141,6 +1144,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           table={table}
           entity={entity}
           getDetailsHref={getMobileDetailsHref}
+          disableDetailsHref={disableMobileDetailsHref}
+          onRowClick={onRowClick}
           additionalToolbarContent={additionalToolbarContent}
           actions={actions}
           bulkActionBar={bulkActionBar}
