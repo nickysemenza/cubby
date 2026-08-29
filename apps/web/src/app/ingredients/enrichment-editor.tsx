@@ -289,7 +289,13 @@ export interface EnrichmentEditorHandle {
   save: () => void;
 }
 
-type EnrichmentEditorLayout = "side" | "compact";
+export type EnrichmentEditorLayout = "side" | "compact" | "panel";
+
+const livePanelsClassName = (layout: EnrichmentEditorLayout) => {
+  if (layout === "compact") return "w-full lg:w-auto";
+  if (layout === "panel") return "w-full";
+  return undefined;
+};
 
 const conversionHintForGaps = (gaps: ReturnType<typeof analyzeGaps>) => {
   if (gaps.priceIslanded) {
@@ -330,6 +336,15 @@ function EnrichmentEditorBody({
         </Stack>
         <div className="min-w-0">{livePanels}</div>
       </div>
+    );
+  }
+  if (layout === "panel") {
+    return (
+      <Stack>
+        <Stack className="min-w-0">{editorFields}</Stack>
+        <div className="min-w-0">{livePanels}</div>
+        {footer}
+      </Stack>
     );
   }
   return (
@@ -596,7 +611,7 @@ export function EnrichmentEditor({
       naKinds={naKinds}
       onToggleNa={toggleNaKind}
       naDisabled={updateIngredient.isPending}
-      className={layout === "compact" ? "w-full lg:w-auto" : undefined}
+      className={livePanelsClassName(layout)}
     />
   );
 

@@ -46,4 +46,39 @@ describe("MCP pruning worklist derivation", () => {
 
     expect(result.map((row) => row.toolName)).toEqual(["search_products"]);
   });
+
+  it("keeps the roster sort keys and directions deterministic", () => {
+    const rows = [tool("zeta", "inactive", 2), tool("alpha", "active", 5)];
+    rows[0]!.lastUsedAt = new Date("2024-01-01T00:00:00Z");
+    rows[1]!.lastUsedAt = new Date("2024-02-01T00:00:00Z");
+
+    expect(
+      filterAndSortMcpTools(
+        rows,
+        { search: "", status: "all" },
+        { key: "toolName", descending: false },
+      ).map((row) => row.toolName),
+    ).toEqual(["alpha", "zeta"]);
+    expect(
+      filterAndSortMcpTools(
+        rows,
+        { search: "", status: "all" },
+        { key: "status", descending: false },
+      ).map((row) => row.toolName),
+    ).toEqual(["alpha", "zeta"]);
+    expect(
+      filterAndSortMcpTools(
+        rows,
+        { search: "", status: "all" },
+        { key: "periodCalls", descending: true },
+      ).map((row) => row.toolName),
+    ).toEqual(["alpha", "zeta"]);
+    expect(
+      filterAndSortMcpTools(
+        rows,
+        { search: "", status: "all" },
+        { key: "lastUsedAt", descending: true },
+      ).map((row) => row.toolName),
+    ).toEqual(["alpha", "zeta"]);
+  });
 });

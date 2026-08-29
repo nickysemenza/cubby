@@ -110,6 +110,12 @@ export interface UseEntityPreviewOptions {
    */
   responsiveInspector?: boolean;
   /**
+   * Responsive inspectors normally preserve the canonical phone-detail
+   * contract. Specialist workbenches without a complete detail destination
+   * may opt into rendering their custom inspector in the same Sheet on phones.
+   */
+  mobileBehavior?: "navigate" | "sheet";
+  /**
    * Product owns a denser, relationship-aware inspector. The responsive
    * presentation still belongs here so it follows the same selection and
    * close/reopen behavior as every other top-level list.
@@ -182,6 +188,7 @@ export function useEntityPreview(
   );
   const idField = options?.idField ?? "id";
   const responsiveInspector = options?.responsiveInspector ?? false;
+  const mobileBehavior = options?.mobileBehavior ?? "navigate";
   const renderInspector = options?.renderInspector ?? renderDefaultInspector;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -289,7 +296,11 @@ export function useEntityPreview(
       const resolved = resolveRow(row);
       if (!resolved || !isBrowserRoutedEntity(resolved.entityType)) return;
 
-      if (responsiveInspector && presentation === "mobile") {
+      if (
+        responsiveInspector &&
+        presentation === "mobile" &&
+        mobileBehavior === "navigate"
+      ) {
         void browserOperations.navigateToDetail(
           resolved.entityType,
           resolved.id,
@@ -300,7 +311,13 @@ export function useEntityPreview(
       setPreview(resolved);
       setInspectorOpen(true);
     },
-    [browserOperations, presentation, resolveRow, responsiveInspector],
+    [
+      browserOperations,
+      mobileBehavior,
+      presentation,
+      resolveRow,
+      responsiveInspector,
+    ],
   );
 
   const onRowHover = useCallback(
@@ -377,7 +394,10 @@ export function useEntityPreview(
     () => (
       <PreviewSheetView
         preview={
-          (!responsiveInspector || presentation === "sheet") && isInspectorOpen
+          (!responsiveInspector ||
+            presentation === "sheet" ||
+            (presentation === "mobile" && mobileBehavior === "sheet")) &&
+          isInspectorOpen
             ? preview
             : null
         }
@@ -387,6 +407,7 @@ export function useEntityPreview(
     ),
     [
       responsiveInspector,
+      mobileBehavior,
       presentation,
       isInspectorOpen,
       preview,

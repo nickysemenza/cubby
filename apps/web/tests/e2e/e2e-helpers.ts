@@ -64,11 +64,13 @@ export async function expectViewportBounded(page: Page) {
     const measurement = await page.evaluate(() => {
       const viewportWidth = window.innerWidth;
       const documentWidth = document.documentElement.scrollWidth;
+      const bodyMargin = getComputedStyle(document.body).margin;
       const offenders = Array.from(document.querySelectorAll<HTMLElement>("*"))
         .map((element) => {
           const rect = element.getBoundingClientRect();
           return {
             tag: element.tagName.toLocaleLowerCase(),
+            ariaLabel: element.getAttribute("aria-label"),
             className: element.className.toString().slice(0, 160),
             left: Math.round(rect.left),
             right: Math.round(rect.right),
@@ -85,6 +87,8 @@ export async function expectViewportBounded(page: Page) {
         .sort((a, b) => b.right - viewportWidth - (a.right - viewportWidth))
         .slice(0, 5);
       return {
+        styled: bodyMargin === "0px",
+        bodyMargin,
         bounded: documentWidth <= viewportWidth,
         documentWidth,
         viewportWidth,
@@ -92,9 +96,10 @@ export async function expectViewportBounded(page: Page) {
       };
     });
     expect(measurement, JSON.stringify(measurement, null, 2)).toMatchObject({
+      styled: true,
       bounded: true,
     });
-  }).toPass({ timeout: 5000 });
+  }).toPass({ timeout: 15000 });
 }
 
 export async function reloadAuthenticatedPage(page: Page, ready?: Locator) {

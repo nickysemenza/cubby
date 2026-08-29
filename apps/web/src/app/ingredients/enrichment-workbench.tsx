@@ -1,3 +1,4 @@
+import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
@@ -6,14 +7,29 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import type { z } from "zod";
 
+import { verbDef } from "~/app/_components/actions/action-verbs";
+import { confidenceColor } from "~/app/_components/ai/ai-suggest";
+import type { BulkActionsConfig } from "~/app/_components/data-table/bulk-actions.types";
+import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
+import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
+import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
+import {
+  type EntityPreviewRendererProps,
+  useEntityPreview,
+} from "~/app/_components/hooks/useEntityPreview";
 import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
+import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import {
   createManyProductsStream,
   markProductsUsdaUnavailableStream,
@@ -21,17 +37,8 @@ import {
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription } from "~/components/ui/empty";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Progress } from "~/components/ui/progress";
-import { Spinner } from "~/components/ui/spinner";
-import { StatusText } from "~/components/ui/status-text";
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
@@ -42,6 +49,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { cn } from "~/lib/utils";
 
 import {
   type EquivalenceDraft,
@@ -55,7 +63,8 @@ import {
   hasUsdaLink,
   isCookbookOnly,
 } from "./workbench-editor-core";
-import { type Suggestion, WorkbenchRow } from "./workbench-row";
+import { fixBadgeLabel } from "./workbench-fix-label";
+import { EnrichmentWorkbenchInspector, type Suggestion } from "./workbench-row";
 
 type FilterKey = "all" | "no-product" | "partial" | "no-usda";
 type WorkbenchView = "browse" | "review";
@@ -70,6 +79,36 @@ const WORKBENCH_FILTER_OPTIONS = [
   ["partial", "Partial"],
   ["no-usda", "No USDA"],
 ] as const;
+
+type MergeSuggestion = { targetId: string; targetName: string };
+
+type EnrichmentTableRow = EnrichmentRow & {
+  focusRank: number;
+  suggestion: Suggestion | null;
+  mergeSuggestion: MergeSuggestion | null;
+};
+
+const ENRICHMENT_TABLE_STATE = {
+  initialSort: "focusRank",
+  initialSortDesc: false,
+  initialPagination: { pageIndex: 0, pageSize: 50 },
+  urlSync: false,
+  readUrlState: false,
+  syncPaginationToUrl: false,
+} as const;
+
+// Single-sourced from the action-verb registry so the workbench can't drift
+// from the ingredient list's own Merge — it had been rendering `GitMerge`
+// where every other merge affordance uses `Merge`.
+const { icon: MergeIcon, label: mergeLabel } = verbDef("merge");
+
+export function canMarkAllSelectedNoUsda(
+  rows: readonly { hasProduct: boolean; hasUsdaLink: boolean }[],
+): boolean {
+  return (
+    rows.length > 0 && rows.every((row) => row.hasProduct && !row.hasUsdaLink)
+  );
+}
 
 function WorkbenchScopeBanner({
   recipeId,
@@ -172,9 +211,8 @@ export function shouldShowEnrichmentEmptyState({
  * Dense bulk-enrichment table for ingredients with incomplete totals data —
  * the bare ones EPUB imports leave behind (no product) plus those with a product
  * whose conversion graph is still incomplete. Each row shows its coverage and the
- * single recommended fix, and expands inline to link a USDA food, set a price,
- * and add conversions. Select rows to run AI USDA suggestions and create products
- * in bulk, or mark "no USDA exists" — without the modal-per-ingredient grind.
+ * single recommended fix. The current row opens in a responsive inspector for
+ * focused editing, while selection independently drives AI and bulk operations.
  */
 export function EnrichmentWorkbench({
   focus,
@@ -190,7 +228,6 @@ export function EnrichmentWorkbench({
   // Layered on top of the chips: drop ingredients used only in imported cookbook
   // recipes (the long noise tail) from counts + the visible/review set.
   const [hideCookbookOnly, setHideCookbookOnly] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [suggestions, setSuggestions] = useState<Record<string, Suggestion>>(
     {},
   );
@@ -204,7 +241,7 @@ export function EnrichmentWorkbench({
   // map back to rows (the hook's onSuccess doesn't see the variables).
   const createOrderRef = useRef<string[]>([]);
   const [mergeSuggestions, setMergeSuggestions] = useState<
-    Record<string, { targetId: string; targetName: string }>
+    Record<string, MergeSuggestion>
   >({});
   // The ingredient pair awaiting a merge — fed to the shared MergeConfirmation,
   // which lets the user pick the keeper (the candidate is listed first, so it's
@@ -212,6 +249,9 @@ export function EnrichmentWorkbench({
   const [mergeConfirm, setMergeConfirm] = useState<
     { id: string; name: string }[] | null
   >(null);
+  const setSelectionRef = useRef<(ids: readonly string[]) => void>(
+    () => undefined,
+  );
 
   const {
     data: worklist,
@@ -239,26 +279,6 @@ export function EnrichmentWorkbench({
   });
 
   const rows = useMemo(() => data ?? [], [data]);
-
-  // Arriving from a Problems "Fix in workbench" link: scroll the targeted
-  // ingredient's row into view once the data loads (it auto-expands via
-  // WorkbenchRow's defaultOpen). `focus` stays on the default "all" filter so the
-  // row is never filtered out.
-  const focusRowRef = useRef<HTMLTableRowElement>(null);
-  useEffect(() => {
-    if (!focus || isLoading) return;
-    // The worklist is recipe-used ingredients that aren't fully costable yet, so
-    // a focus target can be absent (e.g. a partial-coverage product whose
-    // ingredient isn't in any recipe). Say so rather than silently doing nothing.
-    if (!rows.some((r) => r.id === focus)) {
-      toast.info("That ingredient isn't in the workbench worklist.");
-      return;
-    }
-    focusRowRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
-  }, [focus, rows, isLoading]);
 
   const cookbookOnlyCount = useMemo(
     () => rows.filter((r) => isCookbookOnly(r)).length,
@@ -298,21 +318,6 @@ export function EnrichmentWorkbench({
     [base, filter],
   );
 
-  const selectedRows = useMemo(
-    () => rows.filter((r) => selected.has(r.id)),
-    [rows, selected],
-  );
-
-  const toggle = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const clearSelection = () => setSelected(new Set());
-
   const suggestUsda = useMutation(ai.suggestUsdaFoodBatch.mutationOptions());
   const createMany = useBulkActionMutation({
     run: (vars: z.input<typeof productCreateManyInput>) =>
@@ -342,7 +347,7 @@ export function EnrichmentWorkbench({
         for (const id of succeeded) delete next[id];
         return next;
       });
-      setSelected(failed);
+      setSelectionRef.current([...failed]);
       for (const f of data.failed) {
         toast.error(`${f.name}: ${f.error}`);
       }
@@ -354,53 +359,64 @@ export function EnrichmentWorkbench({
       markProductsUsdaUnavailableStream(vars),
     success: "Marked: no USDA entry.",
     invalidateTags: ripple.ingredientProduct,
-    onSuccess: clearSelection,
+    onSuccess: () => setSelectionRef.current([]),
     error: (err) => `Failed: ${getErrorMessage(err)}`,
   });
+  const markNoUsdaMutateAsync = markNoUsda.mutateAsync;
   const suggestMerges = useMutation(
     ai.suggestIngredientMergeBatch.mutationOptions(),
   );
+  const suggestUsdaAsync = suggestUsda.mutateAsync;
+  const suggestMergesAsync = suggestMerges.mutateAsync;
   const mergeMutation = useActionMutation({
     mutationFn: ingredient.merge.mutationOptions,
     success: (data) => savedWithBackgroundWork(data.sideEffects, "Merged"),
     error: (err) => `Merge failed: ${getErrorMessage(err)}`,
   });
 
-  const handleSuggestMerges = async () => {
-    const ingredients = selectedRows.map((r) => ({
-      id: r.id,
-      name: r.name,
-    }));
-    if (ingredients.length === 0) return;
-    try {
-      const results = await suggestMerges.mutateAsync({ ingredients });
-      const next: Record<string, { targetId: string; targetName: string }> = {};
-      let matched = 0;
-      for (const r of results) {
-        if (r.target) {
-          next[r.source.id] = {
-            targetId: r.target.id,
-            targetName: r.target.name,
-          };
-          matched++;
+  const handleSuggestMerges = useCallback(
+    async (selectedRows: readonly EnrichmentTableRow[]) => {
+      const ingredients = selectedRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+      }));
+      if (ingredients.length === 0) return false;
+      try {
+        const results = await suggestMergesAsync({ ingredients });
+        const next: Record<string, MergeSuggestion> = {};
+        let matched = 0;
+        for (const result of results) {
+          if (result.target) {
+            next[result.source.id] = {
+              targetId: result.target.id,
+              targetName: result.target.name,
+            };
+            matched++;
+          }
         }
+        setMergeSuggestions((previous) => ({ ...previous, ...next }));
+        toast.success(`AI found ${matched} merge${matched === 1 ? "" : "s"}.`);
+        return true;
+      } catch (caught) {
+        toast.error(`Merge suggestion failed: ${getErrorMessage(caught)}`);
+        return false;
       }
-      setMergeSuggestions((prev) => ({ ...prev, ...next }));
-      toast.success(`AI found ${matched} merge${matched === 1 ? "" : "s"}.`);
-    } catch (err) {
-      toast.error(`Merge suggestion failed: ${getErrorMessage(err)}`);
-    }
-  };
+    },
+    [suggestMergesAsync],
+  );
 
   // Open the shared merge confirmation for a pair. Merge candidates are
   // suggestions — the AI ones and especially the trigram ones have false
   // positives (e.g. "red wine vinegar" ~ "white wine vinegar") — so the user
   // confirms and picks the keeper. The candidate goes first so it's the default
   // target (it's the one likelier to already have a product/enrichment).
-  const requestMerge = (pair: {
-    source: { id: string; name: string };
-    target: { id: string; name: string };
-  }) => setMergeConfirm([pair.target, pair.source]);
+  const requestMerge = useCallback(
+    (pair: {
+      source: { id: string; name: string };
+      target: { id: string; name: string };
+    }) => setMergeConfirm([pair.target, pair.source]),
+    [],
+  );
 
   // Execute the merge the user confirmed: keeper = the chosen target, the other
   // becomes an alias (deleted, its recipe lines + products repoint to the keeper).
@@ -414,65 +430,41 @@ export function EnrichmentWorkbench({
     setMergeConfirm(null);
   };
 
-  const handleSuggest = async () => {
-    const ingredients = selectedRows.map((r) => ({ id: r.id, name: r.name }));
-    if (ingredients.length === 0) return;
-    const byName = new Map(
-      selectedRows.map((r) => [r.name.toLowerCase(), r.id]),
-    );
-    try {
-      const results = await suggestUsda.mutateAsync({ ingredients });
-      const next: Record<string, Suggestion> = {};
-      let matched = 0;
-      for (const r of results) {
-        const id = byName.get(r.name.toLowerCase());
-        if (id && r.food) {
-          next[id] = {
-            food: r.food,
-            confidence: r.confidence,
-            reasoning: r.reasoning,
-          };
-          matched++;
+  const handleSuggest = useCallback(
+    async (selectedRows: readonly EnrichmentTableRow[]) => {
+      const ingredients = selectedRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+      }));
+      if (ingredients.length === 0) return false;
+      const byName = new Map(
+        selectedRows.map((row) => [row.name.toLowerCase(), row.id]),
+      );
+      try {
+        const results = await suggestUsdaAsync({ ingredients });
+        const next: Record<string, Suggestion> = {};
+        let matched = 0;
+        for (const result of results) {
+          const id = byName.get(result.name.toLowerCase());
+          if (id && result.food) {
+            next[id] = {
+              food: result.food,
+              confidence: result.confidence,
+              reasoning: result.reasoning,
+            };
+            matched++;
+          }
         }
+        setSuggestions((previous) => ({ ...previous, ...next }));
+        toast.success(`AI matched ${matched}/${ingredients.length}.`);
+        return true;
+      } catch (caught) {
+        toast.error(`Suggestion failed: ${getErrorMessage(caught)}`);
+        return false;
       }
-      setSuggestions((prev) => ({ ...prev, ...next }));
-      toast.success(`AI matched ${matched}/${ingredients.length}.`);
-    } catch (err) {
-      toast.error(`Suggestion failed: ${getErrorMessage(err)}`);
-    }
-  };
-
-  const creatable = selectedRows.filter(
-    (r) => r.product.length === 0 && suggestions[r.id],
+    },
+    [suggestUsdaAsync],
   );
-  const handleCreate = () => {
-    if (creatable.length === 0) {
-      toast.error("No selected rows have an AI suggestion yet. Suggest first.");
-      return;
-    }
-    createOrderRef.current = creatable.map((r) => r.id);
-    createMany.mutate(
-      creatable.map((r) => {
-        const p = suggestionPrices[r.id];
-        const { eachPrice, mapping } = p
-          ? buildPackagePrice(p.dollars, p.qty, p.unit)
-          : { eachPrice: null, mapping: null };
-        return {
-          name: r.name,
-          manufacturer: UNSPECIFIED_MANUFACTURER,
-          upc: null,
-          expectedQuantity: null,
-          ingredientId: r.id,
-          fdc_id: suggestions[r.id]!.food.fdc_id,
-          // Ingredient products are food — keeps the category-clean invariant
-          // (the synthesized weight/volume/calorie edges come from the fdc link).
-          category: "food" as const,
-          price: eachPrice,
-          unitMappings: mapping ? [mapping] : [],
-        };
-      }),
-    );
-  };
 
   const rejectSuggestion = (id: string) => {
     setSuggestions((prev) => {
@@ -498,16 +490,320 @@ export function EnrichmentWorkbench({
 
   const suggestionCount = Object.keys(suggestions).length;
 
-  const markable = selectedRows.flatMap((r) =>
-    r.product.length > 0 && !hasUsdaLink(r) ? [r.product[0]!.id] : [],
+  const tableRows = useMemo<EnrichmentTableRow[]>(
+    () =>
+      visible.map((row) => ({
+        ...row,
+        focusRank: row.id === focus ? 0 : 1,
+        suggestion: suggestions[row.id] ?? null,
+        mergeSuggestion: mergeSuggestions[row.id] ?? null,
+      })),
+    [focus, mergeSuggestions, suggestions, visible],
   );
-  const handleMarkNoUsda = () => {
-    if (markable.length === 0) {
-      toast.error("No selected rows have a product missing a USDA link.");
+
+  const renderInspector = useCallback(
+    ({ preview, onClose }: EntityPreviewRendererProps) => {
+      const row = tableRows.find((candidate) => candidate.id === preview.id);
+      if (!row) return null;
+      return (
+        <EnrichmentWorkbenchInspector
+          key={row.id}
+          row={row}
+          initialFood={row.suggestion?.food ?? null}
+          initialConversion={row.id === focus ? initialConversion : undefined}
+          onDone={onClose}
+        />
+      );
+    },
+    [focus, initialConversion, tableRows],
+  );
+  const {
+    onRowClick,
+    inspectRow,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = useEntityPreview("ingredient", {
+    responsiveInspector: true,
+    mobileBehavior: "sheet",
+    renderInspector,
+  });
+
+  const handledFocusRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focus || isLoading || handledFocusRef.current === focus) return;
+    handledFocusRef.current = focus;
+    const row = tableRows.find((candidate) => candidate.id === focus);
+    if (!row) {
+      toast.info("That ingredient isn't in the workbench worklist.");
       return;
     }
-    markNoUsda.mutate({ ids: markable });
+    onRowClick({ id: row.id, original: row });
+  }, [focus, isLoading, onRowClick, tableRows]);
+
+  const columnHelper = useMemo(
+    () => createCubbyColumnHelper<EnrichmentTableRow>(),
+    [],
+  );
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<EnrichmentTableRow>((add) => {
+        add(
+          columnHelper.accessor("focusRank", {
+            header: "Focus",
+            enableSorting: true,
+            meta: { mobile: { slot: "hidden" } },
+          }),
+        );
+        add(
+          createNameColumn(columnHelper, "ingredient", "name", {
+            header: "Ingredient",
+            className: "w-72",
+            nameSuffix: (row) =>
+              row.suggestion ? (
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "max-w-32 truncate font-normal",
+                    confidenceColor[row.suggestion.confidence],
+                  )}
+                  title={`AI: ${row.suggestion.food.foodInfo.description}`}
+                >
+                  AI {row.suggestion.confidence}
+                </Badge>
+              ) : null,
+          }),
+        );
+        add(
+          columnHelper.accessor((row) => row.coverage.tier, {
+            id: "coverage",
+            header: "Coverage",
+            enableSorting: false,
+            meta: {
+              className: "w-48",
+              mobile: { slot: "subtitle", priority: 10, label: "Coverage" },
+            },
+            cell: (info) => (
+              <CoverageChips
+                covered={info.row.original.coverage.covered}
+                applicable={info.row.original.coverage.applicable}
+              />
+            ),
+          }),
+        );
+        add(
+          columnHelper.accessor("recommendedFix", {
+            id: "recommendedFix",
+            header: "Next",
+            enableSorting: false,
+            meta: {
+              className: "w-64",
+              mobile: {
+                slot: "meta",
+                priority: 20,
+                label: "Next",
+                interactive: true,
+              },
+            },
+            cell: (info) => {
+              const row = info.row.original;
+              const candidate =
+                row.mergeSuggestion ?? row.mergeCandidates[0] ?? null;
+              const mergeTarget = candidate
+                ? "targetId" in candidate
+                  ? {
+                      id: candidate.targetId,
+                      name: candidate.targetName,
+                    }
+                  : { id: candidate.id, name: candidate.name }
+                : null;
+              return (
+                <Row align="center" gap="xs" className="min-w-0">
+                  <Badge variant="outline" className="shrink-0 font-normal">
+                    {fixBadgeLabel(row)}
+                  </Badge>
+                  {mergeTarget ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 min-w-0 px-2"
+                      title={`Merge with ${mergeTarget.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        requestMerge({
+                          source: { id: row.id, name: row.name },
+                          target: mergeTarget,
+                        });
+                      }}
+                    >
+                      <MergeIcon className="size-3" />
+                      <span className="truncate">{mergeLabel}</span>
+                    </Button>
+                  ) : null}
+                </Row>
+              );
+            },
+          }),
+        );
+      }),
+    [columnHelper, requestMerge],
+  );
+
+  const bulkActions = useMemo<BulkActionsConfig<EnrichmentTableRow>>(
+    () => ({
+      clearSelectionOnComplete: false,
+      actions: [
+        {
+          id: "suggest-usda",
+          label: "Suggest USDA",
+          icon: <Sparkles className="size-3.5" />,
+          preserveSelection: true,
+          onExecute: async (selectedRows) => ({
+            success: await handleSuggest(
+              selectedRows.map((row) => row.original),
+            ),
+          }),
+        },
+        {
+          id: "suggest-merges",
+          label: "Suggest merges",
+          icon: <Sparkles className="size-3.5" />,
+          preserveSelection: true,
+          onExecute: async (selectedRows) => ({
+            success: await handleSuggestMerges(
+              selectedRows.map((row) => row.original),
+            ),
+          }),
+        },
+        {
+          id: "mark-no-usda",
+          label: "Mark no-USDA",
+          availability: (selectedRows) =>
+            canMarkAllSelectedNoUsda(
+              selectedRows.map((row) => ({
+                hasProduct: row.original.product.length > 0,
+                hasUsdaLink: hasUsdaLink(row.original),
+              })),
+            )
+              ? { status: "available" }
+              : {
+                  status: "disabled",
+                  reason:
+                    "Every selected ingredient must have a product without a USDA link.",
+                },
+          onExecute: async (selectedRows) => {
+            await markNoUsdaMutateAsync({
+              ids: selectedRows.flatMap((row) =>
+                row.original.product[0] ? [row.original.product[0].id] : [],
+              ),
+            });
+            return { success: true };
+          },
+        },
+      ],
+    }),
+    [handleSuggest, handleSuggestMerges, markNoUsdaMutateAsync],
+  );
+
+  const { workbench } = useClientEntityList<EnrichmentTableRow>({
+    entity: "ingredient",
+    data: tableRows,
+    isLoading,
+    error,
+    columns,
+    bulkActions,
+    onInspectRow: inspectRow,
+    includeCatalogActions: false,
+    layoutKey: "ingredient:enrichment-workbench",
+    tableStateOptions: ENRICHMENT_TABLE_STATE,
+    initialColumnVisibility: {
+      focusRank: false,
+      createdAt: false,
+      updatedAt: false,
+    },
+  });
+
+  useEffect(() => {
+    setSelectionRef.current = (ids) =>
+      workbench.table.setRowSelection(
+        Object.fromEntries(ids.map((id) => [id, true])),
+      );
+  }, [workbench.table]);
+
+  const selectedRows = workbench.table
+    .getFilteredSelectedRowModel()
+    .rows.map((row) => row.original);
+  const creatable = selectedRows.filter(
+    (row) => row.product.length === 0 && suggestions[row.id],
+  );
+  const handleCreate = () => {
+    if (creatable.length === 0) {
+      toast.error("No selected rows have an AI suggestion yet. Suggest first.");
+      return;
+    }
+    createOrderRef.current = creatable.map((row) => row.id);
+    createMany.mutate(
+      creatable.map((row) => {
+        const packagePrice = suggestionPrices[row.id];
+        const { eachPrice, mapping } = packagePrice
+          ? buildPackagePrice(
+              packagePrice.dollars,
+              packagePrice.qty,
+              packagePrice.unit,
+            )
+          : { eachPrice: null, mapping: null };
+        return {
+          name: row.name,
+          manufacturer: UNSPECIFIED_MANUFACTURER,
+          upc: null,
+          expectedQuantity: null,
+          ingredientId: row.id,
+          fdc_id: suggestions[row.id]!.food.fdc_id,
+          category: "food" as const,
+          price: eachPrice,
+          unitMappings: mapping ? [mapping] : [],
+        };
+      }),
+    );
   };
+
+  const tableEmptyState = (
+    <Empty variant="minimal" className="py-6">
+      <EmptyTitle>
+        {rows.length === 0 ? "Nothing to enrich" : "No matching ingredients"}
+      </EmptyTitle>
+      <EmptyDescription>
+        {rows.length === 0
+          ? "Every recipe ingredient is fully costable."
+          : "Choose another workbench filter."}
+      </EmptyDescription>
+    </Empty>
+  );
+
+  const contextualStatus = error ? (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => void refetch()}
+    >
+      Try again
+    </Button>
+  ) : markNoUsda.progress ? (
+    <Row align="center" gap="sm" className="min-w-48">
+      <span className="text-xs text-muted-foreground">
+        Marking {markNoUsda.progress.done}/{markNoUsda.progress.total}
+      </span>
+      <Progress
+        className="w-24"
+        value={markNoUsda.progress.done}
+        max={markNoUsda.progress.total}
+      />
+    </Row>
+  ) : null;
 
   return (
     <Stack>
@@ -546,130 +842,34 @@ export function EnrichmentWorkbench({
             />
           )}
 
-          {error && (
-            <Row
-              align="center"
-              wrap
-              gap="sm"
-              className="border border-destructive/40 bg-destructive/5 px-3 py-2"
-            >
-              <StatusText as="div" tone="destructive" className="text-sm">
-                {error.message}
-              </StatusText>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-11 sm:min-h-0"
-                onClick={() => void refetch()}
-              >
-                Try again
-              </Button>
-            </Row>
-          )}
-
-          {shouldShowEnrichmentEmptyState({
-            isLoading,
-            hasError: !!error,
-            rowCount: rows.length,
-          }) && (
-            <Empty>
-              <EmptyDescription>
-                Every recipe ingredient is fully costable. Nothing to enrich.
-              </EmptyDescription>
-            </Empty>
-          )}
-
-          {visible.length > 0 && (
-            <Table
-              className="min-w-[42rem] table-auto"
-              containerClassName="border border-[var(--border)]"
-            >
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8" />
-                  <TableHead className="w-8" />
-                  <TableHead>Ingredient</TableHead>
-                  <TableHead>Coverage</TableHead>
-                  <TableHead>Next</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((row) => (
-                  <WorkbenchRow
-                    key={row.id}
-                    row={row}
-                    selected={selected.has(row.id)}
-                    onToggle={() => toggle(row.id)}
-                    suggestion={suggestions[row.id] ?? null}
-                    mergeSuggestion={mergeSuggestions[row.id] ?? null}
-                    onRequestMerge={requestMerge}
-                    defaultOpen={row.id === focus}
-                    initialConversion={
-                      row.id === focus ? initialConversion : undefined
-                    }
-                    rowRef={row.id === focus ? focusRowRef : undefined}
-                  />
-                ))}
-              </TableBody>
-            </Table>
-          )}
-
-          {isLoading && (
-            <Row justify="center" className="py-6">
-              <Spinner />
-            </Row>
-          )}
-
-          {selected.size > 0 && (
-            <Row
-              align="center"
-              wrap
-              gap="sm"
-              className="sticky bottom-4 border border-[var(--border)] bg-background/95 px-4 py-2 backdrop-blur"
-            >
-              <span className="text-sm font-medium">
-                {selected.size} selected
-              </span>
-              <span className="text-border">|</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSuggest}
-                disabled={suggestUsda.isPending}
-              >
-                <Sparkles className="size-4" />
-                {suggestUsda.isPending ? "Suggesting…" : "Suggest USDA"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSuggestMerges}
-                disabled={suggestMerges.isPending}
-              >
-                <Sparkles className="size-4" />
-                {suggestMerges.isPending ? "Checking…" : "Suggest merges"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleMarkNoUsda}
-                disabled={markNoUsda.isPending || markable.length === 0}
-              >
-                Mark no-USDA ({markable.length})
-              </Button>
-              <Button size="sm" variant="ghost" onClick={clearSelection}>
-                Clear
-              </Button>
-              {markNoUsda.progress && (
-                <Progress
-                  className="w-full"
-                  value={markNoUsda.progress.done}
-                  max={markNoUsda.progress.total}
-                />
-              )}
-            </Row>
-          )}
+          <div
+            className={cn(
+              "min-w-0",
+              dockedInspector && "xl:grid xl:grid-cols-[minmax(0,1fr)_25rem]",
+            )}
+          >
+            <ListWorkbench
+              model={workbench}
+              mode="embedded"
+              ariaLabel="Ingredient enrichment workbench"
+              contextualStatus={contextualStatus}
+              emptyState={tableEmptyState}
+              showColumnMenu
+              defaultDensity="dense"
+              onRowClick={onRowClick}
+              onRowHover={onRowHover}
+              onRowHoverEnd={onRowHoverEnd}
+              currentRowId={preview?.rowKey}
+              inspectorToggle={inspectorToggle}
+              disableMobileDetailsHref
+            />
+            {dockedInspector ? (
+              <aside className="hidden max-h-[60vh] overflow-y-auto border border-l-0 border-[var(--border)] bg-card xl:block">
+                {dockedInspector}
+              </aside>
+            ) : null}
+          </div>
+          <PreviewSheet />
 
           <EntityMergeDialog
             entity="ingredient"

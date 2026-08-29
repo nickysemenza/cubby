@@ -14,7 +14,7 @@ import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
 import { MobileSortSheet } from "./MobileSortSheet";
-import type { CubbyTable as ITable } from "./table-features";
+import type { CubbyRow as Row, CubbyTable as ITable } from "./table-features";
 import type { GroupConfig } from "./useGroupedList";
 import { mobileListLayout } from "./useMobileListModel";
 import type { TableDensity } from "./useTableDensity";
@@ -26,8 +26,10 @@ interface MobileRefreshControls {
 
 interface MobileListScreenProps<TItem extends RowData> {
   table: ITable<TItem>;
+  onRowClick?: (row: Row<TItem>) => void;
   entity?: Entity;
   getDetailsHref?: (item: TItem) => string | undefined;
+  disableDetailsHref?: boolean;
   additionalToolbarContent?: ReactNode;
   actions?: ReactNode;
   bulkActionBar?: ReactNode;
@@ -54,8 +56,10 @@ interface MobileListScreenProps<TItem extends RowData> {
 
 export function MobileListScreen<TItem extends RowData>({
   table,
+  onRowClick,
   entity,
   getDetailsHref,
+  disableDetailsHref,
   additionalToolbarContent,
   actions,
   bulkActionBar,
@@ -147,8 +151,10 @@ export function MobileListScreen<TItem extends RowData>({
           const cardView = (
             <MobileCardView
               table={table}
+              onRowClick={onRowClick}
               entity={entity}
               getDetailsHref={getDetailsHref}
+              disableDetailsHref={disableDetailsHref}
               infiniteScroll={infiniteScroll}
               groupConfig={groupConfig}
               grouped={grouped}
