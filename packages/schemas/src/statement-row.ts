@@ -7,6 +7,7 @@ import {
   financialTransactionShortcode,
 } from "./identifiers";
 import { dateRangeFields, numericRangeFields, plainDate } from "./base-entity";
+import { merchantVendorInference } from "./financial-transaction";
 
 /**
  * The provider-statement ledger: what the card statements said, stored verbatim
@@ -96,6 +97,12 @@ export const statementRowOut = z.object({
 
   matchState: statementRowMatchState,
   transactionId: financialTransactionShortcode.nullable(),
+  vendorInference: merchantVendorInference
+    .nullable()
+    .default(null)
+    .describe(
+      "Advisory Vendor evidence only. Null for matched, ignored, or superseded rows. It neither matches nor links anything.",
+    ),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

@@ -1,8 +1,12 @@
 import {
+  type MerchantVendorInference,
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import type { UseFormReturn } from "react-hook-form";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import {
@@ -10,7 +14,12 @@ import {
   PlainDateField,
 } from "~/app/_components/form-utils";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
+import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { entities, entityDetailParams } from "~/entities/entities";
 
+import { TableLink } from "../_components/table/TableLink";
+import { financialTransaction } from "./finance.functions";
 import {
   SelectField,
   SourceRefsField,
@@ -19,6 +28,7 @@ import {
 import {
   WithFinancialAccountSearch,
   WithPurchaseSearch,
+  PurchaseVendorScope,
 } from "./financial-selectors";
 
 export const financialTransactionFormSchema = z
@@ -93,9 +103,35 @@ const transactionStatuses = financialTransactionStatus.options;
 
 export function FinancialTransactionFormFields({
   form,
+  loadVendorInference,
 }: {
   form: UseFormReturn<FinancialTransactionFormValues>;
+  loadVendorInference?: (merchant: string) => Promise<MerchantVendorInference>;
 }) {
+  const merchant = useWatch({ control: form.control, name: "merchant" });
+  const [debouncedMerchant] = useDebouncedValue(merchant, { wait: 350 });
+  const [allPurchasesVendorId, setAllPurchasesVendorId] = useState<
+    string | null
+  >(null);
+  const inferenceOptions = financialTransaction.vendorInference.queryOptions({
+    merchant: debouncedMerchant,
+  });
+  const inferenceQuery = useQuery({
+    ...inferenceOptions,
+    queryFn: loadVendorInference
+      ? () => loadVendorInference(debouncedMerchant)
+      : inferenceOptions.queryFn,
+    enabled: debouncedMerchant.trim() !== "",
+  });
+  const suggested =
+    merchant.trim() !== "" && inferenceQuery.data?.status === "suggested"
+      ? inferenceQuery.data.candidates[0]
+      : null;
+  const scopedVendorId =
+    suggested && suggested.vendorId !== allPurchasesVendorId
+      ? suggested.vendorId
+      : null;
+
   return (
     <>
       <EntityValueField
@@ -106,15 +142,41 @@ export function FinancialTransactionFormFields({
         placeholder="Select account"
         SearchProvider={WithFinancialAccountSearch}
       />
-      <EntityValueField
-        form={form}
-        name="purchaseId"
-        entity="purchase"
-        label="Purchase"
-        placeholder="Optional linked purchase"
-        SearchProvider={WithPurchaseSearch}
-        clearable
-      />
+      <TextField form={form} name="merchant" label="Merchant" />
+      <PurchaseVendorScope vendorId={scopedVendorId}>
+        <Stack gap="tight">
+          {scopedVendorId && suggested ? (
+            <Row align="center" justify="between" gap="sm" wrap>
+              <span className="text-xs text-muted-foreground">
+                Suggested purchases · Showing purchases from{" "}
+                <TableLink
+                  to={entities.vendor.routes.detail}
+                  params={entityDetailParams(scopedVendorId)}
+                >
+                  {suggested.vendorName}
+                </TableLink>
+              </span>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                onClick={() => setAllPurchasesVendorId(scopedVendorId)}
+              >
+                All purchases
+              </Button>
+            </Row>
+          ) : null}
+          <EntityValueField
+            form={form}
+            name="purchaseId"
+            entity="purchase"
+            label="Purchase"
+            placeholder="Optional linked purchase"
+            SearchProvider={WithPurchaseSearch}
+            clearable
+          />
+        </Stack>
+      </PurchaseVendorScope>
       <SelectField
         form={form}
         name="kind"
@@ -134,7 +196,6 @@ export function FinancialTransactionFormFields({
         label="Transaction date"
       />
       <PlainDateField form={form} name="postedDate" label="Posted date" />
-      <TextField form={form} name="merchant" label="Merchant" />
       <TextField
         form={form}
         name="rawDescription"

@@ -64,6 +64,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
+import { enrichFinancialTransactionsWithVendorInference } from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -360,7 +361,10 @@ export async function listFinancialTransactions(
     count: () => countWhere(db, financialTransaction, where),
   });
   return {
-    data: rows.map(toOut),
+    data: await enrichFinancialTransactionsWithVendorInference(
+      db,
+      rows.map(toOut),
+    ),
     count,
   };
 }
@@ -382,7 +386,10 @@ const financialTransactionReader = createEntityReader<
       .limit(1);
     return row;
   },
-  fromDB: (_db, row) => toOut(row),
+  fromDB: async (db, row) =>
+    (
+      await enrichFinancialTransactionsWithVendorInference(db, [toOut(row)])
+    )[0]!,
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;

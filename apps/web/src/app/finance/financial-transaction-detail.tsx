@@ -14,6 +14,7 @@ import { formatCurrency } from "~/lib/utils";
 
 import { DetailSections } from "../_components/data-table/detail-page";
 import { TableLink } from "../_components/table/TableLink";
+import { PossibleVendor } from "./possible-vendor";
 export function FinancialTransactionDetail({
   transaction,
 }: {
@@ -62,6 +63,19 @@ export function FinancialTransactionDetail({
                       "—"
                     ),
                   },
+                  ...(transaction.vendorInference?.status === "suggested" ||
+                  transaction.vendorInference?.status === "ambiguous"
+                    ? [
+                        {
+                          label: "Possible vendor",
+                          value: (
+                            <PossibleVendor
+                              inference={transaction.vendorInference}
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
                   {
                     label: "Amount",
                     value: formatCurrency(transaction.amount),

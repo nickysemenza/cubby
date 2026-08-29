@@ -86,6 +86,7 @@ const pgliteIntegrationTests = [
   "src/server/background-queue-embedding-gate.integration.test.ts",
   "src/server/repo/calendar.integration.test.ts",
   "src/server/repo/collection.integration.test.ts",
+  "src/server/repo/merchant-vendor-inference.integration.test.ts",
   "src/server/repo/meal.integration.test.ts",
   "src/server/repo/product/analytics.integration.test.ts",
   "src/server/repo/product/conversion-coverage.integration.test.ts",

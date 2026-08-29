@@ -1,5 +1,9 @@
 import { financialAccountOptionsOut } from "@cubby/schemas/financial-account";
-import { financialTransactionSourceOptionsOut } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionSourceOptionsOut,
+  merchantVendorInference,
+  merchantVendorInferenceInput,
+} from "@cubby/schemas/financial-transaction";
 import { z } from "zod";
 
 import {
@@ -22,6 +26,11 @@ export const financialTransaction = defineOperationDomain(
       input: z.null(),
       output: financialTransactionSourceOptionsOut,
       tags: [["financialTransaction", "sourceOptions"]],
+    }),
+    vendorInference: query({
+      input: merchantVendorInferenceInput,
+      output: merchantVendorInference,
+      tags: [["financialTransaction"], ["purchase"], ["vendor"]],
     }),
   },
 );

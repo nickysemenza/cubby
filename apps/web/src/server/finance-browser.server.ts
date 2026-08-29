@@ -6,6 +6,7 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   financialAccountOptionsWorkflow,
   financialTransactionSourceOptionsWorkflow,
+  merchantVendorInferenceWorkflow,
 } from "~/server/workflows/finance.server";
 
 export const financialAccountHandlers = implementOperationDomain(
@@ -20,5 +21,7 @@ export const financialTransactionHandlers = implementOperationDomain(
   {
     sourceOptions: (context) =>
       financialTransactionSourceOptionsWorkflow(context.readDb),
+    vendorInference: (context, input) =>
+      merchantVendorInferenceWorkflow(context.readDb, input),
   },
 );

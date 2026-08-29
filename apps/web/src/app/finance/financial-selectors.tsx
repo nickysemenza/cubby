@@ -1,9 +1,10 @@
 import type {
   FinancialAccountShortcode,
   PurchaseShortcode,
+  VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 
 import { entityListFor } from "~/entities/entity-list.functions";
 
@@ -30,7 +31,31 @@ const accountIdentityFacts = (identity: {
 
 /** Read-only relation selectors: finance evidence must choose an existing
  * account/purchase, never silently mint a counterparty from typed text. */
-function useFinanceSearch(kind: "account" | "purchase") {
+const PurchaseVendorScopeContext = createContext<VendorShortcode | null>(null);
+
+export const purchaseSearchFilters = (
+  search: string,
+  vendorId: VendorShortcode | null,
+) => ({ search, vendorId: vendorId ?? undefined });
+
+export function PurchaseVendorScope({
+  vendorId,
+  children,
+}: {
+  vendorId: VendorShortcode | null;
+  children: ReactNode;
+}) {
+  return (
+    <PurchaseVendorScopeContext.Provider value={vendorId}>
+      {children}
+    </PurchaseVendorScopeContext.Provider>
+  );
+}
+
+function useFinanceSearch(
+  kind: "account" | "purchase",
+  vendorId: VendorShortcode | null = null,
+) {
   const { searchQuery, onSearchChange } = useEntitySearch();
   const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
   const account = useQuery({
@@ -42,7 +67,7 @@ function useFinanceSearch(kind: "account" | "purchase") {
   });
   const purchase = useQuery({
     ...entityListFor("purchase").queryOptions({
-      filters: { search: searchQuery },
+      filters: purchaseSearchFilters(searchQuery, vendorId),
       pagination,
     }),
     enabled: enabled && kind === "purchase",
@@ -97,8 +122,11 @@ export function WithFinancialAccountSearch({
 export function WithPurchaseSearch({
   children,
 }: WithEntitySearchProps<PurchaseShortcode>) {
-  const { onOpenChange, onSearchChange, purchase } =
-    useFinanceSearch("purchase");
+  const vendorId = useContext(PurchaseVendorScopeContext);
+  const { onOpenChange, onSearchChange, purchase } = useFinanceSearch(
+    "purchase",
+    vendorId,
+  );
   const items = useMemo<ComboboxItem<PurchaseShortcode>[]>(
     () =>
       (purchase.data?.items ?? []).map((p) => ({

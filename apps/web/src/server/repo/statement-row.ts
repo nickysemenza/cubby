@@ -31,6 +31,10 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import {
+  merchantVendorInferences,
+  normalizeMerchant,
+} from "~/server/repo/merchant-vendor-inference";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 
 /**
@@ -265,8 +269,22 @@ export async function listStatementRows(
       SELECT count(*)::int AS count ${FROM_WITH_REFS} WHERE ${where}
     `),
   ]);
+  const output = data.rows.map((row) => toOut(row));
+  const eligibleMerchants = output.flatMap((row) =>
+    row.matchState === "unmatched" && row.merchant ? [row.merchant] : [],
+  );
+  const inferences = await merchantVendorInferences(db, eligibleMerchants);
   return {
-    data: data.rows.map((row) => toOut(row)),
+    data: output.map((row) => ({
+      ...row,
+      vendorInference:
+        row.matchState === "unmatched" && row.merchant
+          ? (inferences.get(normalizeMerchant(row.merchant)) ?? {
+              status: "none" as const,
+              candidates: [],
+            })
+          : null,
+    })),
     count: Number(counted.rows[0]?.count ?? 0),
   };
 }

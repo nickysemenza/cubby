@@ -170,6 +170,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "financialTransaction.sourceOptions": async () =>
     (await import("~/server/finance-browser.server"))
       .financialTransactionHandlers.operations.sourceOptions,
+  "financialTransaction.vendorInference": async () =>
+    (await import("~/server/finance-browser.server"))
+      .financialTransactionHandlers.operations.vendorInference,
   "householdContribution.ledger": async () =>
     (await import("~/server/household-contribution-browser.server"))
       .householdContributionHandlers.operations.ledger,

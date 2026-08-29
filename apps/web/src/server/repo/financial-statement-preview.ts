@@ -15,6 +15,10 @@ import { uniq } from "es-toolkit";
 import type { Database } from "~/server/db";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  merchantVendorInferences,
+  normalizeMerchant,
+} from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 
@@ -230,10 +234,32 @@ export async function previewFinancialStatementImport(
     };
   });
 
+  const eligibleRows = rows.filter(
+    (row) =>
+      row.proposed.merchant &&
+      (row.status === "ready_to_create" || row.status === "unresolved_account"),
+  );
+  const inferences = await merchantVendorInferences(
+    db,
+    eligibleRows.flatMap((row) =>
+      row.proposed.merchant ? [row.proposed.merchant] : [],
+    ),
+  );
+  const enrichedRows = rows.map((row) => ({
+    ...row,
+    vendorInference:
+      row.proposed.merchant &&
+      (row.status === "ready_to_create" || row.status === "unresolved_account")
+        ? (inferences.get(normalizeMerchant(row.proposed.merchant)) ?? {
+            status: "none" as const,
+            candidates: [],
+          })
+        : null,
+  }));
   const count = (status: (typeof rows)[number]["status"]) =>
     rows.filter((row) => row.status === status).length;
   return {
-    rows,
+    rows: enrichedRows,
     summary: {
       rowsIn: rows.length,
       alreadyRecorded: count("already_recorded"),
