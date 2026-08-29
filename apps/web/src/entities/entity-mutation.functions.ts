@@ -1,3 +1,4 @@
+import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { hasFdcLink } from "@cubby/schemas/product";
 import { z } from "zod";
 
@@ -14,7 +15,10 @@ import type {
 
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
-import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
+import {
+  entityMutationOutputEntities,
+  parseEntityMutationOutput,
+} from "./generated/entity-mutation-results.gen";
 
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<
@@ -54,6 +58,14 @@ export const entityMutation = defineOperationDomain("entity", {
   mutate: mutation({
     input: z.custom<EntityBrowserMutationInput>(),
     output: z.custom<EntityBrowserMutationResult>(),
+    observability: {
+      entities: [
+        ...entityMutationOutputEntities,
+        "ledgerParty",
+        "ledgerTransfer",
+        "image",
+      ],
+    },
     /**
      * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
      * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,
@@ -78,18 +90,6 @@ export const entityMutation = defineOperationDomain("entity", {
   }),
 });
 
-export async function executeEntityMutation(options: {
-  data: EntityBrowserMutationInput;
-  signal?: AbortSignal;
-}): Promise<EntityBrowserMutationResult> {
-  const result = await entityMutation.mutate
-    .forEntity(options.data.entity)
-    .call(options.data, { signal: options.signal });
-  // Open the fresh-read window before any invalidation this mutation triggers
-  // can re-read a stale replica.
-  return result;
-}
-
 /** Recover the entity-specific output through the same schema that backs the kernel. */
 export function parseEntityMutationResultFor<E extends EditableEntity>(
   entity: E,
@@ -100,4 +100,29 @@ export function parseEntityMutationResultFor(
   value: EntityMutationResultInput,
 ) {
   return parseEntityMutationOutput(entity, value);
+}
+
+export function parseEntityWriteResult<E extends EditableEntity>(
+  entity: E,
+  action: "create" | "update",
+  result: EntityBrowserMutationResult,
+): EntityEditResultFor<E> & { sideEffects: MutationSideEffects } {
+  if (
+    result.entity !== entity ||
+    result.action !== action ||
+    !("item" in result)
+  )
+    throw new Error("Entity mutation result did not match its command");
+  return {
+    ...parseEntityMutationResultFor(entity, result.item),
+    sideEffects: result.sideEffects,
+  };
+}
+
+export function countPrimaryDeletedReferences(
+  result: Extract<EntityBrowserMutationResult, { action: "delete" }>,
+) {
+  return result.deletedReferences.filter(
+    (reference) => reference.entity === result.entity,
+  ).length;
 }

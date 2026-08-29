@@ -9,13 +9,14 @@ import {
   createActionsColumn,
   createNameColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { product as productOperations } from "~/app/products/product.functions";
@@ -157,12 +158,13 @@ export function ProductPurchases({
       }),
     [detach, helper, productId],
   );
-  const layout = useCubbyTableLayout({ key: "product:purchases", columns });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "purchase",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "product:purchases",
+    isLoading:
+      query.isPending || (items.length === 0 && membershipQuery.isPending),
     getRowId: (row) => row.id,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
@@ -218,14 +220,10 @@ export function ProductPurchases({
   );
 
   return (
-    <RTable
-      table={table}
-      entity="purchase"
+    <ListWorkbench
+      model={workbench}
+      mode="embedded"
       ariaLabel="Purchases linked to this product"
-      embedded
-      isLoading={
-        query.isPending || (items.length === 0 && membershipQuery.isPending)
-      }
       emptyState={emptyState}
     />
   );

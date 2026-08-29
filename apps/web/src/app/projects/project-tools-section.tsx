@@ -25,14 +25,15 @@ import {
   createNameColumn,
   rowImages,
 } from "~/app/_components/data-table/columnHelpers";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
-import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { product } from "~/app/products/product.functions";
 import { project } from "~/app/projects/project.functions";
@@ -232,27 +233,21 @@ function ResourcesTable({
       }),
     [detach, helper, projectId, selection.selectColumns],
   );
-  const layout = useCubbyTableLayout({ key: "project:resources", columns });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "product",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "project:resources",
+    selection,
+    isLoading,
     getRowId: (row) => row.id,
-    enableRowSelection: selection.enableRowSelection,
-    state: { rowSelection: selection.rowSelection },
-    onRowSelectionChange: selection.onRowSelectionChange,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
   return (
-    <RTable
-      table={table}
-      entity="product"
-      bulkActionBar={selection.renderBulkActionBar(table)}
-      {...selection.tableProps}
+    <ListWorkbench
+      model={workbench}
+      mode="embedded"
       ariaLabel="Reusable project resources"
-      embedded
-      isLoading={isLoading}
       emptyState={
         <Empty variant="minimal" className="py-6">
           <EmptyHeader>
@@ -399,12 +394,12 @@ function SelectableResourceTable({
   const layoutKey = suggested
     ? "project:resource-suggestions"
     : "project:resource-picker";
-  const layout = useCubbyTableLayout({ key: layoutKey, columns });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "product",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey,
+    isLoading,
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -413,16 +408,14 @@ function SelectableResourceTable({
   });
   return (
     <div className="max-h-96 overflow-y-auto">
-      <RTable
-        table={table}
-        entity="product"
+      <ListWorkbench
+        model={workbench}
+        mode="embedded"
         ariaLabel={
           suggested
             ? "Suggested project tools"
             : "Products available as resources"
         }
-        embedded
-        isLoading={isLoading}
         emptyState={<Description>{emptyCopy}</Description>}
       />
     </div>

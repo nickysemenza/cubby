@@ -2,16 +2,18 @@ import { useMutation } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
-import type { EntityMutationTransport } from "~/entities/entity-contracts";
 import {
+  executeEntityMutationCommand,
+  type EntityMutationTransport,
+} from "~/entities/entity-mutation-command";
+import {
+  countPrimaryDeletedReferences,
   entityMutation,
-  parseEntityMutationResultFor,
+  parseEntityWriteResult,
 } from "~/entities/entity-mutation.functions";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import type { StandardEntity } from "../entity-contracts";
-import { countPrimaryDeletedReferences } from "../mutation-results";
 import { entityEditRegistry } from "./definitions";
 import type { EntityEditDraft, EntityEditIntent } from "./intent-types";
 import {
@@ -83,16 +85,12 @@ function issuesFromRefusal(
   return issues;
 }
 
-const browserEntityMutationTransport: EntityMutationTransport = {
-  execute: async (command) =>
-    await entityMutation.mutate.forEntity(command.entity).call(command),
-};
-
 const executeMutation = async <E extends EditableEntity>(
   command: EntityEditCommand<E>,
-  transport: EntityMutationTransport,
+  transport?: EntityMutationTransport,
 ): Promise<EntityMutationExecution<E>> => {
-  const data = entityBrowserMutationCommandSchema.parse(
+  const result = await executeEntityMutationCommand(
+    command.entity,
     command.operation === "create"
       ? {
           action: command.operation,
@@ -111,21 +109,27 @@ const executeMutation = async <E extends EditableEntity>(
             entity: command.entity,
             ids: [...command.ids],
           },
+    transport,
   );
-  const result = await transport.execute(data);
   if (command.operation === "create" || command.operation === "update") {
-    if (result.action !== command.operation || !("item" in result)) {
+    if (
+      result.action !== command.operation ||
+      result.entity !== command.entity ||
+      !("item" in result)
+    ) {
       throw new Error(
         `${command.entity} ${command.operation} returned ${result.action}.`,
       );
     }
+    const item = parseEntityWriteResult(
+      command.entity,
+      command.operation,
+      result,
+    );
     return {
       operation: command.operation,
-      id: result.item.id,
-      result: {
-        ...parseEntityMutationResultFor(command.entity, result.item),
-        sideEffects: result.sideEffects,
-      },
+      id: item.id,
+      result: item,
     };
   }
   if (result.action !== "delete") {
@@ -136,15 +140,18 @@ const executeMutation = async <E extends EditableEntity>(
 
 const executeBulkMutation = async <E extends EditableEntity>(
   command: EntityBulkUpdateCommand<E>,
-  transport: EntityMutationTransport,
+  transport?: EntityMutationTransport,
 ) => {
-  const data = entityBrowserMutationCommandSchema.parse({
-    action: command.operation,
-    entity: command.entity,
-    ids: [...command.ids],
-    data: command.data,
-  });
-  const result = await transport.execute(data);
+  const result = await executeEntityMutationCommand(
+    command.entity,
+    {
+      action: command.operation,
+      entity: command.entity,
+      ids: [...command.ids],
+      data: command.data,
+    },
+    transport,
+  );
   if (result.action !== "bulkUpdate") {
     throw new Error(`${command.entity} bulk update returned ${result.action}.`);
   }
@@ -153,7 +160,7 @@ const executeBulkMutation = async <E extends EditableEntity>(
 
 /** Start adapter for the schema-correlated editing command interface. */
 export function createEntityMutationPort(
-  transport: EntityMutationTransport = browserEntityMutationTransport,
+  transport?: EntityMutationTransport,
 ): EntityMutationPort {
   return {
     execute: async <E extends EditableEntity>(command: EntityEditCommand<E>) =>
@@ -274,15 +281,8 @@ export function useEntityCommands<E extends EditableEntity>(
   );
 
   const submit = useCallback(
-    async (command: EntityEditCommandInput<E>) => {
-      if (command.operation === "create") {
-        return await executeCommand({ ...command, entity });
-      }
-      if (command.operation === "update") {
-        return await executeCommand({ ...command, entity });
-      }
-      return await executeCommand({ ...command, entity });
-    },
+    async (command: EntityEditCommandInput<E>) =>
+      await executeCommand({ ...command, entity }),
     [entity, executeCommand],
   );
 

@@ -95,14 +95,30 @@ const topLevelVariableDeclarators = (
   return declarators;
 };
 
-type DomainMember = { operation: string; kind: Kind };
+type OperationObservability = {
+  entities: readonly string[];
+  productPhases: readonly string[];
+};
+type DomainMember = {
+  operation: string;
+  kind: Kind;
+  observability: OperationObservability;
+};
 type DomainDeclaration = {
   path: string;
   domain: string;
   members: Map<string, DomainMember>;
 };
 type DomainDeclarations = {
-  byOperation: Map<string, { kind: Kind; path: string; exportName: string }>;
+  byOperation: Map<
+    string,
+    {
+      kind: Kind;
+      path: string;
+      exportName: string;
+      observability: OperationObservability;
+    }
+  >;
   byBinding: Map<string, DomainDeclaration>;
 };
 
@@ -172,6 +188,7 @@ function collectDomainsFromProgram(
     }
     const members = collectDomainMembers(
       path,
+      program,
       declarator.exportName,
       domain.name,
       domain.definitions,
@@ -207,6 +224,7 @@ function declaredDomain(expression: Expression): {
 
 function collectDomainMembers(
   path: string,
+  program: Program,
   exportName: string,
   domain: string,
   definitions: Extract<Expression, { type: "ObjectExpression" }>,
@@ -214,7 +232,7 @@ function collectDomainMembers(
 ): Map<string, DomainMember> {
   const members = new Map<string, DomainMember>();
   for (const property of definitions.properties) {
-    const member = declaredDomainMember(property);
+    const member = declaredDomainMember(path, program, property);
     if (member === null) continue;
     const operation = `${domain}.${member.name}`;
     const existing = byOperation.get(operation);
@@ -223,25 +241,148 @@ function collectDomainMembers(
         `${operation} is declared more than once: ${relative(ROOT, existing.path)} and ${relative(ROOT, path)}. Each Start operation id may have exactly one client declaration; whichever schema the single handler used would win silently.`,
       );
     }
-    byOperation.set(operation, { kind: member.kind, path, exportName });
-    members.set(member.name, { operation, kind: member.kind });
+    byOperation.set(operation, {
+      kind: member.kind,
+      path,
+      exportName,
+      observability: member.observability,
+    });
+    members.set(member.name, {
+      operation,
+      kind: member.kind,
+      observability: member.observability,
+    });
   }
   return members;
 }
 
+const unwrapExpression = (expression: Expression): Expression =>
+  expression.type === "TSAsExpression" ||
+  expression.type === "TSSatisfiesExpression"
+    ? unwrapExpression(expression.expression)
+    : expression;
+
+const sourcePath = (path: string, source: string): string | undefined => {
+  const base = source.startsWith("~/")
+    ? join(SOURCE_ROOT, source.slice(2))
+    : source.startsWith(".")
+      ? join(path, "..", source)
+      : undefined;
+  return base
+    ? [".ts", ".tsx", "/index.ts", "/index.tsx"]
+        .map((extension) => `${base}${extension}`)
+        .find((candidate) => existsSync(candidate))
+    : undefined;
+};
+
+const staticStringArray = (
+  path: string,
+  program: Program,
+  rawExpression: Expression,
+  seen = new Set<string>(),
+): readonly string[] => {
+  const expression = unwrapExpression(rawExpression);
+  if (expression.type === "ArrayExpression") {
+    return expression.elements.flatMap((element) => {
+      if (element === null) return [];
+      if (element.type === "SpreadElement")
+        return staticStringArray(path, program, element.argument, seen);
+      const value = unwrapExpression(element);
+      if (isStringLiteral(value)) return [value.value];
+      throw new Error(
+        `${relative(ROOT, path)} observability arrays may contain only strings or static string-array spreads.`,
+      );
+    });
+  }
+  if (expression.type !== "Identifier") {
+    throw new Error(
+      `${relative(ROOT, path)} observability metadata must be a static string array.`,
+    );
+  }
+  const key = `${path}#${expression.name}`;
+  if (seen.has(key)) throw new Error(`Circular static array reference: ${key}`);
+  seen.add(key);
+  const local = topLevelVariableDeclarators(program).find(
+    ({ exportName }) => exportName === expression.name,
+  );
+  if (local) return staticStringArray(path, program, local.init, seen);
+  const binding = importBindings(program.body).get(expression.name);
+  const target = binding ? sourcePath(path, binding.source) : undefined;
+  if (!binding || !target) {
+    throw new Error(
+      `${relative(ROOT, path)} observability metadata references unresolved array ${expression.name}.`,
+    );
+  }
+  const targetProgram = parseFile(target);
+  const exported = topLevelVariableDeclarators(targetProgram).find(
+    ({ exportName }) => exportName === binding.imported,
+  );
+  if (!exported) {
+    throw new Error(
+      `${relative(ROOT, target)} does not export static array ${binding.imported}.`,
+    );
+  }
+  return staticStringArray(target, targetProgram, exported.init, seen);
+};
+
+const observabilityMetadata = (
+  path: string,
+  program: Program,
+  definition: Expression | undefined,
+): OperationObservability => {
+  const value = definition ? unwrapExpression(definition) : undefined;
+  if (value?.type !== "ObjectExpression")
+    return { entities: [], productPhases: [] };
+  const observability = value.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      propertyName(property.key) === "observability",
+  );
+  if (observability?.type !== "Property")
+    return { entities: [], productPhases: [] };
+  const metadata = unwrapExpression(observability.value);
+  if (metadata.type !== "ObjectExpression") {
+    throw new Error(
+      `${relative(ROOT, path)} observability metadata must be an inline object.`,
+    );
+  }
+  const array = (name: keyof OperationObservability) => {
+    const property = metadata.properties.find(
+      (candidate) =>
+        candidate.type === "Property" && propertyName(candidate.key) === name,
+    );
+    return property?.type === "Property"
+      ? staticStringArray(path, program, property.value, new Set())
+      : [];
+  };
+  return { entities: array("entities"), productPhases: array("productPhases") };
+};
+
 function declaredDomainMember(
+  path: string,
+  program: Program,
   property: Extract<
     Expression,
     { type: "ObjectExpression" }
   >["properties"][number],
-): { name: string; kind: Kind } | null {
+): { name: string; kind: Kind; observability: OperationObservability } | null {
   if (property.type !== "Property" || property.value.type !== "CallExpression")
     return null;
   const name = propertyName(property.key);
   const kind = calledName(property.value.callee);
   return name !== undefined &&
     (kind === "query" || kind === "mutation" || kind === "subscription")
-    ? { name, kind }
+    ? {
+        name,
+        kind,
+        observability: observabilityMetadata(
+          path,
+          program,
+          property.value.arguments[0]?.type === "SpreadElement"
+            ? undefined
+            : property.value.arguments[0],
+        ),
+      }
     : null;
 }
 
@@ -452,7 +593,10 @@ function collectHandlerProperty(
  * the class of bug where a hand-written stream wrapper's operation string was
  * the registry entry.
  */
-export const collectStartOperations = (): Map<string, Kind> => {
+export const collectStartOperations = (): Map<
+  string,
+  { kind: Kind; observability: OperationObservability }
+> => {
   const declarations = collectDomainDeclarations();
 
   // Fires earlier and more clearly than the generated loader's `satisfies`
@@ -477,7 +621,10 @@ export const collectStartOperations = (): Map<string, Kind> => {
   return new Map(
     [...declarations.byOperation].map(([operation, declared]) => [
       operation,
-      declared.kind,
+      {
+        kind: declared.kind,
+        observability: declared.observability,
+      },
     ]),
   );
 };
@@ -489,44 +636,16 @@ export const renderStartOperationRegistry = (): string => {
   return (
     `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
     `export const START_OPERATIONS = {\n${operations
-      .map(([operation, kind]) => {
-        const entities = operation.startsWith("entity.")
-          ? [
-              "ingredient",
-              "product",
-              "recipe",
-              "cookbook",
-              "location",
-              "inventory",
-              "ledgerParty",
-              "ledgerTransfer",
-              "meal",
-              "project",
-              "task",
-              "vendor",
-              "purchase",
-              "expense",
-              "financialAccount",
-              "financialTransaction",
-              "wish",
-              "usda-food",
-              "image",
-            ]
-          : [];
-        const phases =
-          operation === "entity.detail"
-            ? [
-                "resolve",
-                "base",
-                "pricing",
-                "quantity",
-                "breadcrumbs",
-                "quality",
-                "recipe_usages",
-                "food",
-              ]
-            : [];
-        return `  ${JSON.stringify(operation)}: { kind: ${JSON.stringify(kind)}, entities: ${JSON.stringify(entities)}, productPhases: ${JSON.stringify(phases)} },`;
+      .map(([operation, { kind, observability }]) => {
+        const metadata = [
+          observability.entities.length > 0
+            ? `entities: ${JSON.stringify(observability.entities)}`
+            : undefined,
+          observability.productPhases.length > 0
+            ? `productPhases: ${JSON.stringify(observability.productPhases)}`
+            : undefined,
+        ].filter((field): field is string => field !== undefined);
+        return `  ${JSON.stringify(operation)}: { kind: ${JSON.stringify(kind)}${metadata.length > 0 ? `, ${metadata.join(", ")}` : ""} },`;
       })
       .join("\n")}\n} as const;\n\n` +
     `export type StartOperationId = keyof typeof START_OPERATIONS;\n` +

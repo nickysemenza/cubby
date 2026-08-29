@@ -12,14 +12,15 @@ import {
   createCurrencyColumn,
   createNameColumn,
 } from "~/app/_components/data-table/columnHelpers";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
-import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { TradeBadge } from "~/app/projects/trade-options";
@@ -228,15 +229,12 @@ export function LinkExpensesDialog({
       }),
     [helper],
   );
-  const layout = useCubbyTableLayout({
-    key: "purchase:expense-picker",
-    columns,
-  });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "expense",
     data: candidates,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "purchase:expense-picker",
+    isLoading: candidatesQuery.isPending,
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -275,12 +273,10 @@ export function LinkExpensesDialog({
           />
         </Row>
         <div className="max-h-72 overflow-y-auto">
-          <RTable
-            table={table}
-            entity="expense"
+          <ListWorkbench
+            model={workbench}
+            mode="embedded"
             ariaLabel="Expenses available to attach"
-            embedded
-            isLoading={candidatesQuery.isPending}
             emptyState={
               <Empty variant="minimal" className="py-6">
                 <EmptyTitle>No expenses to attach</EmptyTitle>

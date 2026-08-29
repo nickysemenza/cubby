@@ -33,7 +33,7 @@ interface UseEntitySelectionOptions<TData extends { id: string }> {
   canSelectRow?: (row: TData) => boolean;
 }
 
-interface UseEntitySelectionReturn<TData extends { id: string }> {
+export interface UseEntitySelectionReturn<TData extends { id: string }> {
   /**
    * Spread at the head of the columns array. Empty — not a disabled column —
    * when nothing is selectable, so a table with no actions grows no dead

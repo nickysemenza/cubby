@@ -2171,7 +2171,7 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         `${detailRuntimeImportSource}\n\n` +
-        `const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
+        `export const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
         "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
         "export type EntityDetailByEntity = {\n" +
         `${detailOutputTypes}\n` +
@@ -2210,7 +2210,7 @@ export const renderEntityArtifacts = (
         'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
-        `const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type ListEntity = (typeof listEntities)[number];\n\n" +
         'const entityListSortSchema = z.object({ orderBy: z.string().min(1), direction: z.enum(["asc", "desc"]) });\n' +
         "const entityListSortsSchema = z.union([entityListSortSchema, z.array(entityListSortSchema).min(1).max(MAX_SORTS)]);\n" +
@@ -2267,7 +2267,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         `${mutationOutputImports}\n` +
         'import type { z } from "zod";\n\n' +
-        `const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+        `export const entityMutationOutputEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
         "export type EntityMutationOutputEntity = (typeof entityMutationOutputEntities)[number];\n\n" +
         "export type EntityMutationOutputByEntity = {\n" +
         `${mutationOutputTypes}\n` +

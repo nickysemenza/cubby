@@ -10,15 +10,15 @@ import {
   createCurrencyColumn,
   createTimestampColumn,
 } from "~/app/_components/data-table/columnHelpers";
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
-import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
@@ -409,15 +409,12 @@ function ProjectUsesDialog({
       }),
     [helper],
   );
-  const layout = useCubbyTableLayout({
-    key: "product:project-picker",
-    columns,
-  });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "project",
     data: visible,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "product:project-picker",
+    isLoading,
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -446,12 +443,10 @@ function ProjectUsesDialog({
         </Row>
 
         <div className="max-h-80 overflow-y-auto">
-          <RTable
-            table={table}
-            entity="project"
+          <ListWorkbench
+            model={workbench}
+            mode="embedded"
             ariaLabel="Projects available for this product"
-            embedded
-            isLoading={isLoading}
             emptyState={<Description>No projects match.</Description>}
           />
         </div>

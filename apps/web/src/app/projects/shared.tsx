@@ -67,16 +67,16 @@ import {
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { InventoryEntriesCell } from "~/app/_components/data-table/inventory-entries-cell";
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import RTable from "~/app/_components/data-table/Table";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import {
   type CubbyColumnHelper as ColumnHelper,
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyFilterFn as FilterFn,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
@@ -448,32 +448,24 @@ export function TaskList({
   }, [tasks]);
 
   // Embedded and ledger column layouts must not share storage.
-  const layout = useCubbyTableLayout({
-    key: "task:embedded",
-    columns,
-    initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
-    legacyVisibilityKey: "task:embedded",
-    legacySizingKey: "task:embedded",
-  });
-
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "task",
     data: sortedData,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "task:embedded",
+    layout: {
+      initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
+      legacyVisibilityKey: "task:embedded",
+      legacySizingKey: "task:embedded",
+    },
+    selection,
+    deleteDialog,
     // The table holds its full scoped set, so client-side facet counts are exact.
     getRowId: (row) => row.id,
-    enableRowSelection: selection.enableRowSelection,
     enableRowRangeSelection: true,
-    state: {
-      rowSelection: selection.rowSelection,
-      columnFilters,
-    },
-    onRowSelectionChange: selection.onRowSelectionChange,
+    state: { columnFilters },
     onColumnFiltersChange: setColumnFilters,
-    initialState: {
-      pagination: { pageIndex: 0, pageSize: 25 },
-    },
+    initialState: { pagination: { pageIndex: 0, pageSize: 25 } },
   });
 
   if (tasks.length === 0) {
@@ -487,18 +479,7 @@ export function TaskList({
     );
   }
 
-  return (
-    <>
-      <RTable
-        table={table}
-        embedded
-        showColumnMenu
-        bulkActionBar={selection.renderBulkActionBar(table)}
-        {...selection.tableProps}
-      />
-      {deleteDialog}
-    </>
-  );
+  return <ListWorkbench model={workbench} mode="embedded" showColumnMenu />;
 }
 
 const expenseHelper = createCubbyColumnHelper<ExpenseOut>();
@@ -1120,31 +1101,23 @@ export function ExpenseList({
   );
 
   // Embedded and ledger column layouts must not share storage.
-  const layout = useCubbyTableLayout({
-    key: "expense:embedded",
-    columns,
-    initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
-    legacyVisibilityKey: "expense:embedded",
-    legacySizingKey: "expense:embedded",
-  });
-
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "expense",
     data: expenses,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "expense:embedded",
+    layout: {
+      initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
+      legacyVisibilityKey: "expense:embedded",
+      legacySizingKey: "expense:embedded",
+    },
+    selection,
+    deleteDialog,
     getRowId: (row) => row.id,
-    enableRowSelection: selection.enableRowSelection,
     enableRowRangeSelection: true,
-    state: {
-      rowSelection: selection.rowSelection,
-      columnFilters,
-    },
-    onRowSelectionChange: selection.onRowSelectionChange,
+    state: { columnFilters },
     onColumnFiltersChange: setColumnFilters,
-    initialState: {
-      pagination: { pageIndex: 0, pageSize: 25 },
-    },
+    initialState: { pagination: { pageIndex: 0, pageSize: 25 } },
   });
 
   // Apply pivot transitions as multi-select filters without clearing mount state.
@@ -1158,13 +1131,13 @@ export function ExpenseList({
     const nextCostType = costTypeFilter ?? null;
     if (prev.trade === nextTrade && prev.costType === nextCostType) return;
     lastPivotRef.current = { trade: nextTrade, costType: nextCostType };
-    table
+    workbench.table
       .getColumn("trade")
       ?.setFilterValue(nextTrade ? [nextTrade] : undefined);
-    table
+    workbench.table
       .getColumn("costType")
       ?.setFilterValue(nextCostType ? [nextCostType] : undefined);
-  }, [table, tradeFilter, costTypeFilter]);
+  }, [workbench.table, tradeFilter, costTypeFilter]);
 
   if (expenses.length === 0) {
     return (
@@ -1179,14 +1152,7 @@ export function ExpenseList({
 
   return (
     <ExpenseProductImages rows={expenses}>
-      <RTable
-        table={table}
-        embedded
-        showColumnMenu
-        bulkActionBar={selection.renderBulkActionBar(table)}
-        {...selection.tableProps}
-      />
-      {deleteDialog}
+      <ListWorkbench model={workbench} mode="embedded" showColumnMenu />
     </ExpenseProductImages>
   );
 }

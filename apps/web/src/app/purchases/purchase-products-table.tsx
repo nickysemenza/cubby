@@ -15,13 +15,14 @@ import {
   createNameColumn,
   rowImages,
 } from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { groupComponentsByParent } from "~/app/products/product-kit-rows";
@@ -247,30 +248,24 @@ export function PurchaseProductsTable({ purchaseId }: { purchaseId: string }) {
       }),
     [detach, helper, purchaseId, selection.selectColumns],
   );
-  const layout = useCubbyTableLayout({ key: "purchase:products", columns });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "product",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "purchase:products",
+    selection,
+    isLoading: query.isPending,
     // `rowKey`, not `id`: a component can appear under two kits on one order.
     getRowId: (row) => row.rowKey,
     getSubRows: (row) => row.subRows,
-    enableRowSelection: selection.enableRowSelection,
-    state: { rowSelection: selection.rowSelection },
-    onRowSelectionChange: selection.onRowSelectionChange,
     initialState: { pagination: { pageIndex: 0, pageSize: 50 } },
   });
 
   return (
-    <RTable
-      table={table}
-      entity="product"
-      bulkActionBar={selection.renderBulkActionBar(table)}
-      {...selection.tableProps}
+    <ListWorkbench
+      model={workbench}
+      mode="embedded"
       ariaLabel="Products linked to this purchase"
-      embedded
-      isLoading={query.isPending}
       emptyState={
         <Empty variant="minimal" className="py-6">
           <EmptyHeader>
