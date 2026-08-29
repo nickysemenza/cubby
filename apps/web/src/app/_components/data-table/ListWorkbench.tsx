@@ -5,9 +5,11 @@ import type { ReactNode } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 
 import type { EntityActionsEntry } from "../actions/entity-actions";
+import type { UseEntitySelectionReturn } from "../hooks/useEntitySelection";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import RTable, { type RTableProps } from "./Table";
-import type { CubbyTable } from "./table-features";
+import { type CubbyTable, useCubbyTable } from "./table-features";
+import { type TableLayoutOptions, useCubbyTableLayout } from "./table-layout";
 import type { GroupConfig } from "./useGroupedList";
 
 /**
@@ -89,6 +91,70 @@ export interface ListWorkbenchProps<
   mode?: "page" | "embedded";
   /** Domain status or summary shown beside the shared table controls. */
   contextualStatus?: ReactNode;
+}
+
+type CubbyTableOptions<TItem extends RowData> = Parameters<
+  typeof useCubbyTable<TItem>
+>[0];
+
+type BoundedListWorkbenchOptions<TItem extends RowData & { id: string }> = Omit<
+  CubbyTableOptions<TItem>,
+  "data" | "columns" | "atoms" | "meta"
+> & {
+  entity: Entity;
+  data: TItem[];
+  columns: TableLayoutOptions<TItem>["columns"];
+  layoutKey: string;
+  layout?: Omit<TableLayoutOptions<TItem>, "columns" | "key">;
+  selection?: UseEntitySelectionReturn<TItem>;
+  isLoading?: boolean;
+  deleteDialog?: ReactNode;
+};
+
+/**
+ * The complete bounded-table implementation: persisted layout, table atoms,
+ * optional entity selection, bulk chrome, and dialogs are wired once.
+ */
+export function useBoundedListWorkbench<
+  TItem extends RowData & { id: string },
+>({
+  entity,
+  data,
+  columns,
+  layoutKey,
+  layout: layoutOptions,
+  selection,
+  isLoading,
+  deleteDialog,
+  ...tableOptions
+}: BoundedListWorkbenchOptions<TItem>): ListWorkbenchModel<TItem> {
+  const layout = useCubbyTableLayout({
+    ...layoutOptions,
+    key: layoutKey,
+    columns,
+  });
+  const table = useCubbyTable({
+    ...tableOptions,
+    data,
+    columns: layout.columns,
+    atoms: layout.atoms,
+    meta: { defaultLayout: layout.defaultLayout },
+    enableRowSelection:
+      selection?.enableRowSelection ?? tableOptions.enableRowSelection,
+    state: selection
+      ? { ...tableOptions.state, rowSelection: selection.rowSelection }
+      : tableOptions.state,
+    onRowSelectionChange:
+      selection?.onRowSelectionChange ?? tableOptions.onRowSelectionChange,
+  });
+  return {
+    entity,
+    table,
+    isLoading,
+    bulkActionBar: selection?.renderBulkActionBar(table),
+    ...selection?.tableProps,
+    deleteDialog,
+  };
 }
 
 /**

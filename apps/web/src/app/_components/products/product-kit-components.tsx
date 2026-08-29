@@ -25,14 +25,15 @@ import {
   createNameColumn,
   rowImages,
 } from "~/app/_components/data-table/columnHelpers";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
-import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { product as productOperations } from "~/app/products/product.functions";
@@ -241,26 +242,20 @@ function KitTable({
       selection.selectColumns,
     ],
   );
-  const layout = useCubbyTableLayout({ key: layoutKey, columns });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "product",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey,
+    selection,
     getRowId: (row) => row.id,
-    enableRowSelection: selection.enableRowSelection,
-    state: { rowSelection: selection.rowSelection },
-    onRowSelectionChange: selection.onRowSelectionChange,
     initialState: TABLE_STATE,
   });
   return (
-    <RTable
-      table={table}
-      entity="product"
-      bulkActionBar={selection.renderBulkActionBar(table)}
-      {...selection.tableProps}
+    <ListWorkbench
+      model={workbench}
+      mode="embedded"
       ariaLabel={ariaLabel}
-      embedded
       emptyState={emptyState}
     />
   );
@@ -418,15 +413,12 @@ function AddComponentsDialog({
       }),
     [helper, selected],
   );
-  const layout = useCubbyTableLayout({
-    key: "product:component-picker",
-    columns,
-  });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "product",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "product:component-picker",
+    isLoading: searchQuery.isPending,
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
@@ -451,12 +443,10 @@ function AddComponentsDialog({
           placeholder="Search products…"
         />
         <div className="max-h-96 overflow-y-auto">
-          <RTable
-            table={table}
-            entity="product"
+          <ListWorkbench
+            model={workbench}
+            mode="embedded"
             ariaLabel="Products available as kit components"
-            embedded
-            isLoading={searchQuery.isPending}
             emptyState={
               <Empty variant="minimal" className="py-6">
                 <EmptyTitle>No products found</EmptyTitle>

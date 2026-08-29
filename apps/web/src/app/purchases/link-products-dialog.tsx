@@ -16,14 +16,15 @@ import {
   createNameColumn,
   rowImages,
 } from "~/app/_components/data-table/columnHelpers";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/app/_components/data-table/ListWorkbench";
 import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
-import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { product } from "~/app/products/product.functions";
 import { Row } from "~/components/layout";
@@ -162,20 +163,19 @@ export function LinkProductsDialog({
       }),
     [helper],
   );
-  const layout = useCubbyTableLayout({
-    key: "purchase:product-picker",
-    columns,
-  });
-  const table = useCubbyTable({
+  const workbench = useBoundedListWorkbench({
+    entity: "product",
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns,
+    layoutKey: "purchase:product-picker",
+    isLoading: searchQuery.isPending,
     getRowId: (row) => row.id,
     enableRowSelection: true,
     state: { rowSelection },
     onRowSelectionChange,
-    initialState: { pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE } },
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
+    },
   });
 
   return (
@@ -202,12 +202,10 @@ export function LinkProductsDialog({
           />
         </Row>
         <div className="max-h-96 overflow-y-auto">
-          <RTable
-            table={table}
-            entity="product"
+          <ListWorkbench
+            model={workbench}
+            mode="embedded"
             ariaLabel="Products available to attach"
-            embedded
-            isLoading={searchQuery.isPending}
             emptyState={
               <Empty variant="minimal" className="py-6">
                 <EmptyTitle>No products found</EmptyTitle>

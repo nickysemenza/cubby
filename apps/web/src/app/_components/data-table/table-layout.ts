@@ -241,7 +241,7 @@ export function isTableLayoutCustomized(
   );
 }
 
-interface TableLayoutOptions<TData extends RowData> {
+export interface TableLayoutOptions<TData extends RowData> {
   /** Undefined creates an in-memory layout for tables that opt out of persistence. */
   key?: string;
   columns: CubbyColumnCollection<TData>;
