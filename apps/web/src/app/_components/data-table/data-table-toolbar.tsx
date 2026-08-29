@@ -42,6 +42,8 @@ interface DataTableToolbarProps<TData extends RowData> {
   workbenchUtilityViewport?: "all" | "desktop" | "mobile";
   /** Must match the table controller's first-visit density. */
   defaultDensity?: TableDensity;
+  /** Embedded relationship ledgers keep query tools but omit page-owned views. */
+  variant?: "page" | "embedded";
 }
 
 export function DataTableToolbar<TData extends RowData>({
@@ -57,6 +59,7 @@ export function DataTableToolbar<TData extends RowData>({
   portalWorkbenchUtilities = false,
   workbenchUtilityViewport = "all",
   defaultDensity,
+  variant = "page",
 }: DataTableToolbarProps<TData>) {
   const workbenchTarget = usePageWorkbenchTarget();
   const utilities = (
@@ -64,7 +67,7 @@ export function DataTableToolbar<TData extends RowData>({
       {showViewOptions && (
         <DataTableViewOptions table={table} defaultDensity={defaultDensity} />
       )}
-      <DataTableViews table={table} entity={entity} />
+      {variant === "page" && <DataTableViews table={table} entity={entity} />}
     </>
   );
   const utilityClass =
@@ -84,8 +87,10 @@ export function DataTableToolbar<TData extends RowData>({
           workbenchTarget,
         )}
       <div
+        data-toolbar-variant={variant}
         className={cn(
-          "flex min-h-10 min-w-0 flex-wrap items-center gap-2 bg-card px-2 py-1",
+          "flex min-w-0 flex-wrap items-center bg-card px-2 py-1",
+          variant === "embedded" ? "min-h-8 gap-1" : "min-h-10 gap-2",
           className,
         )}
       >

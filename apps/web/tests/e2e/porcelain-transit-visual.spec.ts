@@ -101,6 +101,45 @@ test("Porcelain desktop Products workbench remains visually stable", async ({
   );
 });
 
+test("Porcelain desktop Product detail keeps one calm operating hierarchy", async ({
+  page,
+}) => {
+  const product = await seedProductWithRelationship(
+    page,
+    "Porcelain visual desktop detail shelf",
+    "Porcelain visual desktop detail product",
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Stocked At" }),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.getByRole("button", { name: /jump to section/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Add to inventory", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("detail-supporting-rail")).toBeVisible();
+  await expectViewportBounded(page);
+  await page.waitForLoadState("networkidle");
+  await expectCleanVisualState(page);
+
+  await expect(page).toHaveScreenshot(
+    "porcelain-product-detail-overview-desktop.png",
+    {
+      animations: "disabled",
+      caret: "hide",
+      mask: [
+        ...nondeterministicMasks(page),
+        page.getByText(product.id, { exact: true }),
+        page.getByText(/^Added /),
+      ],
+      maskColor: "#e7ebf1",
+    },
+  );
+});
+
 test("Porcelain phone Products roster remains visually stable", async ({
   page,
 }) => {

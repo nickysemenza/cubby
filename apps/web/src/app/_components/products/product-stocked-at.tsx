@@ -429,6 +429,7 @@ export const ProductStockedAt: FC<{
           <HierarchyDrilldown
             root={locationBreakdown}
             ariaLabel={`${product.name} location breakdown`}
+            density="compact"
           />
         )}
 

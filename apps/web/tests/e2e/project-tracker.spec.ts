@@ -353,10 +353,8 @@ test.describe("Project tracker", () => {
       timeout: 10000,
     });
 
-    const resourcesCard = page.locator('[data-slot="card"]').filter({
-      has: page.getByText("Resources", { exact: true }),
-    });
-    await expect(resourcesCard).toBeVisible();
+    const resourcesSection = page.locator("section#resources");
+    await expect(resourcesSection).toBeVisible();
     const overviewTitle = page.getByRole("heading", {
       name: "Overview",
       exact: true,
@@ -368,10 +366,10 @@ test.describe("Project tracker", () => {
     await expect(overviewTitle).toBeVisible();
     await expect(resourcesTitle).toBeVisible();
 
-    const driveRow = resourcesCard
+    const driveRow = resourcesSection
       .getByText("Google Drive folder", { exact: true })
       .locator("..");
-    const notionRow = resourcesCard
+    const notionRow = resourcesSection
       .getByText("Notion page", { exact: true })
       .locator("..");
 

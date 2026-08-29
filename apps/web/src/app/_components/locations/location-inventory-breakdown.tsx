@@ -113,6 +113,7 @@ export function LocationInventoryBreakdown({
     <HierarchyDrilldown
       root={buildLocationInventoryBreakdown(root)}
       ariaLabel="Contents breakdown"
+      density="compact"
     />
   );
 }

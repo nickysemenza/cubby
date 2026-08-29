@@ -55,6 +55,21 @@ type DesktopPaneStyle = React.CSSProperties & {
   "--row-accent"?: string;
 };
 
+const tableChromeVariant = (embedded: boolean): "page" | "embedded" =>
+  embedded ? "embedded" : "page";
+
+function showMobileViewOptions({
+  embedded,
+  showColumnMenu,
+  externalToolbar,
+}: {
+  embedded: boolean;
+  showColumnMenu: boolean;
+  externalToolbar: boolean;
+}): boolean {
+  return embedded ? showColumnMenu : externalToolbar;
+}
+
 function desktopPaneStyle({
   embedded,
   paneMaxHeight,
@@ -168,9 +183,9 @@ export interface RTableProps<TItem extends RowData> {
   /**
    * Table is nested inside a detail-page section rather than owning the page.
    * Drops the page-level sticky chrome (toolbar / column header / pagination
-   * bar), which otherwise floats over the section's own rows, and hides the
-   * toolbar and pager entirely when they'd hold nothing but the View menu and
-   * a one-page pager.
+   * bar), saved views, and page-size controls, which otherwise compete with
+   * the section's own tools. Hides the toolbar and pager entirely when they
+   * would hold no embedded controls or useful navigation.
    */
   embedded?: boolean;
   /**
@@ -265,6 +280,8 @@ function DesktopTableToolbar<TItem extends RowData>({
   bulkActionBar,
   externalToolbar,
   isTransitioning,
+  embedded,
+  showColumnMenu,
 }: Pick<
   RTableProps<TItem>,
   | "table"
@@ -279,6 +296,8 @@ function DesktopTableToolbar<TItem extends RowData>({
   | "infiniteScroll"
   | "actions"
   | "bulkActionBar"
+  | "embedded"
+  | "showColumnMenu"
 > & {
   externalToolbar: boolean;
   isTransitioning: boolean;
@@ -298,17 +317,19 @@ function DesktopTableToolbar<TItem extends RowData>({
             grouped={grouped}
             onGroupedChange={onGroupedChange}
           />
-          {!infiniteScroll && (
+          {!embedded && !infiniteScroll && (
             <RowsPerPageSelect table={table} className="h-7 w-16" />
           )}
         </div>
       }
       actions={actions}
       bulkActionBar={bulkActionBar}
+      showViewOptions={!embedded || showColumnMenu}
       portalWorkbenchUtilities={externalToolbar}
       workbenchUtilityViewport="desktop"
       isTransitioning={isTransitioning}
-      className="px-4 py-1"
+      variant={embedded ? "embedded" : "page"}
+      className={embedded ? "px-2 py-1" : "px-4 py-1"}
     />
   );
 }
@@ -762,6 +783,7 @@ function DesktopTableView<TItem extends RowData>({
                 timing={timing}
                 showPaginationControls={!infiniteScroll && showPagination}
                 showCellSelectionStats={showCellSelectionStats}
+                variant={tableChromeVariant(embedded)}
               />
             </div>
           ) : null}
@@ -961,6 +983,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       bulkActionBar={bulkActionBar}
       externalToolbar={externalToolbar}
       isTransitioning={isTransitioning}
+      embedded={embedded}
+      showColumnMenu={showColumnMenu}
     />
   ) : null;
 
@@ -1130,6 +1154,13 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           isTransitioning={isTransitioning}
           rowContentVersion={rowContentVersion}
           portalWorkbenchUtilities={externalToolbar}
+          showToolbar={showToolbar}
+          showViewOptions={showMobileViewOptions({
+            embedded,
+            showColumnMenu,
+            externalToolbar,
+          })}
+          toolbarVariant={tableChromeVariant(embedded)}
           emptyState={emptyState}
           defaultDensity={defaultDensity}
         />
@@ -1137,7 +1168,11 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
 
       {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
       {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
-        <DataTablePagination table={table} timing={timing} />
+        <DataTablePagination
+          table={table}
+          timing={timing}
+          variant={tableChromeVariant(embedded)}
+        />
       )}
     </Stack>
   );

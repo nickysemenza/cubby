@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 
-import { EntityActionButtons } from "~/app/_components/actions/entity-actions";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -190,15 +189,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Stocked At",
       icon: MapPin,
       placement: "primary" as const,
-      // From the registry, so the same verb the row menus and the palette offer
-      // is the one this page offers — including its kit over-accounting
-      // warning, which the action now derives itself.
-      headerAction: (
-        <EntityActionButtons
-          entity="product"
-          record={{ id: product.id, name: product.name }}
-        />
-      ),
       content: <ProductStockedAt product={product} />,
     },
     // Custom section: Expense History — every expense linked to this
@@ -514,15 +504,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         sections={sections}
         rawData={product}
         heroImages={images}
-        relationshipPreview={
-          <div className="border-b border-border bg-card px-2 py-2 md:px-4">
-            <ProductRelationshipRouteContent
-              product={product}
-              query={relationshipRouteQuery}
-              variant="strip"
-            />
-          </div>
-        }
       />
       <EntityEditDialog
         open={recordSaleOpen}

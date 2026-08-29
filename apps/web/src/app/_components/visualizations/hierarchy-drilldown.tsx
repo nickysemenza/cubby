@@ -40,6 +40,11 @@ export interface HierarchyDrilldownProps {
   root: HierarchyDrilldownNode;
   /** Names this navigation region for assistive technology. */
   ariaLabel: string;
+  /**
+   * Use the read-heavy detail treatment: 32px desktop rows and a single
+   * direct-only location row when there is no branch to drill into.
+   */
+  density?: "default" | "compact";
   className?: string;
 }
 
@@ -105,6 +110,7 @@ function RowAnnotations({ annotations }: { annotations?: readonly string[] }) {
 export function HierarchyDrilldown({
   root,
   ariaLabel,
+  density = "default",
   className,
 }: HierarchyDrilldownProps) {
   // Store identity, not node snapshots: query invalidation can replace the
@@ -124,7 +130,31 @@ export function HierarchyDrilldown({
     return resolved;
   }, [root, pathIds]);
   const focused = path[path.length - 1] ?? root;
-  const rows = useMemo(() => sortedRows(focused), [focused]);
+  const isCompact = density === "compact";
+  const isDirectOnly = isCompact && (focused.children?.length ?? 0) === 0;
+  const rows = useMemo(() => {
+    if (isDirectOnly) {
+      // A leaf has no useful breakdown. In compact detail surfaces, render the
+      // location itself once instead of repeating it in the breadcrumb and as
+      // a synthetic “Directly here” child row. Keeping the focused node on the
+      // row preserves its typed location link and image.
+      return [
+        {
+          id: focused.id,
+          label: focused.label,
+          metricLabel: focused.directMetricLabel ?? focused.metricLabel,
+          metricValue:
+            focused.directMetricLabel !== undefined
+              ? (focused.directMetricValue ?? null)
+              : focused.metricValue,
+          annotations: focused.annotations,
+          displayImage: focused.displayImage,
+          node: focused,
+        },
+      ];
+    }
+    return sortedRows(focused);
+  }, [focused, isDirectOnly]);
   const focusedMetricValue = focused.metricValue ?? 0;
   const canUseBars =
     rows.length > 0 &&
@@ -134,88 +164,96 @@ export function HierarchyDrilldown({
   return (
     <section
       aria-label={ariaLabel}
+      data-density={density}
       className={cn("border-y border-border bg-card font-sans", className)}
     >
-      <div className="border-b border-border bg-muted/20 px-2 py-1 sm:px-4">
-        <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:min-h-8">
-          <div className="flex min-w-0 items-center gap-1">
-            {path.length > 1 && (
-              <button
-                type="button"
-                onClick={() =>
-                  setPathIds(path.slice(1, -1).map((node) => node.id))
-                }
-                className="-ml-1 inline-flex min-h-10 shrink-0 items-center gap-1 px-1 text-xs font-medium text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
-              >
-                <ChevronLeft aria-hidden="true" className="size-3.5" />
-                Back
-              </button>
-            )}
-            <nav aria-label={`${ariaLabel} path`} className="min-w-0 flex-1">
-              <ol className="flex min-h-10 min-w-0 flex-nowrap items-center gap-1 text-xs sm:min-h-8 sm:flex-wrap">
-                {path.map((node, index) => {
-                  const isCurrent = index === path.length - 1;
-                  return (
-                    <li
-                      key={node.id}
-                      className={cn(
-                        "min-w-0 items-center gap-1",
-                        isCurrent ? "flex" : "hidden sm:flex",
-                      )}
-                    >
-                      {index > 0 && (
-                        <ChevronRight
-                          aria-hidden="true"
-                          className="hidden size-3.5 shrink-0 text-muted-foreground sm:block"
-                        />
-                      )}
-                      {/* Conditional, unlike the rows below: the list reserves
+      {(!isDirectOnly || path.length > 1) && (
+        <div
+          className={cn(
+            "border-b border-border bg-muted/20 px-2 py-1 sm:px-4",
+            isCompact && "py-0 sm:px-3",
+          )}
+        >
+          <div className="grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:min-h-8">
+            <div className="flex min-w-0 items-center gap-1">
+              {path.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPathIds(path.slice(1, -1).map((node) => node.id))
+                  }
+                  className="-ml-1 inline-flex min-h-10 shrink-0 items-center gap-1 px-1 text-xs font-medium text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
+                >
+                  <ChevronLeft aria-hidden="true" className="size-3.5" />
+                  Back
+                </button>
+              )}
+              <nav aria-label={`${ariaLabel} path`} className="min-w-0 flex-1">
+                <ol className="flex min-h-10 min-w-0 flex-nowrap items-center gap-1 text-xs sm:min-h-8 sm:flex-wrap">
+                  {path.map((node, index) => {
+                    const isCurrent = index === path.length - 1;
+                    return (
+                      <li
+                        key={node.id}
+                        className={cn(
+                          "min-w-0 items-center gap-1",
+                          isCurrent ? "flex" : "hidden sm:flex",
+                        )}
+                      >
+                        {index > 0 && (
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="hidden size-3.5 shrink-0 text-muted-foreground sm:block"
+                          />
+                        )}
+                        {/* Conditional, unlike the rows below: the list reserves
                           the box so labels stay aligned down a column, but a
                           breadcrumb is a horizontal trail where placeholders
                           for image-less rungs read as noise. */}
-                      {node.displayImage && (
-                        <EntityIdentityMark
-                          entity="location"
-                          displayImage={node.displayImage}
-                          size="inline"
-                        />
-                      )}
-                      {isCurrent ? (
-                        <span className="min-w-0">
-                          <span
-                            aria-current="page"
-                            className="block truncate font-medium text-foreground"
+                        {node.displayImage && (
+                          <EntityIdentityMark
+                            entity="location"
+                            displayImage={node.displayImage}
+                            size="inline"
+                          />
+                        )}
+                        {isCurrent ? (
+                          <span className="min-w-0">
+                            <span
+                              aria-current="page"
+                              className="block truncate font-medium text-foreground"
+                              title={node.label}
+                            >
+                              {node.label}
+                            </span>
+                            <RowAnnotations annotations={node.annotations} />
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPathIds(
+                                path.slice(1, index + 1).map((item) => item.id),
+                              )
+                            }
                             title={node.label}
+                            className="min-h-10 max-w-40 truncate px-1 text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
                           >
                             {node.label}
-                          </span>
-                          <RowAnnotations annotations={node.annotations} />
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPathIds(
-                              path.slice(1, index + 1).map((item) => item.id),
-                            )
-                          }
-                          title={node.label}
-                          className="min-h-10 max-w-40 truncate px-1 text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted hover:underline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-8"
-                        >
-                          {node.label}
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </nav>
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </nav>
+            </div>
+            <span className="shrink-0 font-mono text-xs text-foreground tabular-nums">
+              {focused.metricLabel}
+            </span>
           </div>
-          <span className="shrink-0 font-mono text-xs text-foreground tabular-nums">
-            {focused.metricLabel}
-          </span>
         </div>
-      </div>
+      )}
 
       {rows.length > 0 ? (
         <ul
@@ -251,7 +289,13 @@ export function HierarchyDrilldown({
             );
 
             return (
-              <li key={row.id} className="relative min-h-11 bg-card sm:min-h-9">
+              <li
+                key={row.id}
+                className={cn(
+                  "relative bg-card",
+                  isCompact ? "min-h-11 sm:min-h-8" : "min-h-11 sm:min-h-9",
+                )}
+              >
                 {barWidth && (
                   <span
                     aria-hidden="true"
@@ -270,7 +314,10 @@ export function HierarchyDrilldown({
                       ])
                     }
                     aria-label={`Drill into ${metricDescription}`}
-                    className="relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-left text-xs text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-9 sm:px-4"
+                    className={cn(
+                      "relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-left text-xs text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:px-4",
+                      isCompact ? "sm:min-h-8 sm:px-3" : "sm:min-h-9",
+                    )}
                   >
                     {content}
                     <ChevronRight
@@ -283,7 +330,10 @@ export function HierarchyDrilldown({
                     to="/locations/$shortcode"
                     params={{ shortcode: row.node.locationShortcode }}
                     aria-label={`Open location ${metricDescription}`}
-                    className="group relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-xs text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:min-h-9 sm:px-4"
+                    className={cn(
+                      "group relative flex min-h-11 w-full min-w-0 items-center gap-2 px-2 py-1 text-xs text-primary underline-offset-4 transition-colors duration-100 ease-cozy hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring motion-reduce:transition-none sm:px-4",
+                      isCompact ? "sm:min-h-8 sm:px-3" : "sm:min-h-9",
+                    )}
                   >
                     {content}
                     <MapPin
@@ -292,7 +342,12 @@ export function HierarchyDrilldown({
                     />
                   </Link>
                 ) : (
-                  <div className="relative flex min-h-11 min-w-0 items-center gap-2 px-2 py-1 text-xs text-foreground sm:min-h-9 sm:px-4">
+                  <div
+                    className={cn(
+                      "relative flex min-h-11 min-w-0 items-center gap-2 px-2 py-1 text-xs text-foreground sm:px-4",
+                      isCompact ? "sm:min-h-8 sm:px-3" : "sm:min-h-9",
+                    )}
+                  >
                     {content}
                     <span aria-hidden="true" className="size-3.5 shrink-0" />
                   </div>

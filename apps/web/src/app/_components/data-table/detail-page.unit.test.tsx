@@ -45,16 +45,16 @@ afterEach(() => {
 function renderDetail({
   entity = "image",
   rawData = { id: "IMG-EXAMPLE", filename: "fixture.jpg" },
+  pageRawData = rawData,
   detailSections = sections,
   heroMedia,
-  relationshipPreview,
   showEntityActions = false,
 }: {
   entity?: Entity;
   rawData?: unknown;
+  pageRawData?: unknown;
   detailSections?: DetailSection[];
   heroMedia?: ReactNode;
-  relationshipPreview?: ReactNode;
   showEntityActions?: boolean;
 } = {}) {
   return render(
@@ -62,13 +62,12 @@ function renderDetail({
       variant="detail"
       title="Fixture detail"
       entity={entity}
-      rawData={rawData}
+      rawData={pageRawData}
     >
       <DetailSections
         sections={detailSections}
         rawData={rawData}
         heroMedia={heroMedia}
-        relationshipPreview={relationshipPreview}
         showEntityActions={showEntityActions}
       />
     </Page>,
@@ -77,34 +76,43 @@ function renderDetail({
 }
 
 describe("DetailSections ledger", () => {
-  it("renders responsive tracks and a ruled section index", async () => {
+  it("combines navigation, section jump, and Overview tools around explicit tracks", async () => {
     const { container } = renderDetail();
-    expect(await screen.findByText("Sections")).toBeVisible();
+    expect(await screen.findByText("Story content")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "data-active",
     );
     expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Story" })).toHaveAttribute(
-      "href",
-      "#story",
+    expect(
+      screen.getByRole("button", { name: "Jump to section" }),
+    ).toBeVisible();
+    expect(screen.getByTestId("detail-overview-tools")).toHaveClass(
+      "w-full",
+      "md:flex-1",
     );
+    expect(
+      container.querySelector("#story")?.closest("[data-testid]"),
+    ).toHaveAttribute("data-testid", "detail-primary-stack");
+    expect(
+      container.querySelector("#summary")?.closest("aside"),
+    ).toHaveAttribute("data-testid", "detail-supporting-rail");
     expect(container.querySelector("#story")?.parentElement).toHaveClass(
-      "lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]",
+      "divide-y",
+      "bg-card",
     );
-    expect(container.querySelector("#story")).toHaveClass("lg:col-start-1");
-    expect(container.querySelector("#summary")).toHaveClass("lg:col-start-2");
   });
 
-  it("keeps authored source order and focuses an indexed section", async () => {
+  it("keeps placement stacks ordered and focuses a Jump target", async () => {
     const { container } = renderDetail();
     await screen.findByText("Story content");
     const ids = Array.from(container.querySelectorAll("section")).map(
       (section) => section.id,
     );
-    expect(ids).toContain("summary");
-    expect(ids).toContain("story");
-    expect(ids).toContain("ledger");
-    fireEvent.click(screen.getByRole("link", { name: "Story" }));
+    expect(ids).toEqual(["story", "summary", "ledger"]);
+    fireEvent.click(screen.getByRole("button", { name: "Jump to section" }));
+    const story = screen.getByRole("menuitem", { name: "Story" });
+    expect(story).toHaveAttribute("href", "#story");
+    fireEvent.click(story);
     expect(document.activeElement).toBe(document.getElementById("story"));
   });
 
@@ -123,7 +131,11 @@ describe("DetailSections ledger", () => {
       heroMedia: <div data-testid="rail-photo">Photo</div>,
     });
     const rail = await screen.findByTestId("detail-rail-media");
-    expect(rail).toHaveClass("hidden", "md:block", "lg:col-start-2");
+    expect(rail).toHaveClass("hidden", "md:block");
+    expect(rail.closest("aside")).toHaveAttribute(
+      "data-testid",
+      "detail-supporting-rail",
+    );
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
     expect(screen.getByText("Full relationships")).toBeVisible();
     expect(screen.queryByTestId("rail-photo")).toBeNull();
@@ -166,11 +178,8 @@ describe("DetailSections ledger", () => {
         content: <p>Authored activity</p>,
       },
     ];
-    renderDetail({
-      detailSections: modeSections,
-      relationshipPreview: <p>Compact relationship route</p>,
-    });
-    expect(await screen.findByText("Compact relationship route")).toBeVisible();
+    renderDetail({ detailSections: modeSections });
+    expect(await screen.findByText("Story content")).toBeVisible();
     expect(screen.queryByText("Full relationship route")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
     expect(screen.getByText("Full relationship route")).toBeVisible();
@@ -209,6 +218,28 @@ describe("DetailSections ledger", () => {
     });
     await screen.findByText("Summary content");
     expect(screen.queryByText("Empty")).toBeNull();
-    expect(screen.queryByText("Sections")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Jump to section" }),
+    ).toBeNull();
+    expect(screen.queryByTestId("detail-overview-tools")).toBeNull();
+  });
+
+  it("keeps record actions when unrelated detail metadata is nullable", async () => {
+    renderDetail({
+      entity: "product",
+      rawData: {
+        id: "PRD-EXAMPLE",
+        name: "Fixture product",
+        fdc_id: null,
+        description: null,
+      },
+      pageRawData: undefined,
+      showEntityActions: true,
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Add to inventory" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "More actions" })).toBeVisible();
   });
 });
