@@ -201,6 +201,39 @@ describe("HierarchyDrilldown", () => {
     ).toBeInTheDocument();
   });
 
+  it("collapses a compact direct-only branch to one linked location row", () => {
+    render(
+      <HierarchyDrilldown
+        root={{
+          id: "utility-room",
+          label: "Utility Room",
+          metricLabel: "2 each",
+          metricValue: 2,
+          directMetricLabel: "2 each",
+          directMetricValue: 2,
+          locationShortcode: utilityRoom,
+        }}
+        ariaLabel="Product locations"
+        density="compact"
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Directly here")).not.toBeInTheDocument();
+    const breakdown = screen.getByRole("list", {
+      name: "Utility Room breakdown",
+    });
+    const row = within(breakdown).getByRole("listitem");
+    expect(row).toHaveTextContent("Utility Room2 each");
+    expect(row).toHaveClass("sm:min-h-8");
+    expect(
+      within(row).getByRole("link", {
+        name: "Open location Utility Room: 2 each",
+      }),
+    ).toHaveAttribute("href", `/locations/${utilityRoom}`);
+  });
+
   it("marks each rung with its own thumbnail and leaves the rest on icons", () => {
     const withImages: HierarchyDrilldownNode = {
       ...tree,

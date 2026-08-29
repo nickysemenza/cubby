@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { Clock } from "lucide-react";
+import { ChevronDown, Clock } from "lucide-react";
 import {
   type FC,
   type ReactNode,
@@ -15,13 +15,14 @@ import { z } from "zod";
 
 import { Row } from "~/components/layout";
 import { usePageDetailContext } from "~/components/page/Page";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
@@ -34,10 +35,6 @@ import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
 import { RelationshipExplorer } from "../relationships/relationship-explorer";
-import {
-  RelationshipRoutePreview,
-  relationshipRouteSourceFromRecord,
-} from "../relationships/relationship-route-preview";
 import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
@@ -52,11 +49,8 @@ type DetailHashResolution = { mode: DetailMode; valid: boolean };
 const detailRecordSchema = z
   .object({
     id: z.string().optional(),
-    fdc_id: z.number().optional(),
-    name: z.string().optional(),
-    date: z.string().optional(),
-    description: z.string().optional(),
-    filename: z.string().optional(),
+    fdc_id: z.number().nullish(),
+    name: z.string().nullish(),
   })
   .passthrough();
 type DetailRecord = z.output<typeof detailRecordSchema>;
@@ -71,7 +65,7 @@ function detailSourceId(
 ): string | undefined {
   if (!record) return undefined;
   if (record.id) return record.id;
-  return entity === "usda-food" && record.fdc_id !== undefined
+  return entity === "usda-food" && record.fdc_id != null
     ? String(record.fdc_id)
     : undefined;
 }
@@ -164,33 +158,72 @@ function SectionCard({
       id={section.id}
       tabIndex={-1}
       className={cn(
-        "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none",
+        "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-4",
+        section.overflowVisible && "overflow-visible",
         className,
       )}
     >
-      <Card
-        size={section.placement === "supporting" ? "sm" : "default"}
-        className={cn(
-          "max-md:gap-1 max-md:border-0 max-md:bg-transparent max-md:py-1",
-          section.overflowVisible && "overflow-visible",
-        )}
-      >
-        <CardHeader className="px-2 pb-1 md:px-4 md:pb-2">
-          <CardTitle as="h2">
-            <section.icon className="size-3.5 shrink-0 text-slate" />
-            {section.title}
-          </CardTitle>
-          {section.headerAction && (
-            <CardAction>{section.headerAction}</CardAction>
-          )}
-        </CardHeader>
-        <CardContent className="px-2 md:px-4">{section.content}</CardContent>
-      </Card>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-semibold tracking-tight">
+          <section.icon className="size-3.5 shrink-0 text-slate" />
+          {section.title}
+        </h2>
+        {section.headerAction ? (
+          <div className="shrink-0">{section.headerAction}</div>
+        ) : null}
+      </div>
+      <div className="mt-2">{section.content}</div>
     </section>
   );
 }
 
-const STACK_CLASS = "min-w-0 space-y-2 sm:space-y-4";
+function SectionPlane({ children }: { children: ReactNode }) {
+  return (
+    <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card max-md:rounded-none max-md:border-x-0">
+      {children}
+    </div>
+  );
+}
+
+function renderSectionStack(sections: DetailSection[]) {
+  const blocks: ReactNode[] = [];
+  let ruled: DetailSection[] = [];
+
+  const flushRuled = () => {
+    if (ruled.length === 0) return;
+    const current = ruled;
+    ruled = [];
+    blocks.push(
+      <SectionPlane key={`plane-${blocks.length}`}>
+        {current.map((section) => (
+          <SectionCard key={section.id} section={section} />
+        ))}
+      </SectionPlane>,
+    );
+  };
+
+  for (const section of sections) {
+    if (section.surface === "plain") {
+      flushRuled();
+      blocks.push(<SectionCard key={section.id} section={section} />);
+    } else {
+      ruled.push(section);
+    }
+  }
+  flushRuled();
+
+  return blocks;
+}
+
+function renderFullSection(section: DetailSection) {
+  return section.surface === "plain" ? (
+    <SectionCard key={section.id} section={section} />
+  ) : (
+    <SectionPlane key={section.id}>
+      <SectionCard section={section} />
+    </SectionPlane>
+  );
+}
 
 function heroVisual({
   heroImages,
@@ -262,34 +295,91 @@ function DetailAnchorIndex({
   };
 
   return (
-    <nav
-      aria-label="Record sections"
-      className="sticky top-[var(--app-chrome-top)] z-30 flex min-h-11 [scrollbar-width:none] items-stretch overflow-x-auto overscroll-x-contain border-b border-border bg-card px-1 md:min-h-9 md:items-center md:gap-1 md:px-2 [&::-webkit-scrollbar]:hidden"
-    >
-      <span className="hidden shrink-0 pr-2 text-xs font-medium text-muted-foreground md:block">
-        Sections
-      </span>
-      {indexed.map((section) => (
-        <a
-          key={section.id}
-          href={`#${section.id}`}
-          aria-current={activeId === section.id ? "location" : undefined}
-          onClick={(event) => {
-            event.preventDefault();
-            onSelect(section.id);
-            jump(section.id);
-          }}
-          className={cn(
-            "relative flex min-h-11 shrink-0 items-center px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none md:min-h-0 md:py-1",
-            activeId === section.id
-              ? "text-primary after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-primary"
-              : "text-muted-foreground hover:text-foreground",
-          )}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-foreground"
+          />
+        }
+      >
+        Jump to section
+        <ChevronDown className="size-3" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        {indexed.map((section) => (
+          <DropdownMenuItem
+            key={section.id}
+            render={<a href={`#${section.id}`} aria-label={section.title} />}
+            aria-current={activeId === section.id ? "location" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              onSelect(section.id);
+              jump(section.id);
+            }}
+          >
+            {section.title}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function DetailCommandStrip({
+  activeMode,
+  hasRelations,
+  hasActivity,
+  hasOverviewTools,
+  overviewSections,
+  entityActions,
+  onSelectOverviewSection,
+}: {
+  activeMode: DetailMode;
+  hasRelations: boolean;
+  hasActivity: boolean;
+  hasOverviewTools: boolean;
+  overviewSections: DetailSection[];
+  entityActions: ReactNode;
+  onSelectOverviewSection: (sectionId: string) => void;
+}) {
+  const showOverviewTools = activeMode === "overview" && hasOverviewTools;
+  return (
+    <div className="sticky top-[var(--app-chrome-top)] z-30 border-y border-border bg-card">
+      <div className="flex min-h-11 flex-wrap items-stretch md:min-h-9 md:flex-nowrap md:items-center md:px-2">
+        <TabsList
+          variant="line"
+          aria-label="Record views"
+          className="h-11 w-full justify-start px-1 md:h-9 md:w-auto md:px-0"
         >
-          {section.title}
-        </a>
-      ))}
-    </nav>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          {hasRelations ? (
+            <TabsTrigger value="relations">Relations</TabsTrigger>
+          ) : null}
+          {hasActivity ? (
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+          ) : null}
+        </TabsList>
+        {showOverviewTools ? (
+          <div
+            data-testid="detail-overview-tools"
+            className="flex min-h-11 w-full items-center justify-between gap-2 border-t border-border px-2 md:min-h-0 md:min-w-0 md:flex-1 md:border-t-0 md:px-0 md:pl-2"
+          >
+            <DetailAnchorIndex
+              sections={overviewSections}
+              onSelect={onSelectOverviewSection}
+            />
+            {entityActions ? <Row gap="sm">{entityActions}</Row> : null}
+          </div>
+        ) : (
+          <div className="hidden min-w-0 flex-1 items-center justify-end gap-2 md:flex">
+            {entityActions ? <Row gap="sm">{entityActions}</Row> : null}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -317,115 +407,50 @@ function renderResponsiveLayout({
     const pendingVisual = !visualPlaced ? visual : undefined;
     const hasSupportingRail = supporting.length > 0 || pendingVisual;
 
-    const renderRunItems = (withDesktopColumns: boolean) => {
-      const items: ReactNode[] = [];
-      let visualInserted = false;
-
-      for (const section of current) {
-        if (
-          pendingVisual &&
-          !visualInserted &&
-          section.placement === "supporting"
-        ) {
-          items.push(
-            <div
-              key="detail-visual"
-              data-testid="detail-rail-media"
-              className={cn(
-                "hidden md:block",
-                withDesktopColumns && "lg:col-start-2",
-              )}
-            >
-              {pendingVisual}
-            </div>,
-          );
-          visualInserted = true;
-          visualPlaced = true;
-        }
-        items.push(
-          <SectionCard
-            key={section.id}
-            section={section}
-            className={
-              withDesktopColumns
-                ? section.placement === "primary"
-                  ? "lg:col-start-1"
-                  : "lg:col-start-2"
-                : undefined
-            }
-          />,
-        );
-      }
-
-      if (pendingVisual && !visualInserted) {
-        items.push(
-          <div
-            key="detail-visual"
-            data-testid="detail-rail-media"
-            className={cn(
-              "hidden md:block",
-              withDesktopColumns && "lg:col-start-2 lg:row-start-1",
-            )}
+    if (!primary.length && !hasSupportingRail) return;
+    blocks.push(
+      <div
+        key={`run-${blocks.length}`}
+        className={cn(
+          "grid items-start gap-4",
+          primary.length > 0 && hasSupportingRail
+            ? "md:grid-cols-[minmax(0,3fr)_minmax(17rem,2fr)] lg:grid-cols-[minmax(0,1fr)_20rem]"
+            : "grid-cols-1",
+        )}
+      >
+        {primary.length > 0 ? (
+          <div data-testid="detail-primary-stack" className="min-w-0 space-y-4">
+            {renderSectionStack(primary)}
+          </div>
+        ) : null}
+        {hasSupportingRail ? (
+          <aside
+            data-testid="detail-supporting-rail"
+            className="min-w-0 space-y-4"
           >
-            {pendingVisual}
-          </div>,
-        );
-        visualPlaced = true;
-      }
-
-      return items;
-    };
-
-    if (primary.length > 0 && hasSupportingRail) {
-      blocks.push(
-        <div
-          key={`run-${blocks.length}`}
-          className="max-md:contents md:grid md:items-start md:gap-4 lg:grid-flow-row-dense lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]"
-        >
-          {renderRunItems(true)}
-        </div>,
-      );
-      return;
-    }
-
-    if (primary.length > 0) {
-      blocks.push(
-        <div
-          key={`run-${blocks.length}`}
-          className={cn(STACK_CLASS, "max-md:contents")}
-        >
-          {renderRunItems(false)}
-        </div>,
-      );
-      return;
-    }
-
-    if (hasSupportingRail) {
-      blocks.push(
-        <div
-          key={`run-${blocks.length}`}
-          className="max-md:contents md:grid md:grid-cols-2 md:items-start md:gap-4 lg:grid-cols-3"
-        >
-          {renderRunItems(false)}
-        </div>,
-      );
-    }
+            {pendingVisual ? (
+              <div data-testid="detail-rail-media" className="hidden md:block">
+                {pendingVisual}
+              </div>
+            ) : null}
+            {renderSectionStack(supporting)}
+          </aside>
+        ) : null}
+      </div>,
+    );
+    visualPlaced = true;
   };
 
   for (const section of sections) {
     if (section.placement === "full") {
       flushRun();
-      blocks.push(<SectionCard key={section.id} section={section} />);
+      blocks.push(renderFullSection(section));
     } else {
       run.push(section);
     }
   }
   flushRun();
-  return (
-    <div className="space-y-4 max-md:space-y-0 max-md:divide-y max-md:divide-border max-md:border-y max-md:border-border">
-      {blocks}
-    </div>
-  );
+  return <div className="space-y-4">{blocks}</div>;
 }
 
 interface DetailSectionsProps {
@@ -433,15 +458,12 @@ interface DetailSectionsProps {
   rawData: unknown;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   heroMedia?: ReactNode;
-  /** Compact, page-authored relationship evidence shown only in Overview. */
-  relationshipPreview?: ReactNode;
   /** Page-owned action hosts (such as Image's hero) suppress this generic one. */
   showEntityActions?: boolean;
 }
 
 function resolveRelationshipDetail(
   pageDetail: ReturnType<typeof usePageDetailContext>,
-  record: DetailRecord | undefined,
   sourceId: string | undefined,
   sections: DetailSection[],
 ) {
@@ -452,18 +474,8 @@ function resolveRelationshipDetail(
     (view) => view.source === pageDetail?.entity,
   );
   if (ownSection || !pageDetail || !sourceId || !hasSourceViews) {
-    return { ownSection, preview: null, section: ownSection };
+    return { ownSection, section: ownSection };
   }
-  const source = record
-    ? relationshipRouteSourceFromRecord(pageDetail.entity, record, sourceId)
-    : null;
-  const preview = (
-    <RelationshipRoutePreview
-      entity={pageDetail.entity}
-      sourceId={sourceId}
-      source={source}
-    />
-  );
   const genericSection: DetailSection = {
     id: RELATIONS_SECTION_ID,
     title: "Relationships",
@@ -475,7 +487,6 @@ function resolveRelationshipDetail(
   };
   return {
     ownSection,
-    preview,
     section: ownSection ?? genericSection,
   };
 }
@@ -556,13 +567,12 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   rawData,
   heroImages,
   heroMedia,
-  relationshipPreview: authoredRelationshipPreview,
   showEntityActions = true,
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
   const parsedDetailRecord = pageDetail
-    ? detailRecordSchema.safeParse(pageDetail.rawData)
+    ? detailRecordSchema.safeParse(rawData)
     : undefined;
   const detailRecord = parsedDetailRecord?.success
     ? parsedDetailRecord.data
@@ -583,7 +593,6 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   // let the generic graph contradict the page-owned relationship contract.
   const relationshipDetail = resolveRelationshipDetail(
     pageDetail,
-    detailRecord,
     sourceId,
     visibleSections,
   );
@@ -681,49 +690,34 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     setHash(sectionId, true);
   };
 
-  const compactRelationshipPreview =
-    authoredRelationshipPreview ?? relationshipDetail.preview;
   const actionRecord = contextActionRecord(pageDetail, detailRecord, sourceId);
+  const entityActions =
+    showEntityActions && pageDetail && actionRecord ? (
+      <EntityActionButtons entity={pageDetail.entity} record={actionRecord} />
+    ) : null;
+  const hasOverviewTools =
+    overviewSections.filter((section) => section.includeInIndex !== false)
+      .length >= 2 || entityActions !== null;
   const visual = heroVisual({
     heroImages,
     heroMedia: heroMedia ?? pageDetail?.heroMedia,
   });
 
   return (
-    <Tabs value={activeMode} onValueChange={selectMode} className="gap-2">
-      <TabsList
-        variant="line"
-        aria-label="Record views"
-        className="w-full justify-start border-b border-border bg-card px-2 md:px-4"
-      >
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        {hasRelations ? (
-          <TabsTrigger value="relations">Relations</TabsTrigger>
-        ) : null}
-        {hasActivity ? (
-          <TabsTrigger value="activity">Activity</TabsTrigger>
-        ) : null}
-      </TabsList>
+    <Tabs value={activeMode} onValueChange={selectMode} className="gap-4">
+      <DetailCommandStrip
+        activeMode={activeMode}
+        hasRelations={hasRelations}
+        hasActivity={hasActivity}
+        hasOverviewTools={hasOverviewTools}
+        overviewSections={overviewSections}
+        entityActions={entityActions}
+        onSelectOverviewSection={selectOverviewSection}
+      />
 
       {activeMode === "overview" ? (
         <TabsContent value="overview" className="text-sm/5">
-          <div className="space-y-2 sm:space-y-4">
-            <DetailAnchorIndex
-              sections={overviewSections}
-              onSelect={selectOverviewSection}
-            />
-            {compactRelationshipPreview}
-            {showEntityActions &&
-            pageDetail &&
-            actionRecord &&
-            pageDetail.entity !== "product" ? (
-              <Row wrap justify="end" gap="sm" className="px-2 sm:px-0">
-                <EntityActionButtons
-                  entity={pageDetail.entity}
-                  record={actionRecord}
-                />
-              </Row>
-            ) : null}
+          <div className="space-y-4">
             <div className="animate-in duration-150 fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none">
               {renderResponsiveLayout({
                 sections: overviewSections,

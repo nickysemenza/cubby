@@ -47,6 +47,9 @@ interface MobileListScreenProps<TItem extends RowData> {
   portalWorkbenchUtilities?: boolean;
   emptyState?: ReactNode;
   defaultDensity?: TableDensity;
+  showToolbar?: boolean;
+  showViewOptions?: boolean;
+  toolbarVariant?: "page" | "embedded";
 }
 
 export function MobileListScreen<TItem extends RowData>({
@@ -68,6 +71,9 @@ export function MobileListScreen<TItem extends RowData>({
   portalWorkbenchUtilities = false,
   emptyState,
   defaultDensity,
+  showToolbar = true,
+  showViewOptions = false,
+  toolbarVariant = "page",
 }: MobileListScreenProps<TItem>) {
   const listRef = useRef<HTMLDivElement>(null);
   // `useIsMobile` reports false until hydration (its server snapshot has to, to
@@ -114,18 +120,21 @@ export function MobileListScreen<TItem extends RowData>({
         !hydrated && "md:hidden",
       )}
     >
-      <DataTableToolbar
-        table={table}
-        defaultDensity={defaultDensity}
-        additionalContent={toolbarContent}
-        actions={actions}
-        bulkActionBar={bulkActionBar}
-        showViewOptions={portalWorkbenchUtilities}
-        portalWorkbenchUtilities={portalWorkbenchUtilities}
-        workbenchUtilityViewport="mobile"
-        className="mb-0 flex-wrap overflow-x-hidden border-b border-border"
-        isTransitioning={isTransitioning}
-      />
+      {showToolbar && (
+        <DataTableToolbar
+          table={table}
+          defaultDensity={defaultDensity}
+          additionalContent={toolbarContent}
+          actions={actions}
+          bulkActionBar={bulkActionBar}
+          showViewOptions={showViewOptions}
+          portalWorkbenchUtilities={portalWorkbenchUtilities}
+          workbenchUtilityViewport="mobile"
+          variant={toolbarVariant}
+          className="mb-0 flex-wrap overflow-x-hidden border-b border-border"
+          isTransitioning={isTransitioning}
+        />
+      )}
 
       {isLoading || !hydrated ? (
         <MobileCardSkeletonList {...mobileListLayout(table)} />

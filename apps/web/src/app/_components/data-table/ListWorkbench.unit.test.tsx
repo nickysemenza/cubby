@@ -13,15 +13,28 @@ interface TestRow {
 
 const helper = createCubbyColumnHelper<TestRow>();
 const columns = helper.columns([
-  helper.accessor("name", { header: "Name", id: "name" }),
+  helper.accessor("name", {
+    header: "Name",
+    id: "name",
+    meta: { filterConfig: { placeholder: "Filter name…" } },
+  }),
 ]);
 const browserHarnesses: Array<ReturnType<typeof createBrowserTestHarness>> = [];
 
-function WorkbenchHarness({ mode = "page" }: { mode?: "page" | "embedded" }) {
+function WorkbenchHarness({
+  mode = "page",
+  populated = mode === "page",
+  multipage = false,
+}: {
+  mode?: "page" | "embedded";
+  populated?: boolean;
+  multipage?: boolean;
+}) {
   const table = useCubbyTable({
-    data: mode === "page" ? [{ id: "PRD-4K7M", name: "Hammer" }] : [],
+    data: populated ? [{ id: "PRD-4K7M", name: "Hammer" }] : [],
     columns,
     getRowId: (row) => row.id,
+    rowCount: multipage ? 60 : undefined,
   });
   return (
     <ListWorkbench
@@ -33,19 +46,21 @@ function WorkbenchHarness({ mode = "page" }: { mode?: "page" | "embedded" }) {
       }}
       mode={mode}
       ariaLabel="Products"
+      actions={<button type="button">Record sale</button>}
+      showColumnMenu={mode === "embedded" && multipage}
       contextualStatus={<span>Net cost: $42</span>}
       emptyState={<span>No products linked</span>}
     />
   );
 }
 
-async function renderWorkbench(mode?: "page" | "embedded") {
+async function renderWorkbench(props?: Parameters<typeof WorkbenchHarness>[0]) {
   const browser = createBrowserTestHarness();
   browserHarnesses.push(browser);
   await act(async () => {
     await browser.loadRouter();
   });
-  return render(<WorkbenchHarness mode={mode} />, {
+  return render(<WorkbenchHarness {...props} />, {
     wrapper: browser.routerWrapper,
   });
 }
@@ -62,13 +77,41 @@ describe("ListWorkbench", () => {
     expect(await screen.findByText("Hammer")).toBeVisible();
     expect(screen.getByText("Net cost: $42")).toBeVisible();
     expect(screen.getByText("Delete Product")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Display" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Saved views" })).toBeVisible();
+    expect(screen.getByText("Rows per page")).toBeVisible();
   });
 
   it("keeps an embedded relationship ledger's empty copy in the real table", async () => {
-    await renderWorkbench("embedded");
+    await renderWorkbench({ mode: "embedded" });
 
     expect(await screen.findByText("No products linked")).toBeVisible();
     expect(screen.getByText("Net cost: $42")).toBeVisible();
     expect(screen.getByText("Delete Product")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Saved views" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Rows per page")).not.toBeInTheDocument();
+  });
+
+  it("keeps useful embedded tools and multipage navigation in compact chrome", async () => {
+    await renderWorkbench({
+      mode: "embedded",
+      populated: true,
+      multipage: true,
+    });
+
+    expect(await screen.findByText("Hammer")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Display" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Filter" })).toBeVisible();
+    expect(screen.getByText("Bulk actions")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Record sale" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Go to next page" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Saved views" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Rows per page")).not.toBeInTheDocument();
   });
 });

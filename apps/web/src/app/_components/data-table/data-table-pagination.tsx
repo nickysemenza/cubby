@@ -22,6 +22,8 @@ interface DataTablePaginationProps<TData extends RowData> {
   showPaginationControls?: boolean;
   /** Opt-in: only the Expenses ledger exposes spreadsheet selection totals. */
   showCellSelectionStats?: boolean;
+  /** Embedded ledgers retain navigation without owning the page-size choice. */
+  variant?: "page" | "embedded";
 }
 
 export function DataTablePagination<TData extends RowData>({
@@ -29,9 +31,18 @@ export function DataTablePagination<TData extends RowData>({
   timing,
   showPaginationControls = true,
   showCellSelectionStats = false,
+  variant = "page",
 }: DataTablePaginationProps<TData>) {
+  const embedded = variant === "embedded";
   return (
-    <div className="flex flex-col space-y-1 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+    <div
+      data-pagination-variant={variant}
+      className={
+        embedded
+          ? "flex items-center justify-between gap-2 px-2"
+          : "flex flex-col space-y-1 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0"
+      }
+    >
       <div className="hidden items-center gap-2 font-mono text-2xs text-muted-foreground uppercase sm:flex">
         <table.Subscribe source={table.atoms.rowSelection!}>
           {() => (
@@ -70,18 +81,26 @@ export function DataTablePagination<TData extends RowData>({
       </div>
 
       {showPaginationControls && (
-        <div className="flex flex-col space-y-1 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4 lg:space-x-4">
-          <Row
-            align="center"
-            justify="between"
-            gap="sm"
-            className="sm:justify-start"
-          >
-            <p className="font-mono text-2xs font-medium tracking-wider text-muted-foreground uppercase">
-              Rows per page
-            </p>
-            <RowsPerPageSelect table={table} />
-          </Row>
+        <div
+          className={
+            embedded
+              ? "flex items-center gap-2 sm:gap-4"
+              : "flex flex-col space-y-1 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4 lg:space-x-4"
+          }
+        >
+          {!embedded && (
+            <Row
+              align="center"
+              justify="between"
+              gap="sm"
+              className="sm:justify-start"
+            >
+              <p className="font-mono text-2xs font-medium tracking-wider text-muted-foreground uppercase">
+                Rows per page
+              </p>
+              <RowsPerPageSelect table={table} />
+            </Row>
+          )}
 
           <Row
             align="center"

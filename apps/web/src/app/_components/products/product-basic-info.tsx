@@ -309,8 +309,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         </Stack>
       }
       actions={
-        // Add to Inventory lives on the Stocked At section header now —
-        // this cluster is product-record actions only.
+        // Inventory and lifecycle verbs live in the shared detail command
+        // strip; this local action only edits the Product record itself.
         <Row gap="sm">
           <DetailEditAction onClick={onEdit} />
         </Row>
