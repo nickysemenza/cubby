@@ -21,6 +21,7 @@ import {
   financialTransactionShortcode,
   ledgerTransferShortcode,
   purchaseShortcode,
+  vendorShortcode,
 } from "./identifiers";
 import {
   financialAccountIdentity,
@@ -426,6 +427,55 @@ export type FinancialTransactionFilters = z.infer<
   typeof financialTransactionFiltersSchema
 >;
 
+export const merchantVendorCandidate = z.object({
+  vendorId: vendorShortcode,
+  vendorName: z.string().min(1),
+  supportingTransactionCount: z.number().int().positive(),
+  lastSeenDate: plainDate.nullable(),
+});
+export type MerchantVendorCandidate = z.infer<typeof merchantVendorCandidate>;
+
+const noMerchantVendorCandidates = z.object({
+  status: z.literal("none"),
+  candidates: z.tuple([]),
+});
+
+const insufficientMerchantVendorCandidate = merchantVendorCandidate.extend({
+  supportingTransactionCount: z.literal(1),
+});
+const suggestedMerchantVendorCandidate = merchantVendorCandidate.extend({
+  supportingTransactionCount: z.number().int().min(2),
+});
+
+/**
+ * Advisory Vendor evidence derived from confirmed Purchase allocations for the
+ * same conservatively normalized merchant label. It never creates or confirms
+ * a relationship: the allocation remains the only source of truth.
+ */
+export const merchantVendorInference = z.discriminatedUnion("status", [
+  noMerchantVendorCandidates,
+  z.object({
+    status: z.literal("insufficient_history"),
+    candidates: z.tuple([insufficientMerchantVendorCandidate]),
+  }),
+  z.object({
+    status: z.literal("suggested"),
+    candidates: z.tuple([suggestedMerchantVendorCandidate]),
+  }),
+  z.object({
+    status: z.literal("ambiguous"),
+    candidates: z.array(merchantVendorCandidate).min(2),
+  }),
+]);
+export type MerchantVendorInference = z.infer<typeof merchantVendorInference>;
+
+export const merchantVendorInferenceInput = z.object({
+  merchant: z.string(),
+});
+export type MerchantVendorInferenceInput = z.infer<
+  typeof merchantVendorInferenceInput
+>;
+
 export const financialTransactionSortableFields = [
   "transactionDate",
   "postedDate",
@@ -452,6 +502,12 @@ export const financialTransactionOut = postedRequiresDate(
     allocations: z.array(financialTransactionAllocationOut),
     ledgerTransferId: ledgerTransferShortcode.nullable(),
     accountName: z.string().nullable(),
+    vendorInference: merchantVendorInference
+      .nullable()
+      .default(null)
+      .describe(
+        "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship.",
+      ),
     ...timestampedFields,
   }),
 );
@@ -559,6 +615,12 @@ export const financialStatementImportPreviewRow = z.object({
   provisionalAccount: financialStatementProvisionalAccount.nullable(),
   proposed: financialStatementImportProposedTransaction,
   existingTransactionIds: z.array(financialTransactionShortcode),
+  vendorInference: merchantVendorInference
+    .nullable()
+    .default(null)
+    .describe(
+      "Advisory Vendor evidence only. Null for completed or duplicate rows. It neither matches nor links anything.",
+    ),
 });
 
 export const financialStatementImportPreviewOut = z.object({

@@ -36,6 +36,7 @@ import {
   financialTransactionKindOptions,
   financialTransactionStatusOptions,
 } from "./financial-transaction-kind-options";
+import { PossibleVendor } from "./possible-vendor";
 
 const PURCHASE_PRESENCE_OPTIONS = presenceCellOptions("purchase");
 
@@ -46,9 +47,10 @@ const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
  * Module-level: this feeds the merged-visibility `useMemo`, so an inline object
  * literal would rebuild the table's column visibility on every render.
  */
-const INITIAL_COLUMN_VISIBILITY = {
+export const FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY = {
   purchasePresence: false,
   merchant: false,
+  possibleVendor: false,
   source: false,
 };
 
@@ -196,6 +198,20 @@ export function FinancialTransactionList() {
           }),
         );
         add(
+          helper.accessor("vendorInference", {
+            id: "possibleVendor",
+            header: "Possible vendor",
+            enableSorting: false,
+            meta: { className: "w-48", mobile: { slot: "hidden" } },
+            cell: (info) =>
+              info.getValue() ? (
+                <PossibleVendor inference={info.getValue()} compact />
+              ) : (
+                <NoneValue />
+              ),
+          }),
+        );
+        add(
           helper.accessor(
             (r) => r.sourceRefs.map((ref) => ref.source).join(", "),
             {
@@ -217,7 +233,7 @@ export function FinancialTransactionList() {
       columns={columns}
       deletable={deletable}
       filterOptions={filterOptions}
-      initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
+      initialColumnVisibility={FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY}
       ariaLabel="Financial transactions"
     />
   );

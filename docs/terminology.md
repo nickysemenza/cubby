@@ -61,6 +61,7 @@ sometimes wears three different names across layers.
 | Expense | "Expense" | `Expense` / `expense` | `Expense` | A spend-ledger line (actual, or planned via `future`), optionally inside a Project. **All money lives here.** |
 | Financial account | "Account" | `FinancialAccount` / `financialAccount` | `FinancialAccount` | A statement/receipt account identity, possibly provisional, with source aliases. |
 | Financial transaction | "Transaction" | `FinancialTransaction` / `financialTransaction` | `FinancialTransaction` | Settlement evidence with a signed amount, allocated across zero or more Purchases. Never spend. |
+| Merchant | "Merchant" | `merchant` | provider fields on `FinancialTransaction` / `StatementRow` | A provider-supplied settlement label that may name a processor or marketplace. Evidence text, not canonical Vendor identity. |
 | Allocation | "Allocation" | `FinancialTransactionAllocation` | `FinancialTransactionAllocation` | How much of one transaction settled one Purchase. Evidence only; never spend. |
 | Image | "Image" / "Photo" | `Image` / `image` | `Image` | An R2-backed image linked to a product, location, recipe, project, or purchase (such as its invoice). |
 
@@ -179,6 +180,13 @@ Settlement is a separate axis:
 ```
 FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purchase
 ```
+
+- **Merchant** (`FinancialTransaction.merchant`, `StatementRow.merchant`) is the
+  provider's settlement label. It may name a processor or marketplace rather
+  than the place the household bought from, so it is evidence text rather than
+  Vendor identity. A Possible vendor suggestion derived from repeated Merchant
+  history remains advisory; only an Allocation through a Purchase establishes
+  the relationship.
 
 - **Vendor** (`Vendor`) — the roster of places money goes. Name is uniquely
   indexed (live rows). Holds **identity only** — its `spend` and `purchaseCount`

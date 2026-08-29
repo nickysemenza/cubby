@@ -123,6 +123,7 @@ export const START_OPERATIONS = {
   "expense.tradeAffinity": { kind: "query" },
   "financialAccount.options": { kind: "query" },
   "financialTransaction.sourceOptions": { kind: "query" },
+  "financialTransaction.vendorInference": { kind: "query" },
   "householdContribution.ledger": { kind: "query" },
   "householdContribution.project": { kind: "query" },
   "image.cleanupUnreferencedImages": { kind: "mutation" },

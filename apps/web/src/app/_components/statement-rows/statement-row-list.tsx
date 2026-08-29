@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { DatePickerInput } from "~/app/_components/date-picker-input";
+import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
@@ -455,6 +456,27 @@ export function StatementRowList() {
                 <NoneValue />
               );
             },
+          }),
+        );
+        add(
+          columnHelper.accessor("vendorInference", {
+            id: "possibleVendor",
+            header: "Possible vendor",
+            enableSorting: false,
+            meta: {
+              className: "w-48",
+              mobile: {
+                slot: "meta",
+                priority: 15,
+                interactive: true,
+              },
+            },
+            cell: (info) =>
+              info.getValue() ? (
+                <PossibleVendor inference={info.getValue()} compact />
+              ) : (
+                <NoneValue />
+              ),
           }),
         );
         add(
