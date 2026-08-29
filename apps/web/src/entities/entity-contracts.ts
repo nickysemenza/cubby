@@ -1,25 +1,30 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { UseMutationOptions } from "@tanstack/react-query";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import type { CubbyOperationMeta } from "~/integrations/tanstack-query/operation-meta";
-import {
-  entityBrowserMutationCommandSchema,
-  type EntityBrowserMutationInput,
-  EntityBrowserMutationResult,
-} from "~/server/entity-kernel/contracts";
+import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 
 import type { EntityEditResultFor } from "./editing/intent-types";
 import {
-  executeEntityMutation,
-  parseEntityMutationResultFor,
+  executeEntityMutationCommand,
+  type EntityMutationTransport,
+} from "./entity-mutation-command";
+import {
+  countPrimaryDeletedReferences,
+  parseEntityWriteResult,
 } from "./entity-mutation.functions";
 import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
 } from "./generated/entity-routes.gen";
-import { countPrimaryDeletedReferences } from "./mutation-results";
+export type { EntityMutationTransport } from "./entity-mutation-command";
+
+const unparsedEntityMutationVariablesSchema = z.unknown();
+type UnparsedEntityMutationVariables = z.input<
+  typeof unparsedEntityMutationVariablesSchema
+>;
 
 export type StandardEntity = GeneratedBrowserCrudEntity;
 export type StandardAction = "create" | "update" | "delete" | "bulkUpdate";
@@ -57,7 +62,7 @@ export type EntityMutationData<
     ? { updated: number; sideEffects: MutationSideEffects }
     : EntityEditResultFor<E> & { sideEffects: MutationSideEffects };
 
-export type EntityMutationOptions<
+type EntityMutationOptions<
   E extends StandardEntity,
   A extends StandardAction,
 > = UseMutationOptions<
@@ -65,7 +70,7 @@ export type EntityMutationOptions<
   Error,
   EntityMutationVariables<E, A>
 >;
-export type EntityMutationCallbacks<
+type EntityMutationCallbacks<
   E extends StandardEntity,
   A extends StandardAction,
 > = Omit<EntityMutationOptions<E, A>, "meta" | "mutationFn" | "mutationKey">;
@@ -73,17 +78,6 @@ export type EntityMutationOptionsFactory<
   E extends StandardEntity,
   A extends StandardAction,
 > = (callbacks?: EntityMutationCallbacks<E, A>) => EntityMutationOptions<E, A>;
-
-/** The browser boundary owns the serializable command transport. */
-export interface EntityMutationTransport {
-  execute(
-    command: EntityBrowserMutationInput,
-  ): Promise<EntityBrowserMutationResult>;
-}
-
-const browserMutationTransport: EntityMutationTransport = {
-  execute: (command) => executeEntityMutation({ data: command }),
-};
 
 function mutationMeta(entity: StandardEntity): CubbyOperationMeta {
   return {
@@ -100,123 +94,6 @@ function mutationBase<E extends StandardEntity>(
   return {
     mutationKey: ["operation", "entity.mutate", entity, action],
     meta: mutationMeta(entity),
-  };
-}
-
-function requireEntityResult<E extends StandardEntity>(
-  entity: E,
-  action: "create" | "update",
-  result: EntityBrowserMutationResult,
-): EntityEditResultFor<E> & { sideEffects: MutationSideEffects } {
-  if (
-    result.entity !== entity ||
-    result.action !== action ||
-    !("item" in result)
-  )
-    throw new Error("Entity mutation result did not match its command");
-  return {
-    ...parseEntityMutationResultFor(entity, result.item),
-    sideEffects: result.sideEffects,
-  };
-}
-
-function createMutationOptions<E extends StandardEntity>(
-  entity: E,
-  callbacks: EntityMutationCallbacks<E, "create">,
-  transport: EntityMutationTransport,
-): EntityMutationOptions<E, "create"> {
-  return {
-    ...mutationBase(entity, "create"),
-    ...callbacks,
-    mutationFn: async (data) =>
-      requireEntityResult(
-        entity,
-        "create",
-        await transport.execute(
-          entityBrowserMutationCommandSchema.parse({
-            action: "create",
-            entity,
-            data,
-          }),
-        ),
-      ),
-  };
-}
-
-function updateMutationOptions<E extends StandardEntity>(
-  entity: E,
-  callbacks: EntityMutationCallbacks<E, "update">,
-  transport: EntityMutationTransport,
-): EntityMutationOptions<E, "update"> {
-  return {
-    ...mutationBase(entity, "update"),
-    ...callbacks,
-    mutationFn: async ({ id, data }) =>
-      requireEntityResult(
-        entity,
-        "update",
-        await transport.execute(
-          entityBrowserMutationCommandSchema.parse({
-            action: "update",
-            entity,
-            id,
-            data,
-          }),
-        ),
-      ),
-  };
-}
-
-function deleteMutationOptions<E extends StandardEntity>(
-  entity: E,
-  callbacks: EntityMutationCallbacks<E, "delete">,
-  transport: EntityMutationTransport,
-): EntityMutationOptions<E, "delete"> {
-  return {
-    ...mutationBase(entity, "delete"),
-    ...callbacks,
-    mutationFn: async ({ ids }) => {
-      const result = await transport.execute(
-        entityBrowserMutationCommandSchema.parse({
-          action: "delete",
-          entity,
-          ids,
-        }),
-      );
-      if (result.entity !== entity || result.action !== "delete")
-        throw new Error("Entity mutation result did not match its command");
-      return {
-        deleted: countPrimaryDeletedReferences(result),
-        sideEffects: result.sideEffects,
-      };
-    },
-  };
-}
-
-function bulkUpdateMutationOptions<E extends StandardEntity>(
-  entity: E,
-  callbacks: EntityMutationCallbacks<E, "bulkUpdate">,
-  transport: EntityMutationTransport,
-): EntityMutationOptions<E, "bulkUpdate"> {
-  return {
-    ...mutationBase(entity, "bulkUpdate"),
-    ...callbacks,
-    mutationFn: async ({ ids, data }) => {
-      const result = await transport.execute(
-        entityBrowserMutationCommandSchema.parse({
-          action: "bulkUpdate",
-          entity,
-          ids,
-          data,
-        }),
-      );
-      if (result.entity !== entity || result.action !== "bulkUpdate")
-        throw new Error("Entity mutation result did not match its command");
-      return {
-        updated: result.updatedReferences.length,
-        sideEffects: result.sideEffects,
-      };
-    },
   };
 }
 
@@ -244,22 +121,51 @@ export function entityMutationOptionsFactory<E extends StandardEntity>(
 export function entityMutationOptionsFactory<E extends StandardEntity>(
   entity: E,
   action: StandardAction,
-  transport: EntityMutationTransport = browserMutationTransport,
+  transport?: EntityMutationTransport,
 ) {
-  switch (action) {
-    case "create":
-      return (callbacks = {}) =>
-        createMutationOptions(entity, callbacks, transport);
-    case "update":
-      return (callbacks = {}) =>
-        updateMutationOptions(entity, callbacks, transport);
-    case "delete":
-      return (callbacks = {}) =>
-        deleteMutationOptions(entity, callbacks, transport);
-    case "bulkUpdate":
-      return (callbacks = {}) =>
-        bulkUpdateMutationOptions(entity, callbacks, transport);
-  }
+  return (callbacks = {}) => ({
+    ...mutationBase(entity, action),
+    ...callbacks,
+    mutationFn: async (variables: UnparsedEntityMutationVariables) => {
+      if (action === "create") {
+        return parseEntityWriteResult(
+          entity,
+          action,
+          await executeEntityMutationCommand(
+            entity,
+            { action, entity, data: variables },
+            transport,
+          ),
+        );
+      }
+      const values = z.record(z.string(), z.unknown()).parse(variables);
+      const result = await executeEntityMutationCommand(
+        entity,
+        action === "update"
+          ? { action, entity, id: values.id, data: values.data }
+          : action === "bulkUpdate"
+            ? { action, entity, ids: values.ids, data: values.data }
+            : { action, entity, ids: values.ids },
+        transport,
+      );
+      if (action === "update") {
+        return parseEntityWriteResult(entity, action, result);
+      }
+      if (result.action === "delete") {
+        return {
+          deleted: countPrimaryDeletedReferences(result),
+          sideEffects: result.sideEffects,
+        };
+      }
+      if (result.action === "bulkUpdate") {
+        return {
+          updated: result.updatedReferences.length,
+          sideEffects: result.sideEffects,
+        };
+      }
+      throw new Error("Entity mutation result did not match its command");
+    },
+  });
 }
 
 export const isGeneratedBrowserCrudEntity = (
