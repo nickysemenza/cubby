@@ -2,8 +2,8 @@ import { literalEntity } from "../literal.js";
 
 export default literalEntity({
   key: "ledgerTransfer",
-  names: { singular: "Ledger Transfer" },
-  route: null,
+  names: { singular: "Ledger Transfer", plural: "Transfers" },
+  route: { basePath: "ledger-transfers" },
   table: "LedgerTransfer",
   identifiers: { brand: "LedgerTransferId", shortcode: "LTR-", legacy: null },
   presentation: { titleField: "name" },
@@ -21,7 +21,41 @@ export default literalEntity({
       export: "ledgerTransferOut",
     },
   },
-  filters: { descriptors: [] },
+  filters: {
+    audit: true,
+    schema: {
+      module: "@cubby/schemas/ledger-transfer",
+      export: "ledgerTransferFilterFields",
+    },
+    descriptors: [
+      {
+        columnId: "fromPartyId",
+        kind: "idMulti",
+        placeholder: "Filter by from party...",
+        brandRef: { entity: "ledgerParty", kind: "id" },
+        urlOnly: true,
+      },
+      {
+        columnId: "toPartyId",
+        kind: "idMulti",
+        placeholder: "Filter by to party...",
+        brandRef: { entity: "ledgerParty", kind: "id" },
+        urlOnly: true,
+      },
+      {
+        columnId: "dateFrom",
+        kind: "text",
+        placeholder: "Transfer date from...",
+        urlOnly: true,
+      },
+      {
+        columnId: "dateTo",
+        kind: "text",
+        placeholder: "Transfer date to...",
+        urlOnly: true,
+      },
+    ],
+  },
   relations: [
     {
       key: "from-party",

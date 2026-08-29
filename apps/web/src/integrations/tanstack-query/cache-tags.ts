@@ -270,6 +270,9 @@ export const ripple = {
     // this table. Without these, a charge's reconciliation cue keeps showing
     // a stale total.
     [["vendor"], ["purchase"]],
+    // Beneficiary/funder attribution and cost both feed the contribution
+    // report, which is otherwise never invalidated from this client.
+    [["householdContribution"]],
   ),
 
   // A vendor's name is denormalized into `purchaseOut.vendorName`, so a rename
@@ -312,7 +315,24 @@ export const ripple = {
     ["financialAccount"],
     ["financialTransaction"],
     ["dashboard"],
+    // The owning LedgerParty is denormalized into `financialAccountOut`, and
+    // the party roster carries no count of its own — but an Expense's funder is
+    // DERIVED from the paying account's owner, so setting an owner moves the
+    // contribution report too.
+    ["ledgerParty"],
+    ["householdContribution"],
   ]),
+
+  /** Renaming a party changes every account row that names it as owner, and
+   * re-parties every Expense funder derived through those accounts. */
+  ledgerParty: rippleTags([
+    ["ledgerParty"],
+    ["financialAccount"],
+    ["householdContribution"],
+  ]),
+
+  /** A transfer is never spend; it only moves a party's ledger position. */
+  ledgerTransfer: rippleTags([["ledgerTransfer"], ["householdContribution"]]),
   financialTransaction: rippleTags([
     ["financialTransaction"],
     ["financialAccount"],
@@ -332,10 +352,15 @@ export const ripple = {
  * Reverse-check audit (do not re-derive this — read it): does every declared
  * query tag get invalidated by SOME mutation? Checked once, across 171
  * declared query tags and 31 distinct invalidation tags: 19 orphans, ZERO
- * confirmed bugs. `["entity","list"]` / `["entity","detail"]` look orphaned
+ * confirmed bugs. ⚠️ ONE of those orphans stopped being deliberate:
+ * `householdContribution` (×2) was listed here as MCP-only, but an Expense's
+ * funder is now derived from `FinancialAccount.ledgerPartyId`, so setting an
+ * account's owner in the browser moves the report. `expense`,
+ * `financialAccount`, `ledgerParty`, and `ledgerTransfer` now ripple to it.
+ * `["entity","list"]` / `["entity","detail"]` look orphaned
  * statically but are matched at runtime via the `[[entity]]` root
- * `descriptorMeta` appends to every query. `statementRow` (×3),
- * `householdContribution` (×2), and `auditLog.list` declare no client
+ * `descriptorMeta` appends to every query. `statementRow` (×3)
+ * and `auditLog.list` declare no client
  * mutation at all, because those writes arrive over MCP from a different
  * client than this one. The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
  * `relatedness.product`, `entity.inspectorHealth`, `entityIntegrity` — are

@@ -1,11 +1,13 @@
 import type {
   FinancialAccountShortcode,
+  LedgerPartyShortcode,
   PurchaseShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
+import { ledgerPartyLabel } from "~/app/_components/household-contribution-format";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import type { ComboboxItem } from "../_components/combobox/combobox-types";
@@ -15,6 +17,7 @@ import {
   useEntitySearch,
 } from "../_components/combobox/entity-search-hooks";
 import type { WithEntitySearchProps } from "../_components/combobox/with-search-hook";
+import { ledgerParty } from "./finance.functions";
 
 const accountIdentityFacts = (identity: {
   kind: string;
@@ -115,6 +118,40 @@ export function WithFinancialAccountSearch({
     items,
     onSearchChange,
     isLoading: account.isLoading,
+    onOpenChange,
+  });
+}
+
+/**
+ * Ledger parties are a household-sized roster (a handful of rows), so this
+ * picker ships the whole list eagerly and lets the combobox filter it locally
+ * rather than issuing a query per keystroke — the same trade-off the accounts
+ * header filter makes, and the opposite of the account/purchase pickers above,
+ * which search tables with thousands of rows.
+ */
+export function WithLedgerPartySearch({
+  children,
+}: WithEntitySearchProps<LedgerPartyShortcode>) {
+  const { searchQuery, onSearchChange } = useEntitySearch();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
+  const parties = useQuery({
+    ...ledgerParty.options.queryOptions(null),
+    enabled,
+  });
+  const items = useMemo<ComboboxItem<LedgerPartyShortcode>[]>(
+    () =>
+      (parties.data ?? []).map((party) => ({
+        id: party.id,
+        shortcode: party.id,
+        name: party.name,
+        secondary: ledgerPartyLabel(party.kind),
+      })),
+    [parties.data],
+  );
+  return children({
+    items,
+    onSearchChange,
+    isLoading: parties.isLoading,
     onOpenChange,
   });
 }

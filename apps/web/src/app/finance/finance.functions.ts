@@ -4,6 +4,7 @@ import {
   merchantVendorInference,
   merchantVendorInferenceInput,
 } from "@cubby/schemas/financial-transaction";
+import { ledgerPartyOptionsOut } from "@cubby/schemas/ledger-party";
 import { z } from "zod";
 
 import {
@@ -16,6 +17,14 @@ export const financialAccount = defineOperationDomain("financialAccount", {
     input: z.null(),
     output: financialAccountOptionsOut,
     tags: [["financialAccount", "options"]],
+  }),
+});
+
+export const ledgerParty = defineOperationDomain("ledgerParty", {
+  options: query({
+    input: z.null(),
+    output: ledgerPartyOptionsOut,
+    tags: [["ledgerParty", "options"]],
   }),
 });
 

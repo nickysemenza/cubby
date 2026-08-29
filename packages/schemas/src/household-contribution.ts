@@ -33,6 +33,18 @@ export const expenseContributionGapCode = z.enum([
   "partial_beneficiaries",
   "partial_funders",
   "unpriced_expense",
+  /**
+   * Consumption was defaulted to the household because nothing was recorded.
+   * Informational, and deliberately AGGREGATED into one entry carrying a count
+   * — emitting one per expense would reproduce the wall of noise this
+   * derivation exists to remove.
+   */
+  "beneficiary_assumed_household",
+  /**
+   * The payment chain resolved, but every paying account has no owner. The one
+   * actionable new code: it names a fixable thing and points at real expenses.
+   */
+  "funder_account_unowned",
 ]);
 export const householdContributionGapCode = z.union([
   expenseContributionGapCode,
@@ -45,6 +57,11 @@ export type HouseholdContributionGapCode = z.infer<
 export const householdContributionGapOut = z.object({
   code: householdContributionGapCode,
   amount: money.optional(),
+  /**
+   * How many records the gap covers. Present only on aggregated codes, where
+   * `targetIds` is deliberately empty rather than thousands long.
+   */
+  count: z.number().int().positive().optional(),
   targetIds: z.array(z.union([expenseShortcode, ledgerTransferShortcode])),
 });
 export type HouseholdContributionGapOut = z.infer<
@@ -55,6 +72,7 @@ export type HouseholdContributionGapOut = z.infer<
 export const projectContributionGapOut = z.object({
   code: expenseContributionGapCode,
   amount: money.optional(),
+  count: z.number().int().positive().optional(),
   targetIds: z.array(expenseShortcode),
 });
 export type ProjectContributionGapOut = z.infer<
@@ -108,6 +126,8 @@ export const projectContributionOut = z.object({
     z.object({ party: ledgerReportPartyOut, initiallyFunded: money }),
   ),
   gaps: z.array(projectContributionGapOut),
+  /** Matches the household ledger: project gaps are capped, not unbounded. */
+  gapsTruncated: z.boolean(),
 });
 export type ProjectContributionOut = z.infer<typeof projectContributionOut>;
 

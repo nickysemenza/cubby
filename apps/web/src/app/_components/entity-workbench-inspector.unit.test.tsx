@@ -17,7 +17,6 @@ import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
 
 const VENDOR_ID = testShortcode("vendor", "VEN-WORK");
 const IMAGE_ID = testShortcode("image", "IMG-WORK");
-const LEDGER_PARTY_ID = "LPY-WORKBENCH";
 
 const vendor = vendorOut.parse({
   id: VENDOR_ID,
@@ -120,7 +119,7 @@ function renderInspector({
   id = VENDOR_ID,
   onClose,
 }: {
-  entity?: "vendor" | "image" | "ledgerParty";
+  entity?: "vendor" | "image";
   id?: string;
   onClose?: () => void;
 } = {}) {
@@ -171,26 +170,13 @@ describe("EntityWorkbenchInspector", () => {
     );
   });
 
-  it("resets to Overview and stops promising a full record when the selection becomes route-less", async () => {
-    seedVendorInspector();
-    const rendered = renderInspector();
-
-    await screen.findByRole("heading", { name: "Fixture vendor" });
-    fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
-    expect(await screen.findByText("Fixture purchase")).toBeVisible();
-
-    rendered.rerender(
-      <EntityWorkbenchInspector entity="ledgerParty" id={LEDGER_PARTY_ID} />,
-    );
-
-    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.queryByText("Fixture purchase")).toBeNull();
-    expect(
-      screen.getByText("Use Relations or Activity to inspect linked records."),
-    ).toBeVisible();
-    expect(screen.queryByRole("button", { name: /open full/i })).toBeNull();
-  });
+  // A test formerly lived here covering a route-less selection (rerendering
+  // with `entity="ledgerParty"` mid-session): once `LedgerParty`/
+  // `LedgerTransfer` gained browser routes, no `Entity` variant is route-less
+  // any more, so `UnsupportedOverview`'s "route-less" copy branch and the
+  // "no Open full record link" assertion it covered are dead code with
+  // nothing left to construct a fixture from. Removed rather than kept
+  // failing or weakened; `isBrowserRoutedEntity`'s guard in
+  // `entity-workbench-inspector.tsx` still exists for a future route-less
+  // entity, but it currently has no live caller to exercise it.
 });

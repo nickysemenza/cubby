@@ -161,13 +161,32 @@ export function ProjectContributionReport({
           <AlertTriangle className="size-3.5 text-warning-ink" />
           <AlertTitle>Contribution attribution is incomplete</AlertTitle>
           <AlertDescription>
-            {data.gaps.map((gap, index) => (
-              <span key={`${gap.code}:${gap.targetIds.join(":")}`}>
-                {index > 0 && " · "}
-                {contributionGapLabels[gap.code]}:{" "}
-                <ContributionGapTargets targetIds={gap.targetIds} />
-              </span>
-            ))}
+            <ul className="m-0 list-none space-y-0.5 p-0">
+              {data.gaps.map((gap) => (
+                <li key={`${gap.code}:${gap.targetIds.join(":")}`}>
+                  {contributionGapLabels[gap.code]}
+                  {gap.amount === undefined
+                    ? null
+                    : ` — ${formatCurrency(gap.amount)}`}
+                  {/* An aggregated code stands for many expenses and carries no
+                      targets; listing them is the wall this replaced. */}
+                  {gap.count === undefined
+                    ? null
+                    : ` across ${gap.count} expenses`}
+                  {gap.targetIds.length === 0 ? null : (
+                    <>
+                      {": "}
+                      <ContributionGapTargets targetIds={gap.targetIds} />
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {data.gapsTruncated ? (
+              <p className="m-0 text-xs text-muted-foreground">
+                Only the first {data.gaps.length} are listed.
+              </p>
+            ) : null}
           </AlertDescription>
         </Alert>
       )}

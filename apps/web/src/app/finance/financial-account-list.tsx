@@ -2,12 +2,14 @@ import type {
   FinancialAccountFilters,
   FinancialAccountOut,
 } from "@cubby/schemas/financial-account";
+import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { useMemo } from "react";
 
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
@@ -16,6 +18,7 @@ import {
   createBooleanColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
+import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { EntityListPage } from "../_components/data-table/EntityListPage";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -24,6 +27,7 @@ import {
   accountIdentityKindOptions,
   provisionalOptions,
 } from "./financial-account-options";
+import { WithLedgerPartySearch } from "./financial-selectors";
 export function FinancialAccountList() {
   const helper = useMemo(
     () => createCubbyColumnHelper<FinancialAccountOut>(),
@@ -53,6 +57,44 @@ export function FinancialAccountList() {
                 {i.getValue()}
               </TableLink>
             ),
+          }),
+        );
+        add(
+          // Load-bearing, not decorative: an Expense's funder is DERIVED from
+          // the paying account's owner, so an account left unowned is spend the
+          // contribution report cannot attribute to anyone.
+          helper.accessor("ledgerPartyName", {
+            header: "Owner",
+            meta: { className: "w-36" },
+            cell: (i) => {
+              const account = i.row.original;
+              const partyId = account.ledgerPartyId;
+              return (
+                <EditableEntityCell<LedgerPartyShortcode>
+                  value={
+                    partyId
+                      ? {
+                          id: partyId,
+                          shortcode: partyId,
+                          name: i.getValue() ?? partyId,
+                        }
+                      : null
+                  }
+                  label="ledgerParty"
+                  SearchProvider={WithLedgerPartySearch}
+                  clearable
+                  onSave={async (ledgerPartyId) => {
+                    await updateAccountMutation.mutateAsync({
+                      id: account.id,
+                      data: { ledgerPartyId },
+                    });
+                  }}
+                  renderValue={(party) =>
+                    party ? <span>{party.name}</span> : <NoneValue />
+                  }
+                />
+              );
+            },
           }),
         );
         add(

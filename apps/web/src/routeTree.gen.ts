@@ -62,6 +62,10 @@ import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_au
 import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
 import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
 import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
+import { Route as AuthenticatedLedgerPartiesIndexRouteImport } from './routes/_authenticated/ledger-parties.index'
+import { Route as AuthenticatedLedgerPartiesShortcodeRouteImport } from './routes/_authenticated/ledger-parties.$shortcode'
+import { Route as AuthenticatedLedgerTransfersIndexRouteImport } from './routes/_authenticated/ledger-transfers.index'
+import { Route as AuthenticatedLedgerTransfersShortcodeRouteImport } from './routes/_authenticated/ledger-transfers.$shortcode'
 import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
 import { Route as AuthenticatedLocationsShortcodeRouteImport } from './routes/_authenticated/locations.$shortcode'
 import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
@@ -402,6 +406,30 @@ const AuthenticatedInventorySessionRoute =
     path: '/inventory/session',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedLedgerPartiesIndexRoute =
+  AuthenticatedLedgerPartiesIndexRouteImport.update({
+    id: '/ledger-parties/',
+    path: '/ledger-parties/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLedgerPartiesShortcodeRoute =
+  AuthenticatedLedgerPartiesShortcodeRouteImport.update({
+    id: '/ledger-parties/$shortcode',
+    path: '/ledger-parties/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLedgerTransfersIndexRoute =
+  AuthenticatedLedgerTransfersIndexRouteImport.update({
+    id: '/ledger-transfers/',
+    path: '/ledger-transfers/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLedgerTransfersShortcodeRoute =
+  AuthenticatedLedgerTransfersShortcodeRouteImport.update({
+    id: '/ledger-transfers/$shortcode',
+    path: '/ledger-transfers/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLocationsIndexRoute =
   AuthenticatedLocationsIndexRouteImport.update({
     id: '/locations/',
@@ -698,6 +726,8 @@ export interface FileRoutesByFullPath {
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
+  '/ledger-parties/$shortcode': typeof AuthenticatedLedgerPartiesShortcodeRoute
+  '/ledger-transfers/$shortcode': typeof AuthenticatedLedgerTransfersShortcodeRoute
   '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
@@ -731,6 +761,8 @@ export interface FileRoutesByFullPath {
   '/images/': typeof AuthenticatedImagesIndexRoute
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/ledger-parties/': typeof AuthenticatedLedgerPartiesIndexRoute
+  '/ledger-transfers/': typeof AuthenticatedLedgerTransfersIndexRoute
   '/locations/': typeof AuthenticatedLocationsIndexRoute
   '/meals/': typeof AuthenticatedMealsIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
@@ -794,6 +826,8 @@ export interface FileRoutesByTo {
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
+  '/ledger-parties/$shortcode': typeof AuthenticatedLedgerPartiesShortcodeRoute
+  '/ledger-transfers/$shortcode': typeof AuthenticatedLedgerTransfersShortcodeRoute
   '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
@@ -827,6 +861,8 @@ export interface FileRoutesByTo {
   '/images': typeof AuthenticatedImagesIndexRoute
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
+  '/ledger-parties': typeof AuthenticatedLedgerPartiesIndexRoute
+  '/ledger-transfers': typeof AuthenticatedLedgerTransfersIndexRoute
   '/locations': typeof AuthenticatedLocationsIndexRoute
   '/meals': typeof AuthenticatedMealsIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
@@ -893,6 +929,8 @@ export interface FileRoutesById {
   '/_authenticated/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
   '/_authenticated/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
+  '/_authenticated/ledger-parties/$shortcode': typeof AuthenticatedLedgerPartiesShortcodeRoute
+  '/_authenticated/ledger-transfers/$shortcode': typeof AuthenticatedLedgerTransfersShortcodeRoute
   '/_authenticated/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/_authenticated/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
@@ -926,6 +964,8 @@ export interface FileRoutesById {
   '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/_authenticated/ledger-parties/': typeof AuthenticatedLedgerPartiesIndexRoute
+  '/_authenticated/ledger-transfers/': typeof AuthenticatedLedgerTransfersIndexRoute
   '/_authenticated/locations/': typeof AuthenticatedLocationsIndexRoute
   '/_authenticated/meals/': typeof AuthenticatedMealsIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
@@ -992,6 +1032,8 @@ export interface FileRouteTypes {
     | '/inventory/bulk-move'
     | '/inventory/new'
     | '/inventory/session'
+    | '/ledger-parties/$shortcode'
+    | '/ledger-transfers/$shortcode'
     | '/locations/$shortcode'
     | '/locations/arrange'
     | '/locations/new'
@@ -1025,6 +1067,8 @@ export interface FileRouteTypes {
     | '/images/'
     | '/ingredients/'
     | '/inventory/'
+    | '/ledger-parties/'
+    | '/ledger-transfers/'
     | '/locations/'
     | '/meals/'
     | '/products/'
@@ -1088,6 +1132,8 @@ export interface FileRouteTypes {
     | '/inventory/bulk-move'
     | '/inventory/new'
     | '/inventory/session'
+    | '/ledger-parties/$shortcode'
+    | '/ledger-transfers/$shortcode'
     | '/locations/$shortcode'
     | '/locations/arrange'
     | '/locations/new'
@@ -1121,6 +1167,8 @@ export interface FileRouteTypes {
     | '/images'
     | '/ingredients'
     | '/inventory'
+    | '/ledger-parties'
+    | '/ledger-transfers'
     | '/locations'
     | '/meals'
     | '/products'
@@ -1186,6 +1234,8 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/bulk-move'
     | '/_authenticated/inventory/new'
     | '/_authenticated/inventory/session'
+    | '/_authenticated/ledger-parties/$shortcode'
+    | '/_authenticated/ledger-transfers/$shortcode'
     | '/_authenticated/locations/$shortcode'
     | '/_authenticated/locations/arrange'
     | '/_authenticated/locations/new'
@@ -1219,6 +1269,8 @@ export interface FileRouteTypes {
     | '/_authenticated/images/'
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
+    | '/_authenticated/ledger-parties/'
+    | '/_authenticated/ledger-transfers/'
     | '/_authenticated/locations/'
     | '/_authenticated/meals/'
     | '/_authenticated/products/'
@@ -1628,6 +1680,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInventorySessionRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ledger-parties/': {
+      id: '/_authenticated/ledger-parties/'
+      path: '/ledger-parties'
+      fullPath: '/ledger-parties/'
+      preLoaderRoute: typeof AuthenticatedLedgerPartiesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ledger-parties/$shortcode': {
+      id: '/_authenticated/ledger-parties/$shortcode'
+      path: '/ledger-parties/$shortcode'
+      fullPath: '/ledger-parties/$shortcode'
+      preLoaderRoute: typeof AuthenticatedLedgerPartiesShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ledger-transfers/': {
+      id: '/_authenticated/ledger-transfers/'
+      path: '/ledger-transfers'
+      fullPath: '/ledger-transfers/'
+      preLoaderRoute: typeof AuthenticatedLedgerTransfersIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ledger-transfers/$shortcode': {
+      id: '/_authenticated/ledger-transfers/$shortcode'
+      path: '/ledger-transfers/$shortcode'
+      fullPath: '/ledger-transfers/$shortcode'
+      preLoaderRoute: typeof AuthenticatedLedgerTransfersShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/locations/': {
       id: '/_authenticated/locations/'
       path: '/locations'
@@ -1967,6 +2047,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryBulkMoveRoute: typeof AuthenticatedInventoryBulkMoveRoute
   AuthenticatedInventoryNewRoute: typeof AuthenticatedInventoryNewRoute
   AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
+  AuthenticatedLedgerPartiesShortcodeRoute: typeof AuthenticatedLedgerPartiesShortcodeRoute
+  AuthenticatedLedgerTransfersShortcodeRoute: typeof AuthenticatedLedgerTransfersShortcodeRoute
   AuthenticatedLocationsShortcodeRoute: typeof AuthenticatedLocationsShortcodeRoute
   AuthenticatedLocationsArrangeRoute: typeof AuthenticatedLocationsArrangeRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
@@ -1997,6 +2079,8 @@ interface AuthenticatedRouteChildren {
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
+  AuthenticatedLedgerPartiesIndexRoute: typeof AuthenticatedLedgerPartiesIndexRoute
+  AuthenticatedLedgerTransfersIndexRoute: typeof AuthenticatedLedgerTransfersIndexRoute
   AuthenticatedLocationsIndexRoute: typeof AuthenticatedLocationsIndexRoute
   AuthenticatedMealsIndexRoute: typeof AuthenticatedMealsIndexRoute
   AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
@@ -2058,6 +2142,10 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryBulkMoveRoute: AuthenticatedInventoryBulkMoveRoute,
   AuthenticatedInventoryNewRoute: AuthenticatedInventoryNewRoute,
   AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
+  AuthenticatedLedgerPartiesShortcodeRoute:
+    AuthenticatedLedgerPartiesShortcodeRoute,
+  AuthenticatedLedgerTransfersShortcodeRoute:
+    AuthenticatedLedgerTransfersShortcodeRoute,
   AuthenticatedLocationsShortcodeRoute: AuthenticatedLocationsShortcodeRoute,
   AuthenticatedLocationsArrangeRoute: AuthenticatedLocationsArrangeRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
@@ -2091,6 +2179,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
+  AuthenticatedLedgerPartiesIndexRoute: AuthenticatedLedgerPartiesIndexRoute,
+  AuthenticatedLedgerTransfersIndexRoute:
+    AuthenticatedLedgerTransfersIndexRoute,
   AuthenticatedLocationsIndexRoute: AuthenticatedLocationsIndexRoute,
   AuthenticatedMealsIndexRoute: AuthenticatedMealsIndexRoute,
   AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,

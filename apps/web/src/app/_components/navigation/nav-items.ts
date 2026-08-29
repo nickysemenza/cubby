@@ -218,6 +218,16 @@ export const desktopNav: NavNode[] = [
         icon: ArrowLeftRight,
       },
       {
+        to: "/ledger-parties",
+        label: "Ledger Parties",
+        icon: entities.ledgerParty.lucideIcon,
+      },
+      {
+        to: "/ledger-transfers",
+        label: "Transfers",
+        icon: entities.ledgerTransfer.lucideIcon,
+      },
+      {
         to: "/statement-rows",
         label: "Statement Rows",
         icon: Receipt,

@@ -108,8 +108,12 @@ describe("HouseholdContributionLedgerReport", () => {
     expect(
       screen.getByText("Transfer has evidence from only one side"),
     ).toBeVisible();
-    expect(screen.getByText("LTR-TEST")).toBeVisible();
-    expect(screen.queryByRole("link", { name: "LTR-TEST" })).toBeNull();
+    // LTR- records used to render as plain text because they had no detail
+    // route. They have one now, so the gap target links like an EXP- does.
+    expect(screen.getByRole("link", { name: "LTR-TEST" })).toHaveAttribute(
+      "href",
+      "/ledger-transfers/LTR-TEST",
+    );
     expect(screen.getByRole("link", { name: "EXP-TEST" })).toHaveAttribute(
       "href",
       "/expenses/EXP-TEST",

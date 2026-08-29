@@ -95,6 +95,16 @@ const entityEmptyConfig = {
       "Log what you've bought (or plan to) to keep a project's running cost honest.",
     actionLabel: "New Expense",
   },
+  ledgerParty: {
+    title: "No ledger parties yet",
+    description:
+      "Household members, guests, and the household itself as a whole show up here once a contribution or transfer names them.",
+  },
+  ledgerTransfer: {
+    title: "No transfers yet",
+    description:
+      "A transfer records money moving between ledger parties after the fact, with its own evidence — logged from the household contribution ledger.",
+  },
   financialAccount: {
     title: "No financial accounts yet",
     description:

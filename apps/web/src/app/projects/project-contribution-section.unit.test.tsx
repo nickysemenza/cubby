@@ -62,7 +62,16 @@ const contribution = projectContributionOut.parse({
       amount: 10,
       targetIds: ["EXP-2222"],
     },
+    // Aggregated: stands for many expenses, so it carries a count and no
+    // targets rather than one entry per record.
+    {
+      code: "beneficiary_assumed_household",
+      amount: 40,
+      count: 3,
+      targetIds: [],
+    },
   ],
+  gapsTruncated: false,
 });
 
 describe("ProjectContributionReport", () => {
@@ -90,5 +99,18 @@ describe("ProjectContributionReport", () => {
       "href",
       "/expenses/EXP-2222",
     );
+  });
+
+  it("summarises an assumed-household gap by count instead of listing records", () => {
+    render(<ProjectContributionReport data={contribution} />, {
+      wrapper: harness.wrapper,
+    });
+
+    // The whole point of aggregating: one line with a count, not one link per
+    // expense. Enumerating these is the wall this replaced.
+    expect(
+      screen.getByText(/Consumption assumed to be the household's/),
+    ).toBeVisible();
+    expect(screen.getByText(/across 3 expenses/)).toBeVisible();
   });
 });

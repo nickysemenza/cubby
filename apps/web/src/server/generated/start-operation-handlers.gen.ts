@@ -263,6 +263,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "inventory.scanAtLocation": async () =>
     (await import("~/server/inventory-browser.server")).inventoryHandlers
       .operations.scanAtLocation,
+  "ledgerParty.options": async () =>
+    (await import("~/server/finance-browser.server")).ledgerPartyHandlers
+      .operations.options,
   "location.bulkUpdateParent": async () =>
     (await import("~/server/location-browser.server")).locationHandlers
       .operations.bulkUpdateParent,

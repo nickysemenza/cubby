@@ -32,7 +32,7 @@ import type {
  */
 export type EditableEntity = Exclude<
   Entity,
-  "image" | "usda-food" | "cookbook" | "ledgerParty" | "ledgerTransfer"
+  "image" | "usda-food" | "cookbook"
 >;
 
 type _EditableEntityMatchesTypedCatalog =

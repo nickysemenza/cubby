@@ -38,8 +38,11 @@ describe("createActionFor", () => {
     expect(createActionFor("usda-food")).toBeNull();
   });
 
+  // Both are routed (list + detail pages), but neither carries a create
+  // affordance — no `/new` route, no registered create action — so this still
+  // isolates the "browser-routed, un-creatable" branch `createActionFor` guards.
   it.each(["ledgerParty", "ledgerTransfer"] as const)(
-    "returns null for route-less %s",
+    "returns null for %s, which has no create affordance",
     (entity) => {
       expect(createActionFor(entity)).toBeNull();
     },

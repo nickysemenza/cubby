@@ -192,9 +192,18 @@ function HairlineRow({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Every `Entity` is browser-routed since ledger parties and transfers gained
+ * routes, so the old de-camel-case fallback is unreachable and TypeScript
+ * narrows it to `never`. The guard stays — a future route-less entity should
+ * get a readable label rather than crash — but it reads the roster through a
+ * widened lookup instead of a dead else branch.
+ */
 const entityLabel = (entity: Entity) => {
   if (isBrowserRoutedEntity(entity)) return entities[entity].label;
-  const words = entity.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/-/g, " ");
+  const words = String(entity)
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/-/g, " ");
   return words[0]?.toUpperCase() + words.slice(1);
 };
 

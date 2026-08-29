@@ -6,13 +6,13 @@ import { entityEditRegistry } from "./definitions";
 import { buildEntityEdit, resolveEntityEdit } from "./kernel";
 import type { EditableEntity } from "./types";
 
+// `ledgerParty`/`ledgerTransfer` joined the registry when they gained browser
+// routes: the shared action and command chrome is keyed by edit intent and runs
+// for every routed entity, so they need entries even though no editor UI is
+// rendered for them yet and their create/update still go through MCP.
 const editableEntities = allEntities.filter(
   (entity): entity is EditableEntity =>
-    entity !== "image" &&
-    entity !== "usda-food" &&
-    entity !== "cookbook" &&
-    entity !== "ledgerParty" &&
-    entity !== "ledgerTransfer",
+    entity !== "image" && entity !== "usda-food" && entity !== "cookbook",
 );
 
 describe("entity edit definitions", () => {

@@ -17,9 +17,11 @@ export const contributionGapLabels = {
   partial_funders: "Some original funding is unattributed",
   unpriced_expense: "Expense has no price",
   transfer_evidence_one_sided: "Transfer has evidence from only one side",
+  beneficiary_assumed_household: "Consumption assumed to be the household's",
+  funder_account_unowned: "Paid from an account with no owner recorded",
 } satisfies Record<HouseholdContributionGapCode, string>;
 
-/** EXP- records have a browser detail route; route-less LTR- records remain text. */
+/** Both EXP- and LTR- records now have browser detail routes. */
 export function ContributionGapTargets({
   targetIds,
 }: {
@@ -36,7 +38,12 @@ export function ContributionGapTargets({
           {targetId}
         </Link>
       ) : (
-        targetId
+        <Link
+          className="text-primary hover:underline"
+          {...entityDetailLink("ledgerTransfer", targetId)}
+        >
+          {targetId}
+        </Link>
       )}
     </span>
   ));

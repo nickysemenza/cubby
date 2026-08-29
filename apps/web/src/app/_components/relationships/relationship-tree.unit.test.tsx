@@ -150,7 +150,11 @@ describe("RelationshipTree display images", () => {
     );
   });
 
-  it("renders route-less ledger records as text instead of a broken link", () => {
+  it("links a ledger party record now that it has a browser detail route", () => {
+    // Formerly asserted the opposite (plain text, no link): `ledgerParty` was
+    // route-less until it gained `/ledger-parties/$shortcode`. It is a
+    // routable entity like any other now, so `isBrowserRoutedEntity` takes
+    // the link branch here too.
     renderTree(
       <RelationshipTree
         presets={[
@@ -177,6 +181,9 @@ describe("RelationshipTree display images", () => {
       />,
     );
 
-    expect(screen.getByText("Household").closest("a")).toBeNull();
+    expect(screen.getByText("Household").closest("a")).toHaveAttribute(
+      "href",
+      "/ledger-parties/LPY-A234",
+    );
   });
 });

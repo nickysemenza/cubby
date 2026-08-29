@@ -98,6 +98,19 @@ async function loadExpenseFacts(
   return result.rows;
 }
 
+/**
+ * Turn allocation rows into user-facing gaps.
+ *
+ * The `recorded`/`unknown` branch is the pre-existing behaviour, untouched:
+ * an explicit null-party row alongside a real one is `partial_*`, a wholly
+ * unattributed role is `missing_*`. The two derived bases are independent
+ * checks on top.
+ *
+ * `assumed_household` is AGGREGATED by the caller — it can cover thousands of
+ * expenses and enumerating them is the noise this work removes — while
+ * `unowned_account` keeps its targets, because there the specific expense (and
+ * the account behind it) is worth opening.
+ */
 function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
   const grouped = new Map<string, ExpenseAllocationRow[]>();
   for (const row of rows) {
@@ -107,30 +120,63 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
     else grouped.set(key, [row]);
   }
   const gaps: Gap[] = [];
+  let assumedCount = 0;
+  let assumedCents = 0n;
   for (const bucket of grouped.values()) {
     const first = bucket[0];
     if (!first) continue;
-    const nullRows = bucket.filter((row) => !row.ledgerPartyId);
-    const nullCents = sum(nullRows.map((row) => row.cents));
-    if (nullRows.some((row) => row.implicitUnattributed)) {
+    const target = parseShortcodeFor("expense", first.expenseShortcode);
+
+    // Scoped to the two bases that predate derivation, so the legacy
+    // missing/partial distinction keeps meaning exactly what it did.
+    const attributable = bucket.filter(
+      (row) => row.basis === "recorded" || row.basis === "unknown",
+    );
+    const nullRows = attributable.filter((row) => !row.ledgerPartyId);
+    if (nullRows.length > 0) {
+      const nullCents = sum(nullRows.map((row) => row.cents));
+      const unknown = nullRows.some((row) => row.basis === "unknown");
       gaps.push({
         code:
           first.role === "beneficiary"
-            ? "missing_beneficiaries"
-            : "missing_funders",
+            ? unknown
+              ? "missing_beneficiaries"
+              : "partial_beneficiaries"
+            : unknown
+              ? "missing_funders"
+              : "partial_funders",
         amount: money(nullCents),
-        targetIds: [parseShortcodeFor("expense", first.expenseShortcode)],
-      });
-    } else if (nullRows.length > 0) {
-      gaps.push({
-        code:
-          first.role === "beneficiary"
-            ? "partial_beneficiaries"
-            : "partial_funders",
-        amount: money(nullCents),
-        targetIds: [parseShortcodeFor("expense", first.expenseShortcode)],
+        targetIds: [target],
       });
     }
+
+    // Arm C only fires when no explicit beneficiary row exists, so an assumed
+    // row is always the whole beneficiary allocation for that expense.
+    const assumed = bucket.filter((row) => row.basis === "assumed_household");
+    if (assumed.length > 0) {
+      assumedCount += 1;
+      assumedCents += sum(assumed.map((row) => row.cents));
+    }
+
+    // Can legitimately coexist with `derived_from_payment` rows when one order
+    // was part-paid from an owned card and part from an orphan account, so sum
+    // only the unowned rows rather than the whole bucket.
+    const unowned = bucket.filter((row) => row.basis === "unowned_account");
+    if (unowned.length > 0) {
+      gaps.push({
+        code: "funder_account_unowned",
+        amount: money(sum(unowned.map((row) => row.cents))),
+        targetIds: [target],
+      });
+    }
+  }
+  if (assumedCount > 0) {
+    gaps.push({
+      code: "beneficiary_assumed_household",
+      amount: money(assumedCents),
+      count: assumedCount,
+      targetIds: [],
+    });
   }
   return gaps;
 }
@@ -375,6 +421,9 @@ export async function projectContribution(
         targetIds: [parseShortcodeFor("expense", row.shortcode)],
       })),
   ];
+  // Same cap the household ledger applies. Without it a project page could
+  // ship one entry per expense — 5,717 on the Household project alone.
+  const gapLimit = 200;
 
   return projectContributionOut.parse({
     projectId: input.projectId,
@@ -406,6 +455,7 @@ export async function projectContribution(
       )
       .sort((a, b) => a.party.name.localeCompare(b.party.name)),
     funders,
-    gaps,
+    gaps: gaps.slice(0, gapLimit),
+    gapsTruncated: gaps.length > gapLimit,
   });
 }

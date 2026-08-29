@@ -9,6 +9,8 @@ import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { imageSortableFields } from "@cubby/schemas/image";
 import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import { inventorySortableFields } from "@cubby/schemas/inventory";
+import { ledgerPartySortableFields } from "@cubby/schemas/ledger-party";
+import { ledgerTransferSortableFields } from "@cubby/schemas/ledger-transfer";
 import { locationSortableFields } from "@cubby/schemas/location";
 import { mealSortableFields } from "@cubby/schemas/meal";
 import { productSortableFields } from "@cubby/schemas/product";
@@ -50,6 +52,8 @@ describe("entity sortableFields", () => {
       location: locationSortableFields,
       inventory: inventorySortableFields,
       meal: mealSortableFields,
+      ledgerParty: ledgerPartySortableFields,
+      ledgerTransfer: ledgerTransferSortableFields,
       project: projectSortableFields,
       task: taskSortableFields,
       vendor: vendorSortableFields,
@@ -81,6 +85,8 @@ describe("entity list first-visit density", () => {
       location: undefined,
       inventory: undefined,
       meal: undefined,
+      ledgerParty: undefined,
+      ledgerTransfer: undefined,
       project: undefined,
       task: undefined,
       vendor: "dense",
@@ -114,9 +120,10 @@ describe("entity label parity", () => {
     const covered = shortcodeEntities.filter((entity) =>
       isBrowserRoutedEntity(entity),
     );
-    // Sanity check the guard itself isn't vacuous: every non-`ledgerParty`/
-    // `ledgerTransfer` shortcode entity has a browser route today.
-    expect(covered.length).toBe(shortcodeEntities.length - 2);
+    // Sanity check the guard itself isn't vacuous: every shortcode entity has
+    // a browser route today — `ledgerParty`/`ledgerTransfer` were the last
+    // holdouts.
+    expect(covered.length).toBe(shortcodeEntities.length);
 
     for (const entity of covered) {
       expect(entityLabel(entity)).toBe(titleCase(ENTITY_LABEL[entity]));

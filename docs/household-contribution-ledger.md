@@ -24,7 +24,7 @@ supporting evidence is complete now.
 
 ## Standard mutations
 
-LedgerParty and LedgerTransfer are standard entities with the ordinary create, update, delete, list, and get surface. A LedgerParty's kind is `member`, `guest`, or `household`; it has no standalone browser route. A LedgerTransfer moves value between parties and likewise has no standalone route.
+LedgerParty and LedgerTransfer are standard entities with the ordinary create, update, delete, list, and get surface. A LedgerParty's kind is `member`, `guest`, or `household`; it has a standalone browser list and detail route (`/ledger-parties`), read-only for now — no create dialog in the browser. A LedgerTransfer moves value between parties and likewise has a standalone browser route (`/ledger-transfers`), also read-only for now.
 
 Expense mutations carry the nested Expense Attribution and Source Claim fields needed to record consumption, initial funding, external source identity, source amount, and an explicit decision about any discrepancy. FinancialAccount mutations carry a nullable Ledger Party field identifying which party the account evidences. These fields preserve the surrounding Expense or FinancialAccount as the routed record.
 
@@ -35,7 +35,7 @@ A Source Claim accepts a provider row ID only as write-time key material. The se
 - Attribute an Expense to one or more parties, the household collectively, or null when attribution is unknown.
 - Claim an Expense's external source amount while retaining an explicit decision when amounts differ.
 - Create, update, or delete a Ledger Transfer between parties, including reimbursements and same-party internal moves.
-- List and get Ledger Parties and Ledger Transfers for review without presenting them as standalone navigation destinations.
+- List and get Ledger Parties and Ledger Transfers for review, including their own browser list and detail pages under Finance.
 - Pair statement evidence to a transfer without treating mirrored rows as separate transfers.
 - Review household-global positions and project-local initial funding, consumption, and gaps.
 
@@ -46,7 +46,7 @@ not apply later transfers: transfers are household-global.
 
 ## Presentation and unknowns
 
-Client labels are derived from party kind. Route-capable entity references are links; Ledger Parties and Ledger Transfers intentionally render as text because they have no standalone browse route. Household attribution is intentional. Missing, partial, unavailable, and null-attributed values remain explicit gaps rather than inferred parties or automatic matches.
+Client labels are derived from party kind. Route-capable entity references elsewhere in the app are links; on this ledger page, Ledger Parties and Ledger Transfers still render as plain text — that is a presentation choice for this module now, not a routing limitation, since both gained their own browser list and detail pages (`/ledger-parties`, `/ledger-transfers`). Household attribution is intentional. Missing, partial, unavailable, and null-attributed values remain explicit gaps rather than inferred parties or automatic matches.
 
 ## Import boundary
 

@@ -6,6 +6,7 @@ import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { NoneValue } from "~/components/ui/none-value";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 
@@ -44,6 +45,19 @@ export function FinancialAccountDetail({
               <BasicInfo
                 fields={[
                   { label: "Name", value: account.name },
+                  {
+                    // Which party's money this account is. Read-only here; the
+                    // accounts table has the inline editor.
+                    label: "Owner",
+                    value: account.ledgerPartyName ?? <NoneValue />,
+                    filterAction: account.ledgerPartyId ? (
+                      <EntityFilterLink
+                        to="/ledger-parties"
+                        search={{ q: account.ledgerPartyName ?? undefined }}
+                        label="Show this party"
+                      />
+                    ) : undefined,
+                  },
                   {
                     label: "Identity",
                     value: renderOptionCell(
