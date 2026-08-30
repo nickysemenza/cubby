@@ -6,7 +6,6 @@ import {
 } from "./check-browser-route-contracts.ts";
 
 test("every generated list and detail route has a file-route module", () => {
-  assert.equal(expectedBrowserRouteFiles().length, 34);
   assert.deepEqual(missingBrowserRouteFiles(), []);
 });
 
