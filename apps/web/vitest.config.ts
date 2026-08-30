@@ -234,7 +234,10 @@ export default defineConfig({
             // Integration stays on isolated forks: database clients and module
             // singletons are file-scoped, while shared registries must not cross
             // test-file boundaries. Larger IntegreSQL pools do not reduce CREATE latency.
-            sequence: { groupOrder: 2 },
+            // A changed-test run can select both portable PGlite and real
+            // PostgreSQL projects. Their worker caps differ, so Vitest requires
+            // distinct sequence groups even though CI runs them in separate jobs.
+            sequence: { groupOrder: 3 },
           },
         },
         {
