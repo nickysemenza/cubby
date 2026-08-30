@@ -125,6 +125,9 @@ describe("ledger contracts", () => {
     const report = {
       projectId: "PRJ-A234",
       wholeGroupCost: 0,
+      actualSpend: 0,
+      committedSpend: 0,
+      creditsReceived: 0,
       householdInitialExposure: 0,
       guestInitialFunding: 0,
       unattributedConsumption: 0,
