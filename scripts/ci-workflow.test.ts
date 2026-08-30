@@ -18,10 +18,45 @@ test("preflight classifies and validates in one runner job", () => {
   assert.match(preflight, /name: Run repository preflight/u);
   assert.match(preflight, /pnpm check:all &/u);
   assert.match(preflight, /wait "\$\{pids\[\$index\]\}"/u);
-  assert.match(preflight, /name: Save full verification provenance/u);
-  assert.match(preflight, /name: full-verification/u);
+  assert.match(preflight, /name: Save PR verification provenance/u);
+  assert.match(preflight, /name: pr-verification-v1-/u);
   assert.doesNotMatch(workflow, /^  scope:$/mu);
   assert.doesNotMatch(workflow, /^  full-verification:$/mu);
+});
+
+test("ordinary PR verification is reusable without a manual full label", () => {
+  const preflight = job("preflight", "test-rust");
+  assert.match(preflight, /name: Classify changes and find a reusable PR run/u);
+  assert.match(
+    preflight,
+    /`pr-verification-v1-\$\{pr\.number\}-\$\{pr\.head\.sha\}`/u,
+  );
+  assert.match(preflight, /artifactNames\.has\(verificationArtifact\)/u);
+  assert.match(preflight, /pr\.merge_commit_sha === context\.sha/u);
+  assert.match(preflight, /pr\.head\.repo\?\.full_name/u);
+  assert.match(
+    preflight,
+    /mainCommit\.data\.tree\.sha === headCommit\.data\.tree\.sha/u,
+  );
+  assert.match(preflight, /run\.conclusion === "success"/u);
+  assert.match(preflight, /run\.head_sha === pr\.head\.sha/u);
+  assert.match(
+    preflight,
+    /classified\.web && !artifactNames\.has\("cf-build"\)/u,
+  );
+  assert.match(preflight, /context\.ref === "refs\/heads\/main"/u);
+  assert.doesNotMatch(preflight, /labels\.includes\("ci:full"\)/u);
+  assert.doesNotMatch(workflow, /\blabeled, unlabeled\b/u);
+});
+
+test("only the preview label spends a CI runner", () => {
+  const preflight = job("preflight", "test-rust");
+  assert.match(preflight, /github\.event\.action != 'labeled'/u);
+  assert.match(preflight, /github\.event\.label\.name == 'preview'/u);
+  assert.match(
+    workflow,
+    /github\.event\.action == 'labeled' && github\.event\.label\.name \|\| 'verify'/u,
+  );
 });
 
 test("E2E setup overlaps the build but tests the uploaded artifact", () => {
@@ -51,7 +86,7 @@ test("the node test runner builds and publishes the deployable artifact", () => 
   assert.doesNotMatch(workflow, /^  build-cf:$/mu);
 });
 
-test("deployment directly requires every full verification result", () => {
+test("deployment accepts exact PR reuse or every full fallback result", () => {
   const deploy = job("deploy-cf", "deploy-worker");
   assert.match(
     deploy,
@@ -65,6 +100,7 @@ test("deployment directly requires every full verification result", () => {
   ]) {
     assert.match(deploy, new RegExp(result.replaceAll(".", "\\."), "u"));
   }
+  assert.match(deploy, /needs\.preflight\.outputs\.reuse == 'true'/u);
   assert.match(
     deploy,
     /inputs\.bypass_e2e && needs\.test-e2e\.result == 'skipped'/u,
