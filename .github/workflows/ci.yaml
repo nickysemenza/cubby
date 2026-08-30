@@ -704,6 +704,12 @@ jobs:
       - name: Re-check whether this is still current main
         id: current_main
         uses: ./.github/actions/check-current-main
+      - uses: ./.github/actions/setup-node-with-deps
+        if: steps.current_main.outputs.current == 'true'
+        with:
+          wasm: "false"
+          workspace-filter: "@cubby/web..."
+          cache-pnpm-store: "false"
       - name: Download the verified Cloudflare bundle
         if: steps.current_main.outputs.current == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
