@@ -15,16 +15,36 @@
 // or a branch switch, rebuilds too).
 
 import { execFileSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { type Dirent, existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { extremeMtime } from "./mtime.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ART = join(ROOT, "packages/wasm/recipebridge_bg.wasm");
 const PRUNE = new Set(["target", ".git", "node_modules"]);
 const WATCH_EXT = [".rs", ".toml", ".lock"];
+
+const newestMtime = (directory: string): number => {
+  let newest = 0;
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(directory, { withFileTypes: true });
+  } catch {
+    return newest;
+  }
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (!PRUNE.has(entry.name)) newest = Math.max(newest, newestMtime(path));
+    } else if (WATCH_EXT.some((extension) => entry.name.endsWith(extension))) {
+      try {
+        newest = Math.max(newest, statSync(path).mtimeMs);
+      } catch {}
+    }
+  }
+  return newest;
+};
 
 export const cargoMetadataSchema = z.object({
   packages: z.array(
@@ -69,14 +89,6 @@ const sourceRoots = () => {
   }
   return [...roots];
 };
-
-const newestMtime = (dir: string) =>
-  extremeMtime(dir, {
-    pick: Math.max,
-    seed: 0,
-    prune: PRUNE,
-    extensions: WATCH_EXT,
-  });
 
 const main = () => {
   if (!existsSync(ART)) {

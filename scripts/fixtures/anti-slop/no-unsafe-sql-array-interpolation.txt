@@ -1,0 +1,9 @@
+declare const sql: {
+  (parts: TemplateStringsArray, ...values: unknown[]): unknown;
+};
+declare const uuidArrayParam: (values: readonly string[]) => unknown;
+declare const ids: readonly string[];
+
+const unsafeAny = sql`id = ANY(${ids})`;
+const unsafeOverlap = sql`tags && ${ids}`;
+const safeAny = sql`id = ANY(${uuidArrayParam(ids)})`;

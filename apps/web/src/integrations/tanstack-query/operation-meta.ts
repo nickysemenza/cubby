@@ -3,6 +3,8 @@ import { z } from "zod";
 
 import type { OperationTransport } from "~/lib/perf/perf-store";
 
+import type { InvalidationTagSet } from "./cache-tags";
+
 export interface CubbyOperationMeta extends Record<string, unknown> {
   transport?: OperationTransport;
   operation?: string;
@@ -13,7 +15,7 @@ export interface CubbyOperationMeta extends Record<string, unknown> {
   /** Semantic cache tags owned by an operation descriptor. */
   cacheTags?: readonly OperationCacheTag[];
   /** Cache tags invalidated after a successful mutation. */
-  invalidates?: readonly OperationCacheTag[];
+  invalidates?: InvalidationTagSet;
   /** Whether a successful query is eligible for offline persistence. */
   persistence?: "persist" | "memory";
   /** Descriptor-owned freshness policy, also copied onto query options. */

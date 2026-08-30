@@ -14,6 +14,7 @@ import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes"
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { recommendations } from "~/lib/recommendations.functions";
 
@@ -136,9 +137,10 @@ function PlacementRecommendation({
       onSuccess: () => {
         // The move's own ripple covers `problems`; the placement suggestion
         // that offered it is this page's alone.
-        void invalidateOperationTags(queryClient, [
-          ["recommendations", "placement"],
-        ]);
+        void invalidateOperationTags(
+          queryClient,
+          ripple.recommendationPlacement,
+        );
       },
     }),
   );
@@ -211,10 +213,10 @@ function TagPropagationRecommendation({
   const accept = useMutation(
     operations.productUpdateMutationOptions({
       onSuccess: () => {
-        void invalidateOperationTags(queryClient, [
-          ["recommendations", "tagPropagation"],
-          ["relatedness", "product"],
-        ]);
+        void invalidateOperationTags(
+          queryClient,
+          ripple.recommendationTagPropagation,
+        );
       },
     }),
   );

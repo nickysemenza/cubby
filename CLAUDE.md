@@ -3,8 +3,7 @@
 ## Universal loop
 
 - Make the requested in-scope change; validate at the narrowest tier that can
-  fail. `pnpm typecheck` is cheap; `pnpm check:staged` checks staged files
-  without formatting the whole tree. Run one file with `pnpm test:file src/…`
+  fail. `pnpm typecheck` is cheap. Run one file with `pnpm test:file src/…`
   (path relative to `apps/web`) — that is the spelling, not `vitest`/`npx
   vitest`. At handoff, run `pnpm check` plus affected tests; before a PR, run
   the existing full relevant gates.

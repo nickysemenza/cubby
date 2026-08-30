@@ -54,17 +54,16 @@ list of the failing tests, and writes the same list to
 `apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
 it. 24% of all test runs used to be a re-run of one that had just failed.
 
-Narrow the other gates too: `pnpm check:staged` checks only staged JavaScript
-and TypeScript plus formattable files, and `pnpm typecheck:web` is useful when
-only the web app is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
+Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
+is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
 entity freshness, Knip, script types, and the high-risk SQL/soft-delete guards
 concurrently. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
 and security validation. Dependency
 deduplication runs separately when a package manifest, workspace file, patch, or
 lockfile changed; CI and pre-PR validation run the applicable superset.
 
-Pre-commit runs `pnpm check:staged` and the complete `pnpm check`. Pre-push
-selects changed Vitest, PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
+Pre-commit runs the complete `pnpm check`. Pre-push selects changed Vitest,
+PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
 from the commits being pushed. Hooks are mandatory: agents never use
 `--no-verify` to bypass a failure.
 

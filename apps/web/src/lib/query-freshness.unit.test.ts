@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { location } from "~/app/locations/location.functions";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 describe("operation freshness metadata", () => {
@@ -28,7 +29,7 @@ describe("operation-tag invalidation", () => {
     const query = client.getQueryCache().build(client, options);
     query.setData({ items: [], days: {} });
 
-    await invalidateOperationTags(client, [["calendar"]]);
+    await invalidateOperationTags(client, ripple.calendar);
 
     expect(query.state.isInvalidated).toBe(true);
   });

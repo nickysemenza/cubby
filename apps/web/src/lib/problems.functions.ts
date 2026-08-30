@@ -94,7 +94,7 @@ export const problems = defineOperationDomain("problems", {
   cleanupOrphanedEmbeddings: mutation({
     input: cleanupOrphanedEntityEmbeddingsInput,
     output: cleanupOrphanedEntityEmbeddingsOut,
-    invalidates: [["problems"], ["search"]],
+    invalidates: ripple.problemsSearch,
   }),
 });
 

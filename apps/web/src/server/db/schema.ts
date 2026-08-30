@@ -2701,12 +2701,9 @@ export const mcpToolCall = pgTable(
     outcome: text("outcome").notNull().$type<McpToolCallOutcome>(),
     registeredAtCall: boolean("registeredAtCall").notNull(),
     surface: text("surface").notNull().$type<McpToolCallSurface>(),
-    // Nullable: only derivable for CRUD-shaped tools (see mcpToolName inversion
-    // in scripts/backfill-mcp-tool-call-entity.ts) plus attach/detach/merge,
-    // which read it off an argument at the call site instead. Every other tool
-    // family (find_*, patch_*, verify_*, statement/usda/problems workflows)
-    // has no single entity to attribute a call to, so this stays null for them
-    // rather than guessing.
+    // Nullable: some tools span entities or have no entity at all, and old
+    // payload-free events remain unattributable when the tool name alone is
+    // ambiguous. Preserve null rather than guessing historical ownership.
     entity: text("entity").$type<Entity>(),
     release: text("release").notNull(),
     occurredAt: timestamp("occurredAt", { mode: "date" }).notNull(),

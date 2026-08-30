@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/oauth";
 import { z } from "zod";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -22,7 +23,7 @@ export const oauth = defineOperationDomain("oauth", {
   revokeConnectedApp: mutation({
     input: revokeConnectedAppInput,
     output: revokeConnectedAppOut,
-    invalidates: [["oauth", "connectedApps"]],
+    invalidates: ripple.connectedApps,
   }),
   countOrphanedClients: query({
     input: z.null(),
@@ -32,6 +33,6 @@ export const oauth = defineOperationDomain("oauth", {
   pruneOrphanedClients: mutation({
     input: z.null(),
     output: pruneOrphanedOAuthClientsOut,
-    invalidates: [["oauth", "orphaned"]],
+    invalidates: ripple.orphanedOAuth,
   }),
 });

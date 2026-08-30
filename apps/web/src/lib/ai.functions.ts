@@ -74,12 +74,12 @@ export const ai = defineOperationDomain("ai", {
   identifyProduct: mutation({
     input: productIdentificationInput,
     output: productIdentificationSchema,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
   suggestUsdaFood: mutation({
     input: usdaFoodSuggestionInput,
     output: usdaFoodSuggestionOut,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
   suggestUsdaFoodBatch: mutation({
     input: usdaFoodSuggestionBatchInput,
@@ -94,7 +94,7 @@ export const ai = defineOperationDomain("ai", {
   parseSearch: mutation({
     input: parseSearchInput,
     output: parsedSearchSchema,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
   usageRecent: query({
     input: aiUsageRecentInput,

@@ -3,7 +3,7 @@ import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSync } from "oxc-parser";
 
-export type IdentifierViolationKind =
+type IdentifierViolationKind =
   | "unsafe-helper-declaration"
   | "unsafe-helper-import"
   | "unsafe-helper-call"
@@ -904,7 +904,7 @@ export const scanSources = (
 export const scanSource = (file: string, source: string) =>
   scanSources([{ file, source }]);
 
-export type ScanOptions = Readonly<{ includeTests?: boolean }>;
+type ScanOptions = Readonly<{ includeTests?: boolean }>;
 const isTestPath = (path: string): boolean =>
   /(?:^|[\\/])(?:tests?|__fixtures__|test-support|tooling)(?:[\\/]|$)/u.test(
     path,
@@ -926,10 +926,7 @@ const sourceFilesUnder = (path: string, options: ScanOptions): string[] => {
       : sourceFilesUnder(child, options);
   });
 };
-export const scanPaths = (
-  paths: readonly string[],
-  options: ScanOptions = {},
-) => {
+const scanPaths = (paths: readonly string[], options: ScanOptions = {}) => {
   const files = paths
     .flatMap((path) => sourceFilesUnder(resolve(path), options))
     .sort();

@@ -373,7 +373,6 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run lint:fix` | Full-tree Oxlint auto-fix |
 | `pnpm run format:check` | Full-tree Oxfmt check |
 | `pnpm run format` | Full-tree Oxfmt write |
-| `pnpm run check:staged` | Oxlint/Oxfmt checks for staged files (used by Husky) |
 | `pnpm run test` | Docker-free Vitest unit/UI plus portable PGlite database tests |
 | `pnpm run test:pglite` | PGlite schema contract plus portable repository integration tests |
 | `pnpm run test:integration:postgres` | Full repository integration suite on PostgreSQL/IntegreSQL (requires Docker) |
@@ -528,8 +527,8 @@ no React, no Tailwind). It doesn't deploy on its own: it builds to
 self-contained HTML that [server/mcp/apps/](apps/web/src/server/mcp/apps/)
 inlines and serves as `ui://` resources, driven off the manifest in
 [src/metadata.ts](apps/mcp-apps/src/metadata.ts) — the one place an app is
-declared. `scripts/ensure-mcp-apps.ts` gates apps/web's `dev`, `test`, and
-`build:cf`, rebuilding only when a source is newer than the bundles.
+declared. The package build's `--if-stale` mode gates apps/web's `dev`, `test`,
+and `build:cf`, rebuilding only when a source is newer than the bundles.
 
 `pnpm --filter @cubby/mcp-apps dev` runs a local host harness that drives the
 real AppBridge protocol against fixture data — no tunnel or connector needed,

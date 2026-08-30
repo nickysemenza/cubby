@@ -1,0 +1,11 @@
+const queryKeys = {};
+const invalidatesFor = () => undefined;
+const invalidateQueryRoots = () => undefined;
+const cancelQueryRoots = () => undefined;
+const normalizeQueryRoot = () => undefined;
+
+queryKeys;
+invalidatesFor();
+invalidateQueryRoots();
+cancelQueryRoots();
+normalizeQueryRoot();

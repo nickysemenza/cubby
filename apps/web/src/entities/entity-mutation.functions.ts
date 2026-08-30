@@ -2,12 +2,15 @@ import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { hasFdcLink } from "@cubby/schemas/product";
 import { z } from "zod";
 
-import { entityRipple, ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  entityRipple,
+  ripple,
+  type InvalidationTagSet,
+} from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
 } from "~/integrations/tanstack-query/operation-catalog";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
@@ -39,7 +42,7 @@ type EntityMutationResultInput = z.input<
  */
 function productWriteTags(
   input: EntityBrowserMutationInput,
-): readonly OperationCacheTag[] {
+): InvalidationTagSet {
   if (
     input.entity !== "product" ||
     (input.action !== "create" && input.action !== "update")
