@@ -69,6 +69,14 @@ test("deployment directly requires every full verification result", () => {
     deploy,
     /inputs\.bypass_e2e && needs\.test-e2e\.result == 'skipped'/u,
   );
+  assert.match(deploy, /uses: \.\/\.github\/actions\/setup-node-with-deps/u);
+  assert.match(deploy, /workspace-filter: "@cubby\/web\.\.\."/u);
+  assert.match(deploy, /cache-pnpm-store: "false"/u);
+  assert.ok(
+    deploy.indexOf("uses: ./.github/actions/setup-node-with-deps") <
+      deploy.indexOf("uses: cloudflare/wrangler-action"),
+  );
+  assert.doesNotMatch(deploy, /run: pnpm --filter @cubby\/web run build:cf/u);
 });
 
 test("reused main runs skip tests while scheduled coverage keeps its tiers", () => {
