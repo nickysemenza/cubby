@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { inventoryPlacementValues, locationTypeValues } from "@cubby/shared";
+import { amount } from "./codec";
 import {
   expenseLineBasisSchema,
   expenseLineKindSchema,
@@ -33,6 +35,8 @@ import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
   expenseShortcode,
+  inventoryShortcode,
+  locationShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -1697,6 +1701,76 @@ export type ProjectDashboardFilters = z.infer<
 export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
 
 export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
+
+export const toolGalleryGroupBy = z.enum(["location", "manufacturer", "trade"]);
+export type ToolGalleryGroupBy = z.infer<typeof toolGalleryGroupBy>;
+
+export const toolGalleryInput = z.object({
+  search: z.string().trim().max(200).optional(),
+  groupBy: toolGalleryGroupBy.default("location"),
+  pagination: z
+    .object({
+      pageIndex: z.number().int().nonnegative().default(0),
+      pageSize: z.number().int().min(1).max(100).default(60),
+    })
+    .default({ pageIndex: 0, pageSize: 60 }),
+});
+export type ToolGalleryInput = z.input<typeof toolGalleryInput>;
+export type ToolGalleryFilters = z.infer<typeof toolGalleryInput>;
+
+export const toolGalleryInventoryEntryOut = z.object({
+  id: inventoryShortcode,
+  amount,
+  placement: z.enum(inventoryPlacementValues),
+  location: z.object({
+    id: locationShortcode,
+    name: z.string(),
+    ancestors: z.array(
+      z.object({
+        id: locationShortcode,
+        name: z.string(),
+        type: z.enum(locationTypeValues).nullable(),
+      }),
+    ),
+  }),
+});
+export type ToolGalleryInventoryEntryOut = z.infer<
+  typeof toolGalleryInventoryEntryOut
+>;
+
+export const toolGalleryItemOut = z.object({
+  productId: productShortcode,
+  productName: z.string(),
+  manufacturer: z.string(),
+  model: z.string().nullable(),
+  coverImageUrl: z.url().nullable(),
+  extraImageCount: z.number().int().nonnegative(),
+  inventoryEntries: z.array(toolGalleryInventoryEntryOut).min(1),
+  trade: tradeSchema.nullable(),
+  groupKey: z.string(),
+  groupLabel: z.string(),
+  ...projectToolEconomicsFields,
+});
+export type ToolGalleryItemOut = z.infer<typeof toolGalleryItemOut>;
+
+export const toolGalleryGroupOut = z.object({
+  key: z.string(),
+  label: z.string(),
+  itemCount: z.number().int().positive(),
+  startIndex: z.number().int().nonnegative(),
+});
+export type ToolGalleryGroupOut = z.infer<typeof toolGalleryGroupOut>;
+
+export const toolGalleryOut = createPaginatedResponseSchema(
+  toolGalleryItemOut,
+).extend({
+  groups: z.array(toolGalleryGroupOut),
+  totals: z.object({
+    products: z.number().int().nonnegative(),
+    placements: z.number().int().nonnegative(),
+  }),
+});
+export type ToolGalleryOut = z.infer<typeof toolGalleryOut>;
 
 export const projectToolMatrixGroupBy = z.enum(["trade", "manufacturer"]);
 export type ProjectToolMatrixGroupBy = z.infer<typeof projectToolMatrixGroupBy>;

@@ -68,6 +68,18 @@ export const project = defineOperationDomain("project", {
       ["project", "resource"],
     ],
   }),
+  toolGallery: query({
+    input: schemas.toolGalleryInput,
+    output: schemas.toolGalleryOut,
+    tags: [
+      ["project", "toolGallery"],
+      ["product", "toolGallery"],
+      ["inventory", "toolGallery"],
+      ["location", "toolGallery"],
+      ["image", "toolGallery"],
+      ["expense", "toolGallery"],
+    ],
+  }),
   setToolUsage: mutation({
     input: schemas.projectToolUsageSetInput,
     output: schemas.projectToolUsageSetOut,

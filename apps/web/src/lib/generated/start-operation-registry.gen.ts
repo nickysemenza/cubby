@@ -234,6 +234,7 @@ export const START_OPERATIONS = {
   "project.portfolioAnalytics": { kind: "query" },
   "project.resources": { kind: "query" },
   "project.setToolUsage": { kind: "mutation" },
+  "project.toolGallery": { kind: "query" },
   "project.toolMatrix": { kind: "query" },
   "project.toolSuggestions": { kind: "query" },
   "project.tree": { kind: "query" },
