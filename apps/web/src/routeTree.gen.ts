@@ -31,6 +31,7 @@ import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
 import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedToolsRouteImport } from './routes/_authenticated/tools'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
@@ -223,6 +224,11 @@ const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedToolsRoute = AuthenticatedToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const ApiMcpRoute = ApiMcpRouteImport.update({
@@ -703,6 +709,7 @@ export interface FileRoutesByFullPath {
   '/problems': typeof AuthenticatedProblemsRoute
   '/scan': typeof AuthenticatedScanRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/tools': typeof AuthenticatedToolsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/docs/$section': typeof DocsSectionRoute
@@ -803,6 +810,7 @@ export interface FileRoutesByTo {
   '/problems': typeof AuthenticatedProblemsRoute
   '/scan': typeof AuthenticatedScanRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/tools': typeof AuthenticatedToolsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/docs/$section': typeof DocsSectionRoute
@@ -906,6 +914,7 @@ export interface FileRoutesById {
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
   '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/tools': typeof AuthenticatedToolsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/docs/$section': typeof DocsSectionRoute
@@ -1009,6 +1018,7 @@ export interface FileRouteTypes {
     | '/problems'
     | '/scan'
     | '/settings'
+    | '/tools'
     | '/api/mcp'
     | '/auth/$authView'
     | '/docs/$section'
@@ -1109,6 +1119,7 @@ export interface FileRouteTypes {
     | '/problems'
     | '/scan'
     | '/settings'
+    | '/tools'
     | '/api/mcp'
     | '/auth/$authView'
     | '/docs/$section'
@@ -1211,6 +1222,7 @@ export interface FileRouteTypes {
     | '/_authenticated/problems'
     | '/_authenticated/scan'
     | '/_authenticated/settings'
+    | '/_authenticated/tools'
     | '/api/mcp'
     | '/auth/$authView'
     | '/docs/$section'
@@ -1461,6 +1473,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/tools': {
+      id: '/_authenticated/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof AuthenticatedToolsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/api/mcp': {
@@ -2029,6 +2048,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
   AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedToolsRoute: typeof AuthenticatedToolsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
   AuthenticatedAccountConnectedAppsRoute: typeof AuthenticatedAccountConnectedAppsRoute
   AuthenticatedCollectionsCollectionRoute: typeof AuthenticatedCollectionsCollectionRoute
@@ -2116,6 +2136,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
   AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedToolsRoute: AuthenticatedToolsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
   AuthenticatedAccountConnectedAppsRoute:
     AuthenticatedAccountConnectedAppsRoute,

@@ -88,6 +88,7 @@ const pgliteIntegrationTests = [
   "src/server/repo/collection.integration.test.ts",
   "src/server/repo/merchant-vendor-inference.integration.test.ts",
   "src/server/repo/meal.integration.test.ts",
+  "src/server/repo/project-tool-gallery.integration.test.ts",
   "src/server/repo/product/analytics.integration.test.ts",
   "src/server/repo/product/conversion-coverage.integration.test.ts",
   "src/server/repo/product/relationship-route.integration.test.ts",

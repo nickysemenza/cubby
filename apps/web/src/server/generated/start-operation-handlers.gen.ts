@@ -476,6 +476,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "project.setToolUsage": async () =>
     (await import("~/server/project-browser.server")).projectHandlers.operations
       .setToolUsage,
+  "project.toolGallery": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .toolGallery,
   "project.toolMatrix": async () =>
     (await import("~/server/project-browser.server")).projectHandlers.operations
       .toolMatrix,

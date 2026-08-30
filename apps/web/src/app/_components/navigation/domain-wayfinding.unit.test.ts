@@ -25,6 +25,7 @@ describe("Porcelain Transit domain wayfinding", () => {
     ["/inventory/session", "pantry"],
     ["/meals/shopping-list", "plan"],
     ["/projects/tools", "house"],
+    ["/tools", "house"],
     ["/expenses/EXP-42?view=list", "finance"],
   ])("classifies %s as %s", (path, expected) => {
     expect(domainForRoute(path)).toBe(expected);

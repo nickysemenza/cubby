@@ -54,7 +54,7 @@ export const DOMAIN_WAYFINDING = {
     accentToken: "--domain-house",
     surfaceToken: "--domain-house-surface",
     entities: ["project", "task"],
-    routeRoots: ["/projects", "/tasks"],
+    routeRoots: ["/projects", "/tools", "/tasks"],
   },
   finance: {
     id: "finance",
