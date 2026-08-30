@@ -8,6 +8,7 @@ import {
   ContributionGapTargets,
   contributionGapLabels,
   ledgerPartyLabel,
+  MoneyCell,
 } from "~/app/_components/household-contribution-format";
 import { householdContribution } from "~/app/finance/household-contribution.functions";
 import { Row, Stack } from "~/components/layout";
@@ -33,6 +34,7 @@ export function ProjectContributionReport({
   const id = useId();
   const beneficiariesHeadingId = `${id}-beneficiaries`;
   const fundersHeadingId = `${id}-funders`;
+  const gapsHeadingId = `${id}-gaps`;
   return (
     <Stack gap="lg">
       <p className="m-0 text-xs/relaxed text-muted-foreground">
@@ -43,6 +45,15 @@ export function ProjectContributionReport({
       <StatGrid>
         <StatTile label="Whole-group cost">
           {formatCurrency(data.wholeGroupCost)}
+        </StatTile>
+        {/* The same three quantities BudgetStrip shows above, from the same
+            helper — a single netted figure hides which is which. */}
+        <StatTile label="Actual">{formatCurrency(data.actualSpend)}</StatTile>
+        <StatTile label="Committed">
+          {formatCurrency(data.committedSpend)}
+        </StatTile>
+        <StatTile label="Credits">
+          {formatCurrency(data.creditsReceived)}
         </StatTile>
         <StatTile label="Household initial exposure">
           {formatCurrency(data.householdInitialExposure)}
@@ -157,38 +168,47 @@ export function ProjectContributionReport({
       </div>
 
       {data.gaps.length > 0 && (
-        <Alert>
-          <AlertTriangle className="size-3.5 text-warning-ink" />
-          <AlertTitle>Contribution attribution is incomplete</AlertTitle>
-          <AlertDescription>
-            <ul className="m-0 list-none space-y-0.5 p-0">
+        <section aria-labelledby={gapsHeadingId}>
+          <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-foreground pb-1">
+            <h3 id={gapsHeadingId} className="my-0 eyebrow">
+              Attribution gaps
+            </h3>
+            {data.gapsTruncated && (
+              <Badge variant="warning">First 200 shown</Badge>
+            )}
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Issue</TableHead>
+                <TableHead className="w-28 text-right">Amount</TableHead>
+                <TableHead className="w-40">Records</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.gaps.map((gap) => (
-                <li key={`${gap.code}:${gap.targetIds.join(":")}`}>
-                  {contributionGapLabels[gap.code]}
-                  {gap.amount === undefined
-                    ? null
-                    : ` — ${formatCurrency(gap.amount)}`}
-                  {/* An aggregated code stands for many expenses and carries no
-                      targets; listing them is the wall this replaced. */}
-                  {gap.count === undefined
-                    ? null
-                    : ` across ${gap.count} expenses`}
-                  {gap.targetIds.length === 0 ? null : (
-                    <>
-                      {": "}
+                <TableRow key={`${gap.code}:${gap.targetIds.join(":")}`}>
+                  {/* Narrower column than the ledger's, and Table defaults to
+                      table-fixed with nowrap cells, so labels must wrap. */}
+                  <TableCell className="whitespace-normal">
+                    <Row align="center" gap="xs">
+                      <AlertTriangle className="size-3.5 shrink-0 text-warning-ink" />
+                      {contributionGapLabels[gap.code]}
+                    </Row>
+                  </TableCell>
+                  <MoneyCell value={gap.amount} empty="—" />
+                  <TableCell className="font-mono text-2xs text-muted-foreground">
+                    {gap.count === undefined ? (
                       <ContributionGapTargets targetIds={gap.targetIds} />
-                    </>
-                  )}
-                </li>
+                    ) : (
+                      `${gap.count} expenses`
+                    )}
+                  </TableCell>
+                </TableRow>
               ))}
-            </ul>
-            {data.gapsTruncated ? (
-              <p className="m-0 text-xs text-muted-foreground">
-                Only the first {data.gaps.length} are listed.
-              </p>
-            ) : null}
-          </AlertDescription>
-        </Alert>
+            </TableBody>
+          </Table>
+        </section>
       )}
     </Stack>
   );

@@ -30,6 +30,8 @@ type AllocationBasis =
   | "assumed_household"
   /** Paid, but every paying account has `ledgerPartyId IS NULL`. */
   | "unowned_account"
+  /** Funder of a future expense: not due yet, so nobody has paid it. */
+  | "not_yet_paid"
   /** No signal at all — the residual seed. */
   | "unknown";
 
@@ -102,6 +104,7 @@ export async function loadExpenseAllocations(
         ${expense.shortcode} AS "expenseShortcode",
         ${expense.projectId} AS "projectId",
         ${expense.purchaseId} AS "purchaseId",
+        ${expense.future} AS future,
         round((${expense.cost})::numeric * 100)::bigint AS cost_cents
       FROM ${expense}
       WHERE ${scopeCondition(scope)}
@@ -132,11 +135,12 @@ export async function loadExpenseAllocations(
        two of one party's cards into a single allocationKey — duplicate keys
        would make the remainder tie-break non-deterministic. Every unowned
        account collapses into the one NULL group for the same reason. */
-    ), funder_party_net AS (
+    ), funder_party_gross AS (
       SELECT
         e."expenseId",
         fa."ledgerPartyId" AS owner_party_id,
-        sum(round(fta.amount::numeric * 100))::bigint AS net_cents
+        sum(round(fta.amount::numeric * 100))
+          FILTER (WHERE fta.amount > 0)::bigint AS gross_cents
       FROM scoped_expense e
       JOIN ${financialTransactionAllocation} fta
         ON fta."purchaseId" = e."purchaseId" AND fta."deletedAt" IS NULL
@@ -149,12 +153,19 @@ export async function loadExpenseAllocations(
         ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
       GROUP BY e."expenseId", fa."ledgerPartyId"
 
-    /* Only strictly positive nets become weights. Allocation amounts are
-       signed (purchase +, refund/income -, adjustment either), so a party whose
-       refunds now exceed its charges is not funding anything and drops out
-       rather than being clamped to zero. If every party drops out this arm is
-       empty and arm D fires — which is also why weight / total_weight can
-       never divide by zero: a zero-weight partition has no row to aggregate. */
+    /* Weight by GROSS outlay — the sum of positive allocations — not by the net.
+       Allocation amounts are signed (purchase +, refund/income -, adjustment
+       either), and netting would charge a refund twice: once by shrinking the
+       weight here, and again as the negative-cost Expense that already receives
+       a negative share. initiallyOutlaid means money INITIALLY put in, which is
+       gross. Netting also dropped a fully-refunded order entirely (net 0, no
+       party), so every one of its expenses reported missing_funders — 155 of
+       them, recovering to within $0.47 of the same total once weighted gross.
+
+       A party with no positive allocation still contributes nothing, so if every
+       party drops out this arm is empty and arm D fires. That is also why
+       weight / total_weight can never divide by zero: a zero-weight partition
+       has no row to aggregate over. */
     ), funder_derived AS (
       SELECT
         e."expenseId",
@@ -164,14 +175,14 @@ export async function loadExpenseAllocations(
         'funder'::text AS role,
         n.owner_party_id AS "ledgerPartyId",
         coalesce(p.shortcode, '~unowned-account') AS "allocationKey",
-        n.net_cents AS weight,
+        n.gross_cents AS weight,
         CASE WHEN n.owner_party_id IS NOT NULL
           THEN 'derived_from_payment' ELSE 'unowned_account' END AS basis
       FROM scoped_expense e
-      JOIN funder_party_net n ON n."expenseId" = e."expenseId"
+      JOIN funder_party_gross n ON n."expenseId" = e."expenseId"
       LEFT JOIN ${ledgerParty} p
         ON p.id = n.owner_party_id AND p."deletedAt" IS NULL
-      WHERE n.net_cents > 0
+      WHERE n.gross_cents > 0
         AND NOT EXISTS (
           SELECT 1 FROM ${expenseAttribution} a
           WHERE a."expenseId" = e."expenseId"
@@ -227,7 +238,15 @@ export async function loadExpenseAllocations(
         NULL::uuid AS "ledgerPartyId",
         '~unattributed'::text AS "allocationKey",
         1::bigint AS weight,
-        'unknown'::text AS basis
+        /* A future expense's funder is not missing, it is not due yet — the
+           money has not moved. Distinguishing it here rather than gating arm B
+           on future is deliberate: some future rows DO have settlement (an
+           instalment on an order already part-paid), and gating derivation
+           would strip their real funders. The row is still emitted so the
+           partition stays non-empty and
+           fundedTotal + unattributedFunding = expenseTotal keeps holding. */
+        CASE WHEN r.role = 'funder' AND e.future
+          THEN 'not_yet_paid' ELSE 'unknown' END AS basis
       FROM scoped_expense e
       CROSS JOIN roles r
       WHERE NOT EXISTS (
@@ -238,8 +257,8 @@ export async function loadExpenseAllocations(
         )
         AND (
           (r.role = 'funder' AND NOT EXISTS (
-            SELECT 1 FROM funder_party_net n
-            WHERE n."expenseId" = e."expenseId" AND n.net_cents > 0
+            SELECT 1 FROM funder_party_gross n
+            WHERE n."expenseId" = e."expenseId" AND n.gross_cents > 0
           ))
           OR
           (r.role = 'beneficiary' AND NOT EXISTS (

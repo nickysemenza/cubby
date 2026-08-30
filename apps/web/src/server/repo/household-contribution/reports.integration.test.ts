@@ -41,17 +41,26 @@ describe("household contribution reports", () => {
     expect(household.checks.expenseTotal).toBe(0);
     expect(household.gaps).toEqual([]);
     expect(projectReport.wholeGroupCost).toBe(125);
+    // The beneficiary is still `missing_*` because this fixture DB has no
+    // household LedgerParty, so the assumed-household arm cannot fire. That is
+    // load-bearing, not incidental — with a household party present this would
+    // aggregate instead.
     expect(projectReport.gaps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: "missing_beneficiaries",
           targetIds: [futureExpense.id],
         }),
-        expect.objectContaining({
-          code: "missing_funders",
-          targetIds: [futureExpense.id],
-        }),
       ]),
     );
+    // A future Expense has no funder because it is not due yet, which is a
+    // status rather than a reconciliation gap. It reports as one aggregated
+    // entry carrying a count, and never as `missing_funders`.
+    expect(projectReport.gaps.map((gap) => gap.code)).not.toContain(
+      "missing_funders",
+    );
+    expect(
+      projectReport.gaps.find((gap) => gap.code === "funder_not_yet_paid"),
+    ).toMatchObject({ amount: 125, count: 1, targetIds: [] });
   });
 });

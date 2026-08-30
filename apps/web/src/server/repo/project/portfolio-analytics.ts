@@ -79,17 +79,29 @@ export async function projectPortfolioAnalytics(
   const shortcodeById = new Map(
     projectRows.map((r) => [r.id, parseShortcodeFor("project", r.shortcode)]),
   );
-  const { subtreeRollups } =
-    wholeTree ?? (await loadProjectSubtreeRollups(db, ids));
+  const subtreeLoad = wholeTree ?? (await loadProjectSubtreeRollups(db, ids));
+  const { subtreeRollups } = subtreeLoad;
+
+  // Each row below is a SUBTREE rollup, so summing them across parents and
+  // children double-counts the child. Flagging the scope roots — in-scope
+  // projects whose parent is not itself in scope — lets a caller total them
+  // without re-deriving the hierarchy. The per-project rows stay subtree values,
+  // which is what a per-project chart should plot.
+  const parentById = new Map(
+    subtreeLoad.allRows.map((row) => [row.id, row.parentProjectId]),
+  );
+  const inScope = new Set(ids);
 
   const costVsEstimate = ids.map((id) => {
     const subtree = subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
+    const parent = parentById.get(id);
     return {
       projectId: shortcodeById.get(id)!,
       projectName: nameById.get(id) ?? "",
       actual: subtree.actualSpent,
       committed: subtree.committedSpent,
       estimate: subtree.costEstimate,
+      isScopeRoot: parent == null || !inScope.has(parent),
     };
   });
 

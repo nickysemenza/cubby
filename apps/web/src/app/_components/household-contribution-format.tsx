@@ -5,7 +5,9 @@ import type {
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
 import { Link } from "@tanstack/react-router";
 
+import { TableCell } from "~/components/ui/table";
 import { entityDetailLink } from "~/entities/entities";
+import { formatCurrency } from "~/lib/utils";
 
 export const ledgerPartyLabel = (kind: LedgerPartyKind) =>
   kind === "household" ? "Household" : kind === "member" ? "Member" : "Guest";
@@ -19,6 +21,10 @@ export const contributionGapLabels = {
   transfer_evidence_one_sided: "Transfer has evidence from only one side",
   beneficiary_assumed_household: "Consumption assumed to be the household's",
   funder_account_unowned: "Paid from an account with no owner recorded",
+  // "Committed" is the word BudgetStrip already uses for future spend on this
+  // same page; two panels disagreeing about vocabulary is how this got
+  // confusing in the first place.
+  funder_not_yet_paid: "Committed, not yet paid",
 } satisfies Record<HouseholdContributionGapCode, string>;
 
 /** Both EXP- and LTR- records now have browser detail routes. */
@@ -47,4 +53,27 @@ export function ContributionGapTargets({
       )}
     </span>
   ));
+}
+
+/**
+ * A right-aligned money cell, shared so the household ledger and the project
+ * contribution panel render the same figure identically. Returns a `TableCell`,
+ * so it only belongs inside a `Table`.
+ */
+export function MoneyCell({
+  value,
+  strong = false,
+  empty,
+}: {
+  value: number | undefined;
+  strong?: boolean;
+  empty?: string;
+}) {
+  return (
+    <TableCell
+      className={`text-right font-mono text-xs tabular-nums ${strong ? "font-semibold text-foreground" : ""}`}
+    >
+      {value === undefined ? empty : formatCurrency(value)}
+    </TableCell>
+  );
 }

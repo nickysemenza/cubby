@@ -83,6 +83,7 @@ import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
 import { focusOnMount } from "~/hooks/focus-on-mount";
 import { getErrorMessage } from "~/lib/error-utils";
+import { splitExpenseSpend } from "~/lib/spend";
 import { formatCurrency } from "~/lib/utils";
 
 import { BudgetStrip } from "./BudgetStrip";
@@ -107,7 +108,6 @@ import {
   StatusIcon,
   TaskList,
 } from "./shared";
-import { splitExpenseSpend } from "./spend";
 
 const ProjectDetailAnalytics = lazy(() =>
   import("./project-detail-analytics-view").then((module) => ({

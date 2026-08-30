@@ -324,15 +324,38 @@ export async function projectDashboardSummary(
     (row) => row.count,
   );
 
-  // actualSpend/committedSpend: sum of each matching project's OWN subtree
-  // total (matches what each project's card shows) — note this double-counts
-  // a parent+child pair when BOTH independently match the filter (e.g. both
-  // `in_progress`), since the child's numbers are already folded into the
-  // parent's subtree. Accepted as a judgment call — see the task report.
   const subtreeOf = (id: ProjectId) =>
     subtreeRollups.get(id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP;
-  const actualSpend = sumBy(ids, (id) => subtreeOf(id).actualSpent);
-  const committedSpend = sumBy(ids, (id) => subtreeOf(id).committedSpent);
+
+  // Sum over SCOPE ROOTS — in-scope projects whose parent is not itself in
+  // scope — not over every matched row. A subtree rollup already contains its
+  // descendants, so summing it across a flat set counts a matched child twice:
+  // once inside its parent's rollup and again as its own row. That was measured
+  // at +$120,000 on estimate and +$107,600 on committed for one parent/child
+  // pair. An earlier comment here called this a "per-top-level-id sum" and
+  // accepted the double count as a judgment call; `ids` was never top-level, so
+  // there was no trade-off to accept.
+  //
+  // Deliberate consequence: a root's subtree pulls in descendants OUTSIDE the
+  // current filter — filter to `in_progress` with an in-progress parent and a
+  // `done` child and the child's spend still counts. That is the price of each
+  // headline equalling the sum of the cards on screen, which is the property
+  // worth keeping.
+  // `allRows` already carries every live project's parentProjectId — the single
+  // query the subtree load makes — so this costs no extra round trip.
+  const parentById = new Map(
+    allRows.map((row) => [row.id, row.parentProjectId]),
+  );
+  const inScope = new Set(ids);
+  const scopeRoots = ids.filter((id) => {
+    const parent = parentById.get(id);
+    return parent == null || !inScope.has(parent);
+  });
+  const actualSpend = sumBy(scopeRoots, (id) => subtreeOf(id).actualSpent);
+  const committedSpend = sumBy(
+    scopeRoots,
+    (id) => subtreeOf(id).committedSpent,
+  );
   // `costEstimate` is nullable end-to-end on purpose (see helpers.ts's
   // `EMPTY_PROJECT_SUBTREE_ROLLUP` doc comment) — an unestimated subtree is
   // UNKNOWN, not zero. Unlike actual/committedSpend (where "no expenses" really
@@ -344,7 +367,9 @@ export async function projectDashboardSummary(
   // ("across N of M projects") instead of silently presenting a partial sum as
   // if it were complete. Same "footnote, don't exclude" convention as the
   // allocation-estimate caveat in docs/todos.md.
-  const projectsWithEstimate = ids.filter(
+  // Same population as actual/committed above, or the "across N of M projects"
+  // caption stops describing the number printed beside it.
+  const projectsWithEstimate = scopeRoots.filter(
     (id) => subtreeOf(id).costEstimate !== null,
   );
   const estimateTotal =
@@ -353,7 +378,7 @@ export async function projectDashboardSummary(
       : null;
   const estimateCoverage = {
     projectsWithEstimate: projectsWithEstimate.length,
-    projectsInScope: ids.length,
+    projectsInScope: scopeRoots.length,
   };
   const forwardCommittedSpend = forwardCommittedRows[0] ?? {
     in30Days: 0,
