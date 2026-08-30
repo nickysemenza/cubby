@@ -29,7 +29,6 @@ import {
   expenseTradeColumn,
   expenseVendorColumn,
 } from "~/app/projects/shared";
-import { splitExpenseSpend } from "~/app/projects/spend";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { Row, Stack } from "~/components/layout";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
@@ -43,6 +42,7 @@ import {
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { FILTER_NONE } from "~/entities/filters";
+import { splitExpenseSpend } from "~/lib/spend";
 import { formatCurrency } from "~/lib/utils";
 
 import {

@@ -12,6 +12,7 @@ import {
 } from "@cubby/schemas/project";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { eq, or } from "drizzle-orm";
+import { sumBy } from "es-toolkit";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -2566,6 +2567,45 @@ describe("project dashboard — portfolio analytics", () => {
     return { parent, child, solo };
   };
 
+  /**
+   * A subtree rollup already contains its descendants, so totalling one across
+   * a flat parent+child set counts the child twice. Measured on production
+   * before the fix: a $175,000 parent plus its $120,000 child reported
+   * $415,000 instead of $295,000. Both projects must match the scope for the
+   * bug to appear, which is why every pre-existing summary test — all built
+   * from flat projects — stayed green through it.
+   */
+  it("counts a matched child once, inside its parent's subtree, not twice", async () => {
+    const parent = await mkProject({
+      name: "rollup parent",
+      status: "in_progress",
+      costEstimate: 175_000,
+    });
+    const child = await mkProject({
+      name: "rollup child",
+      status: "in_progress",
+      parentProjectId: parent.id,
+      costEstimate: 120_000,
+    });
+    await mkExpense("parent spend", parent.id, 100);
+    await mkExpense("child spend", child.id, 40);
+    await mkExpense("child committed", child.id, 25, { future: true });
+
+    const summary = await projectDashboardSummary(ctx.db, {});
+
+    // 175k + 120k once each — NOT the parent's 295k subtree plus the child's
+    // 120k row again.
+    expect(summary.summary.estimateTotal).toBe(295_000);
+    expect(summary.summary.actualSpend).toBe(140);
+    expect(summary.summary.committedSpend).toBe(25);
+    // Coverage describes the same population it totalled, or the "across N of
+    // M projects" caption stops matching the figure beside it.
+    expect(summary.summary.estimateCoverage).toMatchObject({
+      projectsWithEstimate: 1,
+      projectsInScope: 1,
+    });
+  });
+
   it("reports subtree actual/committed/estimate per project in costVsEstimate", async () => {
     const { parent, child, solo } = await seedPortfolio();
 
@@ -2578,6 +2618,9 @@ describe("project dashboard — portfolio analytics", () => {
         actual: 40,
         committed: 0,
         estimate: 50,
+        // Its parent is in the same scope, so its numbers are already inside
+        // the parent's row below.
+        isScopeRoot: false,
       },
       {
         projectId: parent.id,
@@ -2585,6 +2628,7 @@ describe("project dashboard — portfolio analytics", () => {
         actual: 140, // 100 own + 40 child
         committed: 25, // own only — the child has none
         estimate: 150, // 100 own + 50 child
+        isScopeRoot: true,
       },
       {
         projectId: solo.id,
@@ -2592,8 +2636,18 @@ describe("project dashboard — portfolio analytics", () => {
         actual: 200,
         committed: 0,
         estimate: 10,
+        isScopeRoot: true,
       },
     ]);
+
+    // The whole point of the flag: totalling every row counts the child twice.
+    const roots = analytics.costVsEstimate.filter((row) => row.isScopeRoot);
+    expect(sumBy(roots, (row) => row.actual)).toBe(340);
+    expect(sumBy(analytics.costVsEstimate, (row) => row.actual)).toBe(380);
+    expect(sumBy(roots, (row) => row.estimate ?? 0)).toBe(160);
+    expect(sumBy(analytics.costVsEstimate, (row) => row.estimate ?? 0)).toBe(
+      210,
+    );
   });
 
   it("sorts spendingByProject by subtree `spent` descending, contributions netted in", async () => {
@@ -2638,6 +2692,8 @@ describe("project dashboard — portfolio analytics", () => {
         actual: 140,
         committed: 25,
         estimate: 150,
+        // The child is filtered out of this scope, so the parent is a root.
+        isScopeRoot: true,
       },
     ]);
     expect(analytics.spendingByProject).toEqual([

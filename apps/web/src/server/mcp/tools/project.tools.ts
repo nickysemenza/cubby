@@ -256,13 +256,19 @@ export function registerProjectTools(server: McpServer) {
           return a.remaining - b.remaining || b.projected - a.projected;
         });
 
+      // Totals sum SCOPE ROOTS only. Every row is a subtree rollup, so
+      // totalling all of them counts an in-scope child twice — once in its own
+      // row and once inside its parent's. The rows themselves stay complete;
+      // only the totals are deduplicated.
+      const scopeRoots = projects.filter((p) => p.isScopeRoot);
+
       return {
         projects,
         totals: {
-          estimate: sumBy(projects, (p) => p.estimate ?? 0),
-          actual: sumBy(projects, (p) => p.actual),
-          committed: sumBy(projects, (p) => p.committed),
-          projected: sumBy(projects, (p) => p.projected),
+          estimate: sumBy(scopeRoots, (p) => p.estimate ?? 0),
+          actual: sumBy(scopeRoots, (p) => p.actual),
+          committed: sumBy(scopeRoots, (p) => p.committed),
+          projected: sumBy(scopeRoots, (p) => p.projected),
           overBudgetCount: projects.filter((p) => p.overBudget).length,
           missingEstimateCount: projects.filter((p) => p.estimate === null)
             .length,

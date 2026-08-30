@@ -28,11 +28,13 @@ type Datum = {
  *
  * `data` is `portfolioAnalytics`'s `costVsEstimate` — subtree actual/estimate
  * per project matching the dashboard's current filter scope, computed
- * server-side (see repo/project/portfolio-analytics.ts; that scope isn't
- * top-level-only, so a matched parent+child pair can each show their own
- * subtree total, same double-counting judgment call as dashboard-summary.ts's
- * `actualSpend`). `committed` isn't plotted here — this chart is about money
- * already spent vs budget, not the committed pipeline.
+ * server-side (see repo/project/portfolio-analytics.ts). A matched parent and
+ * child each plot their own subtree total, which is correct for per-project
+ * bars: the chart compares each project against its own budget and never sums
+ * across them. Any consumer that DOES total these rows must filter to
+ * `isScopeRoot` first, or a child's money is counted twice. `committed` isn't
+ * plotted here — this chart is about money already spent vs budget, not the
+ * committed pipeline.
  */
 export function CostVsEstimate({
   data: rows,

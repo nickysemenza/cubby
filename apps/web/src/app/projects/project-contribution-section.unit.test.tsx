@@ -19,6 +19,9 @@ afterEach(() => {
 const contribution = projectContributionOut.parse({
   projectId: "PRJ-ABCD",
   wholeGroupCost: 125,
+  actualSpend: 100,
+  committedSpend: 40,
+  creditsReceived: 15,
   householdInitialExposure: 90,
   guestInitialFunding: 25,
   unattributedConsumption: 5,
@@ -108,9 +111,11 @@ describe("ProjectContributionReport", () => {
 
     // The whole point of aggregating: one line with a count, not one link per
     // expense. Enumerating these is the wall this replaced.
+    // The label and the count now live in separate table cells, so they are
+    // matched separately rather than as one string.
     expect(
-      screen.getByText(/Consumption assumed to be the household's/),
+      screen.getByText("Consumption assumed to be the household's"),
     ).toBeVisible();
-    expect(screen.getByText(/across 3 expenses/)).toBeVisible();
+    expect(screen.getByText("3 expenses")).toBeVisible();
   });
 });

@@ -11,6 +11,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, inArray, lte, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
+import { splitExpenseSpend } from "~/lib/spend";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
@@ -72,6 +73,7 @@ async function loadPartyDirectory(
 type ExpenseFact = {
   shortcode: string;
   costCents: string | null;
+  future: boolean;
 };
 
 async function loadExpenseFacts(
@@ -84,7 +86,8 @@ async function loadExpenseFacts(
       ${expense.shortcode} AS shortcode,
       CASE WHEN ${expense.cost} IS NULL THEN NULL
         ELSE round((${expense.cost})::numeric * 100)::bigint::text
-      END AS "costCents"
+      END AS "costCents",
+      ${expense.future} AS future
     FROM ${expense}
     WHERE ${and(
       notDeleted(expense),
@@ -122,6 +125,8 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
   const gaps: Gap[] = [];
   let assumedCount = 0;
   let assumedCents = 0n;
+  let notYetPaidCount = 0;
+  let notYetPaidCents = 0n;
   for (const bucket of grouped.values()) {
     const first = bucket[0];
     if (!first) continue;
@@ -158,6 +163,15 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
       assumedCents += sum(assumed.map((row) => row.cents));
     }
 
+    // Same aggregation, same reason: a scheduled instalment is a status, not a
+    // worklist entry. Only the project report can produce these — the household
+    // ledger scopes future rows out before allocation.
+    const notYetPaid = bucket.filter((row) => row.basis === "not_yet_paid");
+    if (notYetPaid.length > 0) {
+      notYetPaidCount += 1;
+      notYetPaidCents += sum(notYetPaid.map((row) => row.cents));
+    }
+
     // Can legitimately coexist with `derived_from_payment` rows when one order
     // was part-paid from an owned card and part from an orphan account, so sum
     // only the unowned rows rather than the whole bucket.
@@ -175,6 +189,14 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
       code: "beneficiary_assumed_household",
       amount: money(assumedCents),
       count: assumedCount,
+      targetIds: [],
+    });
+  }
+  if (notYetPaidCount > 0) {
+    gaps.push({
+      code: "funder_not_yet_paid",
+      amount: money(notYetPaidCents),
+      count: notYetPaidCount,
       targetIds: [],
     });
   }
@@ -425,6 +447,16 @@ export async function projectContribution(
   // ship one entry per expense — 5,717 on the Household project alone.
   const gapLimit = 200;
 
+  // The same decomposition the project page's BudgetStrip already shows, computed
+  // from the identical helper so the two panels cannot disagree about what
+  // "committed" means. `wholeGroupCost` stays the blended figure it always was.
+  const spend = splitExpenseSpend(
+    facts.map((row) => ({
+      cost: row.costCents === null ? null : Number(BigInt(row.costCents)) / 100,
+      future: row.future,
+    })),
+  );
+
   return projectContributionOut.parse({
     projectId: input.projectId,
     wholeGroupCost: money(
@@ -434,6 +466,9 @@ export async function projectContribution(
         ),
       ),
     ),
+    actualSpend: spend.actual,
+    committedSpend: spend.committed,
+    creditsReceived: spend.contributions,
     householdInitialExposure: money(householdInitialExposure),
     guestInitialFunding: money(guestInitialFunding),
     unattributedConsumption: money(unattributedConsumption),

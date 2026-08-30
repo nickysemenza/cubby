@@ -2101,6 +2101,12 @@ export const projectPortfolioAnalyticsOut = z.object({
       actual: money,
       committed: money,
       estimate: moneyNullable,
+      /**
+       * Whether this row's parent is absent from the same scope. Every row is a
+       * SUBTREE rollup, so a portfolio total must sum only the roots — adding a
+       * parent and its in-scope child counts the child twice.
+       */
+      isScopeRoot: z.boolean(),
     }),
   ),
   spendingByProject: z.array(

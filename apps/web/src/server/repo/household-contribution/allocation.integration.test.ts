@@ -273,7 +273,7 @@ describe("loadExpenseAllocations derived funders", () => {
     ]);
   });
 
-  it("falls back to unknown when refunds cancel the charge, without dividing by zero", async () => {
+  it("still attributes a fully refunded order to the party that paid it", async () => {
     const party = await mkParty("Refunded", "LPY-RFND", "member");
     const account = await mkAccount("FAC-RFCD", "Refund card", party.id);
     const expense = await payFor(80, [
@@ -281,12 +281,35 @@ describe("loadExpenseAllocations derived funders", () => {
       { accountId: account.id, amount: -80, kind: "refund" },
     ]);
 
+    // Weighting by GROSS outlay, not net. Under net weighting this order summed
+    // to zero, the party dropped out, and every one of its expenses reported
+    // missing_funders — 155 across the ledger. The money still nets to nothing,
+    // because the refund is its own negative-cost Expense receiving a negative
+    // share; subtracting it from the weight as well would charge it twice.
+    expect(await fundersOf(expense.id)).toEqual([
+      expect.objectContaining({
+        allocationKey: "LPY-RFND",
+        basis: "derived_from_payment",
+        cents: 8_000n,
+      }),
+    ]);
+  });
+
+  it("leaves an order with no positive outlay unknown, without dividing by zero", async () => {
+    const party = await mkParty("Inbound", "LPY-INBD", "member");
+    const account = await mkAccount("FAC-INBD", "Inbound card", party.id);
+    // Settled only by money coming IN — no positive allocation exists, so there
+    // is no gross outlay to weight by and arm D correctly takes over.
+    const expense = await payFor(40, [
+      { accountId: account.id, amount: -40, kind: "refund" },
+    ]);
+
     expect(await fundersOf(expense.id)).toEqual([
       expect.objectContaining({
         ledgerPartyId: null,
         allocationKey: "~unattributed",
         basis: "unknown",
-        cents: 8_000n,
+        cents: 4_000n,
       }),
     ]);
   });

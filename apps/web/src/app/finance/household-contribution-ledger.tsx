@@ -14,6 +14,7 @@ import {
   ContributionGapTargets,
   contributionGapLabels,
   ledgerPartyLabel,
+  MoneyCell,
 } from "~/app/_components/household-contribution-format";
 import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
@@ -259,24 +260,6 @@ export function HouseholdContributionLedgerReport({
         )}
       </section>
     </Stack>
-  );
-}
-
-function MoneyCell({
-  value,
-  strong = false,
-  empty,
-}: {
-  value: number | undefined;
-  strong?: boolean;
-  empty?: string;
-}) {
-  return (
-    <TableCell
-      className={`text-right font-mono text-xs tabular-nums ${strong ? "font-semibold text-foreground" : ""}`}
-    >
-      {value === undefined ? empty : formatCurrency(value)}
-    </TableCell>
   );
 }
 
