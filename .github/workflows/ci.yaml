@@ -431,7 +431,10 @@ jobs:
           VITEST_PROJECT_ARGS: ${{ matrix.args }}
         run: |
           read -r -a selected <<< "$VITEST_PROJECT_ARGS"
-          args=("${selected[@]}" --reporter=default --reporter=github-actions)
+          # Private-repository standard runners have half the CPUs of public
+          # runners. Keep the same assertions while allowing CPU-bound tests
+          # the equivalent wall-clock budget.
+          args=("${selected[@]}" --testTimeout=10000 --reporter=default --reporter=github-actions)
           if [[ "$FULL" != "true" ]]; then args+=(--changed "$BASE_SHA"); fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
+const playwrightConfig = readFileSync("apps/web/playwright.config.ts", "utf8");
 
 function job(id: string, nextId: string) {
   const start = workflow.indexOf(`  ${id}:\n`);
@@ -84,6 +85,12 @@ test("the node test runner builds and publishes the deployable artifact", () => 
       web.indexOf("name: Run ${{ matrix.tier }} tests"),
   );
   assert.doesNotMatch(workflow, /^  build-cf:$/mu);
+});
+
+test("private-repository runners get timeout budgets for their lower CPU tier", () => {
+  const web = job("test-web", "test-postgres");
+  assert.match(web, /args=\("\$\{selected\[@\]\}" --testTimeout=10000/u);
+  assert.match(playwrightConfig, /timeout: isCI \? 120_000 : 30_000/u);
 });
 
 test("deployment accepts exact PR reuse or every full fallback result", () => {
