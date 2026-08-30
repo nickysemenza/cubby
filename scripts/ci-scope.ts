@@ -75,7 +75,8 @@ const e2eExact = new Set([
 ]);
 
 const highRiskPrefixes = [
-  ".github/workflows/",
+  ".github/",
+  "apps/web/tooling/",
   "apps/web/drizzle/",
   "apps/web/src/app/auth/",
   "apps/web/src/app/expenses/",
@@ -102,6 +103,12 @@ const highRiskFragments = [
   "/shortcode",
   "/transaction",
 ];
+
+const highRiskExact = new Set([
+  "apps/web/playwright.config.ts",
+  "apps/web/vitest.config.ts",
+  "scripts/ci-scope.ts",
+]);
 
 const sharedRootExact = new Set([
   ".gitignore",
@@ -199,6 +206,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
       (path) =>
         startsWithAny(path, highRiskPrefixes) ||
         highRiskFragments.some((fragment) => path.includes(fragment)) ||
+        highRiskExact.has(path) ||
         path === "apps/web/package.json" ||
         path === "pnpm-lock.yaml" ||
         path.startsWith("apps/web/wrangler") ||

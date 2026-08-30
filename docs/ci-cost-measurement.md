@@ -1,7 +1,8 @@
 # CI cost and privacy measurement
 
-Keep the repository public until a complete fourteen-day post-change window has
-elapsed. Do not change visibility as part of the CI optimization change.
+The repository became private on 2026-08-30 after the owner completed the
+visibility change. Measure fourteen complete private-repository UTC days from
+2026-08-31 through 2026-09-13; evaluate the result on or after 2026-09-14.
 
 ## Local gate acceptance
 
@@ -72,12 +73,11 @@ bound, the 75% reduction threshold is at most 5,723 rounded minutes for an equal
 fourteen-day window. The private-usage threshold is stricter: no more than 700
 rounded minutes in fourteen days projects below 1,500 minutes per thirty days.
 
-## Privacy-readiness audit
+## Private-repository audit
 
 After the measurement window, verify that required checks and deployment still
 work with private-repository permissions; external integrations can access a
 private repository; Actions, artifact, package, and storage projections fit the
 budget; Pages or public artifacts are not depending on repository visibility;
-and no public link is the only copy of operational documentation. Present the
-evidence and cost projection, then request explicit confirmation before changing
-GitHub visibility.
+and no formerly public link was the only copy of operational documentation.
+Present the evidence, observed failures, and cost projection.

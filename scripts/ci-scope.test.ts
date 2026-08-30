@@ -127,6 +127,11 @@ test("database, browser, and high-risk paths select their expensive gates", () =
     "apps/web/src/server/entity-kernel/entity-operations.ts",
     "apps/web/drizzle/0001.sql",
     ".github/workflows/ci.yaml",
+    ".github/actions/setup-node-with-deps/action.yml",
+    "apps/web/tooling/test-changed.ts",
+    "apps/web/vitest.config.ts",
+    "apps/web/playwright.config.ts",
+    "scripts/ci-scope.ts",
   ]) {
     assert.equal(classifyPaths([path]).highRisk, true, path);
   }

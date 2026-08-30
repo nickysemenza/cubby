@@ -20,8 +20,10 @@ const localUsesPGlite =
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  /* CI dev server is slower — give tests more room */
-  timeout: isCI ? 60_000 : 30_000,
+  /* Private-repository CI runners have two CPUs; browser, Worker, and database
+     share them. Preserve the local fast-failure budget while giving the same
+     CI scenarios the wall-clock room they had on public four-CPU runners. */
+  timeout: isCI ? 120_000 : 30_000,
 
   /* Global setup/teardown starts the Worker harness with a fresh database. */
   globalSetup: "./tests/e2e/e2e-global-setup.ts",
