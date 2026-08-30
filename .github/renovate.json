@@ -1,8 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "schedule": ["every weekend"],
-  "prHourlyLimit": 2,
+  "schedule": ["before 6am on sunday"],
+  "minimumReleaseAge": "7 days",
+  "rebaseWhen": "conflicted",
+  "prHourlyLimit": 1,
   "prConcurrentLimit": 1,
   "postUpdateOptions": ["pnpmDedupe"],
   "customManagers": [
@@ -21,7 +23,7 @@
     {
       "matchUpdateTypes": ["minor", "pin"],
       "groupName": "all minor and pin updates",
-      "automerge": true,
+      "automerge": false,
       "groupSlug": "all-deps"
     },
     {

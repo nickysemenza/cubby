@@ -16,20 +16,30 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
  * is typed, testable, and readable without shell quoting.
  */
 const fastTasks = [
-  { name: "entity", command: "pnpm entity:check" },
-  { name: "start-ops", command: "pnpm start-operations:check" },
-  { name: "types", command: "pnpm typecheck" },
-  // Oxlint and Oxfmt are both full-tree checks; running them together keeps
-  // the existing nine-process fast gate while making both checks mandatory.
-  { name: "quality", command: "pnpm lint && pnpm format:check" },
+  {
+    name: "entity",
+    command:
+      "node scripts/entity-literal-generator.ts --check && node scripts/check-browser-route-contracts.ts",
+  },
+  {
+    name: "start-ops",
+    command: "node scripts/start-operation-registry-generator.ts --check",
+  },
+  { name: "types", command: "node scripts/run-typecheck.ts" },
+  { name: "lint", command: "oxlint ." },
+  { name: "format", command: "oxfmt --check ." },
   { name: "sql", command: "node scripts/check-sql-safety.ts" },
   { name: "soft-delete", command: "node scripts/check-soft-delete-filters.ts" },
-  { name: "identifiers", command: "pnpm unsafe-identifiers:check" },
+  {
+    name: "identifiers",
+    command:
+      "node scripts/check-unsafe-identifiers.ts --include-tests && node --test scripts/check-unsafe-identifiers.unit.test.ts",
+  },
   {
     name: "invalidation",
     command: "node scripts/check-invalidation-authority.ts",
   },
-  { name: "knip", command: "pnpm knip" },
+  { name: "knip", command: "knip --no-config-hints --cache" },
 ] as const satisfies readonly CheckTask[];
 
 const allOnlyTasks = [
@@ -39,7 +49,7 @@ const allOnlyTasks = [
   { name: "security", command: "pnpm audit:security" },
 ] as const satisfies readonly CheckTask[];
 
-export const maxCheckProcesses = 9;
+export const maxCheckProcesses = 10;
 
 export function getCheckTasks(mode: CheckMode): readonly CheckTask[] {
   return mode === "fast" ? fastTasks : [...fastTasks, ...allOnlyTasks];
@@ -62,9 +72,14 @@ export function parseCheckMode(arguments_: readonly string[]): CheckMode {
 }
 
 export async function runChecks(mode: CheckMode) {
-  const { result } = concurrently([...createCheckCommands(mode)], {
+  await runCheckCommands(createCheckCommands(mode));
+}
+
+export async function runCheckCommands(
+  commands: readonly ConcurrentlyCommandInput[],
+) {
+  const { result } = concurrently([...commands], {
     cwd: repoRoot,
-    killOthersOn: ["failure"],
     maxProcesses: maxCheckProcesses,
     prefix: "name",
   });

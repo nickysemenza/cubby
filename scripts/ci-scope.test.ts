@@ -13,6 +13,10 @@ test("agent, documentation, and editor-only changes are inert", () => {
     workers: [],
     dependencies: false,
     unknown: false,
+    postgres: false,
+    e2e: false,
+    cloudflare: false,
+    highRisk: false,
   });
   assert.equal(
     classifyPaths(["docs/todos.md", ".vscode/settings.json"]).inert,
@@ -31,6 +35,10 @@ test("a web-only change runs web CI without auxiliary or Rust work", () => {
     workers: [],
     dependencies: false,
     unknown: false,
+    postgres: false,
+    e2e: false,
+    cloudflare: true,
+    highRisk: false,
   });
 });
 
@@ -93,7 +101,35 @@ test("a novel path fails safe to every suite and worker", () => {
     workers: ["usda-api", "upc-lookup"],
     dependencies: true,
     unknown: true,
+    postgres: true,
+    e2e: true,
+    cloudflare: true,
+    highRisk: true,
   });
+});
+
+test("database, browser, and high-risk paths select their expensive gates", () => {
+  const repository = classifyPaths([
+    "apps/web/src/server/repo/product/product.repository.ts",
+  ]);
+  assert.equal(repository.postgres, true);
+  assert.equal(repository.e2e, false);
+  assert.equal(repository.highRisk, false);
+
+  const route = classifyPaths([
+    "apps/web/src/routes/_authenticated/products.tsx",
+  ]);
+  assert.equal(route.e2e, true);
+  assert.equal(route.postgres, false);
+
+  for (const path of [
+    "apps/web/src/server/repo/inventory/update.ts",
+    "apps/web/src/server/entity-kernel/entity-operations.ts",
+    "apps/web/drizzle/0001.sql",
+    ".github/workflows/ci.yaml",
+  ]) {
+    assert.equal(classifyPaths([path]).highRisk, true, path);
+  }
 });
 
 test("inert files do not dilute a real code change", () => {

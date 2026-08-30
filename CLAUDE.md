@@ -26,6 +26,10 @@
   placeholders; internal shortcodes are safe.
 - Comments preserve constraints, regressions, contracts, and active TODOs—not
   narration. Do not weaken guard-backed tests as apparent duplication.
+- Git hooks are mandatory validation. Never use `--no-verify`; fix the failing
+  pre-commit or scoped pre-push gate before committing or pushing.
+- Keep the `ci:full` label on a PR before merge and verify its exact final commit
+  has a green full run. Ordinary affected-test runs are not merge evidence.
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large
   file: the cost is calls x bytes returned, not calls alone. Re-read a file only

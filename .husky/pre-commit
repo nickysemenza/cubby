@@ -5,6 +5,5 @@ set -e
 # user's staged/unstaged split for partially staged files.
 pnpm check:staged
 
-# Native TypeScript is now cheap enough that selective orchestration costs more
-# maintenance than it saves.
-pnpm typecheck
+# Keep commit-time validation equivalent to the local handoff gate.
+pnpm check

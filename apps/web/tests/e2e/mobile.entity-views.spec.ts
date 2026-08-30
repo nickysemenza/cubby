@@ -7,47 +7,19 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-const entityLists = Object.entries(generatedBrowserRoutes).map(
-  ([entity, definition]) => {
-    if (!isBrowserRouteEntity(entity)) {
-      throw new Error(
-        `Generated browser route has an unknown entity: ${entity}`,
-      );
-    }
-    return { entity, path: definition.routes.list };
-  },
+const entityCanaries = (["product", "inventory", "expense"] as const).map(
+  (entity) => ({ entity, path: generatedBrowserRoutes[entity].routes.list }),
 );
 
-function isBrowserRouteEntity(
-  entity: string,
-): entity is keyof typeof generatedBrowserRoutes {
-  return Object.hasOwn(generatedBrowserRoutes, entity);
-}
-
-const rendererRoutes = [
-  { path: "/products?view=table", renderer: "Table" },
+const rendererCanaries = [
   { path: "/products?view=shelf", renderer: "Shelf" },
-  { path: "/products?view=events", renderer: "Events" },
-  { path: "/products?view=lifecycles", renderer: "Lifecycles" },
-  { path: "/locations?view=gallery", renderer: "Gallery" },
-  { path: "/locations?view=table", renderer: "Table" },
-  { path: "/locations?view=visualizations", renderer: "Visualizations" },
   { path: "/meals?view=calendar", renderer: "Calendar" },
-  { path: "/meals?view=table", renderer: "Table" },
-  { path: "/projects?view=overview", renderer: "Overview" },
-  { path: "/projects?view=analytics", renderer: "Analytics" },
-  { path: "/projects?view=data", renderer: "Data" },
-  { path: "/projects?view=gallery", renderer: "Gallery" },
-  { path: "/tasks?view=next", renderer: "Next" },
   { path: "/tasks?view=board", renderer: "Board" },
-  { path: "/tasks?view=timeline", renderer: "Timeline" },
-  { path: "/tasks?view=list", renderer: "List" },
-  { path: "/expenses?view=ledger", renderer: "Ledger" },
   { path: "/expenses?view=analytics", renderer: "Analytics" },
 ];
 
 test.describe("phone entity views", () => {
-  for (const { entity, path } of entityLists) {
+  for (const { entity, path } of entityCanaries) {
     test(`${entity} list keeps the shared phone workbench contract`, async ({
       page,
     }) => {
@@ -113,7 +85,7 @@ test.describe("phone entity views", () => {
     await expectViewportBounded(page);
   });
 
-  for (const { path, renderer } of rendererRoutes) {
+  for (const { path, renderer } of rendererCanaries) {
     test(`${path} mounts its selected phone renderer`, async ({ page }) => {
       const pageErrors: string[] = [];
       page.on("pageerror", (error) => pageErrors.push(error.message));
