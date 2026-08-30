@@ -63,6 +63,17 @@ and security validation. Dependency
 deduplication runs separately when a package manifest, workspace file, patch, or
 lockfile changed; CI and pre-PR validation run the applicable superset.
 
+Pre-commit runs `pnpm check:staged` and the complete `pnpm check`. Pre-push
+selects changed Vitest, PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
+from the commits being pushed. Hooks are mandatory: agents never use
+`--no-verify` to bypass a failure.
+
+CI runs affected Vitest projects on ordinary revisions. The persistent
+`ci:full` label requests every web, PostgreSQL, browser, build, and relevant Rust
+gate; high-risk paths request the same automatically. Before merging, agents
+keep `ci:full` applied and verify that the exact final commit has a green full
+run. `preview` and `claude-review` are opt-in PR labels.
+
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,
 results, and limitations. CI remains authoritative and runs full coverage.

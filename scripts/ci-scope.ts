@@ -52,6 +52,57 @@ const upcPrefixes = [
 
 const rustPrefixes = ["recipebridge/"];
 
+const postgresPrefixes = [
+  "apps/web/drizzle/",
+  "apps/web/src/server/db/",
+  "apps/web/src/server/entity-kernel/",
+  "apps/web/src/server/repo/",
+  "apps/web/src/server/services/",
+  "apps/web/src/server/workflows/",
+];
+
+const e2ePrefixes = [
+  "apps/web/tests/e2e/",
+  "apps/web/src/routes/",
+  "apps/web/src/app/auth/",
+  "apps/web/src/app/_components/navigation/",
+  "apps/web/src/app/_components/routing/",
+];
+
+const e2eExact = new Set([
+  "apps/web/playwright.config.ts",
+  "apps/web/vite.config.ts",
+]);
+
+const highRiskPrefixes = [
+  ".github/workflows/",
+  "apps/web/drizzle/",
+  "apps/web/src/app/auth/",
+  "apps/web/src/app/expenses/",
+  "apps/web/src/app/finance/",
+  "apps/web/src/app/inventory/",
+  "apps/web/src/routes/api/auth/",
+  "apps/web/src/server/entity-kernel/",
+  "apps/web/src/server/oauth/",
+  "apps/web/src/server/repo/expense/",
+  "apps/web/src/server/repo/inventory/",
+  "apps/web/src/server/repo/merge/",
+  "apps/web/src/server/repo/removal/",
+];
+
+const highRiskFragments = [
+  ".integration.test.",
+  "/auth.",
+  "/delete",
+  "/expense",
+  "/inventory",
+  "/ledger",
+  "/merge",
+  "/money",
+  "/shortcode",
+  "/transaction",
+];
+
 const sharedRootExact = new Set([
   ".gitignore",
   ".mcp.json.example",
@@ -129,6 +180,31 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
         path === "rust-toolchain.toml" || startsWithAny(path, rustPrefixes),
     );
 
+  const postgres =
+    unknown ||
+    active.some(
+      (path) =>
+        startsWithAny(path, postgresPrefixes) ||
+        path.includes(".integration.test."),
+    );
+  const e2e =
+    unknown ||
+    active.some(
+      (path) => startsWithAny(path, e2ePrefixes) || e2eExact.has(path),
+    );
+  const cloudflare = web;
+  const highRisk =
+    unknown ||
+    active.some(
+      (path) =>
+        startsWithAny(path, highRiskPrefixes) ||
+        highRiskFragments.some((fragment) => path.includes(fragment)) ||
+        path === "apps/web/package.json" ||
+        path === "pnpm-lock.yaml" ||
+        path.startsWith("apps/web/wrangler") ||
+        path.startsWith("apps/web/vite.config"),
+    );
+
   return {
     inert: active.length === 0,
     web,
@@ -139,5 +215,9 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
     workers: [...(usda ? ["usda-api"] : []), ...(upc ? ["upc-lookup"] : [])],
     dependencies,
     unknown,
+    postgres,
+    e2e,
+    cloudflare,
+    highRisk,
   };
 }
