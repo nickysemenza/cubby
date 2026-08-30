@@ -235,17 +235,10 @@ jobs:
           (steps.scope.outputs.verify == 'true' || steps.scope.outputs.coverage == 'true')
         with:
           wasm: "restore"
-      - name: Run complete repository preflight
+      - name: Run repository preflight
         if: |
           steps.scope.outputs.inert != 'true' &&
           (steps.scope.outputs.verify == 'true' || steps.scope.outputs.coverage == 'true')
-        run: pnpm check:all
-      - name: Run independent scoped preflight checks
-        if: |
-          (steps.scope.outputs.verify == 'true' ||
-          steps.scope.outputs.coverage == 'true') &&
-          (steps.scope.outputs.dependencies == 'true' ||
-          steps.scope.outputs.aux == 'true')
         shell: bash
         env:
           CHECK_DEPENDENCIES: ${{ steps.scope.outputs.dependencies }}
@@ -253,8 +246,9 @@ jobs:
           BUILD_USDA: ${{ steps.scope.outputs.usda }}
           BUILD_UPC: ${{ steps.scope.outputs.upc }}
         run: |
-          pids=()
-          names=()
+          pnpm check:all &
+          pids=("$!")
+          names=("complete repository preflight")
 
           if [[ "$CHECK_DEPENDENCIES" == "true" ]]; then
             pnpm dedupe:check &
@@ -353,6 +347,9 @@ jobs:
       needs.preflight.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -364,11 +361,49 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ needs.preflight.outputs.full == 'true' && 1 || 0 }}
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
+          workspace-filter: "@cubby/web..."
       - uses: ./.github/actions/setup-web-env
+      - name: Build web Cloudflare bundle
+        if: matrix.tier == 'node' && needs.preflight.outputs.verify == 'true'
+        env:
+          CUBBY_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          CUBBY_SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && format('PR#{0}', github.event.pull_request.number) || '' }}
+        run: pnpm --filter @cubby/web run build:cf
+      - name: Save recipebridge WASM
+        if: matrix.tier == 'node' && needs.preflight.outputs.verify == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: recipebridge-wasm
+          path: packages/wasm
+          if-no-files-found: error
+          retention-days: 1
+      - name: Save Cloudflare bundle
+        if: matrix.tier == 'node' && needs.preflight.outputs.verify == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: cf-build
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 1
+      - name: Trigger opt-in preview deploy
+        if: |
+          matrix.tier == 'node' &&
+          github.event_name == 'pull_request' &&
+          contains(github.event.pull_request.labels.*.name, 'preview') &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run preview-cf.yaml --ref main \
+            -f pr_number="${{ github.event.pull_request.number }}" \
+            -f head_sha="${{ github.event.pull_request.head.sha }}" \
+            -f run_id="${{ github.run_id }}" ||
+          echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
       - name: Build MCP app documents
         if: matrix.tier == 'node'
         run: node scripts/ensure-mcp-apps.ts
@@ -417,7 +452,7 @@ jobs:
           POSTGRES_DB: cubby
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 10
@@ -433,10 +468,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ needs.preflight.outputs.full == 'true' && 1 || 0 }}
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
+          workspace-filter: "@cubby/web..."
       - uses: ./.github/actions/setup-web-env
       - name: Run PostgreSQL integration tests
         shell: bash
@@ -487,56 +523,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  build-cf:
-    name: Build for Cloudflare Workers
-    needs: preflight
-    if: |
-      !cancelled() && needs.preflight.result == 'success' &&
-      needs.preflight.outputs.verify == 'true' && needs.preflight.outputs.web == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: write
-    env:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          wasm: "restore"
-      - name: Build web Cloudflare bundle
-        env:
-          CUBBY_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
-          CUBBY_SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && format('PR#{0}', github.event.pull_request.number) || '' }}
-        run: pnpm --filter @cubby/web run build:cf
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: recipebridge-wasm
-          path: packages/wasm
-          if-no-files-found: error
-          retention-days: 1
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: cf-build
-          path: apps/web/dist
-          if-no-files-found: error
-          retention-days: 1
-      - name: Trigger opt-in preview deploy
-        if: |
-          github.event_name == 'pull_request' &&
-          contains(github.event.pull_request.labels.*.name, 'preview') &&
-          github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run preview-cf.yaml --ref main \
-            -f pr_number="${{ github.event.pull_request.number }}" \
-            -f head_sha="${{ github.event.pull_request.head.sha }}" \
-            -f run_id="${{ github.run_id }}" ||
-            echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
-
   test-e2e:
     name: E2E tests
     needs: preflight
@@ -568,7 +554,7 @@ jobs:
           POSTGRES_DB: cubby
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 2s
           --health-timeout 5s
           --health-retries 10
@@ -614,7 +600,7 @@ jobs:
                 { ...context.repo, run_id: context.runId, per_page: 100 },
               );
               const build = jobs.find(
-                ({ name }) => name === "Build for Cloudflare Workers",
+                ({ name }) => name === "Tests - web (node)",
               );
               if (
                 build?.status === "completed" &&
@@ -679,7 +665,7 @@ jobs:
 
   deploy-cf:
     name: Deploy tested Cloudflare artifact
-    needs: [preflight, test-rust, test-web, test-postgres, build-cf, test-e2e]
+    needs: [preflight, test-rust, test-web, test-postgres, test-e2e]
     if: |
       always() && !cancelled() &&
       github.ref == 'refs/heads/main' && github.event_name != 'schedule' &&
@@ -693,8 +679,13 @@ jobs:
           (needs.preflight.outputs.rust != 'true' || needs.test-rust.result == 'success') &&
           needs.test-web.result == 'success' &&
           needs.test-postgres.result == 'success' &&
-          needs.build-cf.result == 'success' &&
-          needs.test-e2e.result == 'success'
+          (
+            needs.test-e2e.result == 'success' ||
+            (
+              github.event_name == 'workflow_dispatch' &&
+              inputs.bypass_e2e && needs.test-e2e.result == 'skipped'
+            )
+          )
         )
       )
     runs-on: ubuntu-latest

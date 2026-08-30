@@ -939,28 +939,59 @@ const verifyRouteEmptySentinels = async (
 describe("every declared filter field is applied by its repo", () => {
   const ctx = withTestDb();
 
-  it.each(GUARDED_ENTITIES)("%s", async (entity) => {
-    const world = await seedWorld(ctx);
-    const { fields, list } = GUARDS[entity];
-    const baseline = await list(ctx.db, {});
-    expect(baseline.count).toBeGreaterThanOrEqual(2);
-    const { violations, passingKnownGaps, passingVacuousIdFields } =
-      await verifyDeclaredFilterFields({
-        db: ctx.db,
-        entity,
-        fields,
-        list,
-        world,
-        baselineCount: baseline.count,
-      });
-    expect(violations).toEqual([]);
-    expect(passingKnownGaps).toEqual([]);
-    expect(passingVacuousIdFields).toEqual([]);
-    expect(
-      await verifyPresencePartitions(ctx.db, entity, fields, list),
-    ).toEqual([]);
-    await verifyRouteEmptySentinels(ctx.db, entity, list);
-  });
+  // These probes only call list functions. Keep one seeded world so adding a
+  // guarded entity adds query coverage, not another full database seed.
+  it(
+    "covers every guarded entity from one read-only world",
+    { timeout: 30_000 },
+    async () => {
+      const world = await seedWorld(ctx);
+      const failures: string[] = [];
+
+      for (const entity of GUARDED_ENTITIES) {
+        try {
+          const { fields, list } = GUARDS[entity];
+          const baseline = await list(ctx.db, {});
+          if (baseline.count < 2) {
+            failures.push(
+              `${entity}: baseline returned ${baseline.count} rows`,
+            );
+            continue;
+          }
+          const { violations, passingKnownGaps, passingVacuousIdFields } =
+            await verifyDeclaredFilterFields({
+              db: ctx.db,
+              entity,
+              fields,
+              list,
+              world,
+              baselineCount: baseline.count,
+            });
+          failures.push(...violations);
+          failures.push(
+            ...passingKnownGaps.map(
+              (field) => `${field}: remove this stale known gap`,
+            ),
+          );
+          failures.push(
+            ...passingVacuousIdFields.map(
+              (field) => `${field}: remove this stale vacuous-id exception`,
+            ),
+          );
+          failures.push(
+            ...(await verifyPresencePartitions(ctx.db, entity, fields, list)),
+          );
+          await verifyRouteEmptySentinels(ctx.db, entity, list);
+        } catch (error) {
+          failures.push(
+            `${entity}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+
+      expect(failures).toEqual([]);
+    },
+  );
 });
 
 /**

@@ -1065,59 +1065,78 @@ const SORT_GUARDED_ENTITIES =
 describe("every declared sortable field sorts by the value it displays", () => {
   const ctx = withTestDb();
 
-  it.each(SORT_GUARDED_ENTITIES)("%s", async (entity) => {
-    await seedWorld(ctx);
-    const { fields, list } = SORT_GUARDS[entity];
-    const baseline = await list(ctx.db, []);
-    expect(baseline.count).toBeGreaterThanOrEqual(2);
+  // Every probe below is a read-only list query. A shared world preserves all
+  // field assertions without reseeding the same entity graph for every roster.
+  it(
+    "covers every guarded entity from one read-only world",
+    { timeout: 30_000 },
+    async () => {
+      await seedWorld(ctx);
+      const violations: string[] = [];
+      const passingSortOnly: string[] = [];
 
-    const violations: string[] = [];
-    const passingSortOnly: string[] = [];
+      for (const entity of SORT_GUARDED_ENTITIES) {
+        try {
+          const { fields, list } = SORT_GUARDS[entity];
+          const baseline = await list(ctx.db, []);
+          if (baseline.count < 2) {
+            violations.push(
+              `${entity}: baseline returned ${baseline.count} rows`,
+            );
+            continue;
+          }
 
-    for (const field of fields) {
-      const key = `${entity}.${field}`;
-      if (key in KNOWN_APPROXIMATIONS) continue;
+          for (const field of fields) {
+            const key = `${entity}.${field}`;
+            if (key in KNOWN_APPROXIMATIONS) continue;
 
-      if (key in SORT_ONLY_FIELDS) {
-        const anyComparable = baseline.rows.some(
-          (row) => extractCell(entity, field, row) !== undefined,
-        );
-        if (anyComparable) passingSortOnly.push(key);
-        continue;
+            if (key in SORT_ONLY_FIELDS) {
+              const anyComparable = baseline.rows.some(
+                (row) => extractCell(entity, field, row) !== undefined,
+              );
+              if (anyComparable) passingSortOnly.push(key);
+              continue;
+            }
+
+            const ascending = await list(ctx.db, asc(field));
+            const descending = await list(ctx.db, desc(field));
+            const ascValues = ascending.rows
+              .map((row) => extractCell(entity, field, row))
+              .filter((v): v is string | number => v !== undefined);
+            const descValues = descending.rows
+              .map((row) => extractCell(entity, field, row))
+              .filter((v): v is string | number => v !== undefined);
+
+            const distinct = new Set(ascValues.map(String));
+            if (distinct.size < 2) {
+              violations.push(
+                `${key}: only ${distinct.size} distinct non-null cell value(s) among ${ascValues.length} rows — seeding produced no variance to sort, so this field is untested. Seed more variance in seedWorld, or roster it.`,
+              );
+              continue;
+            }
+
+            if (!isMonotone(ascValues, "asc")) {
+              violations.push(
+                `${key}: ascending sort produced non-monotone cell values ${JSON.stringify(ascValues)}`,
+              );
+            }
+            if (!isMonotone(descValues, "desc")) {
+              violations.push(
+                `${key}: descending sort produced non-monotone cell values ${JSON.stringify(descValues)}`,
+              );
+            }
+          }
+        } catch (error) {
+          violations.push(
+            `${entity}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
 
-      const ascending = await list(ctx.db, asc(field));
-      const descending = await list(ctx.db, desc(field));
-      const ascValues = ascending.rows
-        .map((row) => extractCell(entity, field, row))
-        .filter((v): v is string | number => v !== undefined);
-      const descValues = descending.rows
-        .map((row) => extractCell(entity, field, row))
-        .filter((v): v is string | number => v !== undefined);
-
-      const distinct = new Set(ascValues.map(String));
-      if (distinct.size < 2) {
-        violations.push(
-          `${key}: only ${distinct.size} distinct non-null cell value(s) among ${ascValues.length} rows — seeding produced no variance to sort, so this field is untested. Seed more variance in seedWorld, or roster it.`,
-        );
-        continue;
-      }
-
-      if (!isMonotone(ascValues, "asc")) {
-        violations.push(
-          `${key}: ascending sort produced non-monotone cell values ${JSON.stringify(ascValues)}`,
-        );
-      }
-      if (!isMonotone(descValues, "desc")) {
-        violations.push(
-          `${key}: descending sort produced non-monotone cell values ${JSON.stringify(descValues)}`,
-        );
-      }
-    }
-
-    expect(violations).toEqual([]);
-    expect(passingSortOnly).toEqual([]);
-  });
+      expect(violations).toEqual([]);
+      expect(passingSortOnly).toEqual([]);
+    },
+  );
 });
 
 describe("sort guard coverage", () => {

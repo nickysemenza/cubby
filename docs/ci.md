@@ -21,11 +21,11 @@ full verification; it never widens into an unverified deployment.
 
 ## Build and deployment flow
 
-The web Cloudflare bundle is built once per verification run. Both Playwright
-shards download and test that exact artifact while preview and production
-deployment consume it unchanged. E2E starts in parallel with the build and
-polls for the artifact, preserving the setup head start without duplicating the
-bundle build.
+The web Cloudflare bundle is built once in the node-test runner and uploaded
+before that runner starts its tests. The single Playwright job starts in
+parallel, downloads and tests that exact artifact, and preview and production
+deployment consume it unchanged. Co-locating the build removes a runner and a
+duplicate dependency setup without removing the build gate.
 
 Production jobs serialize per worker and re-check that their workflow SHA is
 still current `main` after acquiring the deployment slot. A burst of merges can
