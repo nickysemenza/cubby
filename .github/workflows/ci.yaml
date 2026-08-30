@@ -287,6 +287,26 @@ jobs:
           done
           exit "$result_code"
 
+      - name: Record requested full verification
+        if: |
+          steps.scope.outputs.full == 'true' &&
+          steps.scope.outputs.coverage != 'true' &&
+          steps.scope.outputs.verify == 'true'
+        run: >-
+          printf '%s\n'
+          '${{ github.event.pull_request.head.sha || github.sha }}'
+          > full-verification.txt
+      - name: Save full verification provenance
+        if: |
+          steps.scope.outputs.full == 'true' &&
+          steps.scope.outputs.coverage != 'true' &&
+          steps.scope.outputs.verify == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-verification
+          path: full-verification.txt
+          retention-days: 14
+
   test-rust:
     name: Rust - recipebridge
     needs: preflight
@@ -627,32 +647,6 @@ jobs:
           path: apps/web/playwright-report/
           retention-days: 1
 
-  full-verification:
-    name: Full verification marker
-    needs: [preflight, test-rust, test-web, test-postgres, build-cf, test-e2e]
-    if: |
-      always() && needs.preflight.outputs.full == 'true' &&
-      needs.preflight.outputs.coverage != 'true' &&
-      needs.preflight.outputs.verify == 'true' &&
-      needs.preflight.result == 'success' &&
-      (needs.preflight.outputs.rust != 'true' || needs.test-rust.result == 'success') &&
-      (needs.preflight.outputs.web != 'true' || needs.test-web.result == 'success') &&
-      (needs.preflight.outputs.web != 'true' || needs.test-postgres.result == 'success') &&
-      (needs.preflight.outputs.web != 'true' || needs.build-cf.result == 'success') &&
-      (needs.preflight.outputs.web != 'true' || needs.test-e2e.result == 'success')
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - run: >-
-          printf '%s\n'
-          '${{ github.event.pull_request.head.sha || github.sha }}'
-          > full-verification.txt
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: full-verification
-          path: full-verification.txt
-          retention-days: 14
-
   report-coverage:
     name: Report scheduled coverage
     needs: [preflight, test-rust, test-web, test-postgres, test-aux-coverage]
@@ -685,14 +679,23 @@ jobs:
 
   deploy-cf:
     name: Deploy tested Cloudflare artifact
-    needs: [preflight, full-verification, build-cf]
+    needs: [preflight, test-rust, test-web, test-postgres, build-cf, test-e2e]
     if: |
       always() && !cancelled() &&
       github.ref == 'refs/heads/main' && github.event_name != 'schedule' &&
       inputs.mode != 'coverage' && needs.preflight.outputs.web == 'true' &&
       (
         needs.preflight.outputs.reuse == 'true' ||
-        needs.full-verification.result == 'success'
+        (
+          needs.preflight.outputs.full == 'true' &&
+          needs.preflight.outputs.verify == 'true' &&
+          needs.preflight.result == 'success' &&
+          (needs.preflight.outputs.rust != 'true' || needs.test-rust.result == 'success') &&
+          needs.test-web.result == 'success' &&
+          needs.test-postgres.result == 'success' &&
+          needs.build-cf.result == 'success' &&
+          needs.test-e2e.result == 'success'
+        )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15

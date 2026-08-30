@@ -16,11 +16,14 @@ test("preflight classifies and validates in one runner job", () => {
   const preflight = job("preflight", "test-rust");
   assert.match(preflight, /id: scope/u);
   assert.match(preflight, /run: pnpm check:all/u);
+  assert.match(preflight, /name: Save full verification provenance/u);
+  assert.match(preflight, /name: full-verification/u);
   assert.doesNotMatch(workflow, /^  scope:$/mu);
+  assert.doesNotMatch(workflow, /^  full-verification:$/mu);
 });
 
 test("E2E setup overlaps the build but tests the uploaded artifact", () => {
-  const e2e = job("test-e2e", "full-verification");
+  const e2e = job("test-e2e", "report-coverage");
   assert.match(e2e, /needs: preflight/u);
   assert.doesNotMatch(e2e, /needs:.*build-cf/u);
   assert.match(e2e, /needs\.preflight\.outputs\.verify == 'true'/u);
@@ -29,6 +32,23 @@ test("E2E setup overlaps the build but tests the uploaded artifact", () => {
   assert.match(e2e, /twenty minutes/u);
   assert.match(e2e, /name: cf-build/u);
   assert.match(e2e, /run: pnpm --filter @cubby\/web run test:e2e:postgres/u);
+});
+
+test("deployment directly requires every full verification result", () => {
+  const deploy = job("deploy-cf", "deploy-worker");
+  assert.match(
+    deploy,
+    /needs: \[preflight, test-rust, test-web, test-postgres, build-cf, test-e2e\]/u,
+  );
+  for (const result of [
+    "needs.preflight.result == 'success'",
+    "needs.test-web.result == 'success'",
+    "needs.test-postgres.result == 'success'",
+    "needs.build-cf.result == 'success'",
+    "needs.test-e2e.result == 'success'",
+  ]) {
+    assert.match(deploy, new RegExp(result.replaceAll(".", "\\."), "u"));
+  }
 });
 
 test("reused main runs skip tests while scheduled coverage keeps its tiers", () => {
