@@ -623,9 +623,15 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "search.find": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .find,
+  "search.grouped": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .grouped,
   "search.related": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .related,
+  "search.relatedGrouped": async () =>
+    (await import("~/server/search-browser.server")).searchHandlers.operations
+      .relatedGrouped,
   "search.repairDocuments": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .repairDocuments,

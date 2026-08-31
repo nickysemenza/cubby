@@ -86,6 +86,7 @@ const pgliteIntegrationTests = [
   "src/server/background-queue-embedding-gate.integration.test.ts",
   "src/server/repo/calendar.integration.test.ts",
   "src/server/repo/collection.integration.test.ts",
+  "src/server/repo/entity-display-image.integration.test.ts",
   "src/server/repo/merchant-vendor-inference.integration.test.ts",
   "src/server/repo/meal.integration.test.ts",
   "src/server/repo/project-tool-gallery.integration.test.ts",
@@ -93,6 +94,7 @@ const pgliteIntegrationTests = [
   "src/server/repo/product/conversion-coverage.integration.test.ts",
   "src/server/repo/product/relationship-route.integration.test.ts",
   "src/server/repo/recipe-section-order.integration.test.ts",
+  "src/server/services/search-grouping.service.integration.test.ts",
 ];
 const pgliteTemplatePath =
   process.env.CUBBY_PGLITE_TEMPLATE_PATH ??

@@ -37,7 +37,7 @@ import { TraceNames, withTrace } from "~/server/tracing";
 const candidateSchema = searchHitSchema.omit({ imageUrl: true }).extend({
   entityId: z.uuid(),
 });
-type Candidate = z.output<typeof candidateSchema>;
+export type InternalSearchCandidate = z.output<typeof candidateSchema>;
 export type InternalSearchHit = SearchHit & { entityId: string };
 type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
   limit?: number;
@@ -48,6 +48,10 @@ export interface RelatedSearchPort {
   readonly embed: typeof embedQuery;
   readonly config: typeof getSemanticEmbeddingConfig;
 }
+
+export type InternalRelatedSearchCandidates =
+  | { status: "ready"; results: InternalSearchCandidate[] }
+  | { status: "unavailable"; results: [] };
 
 const productionRelatedSearchPort: RelatedSearchPort = {
   configured: semanticEmbeddingsConfigured,
@@ -91,7 +95,7 @@ async function hydrateThumbnails(
 
 const withThumbnails = async (
   db: Database,
-  candidates: Candidate[],
+  candidates: InternalSearchCandidate[],
 ): Promise<SearchHit[]> => {
   const images = await hydrateThumbnails(db, candidates);
   return candidates.map(({ entityId, ...candidate }) => ({
@@ -299,14 +303,15 @@ export async function inspectSearchDocumentHealth(db: Database) {
 }
 
 /** One indexed lexical candidate query; rank before applying the caller limit. */
-export async function findSearchHits(
+export async function findLexicalSearchCandidates(
   db: Database,
   input: ServiceSearchQueryInput,
-): Promise<SearchHit[]> {
+  maxLimit = 200,
+): Promise<InternalSearchCandidate[]> {
   const normalized = normalizeSearchText(input.query);
   const tsQuery = buildPrefixTsQuery(input.query);
   if (!normalized || !tsQuery) return [];
-  const limit = Math.min(Math.max(input.limit ?? 5, 1), 50);
+  const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
   const entityTypes = scopes(input.entityTypes);
   const matchTerms = textArray(searchTerms(input.query));
   const rows = await withTrace(
@@ -405,15 +410,23 @@ export async function findSearchHits(
       return candidates;
     },
   );
-  return withThumbnails(db, rows);
+  return rows;
 }
 
-/** Semantic candidates remain a separate section and never block lexical hits. */
-export async function findRelatedSearchHits(
+export async function findSearchHits(
+  db: Database,
+  input: ServiceSearchQueryInput,
+): Promise<SearchHit[]> {
+  return withThumbnails(db, await findLexicalSearchCandidates(db, input, 50));
+}
+
+/** Ranked semantic candidates without presentation hydration. */
+export async function findRelatedSearchCandidates(
   db: Database | undefined,
   input: ServiceSearchQueryInput,
   port: RelatedSearchPort = productionRelatedSearchPort,
-): Promise<RelatedSearchOut> {
+  maxLimit = 50,
+): Promise<InternalRelatedSearchCandidates> {
   if (
     input.query.trim().length < SEMANTIC_MIN_QUERY_LENGTH ||
     !port.configured()
@@ -424,7 +437,7 @@ export async function findRelatedSearchHits(
     const embedding = await port.embed(input.query, { db });
     if (!embedding) return { status: "unavailable", results: [] };
     const config = port.config();
-    const limit = Math.min(Math.max(input.limit ?? 5, 1), 12);
+    const limit = Math.min(Math.max(input.limit ?? 5, 1), maxLimit);
     const entityTypes = scopes(input.entityTypes);
     const matchTerms = textArray(searchTerms(input.query));
     // One bound parameter, not ~30 KB of inlined literal re-parsed per search.
@@ -453,11 +466,26 @@ export async function findRelatedSearchHits(
       LIMIT ${limit}
     `,
     );
-    return { status: "ready", results: await withThumbnails(db, rows) };
+    return { status: "ready", results: rows };
   } catch (error) {
     console.warn("search.related.failed", { message: getErrorMessage(error) });
     return { status: "unavailable", results: [] };
   }
+}
+
+/** Semantic results remain a separate section and never block lexical hits. */
+export async function findRelatedSearchHits(
+  db: Database | undefined,
+  input: ServiceSearchQueryInput,
+  port: RelatedSearchPort = productionRelatedSearchPort,
+): Promise<RelatedSearchOut> {
+  const related = await findRelatedSearchCandidates(db, input, port, 12);
+  if (related.status === "unavailable") return related;
+  if (!db) throw new Error("Configured related search requires a database.");
+  return {
+    status: "ready",
+    results: await withThumbnails(db, related.results),
+  };
 }
 
 /**

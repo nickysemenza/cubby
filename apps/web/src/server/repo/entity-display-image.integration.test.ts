@@ -1,6 +1,6 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { projectCreateInput } from "@cubby/schemas/project";
+import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { eq } from "drizzle-orm";
@@ -12,6 +12,7 @@ import { projectImage, vendor as vendorTable } from "~/server/db/schema";
 import { upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn } from "./database-helpers";
 import { resolveEntityDisplayImages } from "./entity-display-image";
+import { createExpense } from "./expense";
 import { updateProduct } from "./product";
 import { createProject } from "./project";
 import { createPurchase } from "./purchase";
@@ -23,10 +24,12 @@ import {
   createLocationFixture,
   createProductFixture,
   createRecipeFixture,
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
+import { createTask } from "./task";
 import { createVendor } from "./vendor";
 
 describe("resolveEntityDisplayImages", () => {
@@ -61,6 +64,25 @@ describe("resolveEntityDisplayImages", () => {
         locationId: location.id,
         amount: { value: 1, unit: "each" },
       },
+      ctx.actor,
+    );
+    const linkedExpense = await createExpense(
+      ctx.db,
+      makeExpenseInput({ name: "Display expense", productId: product.id }),
+      ctx.actor,
+    );
+    const unlinkedExpense = await createExpense(
+      ctx.db,
+      makeExpenseInput({ name: "Display unlinked expense" }),
+      ctx.actor,
+    );
+    const linkedTask = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "Display task",
+        trade: "other",
+        subjectProductId: product.id,
+      }),
       ctx.actor,
     );
 
@@ -126,6 +148,15 @@ describe("resolveEntityDisplayImages", () => {
     const refs = [
       { entityType: "product" as const, entityId: product.entityId },
       { entityType: "inventory" as const, entityId: inventory.entityId },
+      {
+        entityType: "expense" as const,
+        entityId: linkedExpense.entityId,
+      },
+      { entityType: "task" as const, entityId: linkedTask.entityId },
+      {
+        entityType: "expense" as const,
+        entityId: unlinkedExpense.entityId,
+      },
       { entityType: "location" as const, entityId: location.entityId },
       { entityType: "recipe" as const, entityId: recipe.entityId },
       { entityType: "cookbook" as const, entityId: cookbook.entityId },
@@ -141,6 +172,15 @@ describe("resolveEntityDisplayImages", () => {
     expect(images.get(entityRefKey("inventory", inventory.entityId))?.url).toBe(
       catalogImage.url,
     );
+    expect(
+      images.get(entityRefKey("expense", linkedExpense.entityId))?.url,
+    ).toBe(catalogImage.url);
+    expect(images.get(entityRefKey("task", linkedTask.entityId))?.url).toBe(
+      catalogImage.url,
+    );
+    expect(
+      images.get(entityRefKey("expense", unlinkedExpense.entityId)),
+    ).toBeUndefined();
     expect(images.get(entityRefKey("location", location.entityId))?.url).toBe(
       catalogImage.url,
     );

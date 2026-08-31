@@ -1,5 +1,11 @@
 import { searchableEntities } from "@cubby/schemas/entity-manifest";
-import type { SearchableEntity } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchComponentPlacement,
+  SearchDestination,
+  SearchInventoryPlacement,
+  SearchResultGroup,
+} from "@cubby/schemas/search";
 import {
   type ParsedShortcode,
   parseShortcode,
@@ -9,7 +15,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Activity,
+  ChevronRight,
   Equal,
+  MapPin,
   Search,
   Settings,
   Sparkles,
@@ -61,7 +69,6 @@ import {
   getSearchMatchText,
   getSearchResultRoute,
   rememberSearchResult,
-  type SearchHit,
   SearchResultMedia,
 } from "./search/search-utils";
 
@@ -174,10 +181,8 @@ export function GlobalCommandMenu({
     if (open) recordCommandMenuOpened();
   }, [open]);
 
-  const { results, filteredActions, isLoading, isEmpty } = useGlobalSearch(
-    search,
-    searchScope ?? undefined,
-  );
+  const { results, filteredActions, isLoading, isEmpty, error, retry } =
+    useGlobalSearch(search, searchScope ?? undefined);
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
   // Opt-in: the agent only runs when the user explicitly selects the Ask item.
@@ -274,7 +279,7 @@ export function GlobalCommandMenu({
     goToEntity(entityType, shortcode, name);
   };
 
-  const goToSearchResult = (item: SearchHit) => {
+  const goToSearchResult = (item: SearchDestination) => {
     rememberSearchResult(item);
     navigate(getSearchResultRoute(item));
     setOpen(false);
@@ -427,6 +432,7 @@ export function GlobalCommandMenu({
                 />
 
                 <SearchResults
+                  error={error}
                   hasResults={hasResults}
                   isDevtoolsVisible={isDevtoolsVisible}
                   isLoading={isLoading}
@@ -434,6 +440,7 @@ export function GlobalCommandMenu({
                   onClose={() => setOpen(false)}
                   onSelectResult={goToSearchResult}
                   results={results}
+                  retry={retry}
                   search={search}
                   searchScope={searchScope}
                   scopeLabel={scopeLabel}
@@ -620,6 +627,7 @@ function MatchingQuickActions({
 }
 
 function SearchResults({
+  error,
   hasResults,
   isDevtoolsVisible,
   isLoading,
@@ -627,34 +635,73 @@ function SearchResults({
   onClose,
   onSelectResult,
   results,
+  retry,
   search,
   searchScope,
   scopeLabel,
 }: {
+  error: unknown;
   hasResults: boolean;
   isDevtoolsVisible: boolean;
   isLoading: boolean;
   navigate: CommandMenuNavigate;
   onClose: () => void;
-  onSelectResult: (item: SearchHit) => void;
-  results: SearchHit[] | undefined;
+  onSelectResult: (item: SearchDestination) => void;
+  results: SearchResultGroup[] | undefined;
+  retry: () => void;
   search: string;
   searchScope: SearchableEntity | null;
   scopeLabel: string | null;
 }) {
+  const [expandedKeys, setExpandedKeys] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  React.useEffect(() => setExpandedKeys(new Set()), [search]);
+
+  if (error && !isLoading) {
+    return (
+      <CommandGroup heading="Search unavailable">
+        <CommandItem
+          onSelect={retry}
+          className="justify-center text-destructive"
+        >
+          Search could not load. Try again
+        </CommandItem>
+      </CommandGroup>
+    );
+  }
   if (!hasResults || isLoading || !results) return null;
+
+  const toggleExpanded = (key: string, next?: boolean) => {
+    setExpandedKeys((current) => {
+      const updated = new Set(current);
+      const shouldExpand = next ?? !updated.has(key);
+      if (shouldExpand) updated.add(key);
+      else updated.delete(key);
+      return updated;
+    });
+  };
 
   return (
     <div>
       <CommandGroup
         heading={scopeLabel ? `${scopeLabel} matches` : "Best matches"}
       >
-        {results.map((item) => (
-          <SearchResultItem
-            key={`${item.entityType}-${item.id}`}
+        {results.map((group) => (
+          <SearchGroupItem
+            key={group.key}
+            expanded={expandedKeys.has(group.key)}
+            group={group}
             isDevtoolsVisible={isDevtoolsVisible}
-            item={item}
+            onSeeAll={() => {
+              navigate({
+                to: "/search",
+                search: { q: search, type: searchScope ?? undefined },
+              });
+              onClose();
+            }}
             onSelect={onSelectResult}
+            onToggle={(next) => toggleExpanded(group.key, next)}
           />
         ))}
       </CommandGroup>
@@ -677,15 +724,271 @@ function SearchResults({
   );
 }
 
-function SearchResultItem({
+const formatPlacementAmount = (placement: SearchInventoryPlacement) => {
+  const { value, upperValue, unit } = placement.amount;
+  return `${value}${upperValue === undefined ? "" : `–${upperValue}`} ${unit}`;
+};
+
+const placementDestination = (
+  group: Extract<SearchResultGroup, { kind: "product" }>,
+  placement: SearchInventoryPlacement,
+): SearchDestination => ({
+  id: placement.id,
+  entityType: "inventory",
+  title: group.primary.title,
+  subtitle: placement.locationPath,
+  typeHint: group.primary.typeHint,
+  imageUrl: group.primary.imageUrl,
+});
+
+const componentPlacementDestination = (
+  componentPlacement: SearchComponentPlacement,
+): SearchDestination => ({
+  ...componentPlacement.component,
+  id: componentPlacement.placement.id,
+  entityType: "inventory",
+  subtitle: componentPlacement.placement.locationPath,
+});
+
+function productGroupSummary(
+  group: Extract<SearchResultGroup, { kind: "product" }>,
+) {
+  const placementCount = group.placements.length;
+  const componentPlacementCount = group.componentPlacements.length;
+  const paths = [
+    ...group.placements.map((placement) => placement.locationPath),
+    ...group.componentPlacements.map(({ placement }) => placement.locationPath),
+  ];
+  const parts = [];
+  if (placementCount > 0) {
+    parts.push(
+      `${placementCount} ${componentPlacementCount > 0 ? "direct " : ""}${placementCount === 1 ? "placement" : "placements"}`,
+    );
+  } else if (componentPlacementCount === 0) {
+    parts.push("0 placements");
+  }
+  if (componentPlacementCount > 0) {
+    parts.push("Kit contents placed");
+  }
+  const distinctPaths = [...new Set(paths)].slice(0, 2);
+  if (distinctPaths.length > 0) parts.push(distinctPaths.join(", "));
+  if (group.matchedActivity.length > 0) {
+    const count = group.matchedActivity.length;
+    parts.push(`${count} matching ${count === 1 ? "record" : "records"}`);
+  }
+  return parts.join(" · ");
+}
+
+export function SearchGroupItem({
+  expanded,
+  group,
   isDevtoolsVisible,
-  item,
+  onSeeAll,
+  onSelect,
+  onToggle,
+}: {
+  expanded: boolean;
+  group: SearchResultGroup;
+  isDevtoolsVisible: boolean;
+  onSeeAll: () => void;
+  onSelect: (item: SearchDestination) => void;
+  onToggle: (expanded?: boolean) => void;
+}) {
+  if (group.kind === "entity") {
+    return (
+      <SearchEntityResultItem
+        group={group}
+        isDevtoolsVisible={isDevtoolsVisible}
+        onSelect={onSelect}
+      />
+    );
+  }
+
+  const matchText = getSearchMatchText(group.bestMatch);
+  const hasChildren =
+    group.placements.length > 0 ||
+    group.componentPlacements.length > 0 ||
+    group.matchedActivity.length > 0;
+  const placements = group.placements.slice(0, 2);
+  const componentPlacements = group.componentPlacements.slice(
+    0,
+    2 - placements.length,
+  );
+  const activity = group.matchedActivity.slice(0, 2);
+  const hiddenCount =
+    group.placements.length -
+    placements.length +
+    (group.componentPlacements.length - componentPlacements.length) +
+    (group.matchedActivity.length - activity.length);
+  const regionId = `command-search-${group.primary.id}`;
+
+  return (
+    <>
+      <div className="flex items-stretch">
+        <CommandItem
+          value={`product-${group.primary.id}`}
+          onSelect={() => onSelect(group.primary)}
+          onKeyDown={(event) => {
+            if (!hasChildren) return;
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              onToggle(true);
+            } else if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              onToggle(false);
+            }
+          }}
+          aria-expanded={hasChildren ? expanded : undefined}
+          aria-controls={hasChildren ? regionId : undefined}
+          className="min-w-0 flex-1 items-center gap-2"
+        >
+          <SearchResultMedia item={group.primary} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm">{group.primary.title}</div>
+            <div className="truncate text-xs text-muted-foreground">
+              {[group.primary.subtitle, productGroupSummary(group)]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+            {isDevtoolsVisible && matchText && (
+              <div
+                className="truncate text-2xs text-muted-foreground"
+                title={group.bestMatch.matchReason}
+              >
+                {matchText}
+              </div>
+            )}
+          </div>
+          <div className="max-w-28 shrink-0 self-start pt-1 text-right">
+            <span className="block truncate font-mono text-2xs tracking-wider text-slate uppercase">
+              Product
+            </span>
+            <span className="block truncate font-mono text-2xs text-muted-foreground tabular-nums">
+              {group.primary.id}
+            </span>
+          </div>
+        </CommandItem>
+        {hasChildren && (
+          <button
+            type="button"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${group.primary.title} placements and matching records`}
+            aria-expanded={expanded}
+            aria-controls={regionId}
+            onClick={() => onToggle()}
+            className="flex size-11 shrink-0 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary sm:size-9"
+          >
+            <ChevronRight
+              className={cn(
+                "size-4 transition-transform motion-reduce:transition-none",
+                expanded && "rotate-90",
+              )}
+            />
+          </button>
+        )}
+      </div>
+      {expanded && hasChildren && (
+        <fieldset
+          id={regionId}
+          aria-label={`${group.primary.title} placements and matching records`}
+          className="border-y border-border bg-muted/25 py-1"
+        >
+          {placements.map((placement) => {
+            const destination = placementDestination(group, placement);
+            return (
+              <CommandItem
+                key={placement.id}
+                value={`placement-${placement.id}`}
+                onSelect={() => onSelect(destination)}
+                className="min-h-11 gap-2 pl-8 sm:min-h-9"
+              >
+                <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium">
+                    {placement.locationPath}
+                  </div>
+                  <div className="truncate text-2xs text-muted-foreground">
+                    {formatPlacementAmount(placement)} · {placement.placement}
+                  </div>
+                </div>
+                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                  {placement.id}
+                </span>
+              </CommandItem>
+            );
+          })}
+          {componentPlacements.map((componentPlacement) => {
+            const destination =
+              componentPlacementDestination(componentPlacement);
+            return (
+              <CommandItem
+                key={`${componentPlacement.component.id}-${componentPlacement.placement.id}`}
+                value={`component-placement-${componentPlacement.placement.id}`}
+                onSelect={() => onSelect(destination)}
+                className="min-h-11 gap-2 pl-8 sm:min-h-9"
+              >
+                <SearchResultMedia item={componentPlacement.component} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium">
+                    {componentPlacement.component.title}
+                  </div>
+                  <div className="truncate text-2xs text-muted-foreground">
+                    {componentPlacement.componentQuantity > 1
+                      ? `${componentPlacement.componentQuantity}× kit content`
+                      : "Kit content"}{" "}
+                    · {componentPlacement.placement.locationPath} ·{" "}
+                    {formatPlacementAmount(componentPlacement.placement)} ·{" "}
+                    {componentPlacement.placement.placement}
+                  </div>
+                </div>
+                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                  {componentPlacement.placement.id}
+                </span>
+              </CommandItem>
+            );
+          })}
+          {activity.map((item) => (
+            <CommandItem
+              key={`${item.entityType}-${item.id}`}
+              value={`activity-${item.entityType}-${item.id}`}
+              onSelect={() => onSelect(item)}
+              className="min-h-11 gap-2 pl-8 sm:min-h-9"
+            >
+              <SearchResultMedia item={item} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-medium">{item.title}</div>
+                <div className="truncate text-2xs text-muted-foreground">
+                  {entities[entityTypeMap[item.entityType]].label} · {item.id} ·
+                  Linked to {group.primary.title}
+                </div>
+              </div>
+            </CommandItem>
+          ))}
+          {hiddenCount > 0 && (
+            <CommandItem
+              value={`more-${group.primary.id}`}
+              onSelect={onSeeAll}
+              className="min-h-11 justify-center text-xs text-muted-foreground sm:min-h-9"
+            >
+              <Search className="mr-2 size-4" />
+              See {hiddenCount} more in full search
+            </CommandItem>
+          )}
+        </fieldset>
+      )}
+    </>
+  );
+}
+
+function SearchEntityResultItem({
+  group,
+  isDevtoolsVisible,
   onSelect,
 }: {
+  group: Extract<SearchResultGroup, { kind: "entity" }>;
   isDevtoolsVisible: boolean;
-  item: SearchHit;
-  onSelect: (item: SearchHit) => void;
+  onSelect: (item: SearchDestination) => void;
 }) {
+  const item = group.primary;
   const matchText = getSearchMatchText(item);
 
   return (
@@ -700,6 +1003,11 @@ function SearchResultItem({
         {item.subtitle && (
           <div className="truncate text-xs text-muted-foreground">
             {item.subtitle}
+          </div>
+        )}
+        {group.linkedProduct && (
+          <div className="truncate text-2xs text-muted-foreground">
+            Linked to {group.linkedProduct.title}
           </div>
         )}
         {isDevtoolsVisible && matchText && (

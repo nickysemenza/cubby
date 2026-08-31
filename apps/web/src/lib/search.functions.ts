@@ -3,6 +3,7 @@ import {
   enqueueEmbeddingBackfillOutSchema,
 } from "@cubby/schemas/background-jobs";
 import {
+  relatedSearchGroupsOutSchema,
   relatedSearchOutSchema,
   repairSearchDocumentsOutSchema,
   requestEmbeddingRefreshInputSchema,
@@ -11,6 +12,7 @@ import {
   searchDocumentMaintenanceSchema,
   searchHitsOut,
   searchQueryInputSchema,
+  searchResultGroupsOut,
 } from "@cubby/schemas/search";
 import { z } from "zod";
 
@@ -27,6 +29,11 @@ export const search = defineOperationDomain("search", {
     output: searchHitsOut,
     tags: [["search", "find"]],
   }),
+  grouped: query({
+    input: searchQueryInputSchema,
+    output: searchResultGroupsOut,
+    tags: [["search", "grouped"]],
+  }),
   documentHealth: query({
     input: z.undefined(),
     output: searchDocumentMaintenanceSchema,
@@ -41,6 +48,11 @@ export const search = defineOperationDomain("search", {
     input: searchQueryInputSchema,
     output: relatedSearchOutSchema,
     tags: [["search", "related"]],
+  }),
+  relatedGrouped: query({
+    input: searchQueryInputSchema,
+    output: relatedSearchGroupsOutSchema,
+    tags: [["search", "relatedGrouped"]],
   }),
   debug: query({
     input: searchQueryInputSchema,

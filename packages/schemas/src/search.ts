@@ -1,7 +1,14 @@
 import { z } from "zod";
+import { inventoryPlacementValues } from "@cubby/shared";
 import { backgroundBatchRefSchema } from "./background-jobs";
+import { amount } from "./codec";
 import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
-import { anyShortcodeSchema, nonEmptyTuple } from "./identifiers";
+import {
+  anyShortcodeSchema,
+  inventoryShortcode,
+  locationShortcode,
+  nonEmptyTuple,
+} from "./identifiers";
 import {
   activeRelatednessPairKeys,
   embeddingReadinessSchema,
@@ -129,6 +136,74 @@ export const searchHitSchema = z.object({
 export type SearchHit = z.infer<typeof searchHitSchema>;
 
 export const searchHitsOut = z.array(searchHitSchema);
+
+/** A routable entity projection without a claim that it matched the query. */
+export const searchDestinationSchema = searchHitSchema.pick({
+  id: true,
+  entityType: true,
+  title: true,
+  subtitle: true,
+  typeHint: true,
+  imageUrl: true,
+});
+export type SearchDestination = z.infer<typeof searchDestinationSchema>;
+
+export const searchInventoryPlacementSchema = z.object({
+  id: inventoryShortcode,
+  locationId: locationShortcode,
+  locationPath: z.string(),
+  amount,
+  placement: z.enum(inventoryPlacementValues),
+});
+export type SearchInventoryPlacement = z.infer<
+  typeof searchInventoryPlacementSchema
+>;
+
+export const searchComponentPlacementSchema = z.object({
+  component: searchDestinationSchema,
+  componentQuantity: z.number().int().positive(),
+  placement: searchInventoryPlacementSchema,
+});
+export type SearchComponentPlacement = z.infer<
+  typeof searchComponentPlacementSchema
+>;
+
+const searchEntityGroupSchema = z.object({
+  kind: z.literal("entity"),
+  key: z.string(),
+  primary: searchHitSchema,
+  linkedProduct: searchDestinationSchema.nullable(),
+});
+
+const searchProductGroupSchema = z.object({
+  kind: z.literal("product"),
+  key: z.string(),
+  primary: searchDestinationSchema,
+  bestMatch: searchHitSchema,
+  placements: z.array(searchInventoryPlacementSchema),
+  componentPlacements: z.array(searchComponentPlacementSchema),
+  matchedActivity: z.array(searchHitSchema),
+});
+
+/**
+ * UI-only relational search projection. Flat SearchHit remains the canonical
+ * MCP, picker, and entity-kernel contract.
+ */
+export const searchResultGroupSchema = z.discriminatedUnion("kind", [
+  searchEntityGroupSchema,
+  searchProductGroupSchema,
+]);
+export type SearchResultGroup = z.infer<typeof searchResultGroupSchema>;
+
+export const searchResultGroupsOut = z.array(searchResultGroupSchema);
+
+export const relatedSearchGroupsOutSchema = z.object({
+  status: z.enum(["ready", "unavailable"]),
+  groups: searchResultGroupsOut,
+});
+export type RelatedSearchGroupsOut = z.infer<
+  typeof relatedSearchGroupsOutSchema
+>;
 
 /** Public, aggregate-only health for the private SearchDocument projection. */
 export const searchDocumentHealthSchema = z.object({

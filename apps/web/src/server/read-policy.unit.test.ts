@@ -50,6 +50,8 @@ describe("cached-read policy", () => {
 
     expect(find).toContain("findSearchHitsWorkflow(context.readDb");
     expect(related).toContain("findRelatedSearchHitsWorkflow(context.readDb");
+    expect(browser).toContain("findGroupedSearchHitsWorkflow(context.readDb");
+    expect(browser).toContain("findRelatedSearchGroupsWorkflow(context.readDb");
     expect(mcpSearch).toContain("findSearchHitsWorkflow(context.readDb");
     expect(mcpSearch).toContain("findRelatedSearchHitsWorkflow(context.readDb");
     expect(mcpSearch).toContain("findSimilarEntitiesWorkflow(context.readDb");
