@@ -93,6 +93,14 @@
   // Create once before first deploy:
   //   wrangler queues create cubby-background
   //   wrangler queues create cubby-background-dlq
+  //   wrangler queues create cubby-telemetry
+  //   wrangler queues create cubby-telemetry-dlq
+  //
+  // Two queues, not one: consumer settings below are per-queue and the two
+  // workloads want opposite values (background trades batching for latency,
+  // telemetry the reverse). `max_batch_timeout` is applied before the consumer
+  // runs, so a merged queue could not recover it in-handler, and one FIFO
+  // backlog would let a telemetry burst delay user-visible work.
   "queues": {
     "producers": [
       { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" },
@@ -122,6 +130,23 @@
         "max_concurrency": 1,
         "max_retries": 3,
         "dead_letter_queue": "cubby-telemetry-dlq"
+      },
+      // Dead letters are drained so exhausted messages are recorded rather than
+      // piling up unseen. Deliberately no `dead_letter_queue` of their own —
+      // this is the last stop, and the handler acks everything.
+      {
+        "queue": "cubby-background-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_concurrency": 1,
+        "max_retries": 1
+      },
+      {
+        "queue": "cubby-telemetry-dlq",
+        "max_batch_size": 100,
+        "max_batch_timeout": 5,
+        "max_concurrency": 1,
+        "max_retries": 1
       }
     ]
   },

@@ -3,6 +3,7 @@ import type {
   BackgroundBatchSource,
   BackgroundJobKind,
 } from "@cubby/schemas/background-jobs";
+import { QUEUE_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 
 import { getBackgroundQueue, getProblemCountsCache } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -17,10 +18,7 @@ import {
   toBackgroundBatchRef,
 } from "~/server/repo/background-jobs";
 
-import {
-  BACKGROUND_MESSAGE_VERSION,
-  type BackgroundQueueProducer,
-} from "./background-queue-types";
+import type { BackgroundQueueProducer } from "./background-queue-types";
 
 interface DispatchBackgroundJobsInput {
   kind: BackgroundJobKind;
@@ -122,7 +120,8 @@ async function sendBackgroundMessages(
     await queue.sendBatch(
       jobIds.slice(index, index + 100).map((jobId) => ({
         body: {
-          messageVersion: BACKGROUND_MESSAGE_VERSION,
+          version: QUEUE_MESSAGE_VERSION,
+          queueType: "background",
           batchId,
           jobId,
           kind: batchKind,

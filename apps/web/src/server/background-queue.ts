@@ -2,6 +2,7 @@ import {
   type BackgroundJobKind,
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
+import { backgroundQueueMessageSchema } from "@cubby/schemas/queue-messages";
 import { match } from "ts-pattern";
 
 import { getErrorMessage } from "~/lib/error-utils";
@@ -38,10 +39,15 @@ import { embeddingTextHash } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import {
-  BACKGROUND_MESSAGE_VERSION,
-  type BackgroundQueueDeliveredMessage,
-} from "./background-queue-types";
+import type { BackgroundQueueDeliveredMessage } from "./background-queue-types";
+
+/** Outcome of one job attempt; drives the queue ack/retry decision. */
+export type BackgroundJobOutcome =
+  | "succeeded"
+  | "skipped"
+  | "retry"
+  | "failed"
+  | "leased";
 
 export interface BackgroundQueueEmbeddingPort {
   readonly configured: () => boolean;
@@ -59,19 +65,41 @@ export async function processBackgroundQueueMessage(
   db: Database,
   message: BackgroundQueueDeliveredMessage,
 ): Promise<void> {
-  if (message.body.messageVersion !== BACKGROUND_MESSAGE_VERSION) {
-    console.warn(
-      `[background-queue] dropped stale message version=${String(message.body.messageVersion)} current=${BACKGROUND_MESSAGE_VERSION} batch=${message.body.batchId} job=${message.body.jobId}`,
-    );
+  const parsed = backgroundQueueMessageSchema.safeParse(message.body);
+  if (!parsed.success) {
+    // Ack, don't retry. A body this consumer cannot read will not become
+    // readable on redelivery — retrying only burns the delivery budget and
+    // dead-letters it three attempts later. Stale-version messages land here
+    // too, since `version` is a literal in the schema.
+    console.warn("[background-queue] dropped invalid queue message", {
+      issues: parsed.error.issues,
+    });
     message.ack();
     return;
   }
+  const { batchId, jobId, kind } = parsed.data;
 
-  const outcome = await processBackgroundJob(
-    db,
-    message.body.jobId,
-    message.body.kind,
+  // Per-message clock: a batch is processed serially in this one invocation,
+  // so capture t0 at each message's start (NOT at batch arrival) or
+  // `duration_ms` would accumulate across the batch.
+  const t0 = performance.now();
+  const elapsed = () => Math.round(performance.now() - t0);
+  let outcome: BackgroundJobOutcome;
+  try {
+    outcome = await processBackgroundJob(db, jobId, kind);
+  } catch (error) {
+    // Logged here rather than in the caller: the caller only has the raw
+    // unparsed body, so these identifying fields exist only past the parse.
+    console.error(
+      `[background-queue] message failed batch=${batchId} job=${jobId} kind=${kind} duration_ms=${elapsed()}`,
+      error,
+    );
+    throw error;
+  }
+  console.log(
+    `[background-queue] message handled batch=${batchId} job=${jobId} kind=${kind} outcome=${outcome} duration_ms=${elapsed()}`,
   );
+
   if (outcome === "leased") {
     message.retry({
       delaySeconds: Math.ceil(BACKGROUND_JOB_LEASE_MS / 1_000),
@@ -107,7 +135,7 @@ export async function processBackgroundJob(
   jobId: string,
   batchKind?: BackgroundJobKind,
   embeddingPort: BackgroundQueueEmbeddingPort = productionBackgroundQueueEmbeddingPort,
-): Promise<"succeeded" | "skipped" | "retry" | "failed" | "leased"> {
+): Promise<BackgroundJobOutcome> {
   // The job kind isn't known until this read returns, and a missing job is a
   // non-event — both stay outside the span below.
   const current = await getBackgroundJob(db, jobId);
@@ -116,9 +144,7 @@ export async function processBackgroundJob(
   return withTrace(
     TraceNames.job(current.kind),
     async (span) => {
-      const withOutcome = (
-        status: "succeeded" | "skipped" | "retry" | "failed" | "leased",
-      ) => {
+      const withOutcome = (status: BackgroundJobOutcome) => {
         span.setAttribute("cubby.job.outcome", status);
         return status;
       };

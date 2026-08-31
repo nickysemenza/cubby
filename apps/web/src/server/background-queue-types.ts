@@ -1,14 +1,4 @@
-import type { BackgroundJobKind } from "@cubby/schemas/background-jobs";
-
-export const BACKGROUND_MESSAGE_VERSION = 1;
-
-interface BackgroundQueueMessage {
-  messageVersion: number;
-  batchId: string;
-  jobId: string;
-  /** Batch kind gates workflow continuation checks without another DB read. */
-  kind: BackgroundJobKind;
-}
+import type { BackgroundQueueMessage } from "@cubby/schemas/queue-messages";
 
 export interface BackgroundQueueProducer {
   send(body: BackgroundQueueMessage): Promise<void>;
@@ -18,7 +8,12 @@ export interface BackgroundQueueProducer {
 }
 
 export interface BackgroundQueueDeliveredMessage {
-  readonly body: BackgroundQueueMessage;
+  /**
+   * `unknown`, not `BackgroundQueueMessage`: what Cloudflare hands back is
+   * whatever JSON was on the wire, including messages minted by an older
+   * deploy. Typing it forces the consumer through `safeParse`.
+   */
+  readonly body: unknown;
   ack(): void;
   retry(options?: { delaySeconds: number }): void;
 }

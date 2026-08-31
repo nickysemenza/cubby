@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { entitySchema } from "./entity-core";
+import { queueMessageEnvelope } from "./queue-messages";
 
 const telemetryEnvelope = {
-  version: z.literal(1),
+  ...queueMessageEnvelope,
+  queueType: z.literal("telemetry"),
   eventId: z.uuid(),
   occurredAt: z.iso.datetime(),
   release: z.string().min(1),

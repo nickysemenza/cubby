@@ -29,6 +29,7 @@ export async function recordAiUsage(
   try {
     await port.emit(db, {
       version: 1,
+      queueType: "telemetry",
       eventId: crypto.randomUUID(),
       occurredAt: new Date().toISOString(),
       release: __GIT_COMMIT__,

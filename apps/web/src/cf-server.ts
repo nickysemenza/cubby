@@ -28,6 +28,7 @@ import {
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
+import type { DeadLetterQueueBatch } from "./server/dead-letter-queue";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
 import { classifyHttpWorkload } from "./server/workload";
@@ -254,7 +255,10 @@ const handler = {
   // Background queue consumer. Each message is a small persisted-job wakeup:
   // the payload lives in Postgres, so retries are inspectable and queue messages
   // stay bounded. Per-message ack/retry so one bad job doesn't replay the rest.
-  async queue(batch: BackgroundQueueBatch | TelemetryQueueBatch, env: Env) {
+  async queue(
+    batch: BackgroundQueueBatch | TelemetryQueueBatch | DeadLetterQueueBatch,
+    env: Env,
+  ) {
     setCfEnv(env);
     await withTrace(
       "cf.queue",
@@ -271,32 +275,46 @@ const handler = {
             return;
           }
 
-          // Imported here, not at module scope: the consumer pulls @tanstack/ai +
-          // @cloudflare/tanstack-ai + @anthropic-ai/sdk (~553 KiB, plus a second
-          // copy of zod) and only queue deliveries need it. A static import puts
-          // all of that on the module-init path of every fetch invocation too.
-          const [{ db }, { processBackgroundQueueMessage }] = await Promise.all(
-            [import("./server/db"), import("./server/background-queue")],
-          );
-          for (const message of batch.messages) {
-            // Per-message clock: a batch is processed serially in this one
-            // invocation, so capture t0 at each message's start (NOT at batch
-            // arrival) or `duration_ms` would accumulate across the batch.
-            const t0 = performance.now();
-            try {
-              await processBackgroundQueueMessage(db, message);
-              console.log(
-                `[background-queue] message handled batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
-              );
-            } catch (error) {
-              console.error(
-                `[background-queue] message failed batch=${message.body.batchId} job=${message.body.jobId} kind=${message.body.kind} duration_ms=${Math.round(performance.now() - t0)}`,
-                error,
-              );
-              Sentry.captureException(error);
-              message.retry();
+          if (batch.queue === "cubby-background") {
+            // Imported here, not at module scope: the consumer pulls
+            // @tanstack/ai + @cloudflare/tanstack-ai + @anthropic-ai/sdk
+            // (~553 KiB, plus a second copy of zod) and only queue deliveries
+            // need it. A static import puts all of that on the module-init
+            // path of every fetch invocation too.
+            const [{ db }, { processBackgroundQueueMessage }] =
+              await Promise.all([
+                import("./server/db"),
+                import("./server/background-queue"),
+              ]);
+            for (const message of batch.messages) {
+              try {
+                await processBackgroundQueueMessage(db, message);
+              } catch (error) {
+                // Per-message identifiers are logged inside the consumer, the
+                // only place the body has been parsed. Here we just make sure
+                // one bad job neither escapes Sentry nor replays the rest.
+                Sentry.captureException(error);
+                message.retry();
+              }
             }
+            return;
           }
+
+          // Last stop: the dead-letter queues have no DLQ of their own, so the
+          // handler acks everything and records the loss rather than retrying.
+          const [
+            { db },
+            { processDeadLetterBatch, productionDeadLetterQueuePorts },
+          ] = await Promise.all([
+            import("./server/db"),
+            import("./server/dead-letter-queue"),
+          ]);
+          await processDeadLetterBatch(db, batch, {
+            ...productionDeadLetterQueuePorts,
+            captureException: (error) => {
+              Sentry.captureException(error);
+            },
+          });
         });
       },
       {
