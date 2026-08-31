@@ -57,7 +57,9 @@ test.describe("iPhone WebKit smoke", () => {
       "Today",
       "Search",
     ]) {
-      await bottomNav.getByRole("link", { name: label, exact: true }).click();
+      const link = bottomNav.getByRole("link", { name: label, exact: true });
+      await link.focus();
+      await link.press("Enter");
     }
 
     await expect(page).toHaveURL(/\/search$/);
