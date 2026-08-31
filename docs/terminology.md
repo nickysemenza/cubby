@@ -275,15 +275,21 @@ Two different "a recipe inside something" relationships — don't conflate them:
 - **Recipe-as-ingredient (composition).** When an `Ingredient.recipeId` is set,
   that ingredient *is* a sub-recipe; using it in another recipe's section nests
   one recipe inside another. Costing memoizes sub-recipes (with a cycle guard).
-- **MealRecipe (planning).** A `Meal` (a calendar day occasion) groups
-  `MealRecipe` rows — each a recipe planned at a numeric `scale`. This is
-  *planning only*: no inventory is mutated, and meal totals are rolled up
-  read-time as `sum(recipe.totals × scale)` (see `meal/helpers.ts`).
+- **MealRecipe (occurrence and preparation).** A `Meal` (a calendar day
+  occasion) groups `MealRecipe` rows — each a recipe planned at a numeric
+  `scale`, and optionally one physical preparation with expected and measured
+  cooked yields. Repeating a Recipe or cooking it twice means two rows. No
+  inventory is mutated, and planned meal totals are rolled up read-time as
+  `sum(recipe.totals × scale)` (see `meal/helpers.ts`).
+- **MealRecipePortion.** A gram amount from one source `MealRecipe`, assigned to
+  one member or guest Ledger Party at a target `Meal`. It may target a later
+  leftovers Meal; confirmation distinguishes projected from consumed calories.
 
 **Totals.** `Recipe.totals` (cost/calorie rollup) is **persisted** server-side
 with a `totalsComputedAt` staleness stamp; lists read the persisted value
-rather than recomputing. Meals never persist totals — they always scale the
-recipe's.
+rather than recomputing. Meals and portions never persist totals — planned
+Meals scale the Recipe's current totals, while portions project the same live
+totals through their source preparation's yield.
 
 ---
 

@@ -289,6 +289,7 @@ export async function lockAndValidateForDelete<TId extends string>(
     .select({ id: sql<string>`${table.id}` })
     .from(table)
     .where(and(inArray(table.id, ids), notDeleted(table)))
+    .orderBy(sql`${table.id}`)
     .for("update"); // 🔒 Acquires row-level lock
 
   if (locked.length !== ids.length) {

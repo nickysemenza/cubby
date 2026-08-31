@@ -18,6 +18,11 @@ export const meal = defineOperationDomain("meal", {
     output: schemas.upcomingMealSummaryOut,
     tags: [["meal", "upcomingSummary"]],
   }),
+  getPreparations: query({
+    input: schemas.getMealPreparationsInput,
+    output: schemas.getMealPreparationsOut,
+    tags: [["meal", "getPreparations"]],
+  }),
   getShoppingList: query({
     input: schemas.mealDateRange,
     output: schemas.shoppingListOut,
@@ -36,6 +41,11 @@ export const meal = defineOperationDomain("meal", {
   removeRecipe: mutation({
     input: schemas.mealRecipeIdInput,
     output: schemas.mealOut,
+    invalidates: ripple.meal,
+  }),
+  savePreparation: mutation({
+    input: schemas.saveMealRecipePreparationInput,
+    output: schemas.saveMealRecipePreparationOut,
     invalidates: ripple.meal,
   }),
 });

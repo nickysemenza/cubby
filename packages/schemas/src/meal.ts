@@ -3,6 +3,7 @@ import {
   auditDateFilterFields,
   deriveUpdateData,
   timestampedFields,
+  uniqueBy,
 } from "./base-entity";
 import { mealRelatedFilterFields } from "./related-view";
 import {
@@ -14,12 +15,14 @@ import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
 import {
   ingredientShortcode,
+  ledgerPartyShortcode,
   mealRecipeId,
   mealShortcode,
   recipeShortcode,
 } from "./identifiers";
+import { ledgerPartyKind } from "./ledger-party";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
-import { mealDate, mealScale } from "./meal-shared";
+import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
@@ -42,7 +45,13 @@ export {
   mealTypeSchema,
   mealTypeValues,
 } from "./meal-classification";
-export { mealDate, mealDateRange, mealScale } from "./meal-shared";
+export {
+  mealDate,
+  mealDateRange,
+  mealScale,
+  mealYieldGrams,
+  type MealYieldGrams,
+} from "./meal-shared";
 
 /**
  * `mealType` sorts by SLOT, not alphabetically — the repo resolves it through
@@ -167,11 +176,178 @@ export const mealRecipeOut = z.object({
   recipe: mealRecipeSummary,
   scale: mealScale,
   sortOrder: z.number().int().nullable(),
+  estimatedYieldGrams: mealYieldGrams.nullable(),
+  actualYieldGrams: mealYieldGrams.nullable(),
   /** recipe.totals x scale, or null when totals are absent/stale. */
   scaledTotals: scaledTotals.nullable(),
   ...timestampedFields,
 });
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
+
+export const mealPreparationCalorieEstimate = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("pending"),
+    reason: z.enum(["totals_missing", "totals_stale"]),
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    reason: z.enum(["yield_missing", "calories_uncovered"]),
+  }),
+  z.object({
+    status: z.literal("partial"),
+    lower: z.number().nonnegative(),
+  }),
+  z.object({
+    status: z.literal("complete"),
+    lower: z.number().nonnegative(),
+    upper: z.number().nonnegative().nullable(),
+  }),
+]);
+export type MealPreparationCalorieEstimate = z.infer<
+  typeof mealPreparationCalorieEstimate
+>;
+
+export const mealPreparationYieldBasis = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.enum(["actual", "estimated", "recipe"]),
+    lowerGrams: z.number().positive(),
+    upperGrams: z.number().positive().nullable(),
+  }),
+  z.object({
+    kind: z.literal("missing"),
+    lowerGrams: z.null(),
+    upperGrams: z.null(),
+  }),
+]);
+export type MealPreparationYieldBasis = z.infer<
+  typeof mealPreparationYieldBasis
+>;
+
+const mealRecipePreparationSetChange = z.object({
+  action: z.literal("set"),
+  mealId: mealShortcode,
+  ledgerPartyId: ledgerPartyShortcode,
+  grams: mealYieldGrams,
+  confirmed: z.boolean(),
+});
+
+const mealRecipePreparationRemoveChange = z.object({
+  action: z.literal("remove"),
+  mealId: mealShortcode,
+  ledgerPartyId: ledgerPartyShortcode,
+});
+
+export const mealRecipePreparationChange = z.discriminatedUnion("action", [
+  mealRecipePreparationSetChange,
+  mealRecipePreparationRemoveChange,
+]);
+export type MealRecipePreparationChange = z.infer<
+  typeof mealRecipePreparationChange
+>;
+
+export const getMealPreparationsInput = z.object({
+  mealId: mealShortcode,
+});
+export type GetMealPreparationsInput = z.infer<typeof getMealPreparationsInput>;
+
+export const saveMealRecipePreparationInput = z.object({
+  mealRecipeId,
+  estimatedYieldGrams: mealYieldGrams.nullable().optional(),
+  actualYieldGrams: mealYieldGrams.nullable().optional(),
+  changes: z
+    .array(mealRecipePreparationChange)
+    .refine(
+      ...uniqueBy(
+        (change: MealRecipePreparationChange) =>
+          `${change.mealId}:${change.ledgerPartyId}`,
+        "changes must not repeat a target meal and ledger party",
+      ),
+    ),
+});
+export type SaveMealRecipePreparationInput = z.infer<
+  typeof saveMealRecipePreparationInput
+>;
+
+const mealPreparationSourceMealOut = z.object({
+  id: mealShortcode,
+  date: mealDate,
+  name: z.string().nullable(),
+});
+
+const mealPreparationTargetMealOut = mealPreparationSourceMealOut.extend({
+  mealKind: mealKindSchema,
+});
+
+const mealPreparationEaterOut = z.object({
+  id: ledgerPartyShortcode,
+  name: z.string(),
+  kind: ledgerPartyKind.exclude(["household"]),
+});
+
+export const mealRecipePreparationPortionOut = z.object({
+  targetMeal: mealPreparationTargetMealOut,
+  eater: mealPreparationEaterOut,
+  grams: mealYieldGrams,
+  confirmedAt: z.date().nullable(),
+  servedHere: z.boolean(),
+  calories: mealPreparationCalorieEstimate,
+});
+export type MealRecipePreparationPortionOut = z.infer<
+  typeof mealRecipePreparationPortionOut
+>;
+
+const mealRecipePreparationSourceSummaryOut = z.object({
+  assignedGrams: z.number().int().nonnegative(),
+  confirmedGrams: z.number().int().nonnegative(),
+  // Negative is meaningful: it exposes an over-assigned preparation.
+  unassignedGrams: z.number().nullable(),
+});
+
+export const mealRecipePreparationOut = z
+  .object({
+    mealRecipeId,
+    preparedHere: z.boolean(),
+    sourceMeal: mealPreparationSourceMealOut,
+    recipe: z.object({ id: recipeShortcode, name: z.string() }),
+    scale: mealScale,
+    estimatedYieldGrams: mealYieldGrams.nullable(),
+    actualYieldGrams: mealYieldGrams.nullable(),
+    yieldBasis: mealPreparationYieldBasis,
+    batchCalories: mealPreparationCalorieEstimate,
+    sourceSummary: mealRecipePreparationSourceSummaryOut.nullable(),
+    portions: z.array(mealRecipePreparationPortionOut),
+  })
+  .refine(
+    (preparation) =>
+      preparation.preparedHere === (preparation.sourceSummary !== null),
+    "sourceSummary is available exactly when the preparation was prepared here",
+  );
+export type MealRecipePreparationOut = z.infer<typeof mealRecipePreparationOut>;
+
+const mealPreparationTotalsPartOut = z.object({
+  portionCount: z.number().int().nonnegative(),
+  calories: mealPreparationCalorieEstimate,
+});
+
+export const getMealPreparationsOut = z.object({
+  mealId: mealShortcode,
+  preparations: z.array(mealRecipePreparationOut),
+  totals: z.object({
+    confirmed: mealPreparationTotalsPartOut,
+    projected: mealPreparationTotalsPartOut,
+  }),
+});
+export type GetMealPreparationsOut = z.infer<typeof getMealPreparationsOut>;
+
+export const saveMealRecipePreparationOut = z.object({
+  mealRecipeId,
+  estimatedYieldGrams: mealYieldGrams.nullable(),
+  actualYieldGrams: mealYieldGrams.nullable(),
+  affectedMealIds: z.array(mealShortcode),
+});
+export type SaveMealRecipePreparationOut = z.infer<
+  typeof saveMealRecipePreparationOut
+>;
 
 export const mealTotals = z.object({
   costTotal: money,

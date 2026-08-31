@@ -60,6 +60,8 @@ const NON_ENTITY_FK_TARGETS = {
   // RecipeSectionIngredient) — not independently addressable, so it never
   // graduated to its own entity.
   RecipeSection: "owned wholly by its recipe, not independently addressable",
+  MealRecipe:
+    "a UUID-addressed recipe occurrence owned by its meal, not an entity",
   // Background-job bookkeeping (queue/inline processing metadata), not a
   // domain entity a user ever looks up by id.
   BackgroundBatch: "operational bookkeeping, not a domain entity",

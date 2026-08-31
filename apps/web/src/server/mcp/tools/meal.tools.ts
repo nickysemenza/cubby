@@ -1,9 +1,13 @@
 import {
   mealAddRecipeInput,
   mealDate,
+  getMealPreparationsInput,
+  getMealPreparationsOut,
   mealMcpOut,
   mealScale,
   shoppingListOut,
+  saveMealRecipePreparationInput,
+  saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -19,6 +23,17 @@ import {
 } from "./_shared";
 
 export function registerMealTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "get_meal_preparations",
+    description:
+      "Read recipe preparations made by or served at a meal, including projected and confirmed nutrition.",
+    inputSchema: getMealPreparationsInput,
+    outputSchema: getMealPreparationsOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra) =>
+      getCaller(extra).meal.getPreparations(params),
+  });
+
   registerMcpTool(server, {
     name: "get_shopping_list",
     description:
@@ -54,6 +69,17 @@ export function registerMealTools(server: McpServer) {
       });
       return respond(result, slimMeal);
     },
+  });
+
+  registerMcpTool(server, {
+    name: "save_meal_recipe_preparation",
+    description:
+      "Record measured yield and portions served from one planned recipe occurrence. Confirmed portions count as consumed; unconfirmed portions remain projected.",
+    inputSchema: saveMealRecipePreparationInput,
+    outputSchema: saveMealRecipePreparationOut,
+    annotations: WRITE_CLOSED,
+    handler: async (params, extra) =>
+      getCaller(extra).meal.savePreparation(params),
   });
 
   registerMcpTool(server, {

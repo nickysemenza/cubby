@@ -154,6 +154,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A recipe assigned to this meal; the pairing is part of what the meal consists of, not an independent association.",
       liveness: { kind: "must-target-live" },
     },
+    "MealRecipePortion.mealId": {
+      role: "association",
+      label: "served portions",
+      description:
+        "A gram portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   ledgerParty: {
     "ExpenseAttribution.ledgerPartyId": {
@@ -180,6 +187,13 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "ledger",
       label: "incoming transfers",
       description: "A transfer target endpoint.",
+      liveness: { kind: "must-target-live" },
+    },
+    "MealRecipePortion.ledgerPartyId": {
+      role: "association",
+      label: "meal portions",
+      description:
+        "A planned or confirmed gram portion naming this member or guest as its eater.",
       liveness: { kind: "must-target-live" },
     },
   },

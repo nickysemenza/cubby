@@ -49,6 +49,10 @@ export type LedgerTransferId = z.infer<typeof ledgerTransferId>;
 export const mealRecipeId = brandedId("MealRecipeId");
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
 
+/** Storage-only identity for a portion row; never exposed by meal APIs. */
+export const mealRecipePortionId = brandedId("MealRecipePortionId");
+export type MealRecipePortionId = z.infer<typeof mealRecipePortionId>;
+
 export const projectId = brandedId("ProjectId");
 export type ProjectId = z.infer<typeof projectId>;
 

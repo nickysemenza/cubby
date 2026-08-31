@@ -205,6 +205,7 @@ describe("MCP catalog schemas", () => {
       "entity.command.data.unitMappings[].id",
       "update_meal_recipe.id",
       "remove_meal_recipe.id",
+      "save_meal_recipe_preparation.mealRecipeId",
       "update_statement_rows.selector.externalIds",
       "update_statement_rows.data.supersededByExternalId",
       "delete_statement_rows.selector.externalIds",

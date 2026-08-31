@@ -90,6 +90,8 @@ type MealRow = {
     recipeId: RecipeId;
     scale: number;
     sortOrder: number | null;
+    estimatedYieldGrams: number | null;
+    actualYieldGrams: number | null;
     createdAt: Date;
     updatedAt: Date;
     deletedAt: Date | null;
@@ -121,6 +123,8 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
       id: mr.id,
       mealId: parseShortcodeFor("meal", row.shortcode),
       recipeId: parseShortcodeFor("recipe", mr.recipe.shortcode),
+      estimatedYieldGrams: mr.estimatedYieldGrams,
+      actualYieldGrams: mr.actualYieldGrams,
       recipe: {
         id: parseShortcodeFor("recipe", mr.recipe.shortcode),
         name: mr.recipe.name,

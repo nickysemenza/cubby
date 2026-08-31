@@ -49,6 +49,7 @@ import {
   ingredient,
   meal,
   mealRecipe,
+  mealRecipePortion,
   recipe,
   recipeImage,
   recipeSection,
@@ -1049,10 +1050,13 @@ export const deleteRecipes = async (
     // deliberately NOT touched: the router resolves parents and calls
     // dispatchRecompute, with findParentRecipesWithDeletedSubRecipes as the
     // backstop detector. Cascading or guarding it would break sub-recipe deletion.
-    const cascadedMealRecipes = await tx.query.mealRecipe.findMany({
-      where: and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)),
-      columns: { recipeId: true },
-    });
+    const cascadedMealRecipes = await tx
+      .select({ id: mealRecipe.id, recipeId: mealRecipe.recipeId })
+      .from(mealRecipe)
+      .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)))
+      .orderBy(mealRecipe.id)
+      .for("update");
+    const cascadedMealRecipeIds = cascadedMealRecipes.map((row) => row.id);
 
     let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
     if (sectionIds.length > 0) {
@@ -1101,6 +1105,16 @@ export const deleteRecipes = async (
       .update(mealRecipe)
       .set({ deletedAt: now })
       .where(and(inArray(mealRecipe.recipeId, ids), notDeleted(mealRecipe)));
+    if (cascadedMealRecipeIds.length > 0)
+      await tx
+        .update(mealRecipePortion)
+        .set({ deletedAt: now })
+        .where(
+          and(
+            inArray(mealRecipePortion.mealRecipeId, cascadedMealRecipeIds),
+            notDeleted(mealRecipePortion),
+          ),
+        );
 
     // Declaring recipeImage lets removeEntity reap unreferenced Image/R2 rows.
     return await removeEntity(tx, {

@@ -28,5 +28,6 @@ export {
   updateMeal,
   updateMealRecipeWithEntityId,
 } from "./crud";
+export { getMealPreparations, saveMealRecipePreparation } from "./portions";
 // Helpers (dbMealToAPI, rollupMealTotals, scaleTotals) are intentionally not
 // re-exported here — they're used internally within ./helpers and ./crud.
