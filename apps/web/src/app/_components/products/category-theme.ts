@@ -12,6 +12,7 @@ import {
   Disc,
   type LucideIcon,
   Settings,
+  Shirt,
   Sofa,
   Sparkles,
   Utensils,
@@ -35,6 +36,7 @@ const categoryIcons = {
   books: BookOpen,
   household: Sofa,
   supplies: Sparkles,
+  apparel: Shirt,
 } satisfies Record<ProductCategory, LucideIcon>;
 
 /**

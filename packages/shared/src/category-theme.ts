@@ -10,6 +10,7 @@ export const productCategoryValues = [
   "books", // physical books, including cookbooks cataloged as possessions
   "household", // furniture, cookware, appliances
   "supplies", // cleaning products, tape, batteries, cables
+  "apparel", // shoes, clothing, outerwear, bags worn rather than stored
 ] as const;
 
 export type ProductCategory = (typeof productCategoryValues)[number];
@@ -71,6 +72,12 @@ export const categoryColors = {
 
   household: "var(--chart-8)",
   supplies: "var(--chart-6)",
+
+  // Shares chart-4 with tool-consumables. The ramp only runs chart-1..8 and is
+  // already fully assigned, so every added category doubles up on a value;
+  // pairing apparel with a semantically distant category keeps a donut legible
+  // in a way household/apparel (both domestic) would not.
+  apparel: "var(--chart-4)",
 
   uncategorized: "var(--chart-neutral)",
 } as const satisfies Record<ProductCategory | "uncategorized", string>;
