@@ -184,6 +184,8 @@ export function getItemHeight(category: ProductCategory | null): number {
       return 0.45;
     case "supplies":
       return 0.38;
+    case "apparel":
+      return 0.3;
     default:
       return 0.4;
   }

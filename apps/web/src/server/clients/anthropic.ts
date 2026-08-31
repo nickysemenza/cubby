@@ -102,6 +102,8 @@ export const CATEGORY_DESCRIPTIONS = {
     "Home items: furniture, cookware, appliances, decor, cleaning equipment, linens",
   supplies:
     "General consumable supplies: cleaning products, tape, batteries, glue, lubricants, rags",
+  apparel:
+    "Worn goods: shoes, boots, clothing, outerwear, hats, gloves, worn bags and packs",
 } satisfies Record<ProductCategory, string>;
 
 function buildCategorySystemPrompt(): string {
