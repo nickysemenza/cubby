@@ -8,6 +8,7 @@ import {
 
 const mcpEvent = {
   version: 1 as const,
+  queueType: "telemetry" as const,
   eventId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
   occurredAt: "2026-08-02T16:00:00.000Z",
   release: "abcdef0",
@@ -42,6 +43,21 @@ describe("telemetryMessageV1Schema", () => {
       ).toBe(false);
     },
   );
+
+  it("rejects a message missing or mismatching queueType", () => {
+    // `queueType` is what makes the message format merge-ready: a consumer
+    // reading a single merged queue would route on it instead of `batch.queue`.
+    const { queueType: _dropped, ...withoutQueueType } = mcpEvent;
+    expect(telemetryMessageV1Schema.safeParse(withoutQueueType).success).toBe(
+      false,
+    );
+    expect(
+      telemetryMessageV1Schema.safeParse({
+        ...mcpEvent,
+        queueType: "background",
+      }).success,
+    ).toBe(false);
+  });
 
   it("rejects unsupported versions and event types", () => {
     expect(

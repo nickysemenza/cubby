@@ -10,6 +10,7 @@ const db = new Database(() => {
 });
 const event: TelemetryMessageV1 = {
   version: 1,
+  queueType: "telemetry",
   eventId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
   occurredAt: "2026-08-02T16:00:00.000Z",
   release: "abcdef0",

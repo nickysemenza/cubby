@@ -85,6 +85,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
           try {
             await telemetry.data.emit({
               version: 1,
+              queueType: "telemetry",
               eventId: crypto.randomUUID(),
               occurredAt: new Date().toISOString(),
               release: __GIT_COMMIT__,

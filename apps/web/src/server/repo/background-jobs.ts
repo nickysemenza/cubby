@@ -703,6 +703,50 @@ export async function finishBackgroundJob(
   });
 }
 
+/**
+ * Settle a job whose queue message exhausted delivery and dead-lettered.
+ *
+ * Unconditionally terminal, unlike `failOrRetryBackgroundJob`: by the time a
+ * message reaches the DLQ its delivery budget is spent, so counting `attempts`
+ * here would leave the row `queued` forever. Nothing would ever pick it up
+ * again — redelivery is over, and `findRecoverableStrandedJobs` only reclaims
+ * rows with `attempts = 0`, which a delivered-and-failed job no longer has.
+ * That is the "stuck queued" class this closes; settling the row also stops a
+ * poison message (one that throws before `markBackgroundJobRunning`, so
+ * `attempts` never leaves 0) from being redispatched by the sweep on a loop.
+ *
+ * No-ops on a row already in a terminal state, so a replayed dead letter cannot
+ * overwrite a job that in fact succeeded.
+ */
+export async function abandonBackgroundJob(
+  db: Database,
+  jobId: string,
+  reason: string,
+): Promise<boolean> {
+  return await withTransaction(db, async (tx) => {
+    const now = new Date();
+    const [row] = await tx
+      .update(backgroundJob)
+      .set({
+        status: "failed",
+        finishedAt: now,
+        durationMs: sql`GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (${now}::timestamp - COALESCE(${backgroundJob.startedAt}, ${backgroundJob.createdAt})) * 1000)))::bigint`,
+        lastError: reason,
+      })
+      .where(
+        and(
+          eq(backgroundJob.id, jobId),
+          inArray(backgroundJob.status, ["pending", "queued", "running"]),
+          notDeleted(backgroundJob),
+        ),
+      )
+      .returning({ batchId: backgroundJob.batchId });
+    if (!row) return false;
+    await recalculateBackgroundBatchSummaryTx(tx, row.batchId);
+    return true;
+  });
+}
+
 export async function failOrRetryBackgroundJob<Failure>(
   db: Database,
   jobId: string,

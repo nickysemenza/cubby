@@ -1,3 +1,4 @@
+import { QUEUE_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
@@ -12,17 +13,18 @@ import {
   processBackgroundJob,
   processBackgroundQueueMessage,
 } from "~/server/background-queue";
-import { BACKGROUND_MESSAGE_VERSION } from "~/server/background-queue-types";
 import type { BackgroundQueueProducer } from "~/server/background-queue-types";
 import { setCfEnv } from "~/server/cf-env";
 import { backgroundJob } from "~/server/db/schema";
 import {
+  abandonBackgroundJob,
   appendBackgroundJobsToWorkflow,
   BACKGROUND_JOB_LEASE_MS,
   cancelAbandonedStrandedJobs,
   countAbandonedStrandedJobs,
   createBackgroundBatchWithJobs,
   failOrRetryBackgroundJob,
+  findRecoverableStrandedJobs,
   finishBackgroundJob,
   getBackgroundBatchDetail,
   getBackgroundBatchSummary,
@@ -93,6 +95,65 @@ describe("background job persistence", () => {
     expect(detail?.wallDurationMs).not.toBeNull();
   });
 
+  it("acks an unparseable queue message instead of retrying it", async () => {
+    // A body this consumer cannot read will not become readable on redelivery,
+    // so retrying would only burn the delivery budget and dead-letter it.
+    const acks: number[] = [];
+    const retries: unknown[] = [];
+    await processBackgroundQueueMessage(ctx.db, {
+      body: { version: 99, queueType: "background", batchId: "b", jobId: "j" },
+      ack: () => acks.push(1),
+      retry: (options) => retries.push(options ?? null),
+    });
+    expect(acks).toHaveLength(1);
+    expect(retries).toHaveLength(0);
+  });
+
+  it("abandons a dead-lettered job that the stranded sweep can no longer reach", async () => {
+    const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh",
+      source: "backfill",
+      jobs: [
+        {
+          kind: "entity-embedding.refresh",
+          dedupeKey: "test:embedding:dead-letter",
+          payload: { entityType: "product", entityId: crypto.randomUUID() },
+        },
+      ],
+    });
+    const jobId = jobIds[0]!;
+
+    // Drive the row into the "stuck queued" state: delivered at least once, so
+    // `attempts > 0`, then reset to `queued` by the retry path. The stranded
+    // sweep only reclaims rows with `attempts = 0`, so nothing else settles it
+    // once Cloudflare stops redelivering.
+    await markBackgroundJobRunning(ctx.db, jobId);
+    await expect(
+      failOrRetryBackgroundJob(ctx.db, jobId, new Error("transient")),
+    ).resolves.toBe("retry");
+    let detail = await getBackgroundBatchDetail(ctx.db, batchId);
+    expect(detail?.jobs[0]?.status).toBe("queued");
+    expect(detail?.jobs[0]?.attempts).toBeGreaterThan(0);
+    await expect(findRecoverableStrandedJobs(ctx.db, 10)).resolves.toEqual([]);
+
+    await expect(
+      abandonBackgroundJob(ctx.db, jobId, "dead-lettered"),
+    ).resolves.toBe(true);
+
+    detail = await getBackgroundBatchDetail(ctx.db, batchId);
+    expect(detail?.jobs[0]?.status).toBe("failed");
+    expect(detail?.jobs[0]?.lastError).toBe("dead-lettered");
+    // The parent batch must settle too, or the UI shows it running forever.
+    expect(detail?.status).toBe("failed");
+
+    // Replayed dead letters must not overwrite a terminal row.
+    await expect(
+      abandonBackgroundJob(ctx.db, jobId, "second delivery"),
+    ).resolves.toBe(false);
+    detail = await getBackgroundBatchDetail(ctx.db, batchId);
+    expect(detail?.jobs[0]?.lastError).toBe("dead-lettered");
+  });
+
   it("reclaims a running job only after its worker lease expires", async () => {
     const { jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
       kind: "entity-embedding.refresh",
@@ -119,7 +180,8 @@ describe("background job persistence", () => {
     const retries: Array<{ delaySeconds: number }> = [];
     await processBackgroundQueueMessage(ctx.db, {
       body: {
-        messageVersion: BACKGROUND_MESSAGE_VERSION,
+        version: QUEUE_MESSAGE_VERSION,
+        queueType: "background",
         batchId: "lease-test",
         jobId,
         kind: "entity-embedding.backfill.coordinator",
