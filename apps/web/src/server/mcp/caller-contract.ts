@@ -26,10 +26,12 @@ const callerMethodRoster = {
   ingredient: { recipeUsages: true, resolveOrCreate: true },
   inventory: { moveEntries: true },
   meal: {
+    getPreparations: true,
     addRecipe: true,
     updateRecipe: true,
     removeRecipe: true,
     getShoppingList: true,
+    savePreparation: true,
   },
   problems: {
     getFast: true,

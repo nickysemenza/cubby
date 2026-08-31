@@ -1,5 +1,10 @@
 import { ingredientRecipeUsagesOut } from "@cubby/schemas/ingredient";
-import { mealRecipeIdInput, mealUpdateRecipeInput } from "@cubby/schemas/meal";
+import {
+  getMealPreparationsInput,
+  mealRecipeIdInput,
+  mealUpdateRecipeInput,
+  saveMealRecipePreparationInput,
+} from "@cubby/schemas/meal";
 import {
   type patchProductExternalIdsInput,
   type productExternalIdCollisionInput,
@@ -43,8 +48,10 @@ import {
 import { moveInventoryEntriesWorkflow } from "~/server/workflows/inventory.server";
 import {
   addRecipeToMealWorkflow,
+  getMealPreparationsWorkflow,
   getShoppingListWorkflow,
   removeMealRecipeWorkflow,
+  saveMealRecipePreparationWorkflow,
   updateMealRecipeWorkflow,
 } from "~/server/workflows/meal.server";
 import {
@@ -167,6 +174,11 @@ export const createMcpWorkflowCaller = (
       moveInventoryEntriesWorkflow(context.db, context.actorContext, input),
   },
   meal: {
+    getPreparations: (input: z.input<typeof getMealPreparationsInput>) =>
+      getMealPreparationsWorkflow(
+        context.readDb,
+        getMealPreparationsInput.parse(input),
+      ),
     addRecipe: (input: Parameters<typeof addRecipeToMealWorkflow>[1]) =>
       addRecipeToMealWorkflow(context.db, input, context.actorContext),
     updateRecipe: (input: z.input<typeof mealUpdateRecipeInput>) =>
@@ -179,6 +191,12 @@ export const createMcpWorkflowCaller = (
       removeMealRecipeWorkflow(
         context.db,
         mealRecipeIdInput.parse(input),
+        context.actorContext,
+      ),
+    savePreparation: (input: z.input<typeof saveMealRecipePreparationInput>) =>
+      saveMealRecipePreparationWorkflow(
+        context.db,
+        saveMealRecipePreparationInput.parse(input),
         context.actorContext,
       ),
     getShoppingList: (input: Parameters<typeof getShoppingListWorkflow>[1]) =>

@@ -30,6 +30,7 @@ export async function lockLedgerPartiesForReference(
     .select({ id: ledgerParty.id, kind: ledgerParty.kind })
     .from(ledgerParty)
     .where(and(inArray(ledgerParty.id, uniqueIds), notDeleted(ledgerParty)))
+    .orderBy(ledgerParty.id)
     .for("key share");
   if (rows.length !== uniqueIds.length)
     throw createAppError(

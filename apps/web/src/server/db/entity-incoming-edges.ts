@@ -55,6 +55,7 @@ import {
   location,
   locationImage,
   mealRecipe,
+  mealRecipePortion,
   product,
   productComponent,
   productConversionCoverage,
@@ -140,6 +141,7 @@ export const INCOMING_EDGES = {
   }),
   meal: edges({
     "MealRecipe.mealId": { column: mealRecipe.mealId },
+    "MealRecipePortion.mealId": { column: mealRecipePortion.mealId },
   }),
   ledgerParty: edges({
     "ExpenseAttribution.ledgerPartyId": {
@@ -150,6 +152,9 @@ export const INCOMING_EDGES = {
     },
     "LedgerTransfer.fromPartyId": { column: ledgerTransfer.fromPartyId },
     "LedgerTransfer.toPartyId": { column: ledgerTransfer.toPartyId },
+    "MealRecipePortion.ledgerPartyId": {
+      column: mealRecipePortion.ledgerPartyId,
+    },
   }),
   product: edges({
     "ProductExternalId.productId": { column: productExternalId.productId },

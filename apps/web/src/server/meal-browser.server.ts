@@ -7,6 +7,8 @@ export const mealHandlers = implementOperationDomain(meal, {
     workflow.getMealsByDateRangeWorkflow(context.db, input),
   upcomingSummary: (context, input) =>
     workflow.getUpcomingMealSummaryWorkflow(context.db, input),
+  getPreparations: (context, input) =>
+    workflow.getMealPreparationsWorkflow(context.readDb, input),
   getShoppingList: (context, input) =>
     workflow.getShoppingListWorkflow(
       context.db,
@@ -19,4 +21,10 @@ export const mealHandlers = implementOperationDomain(meal, {
     workflow.updateMealRecipeWorkflow(context.db, input, context.actorContext),
   removeRecipe: (context, input) =>
     workflow.removeMealRecipeWorkflow(context.db, input, context.actorContext),
+  savePreparation: (context, input) =>
+    workflow.saveMealRecipePreparationWorkflow(
+      context.db,
+      input,
+      context.actorContext,
+    ),
 });

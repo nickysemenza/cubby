@@ -23,6 +23,11 @@ const unavailableCallerMethod = async (): Promise<never> => {
   throw new Error("Unexpected MCP caller method in test");
 };
 
+const completeCallerSection = <Section extends object>(
+  unavailable: Section,
+  provided: PartialCaller<Section> | undefined,
+) => Object.assign({}, unavailable, provided);
+
 const unavailableCaller = {
   auditLog: { list: unavailableCallerMethod },
   dataQuality: {
@@ -51,8 +56,10 @@ const unavailableCaller = {
   inventory: { moveEntries: unavailableCallerMethod },
   meal: {
     addRecipe: unavailableCallerMethod,
+    getPreparations: unavailableCallerMethod,
     updateRecipe: unavailableCallerMethod,
     removeRecipe: unavailableCallerMethod,
+    savePreparation: unavailableCallerMethod,
     getShoppingList: unavailableCallerMethod,
   },
   problems: {
@@ -134,7 +141,10 @@ function completeTestCaller(caller: McpTestCaller): McpWorkflowCaller {
     image: { ...unavailableCaller.image, ...caller.image },
     ingredient: { ...unavailableCaller.ingredient, ...caller.ingredient },
     inventory: { ...unavailableCaller.inventory, ...caller.inventory },
-    meal: { ...unavailableCaller.meal, ...caller.meal },
+    meal: completeCallerSection<McpWorkflowCaller["meal"]>(
+      unavailableCaller.meal,
+      caller.meal,
+    ),
     problems: { ...unavailableCaller.problems, ...caller.problems },
     product: { ...unavailableCaller.product, ...caller.product },
     project: { ...unavailableCaller.project, ...caller.project },

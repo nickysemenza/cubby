@@ -21,7 +21,12 @@ import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { meal, mealRecipe, recipe } from "~/server/db/schema";
+import {
+  meal,
+  mealRecipe,
+  mealRecipePortion,
+  recipe,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -60,6 +65,12 @@ export const MEAL_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Deleting a meal soft-deletes its planned recipes; the recipes themselves are untouched.",
+  },
+  "MealRecipePortion.mealId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
   },
 } as const satisfies IncomingEdgePolicy<"meal", OperationDisposition>;
 
@@ -320,6 +331,28 @@ export const deleteMeals = async (
   if (ids.length === 0) return { deleted: 0 };
   return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, meal, ids, "Meal");
+    const sourceOccurrences = await tx
+      .select({ id: mealRecipe.id })
+      .from(mealRecipe)
+      .where(and(inArray(mealRecipe.mealId, ids), notDeleted(mealRecipe)))
+      .orderBy(mealRecipe.id)
+      .for("update");
+    const sourceOccurrenceIds = sourceOccurrences.map((row) => row.id);
+    const now = new Date();
+    // A portion has two independent meanings: it is served at its target Meal
+    // and sourced from its MealRecipe. Removing the source Meal removes both
+    // sides; a portion targeted at a different Meal remains only when its
+    // source occurrence remains live.
+    if (sourceOccurrenceIds.length > 0)
+      await tx
+        .update(mealRecipePortion)
+        .set({ deletedAt: now })
+        .where(
+          and(
+            inArray(mealRecipePortion.mealRecipeId, sourceOccurrenceIds),
+            notDeleted(mealRecipePortion),
+          ),
+        );
     // The meal manifest has onDelete: [], so this transaction is the only place
     // a meal's EntityEmbedding row gets cleaned up. And because
     // `removeMealRecipe` unplans rows singly, a meal can already own dead
@@ -334,6 +367,11 @@ export const deleteMeals = async (
           table: mealRecipe,
           parentColumns: [mealRecipe.mealId],
           auditKey: "cascadedMealRecipes",
+        },
+        {
+          table: mealRecipePortion,
+          parentColumns: [mealRecipePortion.mealId],
+          auditKey: "cascadedMealRecipePortions",
         },
       ],
     });
@@ -428,10 +466,39 @@ const removeMealRecipe = async (
 ): Promise<MealOut> => {
   const mealId = await getMealIdForRecipe(db, id);
   await withTransaction(db, async (tx) => {
+    const [lockedMeal] = await tx
+      .select({ id: meal.id })
+      .from(meal)
+      .where(and(eq(meal.id, mealId), notDeleted(meal)))
+      .for("key share");
+    if (!lockedMeal) throw createAppError("MEAL_NOT_FOUND", "Meal not found");
+    const [lockedOccurrence] = await tx
+      .select({ id: mealRecipe.id })
+      .from(mealRecipe)
+      .where(
+        and(
+          eq(mealRecipe.id, id),
+          eq(mealRecipe.mealId, mealId),
+          notDeleted(mealRecipe),
+        ),
+      )
+      .for("update");
+    if (!lockedOccurrence)
+      throw createAppError("MEAL_RECIPE_NOT_FOUND", "Meal recipe not found");
+    const now = new Date();
+    await tx
+      .update(mealRecipePortion)
+      .set({ deletedAt: now })
+      .where(
+        and(
+          eq(mealRecipePortion.mealRecipeId, id),
+          notDeleted(mealRecipePortion),
+        ),
+      );
     await tx
       .update(mealRecipe)
-      .set({ deletedAt: new Date() })
-      .where(eq(mealRecipe.id, id));
+      .set({ deletedAt: now })
+      .where(and(eq(mealRecipe.id, id), notDeleted(mealRecipe)));
     await logAuditEntry(tx, actor, {
       entityType: "meal",
       entityId: mealId,

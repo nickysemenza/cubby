@@ -33,6 +33,7 @@ import type {
   LocationId,
   MealId,
   MealRecipeId,
+  MealRecipePortionId,
   ProductId,
   ProjectId,
   PurchaseId,
@@ -547,12 +548,54 @@ export const mealRecipe = pgTable(
       .references(() => recipe.id),
     scale: real("scale").notNull().default(1),
     sortOrder: integer("sortOrder"),
+    estimatedYieldGrams: integer("estimatedYieldGrams"),
+    actualYieldGrams: integer("actualYieldGrams"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     index("MealRecipe_mealId_idx").on(table.mealId),
     index("MealRecipe_recipeId_idx").on(table.recipeId),
+    check(
+      "MealRecipe_estimatedYieldGrams_check",
+      sql`${table.estimatedYieldGrams} IS NULL OR ${table.estimatedYieldGrams} > 0`,
+    ),
+    check(
+      "MealRecipe_actualYieldGrams_check",
+      sql`${table.actualYieldGrams} IS NULL OR ${table.actualYieldGrams} > 0`,
+    ),
+  ],
+);
+
+export const mealRecipePortion = pgTable(
+  "MealRecipePortion",
+  {
+    id: pkUuid<MealRecipePortionId>(),
+    mealRecipeId: uuid("mealRecipeId")
+      .notNull()
+      .$type<MealRecipeId>()
+      .references(() => mealRecipe.id, { onDelete: "cascade" }),
+    mealId: uuid("mealId")
+      .notNull()
+      .$type<MealId>()
+      .references(() => meal.id),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references(() => ledgerParty.id),
+    grams: integer("grams").notNull(),
+    confirmedAt: timestamp("confirmedAt", { mode: "date" }),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("MealRecipePortion_live_source_target_eater_key")
+      .on(table.mealRecipeId, table.mealId, table.ledgerPartyId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("MealRecipePortion_mealRecipeId_idx").on(table.mealRecipeId),
+    index("MealRecipePortion_mealId_idx").on(table.mealId),
+    index("MealRecipePortion_ledgerPartyId_idx").on(table.ledgerPartyId),
+    check("MealRecipePortion_grams_check", sql`${table.grams} > 0`),
   ],
 );
 
@@ -2219,9 +2262,10 @@ export const recipeSectionIngredientRelations = relations(
 
 export const mealRelations = relations(meal, ({ many }) => ({
   recipes: many(mealRecipe),
+  recipePortions: many(mealRecipePortion),
 }));
 
-export const mealRecipeRelations = relations(mealRecipe, ({ one }) => ({
+export const mealRecipeRelations = relations(mealRecipe, ({ one, many }) => ({
   meal: one(meal, {
     fields: [mealRecipe.mealId],
     references: [meal.id],
@@ -2230,7 +2274,26 @@ export const mealRecipeRelations = relations(mealRecipe, ({ one }) => ({
     fields: [mealRecipe.recipeId],
     references: [recipe.id],
   }),
+  portions: many(mealRecipePortion),
 }));
+
+export const mealRecipePortionRelations = relations(
+  mealRecipePortion,
+  ({ one }) => ({
+    mealRecipe: one(mealRecipe, {
+      fields: [mealRecipePortion.mealRecipeId],
+      references: [mealRecipe.id],
+    }),
+    meal: one(meal, {
+      fields: [mealRecipePortion.mealId],
+      references: [meal.id],
+    }),
+    ledgerParty: one(ledgerParty, {
+      fields: [mealRecipePortion.ledgerPartyId],
+      references: [ledgerParty.id],
+    }),
+  }),
+);
 
 export const productRelations = relations(product, ({ one, many }) => ({
   ingredient: one(ingredient, {
@@ -2444,6 +2507,7 @@ export const expenseRelations = relations(expense, ({ one, many }) => ({
 export const ledgerPartyRelations = relations(ledgerParty, ({ many }) => ({
   accounts: many(financialAccount),
   attributions: many(expenseAttribution),
+  mealRecipePortions: many(mealRecipePortion),
   outgoingTransfers: many(ledgerTransfer, {
     relationName: "LedgerTransferFromParty",
   }),

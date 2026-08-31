@@ -4,6 +4,8 @@ import type {
 } from "@cubby/schemas/availability";
 import type { MealId } from "@cubby/schemas/identifiers";
 import type {
+  GetMealPreparationsInput,
+  SaveMealRecipePreparationInput,
   mealAddRecipeInput,
   mealDateRange,
   mealRecipeIdInput,
@@ -16,9 +18,11 @@ import { sumBy } from "es-toolkit";
 import type { Database } from "~/server/db";
 import {
   addRecipeToMeal,
+  getMealPreparations,
   getMealsByDateRange,
   getUpcomingMealSummary,
   removeMealRecipeWithEntityId,
+  saveMealRecipePreparation,
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
@@ -45,6 +49,24 @@ export const getUpcomingMealSummaryWorkflow = (
   db: Database,
   input: { from: string; to: string },
 ) => getUpcomingMealSummary(db, input.from, input.to);
+export const getMealPreparationsWorkflow = (
+  db: Database,
+  input: GetMealPreparationsInput,
+) => getMealPreparations(db, input);
+export const saveMealRecipePreparationWorkflow = async (
+  db: Database,
+  input: SaveMealRecipePreparationInput,
+  actorContext: Parameters<typeof saveMealRecipePreparation>[2],
+) => {
+  const saved = await saveMealRecipePreparation(db, input, actorContext);
+  const affectedIds = await mealShortcodes.all(db, saved.affectedMealIds);
+  await Promise.all(
+    affectedIds.map((id) =>
+      refreshMealEmbedding(db, id, "meal.savePreparation"),
+    ),
+  );
+  return saved;
+};
 export const addRecipeToMealWorkflow = async (
   db: Database,
   input: typeof mealAddRecipeInput._output,

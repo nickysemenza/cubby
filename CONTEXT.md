@@ -47,3 +47,15 @@ _Avoid_: debt, settlement balance
 **Credit**:
 A negative Expense that changes actual cost, such as a vendor refund. A person-to-person repayment is a Ledger Transfer.
 _Avoid_: contribution
+
+**Meal preparation**:
+One physical cooking of one Recipe occurrence planned into a Meal. A Meal Recipe occurrence has at most one preparation.
+_Avoid_: inventory batch, recipe version
+
+**Meal portion**:
+A gram amount assigned to one Meal eater from a source Meal preparation at a target Meal. A portion is planned until explicitly confirmed as consumed.
+_Avoid_: serving, inventory decrement
+
+**Meal eater**:
+A member or guest Ledger Party named on a Meal portion. The Household Party is not a Meal eater.
+_Avoid_: household, unknown person
