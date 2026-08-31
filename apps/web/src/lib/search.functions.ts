@@ -14,6 +14,7 @@ import {
 } from "@cubby/schemas/search";
 import { z } from "zod";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -34,7 +35,7 @@ export const search = defineOperationDomain("search", {
   repairDocuments: mutation({
     input: z.undefined(),
     output: repairSearchDocumentsOutSchema,
-    invalidates: [["search"]],
+    invalidates: ripple.search,
   }),
   related: query({
     input: searchQueryInputSchema,
@@ -52,11 +53,11 @@ export const search = defineOperationDomain("search", {
     // `["problems"]` too: the Problems page's "missing embeddings" card is the
     // one surface that starts this, and it used to get that invalidation from
     // the per-card hook rather than from the operation.
-    invalidates: [["search"], ["background-batch"], ["problems"]],
+    invalidates: ripple.searchBackgroundBatchProblems,
   }),
   requestEmbeddingRefresh: mutation({
     input: requestEmbeddingRefreshInputSchema,
     output: requestEmbeddingRefreshOutSchema,
-    invalidates: [["search"], ["background-batch"]],
+    invalidates: ripple.searchBackgroundBatch,
   }),
 });

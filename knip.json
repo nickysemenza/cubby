@@ -3,20 +3,14 @@
   "workspaces": {
     // Root-level gate scripts. They are listed individually rather than as a
     // `scripts/**` glob so knip still reports a genuinely orphaned script.
-    // `mtime.ts` is deliberately absent — it is reached through the
-    // `ensure-*` imports, so knip should keep proving that.
     ".": {
       "entry": [
-        "scripts/check-invalidation-authority.ts!",
-        "scripts/check-sql-safety.ts!",
         "scripts/check-soft-delete-filters.ts!",
         "scripts/check-unsafe-identifiers.unit.test.ts!",
-        "scripts/check-markdown-links.ts!",
         "scripts/check-security-audit.ts!",
         "scripts/ci-scope.ts!",
         "scripts/ci-scope.test.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/ensure-mcp-apps.ts!",
         "scripts/setup-agent-environment.ts!",
         "scripts/entity-literal-generator.ts!",
         "scripts/entity-literals/entities/*.entity.ts!"
@@ -36,9 +30,8 @@
         "src/integrations/**/*.{ts,tsx}!",
         "src/**/*.test.{ts,tsx}!",
         "tests/**/*.{ts,tsx}!",
-        "scripts/analyze-client-bundle.ts!",
-        "scripts/analyze-client-bundle.unit.test.ts!",
-        "scripts/build-sw.mjs!",
+        "scripts/build-sw.ts!",
+        "scripts/build-sw.unit.test.ts!",
         "scripts/ensure-db-extensions.ts!",
         "tooling/**/*.{ts,tsx}!",
         "drizzle.config.ts!",

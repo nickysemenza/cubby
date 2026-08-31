@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/agent";
 import type { z } from "zod";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -15,7 +16,7 @@ export const agent = defineOperationDomain("agent", {
   ask: mutation({
     input: agentAskInputSchema,
     output: agentResultSchema,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
 });
 export const agentStreams = defineOperationDomain("agent", {

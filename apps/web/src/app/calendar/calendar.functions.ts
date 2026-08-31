@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/calendar";
 import { z } from "zod";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -28,6 +29,6 @@ export const calendar = defineOperationDomain("calendar", {
   rotateFeed: mutation({
     input: z.undefined(),
     output: calendarRotateFeedOut,
-    invalidates: [["calendar", "feed"]],
+    invalidates: ripple.calendarFeed,
   }),
 });

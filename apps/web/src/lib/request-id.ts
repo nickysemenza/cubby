@@ -4,7 +4,7 @@
  * Lives in `lib/` rather than `server/tracing.ts` because the browser needs the
  * header name too, and importing anything under `~/server` from client code
  * would drag OTel — and the server router behind it — into the client bundle
- * (see `assertNoServerCodeInClient` in scripts/analyze-client-bundle.ts). Keep
+ * (see `assertNoServerCodeInClient` in scripts/build-sw.ts). Keep
  * this module free of every server import for that reason.
  *
  * The server fills the header via `getRequestId()` in `~/server/tracing`: an

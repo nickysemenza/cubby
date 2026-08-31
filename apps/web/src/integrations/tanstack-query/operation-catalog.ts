@@ -16,6 +16,10 @@ import {
 } from "~/lib/start-operation-observability";
 import { openWorkflowStream } from "~/lib/workflow-stream";
 
+import {
+  EMPTY_INVALIDATION_TAG_SET,
+  type InvalidationTagSet,
+} from "./cache-tags";
 import type {
   CubbyOperationMeta,
   OperationCacheTag,
@@ -76,9 +80,9 @@ export type MutationDefinition<
 > = SharedDefinition<Input, Output> & {
   kind: "mutation";
   invalidates?:
-    | readonly OperationCacheTag[]
+    | InvalidationTagSet
     | {
-        bivarianceHack(input: z.output<Input>): readonly OperationCacheTag[];
+        bivarianceHack(input: z.output<Input>): InvalidationTagSet;
       }["bivarianceHack"];
 };
 
@@ -180,7 +184,7 @@ export const infiniteOperationQueryKey = <Input>(
 
 const invalidationPolicies = new Map<
   StartOperationId,
-  (input: RawOperationValue) => readonly OperationCacheTag[]
+  (input: RawOperationValue) => InvalidationTagSet
 >();
 const NO_POLICY_INPUT = Symbol("no-operation-policy-input");
 
@@ -198,14 +202,14 @@ function isPersistenceResolver<Input extends z.ZodTypeAny>(
 
 function isInvalidationResolver<Input extends z.ZodTypeAny>(
   policy: MutationDefinition<Input, z.ZodTypeAny>["invalidates"],
-): policy is (input: z.output<Input>) => readonly OperationCacheTag[] {
+): policy is (input: z.output<Input>) => InvalidationTagSet {
   return typeof policy === "function";
 }
 
 export const operationInvalidationTags = (
   operation: string | undefined,
   input: RawOperationValue,
-): readonly OperationCacheTag[] | undefined => {
+): InvalidationTagSet | undefined => {
   if (!operation) return undefined;
   const definition = startOperationDefinitionFor(operation);
   return definition
@@ -287,7 +291,7 @@ type MutationDescriptor<
       "mutationFn" | "mutationKey" | "meta"
     >,
   ): UseMutationOptions<z.output<Output>, Error, z.input<Input>>;
-  invalidates(input: z.input<Input>): readonly OperationCacheTag[];
+  invalidates(input: z.input<Input>): InvalidationTagSet;
   forEntity(entity: string): MutationDescriptor<Input, Output>;
   withTransport(
     transport: OperationTransport<z.output<Input>, z.output<Output>>,
@@ -339,8 +343,8 @@ const descriptorMeta = <
   if (entity) meta.entity = entity;
   if (definition.kind === "mutation") {
     meta.invalidates = isInvalidationResolver(definition.invalidates)
-      ? []
-      : (definition.invalidates ?? []);
+      ? EMPTY_INVALIDATION_TAG_SET
+      : (definition.invalidates ?? EMPTY_INVALIDATION_TAG_SET);
     return meta;
   }
 
@@ -472,14 +476,14 @@ function buildMutationDescriptor<
     const input = definition.input.parse(rawInput);
     return isInvalidationResolver(definition.invalidates)
       ? definition.invalidates(input)
-      : (definition.invalidates ?? []);
+      : (definition.invalidates ?? EMPTY_INVALIDATION_TAG_SET);
   };
   invalidationPolicies.set(id, (input) => {
     const parsed = definition.input.safeParse(input);
-    if (!parsed.success) return [];
+    if (!parsed.success) return EMPTY_INVALIDATION_TAG_SET;
     return isInvalidationResolver(definition.invalidates)
       ? definition.invalidates(parsed.data)
-      : (definition.invalidates ?? []);
+      : (definition.invalidates ?? EMPTY_INVALIDATION_TAG_SET);
   });
   return {
     id,

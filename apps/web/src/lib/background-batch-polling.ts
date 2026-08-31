@@ -7,8 +7,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
+import type { InvalidationTagSet } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { backgroundBatch } from "~/lib/background-batch.functions";
 
 /**
@@ -135,7 +135,7 @@ export async function watchBatchesAndInvalidateTags({
 }: {
   queryClient: QueryClient;
   result: unknown;
-  invalidateTags: readonly OperationCacheTag[];
+  invalidateTags: InvalidationTagSet;
   fetchBatchStatus: (batchId: string) => Promise<BackgroundBatchStatus>;
 }): Promise<void> {
   await watchBatches({

@@ -1,6 +1,16 @@
 import type { OperationCacheTag } from "./operation-meta";
 
 /**
+ * An invalidation set can only be minted by this module. Keeping the brand at
+ * the policy boundary prevents a call site from quietly reintroducing an
+ * ad-hoc query-key array instead of naming its cache ripple here.
+ */
+declare const invalidationTagSet: unique symbol;
+export type InvalidationTagSet = readonly OperationCacheTag[] & {
+  readonly [invalidationTagSet]: "InvalidationTagSet";
+};
+
+/**
  * Tag-space translation of the legacy `invalidationFanout` table.
  *
  * The legacy→tag bridge (`operationTagForQueryRoot`) took `key[0]` and
@@ -27,17 +37,32 @@ const ENTITY_FILTER_OPTIONS: OperationCacheTag = ["entity", "filterOptions"];
  * references `queryKeys` handed out, so a group spread into a fan-out that
  * already names one of its tags collapses instead of invalidating the same
  * prefix twice. */
-const rippleTags = (
-  ...groups: readonly (readonly OperationCacheTag[])[]
-): readonly OperationCacheTag[] =>
-  Object.freeze([
+const createRippleTags = (
+  includeEntityFilterOptions: boolean,
+  groups: readonly (readonly OperationCacheTag[])[],
+): InvalidationTagSet => {
+  const tags = Object.freeze([
     ...new Map(
-      [...groups.flat(), ENTITY_FILTER_OPTIONS].map((tag) => [
-        tag.join(" "),
-        tag,
-      ]),
+      [
+        ...groups.flat(),
+        ...(includeEntityFilterOptions ? [ENTITY_FILTER_OPTIONS] : []),
+      ].map((tag) => [tag.join(" "), tag]),
     ).values(),
   ]);
+  // SAFETY: this module is the sole constructor and freezes every tag set before branding it.
+  return tags as InvalidationTagSet;
+};
+
+const rippleTags = (
+  ...groups: readonly (readonly OperationCacheTag[])[]
+): InvalidationTagSet => createRippleTags(true, groups);
+
+const exactRippleTags = (
+  ...groups: readonly (readonly OperationCacheTag[])[]
+): InvalidationTagSet => createRippleTags(false, groups);
+
+/** Stable, explicit no-op policy for mutations that do not write cache-backed state. */
+export const EMPTY_INVALIDATION_TAG_SET = exactRippleTags();
 
 /**
  * The surfaces that re-read whenever a product's price, quantity, or shelf
@@ -118,6 +143,30 @@ const purchaseRipple = rippleTags(
  * rather than a catch-all prefix.
  */
 export const ripple = {
+  none: EMPTY_INVALIDATION_TAG_SET,
+  backgroundBatch: exactRippleTags([["background-batch"]]),
+  search: exactRippleTags([["search"]]),
+  searchBackgroundBatch: exactRippleTags([["search"], ["background-batch"]]),
+  searchBackgroundBatchProblems: exactRippleTags([
+    ["search"],
+    ["background-batch"],
+    ["problems"],
+  ]),
+  problemsSearch: exactRippleTags([["problems"], ["search"]]),
+  recommendations: exactRippleTags([["recommendations"]]),
+  collection: exactRippleTags([["collection"]]),
+  connectedApps: exactRippleTags([["oauth", "connectedApps"]]),
+  orphanedOAuth: exactRippleTags([["oauth", "orphaned"]]),
+  calendarFeed: exactRippleTags([["calendar", "feed"]]),
+  calendar: exactRippleTags([["calendar"]]),
+  relatednessProduct: exactRippleTags([["relatedness", "product"]]),
+  projectOnly: exactRippleTags([["project"]]),
+  productOnly: exactRippleTags([["product"]]),
+  recommendationPlacement: exactRippleTags([["recommendations", "placement"]]),
+  recommendationTagPropagation: exactRippleTags([
+    ["recommendations", "tagPropagation"],
+    ["relatedness", "product"],
+  ]),
   product: productBase,
   /**
    * Product MERGE moves far more than a product write does. A rename touches
@@ -346,7 +395,44 @@ export const ripple = {
   /** Not an entity — the Problems page's own detector cards, resolved by a fix
    * that touched nothing else. */
   problems: rippleTags([["problems"]]),
-} as const satisfies Record<string, readonly OperationCacheTag[]>;
+} as const satisfies Record<string, InvalidationTagSet>;
+
+const problemsRippleCache = new WeakMap<
+  InvalidationTagSet,
+  InvalidationTagSet
+>();
+
+/** Stable union for stream-only Problems actions, which have no mutation meta. */
+export const rippleWithProblems = (
+  tags: InvalidationTagSet,
+): InvalidationTagSet => {
+  const cached = problemsRippleCache.get(tags);
+  if (cached) return cached;
+  const combined = rippleTags(ripple.problems, tags);
+  problemsRippleCache.set(tags, combined);
+  return combined;
+};
+
+/** Union named ripple sets without allowing a call site to construct tags. */
+export const combineRippleTags = (
+  ...tagSets: readonly InvalidationTagSet[]
+): InvalidationTagSet =>
+  tagSets.length === 0
+    ? EMPTY_INVALIDATION_TAG_SET
+    : rippleTags(tagSets[0]!, ...tagSets.slice(1));
+
+const calendarHouseholdRipples = new Map<string, InvalidationTagSet>();
+
+/** Input-keyed policy used where a calendar feed is scoped to one household. */
+export const calendarHouseholdRipple = (
+  household: string,
+): InvalidationTagSet => {
+  const cached = calendarHouseholdRipples.get(household);
+  if (cached) return cached;
+  const tags = exactRippleTags([["calendar", household]]);
+  calendarHouseholdRipples.set(household, tags);
+  return tags;
+};
 
 /**
  * Reverse-check audit (do not re-derive this — read it): does every declared
@@ -374,7 +460,7 @@ export const ripple = {
 /** `entityRipple` hands back the SAME array reference for the same entity, so
  * the result stays safe to pass into a hook dependency array or a memoized
  * config — the contract `invalidatesFor` documented. */
-const fallbackRipples = new Map<string, readonly OperationCacheTag[]>();
+const fallbackRipples = new Map<string, InvalidationTagSet>();
 
 const isDeclaredRipple = (entity: string): entity is keyof typeof ripple =>
   entity in ripple;
@@ -384,7 +470,7 @@ const isDeclaredRipple = (entity: string): entity is keyof typeof ripple =>
  * with no row degrades to its own root plus the dashboard counts rather than
  * silently invalidating nothing.
  */
-export const entityRipple = (entity: string): readonly OperationCacheTag[] => {
+export const entityRipple = (entity: string): InvalidationTagSet => {
   const declared = isDeclaredRipple(entity) ? ripple[entity] : undefined;
   if (declared) return declared;
   const cached = fallbackRipples.get(entity);

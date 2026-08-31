@@ -8,6 +8,7 @@ import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { backgroundBatch } from "~/lib/background-batch.functions";
 import { relatedness } from "~/lib/recommendations.functions";
@@ -141,7 +142,7 @@ export function RelatednessRail({
     if (!refresh.data?.batchId || indexing || !batch.data) return;
     // The worker has reached a terminal state. Re-read the product's status
     // rather than leaving the rail on the request-time readiness snapshot.
-    void invalidateOperationTags(queryClient, [["relatedness", "product"]]);
+    void invalidateOperationTags(queryClient, ripple.relatednessProduct);
   }, [batch.data, indexing, queryClient, refresh.data?.batchId]);
 
   return (

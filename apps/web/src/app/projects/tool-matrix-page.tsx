@@ -66,6 +66,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
@@ -416,7 +417,7 @@ export function ToolMatrixPage({
                 // lifetime use count, which re-ranks trade matches in every
                 // other column too. Only `project.*` — nothing on this page
                 // reads a product query.
-                void invalidateOperationTags(queryClient, [["project"]]);
+                void invalidateOperationTags(queryClient, ripple.projectOnly);
               },
             },
           );

@@ -2,8 +2,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
+import {
+  EMPTY_INVALIDATION_TAG_SET,
+  type InvalidationTagSet,
+} from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { getErrorMessage, type UnparsedError } from "~/lib/error-utils";
 
@@ -14,7 +17,7 @@ import { useBulkStream } from "./useBulkStream";
  * callback below, so an inline `= []` would hand every caller that omits it a
  * fresh reference (and a fresh `mutate`) on every render.
  */
-const NO_INVALIDATE_TAGS: readonly OperationCacheTag[] = [];
+const NO_INVALIDATE_TAGS = EMPTY_INVALIDATION_TAG_SET;
 
 const isSuccessMessageFactory = <Result>(
   value: string | ((data: Result) => string),
@@ -52,7 +55,7 @@ export function useBulkActionMutation<Vars, Result>({
    * rather than taken from a descriptor: the work streams in one held-open
    * request, so there is no `useMutation` for the root cache to read `meta` off.
    */
-  invalidateTags?: readonly OperationCacheTag[];
+  invalidateTags?: InvalidationTagSet;
   /** Side effect after the toast + invalidations. */
   onSuccess?: (data: Result) => void;
   /** Error toast — defaults to `getErrorMessage(err)`. */

@@ -15,6 +15,7 @@ import {
   backgroundStrandedCountOutSchema,
 } from "@cubby/schemas/background-jobs";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -41,12 +42,12 @@ export const backgroundBatch = defineOperationDomain("background-batch", {
   retry: mutation({
     input: backgroundBatchIdInputSchema,
     output: backgroundJobActionOutSchema,
-    invalidates: [["background-batch"]],
+    invalidates: ripple.backgroundBatch,
   }),
   cancel: mutation({
     input: backgroundBatchIdInputSchema,
     output: backgroundJobActionOutSchema,
-    invalidates: [["background-batch"]],
+    invalidates: ripple.backgroundBatch,
   }),
 });
 
@@ -54,12 +55,12 @@ export const backgroundJob = defineOperationDomain("background-job", {
   retry: mutation({
     input: backgroundJobIdInputSchema,
     output: backgroundJobActionOutSchema,
-    invalidates: [["background-batch"]],
+    invalidates: ripple.backgroundBatch,
   }),
   drain: mutation({
     input: backgroundDrainInputSchema,
     output: backgroundDrainOutSchema,
-    invalidates: [["background-batch"]],
+    invalidates: ripple.backgroundBatch,
   }),
   strandedCount: query({
     input: backgroundStrandedCountInputSchema,
@@ -69,6 +70,6 @@ export const backgroundJob = defineOperationDomain("background-job", {
   clearStranded: mutation({
     input: backgroundClearStrandedInputSchema,
     output: backgroundClearStrandedOutSchema,
-    invalidates: [["background-batch"]],
+    invalidates: ripple.backgroundBatch,
   }),
 });

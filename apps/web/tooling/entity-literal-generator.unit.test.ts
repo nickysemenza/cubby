@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   checkEntityArtifacts,
+  expectedBrowserRouteFiles,
+  missingBrowserRouteFiles,
   parseEntityLiteralFiles,
   parseEntityLiterals,
   renderEntityArtifacts,
@@ -212,6 +214,26 @@ describe("literal entity generator", () => {
       "missing: b/entity-literal-contract-cases.gen.ts",
       "extraneous: a/entity-literal-orphan.gen.ts",
     ]);
+  });
+
+  it("requires route modules for every generated browser route", () => {
+    const entities = parseEntityLiterals(`
+      export const ENTITY_LITERALS = [{
+        key: "alpha", route: { basePath: "alphas", detailParam: "id" },
+        descriptor: { auditable: false, searchable: false }, contract: null,
+      }];
+    `);
+    const expected = expectedBrowserRouteFiles(entities);
+
+    expect(expected).toEqual([
+      "apps/web/src/routes/_authenticated/alphas.index.tsx",
+      "apps/web/src/routes/_authenticated/alphas.$id.tsx",
+    ]);
+    expect(
+      missingBrowserRouteFiles(entities, (path) =>
+        path.endsWith(expected[0] ?? ""),
+      ),
+    ).toEqual([expected[1]]);
   });
 
   it("rejects unsupported, duplicate, missing, and stale filter descriptors", () => {

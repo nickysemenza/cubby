@@ -116,7 +116,7 @@ export const recipe = defineOperationDomain("recipe", {
     // legacy call site produced (its two-level key collapsed to the `["recipe"]`
     // root), and a generated flow can restate step order the costing and
     // dependency views read.
-    invalidates: [["recipe"]],
+    invalidates: ripple.recipe,
   }),
   harvestEquivalences: query({
     input: z.undefined(),
@@ -126,12 +126,12 @@ export const recipe = defineOperationDomain("recipe", {
   scrape: mutation({
     input: scrapeRecipeInput,
     output: importRecipeSchema,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
   parseHtml: mutation({
     input: parseRecipeHtmlInput,
     output: importRecipeSchema,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
   upsertCookbook: mutation({
     input: upsertCookbookInput,
@@ -166,7 +166,7 @@ export const recipe = defineOperationDomain("recipe", {
   extractCookbookChunk: mutation({
     input: chunkRequestInput,
     output: chunkResponseOut,
-    invalidates: [],
+    invalidates: ripple.none,
   }),
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { entityRipple, ripple } from "./cache-tags";
 import { matchesTags } from "./operation-cache";
 import type { CubbyOperationMeta, OperationCacheTag } from "./operation-meta";
 import { getContext, type RootMutationSuccessRuntime } from "./root-provider";
@@ -10,10 +11,10 @@ const entityMutationVariablesSchema = z.object({ entity: z.string() });
 const registeredInvalidations = <Variables>(
   operation: string | undefined,
   variables: Variables,
-): readonly OperationCacheTag[] => {
-  if (operation !== "entity.mutate") return [];
+): ReturnType<typeof entityRipple> => {
+  if (operation !== "entity.mutate") return ripple.none;
   const parsed = entityMutationVariablesSchema.safeParse(variables);
-  return parsed.success ? [[parsed.data.entity]] : [];
+  return parsed.success ? entityRipple(parsed.data.entity) : ripple.none;
 };
 
 /**
@@ -58,7 +59,7 @@ describe("root MutationCache invalidation", () => {
   it("uses a descriptor's static tag list", async () => {
     expect(
       await invalidatedTagsFor(
-        { operation: "product.quickCreate", invalidates: [["product"]] },
+        { operation: "product.quickCreate", invalidates: ripple.productOnly },
         { name: "Hammer" },
         [["product", "search"], ["task"], ["meal"]],
       ),
@@ -70,7 +71,7 @@ describe("root MutationCache invalidation", () => {
     // empty array and only the registered policy knows the entity.
     expect(
       await invalidatedTagsFor(
-        { operation: "entity.mutate", invalidates: [] },
+        { operation: "entity.mutate", invalidates: ripple.none },
         { entity: "wish", action: "update", id: "WSH-1", data: {} },
         [["wish"], ["product", "search"]],
       ),
@@ -82,7 +83,7 @@ describe("root MutationCache invalidation", () => {
     // policy alone would resolve the wrong fan-out; `meta` overrides it.
     expect(
       await invalidatedTagsFor(
-        { operation: "entity.mutate", invalidates: [["vendor"]] },
+        { operation: "entity.mutate", invalidates: ripple.vendor },
         { id: "VEN-1", data: { name: "Acme" } },
         [
           ["vendor", "options"],

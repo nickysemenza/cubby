@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1472,6 +1473,30 @@ const browserRoutes = (entity: EntityLiteral) => {
   };
 };
 
+export const expectedBrowserRouteFiles = (
+  entities: readonly EntityLiteral[],
+): readonly string[] =>
+  entities
+    .filter(({ descriptor }) => descriptor.browserRoutes !== false)
+    .flatMap((entity) => {
+      const { basePath, routes } = browserRoutes(entity);
+      const detailParameter = routes.detail.slice(
+        routes.detail.lastIndexOf("/$") + 1,
+      );
+      return [
+        `apps/web/src/routes/_authenticated/${basePath}.index.tsx`,
+        `apps/web/src/routes/_authenticated/${basePath}.${detailParameter}.tsx`,
+      ];
+    });
+
+export const missingBrowserRouteFiles = (
+  entities: readonly EntityLiteral[],
+  exists: (path: string) => boolean = existsSync,
+): readonly string[] =>
+  expectedBrowserRouteFiles(entities).filter(
+    (relativePath) => !exists(resolve(ROOT, relativePath)),
+  );
+
 export const renderEntityArtifacts = (
   entities: readonly EntityLiteral[],
 ): EntityArtifacts[] => {
@@ -2817,6 +2842,12 @@ const main = async () => {
     if (problems.length > 0) {
       throw new LiteralSpecError(
         `Generated entity artifacts are out of date:\n${problems.join("\n")}`,
+      );
+    }
+    const missingRoutes = missingBrowserRouteFiles(entities);
+    if (missingRoutes.length > 0) {
+      throw new LiteralSpecError(
+        `Generated browser routes are missing route modules:\n${missingRoutes.map((path) => `- ${path}`).join("\n")}`,
       );
     }
     return;

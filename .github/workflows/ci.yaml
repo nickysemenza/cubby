@@ -419,9 +419,6 @@ jobs:
             -f head_sha="${{ github.event.pull_request.head.sha }}" \
             -f run_id="${{ github.run_id }}" ||
           echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
-      - name: Build MCP app documents
-        if: matrix.tier == 'node'
-        run: node scripts/ensure-mcp-apps.ts
       - name: Run ${{ matrix.tier }} tests
         shell: bash
         env:

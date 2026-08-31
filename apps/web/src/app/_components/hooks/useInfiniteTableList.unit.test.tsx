@@ -4,6 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 
 import type { TableStateReturn } from "../data-table/useTableState";
@@ -85,7 +86,7 @@ describe("useInfiniteTableList", () => {
     );
 
     await waitFor(() => expect(queryFn).toHaveBeenCalledOnce());
-    await invalidateOperationTags(client, [["expense"]]);
+    await invalidateOperationTags(client, entityRipple("expense"));
     await waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
   });
 
