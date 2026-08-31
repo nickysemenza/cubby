@@ -124,31 +124,84 @@ export const createObservedQuery = (
 ): PgQueryImplementation =>
   queryImplementationFor(observedQuery(queryBridge(run), observe));
 
-/** Instrument one pg client without reproducing its overload restoration. */
-export const observePgClientQueries = <T extends pg.PoolClient>(
-  client: T,
-  observe: (statement: string) => void,
-): T => {
-  client.query = observedQuery(queryBridge(client.query.bind(client)), observe);
-  return client;
+/**
+ * Identify the synchronous `pool.connect(callback)` that pg performs inside
+ * `pool.query()`. The callback may run much later under another async owner,
+ * but the checkout itself always happens before `pool.query()` returns.
+ */
+export const createPoolQueryOwnershipBoundary = () => {
+  let poolQueryDepth = 0;
+  return {
+    runPoolQuery<T>(run: () => T): T {
+      poolQueryDepth += 1;
+      try {
+        return run();
+      } finally {
+        poolQueryDepth -= 1;
+      }
+    },
+    shouldMapConnectedClient: () => poolQueryDepth === 0,
+  };
 };
 
-/** Map every callback- or promise-acquired client from one pg pool. */
-export const mapPgPoolClients = (
-  pool: pg.Pool,
-  mapClient: (client: pg.PoolClient) => pg.PoolClient,
-): pg.Pool => {
+const observePgClientLease = <T extends pg.PoolClient>(
+  client: T,
+  release: (releaseError?: Error | boolean) => void,
+  observe: (statement: string) => void,
+) => {
+  const rawQuery = client.query;
+  let active = true;
+  const observedRelease = (releaseError?: Error | boolean) => {
+    if (active) {
+      client.query = rawQuery;
+      client.release = release;
+      active = false;
+    }
+    release(releaseError);
+  };
+  client.query = observedQuery(queryBridge(rawQuery.bind(client)), observe);
+  client.release = observedRelease;
+  return { client, release: observedRelease };
+};
+
+/**
+ * Observe direct pool calls once at their caller-owned boundary and observe
+ * every query on explicitly checked-out clients. pg's internal pool checkout
+ * stays unwrapped, so its callback dispatch cannot double-count the pool call
+ * or inherit a stale AsyncLocalStorage owner from a previous query.
+ */
+export const observePgPoolAndClientQueries = <T extends pg.Pool>(
+  pool: T,
+  observe: (statement: string) => void,
+): T => {
+  const rawQuery = queryBridge(pool.query.bind(pool));
   const rawConnect = connectBridge(pool.connect.bind(pool));
-  const implementation: PgPoolConnectImplementation = (...args) => {
+  const ownership = createPoolQueryOwnershipBoundary();
+
+  const queryImplementation: PgQueryImplementation = (...args) =>
+    ownership.runPoolQuery(() => {
+      if (isCallbackQuery(args)) return rawQuery(...args);
+      if (isStreamQuery(args)) return rawQuery(...args);
+      return rawQuery(...args);
+    });
+  pool.query = observedQuery(queryBridge(queryImplementation), observe);
+
+  const connectImplementation: PgPoolConnectImplementation = (...args) => {
+    const mapClient = ownership.shouldMapConnectedClient();
     const callback = args[0];
     if (callback) {
-      return rawConnect((error, client, release) =>
-        callback(error, client ? mapClient(client) : client, release),
-      );
+      return rawConnect((error, client, release) => {
+        if (!client || !mapClient) return callback(error, client, release);
+        const observed = observePgClientLease(client, release, observe);
+        return callback(error, observed.client, observed.release);
+      });
     }
-    return rawConnect().then(mapClient);
+    return rawConnect().then((client) => {
+      if (!mapClient) return client;
+      return observePgClientLease(client, client.release, observe).client;
+    });
   };
-  pool.connect = connectBridge(implementation);
+  pool.connect = connectBridge(connectImplementation);
   return pool;
 };
 
