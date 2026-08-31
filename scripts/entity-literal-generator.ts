@@ -1785,9 +1785,10 @@ export const renderEntityArtifacts = (
   const relationCommandVariant = ({
     entity,
     relation,
+    target,
     itemSchema,
   }: RelationMutation) =>
-    `z.object({action:z.enum(["attach","detach"]),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:z.string().min(1),items:z.array(${itemSchema.export}).min(1).max(500)}).strict()`;
+    `z.object({action:z.enum(["attach","detach"]),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),items:z.array(${itemSchema.export}.extend({id:shortcodeSchema(${JSON.stringify(target)})})).min(1).max(500)}).strict()`;
   const relationCommandSchema = (
     audience: "browser" | "mcp" | null,
   ): string => {
@@ -1813,10 +1814,27 @@ export const renderEntityArtifacts = (
   const mcpRelationMutations = relationMutations.filter(({ audiences }) =>
     audiences.includes("mcp"),
   );
+  const mcpParentIdSchemas = [
+    ...new Set(
+      mcpRelationMutations.map(
+        ({ entity }) => `shortcodeSchema(${JSON.stringify(entity)})`,
+      ),
+    ),
+  ];
+  const mcpItemSchemas = [
+    ...new Set(
+      mcpRelationMutations.map(
+        ({ itemSchema, target }) =>
+          `${itemSchema.export}.extend({id:shortcodeSchema(${JSON.stringify(target)})})`,
+      ),
+    ),
+  ];
+  const schemaUnion = (schemas: readonly string[]) =>
+    schemas.length === 1 ? schemas[0] : `z.union([${schemas.join(",")}])`;
   const mcpPreviewInputSchema =
     mcpRelationMutations.length === 0
       ? "z.never()"
-      : `z.object({action:z.enum(["attach","detach"]),entity:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ entity }) => entity))])}),relation:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ relation }) => relation))])}),id:z.string().min(1),items:z.array(z.union([${[...new Set(mcpRelationMutations.map(({ itemSchema }) => itemSchema.export))].join(",")}])).min(1).max(500)}).strict().superRefine((input,ctx)=>{const result=generatedMcpEntityRelationCommandSchema.safeParse(input);if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
+      : `z.object({action:z.enum(["attach","detach"]),entity:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ entity }) => entity))])}),relation:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ relation }) => relation))])}),id:${schemaUnion(mcpParentIdSchemas)},items:z.array(${schemaUnion(mcpItemSchemas)}).min(1).max(500)}).strict().superRefine((input,ctx)=>{const result=generatedMcpEntityRelationCommandSchema.safeParse(input);if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
   const relationAdapterImports = [
     ...new Map(
       relationMutations.map(({ adapter }) => [
@@ -2878,6 +2896,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         'import { relationMutationOut } from "@cubby/schemas/common";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
+        'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
         `${relationSchemaImports}\n` +
         'import { z } from "zod";\n\n' +
         "// Generated relation command schemas stay correlated by entity and relation.\n" +

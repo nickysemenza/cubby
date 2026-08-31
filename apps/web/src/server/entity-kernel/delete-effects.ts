@@ -19,6 +19,26 @@ const UNCHANGED_ON_SUCCESS = new Set<OperationDisposition["effect"]>([
   "preserve",
 ]);
 
+export type AffectedDeleteEdge = {
+  edge: string;
+  effect: OperationDisposition["effect"];
+  changed: number;
+};
+
+/** Convert the before/after snapshots into the public, exact delete report. */
+export const calculateAffectedDeleteEdges = (
+  policy: Record<string, OperationDisposition>,
+  before: ReadonlyMap<string, number>,
+  after: ReadonlyMap<string, number>,
+): AffectedDeleteEdge[] =>
+  Object.entries(policy).map(([edge, disposition]) => ({
+    edge,
+    effect: disposition.effect,
+    changed: UNCHANGED_ON_SUCCESS.has(disposition.effect)
+      ? 0
+      : Math.max(0, (before.get(edge) ?? 0) - (after.get(edge) ?? 0)),
+  }));
+
 /**
  * Measure the concrete incoming rows a successful delete changed.
  *
@@ -39,11 +59,7 @@ export async function executeDeleteWithEffects<
   execute: (transactionDb: Database) => Promise<TResult>,
 ): Promise<{
   result: TResult;
-  affectedEdges: Array<{
-    edge: string;
-    effect: OperationDisposition["effect"];
-    changed: number;
-  }>;
+  affectedEdges: AffectedDeleteEdge[];
 }> {
   const transactionDatabase = (tx: DrizzleTransaction) => {
     // SAFETY: the repository-only Database facade exposes the same schema-bound
@@ -97,13 +113,7 @@ export async function executeDeleteWithEffects<
       const after = await snapshot(transactionDb, ids);
       return {
         result,
-        affectedEdges: entries.map(([edge, disposition]) => ({
-          edge,
-          effect: disposition.effect,
-          changed: UNCHANGED_ON_SUCCESS.has(disposition.effect)
-            ? 0
-            : Math.max(0, (before.get(edge) ?? 0) - (after.get(edge) ?? 0)),
-        })),
+        affectedEdges: calculateAffectedDeleteEdges(policy, before, after),
       };
     },
     { isolationLevel: "repeatable read" },

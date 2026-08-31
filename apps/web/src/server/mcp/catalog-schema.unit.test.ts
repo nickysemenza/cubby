@@ -198,7 +198,6 @@ describe("MCP catalog schemas", () => {
     const uuidExceptions = new Set([
       "entity.command.id",
       "entity.command.ids",
-      "entity.command.items[].id",
       "entity.command.data.externalIds[].id",
       "entity.command.data.sections[].id",
       "entity.command.data.sections[].ingredients[].id",
