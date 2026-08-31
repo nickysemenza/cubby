@@ -1592,6 +1592,26 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "dependency-cycles",
+    label: "Dependency cycles",
+    select: (p) => p.dependencyCycles,
+    problemKeys: ["dependencyCycles"],
+    icon: Network,
+    groupBy: (items) =>
+      groupBy(items, (cycle) =>
+        cycle.entity === "project" ? "Projects" : "Tasks",
+      ),
+    renderItem: (cycle) => ({
+      key: `${cycle.entity}-${cycle.path.join("-")}`,
+      title: cycle.description,
+      details: [
+        <div key="path" className="font-mono text-xs text-muted-foreground">
+          {cycle.path.join(" → ")}
+        </div>,
+      ],
+    }),
+  }),
+  section({
     id: "tracker",
     label: "Tracker",
     // Merge the seven household-tracker attention rules (the same items

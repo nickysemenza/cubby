@@ -14,11 +14,11 @@ export default literalEntity({
       key: "cover",
       label: "Cover image",
       target: "image",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Cookbook.coverImageId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Cookbook.coverImageId", direction: "incoming" }],
       },
@@ -27,11 +27,11 @@ export default literalEntity({
       key: "product",
       label: "Product",
       target: "product",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Cookbook.productId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Cookbook.productId", direction: "incoming" }],
       },
@@ -46,6 +46,7 @@ export default literalEntity({
     delete: { mode: "soft", bulk: false },
     bulkUpdate: null,
     merge: false,
+    operationOwners: { delete: "workflow", merge: null },
     mcp: ["list"],
   },
   extensions: {
@@ -79,14 +80,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/cookbook",
-          export: "COOKBOOK_DELETE_EDGE_POLICY",
-        },
-        runtime: null,
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

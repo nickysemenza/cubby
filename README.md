@@ -222,38 +222,12 @@ replaced with `RCP-XXXX`. The generated registry lives
 in `packages/shared/src/shortcode.ts`; resolution goes through
 `apps/web/src/server/repo/shortcode-resolver.ts` and nowhere else.
 
-```mermaid
-erDiagram
-    Recipe ||--o{ RecipeSection : "has sections"
-    RecipeSection ||--o{ RecipeSectionIngredient : "has ingredients"
-    Ingredient ||--o{ RecipeSectionIngredient : "used in"
-    Recipe ||--o| Ingredient : "can be ingredient"
-
-    Product ||--o{ InventoryEntry : "inventoried as"
-    Product }o--|| Ingredient : "points to"
-
-    Location ||--o{ InventoryEntry : "contains"
-
-    Image ||--o{ Product : "linked to"
-    Image ||--o{ Location : "linked to"
-    Image ||--o{ Recipe : "linked to"
-
-    Product }o--o| usda_food : "linked by fdc_id/barcode"
-
-    Project ||--o{ Task : "has"
-    Project ||--o{ Expense : "has"
-    Project }o--o{ Project : "blocked by"
-    Task }o--o{ Task : "blocked by"
-    Image ||--o{ Project : "linked to"
-
-    Vendor ||--o{ Purchase : "issued"
-    Purchase ||--o{ Expense : "has expenses"
-    FinancialAccount ||--o{ FinancialTransaction : "records activity"
-    FinancialTransaction ||--o{ FinancialTransactionAllocation : "is allocated as"
-    Purchase ||--o{ FinancialTransactionAllocation : "is settled by"
-    Image ||--o{ Purchase : "documents"
-    Product ||--o{ Expense : "bought as"
-```
+The complete relationship graph is compiled from the entity literals rather
+than duplicated here. The in-app `/entities?tab=integrity` inspector renders
+logical cardinality, inverse paths, and named provenance alongside physical FK
+edges and operation-specific delete/merge behavior. The documentation diagram
+uses the same generated manifest for its bounded core view; see
+[the entity compiler contract](docs/entities.md#relations-deletion-and-merge).
 
 ## 🛠️ Development Setup
 
@@ -373,7 +347,6 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run lint:fix` | Full-tree Oxlint auto-fix |
 | `pnpm run format:check` | Full-tree Oxfmt check |
 | `pnpm run format` | Full-tree Oxfmt write |
-| `pnpm run check:staged` | Oxlint/Oxfmt checks for staged files (used by Husky) |
 | `pnpm run test` | Docker-free Vitest unit/UI plus portable PGlite database tests |
 | `pnpm run test:pglite` | PGlite schema contract plus portable repository integration tests |
 | `pnpm run test:integration:postgres` | Full repository integration suite on PostgreSQL/IntegreSQL (requires Docker) |
@@ -528,8 +501,8 @@ no React, no Tailwind). It doesn't deploy on its own: it builds to
 self-contained HTML that [server/mcp/apps/](apps/web/src/server/mcp/apps/)
 inlines and serves as `ui://` resources, driven off the manifest in
 [src/metadata.ts](apps/mcp-apps/src/metadata.ts) — the one place an app is
-declared. `scripts/ensure-mcp-apps.ts` gates apps/web's `dev`, `test`, and
-`build:cf`, rebuilding only when a source is newer than the bundles.
+declared. The package build's `--if-stale` mode gates apps/web's `dev`, `test`,
+and `build:cf`, rebuilding only when a source is newer than the bundles.
 
 `pnpm --filter @cubby/mcp-apps dev` runs a local host harness that drives the
 real AppBridge protocol against fixture data — no tunnel or connector needed,

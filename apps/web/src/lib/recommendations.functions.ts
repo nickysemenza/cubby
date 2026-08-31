@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/recommendations";
 import { relatednessOutSchema } from "@cubby/schemas/relatedness";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -53,16 +54,16 @@ export const recommendations = defineOperationDomain("recommendations", {
   dismissDuplicateProduct: mutation({
     input: dismissDuplicateProductRecommendationInput,
     output: recommendationOkSchema,
-    invalidates: [["recommendations"]],
+    invalidates: ripple.recommendations,
   }),
   dismissTagPropagation: mutation({
     input: dismissTagPropagationInput,
     output: recommendationOkSchema,
-    invalidates: [["recommendations"]],
+    invalidates: ripple.recommendations,
   }),
   dismissProduct: mutation({
     input: dismissProductRecommendationInput,
     output: recommendationOkSchema,
-    invalidates: [["recommendations"]],
+    invalidates: ripple.recommendations,
   }),
 });

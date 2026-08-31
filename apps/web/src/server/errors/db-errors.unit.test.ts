@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isUniqueViolation, runWithConflictRecovery } from "./db-errors";
+import {
+  isUniqueViolation,
+  runWithConflictRecovery,
+  translateDatabaseError,
+} from "./db-errors";
 
 // Shape of the error drizzle surfaces: the raw pg error (code 23505 +
 // constraint) is nested in the `cause` chain behind a "Failed query: …" wrapper.
@@ -77,6 +81,35 @@ describe("runWithConflictRecovery", () => {
       ),
     ).rejects.toMatchObject({
       cause: { constraint: "Product_name_manufacturer_key" },
+    });
+  });
+});
+
+describe("translateDatabaseError", () => {
+  const checkViolation = (constraint: string) =>
+    Object.assign(new Error("Failed query: insert into ..."), {
+      cause: Object.assign(new Error("check violation"), {
+        code: "23514",
+        constraint,
+        table: constraint.startsWith("Location")
+          ? "Location"
+          : "TaskDependency",
+      }),
+    });
+
+  it("maps dependency self-edge checks to SELF_DEPENDENCY", () => {
+    expect(
+      translateDatabaseError(checkViolation("TaskDependency_no_self_check")),
+    ).toMatchObject({ reason: "SELF_DEPENDENCY" });
+  });
+
+  it("gives the Location identity check a stable explanation", () => {
+    expect(
+      translateDatabaseError(checkViolation("Location_productId_type_check")),
+    ).toMatchObject({
+      reason: "CONSTRAINT_VIOLATION",
+      message:
+        "A location can have either a product identity or a type, not both.",
     });
   });
 });

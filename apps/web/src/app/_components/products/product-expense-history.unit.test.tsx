@@ -59,7 +59,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   componentCount: 0,
   food: null,
   recipeUsages: [],
-  cookbook: null,
+  cookbooks: [],
   quantityLedger: {
     acquiredUnits: 0,
     exitedUnits: 0,

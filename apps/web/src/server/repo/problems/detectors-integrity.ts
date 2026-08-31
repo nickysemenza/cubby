@@ -32,15 +32,9 @@
  * behavior as a bug, so it is skipped entirely rather than reported and
  * explained away.
  *
- * **Why `Location.parentId` is audited despite having no DB-level FK.** It is
- * `unconstrained: true` in `INCOMING_EDGES` — the parent/child location tree
- * is walked via app code and `relations()`, not an enforced constraint — but
- * that only means Postgres won't stop a dangling pointer from being written;
- * it says nothing about whether one *should* exist. The edge's `liveness` is
- * still `must-target-live` (a sub-location naming a soft-deleted parent is
- * exactly the same class of bug as any FK-backed edge), so it stays in this
- * audit. `unconstrained` and `liveness` are orthogonal: one is about storage
- * enforcement, the other about domain correctness.
+ * `Location.parentId` is included like every other self-FK. The constraint
+ * prevents a missing parent, while this audit catches the separate liveness
+ * defect of a live child still pointing at a soft-deleted parent.
  *
  * **Why raw SQL instead of the Drizzle query builder.** Three edges are
  * self-referential (`Location.parentId`, `Project.parentProjectId`,
@@ -57,19 +51,25 @@
  * both problems and keeps every branch visually inspectable.
  */
 
-import type { Entity } from "@cubby/schemas/entity";
+import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 import type {
   EdgeRole,
   ReferentialLivenessViolation,
 } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import type { EntityRef } from "@cubby/schemas/identifiers";
+import { parseEntityRef, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ProblemsFast } from "@cubby/schemas/problems";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
+import { projectDependency, taskDependency } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { findDirectedDependencyCycles } from "~/server/repo/database-helpers/dependency-graph";
+import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
 
 /** Cap on returned rows per edge — a pathological backlog can't blow up the response. */
 const ROW_CAP = 50;
@@ -288,8 +288,7 @@ export const countReferentialLivenessViolations = async (
  * Every live row whose FK points at a soft-deleted target, across all 57
  * `must-target-live` incoming edges. See the file-level doc comment for the
  * invariant, why it's a regression guard, and the two audit exemptions
- * (`Ingredient.recipeId` skipped entirely, `Location.parentId` included
- * despite being unconstrained).
+ * (`Ingredient.recipeId` skipped entirely).
  *
  * Two round trips total, not one per edge: one `UNION ALL` for the (capped)
  * violation rows, one `UNION ALL` for the true per-edge count, run
@@ -346,3 +345,74 @@ export const findReferentialLivenessViolations = async (
     };
   });
 };
+
+type DependencyCycle = ProblemsFast["dependencyCycles"][number];
+
+async function dependencyCyclePaths(
+  db: Database,
+  entity: "project" | "task",
+): Promise<string[][]> {
+  const rows =
+    entity === "project"
+      ? await getDb(db)
+          .select({
+            from: projectDependency.projectId,
+            to: projectDependency.blockedByProjectId,
+          })
+          .from(projectDependency)
+      : await getDb(db)
+          .select({
+            from: taskDependency.taskId,
+            to: taskDependency.blockedByTaskId,
+          })
+          .from(taskDependency);
+  return findDirectedDependencyCycles(
+    rows.map((row) => ({ from: String(row.from), to: String(row.to) })),
+  );
+}
+
+/** Out-of-band cycles that bypassed the locked repository replacement path. */
+export async function findDependencyCycles(
+  db: Database,
+): Promise<DependencyCycle[]> {
+  const [projectPaths, taskPaths] = await Promise.all([
+    dependencyCyclePaths(db, "project"),
+    dependencyCyclePaths(db, "task"),
+  ]);
+  const families = [
+    ["project", projectPaths],
+    ["task", taskPaths],
+  ] as const;
+  const refs: EntityRef[] = families.flatMap(([entity, paths]) =>
+    paths.flatMap((path) => path.map((id) => parseEntityRef(entity, id))),
+  );
+  const shortcodes = await lookupShortcodes(db, refs);
+
+  return families.flatMap(([entity, paths]) =>
+    paths.map((path): DependencyCycle => {
+      const publicPath = path.map((id) => {
+        const code = shortcodes.get(entityRefKey(entity, id));
+        if (!code) {
+          throw new Error(
+            `${entity} dependency cycle references a row with no shortcode: ${id}`,
+          );
+        }
+        return parseShortcodeFor(entity, code);
+      });
+      const label = entity === "project" ? "Project" : "Task";
+      return {
+        entity,
+        path: publicPath,
+        description: `${label} dependency cycle: ${publicPath.join(" → ")}.`,
+      };
+    }),
+  );
+}
+
+export async function countDependencyCycles(db: Database): Promise<number> {
+  const [projectPaths, taskPaths] = await Promise.all([
+    dependencyCyclePaths(db, "project"),
+    dependencyCyclePaths(db, "task"),
+  ]);
+  return projectPaths.length + taskPaths.length;
+}

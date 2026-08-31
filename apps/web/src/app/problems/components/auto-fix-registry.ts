@@ -5,8 +5,10 @@ import pluralize from "pluralize";
 
 import { location } from "~/app/locations/location.functions";
 import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
+import {
+  ripple,
+  type InvalidationTagSet,
+} from "~/integrations/tanstack-query/cache-tags";
 import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import { collectBulkStream } from "~/lib/bulk-progress";
 import { imageUpload } from "~/lib/image.functions";
@@ -64,7 +66,7 @@ export type AutoFixTask = {
    * invalidation across every task it ran, and two of the six are held-open
    * streams with no `useMutation` to hang `meta` on.
    */
-  invalidateTags?: readonly OperationCacheTag[];
+  invalidateTags?: InvalidationTagSet;
 };
 
 /**
@@ -100,7 +102,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     count: (problems) => problems.orphanedEntityEmbeddings.length,
     // Its own section, uncapped — every item is on the page.
     listedCount: (problems) => problems.orphanedEntityEmbeddings.length,
-    invalidateTags: [["search"]],
+    invalidateTags: ripple.search,
     // Omitting `ids` cleans every orphan — the server already supports it.
     run: async () => {
       const r = await problems.cleanupOrphanedEmbeddings.call({});
@@ -160,7 +162,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // The section is a capped sample, so only what's listed counts toward the
     // total — a model swap can make the true figure dwarf it.
     listedCount: (problems) => problems.entitiesMissingEmbeddings.length,
-    invalidateTags: [["search"]],
+    invalidateTags: ripple.search,
     // Called unbounded on purpose: `limit` selects an arbitrary per-type window
     // rather than a needs-work one, so a bounded call can enqueue nothing useful
     // and never converge.

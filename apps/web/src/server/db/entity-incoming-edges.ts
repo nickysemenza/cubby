@@ -28,8 +28,7 @@
  *      (the assertion that would have caught `PurchaseImage.imageId` missing
  *      from `image`'s edges — the bug this file exists to prevent recurring);
  *   2. every edge declared here that introspection does NOT find is marked
- *      `unconstrained` (catches typos/renames — Location.parentId is the one
- *      legitimate case, a logical self-reference with no DB-level FK); and
+ *      `unconstrained` (catches typos/renames); and
  *   3. every FK target that is neither an entity nor in the test's
  *      `NON_ENTITY_FK_TARGETS` allowlist fails, forcing a one-line
  *      justification for stepping outside the entity graph.
@@ -88,10 +87,9 @@ export interface IncomingEdge {
   column: AnyColumn;
   /**
    * True when the relationship is real (modeled in `relations()`, walked by
-   * app code) but carries no DB-level FK constraint — `Location.parentId` is
-   * the one case today (see its column definition in schema.ts: no
-   * `.references()`). Predicates that need to walk the relationship still can;
-   * they just can't rely on the database to enforce or cascade it.
+   * app code) but carries no DB-level FK constraint. Predicates that need to
+   * walk the relationship still can; they just can't rely on the database to
+   * enforce or cascade it.
    */
   unconstrained?: true;
   /** Free-text justification, for an edge whose key alone doesn't explain itself. */
@@ -180,14 +178,7 @@ export const INCOMING_EDGES = {
   location: edges({
     "InventoryEntry.locationId": { column: inventoryEntry.locationId },
     "LocationImage.locationId": { column: locationImage.locationId },
-    // Sub-locations. No `.references()` on `location.parentId` in schema.ts —
-    // deliberately unconstrained (see the column's own comment there); the
-    // logical parent/child tree is walked via app code and `relations()`, not
-    // a DB-enforced FK.
-    "Location.parentId": {
-      column: location.parentId,
-      unconstrained: true,
-    },
+    "Location.parentId": { column: location.parentId },
   }),
   project: edges({
     "Project.parentProjectId": { column: project.parentProjectId },

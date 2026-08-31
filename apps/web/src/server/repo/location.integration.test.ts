@@ -119,6 +119,99 @@ describe("findOrCreateLocationByName", () => {
   });
 });
 
+describe("location storage integrity", () => {
+  const ctx = withTestDb();
+
+  it("enforces the parent foreign key while keeping Home parentless", async () => {
+    const home = await getDb(ctx.db).query.location.findFirst({
+      where: eq(location.id, TEST_HOME_ID),
+      columns: { parentId: true },
+    });
+    expect(home?.parentId).toBeNull();
+
+    await expect(
+      getDb(ctx.db)
+        .insert(location)
+        .values({
+          name: "Orphaned raw location",
+          shortcode: parseShortcodeFor("location", "LOC-2345"),
+          parentId: parseEntityId(
+            "location",
+            "00000000-0000-4000-8000-000000000099",
+          ),
+        }),
+    ).rejects.toMatchObject({ cause: { code: "23503" } });
+  });
+
+  it("normalizes product and type as alternatives while preserving both-null", async () => {
+    const identity = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Location identity product" }),
+      ctx.actor,
+    );
+    const productBacked = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Product-backed location",
+        type: "box",
+        productId: identity.id,
+      }),
+      ctx.actor,
+    );
+    expect(productBacked).toMatchObject({
+      type: null,
+      product: { id: identity.id },
+    });
+
+    const productBackedId = parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, productBacked.id, "location"))!,
+    );
+    const { location: typed } = await updateLocation(
+      ctx.db,
+      productBackedId,
+      { type: "box" },
+      ctx.actor,
+    );
+    expect(typed).toMatchObject({ type: "box", product: null });
+
+    const { location: unclassified } = await updateLocation(
+      ctx.db,
+      productBackedId,
+      { type: null, productId: null },
+      ctx.actor,
+    );
+    expect(unclassified).toMatchObject({ type: null, product: null });
+  });
+
+  it("backstops product/type exclusivity with a database CHECK", async () => {
+    const identity = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Raw location identity product" }),
+      ctx.actor,
+    );
+    const productBacked = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Raw product-backed location",
+        productId: identity.id,
+      }),
+      ctx.actor,
+    );
+    const id = parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, productBacked.id, "location"))!,
+    );
+
+    await expect(
+      getDb(ctx.db)
+        .update(location)
+        .set({ type: "box" })
+        .where(eq(location.id, id)),
+    ).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+});
+
 describe("getLocationValuationSummary", () => {
   const ctx = withTestDb();
 

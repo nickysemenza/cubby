@@ -944,12 +944,8 @@ export const productWithIngredientAndInventoryAndMappingsOut = z.object({
    * would contradict the Kit Components table while it loaded.
    */
   componentCount: z.number().int().nonnegative(),
-  /**
-   * The cookbook whose physical copy this product is, when it has one. Embedded
-   * on the detail read for the same reason `servingAsLocations` is — one query,
-   * so the section can't contradict the page around it mid-load.
-   */
-  cookbook: productCookbookRefOut.nullable(),
+  /** Live cookbooks whose physical copies are this product. */
+  cookbooks: z.array(productCookbookRefOut),
   ...productQuantityFields,
 });
 
@@ -1109,12 +1105,8 @@ export const productWithFoodOut = z.object({
   componentCount: z.number().int().nonnegative(),
   food: foodSummary.nullable(),
   recipeUsages: z.array(recipeUsageOut),
-  /**
-   * The cookbook whose physical copy this product is, when it has one. Embedded
-   * on the detail read for the same reason `servingAsLocations` is — one query,
-   * so the section can't contradict the page around it mid-load.
-   */
-  cookbook: productCookbookRefOut.nullable(),
+  /** Live cookbooks whose physical copies are this product. */
+  cookbooks: z.array(productCookbookRefOut),
   ...productQuantityFields,
 });
 export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;

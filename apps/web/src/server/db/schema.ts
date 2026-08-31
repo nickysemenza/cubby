@@ -798,7 +798,9 @@ export const location = pgTable(
     ...baseTimestamps(),
     ...softDeletedAt(),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
-    parentId: uuid("parentId").$type<LocationId>(),
+    parentId: uuid("parentId")
+      .$type<LocationId>()
+      .references((): AnyPgColumn => location.id),
     // The SKU this location physically IS — "this bin is a Milwaukee
     // 48-22-8443". Many locations to one Product: the pooled model has no
     // per-unit identity, and only the count matters. Nullable because rooms,
@@ -840,6 +842,10 @@ export const location = pgTable(
     index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
+    check(
+      "Location_productId_type_check",
+      sql`${table.productId} IS NULL OR ${table.type} IS NULL`,
+    ),
   ],
 );
 
@@ -1205,6 +1211,10 @@ export const projectDependency = pgTable(
       table.blockedByProjectId,
     ),
     index("ProjectDependency_blockedBy_idx").on(table.blockedByProjectId),
+    check(
+      "ProjectDependency_no_self_check",
+      sql`${table.projectId} <> ${table.blockedByProjectId}`,
+    ),
   ],
 );
 
@@ -1344,6 +1354,10 @@ export const taskDependency = pgTable(
       table.blockedByTaskId,
     ),
     index("TaskDependency_blockedBy_idx").on(table.blockedByTaskId),
+    check(
+      "TaskDependency_no_self_check",
+      sql`${table.taskId} <> ${table.blockedByTaskId}`,
+    ),
   ],
 );
 
@@ -2701,12 +2715,9 @@ export const mcpToolCall = pgTable(
     outcome: text("outcome").notNull().$type<McpToolCallOutcome>(),
     registeredAtCall: boolean("registeredAtCall").notNull(),
     surface: text("surface").notNull().$type<McpToolCallSurface>(),
-    // Nullable: only derivable for CRUD-shaped tools (see mcpToolName inversion
-    // in scripts/backfill-mcp-tool-call-entity.ts) plus attach/detach/merge,
-    // which read it off an argument at the call site instead. Every other tool
-    // family (find_*, patch_*, verify_*, statement/usda/problems workflows)
-    // has no single entity to attribute a call to, so this stays null for them
-    // rather than guessing.
+    // Nullable: some tools span entities or have no entity at all, and old
+    // payload-free events remain unattributable when the tool name alone is
+    // ambiguous. Preserve null rather than guessing historical ownership.
     entity: text("entity").$type<Entity>(),
     release: text("release").notNull(),
     occurredAt: timestamp("occurredAt", { mode: "date" }).notNull(),

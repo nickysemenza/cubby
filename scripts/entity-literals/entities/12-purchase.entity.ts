@@ -273,11 +273,11 @@ export default literalEntity({
       key: "vendor",
       label: "Vendor",
       target: "vendor",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Purchase.vendorId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Purchase.vendorId", direction: "incoming" }],
       },
@@ -286,6 +286,7 @@ export default literalEntity({
       key: "images",
       label: "Images",
       target: "image",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -293,7 +294,6 @@ export default literalEntity({
           { edge: "PurchaseImage.imageId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "PurchaseImage.imageId", direction: "incoming" },
@@ -305,6 +305,7 @@ export default literalEntity({
       key: "financial-transactions",
       label: "Financial transactions",
       target: "financialTransaction",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -318,7 +319,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -336,11 +336,11 @@ export default literalEntity({
       key: "expenses",
       label: "Expenses",
       target: "expense",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Expense.purchaseId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Expense.purchaseId", direction: "outgoing" }],
       },
@@ -349,6 +349,8 @@ export default literalEntity({
       key: "products",
       label: "Products",
       target: "product",
+      cardinality: "many",
+      sourceKey: "expense",
       provenance: {
         kind: "local-path",
         steps: [
@@ -356,18 +358,49 @@ export default literalEntity({
           { edge: "Expense.productId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.productId", direction: "incoming" },
           { edge: "Expense.purchaseId", direction: "outgoing" },
         ],
       },
+      sources: [
+        {
+          key: "explicit",
+          label: "Explicit product link",
+          provenance: {
+            kind: "local-path",
+            steps: [
+              { edge: "PurchaseProduct.purchaseId", direction: "incoming" },
+              { edge: "PurchaseProduct.productId", direction: "outgoing" },
+            ],
+          },
+          inverse: {
+            steps: [
+              { edge: "PurchaseProduct.productId", direction: "incoming" },
+              { edge: "PurchaseProduct.purchaseId", direction: "outgoing" },
+            ],
+          },
+        },
+      ],
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "entityRelationReferenceItemSchema",
+        },
+        adapter: {
+          module: "~/server/repo/purchase-products",
+          export: "purchaseProductsRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
     },
     {
       key: "projects",
       label: "Projects",
       target: "project",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -375,7 +408,6 @@ export default literalEntity({
           { edge: "Expense.projectId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.projectId", direction: "incoming" },
@@ -393,7 +425,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: true,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: "kernel" },
+    mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
   },
   extensions: {
     countFilter: null,
@@ -427,26 +460,6 @@ export default literalEntity({
         dependentRefresh: {
           module: "~/server/services/mutation-side-effects",
           export: "runMutationSideEffects",
-        },
-      },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/purchase",
-          export: "PURCHASE_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/purchase.entity-adapter",
-          export: "purchaseEntityAdapter",
-        },
-      },
-      relationMutation: {
-        attach: {
-          module: "~/server/repo/purchase-products",
-          export: "attachPurchaseProducts",
-        },
-        detach: {
-          module: "~/server/repo/purchase-products",
-          export: "detachPurchaseProducts",
         },
       },
     },

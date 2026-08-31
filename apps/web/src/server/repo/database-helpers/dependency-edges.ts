@@ -13,14 +13,15 @@ import {
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import type { InferInsertModel } from "drizzle-orm";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 
-import { getDb } from "./core";
+import { getDb, unwrapDb } from "./core";
+import { findDirectedDependencyCycles } from "./dependency-graph";
 import { notDeleted } from "./query";
 
 /**
@@ -29,13 +30,16 @@ import { notDeleted } from "./query";
  *
  *   1. Dedupe `newIds`.
  *   2. Reject a self-reference (`id` blocked by itself) — BAD_REQUEST.
- *   3. Verify every id is a live row in `opts.entityTable` — throws
+ *   3. Serialize writers in the Project or Task family with a transaction
+ *      advisory lock.
+ *   4. Verify every id is a live row in `opts.entityTable` — throws
  *      `ENTITY_NOT_FOUND_REASON[opts.entity]` listing the missing ids if not.
- *   4. Delete `id`'s existing edges, then insert the (deduped) new set.
+ *   5. Reject any cycle in the whole resulting graph — BAD_REQUEST.
+ *   6. Delete `id`'s existing edges, then insert the (deduped) new set.
  */
 export async function replaceDependencyEdges<
   TEdge extends AnyPgTable,
-  E extends ShortcodeEntity,
+  E extends Extract<ShortcodeEntity, "project" | "task">,
 >(
   tx: DrizzleTransaction,
   edgeTable: TEdge,
@@ -79,6 +83,16 @@ export async function replaceDependencyEdges<
     );
   }
 
+  // Every writer in one dependency family takes the same transaction-scoped
+  // lock before reading the graph. Row locks cannot serialize two new opposite
+  // edges because neither row exists yet; without this lock, concurrent A->B
+  // and B->A replacements can both validate an empty snapshot and commit a
+  // cycle. Project and Task use separate keys so unrelated families proceed.
+  const lockKey = `cubby:${opts.entity}-dependency-graph`;
+  await unwrapDb(tx).execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+  );
+
   if (deduped.length > 0) {
     const live = await tx
       .select({ id: opts.entityTable.id })
@@ -99,6 +113,25 @@ export async function replaceDependencyEdges<
         `${label}(s) not found: ${missing.join(", ")}`,
       );
     }
+  }
+
+  const currentEdges = await tx
+    .select({ own: opts.ownColumn, blockedBy: opts.blockedByColumn })
+    .from(opts.ownColumn.table);
+  const resultingEdges = [
+    ...currentEdges
+      .filter((edge) => edge.own !== id)
+      .map((edge) => ({ from: String(edge.own), to: String(edge.blockedBy) })),
+    ...deduped.map((blockedById) => ({
+      from: String(id),
+      to: String(blockedById),
+    })),
+  ];
+  if (findDirectedDependencyCycles(resultingEdges).length > 0) {
+    throw createAppError(
+      "DEPENDENCY_CYCLE",
+      `${label} dependencies must remain acyclic.`,
+    );
   }
 
   await tx.delete(edgeTable).where(eq(opts.ownColumn, id));

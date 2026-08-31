@@ -89,6 +89,7 @@ export default literalEntity({
       key: "recipes",
       label: "Recipes",
       target: "recipe",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -96,7 +97,6 @@ export default literalEntity({
           { edge: "MealRecipe.recipeId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "MealRecipe.recipeId", direction: "incoming" },
@@ -114,7 +114,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -150,17 +151,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/meal/crud",
-          export: "MEAL_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/meal/entity-adapter",
-          export: "mealEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

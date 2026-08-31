@@ -95,7 +95,7 @@ function acceptedCodes(entity: Entity) {
     .map((prefix) => `${prefix}XXXX`);
 }
 
-function printsLabels(entity: Entity) {
+function printsLabels(entity: Entity): entity is "product" | "location" {
   return entity === "product" || entity === "location";
 }
 
@@ -144,6 +144,10 @@ function PrintedLabelContract({ entity }: { entity: "product" | "location" }) {
       </p>
     </div>
   );
+}
+
+function EntityPrintedLabelContract({ entity }: { entity: Entity }) {
+  return printsLabels(entity) ? <PrintedLabelContract entity={entity} /> : null;
 }
 
 function countFor(
@@ -311,9 +315,20 @@ function inspectorRoute(entity: Entity) {
 }
 
 function mcpFieldLabel(entity: Entity) {
-  return entityInspectorMetadata[entity].mcpOperations.length
+  const metadata = entityInspectorMetadata[entity];
+  return metadata.mcpOwner === "kernel"
     ? "generated kernel command schema"
-    : "not exposed";
+    : "specialized workflow schema";
+}
+
+function mcpTransportLabel(entity: Entity) {
+  const metadata = entityInspectorMetadata[entity];
+  return `${metadata.mcpOwner}: ${metadata.mcpOperations.join(", ")}`;
+}
+
+function routeCoverageLabel(entity: Entity) {
+  const route = inspectorRoute(entity);
+  return route ? `${route.list} · ${route.detail}` : "workflow-owned";
 }
 
 function dependentRefreshLabel(entity: Entity) {
@@ -350,11 +365,20 @@ function RelationshipContract({ entity }: { entity: Entity }) {
       className="grid gap-1 border-b border-border/60 pb-2 text-xs sm:grid-cols-[9rem_1fr]"
     >
       <code>{relation.key}</code>
-      <span>
-        → {relation.target} · {relation.deletionPolicy} ·{" "}
-        {relation.provenance.kind} · inverse{" "}
-        {"inverse" in relation ? "declared" : "external/unconstrained"}
-      </span>
+      <Stack gap="tight">
+        <span>
+          → {relation.target} · {relation.cardinality} ·{" "}
+          {relation.provenance.kind} · inverse{" "}
+          {"inverse" in relation ? "declared" : "external"}
+        </span>
+        <div className="text-muted-foreground">
+          sources: {relation.sourceKey}
+          {relation.sources.map((source) => `, ${source.key}`).join("")}
+          {"mutation" in relation
+            ? ` · mutable via ${relation.mutation.source} (${relation.mutation.audiences.join(", ")})`
+            : ""}
+        </div>
+      </Stack>
     </div>
   ));
 }
@@ -406,9 +430,7 @@ export function EntityInspector({
         </p>
       </header>
 
-      {(entity === "product" || entity === "location") && (
-        <PrintedLabelContract entity={entity} />
-      )}
+      <EntityPrintedLabelContract entity={entity} />
 
       <Section title="Identity and storage">
         <ContractRows
@@ -522,9 +544,9 @@ export function EntityInspector({
       </Section>
 
       <Section title="Relations and lifecycle">
-        <div className="space-y-2">
+        <Stack gap="sm">
           <RelationshipContract entity={entity} />
-        </div>
+        </Stack>
         <div className="mt-4">
           <Chips
             items={[
@@ -535,16 +557,8 @@ export function EntityInspector({
         </div>
         <ContractRows
           rows={[
-            ["Lifecycle policy", sourceRef(metadata.ports.lifecycle.policy)],
-            ["Lifecycle runtime", sourceRef(metadata.ports.lifecycle.runtime)],
-            [
-              "Relation attach",
-              sourceRef(metadata.ports.relationMutation.attach),
-            ],
-            [
-              "Relation detach",
-              sourceRef(metadata.ports.relationMutation.detach),
-            ],
+            ["Delete owner", metadata.operationOwners.delete ?? "none"],
+            ["Merge owner", metadata.operationOwners.merge ?? "none"],
           ]}
         />
       </Section>
@@ -554,16 +568,8 @@ export function EntityInspector({
           rows={[
             ["Start", startTransportLabel(entity)],
             ["Extensions", "explicit workflow extensions only"],
-            [
-              "MCP",
-              metadata.mcpOperations.length
-                ? metadata.mcpOperations.join(", ")
-                : "—",
-            ],
-            [
-              "Routes / pages",
-              route ? `${route.list} · ${route.detail}` : "workflow-owned",
-            ],
+            ["MCP", mcpTransportLabel(entity)],
+            ["Routes / pages", routeCoverageLabel(entity)],
             ["Saved views", <SavedViewChips key="views" entity={entity} />],
             [
               "Contract tiers",

@@ -256,6 +256,29 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "dependencyCycles",
+    problemClass: PROBLEM_CLASS.dependencyCycles,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Each result is a cycle in a dependency graph.",
+    },
+    freshness: { kind: "live" },
+    title: "Dependency cycles",
+    description:
+      "Project or task blocked-by links form a cycle, so no member can be first.",
+    emptyMessage: "Project and task dependencies are acyclic.",
+    source: {
+      kind: "derived",
+      diagnostic: "dependency-cycles",
+      grain: "group",
+      operations: [
+        { label: "Load Project and Task dependency graphs" },
+        { label: "Find cyclic strongly-connected components" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "productsWithBetterUpcData",
     problemClass: PROBLEM_CLASS.productsWithBetterUpcData,
     executionLane: "upc",

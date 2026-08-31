@@ -36,7 +36,7 @@ export const inventory = defineOperationDomain("inventory", {
   bulkAdd: mutation({
     input: inventoryBulkAddPayload,
     output: inventoryBulkAddOut,
-    invalidates: [["inventory"]],
+    invalidates: ripple.inventory,
   }),
   // `ripple.expense`, not `ripple.inventory`: a discard mints a $0 Expense per
   // row, and that ripple already carries the stock surfaces (see `costAndStock`)

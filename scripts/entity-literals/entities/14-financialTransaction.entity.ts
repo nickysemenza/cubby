@@ -242,13 +242,13 @@ export default literalEntity({
       key: "account",
       label: "Financial account",
       target: "financialAccount",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [
           { edge: "FinancialTransaction.accountId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "FinancialTransaction.accountId", direction: "incoming" },
@@ -259,6 +259,7 @@ export default literalEntity({
       key: "ledger-transfer",
       label: "Ledger transfer",
       target: "ledgerTransfer",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [
@@ -268,7 +269,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -282,6 +282,7 @@ export default literalEntity({
       key: "purchase",
       label: "Purchase",
       target: "purchase",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -295,7 +296,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -313,6 +313,7 @@ export default literalEntity({
       key: "vendor",
       label: "Vendor",
       target: "vendor",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -327,7 +328,6 @@ export default literalEntity({
           { edge: "Purchase.vendorId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Purchase.vendorId", direction: "incoming" },
@@ -346,6 +346,7 @@ export default literalEntity({
       key: "expenses",
       label: "Expenses",
       target: "expense",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -360,7 +361,6 @@ export default literalEntity({
           { edge: "Expense.purchaseId", direction: "incoming" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.purchaseId", direction: "outgoing" },
@@ -379,6 +379,7 @@ export default literalEntity({
       key: "products",
       label: "Products",
       target: "product",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -394,7 +395,6 @@ export default literalEntity({
           { edge: "Expense.productId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.productId", direction: "incoming" },
@@ -420,7 +420,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -456,17 +457,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/financial-transaction",
-          export: "FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/financial-transaction.entity-adapter",
-          export: "financialTransactionEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

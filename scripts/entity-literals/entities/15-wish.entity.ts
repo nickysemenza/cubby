@@ -60,6 +60,7 @@ export default literalEntity({
       key: "candidates",
       label: "Tool candidates",
       target: "product",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -67,7 +68,6 @@ export default literalEntity({
           { edge: "WishCandidate.productId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "WishCandidate.productId", direction: "incoming" },
@@ -85,7 +85,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -121,17 +122,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/wish",
-          export: "WISH_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/wish.entity-adapter",
-          export: "wishEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

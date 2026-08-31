@@ -26,13 +26,16 @@ interface GraphNode extends d3Force.SimulationNodeDatum {
 interface GraphLink extends d3Force.SimulationLinkDatum<GraphNode> {
   source: string | GraphNode;
   target: string | GraphNode;
+  relation: string;
+  cardinality: "one" | "many";
+  provenance: string;
 }
 
 const isResolvedGraphNode = (value: string | GraphNode): value is GraphNode =>
   typeof value !== "string";
 
 /** Node treatment: default reference-graph coloring, delete/merge lifecycle, or referential-health. */
-export type EntityGraphLens = "logical" | "lifecycle" | "health";
+export type EntityGraphLens = "logical" | "health";
 
 /** Stable empty default — a fresh `new Set()` per render would destabilize `fillFor`. */
 const EMPTY_UNHEALTHY: ReadonlySet<Entity> = new Set();
@@ -40,8 +43,6 @@ const EMPTY_UNHEALTHY: ReadonlySet<Entity> = new Set();
 const LENS_CAPTION = {
   logical:
     "Arrow → the entity it references · size = times referenced · dashed ring = self-reference",
-  lifecycle:
-    "Fill = delete mode (ultramarine soft · red hard · slate none) · dashed plum ring = mergeable",
   health: "Red = has a live referential-integrity finding",
 } satisfies Record<EntityGraphLens, string>;
 
@@ -93,14 +94,28 @@ export function EntityReferenceGraph({
   const links = useMemo(
     () =>
       allEntities.flatMap((from) =>
-        entityReferences(from)
-          .filter((to) => to !== from)
-          .map((to) => ({ source: from, target: to })),
+        entityManifest[from].relationships
+          .filter(({ target }) => target !== from)
+          .map((relation) => ({
+            source: from,
+            target: relation.target,
+            relation: relation.key,
+            cardinality: relation.cardinality,
+            provenance: [
+              relation.sourceKey,
+              ...relation.sources.map((source) => source.key),
+            ].join(" + "),
+          })),
       ),
     [],
   );
   const selfLoops = useMemo(
-    () => allEntities.filter((e) => entityReferences(e).includes(e)),
+    () =>
+      allEntities.flatMap((source) =>
+        entityManifest[source].relationships
+          .filter(({ target }) => target === source)
+          .map((relation) => ({ source, relation })),
+      ),
     [],
   );
 
@@ -126,12 +141,6 @@ export function EntityReferenceGraph({
         return unhealthyEntities.has(id)
           ? "var(--destructive)"
           : "var(--slate)";
-      }
-      if (lens === "lifecycle") {
-        const mode = entityManifest[id].lifecycle.delete?.mode;
-        if (mode === "hard") return "var(--destructive)";
-        if (mode === "soft") return "var(--primary)";
-        return "var(--slate)";
       }
       return isBrowserRoutedEntity(id)
         ? entities[id].color.accent
@@ -239,7 +248,7 @@ export function EntityReferenceGraph({
             const active = edgeActive(source.id, target.id);
             return (
               <line
-                key={`${source.id}-${target.id}`}
+                key={`${source.id}-${link.relation}`}
                 x1={(source.x ?? 0) + (dx / len) * sr}
                 y1={(source.y ?? 0) + (dy / len) * sr}
                 x2={(target.x ?? 0) - (dx / len) * tr}
@@ -248,7 +257,13 @@ export function EntityReferenceGraph({
                 strokeWidth={active ? 2 : 1.25}
                 strokeOpacity={hovered ? (active ? 0.95 : 0.1) : 0.55}
                 markerEnd={`url(#${active ? arrowActiveId : arrowId})`}
-              />
+                aria-label={`${source.id}.${link.relation} to ${target.id}: ${link.cardinality}, ${link.provenance}`}
+              >
+                <title>
+                  {source.id}.{link.relation} → {target.id} · {link.cardinality}
+                  · {link.provenance}
+                </title>
+              </line>
             );
           })}
         </g>
@@ -261,9 +276,9 @@ export function EntityReferenceGraph({
               hovered !== node.id &&
               !entityReferences(hovered).includes(node.id) &&
               !entityReferences(node.id).includes(hovered);
-            const hasSelf = selfLoops.includes(node.id);
-            const mergeable =
-              lens === "lifecycle" && entityManifest[node.id].lifecycle.merge;
+            const nodeSelfLoops = selfLoops.filter(
+              ({ source }) => source === node.id,
+            );
             return (
               <g
                 key={node.id}
@@ -292,24 +307,22 @@ export function EntityReferenceGraph({
                     : undefined
                 }
               >
-                {hasSelf && (
+                {nodeSelfLoops.map(({ relation }, index) => (
                   <circle
-                    r={r + 4}
+                    key={relation.key}
+                    r={r + 4 + index * 3}
                     fill="none"
                     stroke="var(--warning)"
                     strokeWidth={1.25}
                     strokeDasharray="2 2"
-                  />
-                )}
-                {mergeable && (
-                  <circle
-                    r={r + 7}
-                    fill="none"
-                    stroke="var(--plum)"
-                    strokeWidth={1.25}
-                    strokeDasharray="2 2"
-                  />
-                )}
+                    aria-label={`${node.id}.${relation.key}: ${relation.cardinality}, ${relation.sourceKey}`}
+                  >
+                    <title>
+                      {node.id}.{relation.key} · {relation.cardinality} ·{" "}
+                      {relation.sourceKey}
+                    </title>
+                  </circle>
+                ))}
                 {selected === node.id && (
                   <circle
                     r={r + 10}

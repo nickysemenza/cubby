@@ -74,7 +74,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   ingredient: null,
   food: null,
   recipeUsages: [],
-  cookbook: null,
+  cookbooks: [],
   componentCount: 0,
   usdaUnavailable: null,
   stockTracked: null,

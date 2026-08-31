@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { inventory } from "~/app/inventory/inventory.functions";
 import { location } from "~/app/locations/location.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -50,7 +51,7 @@ export function useArrangeMutations() {
       }
     },
     onError: (err) => {
-      void invalidateOperationTags(queryClient, [["location"]]);
+      void invalidateOperationTags(queryClient, ripple.location);
       toast.error(getErrorMessage(err));
     },
   });
@@ -75,7 +76,7 @@ export function useArrangeMutations() {
       }
     },
     onError: (err) => {
-      void invalidateOperationTags(queryClient, [["location"]]);
+      void invalidateOperationTags(queryClient, ripple.location);
       toast.error(getErrorMessage(err));
     },
   });

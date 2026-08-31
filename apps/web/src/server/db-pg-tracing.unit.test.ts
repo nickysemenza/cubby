@@ -1,12 +1,15 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import type pg from "pg";
 import { describe, expect, it, vi } from "vitest";
 
 import { withDatabaseOperationMetrics } from "./db-observability";
 import {
+  createPoolQueryOwnershipBoundary,
   createPoolConnectAdapter,
   createPoolQueryAdapter,
   createObservedQuery,
   createTracedQuery,
+  observePgPoolAndClientQueries,
   type PgPoolConnectImplementation,
   type PgQueryImplementation,
 } from "./db-pg-tracing";
@@ -104,5 +107,64 @@ describe("node-postgres tracing adapters", () => {
     await expect(query("select 1")).resolves.toBe(result);
 
     expect(statements).toEqual(["select 1"]);
+  });
+
+  it("distinguishes a pool-owned checkout from an explicit client checkout", () => {
+    const ownership = createPoolQueryOwnershipBoundary();
+
+    expect(ownership.shouldMapConnectedClient()).toBe(true);
+    ownership.runPoolQuery(() => {
+      expect(ownership.shouldMapConnectedClient()).toBe(false);
+    });
+    expect(ownership.shouldMapConnectedClient()).toBe(true);
+  });
+
+  it("counts pool and explicit-client queries once and restores reused clients", async () => {
+    const result = queryResult();
+    const release = vi.fn();
+    const rawClientQuery: PgQueryImplementation = (...args) =>
+      args.length === 3 ? undefined : Promise.resolve(result);
+    const physicalClient = fromPartial<pg.PoolClient>({
+      query: rawClientQuery,
+      release,
+    });
+    let pool = fromPartial<pg.Pool>({});
+    const rawConnect: PgPoolConnectImplementation = (...args) => {
+      const callback = args[0];
+      if (callback) {
+        callback(undefined, physicalClient, release);
+        return;
+      }
+      return Promise.resolve(physicalClient);
+    };
+    const rawPoolQuery: PgQueryImplementation = () => {
+      pool.connect(() => undefined);
+      physicalClient.query("select internal dispatch", [], () => undefined);
+      return Promise.resolve(result);
+    };
+    pool = fromPartial<pg.Pool>({
+      connect: rawConnect,
+      query: rawPoolQuery,
+    });
+    const statements: string[] = [];
+    observePgPoolAndClientQueries(pool, (statement) =>
+      statements.push(statement),
+    );
+
+    await pool.query("select pool promise");
+    pool.query("select pool callback", [], () => undefined);
+    const client = await pool.connect();
+    await client.query("select explicit promise");
+    client.query("select explicit callback", [], () => undefined);
+    client.release();
+    physicalClient.query("select reused physical", [], () => undefined);
+
+    expect(statements).toEqual([
+      "select pool promise",
+      "select pool callback",
+      "select explicit promise",
+      "select explicit callback",
+    ]);
+    expect(release).toHaveBeenCalledOnce();
   });
 });

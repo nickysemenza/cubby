@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   checkEntityArtifacts,
+  expectedBrowserRouteFiles,
+  missingBrowserRouteFiles,
   parseEntityLiteralFiles,
   parseEntityLiterals,
   renderEntityArtifacts,
@@ -26,7 +28,21 @@ describe("literal entity generator", () => {
       export const ENTITY_LITERALS = [
         {
           key: "alpha",
-          descriptor: { shortcodePrefix: "ALP-", auditable: true, browserRoutes: true, searchable: false, lifecycle: { delete: null, merge: false } },
+          descriptor: {
+            shortcodePrefix: "ALP-", auditable: true, browserRoutes: true, searchable: false,
+            lifecycle: { delete: null, merge: false },
+            relationships: [{
+              key: "children", label: "Children", target: "alpha", cardinality: "many", sourceKey: "explicit",
+              provenance: { kind: "local-path", steps: [{ edge: "Alpha.parentId", direction: "incoming" }] },
+              inverse: { steps: [{ edge: "Alpha.parentId", direction: "outgoing" }] }, sources: [],
+              mutation: {
+                source: "explicit",
+                itemSchema: { module: "@cubby/schemas/example", export: "relationItem" },
+                adapter: { module: "~/server/example", export: "exampleRelationAdapter" },
+                audiences: ["browser", "mcp"],
+              },
+            }],
+          },
           contract: {
             create: { module: "@cubby/schemas/example", export: "create" },
             update: { module: "@cubby/schemas/example", export: "update" },
@@ -37,8 +53,6 @@ describe("literal entity generator", () => {
             references: { label: { module: "~/entities/entities", export: "entityLabel" }, resolver: null },
             filters: { module: "~/entities/filter-manifest", export: "getEntityFilters" },
             search: { projection: null, semanticText: null, dependentRefresh: null },
-            lifecycle: { policy: null, runtime: null },
-            relationMutation: { attach: { module: "~/server/example", export: "attachExample" }, detach: null },
           },
         },
       ] as const;
@@ -84,13 +98,19 @@ describe("literal entity generator", () => {
       'alpha:{actions:["get","list","create","update"]',
     );
     expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
-      'import type * as entityPortModule2 from "~/server/example"',
+      'import type * as entityPortModule3 from "~/server/example"',
     );
     expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
-      'typeof entityPortModule2["exampleRepository"]',
+      'typeof entityPortModule3["exampleRepository"]',
     );
     expect(artifact("entity-kernel-bindings.gen.ts")).toContain(
-      'typeof entityPortModule2["attachExample"]',
+      'typeof entityPortModule3["exampleRelationAdapter"]',
+    );
+    expect(artifact("entity-relation-contracts.gen.ts")).toContain(
+      'relation:z.literal("children")',
+    );
+    expect(artifact("entity-relation-bindings.gen.ts")).toContain(
+      'case "alpha:children"',
     );
     expect(
       filterArtifacts.find(({ relativePath }) =>
@@ -103,7 +123,7 @@ describe("literal entity generator", () => {
     );
   });
 
-  it("rejects incomplete port declarations", () => {
+  it("rejects retired lifecycle and relation-mutation ports", () => {
     expect(() =>
       parseEntityLiterals(`
         export const ENTITY_LITERALS = [{
@@ -114,11 +134,10 @@ describe("literal entity generator", () => {
             filters: null,
             search: { projection: null, semanticText: null, dependentRefresh: null },
             lifecycle: { policy: null, runtime: null },
-            relationMutation: { attach: null },
           },
         }];
       `),
-    ).toThrow("relationMutation.detach is required");
+    ).toThrow("ports.lifecycle is not allowed");
   });
 
   it("rejects expressions and duplicate keys", () => {
@@ -168,29 +187,31 @@ describe("literal entity generator", () => {
     ).not.toThrow();
   });
 
-  it("requires local-view inverses and valid deletion policies", () => {
+  it("requires cardinality and local-view inverses and rejects deletion policy", () => {
     const entity = (relation: string) => `
       export const ENTITY_LITERALS = [{
         key: "alpha", names: { singular: "alpha" }, route: null, table: null,
         identifiers: { brand: null, shortcode: null, legacy: null }, presentation: { titleField: "name" }, fields: null,
         filters: { descriptors: [] }, relations: [${relation}], search: { enabled: false },
-        capabilities: { auditable: false, images: false, countable: false, softDelete: false, delete: null, merge: false, bulkUpdate: null, mcp: [] },
+        capabilities: { auditable: false, images: false, countable: false, softDelete: false, delete: null, merge: false, operationOwners: { delete: null, merge: null }, bulkUpdate: null, mcp: [] },
         extensions: { countFilter: null, relatednessSignals: null, mcpNames: null },
       }];
     `;
-    const local = `key:"child",label:"Child",target:"alpha",provenance:{kind:"local-path",steps:[{edge:"Alpha.childId",direction:"outgoing"}]}`;
+    const local = `key:"child",label:"Child",target:"alpha",cardinality:"many",provenance:{kind:"local-path",steps:[{edge:"Alpha.childId",direction:"outgoing"}]}`;
     expect(
       parseEntityLiterals(entity(`{${local},inverse:{steps:[]}}`))[0]
         ?.descriptor.relationships,
-    ).toEqual([expect.objectContaining({ deletionPolicy: "restrict" })]);
-    expect(() =>
-      parseEntityLiterals(entity(`{${local},deletionPolicy:"restrict"}`)),
-    ).toThrow("requires inverse");
+    ).toEqual([
+      expect.objectContaining({ cardinality: "many", sourceKey: "child" }),
+    ]);
+    expect(() => parseEntityLiterals(entity(`{${local}}`))).toThrow(
+      "requires inverse",
+    );
     expect(() =>
       parseEntityLiterals(
-        entity(`{${local},inverse:{steps:[]},deletionPolicy:"erase"}`),
+        entity(`{${local},inverse:{steps:[]},deletionPolicy:"restrict"}`),
       ),
-    ).toThrow("deletionPolicy is invalid");
+    ).toThrow("deletionPolicy is not allowed");
   });
 
   it("reports missing, stale, and extraneous generated artifacts", async () => {
@@ -212,6 +233,26 @@ describe("literal entity generator", () => {
       "missing: b/entity-literal-contract-cases.gen.ts",
       "extraneous: a/entity-literal-orphan.gen.ts",
     ]);
+  });
+
+  it("requires route modules for every generated browser route", () => {
+    const entities = parseEntityLiterals(`
+      export const ENTITY_LITERALS = [{
+        key: "alpha", route: { basePath: "alphas", detailParam: "id" },
+        descriptor: { auditable: false, searchable: false }, contract: null,
+      }];
+    `);
+    const expected = expectedBrowserRouteFiles(entities);
+
+    expect(expected).toEqual([
+      "apps/web/src/routes/_authenticated/alphas.index.tsx",
+      "apps/web/src/routes/_authenticated/alphas.$id.tsx",
+    ]);
+    expect(
+      missingBrowserRouteFiles(entities, (path) =>
+        path.endsWith(expected[0] ?? ""),
+      ),
+    ).toEqual([expected[1]]);
   });
 
   it("rejects unsupported, duplicate, missing, and stale filter descriptors", () => {

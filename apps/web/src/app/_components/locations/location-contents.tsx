@@ -44,6 +44,7 @@ import {
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { entityListFor } from "~/entities/entity-list.functions";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -288,7 +289,7 @@ export function LocationContents({ location }: { location: InfLocation }) {
   const handleChildCreated = useCallback(() => {
     // Children change every derived location view, including the count-only
     // drill-down. Keep this broad instead of naming one-off queries.
-    void invalidateOperationTags(queryClient, [["location"]]);
+    void invalidateOperationTags(queryClient, ripple.location);
   }, [queryClient]);
 
   const handleItemAdded = useCallback(() => {

@@ -14,17 +14,14 @@ import {
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { beforeEach } from "vitest";
 import {
   Database,
   type DatabaseClient,
   type DatabaseRuntime,
 } from "../src/server/db/database";
-import {
-  mapPgPoolClients,
-  observePgClientQueries,
-} from "../src/server/db-pg-tracing";
+import { observePgPoolAndClientQueries } from "../src/server/db-pg-tracing";
 import * as schema from "../src/server/db/schema";
 import type {
   EntityCreateInput,
@@ -72,30 +69,23 @@ interface QueryMeasurement {
 }
 
 const queryMeasurement = new AsyncLocalStorage<QueryMeasurement>();
-const countedClients = new WeakSet<PoolClient>();
 
-const countClientQueries = (client: PoolClient): PoolClient => {
-  if (countedClients.has(client)) return client;
-  observePgClientQueries(client, (text) => {
-    const measurement = queryMeasurement.getStore();
-    if (measurement) {
-      measurement.count += 1;
-      // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
-      // two measurements compares statement SHAPES, not page sizes.
-      measurement.statements.push(
-        text
-          .replace(/\s+/g, " ")
-          .replace(/\(\s*\$\d+(?:\s*,\s*\$\d+)*\s*\)/g, "(…)")
-          .slice(0, 160),
-      );
-    }
-  });
-  countedClients.add(client);
-  return client;
+const countObservedStatement = (text: string) => {
+  const measurement = queryMeasurement.getStore();
+  if (!measurement) return;
+  measurement.count += 1;
+  // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
+  // two measurements compares statement SHAPES, not page sizes.
+  measurement.statements.push(
+    text
+      .replace(/\s+/g, " ")
+      .replace(/\(\s*\$\d+(?:\s*,\s*\$\d+)*\s*\)/g, "(…)")
+      .slice(0, 160),
+  );
 };
 
 const countPoolQueries = (pool: Pool): Pool =>
-  mapPgPoolClients(pool, countClientQueries);
+  observePgPoolAndClientQueries(pool, countObservedStatement);
 
 /**
  * Count SQL statements issued by one operation against this integration

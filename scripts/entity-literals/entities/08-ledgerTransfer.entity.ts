@@ -61,11 +61,11 @@ export default literalEntity({
       key: "from-party",
       label: "From party",
       target: "ledgerParty",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "incoming" }],
       },
@@ -74,11 +74,11 @@ export default literalEntity({
       key: "to-party",
       label: "To party",
       target: "ledgerParty",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "LedgerTransfer.toPartyId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "LedgerTransfer.toPartyId", direction: "incoming" }],
       },
@@ -87,6 +87,7 @@ export default literalEntity({
       key: "evidence-transactions",
       label: "Evidence transactions",
       target: "financialTransaction",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -96,7 +97,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -116,6 +116,7 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
+    operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "create", "update", "delete"],
   },
   extensions: {
@@ -139,17 +140,6 @@ export default literalEntity({
         export: "getEntityFilters",
       },
       search: { projection: null, semanticText: null, dependentRefresh: null },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/ledger-transfer",
-          export: "LEDGER_TRANSFER_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/ledger-transfer.entity-adapter",
-          export: "ledgerTransferEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

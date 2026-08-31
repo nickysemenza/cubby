@@ -156,11 +156,11 @@ export default literalEntity({
       key: "product",
       label: "Product",
       target: "product",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "InventoryEntry.productId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "InventoryEntry.productId", direction: "incoming" }],
       },
@@ -169,11 +169,11 @@ export default literalEntity({
       key: "location",
       label: "Location",
       target: "location",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "InventoryEntry.locationId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "InventoryEntry.locationId", direction: "incoming" }],
       },
@@ -182,6 +182,7 @@ export default literalEntity({
       key: "ingredient",
       label: "Ingredient",
       target: "ingredient",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [
@@ -189,7 +190,6 @@ export default literalEntity({
           { edge: "Product.ingredientId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Product.ingredientId", direction: "incoming" },
@@ -207,7 +207,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -247,17 +248,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/inventory/crud",
-          export: "INVENTORY_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/inventory/entity-adapter",
-          export: "inventoryEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

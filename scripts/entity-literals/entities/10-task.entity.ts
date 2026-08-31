@@ -169,22 +169,22 @@ export default literalEntity({
       key: "project",
       label: "Project",
       target: "project",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Task.projectId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: { steps: [{ edge: "Task.projectId", direction: "incoming" }] },
     },
     {
       key: "subject",
       label: "Subject product",
       target: "product",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Task.subjectProductId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Task.subjectProductId", direction: "incoming" }],
       },
@@ -193,11 +193,11 @@ export default literalEntity({
       key: "parent",
       label: "Parent task",
       target: "task",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Task.parentTaskId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Task.parentTaskId", direction: "incoming" }],
       },
@@ -206,6 +206,7 @@ export default literalEntity({
       key: "blocked-by",
       label: "Blocked by",
       target: "task",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -213,7 +214,6 @@ export default literalEntity({
           { edge: "TaskDependency.blockedByTaskId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "TaskDependency.blockedByTaskId", direction: "incoming" },
@@ -233,7 +233,8 @@ export default literalEntity({
       fields: ["projectId", "status", "trade", "dueDate", "dueEndDate"],
     },
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
   },
   extensions: {
     countFilter: null,
@@ -269,17 +270,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/task/crud",
-          export: "TASK_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/task/entity-adapter",
-          export: "taskEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

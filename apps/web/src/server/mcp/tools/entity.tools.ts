@@ -9,7 +9,7 @@ import {
 import {
   entityBulkUpdateResultSchema,
   ENTITY_KERNEL_ENTITIES,
-  entityCommandSchema,
+  entityMcpCommandSchema,
   entityDeleteResultSchema,
   entityRelationMutationResultSchema,
   entitySearchResultSchema,
@@ -25,7 +25,7 @@ import {
 import { getEntityKernelContext } from "../kernel-context";
 import { registerMcpTool, WRITE_DESTRUCTIVE_CLOSED } from "./_shared";
 
-const entityToolInput = z.object({ command: entityCommandSchema });
+const entityToolInput = z.object({ command: entityMcpCommandSchema });
 
 const entityToolOutput = z.union([
   generatedMcpEntityGetResultSchema,
@@ -69,7 +69,7 @@ export function registerEntityTools(
           mimeType: "application/json",
           text: JSON.stringify({
             entities: ENTITY_KERNEL_ENTITIES,
-            commandSchema: z.toJSONSchema(entityCommandSchema),
+            commandSchema: z.toJSONSchema(entityMcpCommandSchema),
           }),
         },
       ],

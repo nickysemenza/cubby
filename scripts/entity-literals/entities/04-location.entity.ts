@@ -160,18 +160,24 @@ export default literalEntity({
       key: "parent",
       label: "Parent location",
       target: "location",
-      provenance: { kind: "unconstrained", edge: "Location.parentId" },
-      deletionPolicy: "restrict",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Location.parentId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Location.parentId", direction: "incoming" }],
+      },
     },
     {
       key: "product",
       label: "Product",
       target: "product",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Location.productId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Location.productId", direction: "incoming" }],
       },
@@ -180,6 +186,7 @@ export default literalEntity({
       key: "ingredients",
       label: "Ingredients",
       target: "ingredient",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -188,7 +195,6 @@ export default literalEntity({
           { edge: "Product.ingredientId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Product.ingredientId", direction: "incoming" },
@@ -201,6 +207,7 @@ export default literalEntity({
       key: "images",
       label: "Images",
       target: "image",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -208,7 +215,6 @@ export default literalEntity({
           { edge: "LocationImage.imageId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "LocationImage.imageId", direction: "incoming" },
@@ -226,7 +232,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["parentId"] },
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
   },
   extensions: {
     countFilter: null,
@@ -262,17 +269,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/location/crud",
-          export: "LOCATION_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/location/entity-adapter",
-          export: "locationEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

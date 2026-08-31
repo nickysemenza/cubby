@@ -2,7 +2,7 @@ import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProductProjectUsesOut,
   ProjectResourceOut,
@@ -59,6 +59,7 @@ import {
 import { foldAssociation } from "~/server/repo/merge";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
+import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
@@ -69,6 +70,10 @@ import {
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 
 import { maxPlainDate } from "./helpers";
 import { collectDescendantIds, loadProjectDateWindows } from "./subtree";
@@ -826,6 +831,27 @@ export async function attachProjectResources(
     };
   });
 }
+
+export const projectResourcesRelationAdapter = {
+  preview(db, action, ownerId, targetIds) {
+    const projectId = parseEntityId("project", ownerId);
+    const productIds = targetIds.map((id) => parseEntityId("product", id));
+    return action === "attach"
+      ? previewAttachProjectResources(db, projectId, productIds)
+      : previewDetachProjectResources(db, projectId, productIds);
+  },
+  async execute(ctx, action, ownerShortcode, items) {
+    const projectId = await resolveOrThrow(ctx.db, "project", ownerShortcode);
+    const productIds = await resolveAllOrThrow(
+      ctx.db,
+      "product",
+      items.map(({ id }) => id),
+    );
+    return action === "attach"
+      ? attachProjectResources(ctx.db, projectId, productIds, ctx.actorContext)
+      : detachProjectResources(ctx.db, projectId, productIds, ctx.actorContext);
+  },
+} satisfies EntityRelationMutationAdapter<{ id: string }>;
 
 export async function detachProjectResources(
   db: Database,

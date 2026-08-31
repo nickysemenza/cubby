@@ -49,6 +49,8 @@
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "error",
     "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-direct-query-invalidation": "error",
+    "anti-slop/no-legacy-query-invalidation": "error",
     "anti-slop/no-module-mocking": "error",
     "anti-slop/no-object-parameters": "error",
     "anti-slop/no-reflect-apply": "error",
@@ -59,6 +61,7 @@
         "allowInTypeGuards": true
       }
     ],
+    "anti-slop/no-unsafe-sql-array-interpolation": "error",
     "anti-slop/no-shape-in-symbol-names": "error",
     "anti-slop/no-unknown-parameters": "error",
     "anti-slop/no-unknown-returns": "error",

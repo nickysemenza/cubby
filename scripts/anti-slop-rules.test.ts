@@ -127,3 +127,39 @@ test("conditional empty spreads are rejected in JSX as well as object literals",
     [3],
   );
 });
+
+test("sql array interpolation requires typed helpers", () => {
+  const diagnostics = lintFixture(
+    "no-unsafe-sql-array-interpolation",
+    "no-unsafe-sql-array-interpolation.txt",
+  );
+
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [7, 8],
+  );
+});
+
+test("only the operation cache may call TanStack invalidation directly", () => {
+  const diagnostics = lintFixture(
+    "no-direct-query-invalidation",
+    "no-direct-query-invalidation.txt",
+  );
+
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [5, 6],
+  );
+});
+
+test("removed query-key invalidation identifiers stay unavailable", () => {
+  const diagnostics = lintFixture(
+    "no-legacy-query-invalidation",
+    "no-legacy-query-invalidation.txt",
+  );
+
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+    [1, 2, 3, 4, 5, 7, 8, 9, 10, 11],
+  );
+});

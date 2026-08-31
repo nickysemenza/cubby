@@ -86,7 +86,6 @@ const baseProduct = {
   stockTracked: null,
   expenseCount: 0,
   componentCount: 0,
-  cookbookRecipeCount: 0,
   expenseTotal: 42.5,
   purchaseDate: null,
   quantityLedger: EMPTY_QUANTITY_LEDGER,
@@ -346,6 +345,56 @@ describe("product mappers", () => {
         { image: baseImage, deletedAt: null },
         { image: joinedImage, deletedAt: DELETED_AT },
       ],
+      cookbooks: [
+        {
+          id: testEntityId("cookbook", "523e4567-e89b-12d3-a456-426614174000"),
+          shortcode: "CKB-2345",
+          name: "Weeknight Cooking",
+          author: [],
+          subjects: [],
+          sourceLabel: "first.epub",
+          rawJson: [],
+          coverImageId: null,
+          productId: PRODUCT_ID,
+          importedAt: CREATED_AT,
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: null,
+          recipes: [{ deletedAt: null }, { deletedAt: DELETED_AT }],
+        },
+        {
+          id: testEntityId("cookbook", "623e4567-e89b-12d3-a456-426614174000"),
+          shortcode: "CKB-DELETED",
+          name: "Deleted Book",
+          author: [],
+          subjects: [],
+          sourceLabel: "deleted.epub",
+          rawJson: [],
+          coverImageId: null,
+          productId: PRODUCT_ID,
+          importedAt: CREATED_AT,
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: DELETED_AT,
+          recipes: [{ deletedAt: null }],
+        },
+        {
+          id: testEntityId("cookbook", "723e4567-e89b-12d3-a456-426614174000"),
+          shortcode: "CKB-2346",
+          name: "Weekend Cooking",
+          author: [],
+          subjects: [],
+          sourceLabel: "second.epub",
+          rawJson: [],
+          coverImageId: null,
+          productId: PRODUCT_ID,
+          importedAt: CREATED_AT,
+          createdAt: CREATED_AT,
+          updatedAt: UPDATED_AT,
+          deletedAt: null,
+          recipes: [{ deletedAt: null }],
+        },
+      ],
       inventoryEntry: [
         {
           id: INVENTORY_ID,
@@ -457,6 +506,18 @@ describe("product mappers", () => {
     expect(result.unitMappings).toHaveLength(1);
     expect(result.images).toHaveLength(1);
     expect(result.externalIds).toHaveLength(1);
+    expect(result.cookbooks).toEqual([
+      {
+        id: testShortcode("cookbook", "CKB-2345"),
+        name: "Weeknight Cooking",
+        recipeCount: 1,
+      },
+      {
+        id: testShortcode("cookbook", "CKB-2346"),
+        name: "Weekend Cooking",
+        recipeCount: 1,
+      },
+    ]);
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
     expect(result.inventoryEntry).toHaveLength(1);

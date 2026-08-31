@@ -15,6 +15,8 @@ import {
   projectResourcesOut,
   projectToolMatrixInput,
   projectToolMatrixOut,
+  toolGalleryInput,
+  toolGalleryOut,
   projectToolSuggestionsOut,
   projectToolUsageSetInput,
   projectToolUsageSetOut,
@@ -33,6 +35,7 @@ import {
   projectNameOptions,
   projectPortfolioAnalytics,
   projectToolMatrix,
+  projectToolGallery,
   projectTreePage,
   repointProjectUses,
   setProjectToolUsage,
@@ -183,6 +186,11 @@ export const projectToolMatrixWorkflow = (
   input: z.output<typeof projectToolMatrixInput>,
 ) => projectToolMatrix(db, input);
 
+export const projectToolGalleryWorkflow = (
+  db: Database,
+  input: z.output<typeof toolGalleryInput>,
+) => projectToolGallery(db, input);
+
 export const projectSetToolUsageWorkflow = async (
   db: Database,
   input: z.output<typeof projectToolUsageSetInput>,
@@ -219,5 +227,6 @@ void projectPortfolioAnalyticsOut;
 void projectResourcesOut;
 void projectToolSuggestionsOut;
 void projectToolMatrixOut;
+void toolGalleryOut;
 void projectResourceMutationOut;
 void projectToolUsageSetOut;

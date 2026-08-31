@@ -59,7 +59,7 @@ export default literalEntity({
     softDelete: true,
     delete: { mode: "soft", bulk: true },
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -86,8 +86,6 @@ export default literalEntity({
         semanticText: null,
         dependentRefresh: null,
       },
-      lifecycle: { policy: null, runtime: null },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });
@@ -98,15 +96,16 @@ module and export; they are not executable imports in the spec. `fields.detail`
 is optional and falls back to `fields.output`; declare it when the current
 detail read carries enriched relations or computed fields.
 
-`extensions.ports` is the explicit seam map for behavior the compiler must
-not infer: the kernel repository binding, entity label and shortcode resolver,
-filter declaration, search-document projection/text/refresh hooks, lifecycle
-policy/runtime binding, and any attach/detach implementation. Each entry is a
+`extensions.ports` is the explicit seam map for entity-wide behavior the
+compiler must not infer: the kernel repository binding, entity label and
+shortcode resolver, filter declaration, and search-document
+projection/text/refresh hooks. Each entry is a
 `{ module, export }` source reference or `null` when that port is intentionally
-absent or remains a workflow-only seam. The generated inspector projects these
-references as client-safe data; the server roster is a lookup catalog, not a
-dynamic importer. Repository closures still own transactions and service
-injection.
+absent or remains a workflow-only seam. Mutable relationships declare their
+typed item schema, repository adapter, source, and browser/MCP exposure on the
+relationship itself. The generated inspector projects these references as
+client-safe data; generated server bindings import executable adapters.
+Repository closures still own transactions and service injection.
 
 Filter descriptors are restricted literal records. Static choices stay literal;
 icon-bearing option lists, identifier brands, and compound preset expansion use
@@ -118,7 +117,8 @@ in repository filter builders.
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (including inbound-only legacy aliases), schema bindings,
 client-safe inspector metadata, browser route roster, filter field/URL catalogs,
-kernel action capabilities, repository-adapter assembly, and contract cases.
+kernel and MCP action capabilities, relation-specific command schemas,
+repository/relation-adapter assembly, and contract cases.
 Shared browser helpers consume the roster, while TanStack route modules remain
 thin handwritten entrypoints. Specialized screens stay as extension slots in
 shared shells.
@@ -192,15 +192,24 @@ after projection changes; source edits do not rewrite persisted rows.
 
 ## Relations, deletion, and merge
 
-Every local relation declares an inverse and an incoming deletion policy:
-`restrict`, `cascade`, `setNull`, or `detach`. Omission defaults to `restrict`.
-These semantic-edge declarations feed the
-catalog; repository edge-role policies remain the runtime authority until the
-relation-policy compiler replaces them.
+Every logical relation declares its target, cardinality, primary named source,
+provenance path, and inverse path. A relationship may add more named sources;
+for example, `Purchase.products` combines detachable `explicit` evidence from
+`PurchaseProduct` with non-detachable `expense` evidence from acquisition
+Expenses. Mutable sources additionally name a typed item schema, adapter, and
+transport exposure. The compiler rejects duplicate relation/source keys,
+unresolvable mutation sources, invalid inverses, and stale generated bindings.
+
+Lifecycle is deliberately separate from logical relationships. Physical edges
+carry stable domain meaning, while each delete or merge operation declares its
+own disposition for every incoming edge. The integrity catalog records whether
+the executable owner is the generic kernel or a specialized workflow. There is
+no logical `deletionPolicy` and no inferred database cascade.
 
 Deletion is one command. Soft versus hard deletion is a capability, and the
-result identifies the deleted public references plus exact affected edges when
-the repository can report them. There is no generic delete preview or restore.
+result identifies the deleted public references plus a non-null changed-row
+count for every affected-edge disposition. There is no generic delete preview
+or restore.
 
 Merge is keeper-wins. Declared edges are repointed, only explicitly mergeable
 fields combine, and uniqueness or workflow collisions reject the operation.
@@ -210,11 +219,14 @@ irreducible transaction and collision rules.
 ## Adding an entity
 
 1. Add its table, migration, branded id, and Zod input/output schemas.
-2. Add one literal `.entity.ts` spec with all capabilities and relation policies.
+2. Add one literal `.entity.ts` spec with its capabilities and logical
+   relationships.
 3. Add a kernel repository adapter for the capabilities the spec declares.
 4. Add thin TanStack route modules and workflow extensions where needed.
 5. Run `pnpm entity:generate`; review generated source like handwritten source.
-6. Run generated action contracts, PGlite mechanical contracts, and any
+6. Declare physical edge semantics and operation-specific lifecycle policies,
+   when the entity participates in deletion or merge.
+7. Run generated action contracts, PGlite mechanical contracts, and any
    real-Postgres tests required by repositories, raw SQL, extensions, or
    concurrency.
 

@@ -2,6 +2,7 @@ import { backgroundBatchBrowserSummarySchema } from "@cubby/schemas/background-j
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { backgroundBatch } from "~/lib/background-batch.functions";
 
 import {
@@ -80,7 +81,7 @@ describe("background batch polling", () => {
     const watching = watchBatchesAndInvalidateTags({
       queryClient,
       result: queuedResult,
-      invalidateTags: [["product"]],
+      invalidateTags: ripple.product,
       fetchBatchStatus,
     });
     await vi.advanceTimersByTimeAsync(3_000);
@@ -100,7 +101,7 @@ describe("background batch polling", () => {
     const watching = watchBatchesAndInvalidateTags({
       queryClient,
       result: queuedResult,
-      invalidateTags: [["product"]],
+      invalidateTags: ripple.product,
       fetchBatchStatus,
     });
     await vi.advanceTimersByTimeAsync(45_000);
@@ -121,7 +122,7 @@ describe("background batch polling", () => {
     const watching = watchBatchesAndInvalidateTags({
       queryClient,
       result: queuedResult,
-      invalidateTags: [["product"]],
+      invalidateTags: ripple.product,
       fetchBatchStatus: vi.fn().mockResolvedValue("succeeded"),
     });
     await vi.advanceTimersByTimeAsync(1_500);

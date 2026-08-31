@@ -210,8 +210,9 @@ history is the archive. Permanent product constraints live in the
   statement-row mutation paths write no audit trail. Also routes that delete through
   `removeEntity` for cascade and locking. Costs shortcode prefixes, a batched backfill
   of the whole `StatementRow` table, a detail route, and entries in roughly ten
-  exhaustive `Record<Entity, …>` tables. Follow `scripts/backfill-image-shortcodes.ts`;
-  `generateUniqueShortcode` does a SELECT per candidate and is wrong for bulk.
+  exhaustive `Record<Entity, …>` tables. Backfill in batches with an in-memory
+  set of existing codes; `generateUniqueShortcode` does a SELECT per candidate
+  and is wrong for bulk.
 - **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
   call actually duplicates a meal line in practice. A natural-key unique index is NOT
   the answer: a meal repeating a recipe at different scales is intended behavior, and

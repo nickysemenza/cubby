@@ -10,6 +10,7 @@ import {
   projectResourcesWorkflow,
   projectSetToolUsageWorkflow,
   projectToolMatrixWorkflow,
+  projectToolGalleryWorkflow,
   projectToolSuggestionsWorkflow,
   projectTreeWorkflow,
 } from "~/server/workflows/project.server";
@@ -31,6 +32,8 @@ export const projectHandlers = implementOperationDomain(project, {
   detachResources: (context, input) =>
     projectDetachResourcesWorkflow(context.db, input, context.actorContext),
   toolMatrix: (context, input) => projectToolMatrixWorkflow(context.db, input),
+  toolGallery: (context, input) =>
+    projectToolGalleryWorkflow(context.db, input),
   setToolUsage: (context, input) =>
     projectSetToolUsageWorkflow(context.db, input, context.actorContext),
 });

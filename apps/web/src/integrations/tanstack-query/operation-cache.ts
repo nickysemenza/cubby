@@ -1,5 +1,9 @@
 import type { Query, QueryClient, QueryKey } from "@tanstack/react-query";
 
+import {
+  EMPTY_INVALIDATION_TAG_SET,
+  type InvalidationTagSet,
+} from "./cache-tags";
 import type { OperationCacheTag } from "./operation-meta";
 
 const tagMatches = (
@@ -10,8 +14,8 @@ const tagMatches = (
   invalidation.every((part, index) => candidate[index] === part);
 
 export const resolveInvalidationTags = (
-  invalidates: readonly OperationCacheTag[] | undefined,
-): readonly OperationCacheTag[] => invalidates ?? [];
+  invalidates: InvalidationTagSet | undefined,
+): InvalidationTagSet => invalidates ?? EMPTY_INVALIDATION_TAG_SET;
 
 /**
  * The one predicate every tag-driven cache operation shares: a query matches
@@ -26,7 +30,7 @@ export const matchesTags =
 
 export function invalidateOperationTags(
   queryClient: QueryClient,
-  invalidations: readonly OperationCacheTag[],
+  invalidations: InvalidationTagSet,
 ) {
   if (invalidations.length === 0) return Promise.resolve();
   return queryClient.invalidateQueries({

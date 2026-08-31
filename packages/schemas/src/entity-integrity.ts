@@ -1,12 +1,5 @@
 import { z } from "zod";
-import { nonEmptyTuple } from "./identifiers";
 import { entitySchema } from "./entity-core";
-import {
-  anyShortcodeSchema,
-  productShortcode,
-  projectShortcode,
-  purchaseShortcode,
-} from "./identifiers";
 
 /**
  * Serializable shapes for the entity-integrity system.
@@ -116,9 +109,9 @@ export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
  * - `local-path` — one or more real FK hops. Verified end-to-end against
  *   Drizzle metadata: every step must be a real FK, the steps must chain, and
  *   the last one must land on the declared target's table.
- * - `unconstrained` — a real relationship the app walks, with no DB-level FK
- *   to verify (`Location.parentId`). Names the edge, which must itself be
- *   marked `unconstrained` in `INCOMING_EDGES`.
+ * - `unconstrained` — a real relationship the app walks with no DB-level FK
+ *   to verify. Names the edge, which must itself be marked `unconstrained` in
+ *   `INCOMING_EDGES`.
  * - `external` — a link to a system with no local table. Names the source
  *   columns that carry it.
  */
@@ -141,17 +134,39 @@ export type RelationshipProvenance = z.infer<
   typeof relationshipProvenanceSchema
 >;
 
-export const entityRelationshipSchema = z.object({
+const relationshipSourceSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
-  target: entitySchema,
   provenance: relationshipProvenanceSchema,
   inverse: z
     .object({ steps: z.array(relationshipPathStepSchema).min(1) })
     .optional(),
-  deletionPolicy: z
-    .enum(["restrict", "cascade", "setNull", "detach"])
-    .default("restrict"),
+});
+
+const sourceRefSchema = z.object({
+  module: z.string().min(1),
+  export: z.string().min(1),
+});
+
+const relationshipMutationSchema = z.object({
+  source: z.string().min(1),
+  itemSchema: sourceRefSchema,
+  adapter: sourceRefSchema,
+  audiences: z.array(z.enum(["browser", "mcp"])).min(1),
+});
+
+export const entityRelationshipSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  target: entitySchema,
+  cardinality: z.enum(["one", "many"]),
+  sourceKey: z.string().min(1).optional(),
+  provenance: relationshipProvenanceSchema,
+  inverse: z
+    .object({ steps: z.array(relationshipPathStepSchema).min(1) })
+    .optional(),
+  sources: z.array(relationshipSourceSchema).default([]),
+  mutation: relationshipMutationSchema.optional(),
 });
 export type EntityRelationship = z.infer<typeof entityRelationshipSchema>;
 
@@ -185,6 +200,7 @@ export type PhysicalEdge = z.infer<typeof physicalEdgeSchema>;
 export const lifecycleOperationSchema = z.object({
   entity: entitySchema,
   operation: z.enum(["delete", "merge"]),
+  owner: z.enum(["kernel", "workflow"]),
   dispositions: z.array(
     z.object({
       edgeKey: edgeKeySchema,
@@ -292,75 +308,10 @@ export const toPublicImpact = (
   return publicImpactItemSchema.parse({ ...item, byTargetId });
 };
 
-/**
- * The parents of the three `<parent> ← product` relation families — the only
- * entities `attach`/`detach` can preview.
- *
- * ⚠️ Dispatch is on the PARENT'S SHORTCODE PREFIX, which is unambiguous only
- * because each of these has exactly one product-parented relation today
- * (`ProductComponent`, `ProjectToolUsage`, `PurchaseProduct`). A SECOND
- * product-parented relation — accessories, replacement parts, consumable-for —
- * would make `PRD-…` ambiguous. When that day comes, add an explicit
- * `relation` ENUM parameter here and in `attach_entity`; do NOT default it to
- * "components" and keep overloading the prefix, which silently reinterprets
- * every existing call.
- */
-export const relationParentEntitySchema = z.enum([
-  "product",
-  "project",
-  "purchase",
-]);
-export type RelationParentEntity = z.infer<typeof relationParentEntitySchema>;
-const previewParentIdSchema = {
-  product: productShortcode,
-  project: projectShortcode,
-  purchase: purchaseShortcode,
-} as const satisfies Record<RelationParentEntity, z.ZodType<string, string>>;
-
-export type PreviewOperationEntity = RelationParentEntity;
-
-export const previewOperationInputSchema = z
-  .object({
-    operation: z
-      .enum(["attach", "detach"])
-      .describe("Whether the product relation is being created or removed."),
-    entity: relationParentEntitySchema.describe(
-      `The parent entity: ${relationParentEntitySchema.options.join(", ")}.`,
-    ),
-    parentId: anyShortcodeSchema(
-      nonEmptyTuple<RelationParentEntity>(relationParentEntitySchema.options),
-    ).describe(
-      `The ${relationParentEntitySchema.options.join("/")} row the relation hangs off. Its prefix must agree with \`entity\`.`,
-    ),
-    productIds: z
-      .array(productShortcode)
-      .min(1)
-      .max(100)
-      .describe("The distinct PRD- codes on the other end of the relation."),
-  })
-  .superRefine((input, ctx) => {
-    const parentSchema = previewParentIdSchema[input.entity];
-    if (!parentSchema.safeParse(input.parentId).success) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["parentId"],
-        message: `"${input.parentId}" is not a ${input.entity} shortcode. The parent id must match the \`entity\` you passed ("${input.entity}").`,
-      });
-    }
-    if (new Set(input.productIds).size !== input.productIds.length) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["productIds"],
-        message: "productIds must be distinct",
-      });
-    }
-  });
-
-export type PreviewOperationInput = z.infer<typeof previewOperationInputSchema>;
-
 export const previewOperationSchema = z.object({
   operation: z.enum(["attach", "detach"]),
-  entity: relationParentEntitySchema,
+  entity: entitySchema,
+  relation: z.string().min(1),
   targetCount: z.number().int().nonnegative(),
   /**
    * False when a blocker will make the mutation throw. The dialog disables

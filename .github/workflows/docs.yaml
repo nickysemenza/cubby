@@ -6,12 +6,10 @@ on:
     paths:
       - "**/*.md"
       - "**/*.mdx"
-      - "scripts/check-markdown-links.ts"
   pull_request:
     paths:
       - "**/*.md"
       - "**/*.mdx"
-      - "scripts/check-markdown-links.ts"
 
 permissions:
   contents: read
@@ -22,7 +20,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - name: Check relative Markdown links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          node-version: 24
-      - run: node scripts/check-markdown-links.ts
+          args: >-
+            --offline
+            --no-progress
+            --exclude-path '(^|/)node_modules/'
+            --root-dir "${{ github.workspace }}"
+            './**/*.md'
+            './**/*.mdx'

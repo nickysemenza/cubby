@@ -30,8 +30,9 @@
  *   EMBEDDING   → `detectors-embedding.ts`  (live entities with no embedding row
  *                                            — invisible to semantic search)
  *   INTEGRITY   → `detectors-integrity.ts`  (live rows pointing at soft-deleted
- *                                            targets — the schema-wide audit of
- *                                            the incoming-edge liveness rules)
+ *                                            targets, plus Project/Task
+ *                                            dependency cycles written out of
+ *                                            band)
  *   REPARSE     → `reparse.ts`              (stale-parse detection + apply writes)
  *
  * Every problem item type is the canonical Zod-derived shape from
@@ -62,7 +63,9 @@ export {
 } from "./detectors-ingredient";
 // Schema-wide referential-liveness audit
 export {
+  countDependencyCycles,
   countReferentialLivenessViolations,
+  findDependencyCycles,
   findReferentialLivenessViolations,
 } from "./detectors-integrity";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
