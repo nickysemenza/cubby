@@ -1,5 +1,9 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchDestination,
+  SearchHit,
+} from "@cubby/schemas/search";
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 
 import { ProjectMark } from "~/app/projects/project-mark";
@@ -35,11 +39,11 @@ export const entityTypeMap = {
   wish: "wish",
 } satisfies Record<SearchableEntity, BrowserRoutedEntity>;
 
-function getSearchResultEntity(item: SearchHit): BrowserRoutedEntity {
+function getSearchResultEntity(item: SearchDestination): BrowserRoutedEntity {
   return entityTypeMap[item.entityType];
 }
 
-export function getSearchResultRoute(item: SearchHit) {
+export function getSearchResultRoute(item: SearchDestination) {
   const entity = getSearchResultEntity(item);
   return {
     to: entities[entity].routes.detail,
@@ -47,7 +51,7 @@ export function getSearchResultRoute(item: SearchHit) {
   };
 }
 
-export function rememberSearchResult(item: SearchHit): void {
+export function rememberSearchResult(item: SearchDestination): void {
   pushRecent({ entityType: item.entityType, id: item.id, name: item.title });
 }
 
@@ -81,7 +85,7 @@ function SearchHitIcon({
   item,
   className = "size-4 shrink-0",
 }: {
-  item: SearchHit;
+  item: SearchDestination;
   className?: string;
 }) {
   const entity = entityTypeMap[item.entityType];
@@ -132,7 +136,7 @@ export function SearchResultMedia({
   item,
   variant = "command",
 }: {
-  item: SearchHit;
+  item: SearchDestination;
   variant?: keyof typeof mediaVariants;
 }) {
   const media = mediaVariants[variant];

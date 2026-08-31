@@ -8,6 +8,10 @@ import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  findGroupedSearchHits,
+  findRelatedSearchGroups,
+} from "~/server/services/search-grouping.service";
+import {
   findRelatedSearchHits,
   findSearchHits,
   inspectSearchDocumentHealth,
@@ -23,6 +27,11 @@ export const findSearchHitsWorkflow = (
   input: z.output<typeof searchQueryInputSchema>,
 ) => findSearchHits(db, input);
 
+export const findGroupedSearchHitsWorkflow = (
+  db: Database,
+  input: z.output<typeof searchQueryInputSchema>,
+) => findGroupedSearchHits(db, input);
+
 export const inspectSearchDocumentHealthWorkflow = (db: Database) =>
   inspectSearchDocumentHealth(db);
 
@@ -33,6 +42,11 @@ export const findRelatedSearchHitsWorkflow = (
   db: Database,
   input: z.output<typeof searchQueryInputSchema>,
 ) => findRelatedSearchHits(db, input);
+
+export const findRelatedSearchGroupsWorkflow = (
+  db: Database,
+  input: z.output<typeof searchQueryInputSchema>,
+) => findRelatedSearchGroups(db, input);
 
 export const findSimilarEntitiesWorkflow = (
   db: Database,

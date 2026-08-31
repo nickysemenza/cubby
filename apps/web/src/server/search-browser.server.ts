@@ -2,6 +2,8 @@ import { search } from "~/lib/search.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   enqueueEmbeddingBackfillWorkflow,
+  findGroupedSearchHitsWorkflow,
+  findRelatedSearchGroupsWorkflow,
   findRelatedSearchHitsWorkflow,
   findSearchHitsWorkflow,
   inspectSearchDebugWorkflow,
@@ -17,6 +19,8 @@ import {
  */
 export const searchHandlers = implementOperationDomain(search, {
   find: (context, input) => findSearchHitsWorkflow(context.readDb, input),
+  grouped: (context, input) =>
+    findGroupedSearchHitsWorkflow(context.readDb, input),
   documentHealth: {
     readPolicy: "strong",
     run: (context) => inspectSearchDocumentHealthWorkflow(context.db),
@@ -24,6 +28,8 @@ export const searchHandlers = implementOperationDomain(search, {
   repairDocuments: (context) => repairSearchDocumentsWorkflow(context.db),
   related: (context, input) =>
     findRelatedSearchHitsWorkflow(context.readDb, input),
+  relatedGrouped: (context, input) =>
+    findRelatedSearchGroupsWorkflow(context.readDb, input),
   debug: (context, input) => inspectSearchDebugWorkflow(context.db, input),
   enqueueEmbeddingBackfill: (context, input) =>
     enqueueEmbeddingBackfillWorkflow(context.db, input),

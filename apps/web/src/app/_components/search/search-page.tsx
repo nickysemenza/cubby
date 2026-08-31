@@ -1,10 +1,16 @@
-import type { SearchableEntity, SearchType } from "@cubby/schemas/search";
+import type {
+  SearchComponentPlacement,
+  SearchDestination,
+  SearchInventoryPlacement,
+  SearchResultGroup,
+  SearchType,
+} from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { Search } from "lucide-react";
+import { ChevronRight, MapPin, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -31,7 +37,6 @@ import {
   getSearchMatchText,
   getSearchResultRoute,
   rememberSearchResult,
-  type SearchHit,
   SearchResultMedia,
 } from "./search-utils";
 
@@ -41,7 +46,7 @@ interface SearchPageProps {
 }
 
 interface SearchPreviewRow {
-  original: SearchHit & EntityPreviewRowData;
+  original: SearchDestination & EntityPreviewRowData;
 }
 
 type SearchPreviewHandler = (row: SearchPreviewRow) => void;
@@ -64,8 +69,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   const relatedHeadingId = useId();
   const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
   const [relatedDraft] = useDebouncedValue(draft, { wait: 450 });
-  const entityTypes: SearchableEntity[] | undefined =
-    type === "all" ? undefined : [type];
+  const entityTypes = type === "all" ? undefined : [type];
   const primaryShouldSearch = debouncedDraft.trim().length > 0;
   const relatedShouldSearch =
     relatedDraft.trim().length > 0 && relatedDraft === draft;
@@ -84,7 +88,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
   }, [debouncedDraft, navigate, query, type]);
 
   const primary = useQuery({
-    ...search.find.queryOptions({
+    ...search.grouped.queryOptions({
       // Disabled queries still construct and validate their options.
       query: primaryShouldSearch ? debouncedDraft : "inactive-search",
       entityTypes,
@@ -94,7 +98,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     placeholderData: keepPreviousData,
   });
   const related = useQuery({
-    ...search.related.queryOptions({
+    ...search.relatedGrouped.queryOptions({
       query: relatedShouldSearch ? relatedDraft : "inactive-search",
       entityTypes,
       limit: 12,
@@ -112,12 +116,8 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
       related.data?.status !== "ready"
     )
       return [];
-    const primaryRefs = new Set(
-      (primary.data ?? []).map((hit) => `${hit.entityType}:${hit.id}`),
-    );
-    return related.data.results.filter(
-      (hit) => !primaryRefs.has(`${hit.entityType}:${hit.id}`),
-    );
+    const primaryRefs = new Set((primary.data ?? []).map((group) => group.key));
+    return related.data.groups.filter((group) => !primaryRefs.has(group.key));
   }, [
     draft,
     primary.data,
@@ -286,7 +286,7 @@ function SearchResults({
   onPrefetch,
   onPrefetchEnd,
 }: {
-  data: SearchHit[];
+  data: SearchResultGroup[];
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
@@ -294,6 +294,9 @@ function SearchResults({
   onPrefetch: SearchPreviewHandler;
   onPrefetchEnd: SearchPreviewHandler;
 }) {
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const feedback = getSearchResultsFeedback({
     isLoading,
     error,
@@ -303,30 +306,50 @@ function SearchResults({
     return <SearchResultsFeedback state={feedback} onRetry={onRetry} />;
   return (
     <div className="border-y border-border">
-      {data.map((item) => (
-        <SearchRow
-          key={`${item.entityType}:${item.id}`}
-          item={item}
-          onPreview={onPreview}
-          onPrefetch={onPrefetch}
-          onPrefetchEnd={onPrefetchEnd}
-        />
-      ))}
+      {data.map((group) =>
+        group.kind === "product" ? (
+          <ProductSearchRow
+            key={group.key}
+            expanded={expandedKeys.has(group.key)}
+            group={group}
+            onPreview={onPreview}
+            onPrefetch={onPrefetch}
+            onPrefetchEnd={onPrefetchEnd}
+            onToggle={() =>
+              setExpandedKeys((current) => {
+                const updated = new Set(current);
+                if (updated.has(group.key)) updated.delete(group.key);
+                else updated.add(group.key);
+                return updated;
+              })
+            }
+          />
+        ) : (
+          <SearchRow
+            key={group.key}
+            group={group}
+            onPreview={onPreview}
+            onPrefetch={onPrefetch}
+            onPrefetchEnd={onPrefetchEnd}
+          />
+        ),
+      )}
     </div>
   );
 }
 
 function SearchRow({
-  item,
+  group,
   onPreview,
   onPrefetch,
   onPrefetchEnd,
 }: {
-  item: SearchHit;
+  group: Extract<SearchResultGroup, { kind: "entity" }>;
   onPreview: SearchPreviewHandler;
   onPrefetch: SearchPreviewHandler;
   onPrefetchEnd: SearchPreviewHandler;
 }) {
+  const item = group.primary;
   const previewRow = { original: item };
   return (
     <div className="group flex items-center gap-4 border-b border-border px-2 py-2 last:border-b-0 hover:bg-muted/45">
@@ -350,6 +373,11 @@ function SearchRow({
         {item.subtitle && (
           <span className="block truncate text-xs text-muted-foreground">
             {item.subtitle}
+          </span>
+        )}
+        {group.linkedProduct && (
+          <span className="block truncate text-2xs text-muted-foreground">
+            Linked to {group.linkedProduct.title}
           </span>
         )}
       </div>
@@ -378,18 +406,246 @@ function SearchRow({
   );
 }
 
+const formatPlacement = (placement: SearchInventoryPlacement) => {
+  const { value, upperValue, unit } = placement.amount;
+  return `${value}${upperValue === undefined ? "" : `–${upperValue}`} ${unit} · ${placement.placement}`;
+};
+
+const placementSearchDestination = (
+  group: Extract<SearchResultGroup, { kind: "product" }>,
+  placement: SearchInventoryPlacement,
+): SearchDestination => ({
+  id: placement.id,
+  entityType: "inventory",
+  title: group.primary.title,
+  subtitle: placement.locationPath,
+  typeHint: group.primary.typeHint,
+  imageUrl: group.primary.imageUrl,
+});
+
+const componentPlacementSearchDestination = (
+  componentPlacement: SearchComponentPlacement,
+): SearchDestination => ({
+  ...componentPlacement.component,
+  id: componentPlacement.placement.id,
+  entityType: "inventory",
+  subtitle: componentPlacement.placement.locationPath,
+});
+
+const searchProductSummary = (
+  group: Extract<SearchResultGroup, { kind: "product" }>,
+) => {
+  const placements = group.placements.length;
+  const componentPlacements = group.componentPlacements.length;
+  const activity = group.matchedActivity.length;
+  const locationPaths = [
+    ...group.placements.map((placement) => placement.locationPath),
+    ...group.componentPlacements.map(({ placement }) => placement.locationPath),
+  ];
+  return [
+    ...(placements > 0
+      ? [
+          `${placements} ${componentPlacements > 0 ? "direct " : ""}${placements === 1 ? "placement" : "placements"}`,
+        ]
+      : componentPlacements === 0
+        ? ["0 placements"]
+        : []),
+    ...(componentPlacements > 0 ? ["Kit contents placed"] : []),
+    ...[...new Set(locationPaths)].slice(0, 2),
+    ...(activity > 0
+      ? [`${activity} matching ${activity === 1 ? "record" : "records"}`]
+      : []),
+  ].join(" · ");
+};
+
+function ProductSearchRow({
+  expanded,
+  group,
+  onPreview,
+  onPrefetch,
+  onPrefetchEnd,
+  onToggle,
+}: {
+  expanded: boolean;
+  group: Extract<SearchResultGroup, { kind: "product" }>;
+  onPreview: SearchPreviewHandler;
+  onPrefetch: SearchPreviewHandler;
+  onPrefetchEnd: SearchPreviewHandler;
+  onToggle: () => void;
+}) {
+  const previewRow = { original: group.primary };
+  const regionId = `search-family-${group.primary.id}`;
+  const hasChildren =
+    group.placements.length > 0 ||
+    group.componentPlacements.length > 0 ||
+    group.matchedActivity.length > 0;
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <div className="group flex items-center gap-3 px-2 py-2 hover:bg-muted/45">
+        {hasChildren && (
+          <button
+            type="button"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${group.primary.title} placements and matching records`}
+            aria-expanded={expanded}
+            aria-controls={regionId}
+            onClick={onToggle}
+            className="flex size-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <ChevronRight
+              className={cn(
+                "size-4 transition-transform motion-reduce:transition-none",
+                expanded && "rotate-90",
+              )}
+            />
+          </button>
+        )}
+        <SearchResultMedia item={group.primary} variant="list" />
+        <div className="min-w-0 flex-1">
+          <Link
+            {...getSearchResultRoute(group.primary)}
+            onPointerEnter={(event) => {
+              if (event.pointerType !== "touch") onPrefetch(previewRow);
+            }}
+            onPointerLeave={(event) => {
+              if (event.pointerType !== "touch") onPrefetchEnd(previewRow);
+            }}
+            onFocus={() => onPrefetch(previewRow)}
+            onBlur={() => onPrefetchEnd(previewRow)}
+            onClick={() => rememberSearchResult(group.primary)}
+            className="block truncate text-sm font-medium hover:text-primary"
+          >
+            {group.primary.title}
+          </Link>
+          <span className="block truncate text-xs text-muted-foreground">
+            {[group.primary.subtitle, searchProductSummary(group)]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onPreview(previewRow)}
+          className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
+        >
+          Preview
+        </button>
+        <div className="hidden max-w-44 shrink-0 text-right sm:block">
+          <span className="block font-mono text-2xs text-muted-foreground uppercase">
+            Product
+          </span>
+          <span className="block font-mono text-2xs text-foreground tabular-nums">
+            {group.primary.id}
+          </span>
+          <span
+            className="block max-w-44 truncate text-2xs text-muted-foreground"
+            title={group.bestMatch.matchReason}
+          >
+            {getSearchMatchText(group.bestMatch)}
+          </span>
+        </div>
+      </div>
+      {expanded && hasChildren && (
+        <fieldset
+          id={regionId}
+          aria-label={`${group.primary.title} placements and matching records`}
+          className="border-t border-border bg-muted/25 py-1"
+        >
+          {group.placements.map((placement) => {
+            const destination = placementSearchDestination(group, placement);
+            return (
+              <Link
+                key={placement.id}
+                {...getSearchResultRoute(destination)}
+                onClick={() => rememberSearchResult(destination)}
+                className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
+              >
+                <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium">
+                    {placement.locationPath}
+                  </span>
+                  <span className="block truncate text-2xs text-muted-foreground">
+                    {formatPlacement(placement)}
+                  </span>
+                </span>
+                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                  {placement.id}
+                </span>
+              </Link>
+            );
+          })}
+          {group.componentPlacements.map((componentPlacement) => {
+            const destination =
+              componentPlacementSearchDestination(componentPlacement);
+            return (
+              <Link
+                key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
+                {...getSearchResultRoute(destination)}
+                onClick={() => rememberSearchResult(destination)}
+                className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
+              >
+                <SearchResultMedia item={componentPlacement.component} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium">
+                    {componentPlacement.component.title}
+                  </span>
+                  <span className="block truncate text-2xs text-muted-foreground">
+                    {componentPlacement.componentQuantity > 1
+                      ? `${componentPlacement.componentQuantity}× kit content`
+                      : "Kit content"}{" "}
+                    · {componentPlacement.placement.locationPath} ·{" "}
+                    {formatPlacement(componentPlacement.placement)}
+                  </span>
+                </span>
+                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                  {componentPlacement.placement.id}
+                </span>
+              </Link>
+            );
+          })}
+          {group.matchedActivity.map((item) => (
+            <Link
+              key={`${item.entityType}:${item.id}`}
+              {...getSearchResultRoute(item)}
+              onClick={() => rememberSearchResult(item)}
+              className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
+            >
+              <SearchResultMedia item={item} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-medium">
+                  {item.title}
+                </span>
+                <span className="block truncate text-2xs text-muted-foreground">
+                  {entities[entityTypeMap[item.entityType]].label} · {item.id} ·
+                  Linked to {group.primary.title}
+                </span>
+              </span>
+              <span className="max-w-36 truncate text-2xs text-muted-foreground">
+                {getSearchMatchText(item)}
+              </span>
+            </Link>
+          ))}
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
 function MobileSearchResults({
   data,
   isLoading,
   error,
   onRetry,
 }: {
-  data: SearchHit[];
+  data: SearchResultGroup[];
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
 }) {
   const navigate = useNavigate();
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const feedback = getSearchResultsFeedback({
     isLoading,
     error,
@@ -400,23 +656,177 @@ function MobileSearchResults({
     return <SearchResultsFeedback state={feedback} onRetry={onRetry} mobile />;
   return (
     <div className="border-y border-border">
-      {data.map((item) => (
-        <MobileCard
-          key={`${item.entityType}:${item.id}`}
-          variant="row"
-          title={item.title}
-          subtitle={item.subtitle}
-          imageSlot={<SearchResultMedia item={item} variant="mobile" />}
-          rightValues={[
-            item.id,
-            entities[entityTypeMap[item.entityType]].label,
-          ]}
-          onClick={() => {
-            rememberSearchResult(item);
-            navigate(getSearchResultRoute(item));
-          }}
-        />
-      ))}
+      {data.map((group) => {
+        if (group.kind === "product") {
+          const expanded = expandedKeys.has(group.key);
+          const hasChildren =
+            group.placements.length > 0 ||
+            group.componentPlacements.length > 0 ||
+            group.matchedActivity.length > 0;
+          const regionId = `mobile-search-family-${group.primary.id}`;
+          return (
+            <div
+              key={group.key}
+              className="border-b border-border last:border-b-0"
+            >
+              <div className="flex items-stretch">
+                <div className="min-w-0 flex-1">
+                  <MobileCard
+                    variant="row"
+                    title={group.primary.title}
+                    subtitle={searchProductSummary(group)}
+                    imageSlot={
+                      <SearchResultMedia
+                        item={group.primary}
+                        variant="mobile"
+                      />
+                    }
+                    rightValues={[group.primary.id, "Product"]}
+                    onClick={() => {
+                      rememberSearchResult(group.primary);
+                      navigate(getSearchResultRoute(group.primary));
+                    }}
+                  />
+                </div>
+                {hasChildren && (
+                  <button
+                    type="button"
+                    aria-label={`${expanded ? "Collapse" : "Expand"} ${group.primary.title} placements and matching records`}
+                    aria-expanded={expanded}
+                    aria-controls={regionId}
+                    onClick={() =>
+                      setExpandedKeys((current) => {
+                        const updated = new Set(current);
+                        if (updated.has(group.key)) updated.delete(group.key);
+                        else updated.add(group.key);
+                        return updated;
+                      })
+                    }
+                    className="flex min-h-11 min-w-11 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        "size-4 transition-transform motion-reduce:transition-none",
+                        expanded && "rotate-90",
+                      )}
+                    />
+                  </button>
+                )}
+              </div>
+              {expanded && hasChildren && (
+                <fieldset
+                  id={regionId}
+                  aria-label={`${group.primary.title} placements and matching records`}
+                  className="border-t border-border bg-muted/25 py-1"
+                >
+                  {group.placements.map((placement) => {
+                    const destination = placementSearchDestination(
+                      group,
+                      placement,
+                    );
+                    return (
+                      <Link
+                        key={placement.id}
+                        {...getSearchResultRoute(destination)}
+                        onClick={() => rememberSearchResult(destination)}
+                        className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
+                      >
+                        <MapPin className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium">
+                            {placement.locationPath}
+                          </span>
+                          <span className="block truncate text-2xs text-muted-foreground">
+                            {formatPlacement(placement)}
+                          </span>
+                        </span>
+                        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                          {placement.id}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                  {group.componentPlacements.map((componentPlacement) => {
+                    const destination =
+                      componentPlacementSearchDestination(componentPlacement);
+                    return (
+                      <Link
+                        key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
+                        {...getSearchResultRoute(destination)}
+                        onClick={() => rememberSearchResult(destination)}
+                        className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
+                      >
+                        <SearchResultMedia
+                          item={componentPlacement.component}
+                          variant="command"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium">
+                            {componentPlacement.component.title}
+                          </span>
+                          <span className="block truncate text-2xs text-muted-foreground">
+                            {componentPlacement.componentQuantity > 1
+                              ? `${componentPlacement.componentQuantity}× kit content`
+                              : "Kit content"}{" "}
+                            · {componentPlacement.placement.locationPath} ·{" "}
+                            {formatPlacement(componentPlacement.placement)}
+                          </span>
+                        </span>
+                        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                          {componentPlacement.placement.id}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                  {group.matchedActivity.map((item) => (
+                    <Link
+                      key={`${item.entityType}:${item.id}`}
+                      {...getSearchResultRoute(item)}
+                      onClick={() => rememberSearchResult(item)}
+                      className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
+                    >
+                      <SearchResultMedia item={item} variant="command" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium">
+                          {item.title}
+                        </span>
+                        <span className="block truncate text-2xs text-muted-foreground">
+                          {entities[entityTypeMap[item.entityType]].label} ·{" "}
+                          {item.id} · Linked to {group.primary.title}
+                        </span>
+                      </span>
+                    </Link>
+                  ))}
+                </fieldset>
+              )}
+            </div>
+          );
+        }
+        const item = group.primary;
+        return (
+          <MobileCard
+            key={group.key}
+            variant="row"
+            title={item.title}
+            subtitle={
+              group.linkedProduct
+                ? [item.subtitle, `Linked to ${group.linkedProduct.title}`]
+                    .filter(Boolean)
+                    .join(" · ")
+                : item.subtitle
+            }
+            imageSlot={<SearchResultMedia item={item} variant="mobile" />}
+            rightValues={[
+              item.id,
+              entities[entityTypeMap[item.entityType]].label,
+            ]}
+            onClick={() => {
+              rememberSearchResult(item);
+              navigate(getSearchResultRoute(item));
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

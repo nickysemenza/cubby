@@ -17,6 +17,8 @@ export interface EntityDisplayImageRef {
 const DISPLAY_IMAGE_ENTITIES = new Set<Entity>([
   "product",
   "inventory",
+  "expense",
+  "task",
   "recipe",
   "cookbook",
   "location",
@@ -67,12 +69,26 @@ export async function resolveEntityDisplayImages(
         SELECT i.key, 0 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId"
         FROM "ProductImage" pi
         JOIN "Image" i ON i.id = pi."imageId"
-        WHERE refs."entityType" IN ('product', 'inventory')
+        WHERE refs."entityType" IN ('product', 'inventory', 'expense', 'task')
           AND pi."productId" = CASE
             WHEN refs."entityType" = 'product' THEN refs."entityId"
-            ELSE (
-              SELECT ie."productId" FROM "InventoryEntry" ie
+            WHEN refs."entityType" = 'inventory' THEN (
+              SELECT ie."productId"
+              FROM "InventoryEntry" ie
+              JOIN "Product" p ON p.id = ie."productId" AND p."deletedAt" IS NULL
               WHERE ie.id = refs."entityId" AND ie."deletedAt" IS NULL
+            )
+            WHEN refs."entityType" = 'expense' THEN (
+              SELECT e."productId"
+              FROM "Expense" e
+              JOIN "Product" p ON p.id = e."productId" AND p."deletedAt" IS NULL
+              WHERE e.id = refs."entityId" AND e."deletedAt" IS NULL
+            )
+            WHEN refs."entityType" = 'task' THEN (
+              SELECT t."subjectProductId"
+              FROM "Task" t
+              JOIN "Product" p ON p.id = t."subjectProductId" AND p."deletedAt" IS NULL
+              WHERE t.id = refs."entityId" AND t."deletedAt" IS NULL
             )
           END
           AND pi."deletedAt" IS NULL AND i."deletedAt" IS NULL AND ${displayable}

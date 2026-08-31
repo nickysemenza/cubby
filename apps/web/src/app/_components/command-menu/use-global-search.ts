@@ -1,4 +1,7 @@
-import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import type {
+  SearchableEntity,
+  SearchResultGroup,
+} from "@cubby/schemas/search";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
@@ -12,10 +15,12 @@ const COMMAND_SEARCH_RESULT_LIMIT = 8;
 const LEXICAL_DEBOUNCE_MS = 100;
 
 interface UseGlobalSearchResult {
-  results: SearchHit[] | undefined;
+  results: SearchResultGroup[] | undefined;
   filteredActions: QuickAction[];
   isLoading: boolean;
   isFetching: boolean;
+  error: unknown;
+  retry: () => void;
   isEmpty: boolean;
 }
 
@@ -45,7 +50,7 @@ export function useGlobalSearch(
   // input must remain valid before the user has typed anything.
   const queryInput = shouldSearch ? query : "inactive-command-search";
   const lexical = useQuery({
-    ...search.find.queryOptions({
+    ...search.grouped.queryOptions({
       query: queryInput,
       entityTypes: entityType ? [entityType] : undefined,
       limit: COMMAND_SEARCH_RESULT_LIMIT,
@@ -102,9 +107,12 @@ export function useGlobalSearch(
     filteredActions,
     isLoading: shouldSearch && lexical.isPending,
     isFetching: lexical.isFetching,
+    error: lexical.error,
+    retry: () => void lexical.refetch(),
     isEmpty:
       shouldSearch &&
       !lexical.isPending &&
+      !lexical.error &&
       !lexical.isPlaceholderData &&
       (results?.length ?? 0) === 0 &&
       filteredActions.length === 0,
