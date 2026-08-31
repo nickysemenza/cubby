@@ -8,15 +8,12 @@ import {
 
 export const mcpHandlers = implementOperationDomain(mcp, {
   listTools: {
-    readPolicy: "strong",
     run: () => listMcpCatalogWorkflow(),
   },
   usageDashboard: {
-    readPolicy: "strong",
     run: (context, input) => getMcpUsageDashboardWorkflow(context.db, input),
   },
   usageActivity: {
-    readPolicy: "strong",
     run: (context, input) => listMcpUsageActivityWorkflow(context.db, input),
   },
 });

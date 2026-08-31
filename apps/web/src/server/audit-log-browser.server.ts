@@ -5,7 +5,6 @@ import { listAuditLog } from "~/server/workflows/audit-log";
 /** Browser adapter: authenticated, strongly consistent, schema-checked read. */
 export const auditLogHandlers = implementOperationDomain(auditLog, {
   list: {
-    readPolicy: "strong",
     run: (context, input) => listAuditLog({ db: context.db, data: input }),
   },
 });

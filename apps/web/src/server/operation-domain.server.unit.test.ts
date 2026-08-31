@@ -2,6 +2,7 @@ import { testUserId } from "@cubby/schemas/testing";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import type { BrowserReadPolicy } from "~/server/browser-read-policy";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import type {
@@ -45,7 +46,7 @@ interface ExecutionObservation {
   inputSchema: z.ZodType;
   outputSchema: object;
   request: StartOperationRequest;
-  readPolicy?: "context" | "strong";
+  readPolicy: BrowserReadPolicy;
 }
 
 function isOutputSchemaResolver<Input, OutputSchema extends z.ZodType>(
@@ -72,8 +73,8 @@ class TestOperationExecutionAdapter implements OperationExecutionAdapter {
       inputSchema: options.inputSchema,
       outputSchema: options.outputSchema,
       request: options.request,
+      readPolicy: options.readPolicy,
     };
-    if (options.readPolicy) observation.readPolicy = options.readPolicy;
     this.last = observation;
 
     const input = options.inputSchema.parse(options.input);
@@ -138,28 +139,49 @@ describe("implementOperationDomain", () => {
     });
     expect(adapter.last?.inputSchema).toBe(rangeInput);
     expect(adapter.last?.outputSchema).toBe(rangeOutput);
-    expect(adapter.last).not.toHaveProperty("readPolicy");
+    expect(adapter.last?.readPolicy).toBe("context");
     expect(seen.input).toEqual({ start: "2026-08-25" });
     expect(seen.context?.signal).toBe(request.signal);
     expect(seen.context?.db).toBe(baseContext.db);
   });
 
-  it("forwards a long-form readPolicy override", async () => {
+  it("derives mutation consistency centrally", async () => {
     const handlers = implementOperationDomain(
       domain,
       {
-        range: {
-          readPolicy: "strong",
-          run: async () => ({ days: 0 }),
-        },
+        range: async () => ({ days: 0 }),
         rotateFeed: async () => "rotated",
       },
       adapter,
     );
 
-    await handlers.operations.range({ data: { start: "x" }, request });
+    await handlers.operations.rotateFeed({ data: undefined, request });
     expect(adapter.last).toMatchObject({
-      operation: "calendar.range",
+      operation: "calendar.rotateFeed",
+      readPolicy: "strong",
+    });
+  });
+
+  it("derives registered strong-query consistency centrally", async () => {
+    const credentialDomain = {
+      getFeed: {
+        id: "calendar.getFeed",
+        definition: {
+          kind: "query",
+          input: z.undefined(),
+          output: z.string(),
+        },
+      },
+    } as const;
+    const handlers = implementOperationDomain(
+      credentialDomain,
+      { getFeed: async () => "feed-token" },
+      adapter,
+    );
+
+    await handlers.operations.getFeed({ data: undefined, request });
+    expect(adapter.last).toMatchObject({
+      operation: "calendar.getFeed",
       readPolicy: "strong",
     });
   });
@@ -224,6 +246,7 @@ describe("implementOperationDomain", () => {
     expect(adapter.last).toMatchObject({
       operation: "calendar.rotateFeed",
       type: "mutation",
+      readPolicy: "strong",
     });
   });
 });

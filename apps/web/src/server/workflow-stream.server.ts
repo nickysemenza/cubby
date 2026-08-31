@@ -4,6 +4,7 @@ import type { z } from "zod";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { REQUEST_ID_HEADER } from "~/lib/request-id";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
+import { applyBrowserReadPolicy } from "~/server/browser-read-policy";
 import { observeOperation } from "~/server/observed-request";
 import type { PublicStartOperationError } from "~/server/start-operation.contract";
 import {
@@ -102,9 +103,9 @@ export async function workflowStreamResponse<
             async (span) => {
               span.setAttribute("cubby.authenticated", false);
               throwIfStartOperationAborted(options.request.signal);
-              const context = await authenticateStartOperation(
-                options.request.headers,
-                span,
+              const context = applyBrowserReadPolicy(
+                await authenticateStartOperation(options.request.headers, span),
+                "strong",
               );
 
               stage = "input";

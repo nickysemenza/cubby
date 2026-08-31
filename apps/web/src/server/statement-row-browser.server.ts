@@ -8,15 +8,12 @@ import {
 
 export const statementRowHandlers = implementOperationDomain(statementRow, {
   list: {
-    readPolicy: "strong",
     run: (context, input) => listStatementRowsWorkflow(context.db, input),
   },
   summary: {
-    readPolicy: "strong",
     run: (context, input) => getStatementRowSummaryWorkflow(context.db, input),
   },
   imports: {
-    readPolicy: "strong",
     run: (context, input) => listStatementImportsWorkflow(context.db, input),
   },
 });

@@ -9,7 +9,6 @@ import { findUsdaFoodWorkflow } from "~/server/workflows/usda.server";
 
 export const usdaFoodHandlers = implementOperationDomain(usdaFood, {
   list: {
-    readPolicy: "strong",
     run: async (context, input) => {
       try {
         const { data, count } = await context.usdaService.listFoods(
@@ -33,11 +32,9 @@ export const usdaFoodHandlers = implementOperationDomain(usdaFood, {
     },
   },
   detail: {
-    readPolicy: "strong",
     run: (context, input) => context.usdaService.getFoodSummaryByID(input.id),
   },
   alternateId: {
-    readPolicy: "strong",
     run: (context, input) => findUsdaFoodWorkflow(context.usdaService, input),
   },
 });

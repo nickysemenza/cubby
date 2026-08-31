@@ -14,15 +14,14 @@ import {
 
 /**
  * User-facing search reads ride the cached read handle; document health,
- * repair, debug, and the embedding mutations stay authoritative — asserted by
- * read-policy.unit.test.ts.
+ * repair, debug, and the embedding mutations stay authoritative through the
+ * central browser read policy.
  */
 export const searchHandlers = implementOperationDomain(search, {
   find: (context, input) => findSearchHitsWorkflow(context.readDb, input),
   grouped: (context, input) =>
     findGroupedSearchHitsWorkflow(context.readDb, input),
   documentHealth: {
-    readPolicy: "strong",
     run: (context) => inspectSearchDocumentHealthWorkflow(context.db),
   },
   repairDocuments: (context) => repairSearchDocumentsWorkflow(context.db),

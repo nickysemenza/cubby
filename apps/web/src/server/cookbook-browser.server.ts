@@ -5,7 +5,6 @@ import { getCookbookSummary, listCookbooks } from "~/server/repo/cookbook";
 export const cookbookHandlers = implementOperationDomain(cookbook, {
   list: (context) => listCookbooks(context.readDb),
   detail: {
-    readPolicy: "strong",
     run: (context, input) => getCookbookSummary(context.db, input.shortcode),
   },
 });

@@ -24,47 +24,36 @@ import {
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problems, {
   getFast: {
-    readPolicy: "strong",
     run: (context) => findFastProblemsWorkflow(context),
   },
   getCounts: {
-    readPolicy: "strong",
     run: (context) => findProblemCountsWorkflow(context),
   },
   getViews: {
-    readPolicy: "strong",
     run: (context) => findViewProblemsWorkflow(context),
   },
   getCoverage: {
-    readPolicy: "strong",
     run: (context) => findCoverageProblemsWorkflow(context),
   },
   getUpc: {
-    readPolicy: "strong",
     run: (context) => findUpcProblemsWorkflow(context),
   },
   getTracker: {
-    readPolicy: "strong",
     run: (context) => findTrackerProblemsWorkflow(context),
   },
   getCoverageTotals: {
-    readPolicy: "strong",
     run: (context) => findCoverageTotalsWorkflow(context),
   },
   getMaintenanceCounts: {
-    readPolicy: "strong",
     run: (context) => findMaintenanceCountsWorkflow(context),
   },
   dryRunReparse: {
-    readPolicy: "strong",
     run: (context) => dryRunReparseWorkflow(context),
   },
   dryRunPruneAliases: {
-    readPolicy: "strong",
     run: (context) => dryRunPruneAliasesWorkflow(context),
   },
   recipeUsageByProduct: {
-    readPolicy: "strong",
     run: (context, input) => recipeUsageByProductWorkflow(context, input),
   },
   deleteUnused: (context, input) =>
@@ -77,7 +66,6 @@ export const integrityProblemsHandlers = implementOperationDomain(
   integrityProblems,
   {
     getByType: {
-      readPolicy: "strong",
       run: async (context, input) =>
         integrityProblems.getByType.definition.output.parse(
           await findProblemByTypeWorkflow(context, input),

@@ -25,21 +25,18 @@ export const backgroundBatchHandlers = implementOperationDomain(
   backgroundBatch,
   {
     list: {
-      readPolicy: "strong",
       run: async (context, input) =>
         backgroundBatchBrowserListOutSchema.parse(
           await listBackgroundBatchesWorkflow(context.db, input),
         ),
     },
     summary: {
-      readPolicy: "strong",
       run: async (context, input) =>
         backgroundBatchBrowserSummarySchema.parse(
           await getBackgroundBatchSummaryWorkflow(context.db, input),
         ),
     },
     jobs: {
-      readPolicy: "strong",
       run: async (context, input) =>
         backgroundBatchBrowserJobsOutSchema.parse(
           await listBackgroundBatchJobsWorkflow(context.db, input),
@@ -55,7 +52,6 @@ export const backgroundJobHandlers = implementOperationDomain(backgroundJob, {
   retry: (context, input) => retryBackgroundJobWorkflow(context.db, input),
   drain: (context, input) => drainBackgroundJobsWorkflow(context.db, input),
   strandedCount: {
-    readPolicy: "strong",
     run: (context) => countStrandedBackgroundJobsWorkflow(context.db),
   },
   clearStranded: (context, input) =>

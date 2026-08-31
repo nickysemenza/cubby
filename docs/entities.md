@@ -158,10 +158,13 @@ projections use the same Start operation module for authentication, validation,
 errors, cancellation checkpoints, tracing, and console observability. Every
 entity browser operation uses this Start transport.
 
-Generic detail, list, and filter reads use the request-selected read handle.
-Ordinary browser requests may therefore use Hyperdrive's bounded-stale cached
-binding; non-browser requests and requests carrying the fresh-after-write
-marker select the authoritative binding. Mutations remain authoritative.
+The browser operation module chooses one database adapter before invoking a
+handler and exposes that adapter through both context handles. Ordinary browser
+queries therefore use Hyperdrive's short bounded-stale binding unless their
+operation is in the server-owned strong-read registry. Non-browser requests,
+fresh-after-write requests, mutations, and workflow streams remain
+authoritative. Generic detail, list, and filter reads follow the same policy;
+the MCP entity/search allowlist remains a separate transport decision.
 
 Workflow operations are explicit Start functions with no entity business logic in
 the transport adapter. Removing an operation has no deployment shim: a tab loaded

@@ -23,15 +23,12 @@ import {
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const aiHandlers = implementOperationDomain(ai, {
   suggestCategory: {
-    readPolicy: "strong",
     run: (context, input) => suggestCategoryWorkflow(context.db, input),
   },
   suggestLocationType: {
-    readPolicy: "strong",
     run: (context, input) => suggestLocationTypeWorkflow(context.db, input),
   },
   suggestLocation: {
-    readPolicy: "strong",
     run: (context, input) => suggestLocationWorkflow(context.db, input),
   },
   describeLocation: (context, input) =>
@@ -49,11 +46,9 @@ export const aiHandlers = implementOperationDomain(ai, {
   parseSearch: (context, input) => parseSearchWorkflow(context.db, input),
   auditCategories: (context) => auditCategoriesWorkflow(context.db),
   usageRecent: {
-    readPolicy: "strong",
     run: (context, input) => listAiUsageRecentWorkflow(context.db, input),
   },
   usageSummary: {
-    readPolicy: "strong",
     run: (context, input) => summarizeAiUsageWorkflow(context.db, input),
   },
 });

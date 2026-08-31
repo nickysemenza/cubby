@@ -9,9 +9,9 @@ import {
 } from "~/server/workflows/collection";
 
 export const collectionHandlers = implementOperationDomain(collection, {
-  list: { readPolicy: "strong", run: listCollectionSummaries },
-  detail: { readPolicy: "strong", run: readCollectionDetail },
-  matrix: { readPolicy: "strong", run: readCollectionMatrix },
+  list: listCollectionSummaries,
+  detail: readCollectionDetail,
+  matrix: readCollectionMatrix,
   set: setCollectionMembership,
   create: createCollection,
 });

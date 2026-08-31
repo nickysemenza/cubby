@@ -1,5 +1,5 @@
-const maxAgeSeconds = 5 * 60;
-const staleWhileRevalidateSeconds = 30;
+const maxAgeSeconds = 60;
+const staleWhileRevalidateSeconds = 15;
 
 /**
  * Desired account-level policy for HYPERDRIVE_CACHED and its browser guard.

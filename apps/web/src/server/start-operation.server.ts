@@ -2,9 +2,14 @@ import { z } from "zod";
 
 import {
   isStartOperationEntity,
+  type StartOperationId,
   type StartOperationDefinition,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
+import {
+  applyBrowserReadPolicy,
+  type BrowserReadPolicy,
+} from "~/server/browser-read-policy";
 import {
   appErrorFromUnknown,
   toPublicErrorPayload,
@@ -185,13 +190,13 @@ export type RunStartOperationOptions<
   InputSchema extends z.ZodType,
   OutputSchema extends z.ZodType,
 > = {
-  operation: string;
+  operation: StartOperationId;
   type: "query" | "mutation" | "subscription";
   input: z.input<z.ZodUnknown>;
   inputSchema: InputSchema;
   outputSchema: OutputSchema | OutputSchemaResolver<InputSchema, OutputSchema>;
   request: StartOperationRequest;
-  readPolicy?: "context" | "strong";
+  readPolicy?: BrowserReadPolicy;
   workload?: Workload;
   run: (
     context: AuthenticatedStartOperationContext,
@@ -240,10 +245,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           const readPolicy =
             options.readPolicy ??
             (options.type === "mutation" ? "strong" : "context");
-          const context =
-            readPolicy === "strong" && authenticated.readDb !== authenticated.db
-              ? { ...authenticated, readDb: authenticated.db }
-              : authenticated;
+          const context = applyBrowserReadPolicy(authenticated, readPolicy);
           span.setAttributes({
             "cubby.request_origin": context.requestOrigin,
             "cubby.read.consistency":

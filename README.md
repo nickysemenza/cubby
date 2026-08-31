@@ -419,13 +419,16 @@ Key constraints:
   the largest request). The shared Neon origin budget is 55 Hyperdrive
   connections for the authoritative object plus 5 for the cached object.
 - **Cached reads are bounded-stale by design.** Desired timings live together in
-  `src/lib/hyperdrive-cache-policy.ts`. Hyperdrive cache settings are
-  account-level state, not a `wrangler.jsonc` field; apply and inspect them with
-  `wrangler hyperdrive update/get`. Successful browser mutations use the same
-  policy to stay on the authoritative binding beyond the maximum cached serve
-  window. Ordinary browser generic entity detail/list/filter reads are the
-  allowlisted consumers; non-browser and fresh-after-write requests stay on
-  the authoritative binding. Do not rely on SQL cache busting or Hyperdrive
+  `src/lib/hyperdrive-cache-policy.ts`: ordinary browser reads may be served for
+  60 seconds plus 15 seconds of stale-while-revalidate. Hyperdrive cache
+  settings are account-level state, not a `wrangler.jsonc` field; apply and
+  inspect them with `wrangler hyperdrive update/get`. The server-only browser
+  read policy keeps credentials, live operations, diagnostics, imports, and
+  modules that own authoritative database helpers on `HYPERDRIVE`; other
+  browser queries receive only the request-selected adapter. Successful browser
+  mutations stay authoritative for 90 seconds, beyond the maximum cached serve
+  window. Non-browser callers remain strong except for the deliberately narrow
+  MCP entity/search allowlist. Do not rely on SQL cache busting or Hyperdrive
   invalidation: rollback is disabling caching on `HYPERDRIVE_CACHED` while
   leaving the binding in place.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.

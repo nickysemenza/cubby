@@ -106,7 +106,6 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
   entityInspectorHealth,
   {
     inspectorHealth: {
-      readPolicy: "strong",
       run: async (context) => {
         const [counts, rows] = await Promise.all([
           getEntityCounts(context.db),

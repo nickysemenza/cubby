@@ -164,11 +164,9 @@ async function loadProjectImageSummaries(
 
 export const imageHandlers = implementOperationDomain(image, {
   list: {
-    readPolicy: "strong",
     run: (context, input) => productionImageBrowserPorts.list(context, input),
   },
   detail: {
-    readPolicy: "strong",
     run: (context, input) =>
       productionImageBrowserPorts.get(context, input.id, "null"),
   },
@@ -178,7 +176,6 @@ export const imageHandlers = implementOperationDomain(image, {
   delete: (context, input) =>
     productionImageBrowserPorts.delete(context, input),
   projectSummaries: {
-    readPolicy: "strong",
     run: (context, input) =>
       loadProjectImageSummaries(context, input.projectIds),
   },

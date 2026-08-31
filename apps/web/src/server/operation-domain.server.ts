@@ -1,6 +1,10 @@
 import type { z } from "zod";
 
 import type { StartOperationId } from "~/lib/start-operation-observability";
+import {
+  type BrowserReadPolicy,
+  browserReadPolicyFor,
+} from "~/server/browser-read-policy";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import type { StartOperationResult } from "~/server/start-operation.contract";
 import {
@@ -50,8 +54,6 @@ type OutputSchemaResolver<Descriptor extends OperationDomainDescriptor> = (
 type ConfiguredOperationHandler<Descriptor extends OperationDomainDescriptor> =
   {
     run: OperationRun<Descriptor>;
-    /** Overrides the default policy (queries "context", mutations "strong"). */
-    readPolicy?: "context" | "strong";
     /** Replaces a type-only client schema with server-owned runtime validation. */
     input?: RuntimeInputSchema<Descriptor>;
     /** Replaces or derives server-owned runtime output validation. */
@@ -77,13 +79,13 @@ function configuredOperationHandler<
 }
 
 export type OperationExecutionOptions<Input, OutputSchema extends z.ZodType> = {
-  operation: string;
+  operation: StartOperationId;
   type: OperationKind;
   input: z.input<z.ZodUnknown>;
   inputSchema: z.ZodType<Input>;
   outputSchema: OutputSchema | ((input: Input) => OutputSchema);
   request: Parameters<StartOperationHandler>[0]["request"];
-  readPolicy?: "context" | "strong";
+  readPolicy: BrowserReadPolicy;
   run: (
     context: AuthenticatedStartOperationContext,
     input: Input,
@@ -145,10 +147,13 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
       inputSchema,
       outputSchema,
       request: options.request,
+      readPolicy: browserReadPolicyFor(
+        descriptor.id,
+        descriptor.definition.kind,
+      ),
       run: (context, parsed) =>
         configured.run({ ...context, signal: options.request.signal }, parsed),
     };
-    if (configured.readPolicy) execution.readPolicy = configured.readPolicy;
     return adapter.execute(execution);
   };
 }

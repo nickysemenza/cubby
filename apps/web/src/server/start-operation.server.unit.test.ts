@@ -19,11 +19,21 @@ import {
 const database = new Database(() => {
   throw new Error("The Start operation unit test must not resolve a database");
 });
-const context = requireActor(
-  createTestRequestContext(database, {
-    auth: { userId: testUserId("start-operation-user") },
-  }),
-);
+const cachedDatabase = new Database(() => {
+  throw new Error("The cached Start database must not resolve during tests");
+});
+const context = {
+  ...requireActor(
+    createTestRequestContext(database, {
+      auth: { userId: testUserId("start-operation-user") },
+      readDb: cachedDatabase,
+    }),
+  ),
+  readConsistency: {
+    consistency: "bounded-stale" as const,
+    reason: "cached-policy" as const,
+  },
+};
 
 const setAttribute = vi.fn<AppSpan["setAttribute"]>();
 const setAttributes = vi.fn<AppSpan["setAttributes"]>();
@@ -93,9 +103,78 @@ describe("runStartOperation", () => {
     ).resolves.toEqual({ ok: true, data: { doubled: 6 } });
 
     expect(authenticate).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledWith(context, { count: 3 });
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ db: cachedDatabase, readDb: cachedDatabase }),
+      { count: 3 },
+    );
     expect(observedOperations).toEqual(["entity.detail"]);
     expect(inspections).toEqual([{ workload: "ui" }]);
+  });
+
+  it("hides the cached adapter from an explicitly strong query", async () => {
+    const run = vi.fn(async () => ({ ok: true }));
+
+    await runStartOperation({
+      operation: "entity.detail",
+      type: "query",
+      input: {},
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      request: request(),
+      readPolicy: "strong",
+      run,
+    });
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ db: database, readDb: database }),
+      {},
+    );
+  });
+
+  it("makes the whole mutation workflow authoritative", async () => {
+    const run = vi.fn(async () => ({ ok: true }));
+
+    await runStartOperation({
+      operation: "entity.mutate",
+      type: "mutation",
+      input: {},
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      request: request(),
+      run,
+    });
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ db: database, readDb: database }),
+      {},
+    );
+  });
+
+  it("keeps a default query strong when request context carries the fresh marker decision", async () => {
+    authenticate.mockResolvedValue({
+      ...context,
+      readDb: database,
+      readConsistency: {
+        consistency: "strong",
+        reason: "fresh-after-write",
+      },
+    });
+    const run = vi.fn(async () => ({ ok: true }));
+
+    await runStartOperation({
+      operation: "entity.detail",
+      type: "query",
+      input: {},
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      request: request(),
+      run,
+    });
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ db: database, readDb: database }),
+      {},
+    );
   });
 
   it("uses the parsed input entity rather than an inbound header on the inner span", async () => {
