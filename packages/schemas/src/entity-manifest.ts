@@ -13,7 +13,16 @@ import {
   type RelationshipPathStep,
 } from "./entity-integrity";
 
-const mcpOp = z.enum(["get", "list", "create", "update", "delete"]);
+const mcpOp = z.enum([
+  "get",
+  "list",
+  "search",
+  "create",
+  "update",
+  "delete",
+  "bulkUpdate",
+  "merge",
+]);
 
 export const entityDescriptor = z.object({
   dbTable: z.string().nullable(),

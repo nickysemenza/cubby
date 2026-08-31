@@ -165,11 +165,11 @@ export default literalEntity({
       key: "cookbook",
       label: "Cookbook",
       target: "cookbook",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Recipe.cookbookId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Recipe.cookbookId", direction: "incoming" }],
       },
@@ -178,6 +178,7 @@ export default literalEntity({
       key: "images",
       label: "Images",
       target: "image",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -185,7 +186,6 @@ export default literalEntity({
           { edge: "RecipeImage.imageId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "RecipeImage.imageId", direction: "incoming" },
@@ -197,6 +197,7 @@ export default literalEntity({
       key: "ingredients",
       label: "Ingredients",
       target: "ingredient",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -211,7 +212,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -230,6 +230,7 @@ export default literalEntity({
       key: "sub-recipes",
       label: "Sub-recipes",
       target: "recipe",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -245,7 +246,6 @@ export default literalEntity({
           { edge: "Ingredient.recipeId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Ingredient.recipeId", direction: "incoming" },
@@ -265,6 +265,7 @@ export default literalEntity({
       key: "meals",
       label: "Meals",
       target: "meal",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -272,7 +273,6 @@ export default literalEntity({
           { edge: "MealRecipe.mealId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "MealRecipe.mealId", direction: "incoming" },
@@ -290,7 +290,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -326,17 +327,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/recipe/crud",
-          export: "RECIPE_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/recipe/entity-adapter",
-          export: "recipeEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

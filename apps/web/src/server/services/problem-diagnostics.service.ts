@@ -23,8 +23,10 @@ import {
   findOrphanedEntityEmbeddings,
 } from "~/server/repo/entity-embedding";
 import {
+  countDependencyCycles,
   countEntitiesMissingEmbeddings,
   countReferentialLivenessViolations,
+  findDependencyCycles,
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
   findDuplicateProductIdentities,
@@ -306,6 +308,11 @@ export const diagnosticAdapters = {
       healthySample(findReferentialLivenessViolations(db), limit),
     count: async (db) =>
       healthyCount(await countReferentialLivenessViolations(db)),
+  },
+  "dependency-cycles": {
+    sample: (db, _options, limit) =>
+      healthySample(findDependencyCycles(db), limit),
+    count: async (db) => healthyCount(await countDependencyCycles(db)),
   },
   "products-with-better-upc-data": {
     sample: (db, options, limit) =>

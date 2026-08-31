@@ -70,7 +70,7 @@ const relatedViewPresentationRegistry = [
   {
     key: "product.purchases",
     source: "product",
-    relationship: "purchases-via-spend",
+    relationship: "purchases",
     // "via spend", not just "Purchases": the product detail page now also has a
     // Purchases section fed by the direct `PurchaseProduct` provenance link, and
     // the two answer different questions. This path reaches a purchase only
@@ -188,7 +188,7 @@ const relatedViewPresentationRegistry = [
   {
     key: "project.usedTools",
     source: "project",
-    relationship: "tools-used",
+    relationship: "resources",
     defaultVisible: true,
     order: "alphabetical",
     filterPrefix: "usedTool",
@@ -353,7 +353,7 @@ const relatedViewRelationshipKeys = {
   "product.vendors": "vendors",
   "product.projects": "purchased-projects",
   "product.usedOnProjects": "project-uses",
-  "product.purchases": "purchases-via-spend",
+  "product.purchases": "purchases",
   "product.expenses": "expenses",
   "product.inventory": "inventory",
   "product.wishes": "wishes",
@@ -368,7 +368,7 @@ const relatedViewRelationshipKeys = {
   "project.expenses": "expenses",
   "project.taskProducts": "task-products",
   "project.purchasedProducts": "purchased-products",
-  "project.usedTools": "tools-used",
+  "project.usedTools": "resources",
   "project.vendors": "vendors",
   "task.blockedBy": "blocked-by",
   "task.parent": "parent",

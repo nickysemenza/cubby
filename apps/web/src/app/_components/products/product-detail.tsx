@@ -313,17 +313,17 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       placement: "supporting" as const,
       content: <RelatednessRail product={product} />,
     },
-    // The book behind the book: this product is a cookbook's physical copy.
-    // Gated on the link existing, so it never draws on the ~3,000 products
-    // that aren't books.
-    ...(product.cookbook
+    // The books behind the book: this product may be the physical copy for
+    // multiple cookbooks. Gated on the links existing, so it never draws on
+    // the ~3,000 products that aren't books.
+    ...(product.cookbooks.length > 0
       ? [
           {
-            id: "cookbook",
-            title: "Cookbook",
+            id: "cookbooks",
+            title: "Cookbooks",
             icon: BookOpen,
             placement: "supporting" as const,
-            content: <ProductCookbook cookbook={product.cookbook} />,
+            content: <ProductCookbook cookbooks={product.cookbooks} />,
           },
         ]
       : []),

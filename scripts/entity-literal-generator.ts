@@ -61,12 +61,17 @@ type EntityPorts = Readonly<{
     semanticText: SourceRef | null;
     dependentRefresh: SourceRef | null;
   }>;
-  lifecycle: Readonly<{ policy: SourceRef | null; runtime: SourceRef | null }>;
-  relationMutation: Readonly<{
-    attach: SourceRef | null;
-    detach: SourceRef | null;
-  }>;
 }>;
+type RelationMutation = Readonly<{
+  entity: string;
+  relation: string;
+  target: string;
+  source: string;
+  itemSchema: SourceRef;
+  adapter: SourceRef;
+  audiences: readonly ("browser" | "mcp")[];
+}>;
+type OperationOwner = "kernel" | "workflow" | null;
 export type EntityLiteral = Readonly<{
   key: string;
   shortcode: string | null;
@@ -95,6 +100,11 @@ export type EntityLiteral = Readonly<{
   /** Fields a `bulkUpdate` command may patch; null means the capability is undeclared. */
   bulkUpdateFields: readonly string[] | null;
   ports: EntityPorts;
+  relationMutations: readonly RelationMutation[];
+  operationOwners: Readonly<{
+    delete: OperationOwner;
+    merge: OperationOwner;
+  }>;
 }>;
 
 export type EntityArtifacts = Readonly<{
@@ -172,9 +182,6 @@ const exactKeys = (
   }
 };
 
-const includesString = (values: readonly string[], value: string) =>
-  values.includes(value);
-
 const literalObjectArray = (
   value: LiteralValue,
   context: string,
@@ -234,23 +241,10 @@ const entityPorts = (
       references: { label: null, resolver: null },
       filters: null,
       search: { projection: null, semanticText: null, dependentRefresh: null },
-      lifecycle: { policy: null, runtime: null },
-      relationMutation: { attach: null, detach: null },
     };
   }
   const ports = objectValue(value, context);
-  exactKeys(
-    ports,
-    [
-      "repository",
-      "references",
-      "filters",
-      "search",
-      "lifecycle",
-      "relationMutation",
-    ],
-    context,
-  );
+  exactKeys(ports, ["repository", "references", "filters", "search"], context);
   const references = objectValue(
     required(ports, "references", context),
     `${context}.references`,
@@ -264,20 +258,6 @@ const entityPorts = (
     search,
     ["projection", "semanticText", "dependentRefresh"],
     `${context}.search`,
-  );
-  const lifecycle = objectValue(
-    required(ports, "lifecycle", context),
-    `${context}.lifecycle`,
-  );
-  exactKeys(lifecycle, ["policy", "runtime"], `${context}.lifecycle`);
-  const relationMutation = objectValue(
-    required(ports, "relationMutation", context),
-    `${context}.relationMutation`,
-  );
-  exactKeys(
-    relationMutation,
-    ["attach", "detach"],
-    `${context}.relationMutation`,
   );
   return {
     repository: nullableSourceRef(
@@ -312,30 +292,8 @@ const entityPorts = (
         `${context}.search.dependentRefresh`,
       ),
     },
-    lifecycle: {
-      policy: nullableSourceRef(
-        required(lifecycle, "policy", `${context}.lifecycle`),
-        `${context}.lifecycle.policy`,
-      ),
-      runtime: nullableSourceRef(
-        required(lifecycle, "runtime", `${context}.lifecycle`),
-        `${context}.lifecycle.runtime`,
-      ),
-    },
-    relationMutation: {
-      attach: nullableSourceRef(
-        required(relationMutation, "attach", `${context}.relationMutation`),
-        `${context}.relationMutation.attach`,
-      ),
-      detach: nullableSourceRef(
-        required(relationMutation, "detach", `${context}.relationMutation`),
-        `${context}.relationMutation.detach`,
-      ),
-    },
   };
 };
-
-const policies = ["restrict", "cascade", "setNull", "detach"] as const;
 const filterKinds = [
   "text",
   "select",
@@ -482,12 +440,35 @@ const normalizedEntitySource = (
   context: string,
 ): LiteralObject => {
   if (raw.descriptor !== undefined) {
+    const rawDescriptor = objectValue(raw.descriptor, `${context}.descriptor`);
+    const lifecycle =
+      rawDescriptor.lifecycle === undefined
+        ? null
+        : objectValue(
+            rawDescriptor.lifecycle,
+            `${context}.descriptor.lifecycle`,
+          );
+    const hasRepository = raw.ports !== undefined;
     return {
       filters: { audit: false, descriptors: [] },
       inspector: {
         singular: required(raw, "key", context),
         plural: null,
         titleField: "name",
+      },
+      operationOwners: raw.operationOwners ?? {
+        delete:
+          lifecycle === null || lifecycle.delete === null
+            ? null
+            : hasRepository
+              ? "kernel"
+              : "workflow",
+        merge:
+          lifecycle?.merge === true
+            ? hasRepository
+              ? "kernel"
+              : "workflow"
+            : null,
       },
       ...raw,
     };
@@ -548,6 +529,7 @@ const normalizedEntitySource = (
       "delete",
       "bulkUpdate",
       "merge",
+      "operationOwners",
       "mcp",
     ],
     `${context}.capabilities`,
@@ -591,12 +573,41 @@ const validateLegacyCapabilities = (
   capabilities: LiteralObject,
   context: string,
 ): void => {
+  const owners = objectValue(
+    required(capabilities, "operationOwners", `${context}.capabilities`),
+    `${context}.capabilities.operationOwners`,
+  );
+  exactKeys(
+    owners,
+    ["delete", "merge"],
+    `${context}.capabilities.operationOwners`,
+  );
+  const validateOwner = (operation: "delete" | "merge") => {
+    const owner = required(
+      owners,
+      operation,
+      `${context}.capabilities.operationOwners`,
+    );
+    if (owner !== null && owner !== "kernel" && owner !== "workflow") {
+      throw new LiteralSpecError(
+        `${context}.capabilities.operationOwners.${operation} must be kernel, workflow, or null.`,
+      );
+    }
+    return owner;
+  };
+  const deleteOwner = validateOwner("delete");
+  const mergeOwner = validateOwner("merge");
   const deleteCapability = required(
     capabilities,
     "delete",
     `${context}.capabilities`,
   );
   if (deleteCapability !== null) {
+    if (deleteOwner === null) {
+      throw new LiteralSpecError(
+        `${context}.capabilities.operationOwners.delete is required for delete.`,
+      );
+    }
     const deletion = objectValue(
       deleteCapability,
       `${context}.capabilities.delete`,
@@ -613,6 +624,20 @@ const validateLegacyCapabilities = (
     booleanValue(
       required(deletion, "bulk", `${context}.capabilities.delete`),
       `${context}.capabilities.delete.bulk`,
+    );
+  }
+  if (deleteCapability === null && deleteOwner !== null) {
+    throw new LiteralSpecError(
+      `${context}.capabilities.operationOwners.delete must be null without delete.`,
+    );
+  }
+  const mergeCapability = booleanValue(
+    required(capabilities, "merge", `${context}.capabilities`),
+    `${context}.capabilities.merge`,
+  );
+  if (mergeCapability !== (mergeOwner !== null)) {
+    throw new LiteralSpecError(
+      `${context}.capabilities.operationOwners.merge must match merge capability.`,
     );
   }
   const bulkUpdateCapability = required(
@@ -660,7 +685,16 @@ const validateLegacyCapabilities = (
   const mcpActions = required(capabilities, "mcp", `${context}.capabilities`);
   if (!Array.isArray(mcpActions))
     throw new LiteralSpecError(`${context}.capabilities.mcp must be an array.`);
-  const supportedMcpActions = ["get", "list", "create", "update", "delete"];
+  const supportedMcpActions = [
+    "get",
+    "list",
+    "search",
+    "create",
+    "update",
+    "delete",
+    "bulkUpdate",
+    "merge",
+  ];
   for (const [index, action] of mcpActions.entries()) {
     const name = stringValue(action, `${context}.capabilities.mcp[${index}]`);
     if (!supportedMcpActions.includes(name))
@@ -670,6 +704,9 @@ const validateLegacyCapabilities = (
   }
 };
 
+// Keep relation normalization in one diagnostic context: every rejected field
+// must identify the same literal relation path, including nested sources.
+// oxlint-disable-next-line eslint/complexity
 const normalizedLegacyRelations = (
   raw: LiteralObject,
   context: string,
@@ -681,29 +718,156 @@ const normalizedLegacyRelations = (
     const relation = objectValue(value, `${context}.relations[${index}]`);
     exactKeys(
       relation,
-      ["key", "label", "target", "provenance", "deletionPolicy", "inverse"],
+      [
+        "key",
+        "label",
+        "target",
+        "cardinality",
+        "sourceKey",
+        "provenance",
+        "inverse",
+        "sources",
+        "mutation",
+      ],
       `${context}.relations[${index}]`,
     );
+    const relationKey = stringValue(
+      required(relation, "key", `${context}.relations[${index}]`),
+      `${context}.relations[${index}].key`,
+    );
+    const cardinality = stringValue(
+      required(relation, "cardinality", `${context}.relations[${index}]`),
+      `${context}.relations[${index}].cardinality`,
+    );
+    if (cardinality !== "one" && cardinality !== "many") {
+      throw new LiteralSpecError(
+        `${context}.relations[${index}].cardinality must be one or many.`,
+      );
+    }
+    const sourceKey =
+      relation.sourceKey === undefined
+        ? relationKey
+        : stringValue(
+            relation.sourceKey,
+            `${context}.relations[${index}].sourceKey`,
+          );
+    relation.sourceKey = sourceKey;
     const provenance = objectValue(
       required(relation, "provenance", `${context}.relations[${index}]`),
       `${context}.relations[${index}].provenance`,
     );
-    const policy =
-      relation.deletionPolicy === undefined
-        ? "restrict"
-        : stringValue(
-            relation.deletionPolicy,
-            `${context}.relations[${index}].deletionPolicy`,
-          );
-    if (!includesString(policies, policy))
-      throw new LiteralSpecError(
-        `${context}.relations[${index}].deletionPolicy is invalid.`,
-      );
-    relation.deletionPolicy = policy;
     if (provenance.kind === "local-path" && relation.inverse === undefined)
       throw new LiteralSpecError(
         `${context}.relations[${index}] local-path requires inverse.`,
       );
+    const sources =
+      relation.sources === undefined
+        ? []
+        : literalObjectArray(
+            relation.sources,
+            `${context}.relations[${index}].sources`,
+          );
+    const sourceKeys = [sourceKey];
+    for (const [sourceIndex, source] of sources.entries()) {
+      exactKeys(
+        source,
+        ["key", "label", "provenance", "inverse"],
+        `${context}.relations[${index}].sources[${sourceIndex}]`,
+      );
+      const key = stringValue(
+        required(
+          source,
+          "key",
+          `${context}.relations[${index}].sources[${sourceIndex}]`,
+        ),
+        `${context}.relations[${index}].sources[${sourceIndex}].key`,
+      );
+      sourceKeys.push(key);
+      const sourceProvenance = objectValue(
+        required(
+          source,
+          "provenance",
+          `${context}.relations[${index}].sources[${sourceIndex}]`,
+        ),
+        `${context}.relations[${index}].sources[${sourceIndex}].provenance`,
+      );
+      if (
+        sourceProvenance.kind === "local-path" &&
+        source.inverse === undefined
+      ) {
+        throw new LiteralSpecError(
+          `${context}.relations[${index}].sources[${sourceIndex}] local-path requires inverse.`,
+        );
+      }
+    }
+    if (new Set(sourceKeys).size !== sourceKeys.length) {
+      throw new LiteralSpecError(
+        `${context}.relations[${index}] contains duplicate source keys.`,
+      );
+    }
+    relation.sources = sources;
+    if (relation.mutation !== undefined) {
+      const mutation = objectValue(
+        relation.mutation,
+        `${context}.relations[${index}].mutation`,
+      );
+      exactKeys(
+        mutation,
+        ["source", "itemSchema", "adapter", "audiences"],
+        `${context}.relations[${index}].mutation`,
+      );
+      const mutationSource = stringValue(
+        required(mutation, "source", `${context}.relations[${index}].mutation`),
+        `${context}.relations[${index}].mutation.source`,
+      );
+      if (!sourceKeys.includes(mutationSource)) {
+        throw new LiteralSpecError(
+          `${context}.relations[${index}].mutation.source must name a declared source.`,
+        );
+      }
+      mutation.itemSchema = sourceRef(
+        required(
+          mutation,
+          "itemSchema",
+          `${context}.relations[${index}].mutation`,
+        ),
+        `${context}.relations[${index}].mutation.itemSchema`,
+      );
+      mutation.adapter = sourceRef(
+        required(
+          mutation,
+          "adapter",
+          `${context}.relations[${index}].mutation`,
+        ),
+        `${context}.relations[${index}].mutation.adapter`,
+      );
+      const audiences = required(
+        mutation,
+        "audiences",
+        `${context}.relations[${index}].mutation`,
+      );
+      if (!Array.isArray(audiences) || audiences.length === 0) {
+        throw new LiteralSpecError(
+          `${context}.relations[${index}].mutation.audiences must be a non-empty array.`,
+        );
+      }
+      for (const [audienceIndex, audience] of audiences.entries()) {
+        const name = stringValue(
+          audience,
+          `${context}.relations[${index}].mutation.audiences[${audienceIndex}]`,
+        );
+        if (name !== "browser" && name !== "mcp") {
+          throw new LiteralSpecError(
+            `${context}.relations[${index}].mutation.audiences[${audienceIndex}] is unsupported.`,
+          );
+        }
+      }
+      if (new Set(audiences).size !== audiences.length) {
+        throw new LiteralSpecError(
+          `${context}.relations[${index}].mutation.audiences contains duplicates.`,
+        );
+      }
+    }
   }
   return relations;
 };
@@ -813,6 +977,11 @@ const normalizedLegacyEntity = (
     contract: required(raw, "fields", context),
     filters: required(raw, "filters", context),
     bulkUpdate: required(capabilities, "bulkUpdate", `${context}.capabilities`),
+    operationOwners: required(
+      capabilities,
+      "operationOwners",
+      `${context}.capabilities`,
+    ),
   };
   if (extensions.ports !== undefined) {
     normalized.ports = extensions.ports;
@@ -886,6 +1055,9 @@ const compiledShortcode = (
   return shortcode;
 };
 
+// One compiler pass keeps cross-field capability errors attached to the exact
+// entity literal rather than losing context across partial validators.
+// oxlint-disable-next-line eslint/complexity
 const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   const context = `ENTITY_LITERALS[${index}]`;
   const object = normalizedEntitySource(objectValue(value, context), context);
@@ -899,6 +1071,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
       "filters",
       "inspector",
       "bulkUpdate",
+      "operationOwners",
       "ports",
     ],
     context,
@@ -915,6 +1088,33 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     required(object, "descriptor", context),
     `${context}.descriptor`,
   );
+  descriptor.relationships ??= [];
+  const operationOwnersObject = objectValue(
+    required(object, "operationOwners", context),
+    `${context}.operationOwners`,
+  );
+  exactKeys(
+    operationOwnersObject,
+    ["delete", "merge"],
+    `${context}.operationOwners`,
+  );
+  const operationOwner = (operation: "delete" | "merge"): OperationOwner => {
+    const value = required(
+      operationOwnersObject,
+      operation,
+      `${context}.operationOwners`,
+    );
+    if (value === null || value === "kernel" || value === "workflow") {
+      return value;
+    }
+    throw new LiteralSpecError(
+      `${context}.operationOwners.${operation} must be kernel, workflow, or null.`,
+    );
+  };
+  const operationOwners = {
+    delete: operationOwner("delete"),
+    merge: operationOwner("merge"),
+  };
   const inspector = compiledInspector(object, context);
   const filters = objectValue(
     required(object, "filters", context),
@@ -1137,6 +1337,82 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     );
   }
   const ports = entityPorts(object.ports, `${context}.ports`);
+  const relationships = literalObjectArray(
+    required(descriptor, "relationships", `${context}.descriptor`),
+    `${context}.descriptor.relationships`,
+  );
+  const relationshipKeys = relationships.map((relationship, relationIndex) =>
+    stringValue(
+      required(
+        relationship,
+        "key",
+        `${context}.descriptor.relationships[${relationIndex}]`,
+      ),
+      `${context}.descriptor.relationships[${relationIndex}].key`,
+    ),
+  );
+  if (new Set(relationshipKeys).size !== relationshipKeys.length) {
+    throw new LiteralSpecError(
+      `${context}.descriptor.relationships contains duplicate keys.`,
+    );
+  }
+  const relationMutations = relationships.flatMap(
+    (relationship, relationIndex): RelationMutation[] => {
+      if (relationship.mutation === undefined) return [];
+      const relationContext = `${context}.descriptor.relationships[${relationIndex}]`;
+      const mutation = objectValue(
+        relationship.mutation,
+        `${relationContext}.mutation`,
+      );
+      const audiences = required(
+        mutation,
+        "audiences",
+        `${relationContext}.mutation`,
+      );
+      if (!Array.isArray(audiences)) {
+        throw new LiteralSpecError(
+          `${relationContext}.mutation.audiences must be an array.`,
+        );
+      }
+      return [
+        {
+          entity: key,
+          relation: stringValue(
+            required(relationship, "key", relationContext),
+            `${relationContext}.key`,
+          ),
+          target: stringValue(
+            required(relationship, "target", relationContext),
+            `${relationContext}.target`,
+          ),
+          source: stringValue(
+            required(mutation, "source", `${relationContext}.mutation`),
+            `${relationContext}.mutation.source`,
+          ),
+          itemSchema: sourceRef(
+            required(mutation, "itemSchema", `${relationContext}.mutation`),
+            `${relationContext}.mutation.itemSchema`,
+          ),
+          adapter: sourceRef(
+            required(mutation, "adapter", `${relationContext}.mutation`),
+            `${relationContext}.mutation.adapter`,
+          ),
+          audiences: audiences.map((audience, audienceIndex) => {
+            const value = stringValue(
+              audience,
+              `${relationContext}.mutation.audiences[${audienceIndex}]`,
+            );
+            if (value !== "browser" && value !== "mcp") {
+              throw new LiteralSpecError(
+                `${relationContext}.mutation.audiences[${audienceIndex}] is unsupported.`,
+              );
+            }
+            return value;
+          }),
+        },
+      ];
+    },
+  );
   const bulkUpdateValue = object.bulkUpdate;
   const bulkUpdateFields =
     bulkUpdateValue === undefined || bulkUpdateValue === null
@@ -1174,6 +1450,8 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     filterDescriptors: filterDescriptorsWithAudit,
     bulkUpdateFields,
     ports,
+    relationMutations,
+    operationOwners,
   };
 };
 
@@ -1497,9 +1775,127 @@ export const missingBrowserRouteFiles = (
     (relativePath) => !exists(resolve(ROOT, relativePath)),
   );
 
+// One render pass preserves deterministic cross-artifact ordering and hashes.
+// oxlint-disable-next-line eslint/complexity
 export const renderEntityArtifacts = (
   entities: readonly EntityLiteral[],
 ): EntityArtifacts[] => {
+  const relationMutations = entities.flatMap(
+    (entity) => entity.relationMutations,
+  );
+  const relationMutationKeys = relationMutations.map(
+    ({ entity, relation }) => `${entity}:${relation}`,
+  );
+  if (new Set(relationMutationKeys).size !== relationMutationKeys.length) {
+    throw new LiteralSpecError("Relation mutation keys must be unique.");
+  }
+  const relationSchemaImports = [
+    ...new Map(
+      relationMutations.map(({ itemSchema }) => [
+        `${itemSchema.module}#${itemSchema.export}`,
+        itemSchema,
+      ]),
+    ).values(),
+  ]
+    .sort((left, right) =>
+      `${left.module}#${left.export}`.localeCompare(
+        `${right.module}#${right.export}`,
+      ),
+    )
+    .map(
+      ({ module, export: exportName }) =>
+        `import { ${exportName} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const relationCommandVariant = ({
+    entity,
+    relation,
+    target,
+    itemSchema,
+  }: RelationMutation) =>
+    `z.object({action:z.enum(["attach","detach"]),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),items:z.array(${itemSchema.export}.extend({id:shortcodeSchema(${JSON.stringify(target)})})).min(1).max(500)}).strict()`;
+  const relationCommandSchema = (
+    audience: "browser" | "mcp" | null,
+  ): string => {
+    const mutations =
+      audience === null
+        ? relationMutations
+        : relationMutations.filter(({ audiences }) =>
+            audiences.includes(audience),
+          );
+    return mutations.length === 0
+      ? "z.never()"
+      : `z.union([\n  ${mutations.map(relationCommandVariant).join(",\n  ")}\n])`;
+  };
+  const relationResultSchema =
+    relationMutations.length === 0
+      ? "z.never()"
+      : `z.union([\n  ${relationMutations
+          .map(
+            ({ entity, relation }) =>
+              `z.object({action:z.enum(["attach","detach"]),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),result:relationMutationOut})`,
+          )
+          .join(",\n  ")}\n])`;
+  const mcpRelationMutations = relationMutations.filter(({ audiences }) =>
+    audiences.includes("mcp"),
+  );
+  const mcpParentIdSchemas = [
+    ...new Set(
+      mcpRelationMutations.map(
+        ({ entity }) => `shortcodeSchema(${JSON.stringify(entity)})`,
+      ),
+    ),
+  ];
+  const mcpItemSchemas = [
+    ...new Set(
+      mcpRelationMutations.map(
+        ({ itemSchema, target }) =>
+          `${itemSchema.export}.extend({id:shortcodeSchema(${JSON.stringify(target)})})`,
+      ),
+    ),
+  ];
+  const schemaUnion = (schemas: readonly string[]) =>
+    schemas.length === 1 ? schemas[0] : `z.union([${schemas.join(",")}])`;
+  const mcpPreviewInputSchema =
+    mcpRelationMutations.length === 0
+      ? "z.never()"
+      : `z.object({action:z.enum(["attach","detach"]),entity:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ entity }) => entity))])}),relation:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ relation }) => relation))])}),id:${schemaUnion(mcpParentIdSchemas)},items:z.array(${schemaUnion(mcpItemSchemas)}).min(1).max(500)}).strict().superRefine((input,ctx)=>{const result=generatedMcpEntityRelationCommandSchema.safeParse(input);if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
+  const relationAdapterImports = [
+    ...new Map(
+      relationMutations.map(({ adapter }) => [
+        `${adapter.module}#${adapter.export}`,
+        adapter,
+      ]),
+    ).values(),
+  ]
+    .sort((left, right) =>
+      `${left.module}#${left.export}`.localeCompare(
+        `${right.module}#${right.export}`,
+      ),
+    )
+    .map(
+      ({ module, export: exportName }) =>
+        `import { ${exportName} } from ${JSON.stringify(module)};`,
+    )
+    .join("\n");
+  const relationRuntimeCases = relationMutations
+    .map(
+      ({ entity, relation, adapter }) =>
+        `    case ${JSON.stringify(`${entity}:${relation}`)}: {\n      const result = await ${adapter.export}.execute(ctx,command.action,command.id,command.items);\n      return {action:command.action,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},result};\n    }`,
+    )
+    .join("\n");
+  const relationTargetCases = relationMutations
+    .map(
+      ({ entity, relation, target }) =>
+        `    case ${JSON.stringify(`${entity}:${relation}`)}: return ${JSON.stringify(target)};`,
+    )
+    .join("\n");
+  const relationPreviewCases = relationMutations
+    .map(
+      ({ entity, relation, adapter }) =>
+        `    case ${JSON.stringify(`${entity}:${relation}`)}: return ${adapter.export}.preview(db,command.action,ownerId,targetIds);`,
+    )
+    .join("\n");
   const imports = new Map<string, Set<string>>();
   for (const { contract, filterSchema } of entities) {
     if (contract === null) continue;
@@ -1747,11 +2143,16 @@ export const renderEntityArtifacts = (
   const commandVariants = (
     action: "create" | "update",
     schema: "create" | "update",
+    audience: "mcp" | null = null,
   ) =>
     entities
       .filter(
         (entity) =>
-          entity.contract !== null && entity.contract[schema] !== null,
+          entity.contract !== null &&
+          entity.contract[schema] !== null &&
+          (audience === null ||
+            (Array.isArray(entity.descriptor.mcp) &&
+              entity.descriptor.mcp.includes(action))),
       )
       .map((entity) => {
         const schemaRef = entity.contract?.[schema];
@@ -1781,7 +2182,10 @@ export const renderEntityArtifacts = (
     entities
       .filter(
         (entity) =>
-          entity.contract !== null && entity.contract[action] !== null,
+          entity.contract !== null &&
+          entity.contract[action] !== null &&
+          Array.isArray(entity.descriptor.mcp) &&
+          entity.descriptor.mcp.includes(action),
       )
       .map((entity) => {
         const output = entity.contract?.mcpOutput;
@@ -1803,12 +2207,22 @@ export const renderEntityArtifacts = (
     )
     .join(",\n  ");
   const mcpQueryGetResultVariants = schemaEntitySpecs
+    .filter(
+      (entity) =>
+        Array.isArray(entity.descriptor.mcp) &&
+        entity.descriptor.mcp.includes("get"),
+    )
     .map(
       ({ key, contract }) =>
         `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:${contract.mcpDetail.export}.nullable()})`,
     )
     .join(",\n  ");
   const mcpQueryListResultVariants = schemaEntitySpecs
+    .filter(
+      (entity) =>
+        Array.isArray(entity.descriptor.mcp) &&
+        entity.descriptor.mcp.includes("list"),
+    )
     .map(
       ({ key, contract }) =>
         `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(${contract.mcpList.export}),meta:generatedEntityListMetaSchema})`,
@@ -1822,23 +2236,38 @@ export const renderEntityArtifacts = (
     (entity) =>
       entity.bulkUpdateFields !== null && entity.contract?.update !== null,
   );
-  const bulkUpdateCommandVariants = bulkUpdateEntities
-    .map((entity) => {
-      const schemaRef = entity.contract?.update;
-      if (!schemaRef)
-        throw new LiteralSpecError(`${entity.key}.update is missing.`);
-      const mask = (entity.bulkUpdateFields ?? [])
-        .map((field) => `${JSON.stringify(field)}:true`)
-        .join(",");
-      return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${schemaRef.export}.pick({${mask}}).strict()})`;
-    })
-    .join(",\n  ");
+  const bulkUpdateCommandVariantsFor = (
+    entitySpecs: readonly EntityLiteral[],
+  ) =>
+    entitySpecs
+      .map((entity) => {
+        const schemaRef = entity.contract?.update;
+        if (!schemaRef)
+          throw new LiteralSpecError(`${entity.key}.update is missing.`);
+        const mask = (entity.bulkUpdateFields ?? [])
+          .map((field) => `${JSON.stringify(field)}:true`)
+          .join(",");
+        return `z.object({action:z.literal("bulkUpdate"),entity:z.literal(${JSON.stringify(entity.key)}),ids,data:${schemaRef.export}.pick({${mask}}).strict()})`;
+      })
+      .join(",\n  ");
   // No declaration anywhere means the command exists but matches nothing,
   // rather than an empty `z.union([])` that fails far from its cause.
-  const bulkUpdateCommandFactory =
-    bulkUpdateEntities.length === 0
+  const bulkUpdateCommandFactoryFor = (
+    entitySpecs: readonly EntityLiteral[],
+  ) =>
+    entitySpecs.length === 0
       ? "(_ids: z.ZodType<string[]>) => z.never()"
-      : `(ids: z.ZodType<string[]>) => z.union([\n  ${bulkUpdateCommandVariants}\n])`;
+      : `(ids: z.ZodType<string[]>) => z.union([\n  ${bulkUpdateCommandVariantsFor(entitySpecs)}\n])`;
+  const bulkUpdateCommandFactory =
+    bulkUpdateCommandFactoryFor(bulkUpdateEntities);
+  const mcpBulkUpdateEntities = bulkUpdateEntities.filter(
+    (entity) =>
+      Array.isArray(entity.descriptor.mcp) &&
+      entity.descriptor.mcp.includes("bulkUpdate"),
+  );
+  const mcpBulkUpdateCommandFactory = bulkUpdateCommandFactoryFor(
+    mcpBulkUpdateEntities,
+  );
   const kernelEntities = entities.filter(
     ({ contract, key }) => contract !== null || key === "image",
   );
@@ -1910,6 +2339,7 @@ export const renderEntityArtifacts = (
       ...(entity.descriptor.searchable === true ? ["search"] : []),
       ...(entity.contract?.create ? ["create"] : []),
       ...(entity.contract?.update ? ["update"] : []),
+      ...(entity.bulkUpdateFields === null ? [] : ["bulkUpdate"]),
       ...(lifecycle.delete === null ? [] : ["delete"]),
       ...(lifecycle.merge === true ? ["merge"] : []),
     ];
@@ -1929,6 +2359,29 @@ export const renderEntityArtifacts = (
     Object.entries(kernelContractCases)
       .filter(([, contractCase]) => contractCase.actions.includes(action))
       .map(([key]) => key);
+  const mcpActionsFor = (entity: EntityLiteral): string[] =>
+    Array.isArray(entity.descriptor.mcp)
+      ? entity.descriptor.mcp.map((action) => String(action))
+      : [];
+  const mcpKernelContractCases = Object.fromEntries(
+    kernelEntities.map((entity) => {
+      const declared = mcpActionsFor(entity);
+      const executable = kernelActionsFor(entity);
+      const unsupported = declared.filter(
+        (action) => !executable.includes(action),
+      );
+      if (unsupported.length > 0) {
+        throw new LiteralSpecError(
+          `${entity.key}.capabilities.mcp declares unbound actions: ${unsupported.join(", ")}.`,
+        );
+      }
+      return [entity.key, { actions: declared }];
+    }),
+  );
+  const mcpEntitiesForAction = (action: string) =>
+    Object.entries(mcpKernelContractCases)
+      .filter(([, contractCase]) => contractCase.actions.includes(action))
+      .map(([key]) => key);
   const mergeResultVariants = kernelEntities
     .filter((entity) => kernelActionsFor(entity).includes("merge"))
     .map((entity) => {
@@ -1939,7 +2392,7 @@ export const renderEntityArtifacts = (
     })
     .join(",\n  ");
   const mcpMergeResultVariants = kernelEntities
-    .filter((entity) => kernelActionsFor(entity).includes("merge"))
+    .filter((entity) => mcpActionsFor(entity).includes("merge"))
     .map((entity) => {
       if (entity.contract === null) {
         throw new LiteralSpecError(`${entity.key}.merge output is missing.`);
@@ -1966,6 +2419,12 @@ export const renderEntityArtifacts = (
       const mcpOperations = Array.isArray(entity.descriptor.mcp)
         ? entity.descriptor.mcp
         : [];
+      const mcpOwner =
+        mcpOperations.length === 0
+          ? null
+          : kernelEntityKeys.includes(entity.key)
+            ? "kernel"
+            : "workflow";
       const sourceRefs =
         entity.contract === null
           ? null
@@ -1993,6 +2452,7 @@ export const renderEntityArtifacts = (
           filterUrlKeys: entity.filterUrlKeys,
           filterDescriptors: entity.filterDescriptors,
           mcpOperations,
+          mcpOwner,
           lifecycle: {
             softDelete: entity.descriptor.softDelete === true,
             delete: lifecycle.delete,
@@ -2001,6 +2461,10 @@ export const renderEntityArtifacts = (
               entity.bulkUpdateFields === null
                 ? null
                 : { fields: entity.bulkUpdateFields },
+          },
+          operationOwners: {
+            delete: entity.operationOwners.delete,
+            merge: entity.operationOwners.merge,
           },
           sourceRefs,
           ports: entity.ports,
@@ -2031,10 +2495,10 @@ export const renderEntityArtifacts = (
           ports.search.projection,
           ports.search.semanticText,
           ports.search.dependentRefresh,
-          ports.lifecycle.policy,
-          ports.lifecycle.runtime,
-          ports.relationMutation.attach,
-          ports.relationMutation.detach,
+          ...entity.relationMutations.flatMap(({ itemSchema, adapter }) => [
+            itemSchema,
+            adapter,
+          ]),
           ...entity.filterDescriptors.flatMap((descriptor) => [
             descriptor.optionsRef,
             descriptor.expandRef,
@@ -2162,11 +2626,13 @@ export const renderEntityArtifacts = (
         "  auditable: boolean;\n" +
         "  hasImages: boolean;\n" +
         "  countable: boolean;\n" +
-        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "merge")[];\n' +
+        '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];\n' +
         "  filterUrlKeys: readonly string[];\n" +
         "  filterDescriptors: readonly EntityFilterDescriptorMetadata[];\n" +
-        '  mcpOperations: readonly ("get" | "list" | "create" | "update" | "delete")[];\n' +
+        '  mcpOperations: readonly ("get" | "list" | "search" | "create" | "update" | "delete" | "bulkUpdate" | "merge")[];\n' +
+        '  mcpOwner: "kernel" | "workflow" | null;\n' +
         '  lifecycle: { softDelete: boolean; delete: { mode: "soft" | "hard"; bulk: boolean } | null; merge: boolean; bulkUpdate: { fields: readonly string[] } | null };\n' +
+        '  operationOwners: { delete: "kernel" | "workflow" | null; merge: "kernel" | "workflow" | null };\n' +
         "  sourceRefs: { create?: string; update?: string; output: string; list: string; detail: string; mcpOutput: string; mcpList: string; mcpDetail: string } | null;\n" +
         "  ports: EntityPortSourceRoster;\n" +
         "  references: readonly Entity[];\n" +
@@ -2185,8 +2651,6 @@ export const renderEntityArtifacts = (
         "  references: { label: EntityPortSourceRef | null; resolver: EntityPortSourceRef | null };\n" +
         "  filters: EntityPortSourceRef | null;\n" +
         "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
-        "  lifecycle: { policy: EntityPortSourceRef | null; runtime: EntityPortSourceRef | null };\n" +
-        "  relationMutation: { attach: EntityPortSourceRef | null; detach: EntityPortSourceRef | null };\n" +
         "};\n\n" +
         "// Generated inspector metadata stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityInspectorMetadata = ${compactLiteral(inspectorMetadata)} as const satisfies Record<Entity, EntityInspectorMetadata>;\n`,
@@ -2365,9 +2829,15 @@ export const renderEntityArtifacts = (
         `export const generatedEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", "create")}\n]);\n\n` +
         "// One generated variant per entity.\n// oxfmt-ignore\n" +
         `export const generatedEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update")}\n]);\n\n` +
+        "// MCP command variants are filtered by each literal's declared exposure.\n" +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityCreateCommandSchema = z.union([\n  ${commandVariants("create", "create", "mcp")}\n]);\n\n` +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityUpdateCommandSchema = z.union([\n  ${commandVariants("update", "update", "mcp")}\n]);\n\n` +
         "/** The kernel owns the shared 1-500 unique-id bound, so it injects `ids`. */\n" +
         "// One generated variant per bulk-updatable entity.\n// oxfmt-ignore\n" +
         `export const generatedEntityBulkUpdateCommandSchema = ${bulkUpdateCommandFactory};\n` +
+        `export const generatedMcpEntityBulkUpdateCommandSchema = ${mcpBulkUpdateCommandFactory};\n` +
         "\n" +
         `export const generatedEntityMutationCreateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("create")}\n]);\n\n` +
         `export const generatedEntityMutationUpdateResultSchema = z.discriminatedUnion("entity", [\n  ${mutationResultVariants("update")}\n]);\n` +
@@ -2421,9 +2891,81 @@ export const renderEntityArtifacts = (
         `export const generatedEntityKernelEntities = ${compactLiteral(kernelEntityKeys)} as const;\n\n` +
         "// Generated capabilities stay compact and reviewable.\n// oxfmt-ignore\n" +
         `export const generatedEntityKernelContractCases = ${compactLiteral(kernelContractCases)} as const;\n\n` +
+        "// Generated MCP exposure is a strict subset of executable kernel actions.\n" +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityKernelContractCases = ${compactLiteral(mcpKernelContractCases)} as const;\n\n` +
+        "// One generated entity roster per MCP action.\n" +
+        "// oxfmt-ignore\n" +
+        `export const generatedMcpEntityActionEntities = ${compactLiteral(
+          Object.fromEntries(
+            [
+              "get",
+              "list",
+              "search",
+              "create",
+              "update",
+              "delete",
+              "bulkUpdate",
+              "merge",
+            ].map((action) => [action, mcpEntitiesForAction(action)]),
+          ),
+        )} as const;\n\n` +
         "// Generated action rosters stay one line each.\n// oxfmt-ignore\n" +
         `export const generatedSearchEntityKernelEntities = ${compactLiteral(entitiesForAction("search"))} as const;\n` +
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
+    },
+    {
+      relativePath:
+        "apps/web/src/server/generated/entity-relation-contracts.gen.ts",
+      source:
+        generatedHeader +
+        'import { relationMutationOut } from "@cubby/schemas/common";\n' +
+        'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
+        'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
+        `${relationSchemaImports}\n` +
+        'import { z } from "zod";\n\n' +
+        "// Generated relation command schemas stay correlated by entity and relation.\n" +
+        `const generatedEntityRelationCommandSchema = ${relationCommandSchema(null)};\n` +
+        `export const generatedBrowserEntityRelationCommandSchema = ${relationCommandSchema("browser")};\n` +
+        `export const generatedMcpEntityRelationCommandSchema = ${relationCommandSchema("mcp")};\n\n` +
+        `export const generatedMcpEntityRelationPreviewInputSchema = ${mcpPreviewInputSchema};\n\n` +
+        `export const generatedEntityRelationMutationResultSchema = ${relationResultSchema};\n\n` +
+        "export type GeneratedEntityRelationCommand = z.infer<typeof generatedEntityRelationCommandSchema>;\n\n" +
+        "/** Resolve generated relation metadata without a parallel hand-written roster. */\n" +
+        "export function generatedEntityRelationTarget(command: GeneratedEntityRelationCommand): ShortcodeEntity {\n" +
+        "  switch (`${command.entity}:${command.relation}`) {\n" +
+        `${relationTargetCases}\n` +
+        "  }\n" +
+        "  throw new Error(`Unsupported relation ${command.entity}:${command.relation}`);\n" +
+        "}\n\n" +
+        "export const generatedEntityRelationItemIds = (command: GeneratedEntityRelationCommand): string[] => command.items.map((item) => item.id);\n",
+    },
+    {
+      relativePath:
+        "apps/web/src/server/generated/entity-relation-bindings.gen.ts",
+      source:
+        generatedHeader +
+        'import type { EntityKernelContext } from "~/server/entity-kernel/adapter";\n' +
+        'import type { Database } from "~/server/db";\n' +
+        'import type { GeneratedEntityRelationCommand } from "~/server/generated/entity-relation-contracts.gen";\n' +
+        'import type { RelationPlan } from "~/server/repo/relation-preflight";\n' +
+        'import type { z } from "zod";\n' +
+        'import { generatedEntityRelationMutationResultSchema } from "~/server/generated/entity-relation-contracts.gen";\n\n' +
+        `${relationAdapterImports}\n\n` +
+        "/** Dispatch is generated from each literal relationship mutation declaration. */\n" +
+        "export async function executeGeneratedRelationMutation(ctx: EntityKernelContext, command: GeneratedEntityRelationCommand): Promise<z.infer<typeof generatedEntityRelationMutationResultSchema>> {\n" +
+        "  switch (`${command.entity}:${command.relation}`) {\n" +
+        `${relationRuntimeCases}\n` +
+        "  }\n" +
+        "  throw new Error(`Unsupported relation mutation ${command.entity}:${command.relation}`);\n" +
+        "}\n\n" +
+        "/** Advisory planning uses the same generated relation-to-adapter dispatch. */\n" +
+        "export async function previewGeneratedRelationMutation(db: Database, command: GeneratedEntityRelationCommand, ownerId: string, targetIds: readonly string[]): Promise<RelationPlan> {\n" +
+        "  switch (`${command.entity}:${command.relation}`) {\n" +
+        `${relationPreviewCases}\n` +
+        "  }\n" +
+        "  throw new Error(`Unsupported relation preview ${command.entity}:${command.relation}`);\n" +
+        "}\n",
     },
     {
       relativePath:

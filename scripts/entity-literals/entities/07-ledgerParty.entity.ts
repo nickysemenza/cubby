@@ -49,6 +49,7 @@ export default literalEntity({
       key: "expenses",
       label: "Attributed expenses",
       target: "expense",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -56,7 +57,6 @@ export default literalEntity({
           { edge: "ExpenseAttribution.expenseId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "ExpenseAttribution.expenseId", direction: "incoming" },
@@ -68,13 +68,13 @@ export default literalEntity({
       key: "financial-accounts",
       label: "Financial accounts",
       target: "financialAccount",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
           { edge: "FinancialAccount.ledgerPartyId", direction: "incoming" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "FinancialAccount.ledgerPartyId", direction: "outgoing" },
@@ -85,11 +85,11 @@ export default literalEntity({
       key: "outgoing-transfers",
       label: "Outgoing transfers",
       target: "ledgerTransfer",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "LedgerTransfer.fromPartyId", direction: "outgoing" }],
       },
@@ -98,11 +98,11 @@ export default literalEntity({
       key: "incoming-transfers",
       label: "Incoming transfers",
       target: "ledgerTransfer",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "LedgerTransfer.toPartyId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "LedgerTransfer.toPartyId", direction: "outgoing" }],
       },
@@ -117,7 +117,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: true,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: "kernel" },
+    mcp: ["get", "list", "create", "update", "delete", "merge"],
   },
   extensions: {
     countFilter: null,
@@ -140,17 +141,6 @@ export default literalEntity({
         export: "getEntityFilters",
       },
       search: { projection: null, semanticText: null, dependentRefresh: null },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/ledger-party",
-          export: "LEDGER_PARTY_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/ledger-party.entity-adapter",
-          export: "ledgerPartyEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

@@ -20,6 +20,7 @@
     "test:e2e:postgres": "NODE_ENV=test CUBBY_E2E_DATABASE=postgres playwright test",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
+    "db:preflight-entity-integrity": "tsx scripts/preflight-entity-relationship-integrity.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",

@@ -240,18 +240,17 @@ export const defineEntityOperations = <
       backgroundBatches = [],
       affectedEdges,
     } = await binding.repository.delete(ctx, ids);
+    if (!affectedEdges) {
+      throw new Error(
+        `${binding.entity} delete returned without affected-edge counts`,
+      );
+    }
     await deleteStoredObjects(detachedImageKeys);
     return entityMutationResultSchema.parse({
       action: "delete",
       entity: binding.entity,
       deletedReferences,
-      affectedEdges:
-        affectedEdges ??
-        Object.entries(binding.lifecycle.delete).map(([edge, disposition]) => ({
-          edge,
-          effect: disposition.effect,
-          changed: null,
-        })),
+      affectedEdges,
       sideEffects: { backgroundBatches },
     });
   },

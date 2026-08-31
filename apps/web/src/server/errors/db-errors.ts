@@ -168,6 +168,23 @@ export function translateDatabaseError(
     }
     case "23514": {
       // check_violation
+      if (
+        pg.constraint === "ProjectDependency_no_self_check" ||
+        pg.constraint === "TaskDependency_no_self_check"
+      ) {
+        return createAppError(
+          "SELF_DEPENDENCY",
+          "A dependency cannot point to itself.",
+          error,
+        );
+      }
+      if (pg.constraint === "Location_productId_type_check") {
+        return createAppError(
+          "CONSTRAINT_VIOLATION",
+          "A location can have either a product identity or a type, not both.",
+          error,
+        );
+      }
       return createAppError(
         "CONSTRAINT_VIOLATION",
         `This ${entity} fails a validation rule${

@@ -222,38 +222,12 @@ replaced with `RCP-XXXX`. The generated registry lives
 in `packages/shared/src/shortcode.ts`; resolution goes through
 `apps/web/src/server/repo/shortcode-resolver.ts` and nowhere else.
 
-```mermaid
-erDiagram
-    Recipe ||--o{ RecipeSection : "has sections"
-    RecipeSection ||--o{ RecipeSectionIngredient : "has ingredients"
-    Ingredient ||--o{ RecipeSectionIngredient : "used in"
-    Recipe ||--o| Ingredient : "can be ingredient"
-
-    Product ||--o{ InventoryEntry : "inventoried as"
-    Product }o--|| Ingredient : "points to"
-
-    Location ||--o{ InventoryEntry : "contains"
-
-    Image ||--o{ Product : "linked to"
-    Image ||--o{ Location : "linked to"
-    Image ||--o{ Recipe : "linked to"
-
-    Product }o--o| usda_food : "linked by fdc_id/barcode"
-
-    Project ||--o{ Task : "has"
-    Project ||--o{ Expense : "has"
-    Project }o--o{ Project : "blocked by"
-    Task }o--o{ Task : "blocked by"
-    Image ||--o{ Project : "linked to"
-
-    Vendor ||--o{ Purchase : "issued"
-    Purchase ||--o{ Expense : "has expenses"
-    FinancialAccount ||--o{ FinancialTransaction : "records activity"
-    FinancialTransaction ||--o{ FinancialTransactionAllocation : "is allocated as"
-    Purchase ||--o{ FinancialTransactionAllocation : "is settled by"
-    Image ||--o{ Purchase : "documents"
-    Product ||--o{ Expense : "bought as"
-```
+The complete relationship graph is compiled from the entity literals rather
+than duplicated here. The in-app `/entities?tab=integrity` inspector renders
+logical cardinality, inverse paths, and named provenance alongside physical FK
+edges and operation-specific delete/merge behavior. The documentation diagram
+uses the same generated manifest for its bounded core view; see
+[the entity compiler contract](docs/entities.md#relations-deletion-and-merge).
 
 ## 🛠️ Development Setup
 

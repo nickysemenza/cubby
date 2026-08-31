@@ -28,6 +28,7 @@ describe("PROBLEM_CLASS", () => {
     duplicateInventory: "defect",
     duplicateProductIdentities: "defect",
     duplicateVendors: "defect",
+    dependencyCycles: "defect",
     emptyCookedMeals: "defect",
     entitiesMissingEmbeddings: "defect",
     financialTransactionAllocationDefects: "defect",

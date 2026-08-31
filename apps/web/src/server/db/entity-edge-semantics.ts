@@ -300,7 +300,7 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "hierarchy",
       label: "sub-locations",
       description:
-        "A child location nested under this one in the house → room → shelf → bin tree; unconstrained at the DB level, walked via app code and relations() rather than an enforced FK.",
+        "A child location nested under this one in the house → room → shelf → bin tree, enforced by the Location parent self-FK.",
       liveness: { kind: "must-target-live" },
     },
   },

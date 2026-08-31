@@ -3,6 +3,7 @@ import type {
   PhysicalEdge,
 } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { sumBy } from "es-toolkit";
@@ -57,6 +58,13 @@ export function buildIntegrityCatalog(): IntegrityCatalog {
   const operations = ENTITY_LIFECYCLE_REGISTRY.map((entry) => ({
     entity: entry.entity,
     operation: entry.operation,
+    owner:
+      entityInspectorMetadata[entry.entity].operationOwners[entry.operation] ??
+      (() => {
+        throw new Error(
+          `${entry.entity}.${entry.operation} has lifecycle policy without an executable owner`,
+        );
+      })(),
     dispositions: Object.entries(entry.policy).map(
       ([edgeKey, disposition]) => ({
         edgeKey,

@@ -36,7 +36,7 @@
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProductPurchaseOut,
   PurchaseProductOut,
@@ -63,6 +63,7 @@ import {
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
+import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
@@ -73,6 +74,10 @@ import {
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 
 /**
  * Does this Expense say the order ACQUIRED the product?
@@ -544,3 +549,29 @@ export async function detachPurchaseProducts(
     };
   });
 }
+
+export const purchaseProductsRelationAdapter = {
+  preview(db, action, ownerId, targetIds) {
+    const purchaseId = parseEntityId("purchase", ownerId);
+    const productIds = targetIds.map((id) => parseEntityId("product", id));
+    return action === "attach"
+      ? previewAttachPurchaseProducts(db, purchaseId, productIds)
+      : previewDetachPurchaseProducts(db, purchaseId, productIds);
+  },
+  async execute(ctx, action, ownerShortcode, items) {
+    const purchaseId = await resolveOrThrow(ctx.db, "purchase", ownerShortcode);
+    const productIds = await resolveAllOrThrow(
+      ctx.db,
+      "product",
+      items.map(({ id }) => id),
+    );
+    return action === "attach"
+      ? attachPurchaseProducts(ctx.db, purchaseId, productIds, ctx.actorContext)
+      : detachPurchaseProducts(
+          ctx.db,
+          purchaseId,
+          productIds,
+          ctx.actorContext,
+        );
+  },
+} satisfies EntityRelationMutationAdapter<{ id: string }>;

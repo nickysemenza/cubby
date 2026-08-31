@@ -369,6 +369,48 @@ describe("project repository", () => {
     expect(edges).toHaveLength(1);
   });
 
+  it("rejects a dependency cycle against the whole projected graph", async () => {
+    const { output: a, entityId: aId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "dependency cycle project a" }),
+      ctx.actor,
+    );
+    const { output: b } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "dependency cycle project b" }),
+      ctx.actor,
+    );
+    const { output: c } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "dependency cycle project c" }),
+      ctx.actor,
+    );
+    await updateProject(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
+    await updateProject(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
+
+    await expect(
+      updateProject(ctx.db, c.id, { blockedByIds: [a.id] }, ctx.actor),
+    ).rejects.toMatchObject({ reason: "DEPENDENCY_CYCLE" });
+    await expect(getProjectByID(ctx.db, aId)).resolves.toMatchObject({
+      blockedByIds: [b.id],
+    });
+  });
+
+  it("backstops self dependency with a database CHECK", async () => {
+    const { entityId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "raw self dependency project" }),
+      ctx.actor,
+    );
+
+    await expect(
+      insertAndReturn(ctx.db, projectDependency, {
+        projectId: entityId,
+        blockedByProjectId: entityId,
+      }),
+    ).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
   it("rejects a nonexistent id in blockedByIds with NOT_FOUND (not a raw 500)", async () => {
     const { output: projectA } = await createProject(
       ctx.db,

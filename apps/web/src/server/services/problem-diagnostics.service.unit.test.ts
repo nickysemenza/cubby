@@ -17,6 +17,7 @@ describe("Problem diagnostic adapters", () => {
       "manufacturer-spelling-variants",
       "duplicate-vendors",
       "referential-liveness-violations",
+      "dependency-cycles",
       "products-with-better-upc-data",
       "duplicate-spend-candidates",
       "duplicate-financial-transaction-source-refs",

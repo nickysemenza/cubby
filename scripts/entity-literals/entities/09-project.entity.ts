@@ -264,11 +264,11 @@ export default literalEntity({
       key: "parent",
       label: "Parent project",
       target: "project",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Project.parentProjectId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Project.parentProjectId", direction: "incoming" }],
       },
@@ -277,6 +277,7 @@ export default literalEntity({
       key: "blocked-by",
       label: "Blocked by",
       target: "project",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -287,7 +288,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -299,9 +299,11 @@ export default literalEntity({
       },
     },
     {
-      key: "tools-used",
+      key: "resources",
       label: "Reusable resources",
       target: "product",
+      cardinality: "many",
+      sourceKey: "explicit",
       provenance: {
         kind: "local-path",
         steps: [
@@ -309,34 +311,45 @@ export default literalEntity({
           { edge: "ProjectToolUsage.productId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "ProjectToolUsage.productId", direction: "incoming" },
           { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
         ],
       },
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "entityRelationReferenceItemSchema",
+        },
+        adapter: {
+          module: "~/server/repo/project/tools",
+          export: "projectResourcesRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
     },
     {
       key: "tasks",
       label: "Tasks",
       target: "task",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Task.projectId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: { steps: [{ edge: "Task.projectId", direction: "outgoing" }] },
     },
     {
       key: "expenses",
       label: "Expenses",
       target: "expense",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Expense.projectId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Expense.projectId", direction: "outgoing" }],
       },
@@ -345,6 +358,7 @@ export default literalEntity({
       key: "task-products",
       label: "Task products",
       target: "product",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -352,7 +366,6 @@ export default literalEntity({
           { edge: "Task.subjectProductId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Task.subjectProductId", direction: "incoming" },
@@ -364,6 +377,7 @@ export default literalEntity({
       key: "purchased-products",
       label: "Purchased products",
       target: "product",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -371,7 +385,6 @@ export default literalEntity({
           { edge: "Expense.productId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.productId", direction: "incoming" },
@@ -383,6 +396,7 @@ export default literalEntity({
       key: "vendors",
       label: "Vendors",
       target: "vendor",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -391,7 +405,6 @@ export default literalEntity({
           { edge: "Purchase.vendorId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Purchase.vendorId", direction: "incoming" },
@@ -404,6 +417,7 @@ export default literalEntity({
       key: "images",
       label: "Images",
       target: "image",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -411,7 +425,6 @@ export default literalEntity({
           { edge: "ProjectImage.imageId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "ProjectImage.imageId", direction: "incoming" },
@@ -429,7 +442,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -463,26 +477,6 @@ export default literalEntity({
         dependentRefresh: {
           module: "~/server/services/mutation-side-effects",
           export: "runMutationSideEffects",
-        },
-      },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/project/crud",
-          export: "PROJECT_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/project/entity-adapter",
-          export: "projectEntityAdapter",
-        },
-      },
-      relationMutation: {
-        attach: {
-          module: "~/server/repo/project/tools",
-          export: "attachProjectResources",
-        },
-        detach: {
-          module: "~/server/repo/project/tools",
-          export: "detachProjectResources",
         },
       },
     },

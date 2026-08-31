@@ -36,7 +36,11 @@ import {
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { findReferentialLivenessViolations } from "./detectors-integrity";
+import {
+  countDependencyCycles,
+  findDependencyCycles,
+  findReferentialLivenessViolations,
+} from "./detectors-integrity";
 
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
@@ -848,7 +852,7 @@ describe("findReferentialLivenessViolations", () => {
     expect(skipped).toEqual(HARD_DELETE_ONLY_SOURCE_TABLES);
   });
 
-  it("audits Location.parentId even though it is unconstrained at the DB level", () => {
+  it("audits Location.parentId liveness separately from its foreign key", () => {
     expect(derivedMustTargetLiveEdges.map((s) => s.edgeKey)).toContain(
       "Location.parentId",
     );
@@ -989,5 +993,52 @@ describe("findReferentialLivenessViolations", () => {
     });
 
     expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
+  });
+});
+
+describe("findDependencyCycles", () => {
+  const ctx = withTestDb();
+
+  it("reports out-of-band Project and Task cycles by public shortcode", async () => {
+    const projectA = await mkProject(ctx.db);
+    const projectB = await mkProject(ctx.db);
+    await insertAndReturn(ctx.db, projectDependency, {
+      projectId: projectA.id,
+      blockedByProjectId: projectB.id,
+    });
+    await insertAndReturn(ctx.db, projectDependency, {
+      projectId: projectB.id,
+      blockedByProjectId: projectA.id,
+    });
+
+    const taskA = await mkTask(ctx.db);
+    const taskB = await mkTask(ctx.db);
+    const taskC = await mkTask(ctx.db);
+    await insertAndReturn(ctx.db, taskDependency, {
+      taskId: taskA.id,
+      blockedByTaskId: taskB.id,
+    });
+    await insertAndReturn(ctx.db, taskDependency, {
+      taskId: taskB.id,
+      blockedByTaskId: taskC.id,
+    });
+    await insertAndReturn(ctx.db, taskDependency, {
+      taskId: taskC.id,
+      blockedByTaskId: taskA.id,
+    });
+
+    const cycles = await findDependencyCycles(ctx.db);
+    expect(cycles).toHaveLength(2);
+    expect(await countDependencyCycles(ctx.db)).toBe(2);
+    const projectCycle = cycles.find((cycle) => cycle.entity === "project");
+    const taskCycle = cycles.find((cycle) => cycle.entity === "task");
+    expect(projectCycle?.path[0]).toBe(projectCycle?.path.at(-1));
+    expect(new Set(projectCycle?.path)).toEqual(
+      new Set([projectA.shortcode, projectB.shortcode]),
+    );
+    expect(taskCycle?.path[0]).toBe(taskCycle?.path.at(-1));
+    expect(new Set(taskCycle?.path)).toEqual(
+      new Set([taskA.shortcode, taskB.shortcode, taskC.shortcode]),
+    );
   });
 });

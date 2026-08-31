@@ -19,6 +19,7 @@ export default literalEntity({
     delete: null,
     bulkUpdate: null,
     merge: false,
+    operationOwners: { delete: null, merge: null },
     mcp: ["get", "list"],
   },
   extensions: {
@@ -36,8 +37,6 @@ export default literalEntity({
         export: "getEntityFilters",
       },
       search: { projection: null, semanticText: null, dependentRefresh: null },
-      lifecycle: { policy: null, runtime: null },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

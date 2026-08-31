@@ -92,7 +92,8 @@ export default literalEntity({
     delete: { mode: "hard", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: [],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -115,14 +116,6 @@ export default literalEntity({
         export: "getEntityFilters",
       },
       search: { projection: null, semanticText: null, dependentRefresh: null },
-      lifecycle: {
-        policy: { module: "~/server/repo/image", export: "IMAGE_HARD_DELETE" },
-        runtime: {
-          module: "~/server/repo/image.entity-adapter",
-          export: "imageEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

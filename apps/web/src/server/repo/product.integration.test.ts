@@ -25,6 +25,7 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getAuditLog } from "./audit-log";
+import { deleteCookbook, setCookbookProduct, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
 import { createExpense, deleteExpenses } from "./expense";
 import { deleteInventoryEntries, inventoryentryList } from "./inventory";
@@ -327,6 +328,71 @@ describe("product repository", () => {
     expect(measured.queryCount).toBeLessThanOrEqual(
       PRODUCT_DETAIL_QUERY_BUDGET_DATA_RICH,
     );
+  });
+
+  it("returns every live cookbook linked to a product", async () => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Shared Cookbook Product" }),
+      ctx.actor,
+    );
+    const first = await upsertCookbook(
+      ctx.db,
+      { name: "Shared Cookbook First", rawJson: [], sourceLabel: "first.epub" },
+      ctx.actor,
+    );
+    const second = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Shared Cookbook Second",
+        rawJson: [],
+        sourceLabel: "second.epub",
+      },
+      ctx.actor,
+    );
+    await setCookbookProduct(
+      ctx.db,
+      ctx.actor,
+      first.entityId,
+      product.entityId,
+    );
+    await setCookbookProduct(
+      ctx.db,
+      ctx.actor,
+      second.entityId,
+      product.entityId,
+    );
+
+    const request = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    });
+    const read = () =>
+      readProductDetail(
+        { db: ctx.db, usdaClient: request.usdaClient },
+        product.id,
+      );
+
+    await expect(read()).resolves.toMatchObject({
+      cookbooks: [
+        { id: first.output.id, name: "Shared Cookbook First", recipeCount: 0 },
+        {
+          id: second.output.id,
+          name: "Shared Cookbook Second",
+          recipeCount: 0,
+        },
+      ],
+    });
+
+    await deleteCookbook(ctx.db, first.entityId, ctx.actor);
+    await expect(read()).resolves.toMatchObject({
+      cookbooks: [
+        {
+          id: second.output.id,
+          name: "Shared Cookbook Second",
+          recipeCount: 0,
+        },
+      ],
+    });
   });
 
   it("returns linked ingredient IDs with a bulk delete", async () => {
