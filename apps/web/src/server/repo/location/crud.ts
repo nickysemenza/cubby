@@ -442,7 +442,15 @@ export const updateLocation = async (
       where: and(eq(location.id, id), notDeleted(location)),
     });
     const parentId = await resolveUpdatedParentId(tx);
-    const productId = await resolveUpdatedProductId(tx);
+    const requestedProductId = await resolveUpdatedProductId(tx);
+    // The fields are alternatives. Linking a product clears type; explicitly
+    // choosing a type on an existing product-backed Location switches it back
+    // to a productless typed Location. Null remains meaningful on either side,
+    // so callers can deliberately store the valid both-null state.
+    const productId =
+      requestedProductId === undefined && data.type != null
+        ? null
+        : requestedProductId;
 
     const updateValues = buildPartialUpdateValues({
       name: data.name,

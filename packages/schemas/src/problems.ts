@@ -18,6 +18,7 @@ import {
   projectShortcode,
   purchaseShortcode,
   recipeShortcode,
+  taskShortcode,
   vendorShortcode,
   nonEmptyTuple,
 } from "./identifiers";
@@ -749,6 +750,13 @@ const problemsFastFields = {
   // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
   // cost group: the expense is I/O, not the CPU the other groups isolate.
   referentialLivenessViolations: z.array(referentialLivenessViolationSchema),
+  dependencyCycles: z.array(
+    z.object({
+      entity: z.enum(["project", "task"]),
+      path: z.array(z.union([projectShortcode, taskShortcode])).min(2),
+      description: z.string().min(1),
+    }),
+  ),
   incompleteStatementImports: z.array(incompleteStatementImportSchema),
 };
 
@@ -937,7 +945,7 @@ const problemArraysSchema = z.object(allProblemArrayFields);
  * Every detector key at empty. The Problems page merges four separately-loaded
  * cost groups into one `AllProblems`, and a group that hasn't resolved yet has
  * to render as empty sections rather than as missing keys — spreading the
- * loaded groups over this derives all 42 defaults from the group shapes, so a
+ * loaded groups over this derives every default from the group shapes, so a
  * new detector needs no edit at the merge site.
  *
  * The empty arrays are shared rather than rebuilt per merge: problem sections
@@ -1054,6 +1062,10 @@ export const PROBLEM_CLASS = {
   // clearing the FK and deleting the source row are both plausible and not
   // interchangeable, and picking wrong destroys data with no restore path.
   referentialLivenessViolations: "defect",
+  // Project/Task blocked-by edges are DAGs. New writes are locked and checked,
+  // so a reported cycle is out-of-band corruption that can make actionable
+  // work and tracker chains contradict one another or terminate defensively.
+  dependencyCycles: "defect",
   ingredientsWithPartialCoverage: "defect",
   productsWithIslandedMappings: "defect",
   productsWithBetterUpcData: "defect",

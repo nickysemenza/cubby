@@ -23,7 +23,7 @@
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   KitComponentRowOut,
   KitMembershipOut,
@@ -73,6 +73,7 @@ import {
 // shared rather than restated, so a kit's purchase link and the Purchases panel
 // can never disagree about which orders count.
 import { expensePairPredicate } from "~/server/repo/purchase-products";
+import type { EntityRelationMutationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
   loadRelationProducts,
@@ -83,6 +84,10 @@ import {
   relationImpact,
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
 
 export interface ProductComponentEntry {
   productId: ProductId;
@@ -743,3 +748,50 @@ export async function detachProductComponents(
     };
   });
 }
+
+export const productComponentsRelationAdapter = {
+  preview(db, action, ownerId, targetIds) {
+    const parentProductId = parseEntityId("product", ownerId);
+    const componentProductIds = targetIds.map((id) =>
+      parseEntityId("product", id),
+    );
+    return action === "attach"
+      ? previewAttachProductComponents(db, parentProductId, componentProductIds)
+      : previewDetachProductComponents(
+          db,
+          parentProductId,
+          componentProductIds,
+        );
+  },
+  async execute(ctx, action, ownerShortcode, items) {
+    const parentProductId = await resolveOrThrow(
+      ctx.db,
+      "product",
+      ownerShortcode,
+    );
+    const componentProductIds = await resolveAllOrThrow(
+      ctx.db,
+      "product",
+      items.map(({ id }) => id),
+    );
+    return action === "attach"
+      ? attachProductComponents(
+          ctx.db,
+          parentProductId,
+          componentProductIds.map((productId, index) => ({
+            productId,
+            quantity: items[index]?.quantity ?? 1,
+          })),
+          ctx.actorContext,
+        )
+      : detachProductComponents(
+          ctx.db,
+          parentProductId,
+          componentProductIds,
+          ctx.actorContext,
+        );
+  },
+} satisfies EntityRelationMutationAdapter<{
+  id: string;
+  quantity?: number;
+}>;

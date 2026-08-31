@@ -1,4 +1,3 @@
-import type { RelationMutationOut } from "@cubby/schemas/common";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
@@ -8,22 +7,7 @@ import {
   ENTITY_KERNEL_BINDINGS,
   ENTITY_KERNEL_OPERATIONS,
 } from "~/server/generated/entity-kernel-bindings.gen";
-import {
-  attachProductComponents,
-  detachProductComponents,
-} from "~/server/repo/product-components";
-import {
-  attachProjectResources,
-  detachProjectResources,
-} from "~/server/repo/project/tools";
-import {
-  attachPurchaseProducts,
-  detachPurchaseProducts,
-} from "~/server/repo/purchase-products";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/repo/shortcode-resolver";
+import { executeGeneratedRelationMutation } from "~/server/generated/entity-relation-bindings.gen";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   mutationSideEffectEventSchema,
@@ -107,70 +91,7 @@ const executeRelationMutation = async (
   ctx: EntityKernelContext,
   command: Extract<EntityMutationCommand, { action: "attach" | "detach" }>,
 ) => {
-  const ids = command.items.map((item) => item.id);
-  const products = () => resolveAllOrThrow(ctx.db, "product", ids);
-  let result: RelationMutationOut;
-  if (command.entity === "product") {
-    const parentId = await resolveOrThrow(ctx.db, "product", command.id);
-    const productIds = await products();
-    result =
-      command.action === "attach"
-        ? await attachProductComponents(
-            ctx.db,
-            parentId,
-            productIds.map((productId, index) => ({
-              productId,
-              quantity: command.items[index]?.quantity ?? 1,
-            })),
-            ctx.actorContext,
-          )
-        : await detachProductComponents(
-            ctx.db,
-            parentId,
-            productIds,
-            ctx.actorContext,
-          );
-  } else if (command.entity === "project") {
-    const projectId = await resolveOrThrow(ctx.db, "project", command.id);
-    const productIds = await products();
-    result =
-      command.action === "attach"
-        ? await attachProjectResources(
-            ctx.db,
-            projectId,
-            productIds,
-            ctx.actorContext,
-          )
-        : await detachProjectResources(
-            ctx.db,
-            projectId,
-            productIds,
-            ctx.actorContext,
-          );
-  } else {
-    const purchaseId = await resolveOrThrow(ctx.db, "purchase", command.id);
-    const productIds = await products();
-    result =
-      command.action === "attach"
-        ? await attachPurchaseProducts(
-            ctx.db,
-            purchaseId,
-            productIds,
-            ctx.actorContext,
-          )
-        : await detachPurchaseProducts(
-            ctx.db,
-            purchaseId,
-            productIds,
-            ctx.actorContext,
-          );
-  }
-  return {
-    action: command.action,
-    entity: command.entity,
-    relation: command.relation,
-    result,
-  } as const;
+  return executeGeneratedRelationMutation(ctx, command);
 };
 
 /**

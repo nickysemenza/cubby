@@ -1,5 +1,6 @@
 import { integrityCatalogSchema } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
@@ -37,7 +38,7 @@ describe("integrity catalog", () => {
     const edges = catalog.entities.flatMap((entry) => entry.incomingEdges);
     expect(
       edges.filter((edge) => !edge.constrained).map((edge) => edge.edgeKey),
-    ).toEqual(["Location.parentId"]);
+    ).toEqual([]);
     expect(catalog.coverage.incomingEdges).toBe(edges.length);
     expect(catalog.coverage.auditedEdges + catalog.coverage.exemptEdges).toBe(
       edges.length,
@@ -61,9 +62,21 @@ describe("integrity catalog", () => {
     );
     expect(catalog.coverage.operations).toBe(ENTITY_LIFECYCLE_REGISTRY.length);
     for (const operation of catalog.operations) {
+      expect(operation.owner).toBe(
+        entityInspectorMetadata[operation.entity].operationOwners[
+          operation.operation
+        ],
+      );
       expect(
         operation.dispositions.map((disposition) => disposition.edgeKey).sort(),
       ).toEqual(Object.keys(INCOMING_EDGES[operation.entity]).sort());
     }
+    expect(catalog.operations).toContainEqual(
+      expect.objectContaining({
+        entity: "cookbook",
+        operation: "delete",
+        owner: "workflow",
+      }),
+    );
   });
 });

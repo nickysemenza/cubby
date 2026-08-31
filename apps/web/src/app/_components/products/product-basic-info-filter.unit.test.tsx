@@ -59,7 +59,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   servingAsLocations: [],
   componentCount: 0,
   recipeUsages: [],
-  cookbook: null,
+  cookbooks: [],
   quantityLedger: {
     acquiredUnits: 0,
     exitedUnits: 0,

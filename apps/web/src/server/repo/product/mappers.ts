@@ -466,15 +466,15 @@ export const dbProductToAPI = (
     // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`
     // reads as 1. Non-zero is what makes this product a kit.
     componentCount: Number(productData.componentCount ?? 0),
-    // At most one cookbook claims a given product, but `mapRelation` still
-    // drops soft-deleted rows first — a deleted cookbook must not resurrect
-    // its shelf link on the product page.
-    cookbook:
-      mapRelation(productData.cookbooks ?? [], (cb) => ({
-        id: parseShortcodeFor("cookbook", cb.shortcode),
-        name: cb.name,
-        recipeCount: Number(productData.cookbookRecipeCount ?? 0),
-      }))[0] ?? null,
+    // A product may be the physical copy for many cookbooks. The query filters
+    // both cookbook and recipe rows, while mapRelation remains a defensive
+    // backstop for callers that construct ProductDeepDB directly.
+    cookbooks: mapRelation(productData.cookbooks ?? [], (cb) => ({
+      id: parseShortcodeFor("cookbook", cb.shortcode),
+      name: cb.name,
+      recipeCount:
+        cb.recipes?.filter((recipe) => isNotDeleted(recipe)).length ?? 0,
+    })),
     ...deriveProductQuantitySummary(
       mappedInventoryEntry,
       productData.quantityLedger,

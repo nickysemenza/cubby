@@ -169,6 +169,9 @@ export const AppErrors = {
   // can't become its own descendant.
   PROJECT_HAS_CHILDREN: "PRECONDITION_FAILED",
   PROJECT_CYCLE: "BAD_REQUEST",
+  // ProjectDependency and TaskDependency are DAGs. The repository checks the
+  // whole projected graph under a per-family transaction lock before replace.
+  DEPENDENCY_CYCLE: "BAD_REQUEST",
   // Generic (non-entity-specific): a blockedByIds replacement set contains
   // the entity's own id. Also reused for task.parentTaskId/project.parentProjectId
   // self-reference.

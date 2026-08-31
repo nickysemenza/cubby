@@ -149,13 +149,13 @@ export default literalEntity({
       key: "ledger-party",
       label: "Ledger party",
       target: "ledgerParty",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [
           { edge: "FinancialAccount.ledgerPartyId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "FinancialAccount.ledgerPartyId", direction: "incoming" },
@@ -166,13 +166,13 @@ export default literalEntity({
       key: "transactions",
       label: "Transactions",
       target: "financialTransaction",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
           { edge: "FinancialTransaction.accountId", direction: "incoming" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "FinancialTransaction.accountId", direction: "outgoing" },
@@ -183,6 +183,7 @@ export default literalEntity({
       key: "purchases",
       label: "Purchases",
       target: "purchase",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -197,7 +198,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -216,6 +216,7 @@ export default literalEntity({
       key: "vendors",
       label: "Vendors",
       target: "vendor",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -231,7 +232,6 @@ export default literalEntity({
           { edge: "Purchase.vendorId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Purchase.vendorId", direction: "incoming" },
@@ -257,7 +257,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: null,
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
   },
   extensions: {
     countFilter: null,
@@ -293,17 +294,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/financial-account",
-          export: "FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/financial-account.entity-adapter",
-          export: "financialAccountEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

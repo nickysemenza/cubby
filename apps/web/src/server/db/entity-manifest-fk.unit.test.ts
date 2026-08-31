@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityRelationshipSchema } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
@@ -287,31 +288,107 @@ describe("relationship provenance", () => {
     expect(failures).toEqual([]);
   });
 
+  it("validates every named provenance source and its inverse path", () => {
+    const failures: string[] = [];
+    const walk = (
+      start: string,
+      steps: readonly { edge: string; direction: "outgoing" | "incoming" }[],
+      where: string,
+    ): string | null => {
+      let at = start;
+      for (const step of steps) {
+        const target = FK_TARGET.get(step.edge);
+        if (!target) {
+          failures.push(`${where}: \`${step.edge}\` is not a real FK.`);
+          return null;
+        }
+        const holder = sourceTableOf(step.edge);
+        if (step.direction === "outgoing") {
+          if (holder !== at) {
+            failures.push(
+              `${where}: outgoing \`${step.edge}\` starts on ${holder}, not ${at}.`,
+            );
+            return null;
+          }
+          at = target;
+        } else {
+          if (target !== at) {
+            failures.push(
+              `${where}: incoming \`${step.edge}\` targets ${target}, not ${at}.`,
+            );
+            return null;
+          }
+          at = holder;
+        }
+      }
+      return at;
+    };
+
+    for (const entity of entities) {
+      const sourceTable = entityManifest[entity].dbTable;
+      if (!sourceTable) continue;
+      for (const literal of entityManifest[entity].relationships) {
+        const relationship = entityRelationshipSchema.parse(literal);
+        const targetTable = entityManifest[relationship.target].dbTable;
+        const sources = [
+          {
+            key: relationship.sourceKey ?? relationship.key,
+            provenance: relationship.provenance,
+            inverse: relationship.inverse,
+          },
+          ...relationship.sources,
+        ];
+        for (const source of sources) {
+          if (source.provenance.kind !== "local-path") continue;
+          const where = `${entity}.${relationship.key}[${source.key}]`;
+          expect(source.inverse, `${where} has no inverse`).toBeDefined();
+          if (!source.inverse || !targetTable) continue;
+          expect(walk(sourceTable, source.provenance.steps, where)).toBe(
+            targetTable,
+          );
+          expect(
+            walk(targetTable, source.inverse.steps, `${where}.inverse`),
+          ).toBe(sourceTable);
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
   it("backs every unconstrained relationship with an edge marked unconstrained", () => {
     const failures: string[] = [];
     for (const entity of entities) {
-      for (const rel of entityManifest[entity].relationships) {
-        if (rel.provenance.kind !== "unconstrained") continue;
-        const { edge } = rel.provenance;
-        // It must NOT be a real FK (that's what unconstrained means) and it
-        // must be declared as such on the target's incoming edges.
-        if (FK_TARGET.has(edge)) {
-          failures.push(
-            `${entity}.${rel.key}: \`${edge}\` IS a real FK — declare it as a local-path instead.`,
-          );
-          continue;
-        }
-        const declared = Object.entries(INCOMING_EDGES[rel.target]).find(
-          ([key]) => key === edge,
-        )?.[1];
-        if (
-          !declared ||
-          !("unconstrained" in declared) ||
-          declared.unconstrained !== true
-        ) {
-          failures.push(
-            `${entity}.${rel.key}: \`${edge}\` is not marked \`unconstrained\` in INCOMING_EDGES.${rel.target}.`,
-          );
+      for (const literal of entityManifest[entity].relationships) {
+        const rel = entityRelationshipSchema.parse(literal);
+        const sources = [
+          { key: rel.sourceKey ?? rel.key, provenance: rel.provenance },
+          ...rel.sources,
+        ];
+        for (const source of sources) {
+          const { provenance } = source;
+          if (provenance.kind !== "unconstrained") continue;
+          const { edge } = provenance;
+          // It must NOT be a real FK (that's what unconstrained means) and it
+          // must be declared as such on the target's incoming edges.
+          if (FK_TARGET.has(edge)) {
+            failures.push(
+              `${entity}.${rel.key}[${source.key}]: \`${edge}\` IS a real FK — declare it as a local-path instead.`,
+            );
+            continue;
+          }
+          const declared = Object.entries(INCOMING_EDGES[rel.target]).find(
+            ([key]) => key === edge,
+          )?.[1];
+          if (
+            !declared ||
+            !("unconstrained" in declared) ||
+            declared.unconstrained !== true
+          ) {
+            failures.push(
+              `${entity}.${rel.key}[${source.key}]: \`${edge}\` is not marked \`unconstrained\` in INCOMING_EDGES.${rel.target}.`,
+            );
+          }
         }
       }
     }
@@ -331,13 +408,20 @@ describe("relationship provenance", () => {
 
     const failures: string[] = [];
     for (const entity of entities) {
-      for (const rel of entityManifest[entity].relationships) {
-        if (rel.provenance.kind !== "external") continue;
-        for (const column of rel.provenance.sourceColumns) {
-          if (!COLUMNS.has(column)) {
-            failures.push(
-              `${entity}.${rel.key}: \`${column}\` is not a real column in schema.ts.`,
-            );
+      for (const literal of entityManifest[entity].relationships) {
+        const rel = entityRelationshipSchema.parse(literal);
+        const sources = [
+          { key: rel.sourceKey ?? rel.key, provenance: rel.provenance },
+          ...rel.sources,
+        ];
+        for (const source of sources) {
+          if (source.provenance.kind !== "external") continue;
+          for (const column of source.provenance.sourceColumns) {
+            if (!COLUMNS.has(column)) {
+              failures.push(
+                `${entity}.${rel.key}[${source.key}]: \`${column}\` is not a real column in schema.ts.`,
+              );
+            }
           }
         }
       }

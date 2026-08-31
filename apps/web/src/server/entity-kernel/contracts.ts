@@ -1,5 +1,4 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
-import { relationMutationOut } from "@cubby/schemas/common";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
 import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";
 import {
@@ -18,12 +17,21 @@ import {
   generatedEntityMutationCreateResultSchema,
   generatedEntityMutationUpdateResultSchema,
   generatedEntityUpdateCommandSchema,
+  generatedMcpEntityBulkUpdateCommandSchema,
+  generatedMcpEntityCreateCommandSchema,
+  generatedMcpEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
 import {
   generatedEntityKernelEntities,
   generatedMergeEntityKernelEntities,
+  generatedMcpEntityActionEntities,
   generatedSearchEntityKernelEntities,
 } from "~/server/generated/entity-kernel-entities.gen";
+import {
+  generatedBrowserEntityRelationCommandSchema,
+  generatedEntityRelationMutationResultSchema,
+  generatedMcpEntityRelationCommandSchema,
+} from "~/server/generated/entity-relation-contracts.gen";
 
 export const ENTITY_KERNEL_ENTITIES = generatedEntityKernelEntities;
 
@@ -77,11 +85,6 @@ const entityQueryCommandSchema = z.discriminatedUnion("action", [
 // surface without inventing a dishonest `create` command.
 const mergeableEntitySchema = z.enum(generatedMergeEntityKernelEntities);
 
-const relationItemSchema = z.object({
-  id: z.string().min(1),
-  quantity: z.number().int().min(1).max(9999).optional(),
-});
-
 const uniqueEntityIdsSchema = z
   .array(z.string().min(1))
   .min(1)
@@ -90,51 +93,6 @@ const uniqueEntityIdsSchema = z
     message: "entity IDs must be unique",
   });
 
-const relationCommandFields = {
-  entity: z.enum(["product", "project", "purchase"]),
-  relation: z.enum(["components", "resources", "products"]),
-  id: z.string().min(1),
-  items: z.array(relationItemSchema).min(1).max(500),
-};
-
-const validateRelationCommand = (
-  value: {
-    entity: "product" | "project" | "purchase";
-    relation: "components" | "resources" | "products";
-    items: { id: string; quantity?: number }[];
-  },
-  ctx: z.RefinementCtx,
-) => {
-  const expected = {
-    product: "components",
-    project: "resources",
-    purchase: "products",
-  }[value.entity];
-  if (value.relation !== expected) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["relation"],
-      message: `${value.entity} only supports the ${expected} relation`,
-    });
-  }
-  if (
-    value.entity !== "product" &&
-    value.items.some((item) => item.quantity !== undefined)
-  ) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["items"],
-      message: "quantity is only valid for product components",
-    });
-  }
-};
-
-const attachCommandSchema = z
-  .object({ action: z.literal("attach"), ...relationCommandFields })
-  .superRefine(validateRelationCommand);
-const detachCommandSchema = z
-  .object({ action: z.literal("detach"), ...relationCommandFields })
-  .superRefine(validateRelationCommand);
 const deleteCommandSchema = z.object({
   action: z.literal("delete"),
   entity: entityKernelEntitySchema,
@@ -156,8 +114,7 @@ export const entityBrowserMutationCommandSchema = z.union([
   generatedEntityUpdateCommandSchema,
   deleteCommandSchema,
   bulkUpdateCommandSchema,
-  attachCommandSchema,
-  detachCommandSchema,
+  generatedBrowserEntityRelationCommandSchema,
 ]);
 
 const entityMutationCommandSchema = z.union([
@@ -172,6 +129,48 @@ const entityMutationCommandSchema = z.union([
 export const entityCommandSchema = z.union([
   entityQueryCommandSchema,
   entityMutationCommandSchema,
+]);
+
+const mcpQueryCommandSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("get"),
+    entity: z.enum(generatedMcpEntityActionEntities.get),
+    id: z.string().min(1),
+    missing: z.enum(["error", "null"]).default("error"),
+  }),
+  z.object({
+    action: z.literal("list"),
+    entity: z.enum(generatedMcpEntityActionEntities.list),
+    ...listFields,
+  }),
+  z.object({
+    action: z.literal("search"),
+    entity: z.enum(generatedMcpEntityActionEntities.search),
+    query: z.string().trim().min(1).max(100),
+    limit: z.number().int().min(1).max(50).default(5),
+    semantic: z.boolean().default(true),
+  }),
+]);
+
+const mcpDeleteCommandSchema = deleteCommandSchema.extend({
+  entity: z.enum(generatedMcpEntityActionEntities.delete),
+});
+
+const mcpMergeCommandSchema = z.object({
+  action: z.literal("merge"),
+  entity: z.enum(generatedMcpEntityActionEntities.merge),
+  data: z.record(z.string(), z.unknown()),
+});
+
+/** MCP ingress is generated from executable actions each literal exposes. */
+export const entityMcpCommandSchema = z.union([
+  mcpQueryCommandSchema,
+  generatedMcpEntityCreateCommandSchema,
+  generatedMcpEntityUpdateCommandSchema,
+  mcpDeleteCommandSchema,
+  generatedMcpEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema),
+  generatedMcpEntityRelationCommandSchema,
+  mcpMergeCommandSchema,
 ]);
 
 export type EntityQueryCommand = z.infer<typeof entityQueryCommandSchema>;
@@ -221,7 +220,7 @@ export const entityDeleteResultSchema = z.object({
     z.object({
       edge: z.string().min(1),
       effect: operationEffectSchema,
-      changed: z.number().int().nonnegative().nullable(),
+      changed: z.number().int().nonnegative(),
     }),
   ),
   sideEffects: mutationSideEffectsSchema,
@@ -234,12 +233,8 @@ export const entityBulkUpdateResultSchema = z.object({
   ),
   sideEffects: mutationSideEffectsSchema,
 });
-export const entityRelationMutationResultSchema = z.object({
-  action: z.enum(["attach", "detach"]),
-  entity: z.enum(["product", "project", "purchase"]),
-  relation: z.enum(["components", "resources", "products"]),
-  result: relationMutationOut,
-});
+export const entityRelationMutationResultSchema =
+  generatedEntityRelationMutationResultSchema;
 
 /** Strict wire result for browser mutations; merge remains a workflow API. */
 export const entityBrowserMutationResultSchema = z.union([

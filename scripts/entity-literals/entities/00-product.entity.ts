@@ -519,11 +519,11 @@ export default literalEntity({
       key: "ingredient",
       label: "Ingredient",
       target: "ingredient",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Product.ingredientId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Product.ingredientId", direction: "incoming" }],
       },
@@ -532,6 +532,7 @@ export default literalEntity({
       key: "project-uses",
       label: "Used on projects",
       target: "project",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -539,7 +540,6 @@ export default literalEntity({
           { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "ProjectToolUsage.projectId", direction: "incoming" },
@@ -551,6 +551,7 @@ export default literalEntity({
       key: "vendors",
       label: "Vendors",
       target: "vendor",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -559,7 +560,6 @@ export default literalEntity({
           { edge: "Purchase.vendorId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Purchase.vendorId", direction: "incoming" },
@@ -572,6 +572,7 @@ export default literalEntity({
       key: "purchased-projects",
       label: "Projects",
       target: "project",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -579,7 +580,6 @@ export default literalEntity({
           { edge: "Expense.projectId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.projectId", direction: "incoming" },
@@ -588,9 +588,11 @@ export default literalEntity({
       },
     },
     {
-      key: "purchases-via-spend",
-      label: "Purchases (via spend)",
+      key: "purchases",
+      label: "Purchases",
       target: "purchase",
+      cardinality: "many",
+      sourceKey: "expense",
       provenance: {
         kind: "local-path",
         steps: [
@@ -598,23 +600,44 @@ export default literalEntity({
           { edge: "Expense.purchaseId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "Expense.purchaseId", direction: "incoming" },
           { edge: "Expense.productId", direction: "outgoing" },
         ],
       },
+      sources: [
+        {
+          key: "explicit",
+          label: "Explicit purchase link",
+          provenance: {
+            kind: "local-path",
+            steps: [
+              { edge: "PurchaseProduct.productId", direction: "incoming" },
+              {
+                edge: "PurchaseProduct.purchaseId",
+                direction: "outgoing",
+              },
+            ],
+          },
+          inverse: {
+            steps: [
+              { edge: "PurchaseProduct.purchaseId", direction: "incoming" },
+              { edge: "PurchaseProduct.productId", direction: "outgoing" },
+            ],
+          },
+        },
+      ],
     },
     {
       key: "expenses",
       label: "Expenses",
       target: "expense",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Expense.productId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Expense.productId", direction: "outgoing" }],
       },
@@ -623,11 +646,11 @@ export default literalEntity({
       key: "inventory",
       label: "Inventory",
       target: "inventory",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "InventoryEntry.productId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "InventoryEntry.productId", direction: "outgoing" }],
       },
@@ -636,11 +659,11 @@ export default literalEntity({
       key: "tasks",
       label: "Tasks",
       target: "task",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Task.subjectProductId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Task.subjectProductId", direction: "outgoing" }],
       },
@@ -649,6 +672,7 @@ export default literalEntity({
       key: "wishes",
       label: "Wishlist candidates",
       target: "wish",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -656,7 +680,6 @@ export default literalEntity({
           { edge: "WishCandidate.wishId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "WishCandidate.wishId", direction: "incoming" },
@@ -668,11 +691,11 @@ export default literalEntity({
       key: "locations",
       label: "Serving as locations",
       target: "location",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Location.productId", direction: "incoming" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Location.productId", direction: "outgoing" }],
       },
@@ -681,6 +704,7 @@ export default literalEntity({
       key: "images",
       label: "Images",
       target: "image",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -688,7 +712,6 @@ export default literalEntity({
           { edge: "ProductImage.imageId", direction: "outgoing" },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           { edge: "ProductImage.imageId", direction: "incoming" },
@@ -697,15 +720,79 @@ export default literalEntity({
       },
     },
     {
+      key: "components",
+      label: "Components",
+      target: "product",
+      cardinality: "many",
+      sourceKey: "explicit",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "ProductComponent.parentProductId", direction: "incoming" },
+          {
+            edge: "ProductComponent.componentProductId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "ProductComponent.componentProductId",
+            direction: "incoming",
+          },
+          { edge: "ProductComponent.parentProductId", direction: "outgoing" },
+        ],
+      },
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "productComponentRelationItemSchema",
+        },
+        adapter: {
+          module: "~/server/repo/product-components",
+          export: "productComponentsRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
+    },
+    {
+      key: "containing-kits",
+      label: "Containing kits",
+      target: "product",
+      cardinality: "many",
+      sourceKey: "explicit",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "ProductComponent.componentProductId",
+            direction: "incoming",
+          },
+          { edge: "ProductComponent.parentProductId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "ProductComponent.parentProductId", direction: "incoming" },
+          {
+            edge: "ProductComponent.componentProductId",
+            direction: "outgoing",
+          },
+        ],
+      },
+    },
+    {
       key: "usda-food",
       label: "USDA food",
       target: "usda-food",
+      cardinality: "one",
       provenance: {
         kind: "external",
         system: "usda-api",
         sourceColumns: ["ProductExternalId.externalId", "Product.fdc_id"],
       },
-      deletionPolicy: "restrict",
     },
   ],
   search: { enabled: true },
@@ -717,7 +804,17 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["stockTracked"] },
     merge: true,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: "kernel" },
+    mcp: [
+      "get",
+      "list",
+      "search",
+      "create",
+      "update",
+      "delete",
+      "bulkUpdate",
+      "merge",
+    ],
   },
   extensions: {
     countFilter: null,
@@ -767,26 +864,6 @@ export default literalEntity({
         dependentRefresh: {
           module: "~/server/services/mutation-side-effects",
           export: "runMutationSideEffects",
-        },
-      },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/product/edge-roles",
-          export: "PRODUCT_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/product/entity-adapter",
-          export: "productEntityAdapter",
-        },
-      },
-      relationMutation: {
-        attach: {
-          module: "~/server/repo/product-components",
-          export: "attachProductComponents",
-        },
-        detach: {
-          module: "~/server/repo/product-components",
-          export: "detachProductComponents",
         },
       },
     },

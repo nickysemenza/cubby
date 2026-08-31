@@ -8,7 +8,7 @@ import type {
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
 import { useQuery } from "@tanstack/react-query";
-import { HeartPulse, Trash2, Waypoints } from "lucide-react";
+import { Database, HeartPulse, Waypoints } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
@@ -39,14 +39,15 @@ import {
 
 type EntityRow = IntegrityCatalog["entities"][number];
 type EntityRelationship = EntityRow["relationships"][number];
+type IntegrityLens = EntityGraphLens | "physical";
 
 const LENS_OPTIONS: {
-  value: EntityGraphLens;
+  value: IntegrityLens;
   label: string;
   icon: typeof Waypoints;
 }[] = [
   { value: "logical", label: "Logical", icon: Waypoints },
-  { value: "lifecycle", label: "Lifecycle", icon: Trash2 },
+  { value: "physical", label: "Physical", icon: Database },
   { value: "health", label: "Health", icon: HeartPulse },
 ];
 
@@ -100,7 +101,7 @@ export function EntityIntegrityTab({
   );
 
   const [selected, setSelected] = useState<Entity | null>(null);
-  const [lens, setLens] = useState<EntityGraphLens>("logical");
+  const [lens, setLens] = useState<IntegrityLens>("logical");
 
   const unhealthyEntities = useMemo(
     () => new Set(violations.map((v) => v.targetEntity)),
@@ -149,7 +150,7 @@ export function EntityIntegrityTab({
           One node per entity — click a node (or a chip below) to inspect its
           relationships, incoming edges, and lifecycle dispositions.
         </p>
-        <ViewSwitcher<EntityGraphLens>
+        <ViewSwitcher<IntegrityLens>
           ariaLabel="Graph lens"
           value={lens}
           onValueChange={setLens}
@@ -158,12 +159,16 @@ export function EntityIntegrityTab({
       </Row>
 
       <Grid cols="pair">
-        <EntityReferenceGraph
-          selected={selected}
-          onSelect={setSelected}
-          lens={lens}
-          unhealthyEntities={unhealthyEntities}
-        />
+        {lens === "physical" ? (
+          <PhysicalRelationshipGraph catalog={catalog} />
+        ) : (
+          <EntityReferenceGraph
+            selected={selected}
+            onSelect={setSelected}
+            lens={lens}
+            unhealthyEntities={unhealthyEntities}
+          />
+        )}
         <EntityDetailPanel
           entity={selected}
           row={selectedRow}
@@ -188,6 +193,55 @@ function HairlineRow({ children }: { children: ReactNode }) {
   return (
     <div className="border-b border-[var(--border)] py-1 last:border-b-0">
       {children}
+    </div>
+  );
+}
+
+function PhysicalRelationshipGraph({ catalog }: { catalog: IntegrityCatalog }) {
+  const rows = catalog.entities.flatMap((entity) =>
+    entity.incomingEdges.map((edge) => ({ entity: entity.entity, edge })),
+  );
+  return (
+    <div className="h-[420px] overflow-y-auto border border-[var(--border)] p-3">
+      <Stack gap="tight">
+        <p className="text-xs text-muted-foreground">
+          Physical FK/join edges → target entity · operation-specific lifecycle
+          effects
+        </p>
+        {rows.map(({ entity, edge }) => {
+          const dispositions = catalog.operations.flatMap((operation) =>
+            operation.entity === entity
+              ? operation.dispositions
+                  .filter((item) => item.edgeKey === edge.edgeKey)
+                  .map((item) => ({
+                    operation: operation.operation,
+                    owner: operation.owner,
+                    effect: item.disposition.effect,
+                  }))
+              : [],
+          );
+          return (
+            <HairlineRow key={edge.edgeKey}>
+              <Row justify="between" align="center" gap="sm" wrap>
+                <span className="font-mono text-2xs">
+                  {edge.sourceTable}.{edge.sourceColumn} → {entity}
+                </span>
+                <Row gap="xs" align="center" wrap>
+                  <Badge variant="secondary">{edge.semantics.role}</Badge>
+                  {dispositions.map((item) => (
+                    <Badge
+                      key={`${item.operation}-${item.owner}`}
+                      variant={EFFECT_VARIANT[item.effect]}
+                    >
+                      {item.operation}:{item.effect} · {item.owner}
+                    </Badge>
+                  ))}
+                </Row>
+              </Row>
+            </HairlineRow>
+          );
+        })}
+      </Stack>
     </div>
   );
 }
@@ -297,14 +351,37 @@ function RelationshipRow({
     <div className="border-b border-[var(--border)] py-2 last:border-b-0">
       <Row justify="between" align="center" gap="sm" wrap>
         <span className="text-xs font-medium">{relationship.label}</span>
-        <EntityChip
-          entity={relationship.target}
-          onClick={() => onSelect(relationship.target)}
-        />
+        <Row gap="xs" align="center">
+          <Badge variant="secondary">{relationship.cardinality}</Badge>
+          <EntityChip
+            entity={relationship.target}
+            onClick={() => onSelect(relationship.target)}
+          />
+        </Row>
       </Row>
-      <div className="mt-1">
-        <RelationshipProvenanceView provenance={relationship.provenance} />
-      </div>
+      <Stack gap="tight" className="mt-1">
+        <Row gap="xs" align="center" wrap>
+          <Badge variant="outline">
+            {relationship.sourceKey ?? relationship.key}
+          </Badge>
+          <RelationshipProvenanceView provenance={relationship.provenance} />
+        </Row>
+        {relationship.sources.map((source) => (
+          <Row key={source.key} gap="xs" align="center" wrap>
+            <Badge variant="outline">{source.key}</Badge>
+            <RelationshipProvenanceView provenance={source.provenance} />
+          </Row>
+        ))}
+        {relationship.mutation && (
+          <Row gap="xs" align="center" wrap>
+            <Badge variant="plum">mutable</Badge>
+            <span className="text-2xs text-muted-foreground">
+              {relationship.mutation.audiences.join(" + ")} · source{" "}
+              {relationship.mutation.source}
+            </span>
+          </Row>
+        )}
+      </Stack>
     </div>
   );
 }
@@ -336,7 +413,10 @@ function IncomingEdgeRow({ edge }: { edge: PhysicalEdge }) {
 function OperationBlock({ operation }: { operation: LifecycleOperation }) {
   return (
     <Stack gap="sm">
-      <Eyebrow>{operation.operation}</Eyebrow>
+      <Row gap="xs" align="center">
+        <Eyebrow>{operation.operation}</Eyebrow>
+        <Badge variant="outline">{operation.owner}</Badge>
+      </Row>
       <Stack gap="tight">
         {operation.dispositions.map((d) => (
           <HairlineRow key={d.edgeKey}>

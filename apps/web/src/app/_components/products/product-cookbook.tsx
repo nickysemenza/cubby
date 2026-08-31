@@ -1,15 +1,15 @@
 import type { ProductCookbookRefOut } from "@cubby/schemas/product";
 
-import { Row } from "~/components/layout/row";
+import { Row, Stack } from "~/components/layout";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 
 /**
- * The cookbook whose physical copy this product is.
+ * The cookbooks whose physical copies this product is.
  *
  * No query of its own: the link arrives embedded in the product detail payload
- * (see `productWithFoodOut.cookbook`), so the panel can't contradict the page
+ * (see `productWithFoodOut.cookbooks`), so the panel can't contradict the page
  * around it while a second request is in flight.
  *
  * The recipe count is the whole point of the panel — it is what turns "a book
@@ -18,25 +18,30 @@ import { EntityInlineLink } from "../EntityInlineLink";
  * side.
  */
 export function ProductCookbook({
-  cookbook,
+  cookbooks,
 }: {
-  cookbook: ProductCookbookRefOut;
+  cookbooks: ProductCookbookRefOut[];
 }) {
+  if (cookbooks.length === 0) return null;
   return (
-    <Row className="items-center justify-between gap-2">
-      <EntityInlineLink
-        displayImage={undefined}
-        entity="cookbook"
-        data={{ id: cookbook.id, name: cookbook.name }}
-      />
-      <EntityFilterLink
-        variant="value"
-        to="/recipes"
-        search={{ source: cookbook.id }}
-        label={`Show all ${cookbook.recipeCount} recipes from ${cookbook.name}`}
-      >
-        {cookbook.recipeCount} recipes
-      </EntityFilterLink>
-    </Row>
+    <Stack gap="sm">
+      {cookbooks.map((cookbook) => (
+        <Row key={cookbook.id} className="items-center justify-between gap-2">
+          <EntityInlineLink
+            displayImage={undefined}
+            entity="cookbook"
+            data={{ id: cookbook.id, name: cookbook.name }}
+          />
+          <EntityFilterLink
+            variant="value"
+            to="/recipes"
+            search={{ source: cookbook.id }}
+            label={`Show all ${cookbook.recipeCount} recipes from ${cookbook.name}`}
+          >
+            {cookbook.recipeCount} recipes
+          </EntityFilterLink>
+        </Row>
+      ))}
+    </Stack>
   );
 }

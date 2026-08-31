@@ -7,9 +7,11 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
+import { taskDependency } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getAuditLog } from "~/server/repo/audit-log";
+import { getDb } from "~/server/repo/database-helpers";
 import { createProduct, deleteProducts } from "~/server/repo/product";
 import {
   createProject,
@@ -217,6 +219,76 @@ describe("task repository — listActionableTasks", () => {
 
     expect(row?.reasons).toHaveLength(1);
     expect(row?.reasons[0]?.chain.map((n) => n.id)).toEqual([b.id, c.id]);
+  });
+
+  it("rejects a multi-hop dependency cycle without replacing prior edges", async () => {
+    const { output: a } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "task cycle a" }),
+      ctx.actor,
+    );
+    const { output: b } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "task cycle b" }),
+      ctx.actor,
+    );
+    const { output: c } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "task cycle c" }),
+      ctx.actor,
+    );
+    await updateTask(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
+    await updateTask(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
+
+    await expect(
+      updateTask(ctx.db, c.id, { blockedByIds: [a.id] }, ctx.actor),
+    ).rejects.toMatchObject({ reason: "DEPENDENCY_CYCLE" });
+    await expect(getTaskByShortcode(ctx.db, c.id)).resolves.toMatchObject({
+      blockedByIds: [],
+    });
+  });
+
+  it("serializes opposite dependency writes so only one side can commit", async () => {
+    const { output: a } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "dependency race a" }),
+      ctx.actor,
+    );
+    const { output: b } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "dependency race b" }),
+      ctx.actor,
+    );
+
+    const results = await Promise.allSettled([
+      updateTask(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor),
+      updateTask(ctx.db, b.id, { blockedByIds: [a.id] }, ctx.actor),
+    ]);
+
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.find((result) => result.status === "rejected"),
+    ).toMatchObject({ reason: { reason: "DEPENDENCY_CYCLE" } });
+  });
+
+  it("backstops task self dependency with a database CHECK", async () => {
+    const { entityId } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "raw self dependency task",
+      }),
+      ctx.actor,
+    );
+
+    await expect(
+      getDb(ctx.db).insert(taskDependency).values({
+        taskId: entityId,
+        blockedByTaskId: entityId,
+      }),
+    ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
   it("a soft-deleted blocker task does not block", async () => {
@@ -1715,6 +1787,25 @@ describe("task kernel — bulkUpdate", () => {
       expect.arrayContaining([
         { entity: "task", id: parent.id },
         { entity: "task", id: subtask.id },
+      ]),
+    );
+    expect(result.affectedEdges).toEqual(
+      expect.arrayContaining([
+        {
+          edge: "Task.parentTaskId",
+          effect: "soft-delete",
+          changed: 1,
+        },
+        {
+          edge: "TaskDependency.taskId",
+          effect: "hard-delete",
+          changed: 0,
+        },
+        {
+          edge: "TaskDependency.blockedByTaskId",
+          effect: "hard-delete",
+          changed: 0,
+        },
       ]),
     );
   });

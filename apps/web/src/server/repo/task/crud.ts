@@ -19,11 +19,9 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
-  TaskBulkDueDateInput,
   TaskBulkMoveInput,
   TaskBulkReorderInput,
   TaskBulkStatusInput,
-  TaskBulkTradeInput,
   TaskCreateInput,
   TaskOut,
   TaskUpdateInput,
@@ -715,99 +713,6 @@ export const setTasksStatus = async (
     const auditEntries: AuditEntryInput[] = [];
     for (const row of before) {
       const changes = computeChanges(row, { id: row.id, status }, ["status"]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "task",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
-  });
-
-  return getTasksByIDs(db, updatedIds);
-};
-
-/**
- * Bulk trade write — a plain `trade` column write over `ids`, mirroring
- * `setTasksStatus`. A trade change is embedding-relevant, but (like the other
- * bulk writes here) the router runs one wave-wide side-effect dispatch, so
- * this stays a plain audited UPDATE.
- */
-export const setTasksTrade = async (
-  db: Database,
-  input: TaskBulkTradeInput,
-  actor: ActorContext,
-): Promise<TaskOut[]> => {
-  const { trade } = input;
-
-  const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIds(tx, input.ids);
-    const before = await tx.query.task.findMany({
-      where: and(inArray(task.id, ids), notDeleted(task)),
-      columns: { id: true, trade: true },
-    });
-    if (before.length === 0) return [];
-
-    await tx
-      .update(task)
-      .set({ trade })
-      .where(and(inArray(task.id, ids), notDeleted(task)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, trade }, ["trade"]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "task",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
-  });
-
-  return getTasksByIDs(db, updatedIds);
-};
-
-/**
- * Bulk due-date write — a plain `dueDate`/`dueEndDate` column pair write over
- * `ids`, mirroring `setTasksStatus`/`setTasksTrade`.
- */
-export const setTasksDueDate = async (
-  db: Database,
-  input: TaskBulkDueDateInput,
-  actor: ActorContext,
-): Promise<TaskOut[]> => {
-  const { dueDate, dueEndDate } = input;
-
-  const updatedIds = await withTransaction(db, async (tx) => {
-    const ids = await resolveLiveTaskIds(tx, input.ids);
-    const before = await tx.query.task.findMany({
-      where: and(inArray(task.id, ids), notDeleted(task)),
-      columns: { id: true, dueDate: true, dueEndDate: true },
-    });
-    if (before.length === 0) return [];
-
-    await tx
-      .update(task)
-      .set({ dueDate, dueEndDate })
-      .where(and(inArray(task.id, ids), notDeleted(task)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, dueDate, dueEndDate }, [
-        "dueDate",
-        "dueEndDate",
-      ]);
       if (changes) {
         auditEntries.push({
           entityType: "task",

@@ -5,12 +5,15 @@ import { mock } from "~/lib/test/mock-schema";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
+import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 
 import {
   ENTITY_KERNEL_ENTITIES,
   type EntityBrowserMutationCommand,
   entityCommandSchema,
   type EntityQueryCommand,
+  entityDeleteResultSchema,
+  entityMcpCommandSchema,
   type EntityResultFor,
   entityMutationResultSchema,
 } from "./contracts";
@@ -106,6 +109,29 @@ describe("entity kernel bindings", () => {
     expect(image.repository.update).toBeTypeOf("function");
   });
 
+  it("requires concrete affected-edge counts on every delete result", () => {
+    const result = {
+      action: "delete" as const,
+      entity: "project" as const,
+      deletedReferences: [{ entity: "project" as const, id: "PRJ-4K7M" }],
+      affectedEdges: [
+        {
+          edge: "ProjectImage.projectId",
+          effect: "soft-delete" as const,
+          changed: 2,
+        },
+      ],
+      sideEffects: { backgroundBatches: [] },
+    };
+    expect(entityDeleteResultSchema.safeParse(result).success).toBe(true);
+    expect(
+      entityDeleteResultSchema.safeParse({
+        ...result,
+        affectedEdges: [{ ...result.affectedEdges[0], changed: null }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("matches generated action contracts to executable bindings", () => {
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       const actions = generatedEntityKernelContractCases[entity].actions;
@@ -138,6 +164,11 @@ describe("entity kernel bindings", () => {
           if (schema === null)
             throw new Error(`${entity} has no update schema`);
           actionInput = { id, data: mock(schema, { seed: 1 }) };
+        } else if (action === "bulkUpdate") {
+          const schema = binding.schemas.bulkUpdateInput;
+          if (schema === null)
+            throw new Error(`${entity} has no bulk update schema`);
+          actionInput = { ids: [id], data: mock(schema, { seed: 1 }) };
         } else if (action === "get") {
           actionInput = { id };
         } else if (action === "delete") {
@@ -161,5 +192,103 @@ describe("entity kernel bindings", () => {
         ).toBe(true);
       }
     }
+  });
+
+  it("accepts exactly the generated MCP action exposure", () => {
+    for (const entity of ENTITY_KERNEL_ENTITIES) {
+      const executable = generatedEntityKernelContractCases[entity].actions;
+      const exposed = generatedMcpEntityKernelContractCases[entity].actions;
+      const binding = ENTITY_KERNEL_BINDINGS[entity];
+      const id = `${SHORTCODE_PREFIX[entity]}ABCD`;
+
+      for (const action of executable) {
+        let actionInput = {};
+        if (action === "create") {
+          const schema = binding.schemas.createInput;
+          if (schema === null)
+            throw new Error(`${entity} has no create schema`);
+          actionInput = { data: mock(schema, { seed: 2 }) };
+        } else if (action === "update") {
+          const schema = binding.schemas.updateInput;
+          if (schema === null)
+            throw new Error(`${entity} has no update schema`);
+          actionInput = { id, data: mock(schema, { seed: 2 }) };
+        } else if (action === "bulkUpdate") {
+          const schema = binding.schemas.bulkUpdateInput;
+          if (schema === null)
+            throw new Error(`${entity} has no bulk update schema`);
+          actionInput = { ids: [id], data: mock(schema, { seed: 2 }) };
+        } else if (action === "get") {
+          actionInput = { id };
+        } else if (action === "delete") {
+          actionInput = { ids: [id] };
+        } else if (action === "search") {
+          actionInput = { query: "needle" };
+        } else if (action === "merge") {
+          actionInput = { data: {} };
+        }
+
+        const parsed = entityMcpCommandSchema.safeParse({
+          entity,
+          action,
+          ...actionInput,
+        });
+        expect(parsed.success).toBe(includesAction(exposed, action));
+      }
+    }
+  });
+
+  it("uses one public relation command shape with relation-specific items", () => {
+    const owner = {
+      product: "PRD-ABCD",
+      project: "PRJ-ABCD",
+      purchase: "PUR-ABCD",
+    } as const;
+    const cases = [
+      {
+        entity: "product",
+        relation: "components",
+        items: [{ id: "PRD-BCDE" }],
+      },
+      {
+        entity: "project",
+        relation: "resources",
+        items: [{ id: "PRD-BCDE" }],
+      },
+      {
+        entity: "purchase",
+        relation: "products",
+        items: [{ id: "PRD-BCDE" }],
+      },
+    ] as const;
+
+    for (const relationCase of cases) {
+      expect(
+        entityCommandSchema.safeParse({
+          action: "attach",
+          id: owner[relationCase.entity],
+          ...relationCase,
+        }).success,
+      ).toBe(true);
+    }
+
+    expect(
+      entityCommandSchema.safeParse({
+        action: "attach",
+        entity: "project",
+        relation: "components",
+        id: owner.project,
+        items: [{ id: "PRD-BCDE" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      entityCommandSchema.safeParse({
+        action: "attach",
+        entity: "purchase",
+        relation: "products",
+        id: owner.purchase,
+        items: [{ id: "PRD-BCDE", quantity: 2 }],
+      }).success,
+    ).toBe(false);
   });
 });

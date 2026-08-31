@@ -297,11 +297,11 @@ export default literalEntity({
       key: "purchase",
       label: "Purchase",
       target: "purchase",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Expense.purchaseId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Expense.purchaseId", direction: "incoming" }],
       },
@@ -310,11 +310,11 @@ export default literalEntity({
       key: "project",
       label: "Project",
       target: "project",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Expense.projectId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Expense.projectId", direction: "incoming" }],
       },
@@ -323,11 +323,11 @@ export default literalEntity({
       key: "product",
       label: "Product",
       target: "product",
+      cardinality: "one",
       provenance: {
         kind: "local-path",
         steps: [{ edge: "Expense.productId", direction: "outgoing" }],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [{ edge: "Expense.productId", direction: "incoming" }],
       },
@@ -336,6 +336,7 @@ export default literalEntity({
       key: "transactions",
       label: "Purchase transactions",
       target: "financialTransaction",
+      cardinality: "many",
       provenance: {
         kind: "local-path",
         steps: [
@@ -350,7 +351,6 @@ export default literalEntity({
           },
         ],
       },
-      deletionPolicy: "restrict",
       inverse: {
         steps: [
           {
@@ -375,7 +375,8 @@ export default literalEntity({
     delete: { mode: "soft", bulk: true },
     bulkUpdate: { fields: ["projectId", "trade", "costType"] },
     merge: false,
-    mcp: ["get", "list", "create", "update", "delete"],
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
   },
   extensions: {
     countFilter: null,
@@ -411,17 +412,6 @@ export default literalEntity({
           export: "runMutationSideEffects",
         },
       },
-      lifecycle: {
-        policy: {
-          module: "~/server/repo/expense/crud",
-          export: "EXPENSE_DELETE_EDGE_POLICY",
-        },
-        runtime: {
-          module: "~/server/repo/expense/entity-adapter",
-          export: "expenseEntityAdapter",
-        },
-      },
-      relationMutation: { attach: null, detach: null },
     },
   },
 });

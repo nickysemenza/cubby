@@ -13,16 +13,18 @@ describe("entityIntegrity.previewOperation", () => {
     const result = await previewOperation(
       ctx.db,
       {
-        operation: "attach",
+        action: "attach",
         entity: "product",
-        parentId,
-        productIds: [productId],
+        relation: "components",
+        id: parentId,
+        items: [{ id: productId }],
       },
       new Date(),
     );
 
     expect(result.canProceed).toBe(false);
     expect(result.operation).toBe("attach");
+    expect(result.relation).toBe("components");
     expect(result.blockers).toContainEqual(
       expect.objectContaining({
         code: "block-unresolved-target",

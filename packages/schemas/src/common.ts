@@ -75,6 +75,19 @@ export const relationMutationOut = z.object({
    */
   alreadySatisfied: z.number().int().nonnegative(),
 });
+
+/** Public relation item shared by id-only attach/detach families. */
+export const entityRelationReferenceItemSchema = z
+  .object({
+    id: z.string().min(1),
+  })
+  .strict();
+
+/** Product components default omitted quantities to one at the repository seam. */
+export const productComponentRelationItemSchema =
+  entityRelationReferenceItemSchema.extend({
+    quantity: z.number().int().min(1).max(9999).optional(),
+  });
 export type RelationMutationOut = z.infer<typeof relationMutationOut>;
 
 /**

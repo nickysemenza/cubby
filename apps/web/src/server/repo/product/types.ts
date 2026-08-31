@@ -64,9 +64,11 @@ export type ProductDeepDB = ProductSelect & {
   }>;
   quantityLedger: QuantityLedger;
   componentCount: number;
-  cookbooks?: Array<typeof cookbook.$inferSelect>;
-  /** Live recipes reachable through {@link cookbooks}, counted in SQL. */
-  cookbookRecipeCount: number;
+  cookbooks?: Array<
+    typeof cookbook.$inferSelect & {
+      recipes?: Array<{ deletedAt: Date | null }>;
+    }
+  >;
 };
 
 export type ProductListDB = ProductSelect & {

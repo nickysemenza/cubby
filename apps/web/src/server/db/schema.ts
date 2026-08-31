@@ -798,7 +798,9 @@ export const location = pgTable(
     ...baseTimestamps(),
     ...softDeletedAt(),
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
-    parentId: uuid("parentId").$type<LocationId>(),
+    parentId: uuid("parentId")
+      .$type<LocationId>()
+      .references((): AnyPgColumn => location.id),
     // The SKU this location physically IS — "this bin is a Milwaukee
     // 48-22-8443". Many locations to one Product: the pooled model has no
     // per-unit identity, and only the count matters. Nullable because rooms,
@@ -840,6 +842,10 @@ export const location = pgTable(
     index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
+    check(
+      "Location_productId_type_check",
+      sql`${table.productId} IS NULL OR ${table.type} IS NULL`,
+    ),
   ],
 );
 
@@ -1205,6 +1211,10 @@ export const projectDependency = pgTable(
       table.blockedByProjectId,
     ),
     index("ProjectDependency_blockedBy_idx").on(table.blockedByProjectId),
+    check(
+      "ProjectDependency_no_self_check",
+      sql`${table.projectId} <> ${table.blockedByProjectId}`,
+    ),
   ],
 );
 
@@ -1344,6 +1354,10 @@ export const taskDependency = pgTable(
       table.blockedByTaskId,
     ),
     index("TaskDependency_blockedBy_idx").on(table.blockedByTaskId),
+    check(
+      "TaskDependency_no_self_check",
+      sql`${table.taskId} <> ${table.blockedByTaskId}`,
+    ),
   ],
 );
 

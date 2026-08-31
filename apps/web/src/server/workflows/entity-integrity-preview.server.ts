@@ -2,29 +2,21 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   ImpactItem,
   PreviewOperation,
-  PreviewOperationInput,
   PublicImpactItem,
 } from "@cubby/schemas/entity-integrity";
 import {
   previewOperationSchema,
   toPublicImpact,
 } from "@cubby/schemas/entity-integrity";
-import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
-import { match } from "ts-pattern";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
+import { previewGeneratedRelationMutation } from "~/server/generated/entity-relation-bindings.gen";
 import {
-  previewAttachProductComponents,
-  previewDetachProductComponents,
-} from "~/server/repo/product-components";
-import {
-  previewAttachProjectResources,
-  previewDetachProjectResources,
-} from "~/server/repo/project/tools";
-import {
-  previewAttachPurchaseProducts,
-  previewDetachPurchaseProducts,
-} from "~/server/repo/purchase-products";
+  generatedEntityRelationItemIds,
+  generatedEntityRelationTarget,
+  type GeneratedEntityRelationCommand,
+} from "~/server/generated/entity-relation-contracts.gen";
 import {
   lookupShortcodes,
   resolveLiveShortcodes,
@@ -44,81 +36,43 @@ const EMPTY_PLAN: Planned = { blockers: [], changes: [] };
 
 const planRelation = async (
   db: Database,
-  input: PreviewOperationInput,
+  input: GeneratedEntityRelationCommand,
 ): Promise<{
   planned: Planned;
   publicIdByEntityId: Map<string, string>;
   unresolved?: string[];
 }> => {
+  const targetEntity = generatedEntityRelationTarget(input);
+  const targetShortcodes = generatedEntityRelationItemIds(input);
   const [parentIds, productIds] = await Promise.all([
-    resolveLiveShortcodes(db, [input.parentId], input.entity),
-    resolveLiveShortcodes(db, input.productIds, "product"),
+    resolveLiveShortcodes(db, [input.id], input.entity),
+    resolveLiveShortcodes(db, targetShortcodes, targetEntity),
   ]);
   const unresolved = [
-    ...(parentIds.has(input.parentId) ? [] : [input.parentId]),
-    ...input.productIds.filter((code) => !productIds.has(code)),
+    ...(parentIds.has(input.id) ? [] : [input.id]),
+    ...targetShortcodes.filter((code) => !productIds.has(code)),
   ];
   if (unresolved.length > 0) {
     return { planned: EMPTY_PLAN, publicIdByEntityId: new Map(), unresolved };
   }
 
-  const parentId = parentIds.get(input.parentId)!;
-  const targets = input.productIds.map((code) =>
-    parseEntityId("product", productIds.get(code)!),
+  const parentId = parentIds.get(input.id)!;
+  const targets = targetShortcodes.map((code) => productIds.get(code)!);
+  const planned = await previewGeneratedRelationMutation(
+    db,
+    input,
+    parentId,
+    targets,
   );
-  const planned = await match(input)
-    .with({ operation: "attach", entity: "product" }, () =>
-      previewAttachProductComponents(
-        db,
-        parseEntityId("product", parentId),
-        targets,
-      ),
-    )
-    .with({ operation: "detach", entity: "product" }, () =>
-      previewDetachProductComponents(
-        db,
-        parseEntityId("product", parentId),
-        targets,
-      ),
-    )
-    .with({ operation: "attach", entity: "project" }, () =>
-      previewAttachProjectResources(
-        db,
-        parseEntityId("project", parentId),
-        targets,
-      ),
-    )
-    .with({ operation: "detach", entity: "project" }, () =>
-      previewDetachProjectResources(
-        db,
-        parseEntityId("project", parentId),
-        targets,
-      ),
-    )
-    .with({ operation: "attach", entity: "purchase" }, () =>
-      previewAttachPurchaseProducts(
-        db,
-        parseEntityId("purchase", parentId),
-        targets,
-      ),
-    )
-    .with({ operation: "detach", entity: "purchase" }, () =>
-      previewDetachPurchaseProducts(
-        db,
-        parseEntityId("purchase", parentId),
-        targets,
-      ),
-    )
-    .exhaustive();
 
   const codes = await lookupShortcodes(db, [
     parseEntityRef(input.entity, parentId),
-    ...targets.map((id) => ({ entity: "product" as const, id })),
+    ...targets.map((id) => parseEntityRef(targetEntity, id)),
   ]);
   const publicIdByEntityId = new Map(
     [
       [input.entity, parentId] as const,
-      ...targets.map((id) => ["product", id] as const),
+      ...targets.map((id) => [targetEntity, id] as const),
     ].flatMap(([entity, id]) => {
       const code = codes.get(entityRefKey(entity, id));
       return code ? [[id, code] as const] : [];
@@ -129,7 +83,7 @@ const planRelation = async (
 
 export const previewOperation = async (
   db: Database,
-  input: PreviewOperationInput,
+  input: GeneratedEntityRelationCommand,
   now: Date,
 ): Promise<PreviewOperation> => {
   const { planned, publicIdByEntityId, unresolved } = await planRelation(
@@ -137,13 +91,14 @@ export const previewOperation = async (
     input,
   );
   return previewOperationSchema.parse({
-    operation: input.operation,
+    operation: input.action,
     entity: input.entity,
-    targetCount: input.productIds.length,
+    relation: input.relation,
+    targetCount: input.items.length,
     canProceed: planned.blockers.length === 0 && !unresolved,
     blockers: [
       ...planned.blockers.map((item) => publicImpact(item, publicIdByEntityId)),
-      ...(unresolved ? [unresolvedBlocker(input.entity, unresolved)] : []),
+      ...(unresolved ? [unresolvedBlocker(input.relation, unresolved)] : []),
     ],
     changes: planned.changes.map((item) =>
       publicImpact(item, publicIdByEntityId),

@@ -17,6 +17,7 @@ import type { LocationValuationService } from "~/server/services/location-valuat
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
 
+import { executeDeleteWithEffects } from "./delete-effects";
 export interface EntityKernelContext {
   /** Authoritative adapter for strong reads, mutations, and side effects. */
   db: Database;
@@ -277,6 +278,26 @@ export function defineEntityAdapter<
     : null;
   return {
     ...config,
+    repository: {
+      ...config.repository,
+      delete: async (
+        ctx: EntityKernelContext,
+        ids: ZodOutput<SchemasFor<E>["id"]>[],
+      ) => {
+        const { result, affectedEdges } = await executeDeleteWithEffects(
+          ctx.db,
+          config.entity,
+          ids,
+          config.lifecycle.delete,
+          (transactionDb) =>
+            config.repository.delete({ ...ctx, db: transactionDb }, ids),
+        );
+        return {
+          ...result,
+          affectedEdges,
+        };
+      },
+    },
     sideEffects: config.sideEffects ?? true,
     schemas: ENTITY_SCHEMA_BINDINGS[config.entity],
     mergeOperation,
