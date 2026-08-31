@@ -60,7 +60,7 @@ import { uniq } from "es-toolkit";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
-import type { Database, DrizzleClient } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   expense,
   inventoryEntry,
@@ -79,6 +79,7 @@ import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 
 import { buildDashboardProjectWhere } from "./dashboard-shared";
 import { loadProjectDateWindows, projectCompletionYear } from "./subtree";
+import { deriveToolTrades } from "./tool-trades";
 import {
   buildTimelineGates,
   EMPTY_METRICS,
@@ -109,65 +110,6 @@ type TradeSignal = {
   expenseCount: number;
   grossSpend: number;
 };
-
-/**
- * A tool's trade, taken from its largest principal, non-future, `cost > 0`
- * Expense. `Product` has no `trade` column; this is the whole derivation, and
- * it lives in exactly one place so the rule can't drift.
- *
- * The predicate deliberately OMITS `costType = 'tools'`, unlike the neighbouring
- * suggestion queries. Measured on production: adding it drops single-trade
- * coverage from 373/425 tools to 301. It looks like an inconsistency and it is
- * not one — do not "fix" it.
- *
- * Tie-break is the ORDER BY and nothing else: `cost DESC` is the rule, then
- * `date ASC` (earliest wins, i.e. the acquisition rather than a later
- * accessory), then `trade ASC` purely to make the order total and the result
- * reproducible. 12 tools are contested today and every one of them is below the
- * default cost floor.
- *
- * Module-private on purpose: a second caller spelling this predicate out again
- * is exactly the drift the doc above warns about, so a future one imports this
- * rather than re-deriving it.
- */
-async function deriveToolTrades(
-  dbc: DrizzleClient,
-  productIds?: ProductId[],
-): Promise<Map<ProductId, Trade>> {
-  if (productIds && productIds.length === 0) return new Map();
-  const rows = await dbc
-    .selectDistinctOn([expense.productId], {
-      productId: expense.productId,
-      trade: expense.trade,
-    })
-    .from(expense)
-    .innerJoin(
-      product,
-      and(
-        eq(product.id, expense.productId),
-        eq(product.category, "tools"),
-        notDeleted(product),
-      ),
-    )
-    .where(
-      and(
-        productIds ? inArray(expense.productId, productIds) : undefined,
-        eq(expense.lineKind, "principal"),
-        eq(expense.future, false),
-        gt(expense.cost, 0),
-        notDeleted(expense),
-      ),
-    )
-    .orderBy(
-      asc(expense.productId),
-      desc(expense.cost),
-      asc(expense.date),
-      asc(expense.trade),
-    );
-  return new Map(
-    rows.flatMap((row) => (row.productId ? [[row.productId, row.trade]] : [])),
-  );
-}
 
 /** Group ordering: declaration order for trades, alphabetical for makers. */
 function groupSortKey(groupBy: "trade" | "manufacturer", key: string): number {

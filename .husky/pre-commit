@@ -1,9 +1,5 @@
 #!/usr/bin/env sh
 set -e
 
-# Validate staged files without rewriting the working tree. This preserves the
-# user's staged/unstaged split for partially staged files.
-pnpm check:staged
-
 # Keep commit-time validation equivalent to the local handoff gate.
 pnpm check

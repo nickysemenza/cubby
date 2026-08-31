@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
   schedule:
     - cron: "17 10 * * 3"
   workflow_dispatch:
@@ -24,7 +24,12 @@ on:
         default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  group: >-
+    ${{ github.workflow }}-${{
+      github.ref == 'refs/heads/main' && github.run_id ||
+      format('{0}-{1}', github.ref,
+        github.event.action == 'labeled' && github.event.label.name || 'verify')
+    }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
@@ -35,6 +40,10 @@ permissions:
 jobs:
   preflight:
     name: Preflight - check:all
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.action != 'labeled' ||
+      github.event.label.name == 'preview'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -61,7 +70,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Classify changes and find a reusable full PR run
+      - name: Classify changes and find a reusable PR run
         id: scope
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
@@ -105,14 +114,10 @@ jobs:
             const classified = coverage
               ? classifyPaths([".github/workflows/ci.yaml"])
               : classifyPaths(paths);
-            const labels = context.payload.pull_request?.labels?.map(
-              ({ name }) => name,
-            ) ?? [];
             const full =
               coverage ||
               context.ref === "refs/heads/main" ||
               process.env.FORCE_FULL === "true" ||
-              labels.includes("ci:full") ||
               classified.highRisk;
 
             let reuse = false;
@@ -129,7 +134,11 @@ jobs:
                 { ...context.repo, commit_sha: context.sha, per_page: 100 },
               );
               const candidates = associated.filter(
-                (pr) => pr.merged_at && pr.base.ref === "main",
+                (pr) =>
+                  pr.merged_at &&
+                  pr.base.ref === "main" &&
+                  pr.merge_commit_sha === context.sha &&
+                  pr.head.repo?.full_name === `${context.repo.owner}/${context.repo.repo}`,
               );
 
               if (candidates.length === 1) {
@@ -146,6 +155,8 @@ jobs:
                 ]);
 
                 if (mainCommit.data.tree.sha === headCommit.data.tree.sha) {
+                  const verificationArtifact =
+                    `pr-verification-v1-${pr.number}-${pr.head.sha}`;
                   const runs = await github.paginate(
                     github.rest.actions.listWorkflowRuns,
                     {
@@ -174,7 +185,7 @@ jobs:
                         .filter(({ expired }) => !expired)
                         .map(({ name }) => name),
                     );
-                    if (!artifactNames.has("full-verification")) continue;
+                    if (!artifactNames.has(verificationArtifact)) continue;
                     if (classified.web && !artifactNames.has("cf-build")) continue;
                     reuse = true;
                     sourceRunId = String(run.id);
@@ -281,24 +292,28 @@ jobs:
           done
           exit "$result_code"
 
-      - name: Record requested full verification
+      - name: Record reusable PR verification
         if: |
-          steps.scope.outputs.full == 'true' &&
+          github.event_name == 'pull_request' &&
+          steps.scope.outputs.inert != 'true' &&
           steps.scope.outputs.coverage != 'true' &&
           steps.scope.outputs.verify == 'true'
-        run: >-
-          printf '%s\n'
-          '${{ github.event.pull_request.head.sha || github.sha }}'
-          > full-verification.txt
-      - name: Save full verification provenance
+        run: |
+          printf 'policy=v1\npr=%s\nhead_sha=%s\nfull=%s\n' \
+            '${{ github.event.pull_request.number }}' \
+            '${{ github.event.pull_request.head.sha }}' \
+            '${{ steps.scope.outputs.full }}' \
+            > pr-verification.txt
+      - name: Save PR verification provenance
         if: |
-          steps.scope.outputs.full == 'true' &&
+          github.event_name == 'pull_request' &&
+          steps.scope.outputs.inert != 'true' &&
           steps.scope.outputs.coverage != 'true' &&
           steps.scope.outputs.verify == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: full-verification
-          path: full-verification.txt
+          name: pr-verification-v1-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: pr-verification.txt
           retention-days: 14
 
   test-rust:
@@ -404,9 +419,6 @@ jobs:
             -f head_sha="${{ github.event.pull_request.head.sha }}" \
             -f run_id="${{ github.run_id }}" ||
           echo "::warning::Could not dispatch the preview deploy; CI is unaffected."
-      - name: Build MCP app documents
-        if: matrix.tier == 'node'
-        run: node scripts/ensure-mcp-apps.ts
       - name: Run ${{ matrix.tier }} tests
         shell: bash
         env:
@@ -416,7 +428,10 @@ jobs:
           VITEST_PROJECT_ARGS: ${{ matrix.args }}
         run: |
           read -r -a selected <<< "$VITEST_PROJECT_ARGS"
-          args=("${selected[@]}" --reporter=default --reporter=github-actions)
+          # Private-repository standard runners have half the CPUs of public
+          # runners. Keep the same assertions while allowing CPU-bound tests
+          # the equivalent wall-clock budget.
+          args=("${selected[@]}" --testTimeout=10000 --reporter=default --reporter=github-actions)
           if [[ "$FULL" != "true" ]]; then args+=(--changed "$BASE_SHA"); fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"

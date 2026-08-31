@@ -20,8 +20,10 @@ const localUsesPGlite =
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  /* CI dev server is slower — give tests more room */
-  timeout: isCI ? 60_000 : 30_000,
+  /* Private-repository CI runners have two CPUs; browser, Worker, and database
+     share them. Preserve the local fast-failure budget while giving the same
+     CI scenarios the wall-clock room they had on public four-CPU runners. */
+  timeout: isCI ? 120_000 : 30_000,
 
   /* Global setup/teardown starts the Worker harness with a fresh database. */
   globalSetup: "./tests/e2e/e2e-global-setup.ts",
@@ -33,11 +35,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Local PGlite runs share one WASM database and socket server. Keep that
-     resource-constrained lane single-worker for predictable fixture lifetime
-     and memory use; the socket package's protocol-affinity patch itself keeps
-     concurrent query cycles correlated. Preserve CI/PostgreSQL parallelism. */
-  workers: localUsesPGlite ? 1 : isCI ? 2 : undefined,
+  /* Local PGlite shares one WASM database, while private CI runners share two
+     CPUs between the browser, Worker, and PostgreSQL. Keep both constrained
+     lanes single-worker so client hydration is not starved under load. */
+  workers: localUsesPGlite || isCI ? 1 : undefined,
   /* Backstop for a dead dev server, which fails every remaining test
      identically (see the exit handler in e2e-global-setup.ts): uncapped, that
      is ~20 tests x 3 attempts of ECONNREFUSED burying the one line that

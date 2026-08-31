@@ -1,0 +1,6 @@
+declare const client: {
+  invalidateQueries(input: unknown): void;
+};
+
+client.invalidateQueries({});
+client["invalidateQueries"]({});

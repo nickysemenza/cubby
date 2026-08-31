@@ -6,8 +6,8 @@
   // These scripts run under `node scripts/foo.ts` with Node 24's native type
   // stripping — no tsx, no build step — which is why `erasableSyntaxOnly` is on:
   // it fails the build on enums, namespaces, and parameter properties, the
-  // constructs stripping cannot handle. `allowImportingTsExtensions` matches the
-  // explicit `./mtime.ts` specifiers Node's ESM resolver requires.
+  // constructs stripping cannot handle. `allowImportingTsExtensions` supports
+  // explicit TypeScript specifiers when script modules import one another.
   "compilerOptions": {
     "incremental": true,
     "target": "es2023",

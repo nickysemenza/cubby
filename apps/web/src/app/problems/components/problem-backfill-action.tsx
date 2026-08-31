@@ -5,9 +5,12 @@ import { toast } from "sonner";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { Stack } from "~/components/layout";
 import { Progress } from "~/components/ui/progress";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  ripple,
+  rippleWithProblems,
+  type InvalidationTagSet,
+} from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 
 import { ProblemActionButton } from "./problem-action-button";
@@ -29,7 +32,7 @@ export type BackfillButtonProps<TResult> = {
    * rather than taken from the descriptor: these buttons drive a held-open
    * stream, so there is no `useMutation` for the root cache to read `meta` off.
    */
-  invalidateTags?: readonly OperationCacheTag[];
+  invalidateTags?: InvalidationTagSet;
   toastResult: (data: TResult) => BackfillToast;
   idleLabel: string;
   pendingLabel: string;
@@ -66,10 +69,10 @@ export function BackfillButton<TResult>({
       onDone: (data) => {
         const { tone, message } = toastResult(data);
         toast[tone](message);
-        void invalidateOperationTags(queryClient, [
-          ...ripple.problems,
-          ...(invalidateTags ?? []),
-        ]);
+        void invalidateOperationTags(
+          queryClient,
+          rippleWithProblems(invalidateTags ?? ripple.none),
+        );
       },
     });
 

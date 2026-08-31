@@ -14,9 +14,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import {
+  combineRippleTags,
+  ripple,
+  type InvalidationTagSet,
+} from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { getErrorMessage } from "~/lib/error-utils";
 import { problems as problemOperations } from "~/lib/problems.functions";
 
@@ -70,24 +73,24 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
     const clauses: string[] = [];
     const failures: string[] = [];
     const batchIds: string[] = [];
-    const invalidate = new Map<string, OperationCacheTag>(
-      ripple.problems.map((tag) => [tag.join(" "), tag]),
-    );
+    const invalidations: InvalidationTagSet[] = [ripple.problems];
 
     for (const [index, task] of tasks.entries()) {
       try {
         const outcome = await task.run();
         if (outcome.summary) clauses.push(outcome.summary);
         if (outcome.batchId) batchIds.push(outcome.batchId);
-        for (const tag of task.invalidateTags ?? [])
-          invalidate.set(tag.join(" "), tag);
+        if (task.invalidateTags) invalidations.push(task.invalidateTags);
       } catch (error) {
         failures.push(`${task.label}: ${getErrorMessage(error)}`);
       }
       setRunning({ done: index + 1, total: tasks.length });
     }
 
-    void invalidateOperationTags(queryClient, [...invalidate.values()]);
+    void invalidateOperationTags(
+      queryClient,
+      combineRippleTags(...invalidations),
+    );
     setRunning(null);
 
     if (failures.length) {

@@ -45,7 +45,12 @@ import { match } from "ts-pattern";
 
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
+import {
+  ProductImageSummariesProvider,
+  useHydratedProductImages,
+} from "~/app/_components/products/product-image-summaries";
 import { ProjectMark } from "~/app/projects/project-mark";
+import type { ToolMatrixSearch } from "~/app/tools/tool-search";
 import { Row, Stack } from "~/components/layout";
 import {
   cellMonoDense,
@@ -61,11 +66,11 @@ import {
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
-import type { ToolMatrixSearch } from "~/routes/_authenticated/projects.tools";
 
 import { PROJECT_STATUS_LABELS } from "./project-formatting";
 import { project } from "./project.functions";
@@ -91,6 +96,7 @@ const KIND_LABELS = {
 
 const MATRIX_PAGE_SIZE = 16;
 const PROJECT_COLUMN_WIDTH = 44;
+const EMPTY_TOOL_PRODUCT_IDS: readonly string[] = [];
 
 const cellKey = (projectId: string, productId: string) =>
   `${projectId}:${productId}`;
@@ -354,6 +360,10 @@ export function ToolMatrixPage({
   );
 
   const { data, isLoading } = useQuery(project.toolMatrix.queryOptions(input));
+  const productIds = useMemo(
+    () => data?.rows.map((row) => row.productId) ?? EMPTY_TOOL_PRODUCT_IDS,
+    [data?.rows],
+  );
 
   // A hand-edited or stale URL can point past the last page after filtering.
   // The server clamps authoritatively; mirror that answer back into the URL.
@@ -407,7 +417,7 @@ export function ToolMatrixPage({
                 // lifetime use count, which re-ranks trade matches in every
                 // other column too. Only `project.*` — nothing on this page
                 // reads a product query.
-                void invalidateOperationTags(queryClient, [["project"]]);
+                void invalidateOperationTags(queryClient, ripple.projectOnly);
               },
             },
           );
@@ -596,14 +606,16 @@ export function ToolMatrixPage({
             </EmptyDescription>
           </Empty>
         ) : (
-          <div className="overflow-visible">
-            <MatrixTable
-              data={data}
-              cellIndex={cellIndex}
-              pending={pending}
-              onToggle={toggleCell}
-            />
-          </div>
+          <ProductImageSummariesProvider productIds={productIds}>
+            <div className="overflow-visible">
+              <MatrixTable
+                data={data}
+                cellIndex={cellIndex}
+                pending={pending}
+                onToggle={toggleCell}
+              />
+            </div>
+          </ProductImageSummariesProvider>
         )}
         <Row
           align="center"
@@ -648,6 +660,26 @@ export function ToolMatrixPage({
         </Row>
       </div>
     </Stack>
+  );
+}
+
+function ToolIdentityLink({
+  row,
+}: {
+  row: ProjectToolMatrixOut["rows"][number];
+}) {
+  const images = useHydratedProductImages(row.productId);
+
+  return (
+    <EntityInlineLink
+      displayImage={images[0] ?? null}
+      entity="product"
+      data={{
+        id: row.productId,
+        name: row.productName,
+      }}
+      truncate
+    />
   );
 }
 
@@ -801,15 +833,7 @@ function MatrixTable({
                 )}
               >
                 <div className="w-64 min-w-0">
-                  <EntityInlineLink
-                    displayImage={undefined}
-                    entity="product"
-                    data={{
-                      id: row.productId,
-                      name: row.productName,
-                    }}
-                    truncate
-                  />
+                  <ToolIdentityLink row={row} />
                   <div className="truncate text-2xs text-slate">
                     {row.manufacturer}
                     {!row.isInventoried && " · not in inventory"}

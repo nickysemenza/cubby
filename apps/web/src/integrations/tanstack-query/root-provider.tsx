@@ -15,11 +15,14 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 
 import {
+  EMPTY_INVALIDATION_TAG_SET,
+  type InvalidationTagSet,
+} from "./cache-tags";
+import {
   invalidateOperationTags,
   resolveInvalidationTags,
 } from "./operation-cache";
 import { operationInvalidationTags } from "./operation-catalog";
-import type { OperationCacheTag } from "./operation-meta";
 import { installOperationRecorder } from "./operation-recorder";
 import { persister } from "./persister";
 import { shouldToastQueryError } from "./query-error-policy";
@@ -53,17 +56,18 @@ export interface RootMutationSuccessRuntime {
   registeredInvalidations<Variables>(
     operation: string | undefined,
     variables: Variables,
-  ): readonly OperationCacheTag[];
+  ): InvalidationTagSet;
   afterSuccess<Result>(options: {
     queryClient: QueryClient;
     result: Result;
-    invalidations: readonly OperationCacheTag[];
+    invalidations: InvalidationTagSet;
   }): void;
 }
 
 const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
   registeredInvalidations: (operation, variables) =>
-    operationInvalidationTags(operation, variables) ?? [],
+    operationInvalidationTags(operation, variables) ??
+    EMPTY_INVALIDATION_TAG_SET,
   afterSuccess: ({ queryClient, result, invalidations }) => {
     void invalidateOperationTags(queryClient, invalidations);
     void watchBatchesAndInvalidateTags({

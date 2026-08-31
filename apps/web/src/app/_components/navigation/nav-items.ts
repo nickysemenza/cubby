@@ -189,7 +189,7 @@ export const desktopNav: NavNode[] = [
     tier: "primary",
     children: [
       { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
-      { to: "/projects/tools", label: "Tool usage", icon: Wrench },
+      { to: "/tools", label: "Tools", icon: Wrench },
       { to: "/tasks", label: "Tasks", icon: entities.task.lucideIcon },
     ],
   },

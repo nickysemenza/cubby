@@ -22,7 +22,7 @@ import {
  *    not call respondWith for them, so nothing stale or auth-sensitive is served.
  *
  * Hand-rolled (no Workbox runtime deps) to keep the dependency surface small and
- * the caching rules explicit. scripts/build-sw.mjs bundles this file and replaces
+ * the caching rules explicit. scripts/build-sw.ts bundles this file and replaces
  * `self.__WB_MANIFEST` with the precache list after the client build.
  */
 
@@ -36,7 +36,7 @@ const sw = self;
 // navigation fallback without booting the SPA / causing a hydration mismatch.
 const OFFLINE_URL = "/offline.html";
 
-// Precache list, injected at build time: scripts/build-sw.mjs replaces the
+// Precache list, injected at build time: scripts/build-sw.ts replaces the
 // `self.__WB_MANIFEST` token via esbuild define. Keep it as a bare `self.`
 // member access so that replacement matches.
 const manifest = self.__WB_MANIFEST;

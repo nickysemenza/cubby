@@ -54,25 +54,25 @@ list of the failing tests, and writes the same list to
 `apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
 it. 24% of all test runs used to be a re-run of one that had just failed.
 
-Narrow the other gates too: `pnpm check:staged` checks only staged JavaScript
-and TypeScript plus formattable files, and `pnpm typecheck:web` is useful when
-only the web app is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
+Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
+is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
 entity freshness, Knip, script types, and the high-risk SQL/soft-delete guards
 concurrently. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
 and security validation. Dependency
 deduplication runs separately when a package manifest, workspace file, patch, or
 lockfile changed; CI and pre-PR validation run the applicable superset.
 
-Pre-commit runs `pnpm check:staged` and the complete `pnpm check`. Pre-push
-selects changed Vitest, PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
+Pre-commit runs the complete `pnpm check`. Pre-push selects changed Vitest,
+PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
 from the commits being pushed. Hooks are mandatory: agents never use
 `--no-verify` to bypass a failure.
 
-CI runs affected Vitest projects on ordinary revisions. The persistent
-`ci:full` label requests every web, PostgreSQL, browser, build, and relevant Rust
-gate; high-risk paths request the same automatically. Before merging, agents
-keep `ci:full` applied and verify that the exact final commit has a green full
-run. `preview` and `claude-review` are opt-in PR labels.
+CI runs affected Vitest projects on ordinary revisions and every web,
+PostgreSQL, browser, build, and relevant Rust gate for high-risk paths. Before
+merging, agents verify that the exact final commit has a green CI run; the path
+classifier decides whether that run is affected or full. Weekly full JS, Rust,
+and PostgreSQL coverage plus manual `force_full` dispatches provide backstops.
+`preview` and `claude-review` are opt-in PR labels.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,

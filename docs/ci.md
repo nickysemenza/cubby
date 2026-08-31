@@ -13,11 +13,18 @@ classifier does not recognize deliberately selects every suite and worker.
 Documentation, agent configuration, and editor-only files are inert for the
 expensive workflow; Markdown still runs the dedicated relative-link workflow.
 
+Ordinary pull requests run affected tests. High-risk paths and manual
+`force_full` dispatches run the complete applicable verification suite. Weekly
+coverage runs the full instrumented JS, Rust, and PostgreSQL tiers. This avoids
+a persistent label turning every follow-up revision into another full run.
+
 On a `main` push, CI looks for the merged pull request and its final successful
-CI run. A prior result is reusable only when the pull-request head and merged
-commit have the same Git tree. Web changes additionally require a live
-`cf-build` artifact from that successful run. Anything ambiguous falls back to
-full verification; it never widens into an unverified deployment.
+CI run. A prior result is reusable only when it came from this repository, has
+a policy-versioned provenance marker bound to the PR number and head commit,
+and the pull-request head and merged commit have the same Git tree. Web changes
+additionally require a live `cf-build` artifact from that successful run.
+Anything ambiguous falls back to full verification; it never widens into an
+unverified deployment.
 
 ## Build and deployment flow
 

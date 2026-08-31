@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/collection";
 import { z } from "zod";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   defineOperationDomain,
   mutation,
@@ -35,12 +36,12 @@ export const collection = defineOperationDomain("collection", {
   set: mutation({
     input: collectionTagSetInput,
     output: collectionTagSetOut,
-    invalidates: [["collection"]],
+    invalidates: ripple.collection,
   }),
   create: mutation({
     input: collectionCreateInput,
     output: collectionSummaryOut,
-    invalidates: [["collection"]],
+    invalidates: ripple.collection,
   }),
 });
 

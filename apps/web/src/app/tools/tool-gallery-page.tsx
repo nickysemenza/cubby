@@ -1,0 +1,819 @@
+import type {
+  ToolGalleryGroupBy,
+  ToolGalleryGroupOut,
+  ToolGalleryInventoryEntryOut,
+  ToolGalleryItemOut,
+} from "@cubby/schemas/project";
+import { toolGalleryGroupBy } from "@cubby/schemas/project";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
+import { LayoutGrid, RotateCw, Search, Wrench } from "lucide-react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { z } from "zod";
+
+import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
+import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
+import { ProductWorkbenchInspector } from "~/app/_components/products/product-workbench-inspector";
+import { ErrorDisplay } from "~/components/feedback/error-display";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { FilterableCombobox } from "~/components/ui/combobox";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyIcon,
+  EmptyTitle,
+} from "~/components/ui/empty";
+import { Image } from "~/components/ui/image";
+import { Input } from "~/components/ui/input";
+import { NativeSelect } from "~/components/ui/native-select";
+import { Skeleton } from "~/components/ui/skeleton";
+import { Spinner } from "~/components/ui/spinner";
+import { useHydrated } from "~/hooks/useHydrated";
+import { cn, formatCurrency } from "~/lib/utils";
+
+import { project } from "../projects/project.functions";
+
+const PAGE_SIZE = 60;
+const DIRECT_GROUP_JUMP_LIMIT = 10;
+
+export interface ToolGalleryPageOperations {
+  gallery: typeof project.toolGallery;
+}
+
+const productionOperations: ToolGalleryPageOperations = {
+  gallery: project.toolGallery,
+};
+
+const GROUP_OPTIONS: ReadonlyArray<{
+  value: ToolGalleryGroupBy;
+  label: string;
+}> = [
+  { value: "location", label: "Location" },
+  { value: "manufacturer", label: "Manufacturer" },
+  { value: "trade", label: "Trade" },
+];
+
+const GROUP_NOUN = {
+  location: "location",
+  manufacturer: "manufacturer",
+  trade: "trade",
+} as const satisfies Record<ToolGalleryGroupBy, string>;
+
+function toolGroupSectionId(groupKey: string): string {
+  return `tool-gallery-group-${encodeURIComponent(groupKey)}`;
+}
+
+function renderProductInspector({
+  preview,
+  onClose,
+}: {
+  preview: { id: string };
+  onClose: () => void;
+}) {
+  return <ProductWorkbenchInspector productId={preview.id} onClose={onClose} />;
+}
+
+export function toolLocationPath(entry: ToolGalleryInventoryEntryOut): string {
+  return [...entry.location.ancestors, entry.location]
+    .map((part) => part.name)
+    .join(" / ");
+}
+
+type ToolPlacementSummary = {
+  label: string;
+  mixed: boolean;
+  installed: boolean;
+};
+
+export function toolPlacementSummary(
+  entries: ToolGalleryInventoryEntryOut[],
+): ToolPlacementSummary {
+  const installed = entries.some((entry) => entry.placement === "installed");
+  if (entries.length === 1) {
+    return {
+      label: tryFormatAmount(entries[0]!.amount),
+      mixed: false,
+      installed,
+    };
+  }
+  const units = new Set(entries.map((entry) => entry.amount.unit));
+  return {
+    label: `${entries.length} placements${units.size > 1 ? " · Mixed amounts" : ""}`,
+    mixed: units.size > 1,
+    installed,
+  };
+}
+
+function GallerySkeleton() {
+  return (
+    <div
+      aria-label="Loading tool gallery"
+      className="grid grid-cols-2 gap-2 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+    >
+      {Array.from({ length: 12 }, (_, index) => (
+        <div key={index} className="border border-[var(--border)] bg-card">
+          <Skeleton className="aspect-square w-full rounded-none" />
+          <div className="space-y-2 p-2">
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-3 w-3/5" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function ToolCard({
+  item,
+  current,
+  onInspect,
+  onHover,
+  onHoverEnd,
+}: {
+  item: ToolGalleryItemOut;
+  current: boolean;
+  onInspect: () => void;
+  onHover: () => void;
+  onHoverEnd: () => void;
+}) {
+  const placements = toolPlacementSummary(item.inventoryEntries);
+  const maker = item.manufacturer.trim();
+  const identity = [maker === "(unspecified)" ? null : maker, item.model]
+    .filter(Boolean)
+    .join(" · ");
+  const shownEntries = item.inventoryEntries.slice(0, 2);
+
+  return (
+    <button
+      type="button"
+      aria-current={current ? "true" : undefined}
+      onClick={onInspect}
+      onMouseEnter={onHover}
+      onMouseLeave={onHoverEnd}
+      onFocus={onHover}
+      onBlur={onHoverEnd}
+      className={cn(
+        "group flex h-full min-h-0 w-full flex-col overflow-hidden border bg-card text-left transition-colors duration-150 outline-none",
+        "border-[var(--border)] hover:border-primary/50 hover:bg-muted/30 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25",
+        current && "border-primary ring-1 ring-primary/20",
+      )}
+    >
+      <div className="relative aspect-square w-full shrink-0 overflow-hidden bg-muted/20">
+        <Image
+          src={item.coverImageUrl ?? ""}
+          alt={item.productName}
+          displayWidth={500}
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
+          fallback={
+            <div className="flex h-full w-full items-center justify-center bg-[var(--domain-house-surface)] text-[var(--domain-house)]">
+              <Wrench className="size-8" aria-hidden />
+            </div>
+          }
+        />
+        {item.extraImageCount > 0 ? (
+          <Badge className="absolute right-1.5 bottom-1.5 border-black/20 bg-black/65 text-white">
+            +{item.extraImageCount}
+          </Badge>
+        ) : null}
+        {placements.installed ? (
+          <Badge
+            variant="slate"
+            className="absolute top-1.5 left-1.5 bg-card/95"
+          >
+            Installed
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className="flex min-h-36 flex-1 flex-col p-2">
+        <h3 className="line-clamp-2 min-h-9 text-sm/4.5 font-semibold text-foreground">
+          {item.productName}
+        </h3>
+        <p
+          className="mt-1 min-h-4 truncate text-xs text-muted-foreground"
+          title={identity || undefined}
+        >
+          {identity || "Unspecified maker"}
+        </p>
+
+        <div className="mt-2 min-h-13 border-t border-[var(--border)] pt-2">
+          {shownEntries.map((entry) => (
+            <div
+              key={entry.id}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2 text-2xs/4"
+            >
+              <span
+                className="truncate text-muted-foreground"
+                title={toolLocationPath(entry)}
+              >
+                {toolLocationPath(entry)}
+              </span>
+              <span className="font-mono text-foreground tabular-nums">
+                {tryFormatAmount(entry.amount)}
+              </span>
+            </div>
+          ))}
+          {item.inventoryEntries.length > shownEntries.length ? (
+            <p className="text-2xs text-muted-foreground">
+              +{item.inventoryEntries.length - shownEntries.length} more
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-auto flex items-end justify-between gap-2 border-t border-[var(--border)] pt-2">
+          <div className="min-w-0">
+            <p className="font-mono text-2xs text-foreground tabular-nums">
+              {placements.label}
+            </p>
+            <p className="text-2xs text-muted-foreground">
+              {item.projectUseCount === 0
+                ? "No project uses"
+                : `${item.projectUseCount} project use${item.projectUseCount === 1 ? "" : "s"}`}
+            </p>
+          </div>
+          {item.costPerProjectUse !== null ? (
+            <span className="shrink-0 font-mono text-xs font-medium text-primary tabular-nums">
+              {formatCurrency(item.costPerProjectUse)}/use
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function EmptyGallery({
+  query,
+  onClear,
+}: {
+  query: string;
+  onClear: () => void;
+}) {
+  return (
+    <Empty className="min-h-72 bg-card">
+      <EmptyIcon icon={query ? Search : Wrench} />
+      <EmptyHeader>
+        <EmptyTitle>
+          {query ? "No matching tools" : "No inventoried tools"}
+        </EmptyTitle>
+        <EmptyDescription>
+          {query
+            ? `Nothing in the tool inventory matches “${query}”.`
+            : "Products categorized as tools appear here once they have a live inventory placement."}
+        </EmptyDescription>
+      </EmptyHeader>
+      {query ? (
+        <Button variant="outline" onClick={onClear}>
+          Clear search
+        </Button>
+      ) : null}
+    </Empty>
+  );
+}
+
+function GroupJumpBar({
+  groupBy,
+  groups,
+  activeGroupKey,
+  onJump,
+  disabled,
+}: {
+  groupBy: ToolGalleryGroupBy;
+  groups: ToolGalleryGroupOut[];
+  activeGroupKey?: string;
+  onJump: (groupKey: string) => void;
+  disabled: boolean;
+}) {
+  if (groups.length < 2) return null;
+
+  const noun = GROUP_NOUN[groupBy];
+  const usesPicker = groups.length > DIRECT_GROUP_JUMP_LIMIT;
+  return (
+    <nav
+      aria-label="Tool gallery sections"
+      className="sticky top-[var(--app-chrome-top)] z-20 -mx-2 mb-4 border-y border-[var(--border)] bg-background px-2 py-2 md:-mx-6 md:px-6"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="shrink-0 eyebrow">Jump to</span>
+        {usesPicker ? (
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <FilterableCombobox
+              items={groups.map((group) => ({
+                value: group.key,
+                label: group.label,
+                hint: String(group.itemCount),
+              }))}
+              value={activeGroupKey ?? null}
+              onValueChange={(value) => {
+                if (value !== null) onJump(value);
+              }}
+              disabled={disabled}
+              placeholder={`Choose a ${noun}`}
+              ariaLabel={`Jump to ${noun}`}
+              className="bg-card"
+            />
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-0.5">
+            {groups.map((group) => {
+              const active = group.key === activeGroupKey;
+              return (
+                <Button
+                  key={group.key}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-current={active ? "location" : undefined}
+                  onClick={() => onJump(group.key)}
+                  disabled={disabled}
+                  className={cn(
+                    "h-9 shrink-0 rounded-sm border border-transparent px-2 max-sm:h-11",
+                    active &&
+                      "border-[var(--domain-house)] bg-[var(--domain-house-surface)] text-foreground",
+                  )}
+                >
+                  <span>{group.label}</span>
+                  <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                    {group.itemCount}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+function useToolGroupNavigation({
+  groupBy,
+  query,
+  section,
+  groups,
+  loadedPageCount,
+  ready,
+  fetchNextPage,
+  onSectionChange,
+}: {
+  groupBy: ToolGalleryGroupBy;
+  query: string;
+  section?: string;
+  groups: ToolGalleryGroupOut[];
+  loadedPageCount: number;
+  ready: boolean;
+  fetchNextPage: () => Promise<{ isError: boolean }>;
+  onSectionChange: (section: string | undefined) => void;
+}) {
+  const [visibleGroupKey, setVisibleGroupKey] = useState<string>();
+  const jumpingRef = useRef<string | undefined>(undefined);
+  const handledSectionRef = useRef<string | undefined>(undefined);
+
+  const scrollToGroup = useCallback(
+    async (groupKey: string, behavior: ScrollBehavior, force = false) => {
+      const requestKey = `${groupBy}:${query}:${groupKey}`;
+      if (!force && handledSectionRef.current === requestKey) return;
+      if (jumpingRef.current === requestKey) return;
+      const target = groups.find((group) => group.key === groupKey);
+      if (!target) {
+        if (ready) onSectionChange(undefined);
+        return;
+      }
+
+      jumpingRef.current = requestKey;
+      try {
+        const targetPage = Math.floor(target.startIndex / PAGE_SIZE);
+        for (let page = loadedPageCount; page <= targetPage; page += 1) {
+          const result = await fetchNextPage();
+          if (result.isError) return;
+        }
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        const targetSection = document.getElementById(
+          toolGroupSectionId(groupKey),
+        );
+        if (!targetSection) return;
+        targetSection.scrollIntoView({ block: "start", behavior });
+        handledSectionRef.current = requestKey;
+        setVisibleGroupKey(groupKey);
+      } finally {
+        jumpingRef.current = undefined;
+      }
+    },
+    [
+      fetchNextPage,
+      groupBy,
+      groups,
+      loadedPageCount,
+      onSectionChange,
+      query,
+      ready,
+    ],
+  );
+
+  useEffect(() => {
+    if (section) void scrollToGroup(section, "auto");
+  }, [scrollToGroup, section]);
+
+  useEffect(() => {
+    const sections = document.querySelectorAll<HTMLElement>(
+      "[data-tool-gallery-group]",
+    );
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entering = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top,
+          )[0];
+        const target = entering?.target;
+        const groupKey =
+          target instanceof HTMLElement
+            ? target.dataset.toolGalleryGroup
+            : undefined;
+        if (groupKey !== undefined) setVisibleGroupKey(groupKey);
+      },
+      { rootMargin: "-104px 0px -70% 0px" },
+    );
+    sections.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [loadedPageCount]);
+
+  const jumpToGroup = useCallback(
+    (groupKey: string) => {
+      onSectionChange(groupKey);
+      setVisibleGroupKey(groupKey);
+      void scrollToGroup(
+        groupKey,
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        true,
+      );
+    },
+    [onSectionChange, scrollToGroup],
+  );
+
+  return {
+    activeGroupKey: visibleGroupKey ?? section ?? groups[0]?.key,
+    jumpToGroup,
+  };
+}
+
+function GalleryGroups({
+  groups,
+  groupMetadata,
+  isPlaceholderData,
+  error,
+  isFetchingNextPage,
+  sentinelRef,
+  currentProductId,
+  onInspect,
+  onHover,
+  onHoverEnd,
+  onRetryMore,
+}: {
+  groups: Map<string, ToolGalleryItemOut[]>;
+  groupMetadata: Map<string, ToolGalleryGroupOut>;
+  isPlaceholderData: boolean;
+  error: Error | null;
+  isFetchingNextPage: boolean;
+  sentinelRef: RefObject<HTMLDivElement | null>;
+  currentProductId?: string;
+  onInspect: (item: ToolGalleryItemOut) => void;
+  onHover: (item: ToolGalleryItemOut) => void;
+  onHoverEnd: (item: ToolGalleryItemOut) => void;
+  onRetryMore: () => void;
+}) {
+  return (
+    <div
+      aria-busy={isPlaceholderData}
+      className={cn(
+        "space-y-6 transition-opacity",
+        isPlaceholderData && "pointer-events-none opacity-55",
+      )}
+    >
+      {[...groups].map(([groupKey, groupItems]) => {
+        const metadata = groupMetadata.get(groupKey);
+        const sectionId = toolGroupSectionId(groupKey);
+        const headingId = `${sectionId}-heading`;
+        return (
+          <section
+            key={groupKey}
+            id={sectionId}
+            data-tool-gallery-group={groupKey}
+            aria-labelledby={headingId}
+            className="scroll-mt-28 md:scroll-mt-24"
+          >
+            <div className="mb-2 flex items-baseline gap-2 border-l-2 border-[var(--domain-house)] pl-2">
+              <h2
+                id={headingId}
+                className="text-sm font-semibold text-foreground"
+              >
+                {metadata?.label ?? groupItems[0]?.groupLabel}
+              </h2>
+              <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+                {metadata?.itemCount ?? groupItems.length}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 items-stretch gap-2 min-[480px]:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              {groupItems.map((item) => (
+                <ToolCard
+                  key={item.productId}
+                  item={item}
+                  current={currentProductId === item.productId}
+                  onInspect={() => onInspect(item)}
+                  onHover={() => onHover(item)}
+                  onHoverEnd={() => onHoverEnd(item)}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+
+      {error ? (
+        <div className="space-y-2">
+          <ErrorDisplay error={error} />
+          <Button variant="outline" size="sm" onClick={onRetryMore}>
+            Retry loading more
+          </Button>
+        </div>
+      ) : null}
+      <div
+        ref={sentinelRef}
+        className="flex h-11 items-center justify-center text-xs text-muted-foreground"
+        aria-hidden={!isFetchingNextPage}
+      >
+        {isFetchingNextPage ? (
+          <>
+            <Spinner size="sm" />
+            <span className="ml-1.5">Loading more tools…</span>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function ToolGalleryPage({
+  query,
+  groupBy,
+  section,
+  onQueryChange,
+  onGroupByChange,
+  onSectionChange,
+  operations = productionOperations,
+}: {
+  query: string;
+  groupBy: ToolGalleryGroupBy;
+  section?: string;
+  onQueryChange: (query: string | undefined) => void;
+  onGroupByChange: (groupBy: ToolGalleryGroupBy) => void;
+  onSectionChange: (section: string | undefined) => void;
+  operations?: ToolGalleryPageOperations;
+}) {
+  const hydrated = useHydrated();
+  const [draftQuery, setDraftQuery] = useState(query);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const {
+    inspectRow,
+    onRowHover,
+    onRowHoverEnd,
+    preview,
+    PreviewSheet,
+    dockedInspector,
+    inspectorToggle,
+  } = useEntityPreview("product", {
+    responsiveInspector: true,
+    renderInspector: renderProductInspector,
+  });
+
+  useEffect(() => setDraftQuery(query), [query]);
+  useEffect(() => {
+    if (draftQuery === query) return;
+    const timeout = setTimeout(
+      () => onQueryChange(draftQuery.trim() || undefined),
+      250,
+    );
+    return () => clearTimeout(timeout);
+  }, [draftQuery, onQueryChange, query]);
+
+  const infiniteOptions = useMemo(
+    () =>
+      operations.gallery.infiniteQueryOptions(
+        {
+          search: query || undefined,
+          groupBy,
+          pagination: { pageIndex: 0, pageSize: PAGE_SIZE },
+        },
+        {
+          initialPageParam: 0,
+          pageParamSchema: z.number().int().nonnegative(),
+          page: (input, pageIndex) => ({
+            ...input,
+            pagination: { ...input.pagination, pageIndex },
+          }),
+          getNextPageParam: (lastPage) => {
+            const loaded =
+              (lastPage.meta.pageIndex + 1) * lastPage.meta.pageSize;
+            return loaded < lastPage.meta.totalCount
+              ? lastPage.meta.pageIndex + 1
+              : undefined;
+          },
+        },
+      ),
+    [groupBy, operations.gallery, query],
+  );
+
+  const gallery = useInfiniteQuery({
+    ...infiniteOptions,
+    placeholderData: keepPreviousData,
+  });
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isPlaceholderData,
+    refetch,
+  } = gallery;
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !isFetchingNextPage) {
+          void fetchNextPage({ cancelRefetch: false });
+        }
+      },
+      { rootMargin: "500px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  const pages = useMemo(() => data?.pages ?? [], [data?.pages]);
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return pages
+      .flatMap((page) => page.items)
+      .filter((item) => {
+        if (seen.has(item.productId)) return false;
+        seen.add(item.productId);
+        return true;
+      });
+  }, [pages]);
+  const groups = useMemo(() => {
+    const result = new Map<string, ToolGalleryItemOut[]>();
+    for (const item of items) {
+      const current = result.get(item.groupKey) ?? [];
+      current.push(item);
+      result.set(item.groupKey, current);
+    }
+    return result;
+  }, [items]);
+  const groupOptions = useMemo(() => pages[0]?.groups ?? [], [pages]);
+  const groupMetadata = useMemo(
+    () => new Map(groupOptions.map((group) => [group.key, group])),
+    [groupOptions],
+  );
+  const totals = pages[0]?.totals;
+  const loadNextPage = useCallback(
+    () => fetchNextPage({ cancelRefetch: false }),
+    [fetchNextPage],
+  );
+  const { activeGroupKey, jumpToGroup } = useToolGroupNavigation({
+    groupBy,
+    query,
+    section,
+    groups: groupOptions,
+    loadedPageCount: pages.length,
+    ready: data !== undefined && !isPlaceholderData,
+    fetchNextPage: loadNextPage,
+    onSectionChange,
+  });
+
+  let content;
+  if (!hydrated || (isLoading && items.length === 0)) {
+    content = <GallerySkeleton />;
+  } else if (error && items.length === 0) {
+    content = (
+      <div className="space-y-3">
+        <ErrorDisplay error={error} />
+        <Button variant="outline" onClick={() => void refetch()}>
+          <RotateCw /> Retry
+        </Button>
+      </div>
+    );
+  } else if (items.length === 0) {
+    content = <EmptyGallery query={query} onClear={() => setDraftQuery("")} />;
+  } else {
+    content = (
+      <GalleryGroups
+        groups={groups}
+        groupMetadata={groupMetadata}
+        isPlaceholderData={isPlaceholderData}
+        error={error}
+        isFetchingNextPage={isFetchingNextPage}
+        sentinelRef={sentinelRef}
+        currentProductId={preview?.id}
+        onInspect={(item) =>
+          inspectRow({ id: item.productId, original: { id: item.productId } })
+        }
+        onHover={(item) =>
+          onRowHover({ id: item.productId, original: { id: item.productId } })
+        }
+        onHoverEnd={(item) =>
+          onRowHoverEnd({
+            id: item.productId,
+            original: { id: item.productId },
+          })
+        }
+        onRetryMore={() => void fetchNextPage()}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-4 flex flex-col gap-2 border-b border-[var(--border)] pb-3 sm:flex-row sm:items-center">
+        <label
+          htmlFor="tool-gallery-search"
+          className="relative min-w-0 flex-1 sm:max-w-md"
+        >
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <span className="sr-only">Search inventoried tools</span>
+          <Input
+            id="tool-gallery-search"
+            value={draftQuery}
+            onChange={(event) => setDraftQuery(event.target.value)}
+            placeholder="Search tools, makers, tags, or locations"
+            className="pl-8"
+          />
+        </label>
+        <label htmlFor="tool-gallery-group" className="flex items-center gap-2">
+          <span className="shrink-0 eyebrow">Group by</span>
+          <NativeSelect
+            id="tool-gallery-group"
+            value={groupBy}
+            onChange={(event) =>
+              onGroupByChange(toolGalleryGroupBy.parse(event.target.value))
+            }
+          >
+            {GROUP_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+        {totals ? (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground sm:ml-auto">
+            <LayoutGrid className="size-3.5 text-[var(--domain-house)]" />
+            <span className="font-mono tabular-nums">
+              {totals.products} tools · {totals.placements} placements
+            </span>
+          </div>
+        ) : null}
+        {inspectorToggle}
+      </div>
+
+      <GroupJumpBar
+        groupBy={groupBy}
+        groups={groupOptions}
+        activeGroupKey={activeGroupKey}
+        onJump={jumpToGroup}
+        disabled={isPlaceholderData}
+      />
+
+      <div
+        className={cn(
+          "min-w-0",
+          dockedInspector && "xl:grid xl:grid-cols-[minmax(0,1fr)_25rem]",
+        )}
+      >
+        <div className="min-w-0">{content}</div>
+        {dockedInspector ? (
+          <aside className="hidden max-h-[calc(100vh-10rem)] overflow-y-auto border border-l-0 border-[var(--border)] bg-card xl:sticky xl:top-20 xl:block xl:self-start">
+            {dockedInspector}
+          </aside>
+        ) : null}
+      </div>
+      <PreviewSheet />
+    </>
+  );
+}

@@ -2,7 +2,7 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { z, type JSONType } from "zod";
 
-import { entityRipple, ripple } from "./cache-tags";
+import { entityRipple, ripple, type InvalidationTagSet } from "./cache-tags";
 import type { OperationCacheTag } from "./operation-meta";
 
 /**
@@ -25,15 +25,15 @@ type AnyDescriptor = {
     kind: string;
     tags?: readonly OperationCacheTag[];
     invalidates?:
-      | readonly OperationCacheTag[]
-      | ((input: JSONType) => readonly OperationCacheTag[]);
+      | InvalidationTagSet
+      | ((input: JSONType) => InvalidationTagSet);
   };
   /**
    * `buildDescriptor` puts a resolved policy on every mutation descriptor —
    * static or dynamic, it is always a function of the input. That is the one
    * handle the replay below can pull on.
    */
-  invalidates?: (input: JSONType) => readonly OperationCacheTag[];
+  invalidates?: (input: JSONType) => InvalidationTagSet;
 };
 
 const moduleExportsSchema = z.record(z.string(), z.unknown());
@@ -53,10 +53,10 @@ const isDescriptor = (
   );
 };
 
-type InvalidationPolicy = (input: JSONType) => readonly OperationCacheTag[];
+type InvalidationPolicy = (input: JSONType) => InvalidationTagSet;
 
 const isInvalidationPolicy = (
-  policy: readonly OperationCacheTag[] | InvalidationPolicy | undefined,
+  policy: InvalidationTagSet | InvalidationPolicy | undefined,
 ): policy is InvalidationPolicy => typeof policy === "function";
 
 /**
@@ -164,9 +164,8 @@ describe("operation cache tags", () => {
    * `["product","lookup"]`, `["product","recipe"]`, `["ingredient","merge"]`,
    * `["vendor","merge"]`, `["location","reparent"]`, `["recipe","list"]`,
    * `["recipe","cookbook"]`), each longer than any tag its target queries
-   * declare. Those live in `*.functions.ts` `invalidates:` positions, which
-   * Wave 2's step A2 replaces with the `ripple.*` rows asserted here; the
-   * repo-wide version of this check lands as `check-invalidation-authority.ts`.
+   * declare. Mutation policies can only use branded `ripple.*` rows, so this
+   * table-level check covers every static invalidation declaration.
    */
   it("only ever invalidates tags some query declares", () => {
     const dead: string[] = [];
@@ -197,11 +196,9 @@ describe("operation cache tags", () => {
 
   /**
    * Invariant 4. A function-valued `invalidates` names its tags only when it is
-   * CALLED, which makes it invisible to every other rule in this file (they read
-   * declarations) and to `check-invalidation-authority.ts` (it reads syntax).
-   * That script counts dynamic policies and defers them here; the registry below
-   * is where the deferral is paid off. A policy with no sample entry is a policy
-   * nothing checks, so the first test fails rather than skipping it.
+   * CALLED, which makes it invisible to the declaration checks above. The
+   * registry below executes every dynamic policy; a policy with no sample entry
+   * is a policy nothing checks, so the first test fails rather than skipping it.
    *
    * `entity.mutate` samples all four branches of `productWriteTags`, because the
    * two widened branches are the only place in the app where an invalidation is

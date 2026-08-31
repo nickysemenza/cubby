@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { calendarHouseholdRipple } from "./cache-tags";
 import { invalidateOperationTags } from "./operation-cache";
 import {
   defineOperationDomain,
@@ -21,7 +22,7 @@ const calendar = defineOperationDomain("calendar", {
   rotateFeed: mutation({
     input: z.object({ household: z.string() }),
     output: z.object({ token: z.string() }),
-    invalidates: (input) => [["calendar", input.household]],
+    invalidates: (input) => calendarHouseholdRipple(input.household),
   }),
 });
 
