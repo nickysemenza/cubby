@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/bundles.ts",
-    "./metadata": "./src/metadata.ts"
+    "./metadata": "./src/metadata.ts",
+    "./dev": "./src/dev-bundles.ts"
   },
   "scripts": {
     "build": "node build.mjs",

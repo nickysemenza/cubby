@@ -10,6 +10,7 @@ import {
   Scripts,
   useRouterState,
 } from "@tanstack/react-router";
+import { createClientOnlyFn } from "@tanstack/react-start";
 import * as React from "react";
 
 import {
@@ -40,9 +41,10 @@ const GlobalCommandMenu = React.lazy(loadCommandMenu);
 
 // Keep production devtools out of the initial client path. The persisted flag
 // still controls whether this lazy chunk is requested and mounted.
-const TanStackDevtoolsMount = React.lazy(
+const loadTanStackDevtools = createClientOnlyFn(
   () => import("~/integrations/tanstack-devtools"),
 );
+const TanStackDevtoolsMount = React.lazy(loadTanStackDevtools);
 
 // Lazy + flag-gated: the perf overlay and its web-vitals collector only load when
 // the `perfOverlay` flag is on (flippable on /settings, any environment).

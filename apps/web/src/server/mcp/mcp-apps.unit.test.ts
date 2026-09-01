@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
 
+import { USDA_PICKER_HTML } from "@cubby/mcp-apps/dev";
 import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { describe, expect, it } from "vitest";
+import { fromPartial } from "@total-typescript/shoehorn";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+
+import { setCfEnv } from "~/server/cf-env";
 
 import { registerMcpApps } from "./apps";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
@@ -28,7 +32,16 @@ const invocationFixtureSchema = z.object({
 });
 
 describe("MCP App resources", () => {
+  afterEach(() => setCfEnv(undefined));
+
   it("serves the USDA picker as a self-contained MCP App document", async () => {
+    const assetFetch = vi.fn(
+      async () =>
+        new Response(USDA_PICKER_HTML, {
+          headers: { "content-type": "text/html" },
+        }),
+    );
+    setCfEnv(fromPartial<Env>({ ASSETS: { fetch: assetFetch } }));
     const server = new McpServer({ name: "test", version: "1.0.0" });
     registerMcpApps(server);
     const [clientTransport, serverTransport] =
@@ -51,6 +64,13 @@ describe("MCP App resources", () => {
       expect(html.startsWith("<!doctype html>")).toBe(true);
       expect(html).not.toMatch(/<(?:script|link)[^>]+(?:src|href)=/u);
       expect(html).not.toContain("__CUBBY_ORIGIN__");
+      expect(assetFetch).toHaveBeenCalledOnce();
+
+      const secondRead = await client.readResource({ uri: USDA_PICKER.uri });
+      expect(appResourceContentSchema.parse(secondRead.contents[0]).text).toBe(
+        html,
+      );
+      expect(assetFetch).toHaveBeenCalledOnce();
     } finally {
       await Promise.allSettled([client.close(), server.close()]);
     }
