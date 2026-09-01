@@ -76,6 +76,7 @@ test("E2E browser lanes start with scope and test the uploaded artifact", () => 
     /Bound Ubuntu package mirror retries\n        if: matrix\.browser == 'webkit'/u,
   );
   assert.match(e2e, /Acquire::http::Timeout "10"/u);
+  assert.match(e2e, /\/etc\/apt\/apt-mirrors\.txt/u);
   assert.match(
     e2e,
     /Install Playwright browser dependencies\n        if: matrix\.browser == 'webkit'\n        timeout-minutes: 2/u,

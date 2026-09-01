@@ -624,6 +624,11 @@ jobs:
         if: matrix.browser == 'webkit'
         shell: bash
         run: |
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            sudo sed -i \
+              's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+              /etc/apt/apt-mirrors.txt
+          fi
           sudo sed -i \
             's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
             /etc/apt/sources.list.d/ubuntu.sources
