@@ -29,6 +29,8 @@ const view = getMealPreparationsOut.parse({
       actualYieldGrams: 500,
       yieldBasis: { kind: "actual", lowerGrams: 500, upperGrams: 500 },
       batchCalories: { status: "complete", lower: 1000, upper: null },
+      batchCost: { status: "complete", lower: 10, upper: null },
+      batchProtein: { status: "complete", lower: 80, upper: null },
       sourceSummary: {
         assignedGrams: 350,
         confirmedGrams: 200,
@@ -51,6 +53,8 @@ const view = getMealPreparationsOut.parse({
           confirmedAt: new Date("2026-08-31T19:00:00Z"),
           servedHere: true,
           calories: { status: "complete", lower: 400, upper: null },
+          cost: { status: "complete", lower: 4, upper: null },
+          protein: { status: "complete", lower: 32, upper: null },
         },
       ],
     },
@@ -59,10 +63,14 @@ const view = getMealPreparationsOut.parse({
     confirmed: {
       portionCount: 1,
       calories: { status: "complete", lower: 400, upper: null },
+      cost: { status: "complete", lower: 4, upper: null },
+      protein: { status: "complete", lower: 32, upper: null },
     },
     projected: {
       portionCount: 1,
       calories: { status: "complete", lower: 400, upper: null },
+      cost: { status: "complete", lower: 4, upper: null },
+      protein: { status: "complete", lower: 32, upper: null },
     },
   },
 });

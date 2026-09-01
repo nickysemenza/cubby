@@ -28,11 +28,24 @@ export const recipeTotalsFields = {
   costTotalUpper: money.optional(),
   caloriesTotal: z.number(),
   caloriesTotalUpper: z.number().optional(),
+  // The macro upper bounds and coverage counts are optional on reads so JSONB
+  // totals written before this contract still validate; fresh recomputations
+  // always emit them and the totals freshness predicate queues legacy rows.
   proteinTotal: z.number().optional(),
+  proteinTotalUpper: z.number().optional(),
+  proteinCovered: z.number().int().optional(),
   fatTotal: z.number().optional(),
+  fatTotalUpper: z.number().optional(),
+  fatCovered: z.number().int().optional(),
   carbsTotal: z.number().optional(),
+  carbsTotalUpper: z.number().optional(),
+  carbsCovered: z.number().int().optional(),
   fiberTotal: z.number().optional(),
+  fiberTotalUpper: z.number().optional(),
+  fiberCovered: z.number().int().optional(),
   sodiumTotal: z.number().optional(),
+  sodiumTotalUpper: z.number().optional(),
+  sodiumCovered: z.number().int().optional(),
   ingredientCount: z.number().int(),
   costCovered: z.number().int(),
   caloriesCovered: z.number().int(),
@@ -66,6 +79,10 @@ export const RECIPE_MACRO_KEYS = [
   "sodium",
 ] as const satisfies readonly NutrientKey[];
 export type RecipeMacroColumn = `${(typeof RECIPE_MACRO_KEYS)[number]}Total`;
+export type RecipeMacroUpperColumn =
+  `${(typeof RECIPE_MACRO_KEYS)[number]}TotalUpper`;
+export type RecipeMacroCoverageColumn =
+  `${(typeof RECIPE_MACRO_KEYS)[number]}Covered`;
 
 // Costing explain payload (recipe.explainCosting + the MCP explain tool).
 // Mirrors the diagnostics calculateTotals produces (lib/recipe-costing.ts) —

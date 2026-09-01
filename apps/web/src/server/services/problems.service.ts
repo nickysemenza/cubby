@@ -684,6 +684,8 @@ const exactProblemPresentationRowSchema = z.object({
       z.object({
         recipe: z
           .object({
+            id: z.string(),
+            name: z.string(),
             totals: z
               .object({
                 costCovered: z.number().optional(),
@@ -819,17 +821,33 @@ const fastExactPresenters = {
       targetType: row.entityType ?? null,
       targetId: row.entityId ?? null,
     }),
-  understatedCostMeals: (row) =>
-    allProblemsSchema.shape.understatedCostMeals.element.parse({
+  understatedCostMeals: (row) => {
+    const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
+      const recipe = entry.recipe;
+      const costCovered = recipe?.totals?.costCovered;
+      const ingredientCount = recipe?.totals?.ingredientCount;
+      return recipe &&
+        costCovered != null &&
+        ingredientCount != null &&
+        costCovered < ingredientCount
+        ? [
+            {
+              id: recipe.id,
+              name: recipe.name,
+              costCovered,
+              ingredientCount,
+            },
+          ]
+        : [];
+    });
+    return allProblemsSchema.shape.understatedCostMeals.element.parse({
       id: row.id,
       name: row.name ?? null,
       date: row.date,
-      recipeCount: (row.recipes ?? []).filter(
-        (entry) =>
-          (entry.recipe?.totals?.costCovered ?? 0) <
-          (entry.recipe?.totals?.ingredientCount ?? 0),
-      ).length,
-    }),
+      affectedRecipes,
+      recipeCount: affectedRecipes.length,
+    });
+  },
   unknownParkedItems: (row) =>
     allProblemsSchema.shape.unknownParkedItems.element.parse({
       id: row.id,

@@ -2,7 +2,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { updateProduct } from "~/server/repo/product";
-import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
+import {
+  getRecipeTotalsState,
+  selectAllStaleRecipeIds,
+  updateRecipeTotalsBatch,
+} from "~/server/repo/recipe/totals";
 
 import { findOrCreateIngredient } from "../repo/ingredient";
 import {
@@ -128,6 +132,34 @@ describe("RecipeCostingService", () => {
   });
 
   describe("recompute", () => {
+    it("queues fresh-timestamp legacy totals missing nutrient coverage and upgrades them", async () => {
+      const recipe = await seedPricedRecipe("Legacy nutrient coverage");
+
+      // This is a real pre-coverage JSONB shape. Its timestamp is deliberately
+      // fresh, so the stale drain must detect the absent contract field rather
+      // than relying only on `totalsComputedAt IS NULL`.
+      await updateRecipeTotalsBatch(ctx.db, [
+        {
+          id: recipe.entityId,
+          totals: {
+            costTotal: 0,
+            caloriesTotal: 0,
+            ingredientCount: 1,
+            costCovered: 0,
+            caloriesCovered: 0,
+          },
+        },
+      ]);
+      expect(await selectAllStaleRecipeIds(ctx.db)).toContain(recipe.entityId);
+
+      expect(await service().recomputeQueued([recipe.entityId])).toBe(1);
+      const state = await getRecipeTotalsState(ctx.db, recipe.entityId);
+      expect(state?.totals?.proteinCovered).toBeTypeOf("number");
+      expect(await selectAllStaleRecipeIds(ctx.db)).not.toContain(
+        recipe.entityId,
+      );
+    });
+
     it("eagerly recomputes a parent when a child's cost changes", async () => {
       // A *costable* child: 1 lb of an ingredient priced "1 lb = $4" → $4 (a
       // weight→money package mapping, the form the engine can actually convert).

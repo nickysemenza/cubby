@@ -8,6 +8,7 @@ import {
   type GetMealPreparationsOut,
   getMealPreparationsOut,
   type MealPreparationCalorieEstimate,
+  type MealPreparationEstimate,
   type MealPreparationYieldBasis,
   type SaveMealRecipePreparationInput,
   type SaveMealRecipePreparationOut,
@@ -102,32 +103,86 @@ export const yieldBasisFor = (
   };
 };
 
+type PortionMeasure = "cost" | "calories" | "protein";
+
+type PortionMeasureDefinition = {
+  uncoveredReason: Extract<
+    MealPreparationEstimate,
+    { status: "unavailable" }
+  >["reason"];
+  lower: (totals: RecipeTotals) => number | undefined;
+  upper: (totals: RecipeTotals) => number | undefined;
+  covered: (totals: RecipeTotals) => number | undefined;
+};
+
+const portionMeasures = {
+  cost: {
+    uncoveredReason: "cost_uncovered",
+    lower: (totals) => totals.costTotal,
+    upper: (totals) => totals.costTotalUpper,
+    covered: (totals) => totals.costCovered,
+  },
+  calories: {
+    uncoveredReason: "calories_uncovered",
+    lower: (totals) => totals.caloriesTotal,
+    upper: (totals) => totals.caloriesTotalUpper,
+    covered: (totals) => totals.caloriesCovered,
+  },
+  protein: {
+    uncoveredReason: "protein_uncovered",
+    lower: (totals) => totals.proteinTotal,
+    upper: (totals) => totals.proteinTotalUpper,
+    covered: (totals) => totals.proteinCovered,
+  },
+} satisfies Record<PortionMeasure, PortionMeasureDefinition>;
+
+/** One scaling/coverage pipeline for every measure carried by a portion. */
+export const batchEstimateFor = (
+  totals: RecipeTotals | null,
+  totalsComputedAt: Date | null,
+  scale: number,
+  measure: PortionMeasure,
+): MealPreparationEstimate => {
+  if (!totals) return { status: "pending", reason: "totals_missing" };
+  if (!totalsComputedAt) return { status: "pending", reason: "totals_stale" };
+  const definition = portionMeasures[measure];
+  const covered = definition.covered(totals);
+  const lower = definition.lower(totals);
+  const upper = definition.upper(totals);
+  // Nutrient coverage was added after recipe totals already existed. The
+  // totals service normally marks those rows stale; retaining this defensive
+  // branch means an older row can never silently report protein as zero.
+  if (covered == null && measure === "protein")
+    return { status: "pending", reason: "totals_stale" };
+  if (
+    covered == null ||
+    lower == null ||
+    (covered === 0 && totals.ingredientCount > 0)
+  )
+    return { status: "unavailable", reason: definition.uncoveredReason };
+  if (covered < totals.ingredientCount)
+    return { status: "partial", lower: lower * scale };
+  return {
+    status: "complete",
+    lower: lower * scale,
+    upper: upper == null ? null : upper * scale,
+  };
+};
+
+// Existing calorie-specific exports remain as compatibility helpers for callers
+// outside the portion view. New code should call the measure-generic helpers.
 export const batchCaloriesFor = (
   totals: RecipeTotals | null,
   totalsComputedAt: Date | null,
   scale: number,
-): MealPreparationCalorieEstimate => {
-  if (!totals) return { status: "pending", reason: "totals_missing" };
-  if (!totalsComputedAt) return { status: "pending", reason: "totals_stale" };
-  if (totals.caloriesCovered === 0 && totals.ingredientCount > 0)
-    return { status: "unavailable", reason: "calories_uncovered" };
-  if (totals.caloriesCovered < totals.ingredientCount)
-    return { status: "partial", lower: totals.caloriesTotal * scale };
-  return {
-    status: "complete",
-    lower: totals.caloriesTotal * scale,
-    upper:
-      totals.caloriesTotalUpper == null
-        ? null
-        : totals.caloriesTotalUpper * scale,
-  };
-};
+): MealPreparationCalorieEstimate =>
+  batchEstimateFor(totals, totalsComputedAt, scale, "calories");
 
-const portionCaloriesFor = (
-  batch: MealPreparationCalorieEstimate,
+export const portionEstimateFor = (
+  batch: MealPreparationEstimate,
   yieldBasis: MealPreparationYieldBasis,
   grams: number,
-): MealPreparationCalorieEstimate => {
+): MealPreparationEstimate => {
   if (yieldBasis.kind === "missing")
     return { status: "unavailable", reason: "yield_missing" };
   if (batch.status === "pending" || batch.status === "unavailable")
@@ -147,9 +202,9 @@ const portionCaloriesFor = (
   };
 };
 
-export const aggregateMealPreparationCalories = (
-  entries: MealPreparationCalorieEstimate[],
-): MealPreparationCalorieEstimate => {
+export const aggregateMealPreparationEstimates = (
+  entries: MealPreparationEstimate[],
+): MealPreparationEstimate => {
   if (entries.length === 0)
     return { status: "complete", lower: 0, upper: null };
   const missing = entries.find(
@@ -158,7 +213,7 @@ export const aggregateMealPreparationCalories = (
   if (missing) return missing;
   const stale = entries.find((entry) => entry.status === "pending");
   if (stale) return stale;
-  const covered = entries.filter(hasKnownCalories);
+  const covered = entries.filter(hasKnownEstimate);
   if (covered.length === 0) {
     const yieldMissing = entries.find(
       (entry) =>
@@ -176,7 +231,7 @@ export const aggregateMealPreparationCalories = (
       status: "partial",
       lower: covered.reduce((sum, entry) => sum + entry.lower, 0),
     };
-  const complete = covered.filter(hasCompleteCalories);
+  const complete = covered.filter(hasCompleteEstimate);
   return {
     status: "complete",
     lower: complete.reduce((sum, entry) => sum + entry.lower, 0),
@@ -186,21 +241,25 @@ export const aggregateMealPreparationCalories = (
   };
 };
 
-type KnownCalories = Extract<
-  MealPreparationCalorieEstimate,
+export const aggregateMealPreparationCalories = (
+  entries: MealPreparationCalorieEstimate[],
+): MealPreparationCalorieEstimate => aggregateMealPreparationEstimates(entries);
+
+type KnownEstimate = Extract<
+  MealPreparationEstimate,
   { status: "partial" | "complete" }
 >;
-type CompleteCalories = Extract<
-  MealPreparationCalorieEstimate,
+type CompleteEstimate = Extract<
+  MealPreparationEstimate,
   { status: "complete" }
 >;
 
-const hasKnownCalories = (
-  entry: MealPreparationCalorieEstimate,
-): entry is KnownCalories =>
+const hasKnownEstimate = (
+  entry: MealPreparationEstimate,
+): entry is KnownEstimate =>
   entry.status === "partial" || entry.status === "complete";
 
-const hasCompleteCalories = (entry: KnownCalories): entry is CompleteCalories =>
+const hasCompleteEstimate = (entry: KnownEstimate): entry is CompleteEstimate =>
   entry.status === "complete";
 
 const updatePreparationYields = async (
@@ -500,6 +559,8 @@ export const getMealPreparations = async (
       actualYieldGrams: number | null;
       yieldBasis: MealPreparationYieldBasis;
       batchCalories: MealPreparationCalorieEstimate;
+      batchCost: MealPreparationEstimate;
+      batchProtein: MealPreparationEstimate;
       portions: PortionRow[];
     }
   >();
@@ -532,6 +593,18 @@ export const getMealPreparations = async (
           row.recipeTotals,
           row.totalsComputedAt,
           row.scale,
+        ),
+        batchCost: batchEstimateFor(
+          row.recipeTotals,
+          row.totalsComputedAt,
+          row.scale,
+          "cost",
+        ),
+        batchProtein: batchEstimateFor(
+          row.recipeTotals,
+          row.totalsComputedAt,
+          row.scale,
+          "protein",
         ),
         portions: [],
       };
@@ -568,6 +641,10 @@ export const getMealPreparations = async (
 
   const confirmedCalories: MealPreparationCalorieEstimate[] = [];
   const projectedCalories: MealPreparationCalorieEstimate[] = [];
+  const confirmedCost: MealPreparationEstimate[] = [];
+  const projectedCost: MealPreparationEstimate[] = [];
+  const confirmedProtein: MealPreparationEstimate[] = [];
+  const projectedProtein: MealPreparationEstimate[] = [];
   let confirmedCount = 0;
   let projectedCount = 0;
   const outputPreparations = [...preparations.values()].map((preparation) => {
@@ -580,8 +657,18 @@ export const getMealPreparations = async (
       .filter((portion) => portion.confirmedAt != null)
       .reduce((sum, portion) => sum + portion.grams, 0);
     const portions = preparation.portions.map((portion) => {
-      const calories = portionCaloriesFor(
+      const calories = portionEstimateFor(
         preparation.batchCalories,
+        preparation.yieldBasis,
+        portion.grams,
+      );
+      const cost = portionEstimateFor(
+        preparation.batchCost,
+        preparation.yieldBasis,
+        portion.grams,
+      );
+      const protein = portionEstimateFor(
+        preparation.batchProtein,
         preparation.yieldBasis,
         portion.grams,
       );
@@ -589,9 +676,13 @@ export const getMealPreparations = async (
       if (servedHere) {
         projectedCount += 1;
         projectedCalories.push(calories);
+        projectedCost.push(cost);
+        projectedProtein.push(protein);
         if (portion.confirmedAt != null) {
           confirmedCount += 1;
           confirmedCalories.push(calories);
+          confirmedCost.push(cost);
+          confirmedProtein.push(protein);
         }
       }
       if (portion.ledgerPartyKind === "household")
@@ -615,6 +706,8 @@ export const getMealPreparations = async (
         confirmedAt: portion.confirmedAt,
         servedHere,
         calories,
+        cost,
+        protein,
       };
     });
     return {
@@ -627,6 +720,8 @@ export const getMealPreparations = async (
       actualYieldGrams: preparation.actualYieldGrams,
       yieldBasis: preparation.yieldBasis,
       batchCalories: preparation.batchCalories,
+      batchCost: preparation.batchCost,
+      batchProtein: preparation.batchProtein,
       sourceSummary: preparedHere
         ? {
             assignedGrams,
@@ -647,10 +742,14 @@ export const getMealPreparations = async (
       confirmed: {
         portionCount: confirmedCount,
         calories: aggregateMealPreparationCalories(confirmedCalories),
+        cost: aggregateMealPreparationEstimates(confirmedCost),
+        protein: aggregateMealPreparationEstimates(confirmedProtein),
       },
       projected: {
         portionCount: projectedCount,
         calories: aggregateMealPreparationCalories(projectedCalories),
+        cost: aggregateMealPreparationEstimates(projectedCost),
+        protein: aggregateMealPreparationEstimates(projectedProtein),
       },
     },
   });

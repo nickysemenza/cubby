@@ -3,8 +3,13 @@ import {
   EMPTY_PROBLEM_ARRAYS,
   PROBLEM_CLASS,
   type ProblemKey,
+  understatedCostMealSchema,
 } from "@cubby/schemas/problems";
+import { testShortcode } from "@cubby/schemas/testing";
+import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PROBLEM_SECTIONS } from "./problem-sections";
 
@@ -92,4 +97,46 @@ describe("PROBLEM_SECTIONS", () => {
       );
     },
   );
+
+  it("links every affected recipe directly to its live cost-gap popover", async () => {
+    const harness = createBrowserTestHarness();
+    await act(async () => {
+      await harness.loadRouter();
+    });
+    const section = PROBLEM_SECTIONS.find(
+      (candidate) => candidate.id === "understated-cost-meals",
+    );
+    if (!section) throw new Error("Missing understated-cost Problems section");
+    const meal = understatedCostMealSchema.parse({
+      id: testShortcode("meal", "understated"),
+      name: "Weeknight dinner",
+      date: "2026-09-01",
+      recipeCount: 1,
+      affectedRecipes: [
+        {
+          id: testShortcode("recipe", "broccoli"),
+          name: "Broccoli",
+          costCovered: 2,
+          ingredientCount: 3,
+        },
+      ],
+    });
+    const problems: AllProblems = {
+      ...EMPTY_PROBLEM_ARRAYS,
+      understatedCostMeals: [meal],
+      sectionTotals: {},
+      totalProblems: 1,
+    };
+
+    render(section.node(problems, undefined), { wrapper: harness.wrapper });
+
+    const link = screen.getByRole("link", {
+      name: "Broccoli — 2 of 3 ingredients priced",
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      `/recipes/${meal.affectedRecipes[0]!.id}?costingGap=true`,
+    );
+    harness.dispose();
+  });
 });

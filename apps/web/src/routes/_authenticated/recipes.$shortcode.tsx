@@ -32,6 +32,7 @@ import { shortcodeHead } from "~/lib/page-title";
 import { formatCurrency } from "~/lib/utils";
 
 const searchSchema = z.object({
+  costingGap: z.boolean().optional().catch(undefined),
   edit: z.boolean().optional().catch(undefined),
   // The enum accepts the four current views PLUS the five legacy names so old
   // bookmarks/links don't get stripped; `remapLegacyView` normalizes a legacy
@@ -58,6 +59,7 @@ const searchSchema = z.object({
 });
 
 const searchDefaults = {
+  costingGap: undefined,
   edit: undefined,
   view: undefined,
   flowLayout: undefined,
@@ -93,7 +95,13 @@ export const Route = createFileRoute("/_authenticated/recipes/$shortcode")({
 });
 
 function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
-  const { edit: isEditing, view, flowLayout, scale } = Route.useSearch();
+  const {
+    costingGap: openCostingGap,
+    edit: isEditing,
+    view,
+    flowLayout,
+    scale,
+  } = Route.useSearch();
   const navigate = useNavigate();
 
   // Normalize the (possibly legacy) URL view into a current view.
@@ -153,6 +161,13 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
   const stopEditing = () => {
     navigate({ to: ".", search: { edit: undefined } });
   };
+  const setCostingGapOpen = (open: boolean) => {
+    navigate({
+      to: ".",
+      search: (prev) => ({ ...prev, costingGap: open ? true : undefined }),
+      replace: !open,
+    });
+  };
   const routeSections: DetailSection[] = [
     {
       id: "availability",
@@ -204,6 +219,8 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
         <RecipeDetail
           recipe={recipe}
           leadingSections={routeSections}
+          openCostingGap={openCostingGap}
+          onCostingGapOpenChange={setCostingGapOpen}
           view={recipeView}
           onViewChange={setRecipeView}
           scale={scale}

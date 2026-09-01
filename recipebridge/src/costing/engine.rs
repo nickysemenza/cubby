@@ -37,8 +37,8 @@ use ingredient::usage::IngredientUsage;
 use super::consumption::{ComponentSource, PlanTrio, plan_for};
 use super::types::{
     WBakerPct, WCostingInput, WCostingRecipe, WCostingRow, WMeasureOk, WMeasureResult,
-    WMissingByType, WNutrientAmount, WNutrientsOk, WNutrientsResult, WRecipeCosting, WRowKind,
-    WRowMissing, WRowPaths, WRowResult,
+    WMissingByType, WNutrientAmount, WNutrientCoverage, WNutrientsOk, WNutrientsResult,
+    WRecipeCosting, WRowKind, WRowMissing, WRowPaths, WRowResult,
 };
 use crate::WConversionStep;
 use crate::food_mappings::product_non_price_mapping_pairs;
@@ -140,6 +140,9 @@ impl Trio {
 struct TrioWithMissing {
     trio: Trio,
     missing: WRowMissing,
+    /// Exact targets that are incomplete even if a numeric partial total can
+    /// still be carried through a sub-recipe mapping.
+    missing_nutrient_codes: HashSet<String>,
 }
 
 fn measure_is_missing(r: &MeasureRes) -> bool {
@@ -296,11 +299,13 @@ struct SubTotals {
     weight_upper: Option<f64>,
     nutrients: Vec<(String, f64, Option<f64>)>,
     missing: WRowMissing,
+    missing_nutrient_codes: HashSet<String>,
 }
 
 struct SubRecipePairs {
     pairs: Vec<(Measure, Measure)>,
     missing: WRowMissing,
+    missing_nutrient_codes: HashSet<String>,
 }
 
 pub(crate) struct Engine<'a> {
@@ -367,6 +372,21 @@ impl<'a> Engine<'a> {
         self.ingredients
             .get(ingredient_id)
             .unwrap_or(&self.empty_ctx)
+    }
+
+    /// Requested targets absent from a resolved nutrient result. This is
+    /// intentionally target-aware: `WNutrientsResult::Ok` means *some*
+    /// nutrients resolved, not that all requested nutrients did.
+    fn missing_nutrient_codes(&self, nutrients: &NutrientsRes) -> HashSet<String> {
+        self.targets
+            .iter()
+            .filter(|target| {
+                !matches!(nutrients, Ok(entries) if entries.iter().any(|(code, value, _)| {
+                    code == &target.code && value.is_finite()
+                }))
+            })
+            .map(|target| target.code.clone())
+            .collect()
     }
 
     /// Convert one amount to every costing measure off a single graph — the old
@@ -449,14 +469,20 @@ impl<'a> Engine<'a> {
                     weight: true,
                     nutrients: true,
                 },
+                missing_nutrient_codes: self
+                    .targets
+                    .iter()
+                    .map(|target| target.code.clone())
+                    .collect(),
             };
         }
         let measures: Vec<Measure> = row.amounts.iter().map(|a| a.to_measure()).collect();
-        let (trio, propagated) = match row.kind {
+        let (trio, propagated, propagated_nutrient_codes) = match row.kind {
             WRowKind::Recipe => match self.sub_recipe_pairs(&row.target_id, visited, taint) {
                 Some(sub) => (
                     self.measures(&measures, &make_graph(&sub.pairs), None),
                     sub.missing,
+                    sub.missing_nutrient_codes,
                 ),
                 None => (
                     Trio::all_err(format!("sub-recipe {} could not be costed", row.target_id)),
@@ -465,6 +491,10 @@ impl<'a> Engine<'a> {
                         weight: true,
                         nutrients: true,
                     },
+                    self.targets
+                        .iter()
+                        .map(|target| target.code.clone())
+                        .collect(),
                 ),
             },
             WRowKind::Ingredient => {
@@ -472,10 +502,13 @@ impl<'a> Engine<'a> {
                 (
                     self.measures(&measures, ctx.graph(), ctx.cheapest_price(&measures)),
                     WRowMissing::default(),
+                    HashSet::new(),
                 )
             }
         };
         let direct = trio_missing(&trio);
+        let mut missing_nutrient_codes = self.missing_nutrient_codes(&trio.nutrients);
+        missing_nutrient_codes.extend(propagated_nutrient_codes);
         TrioWithMissing {
             trio,
             missing: WRowMissing {
@@ -483,6 +516,7 @@ impl<'a> Engine<'a> {
                 weight: direct.weight || propagated.weight,
                 nutrients: direct.nutrients || propagated.nutrients,
             },
+            missing_nutrient_codes,
         }
     }
 
@@ -529,6 +563,17 @@ impl<'a> Engine<'a> {
                         weight: !out.missing_by_type.weight.is_empty(),
                         nutrients: !out.missing_by_type.nutrients.is_empty(),
                     },
+                    missing_nutrient_codes: self
+                        .targets
+                        .iter()
+                        .filter(|target| {
+                            out.nutrient_coverage
+                                .iter()
+                                .find(|coverage| coverage.code == target.code)
+                                .is_none_or(|coverage| coverage.covered < out.total_ingredients)
+                        })
+                        .map(|target| target.code.clone())
+                        .collect(),
                 };
                 if sub_taint {
                     *taint = true;
@@ -584,6 +629,7 @@ impl<'a> Engine<'a> {
         Some(SubRecipePairs {
             pairs,
             missing: totals.missing,
+            missing_nutrient_codes: totals.missing_nutrient_codes,
         })
     }
 
@@ -611,7 +657,7 @@ impl<'a> Engine<'a> {
         basis_grams: f64,
         visited: &HashSet<String>,
         taint: &mut bool,
-    ) -> (Trio, Option<Trio>, WRowMissing) {
+    ) -> (Trio, Option<Trio>, WRowMissing, HashSet<String>) {
         use ComponentSource::{BasisFraction, FlatGrams, Missing, OwnFraction, OwnFull};
 
         let needs_own = plan
@@ -678,6 +724,10 @@ impl<'a> Engine<'a> {
             nutrients: nutrients_for(plan.nutrients),
         };
         let own_missing = own.as_ref().map(|o| o.missing).unwrap_or_default();
+        let own_missing_nutrient_codes = own
+            .as_ref()
+            .map(|o| o.missing_nutrient_codes.clone())
+            .unwrap_or_default();
         let uses_own = |source: ComponentSource| {
             matches!(
                 source,
@@ -690,7 +740,11 @@ impl<'a> Engine<'a> {
             nutrients: nutrients_are_missing(&trio.nutrients)
                 || (uses_own(plan.nutrients) && own_missing.nutrients),
         };
-        (trio, own.map(|o| o.trio), missing)
+        let mut missing_nutrient_codes = self.missing_nutrient_codes(&trio.nutrients);
+        if uses_own(plan.nutrients) {
+            missing_nutrient_codes.extend(own_missing_nutrient_codes);
+        }
+        (trio, own.map(|o| o.trio), missing, missing_nutrient_codes)
     }
 
     /// Unit-graph routes for a root row's driving amount (explain mode): its
@@ -841,7 +895,13 @@ impl<'a> Engine<'a> {
         };
 
         /// (resolved trio, own trio if computed, basis the row drew from).
-        type RowOutcome = (Trio, Option<Trio>, Option<f64>, WRowMissing);
+        type RowOutcome = (
+            Trio,
+            Option<Trio>,
+            Option<f64>,
+            WRowMissing,
+            HashSet<String>,
+        );
         let n = planned.len();
         let mut outcomes: Vec<Option<RowOutcome>> = (0..n).map(|_| None).collect();
 
@@ -853,24 +913,55 @@ impl<'a> Engine<'a> {
                 deferred.push(idx);
                 continue;
             }
-            let (trio, own, missing_flags) = self.resolve_row(p.row, &p.plan, 0.0, visited, taint);
+            let (trio, own, missing_flags, missing_nutrient_codes) =
+                self.resolve_row(p.row, &p.plan, 0.0, visited, taint);
             fold(&trio, missing_flags, &p.row.name);
             if p.plan.contributes_to_basis() {
                 if let Ok(g) = &trio.gram {
                     basis_grams += g.value;
                 }
             }
-            outcomes[idx] = Some((trio, own, None, missing_flags));
+            outcomes[idx] = Some((trio, own, None, missing_flags, missing_nutrient_codes));
         }
 
         // Pass 2: basis-dependent and flat estimates, now that the basis is known.
         for idx in deferred {
             let p = &planned[idx];
-            let (trio, own, missing_flags) =
+            let (trio, own, missing_flags, missing_nutrient_codes) =
                 self.resolve_row(p.row, &p.plan, basis_grams, visited, taint);
             fold(&trio, missing_flags, &p.row.name);
-            outcomes[idx] = Some((trio, own, Some(basis_grams), missing_flags));
+            outcomes[idx] = Some((
+                trio,
+                own,
+                Some(basis_grams),
+                missing_flags,
+                missing_nutrient_codes,
+            ));
         }
+
+        let nutrient_coverage = self
+            .targets
+            .iter()
+            .map(|target| WNutrientCoverage {
+                code: target.code.clone(),
+                covered: u32::try_from(
+                    outcomes
+                        .iter()
+                        .filter(|outcome| {
+                            outcome.as_ref().is_some_and(
+                                |(trio, _, _, _, missing_nutrient_codes)| {
+                                    !missing_nutrient_codes.contains(&target.code)
+                                        && matches!(&trio.nutrients, Ok(entries) if entries.iter().any(|(code, value, _)| {
+                                            code == &target.code && value.is_finite()
+                                        }))
+                                },
+                            )
+                        })
+                        .count(),
+                )
+                .unwrap_or(u32::MAX),
+            })
+            .collect();
 
         // Per-row output, in input order. own_gram (pre-estimate) feeds baker %.
         let mut own_grams: Vec<Option<f64>> = Vec::with_capacity(n);
@@ -880,7 +971,7 @@ impl<'a> Engine<'a> {
             // Every row is filled by pass 1 (non-deferred) or pass 2 (deferred),
             // so this is always Some. Degrade an unfilled row to an error outcome
             // rather than panic — keeps own_grams / rows_out index-aligned.
-            let (trio, own, basis, missing_flags) = outcomes[idx].take().unwrap_or_else(|| {
+            let (trio, own, basis, missing_flags, _) = outcomes[idx].take().unwrap_or_else(|| {
                 (
                     Trio::all_err(format!("internal: row {idx} not resolved")),
                     None,
@@ -890,6 +981,10 @@ impl<'a> Engine<'a> {
                         weight: true,
                         nutrients: true,
                     },
+                    self.targets
+                        .iter()
+                        .map(|target| target.code.clone())
+                        .collect(),
                 )
             });
             let own_gram = own
@@ -953,6 +1048,7 @@ impl<'a> Engine<'a> {
                     upper_value: acc.any_upper.then_some(acc.hi),
                 })
                 .collect(),
+            nutrient_coverage,
             total_ingredients: u32::try_from(n).unwrap_or(u32::MAX),
             missing_by_type: missing,
             rows: rows_out,

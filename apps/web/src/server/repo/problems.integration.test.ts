@@ -3,6 +3,7 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { mealCreateInput } from "@cubby/schemas/meal";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
@@ -12,13 +13,18 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { financialTransaction } from "~/server/db/schema";
+import { financialTransaction, recipe } from "~/server/db/schema";
 
 import { findFastProblems } from "../services/problems.service";
 import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
+import { createMealWithEntityId } from "./meal/crud";
 import { updatePurchase } from "./purchase";
-import { makeExpenseInput } from "./repo.fixtures";
+import {
+  createRecipeFixture,
+  makeExpenseInput,
+  makeRecipeInput,
+} from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 
@@ -33,6 +39,81 @@ const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
 // banner, the headline card — must count only rows that can reach zero;
 // coverage rows (un-itemized bins, un-photographed tools, un-recounted shelves)
 // never can, and folding them in is what made the badge permanently red.
+
+describe("problems — understated meal cost", () => {
+  const ctx = withTestDb();
+
+  it("reports only the affected recipes with their exact persisted coverage", async () => {
+    const [incomplete, complete] = await Promise.all([
+      createRecipeFixture(
+        ctx.db,
+        makeRecipeInput({ name: "Underpriced test recipe" }),
+        ctx.actor,
+      ),
+      createRecipeFixture(
+        ctx.db,
+        makeRecipeInput({ name: "Fully priced test recipe" }),
+        ctx.actor,
+      ),
+    ]);
+    await Promise.all([
+      getDb(ctx.db)
+        .update(recipe)
+        .set({
+          totals: {
+            costTotal: 4,
+            caloriesTotal: 100,
+            ingredientCount: 3,
+            costCovered: 2,
+            caloriesCovered: 3,
+          },
+          totalsComputedAt: new Date(),
+        })
+        .where(eq(recipe.id, incomplete.entityId)),
+      getDb(ctx.db)
+        .update(recipe)
+        .set({
+          totals: {
+            costTotal: 6,
+            caloriesTotal: 200,
+            ingredientCount: 2,
+            costCovered: 2,
+            caloriesCovered: 2,
+          },
+          totalsComputedAt: new Date(),
+        })
+        .where(eq(recipe.id, complete.entityId)),
+    ]);
+    const meal = (
+      await createMealWithEntityId(
+        ctx.db,
+        mealCreateInput.parse({
+          date: "2026-09-01",
+          name: "Coverage dinner",
+          recipes: [{ recipeId: incomplete.id }, { recipeId: complete.id }],
+        }),
+        ctx.actor,
+      )
+    ).output;
+
+    const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
+      (candidate) => candidate.id === meal.id,
+    );
+
+    expect(row).toMatchObject({
+      id: meal.id,
+      recipeCount: 1,
+      affectedRecipes: [
+        {
+          id: incomplete.id,
+          name: "Underpriced test recipe",
+          costCovered: 2,
+          ingredientCount: 3,
+        },
+      ],
+    });
+  });
+});
 
 describe("problems — charges not reconciling", () => {
   const ctx = withTestDb();

@@ -22,6 +22,7 @@ import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import type {
   RecipeCostingExplain,
   RecipeMacroColumn,
+  RecipeMacroCoverageColumn,
   RecipeTotals,
 } from "@cubby/schemas/recipe-shared";
 import {
@@ -87,10 +88,45 @@ const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
     ),
     ingredientCount: t.totalIngredients,
     costCovered: t.totalIngredients - t.missingByType.price.length,
-    caloriesCovered: t.totalIngredients - t.missingByType.nutrients.length,
+    // Nutrient coverage is target-specific: a line with sodium but no kcal is
+    // not calorie coverage, and a partial sub-recipe carries that incompleteness
+    // up to its parent in recipebridge.
+    caloriesCovered:
+      getNutrientValueByKey(t.nutrientCoverage ?? {}, "kcal") ?? 0,
+    ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroCoverageColumn>>(
+      (acc, key) => {
+        acc[`${key}Covered`] =
+          getNutrientValueByKey(t.nutrientCoverage ?? {}, key) ?? 0;
+        return acc;
+      },
+      {},
+    ),
   };
   if (t.priceUpper != null) totals.costTotalUpper = t.priceUpper;
   if (caloriesUpper != null) totals.caloriesTotalUpper = caloriesUpper;
+  for (const key of RECIPE_MACRO_KEYS) {
+    const upper = t.nutrientsUpper
+      ? getNutrientValueByKey(t.nutrientsUpper, key)
+      : undefined;
+    if (upper == null) continue;
+    switch (key) {
+      case "protein":
+        totals.proteinTotalUpper = upper;
+        break;
+      case "fat":
+        totals.fatTotalUpper = upper;
+        break;
+      case "carbs":
+        totals.carbsTotalUpper = upper;
+        break;
+      case "fiber":
+        totals.fiberTotalUpper = upper;
+        break;
+      case "sodium":
+        totals.sodiumTotalUpper = upper;
+        break;
+    }
+  }
   return totals;
 };
 
@@ -120,6 +156,10 @@ const totalsDiffer = (
   b: RecipeTotals,
 ): boolean => {
   if (!a) return true;
+  // Coverage fields are optional only to keep pre-contract JSONB rows readable.
+  // A missing field is not equivalent to a real zero: otherwise a legacy recipe
+  // with no protein coverage would be stamped fresh without being upgraded.
+  if (RECIPE_MACRO_KEYS.some((key) => a[`${key}Covered`] == null)) return true;
   return recipeTotalsFieldNames.some((k) => fieldDiffers(a, b, k));
 };
 

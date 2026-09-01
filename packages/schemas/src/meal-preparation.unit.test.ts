@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { testShortcode } from "./test-support/identifiers";
 import {
   getMealPreparationsOut,
-  mealPreparationCalorieEstimate,
+  mealPreparationEstimate,
   mealPreparationYieldBasis,
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
@@ -101,20 +101,20 @@ describe("meal preparation contracts", () => {
 
   it("models calorie completeness and yield provenance as closed unions", () => {
     expect(
-      mealPreparationCalorieEstimate.parse({
+      mealPreparationEstimate.parse({
         status: "pending",
         reason: "totals_stale",
       }),
     ).toEqual({ status: "pending", reason: "totals_stale" });
     expect(
-      mealPreparationCalorieEstimate.parse({
+      mealPreparationEstimate.parse({
         status: "complete",
         lower: 350,
         upper: null,
       }),
     ).toEqual({ status: "complete", lower: 350, upper: null });
     expect(
-      mealPreparationCalorieEstimate.safeParse({
+      mealPreparationEstimate.safeParse({
         status: "unavailable",
         reason: "totals_missing",
       }).success,
@@ -158,6 +158,8 @@ describe("meal preparation contracts", () => {
             upperGrams: null,
           },
           batchCalories: { status: "complete", lower: 1000, upper: null },
+          batchCost: { status: "complete", lower: 10, upper: null },
+          batchProtein: { status: "complete", lower: 80, upper: null },
           sourceSummary: {
             assignedGrams: 350,
             confirmedGrams: 200,
@@ -177,6 +179,8 @@ describe("meal preparation contracts", () => {
               confirmedAt: new Date("2026-08-31T19:00:00Z"),
               servedHere: true,
               calories: { status: "complete", lower: 400, upper: null },
+              cost: { status: "complete", lower: 4, upper: null },
+              protein: { status: "complete", lower: 32, upper: null },
             },
           ],
         },
@@ -185,10 +189,14 @@ describe("meal preparation contracts", () => {
         confirmed: {
           portionCount: 1,
           calories: { status: "complete", lower: 400, upper: null },
+          cost: { status: "complete", lower: 4, upper: null },
+          protein: { status: "complete", lower: 32, upper: null },
         },
         projected: {
           portionCount: 0,
           calories: { status: "complete", lower: 0, upper: null },
+          cost: { status: "complete", lower: 0, upper: null },
+          protein: { status: "complete", lower: 0, upper: null },
         },
       },
     });

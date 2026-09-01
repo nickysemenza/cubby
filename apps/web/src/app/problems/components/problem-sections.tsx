@@ -1538,6 +1538,18 @@ const DECLARED_SECTIONS = [
       return {
         title: meal.name ?? mealDay(meal),
         subtitle: meal.name ? `${mealDay(meal)} · ${recipes}` : recipes,
+        details: meal.affectedRecipes.map((recipe) => (
+          <Link
+            key={recipe.id}
+            to="/recipes/$shortcode"
+            params={{ shortcode: recipe.id }}
+            search={{ costingGap: true }}
+            className="block text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            {recipe.name} — {recipe.costCovered} of {recipe.ingredientCount}{" "}
+            ingredients priced
+          </Link>
+        )),
         route: entityDetailLink("meal", meal.id),
       };
     },

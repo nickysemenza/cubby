@@ -304,6 +304,9 @@ function RecipeWorkflowContent({
   nutritionServingLabel,
   recipeImages,
   isDebugEnabled,
+  openCostingGap,
+  onCostingGapOpenChange,
+  costingCoverageResolved,
 }: {
   recipe: RecipeOut;
   scaledRecipe: RecipeOut;
@@ -328,6 +331,9 @@ function RecipeWorkflowContent({
   nutritionServingLabel: string;
   recipeImages: RecipeOut["images"];
   isDebugEnabled: boolean;
+  openCostingGap?: boolean;
+  onCostingGapOpenChange?: (open: boolean) => void;
+  costingCoverageResolved: boolean;
 }) {
   const exportFormat =
     viewMode === "spec" ? "nested" : viewMode === "flow" ? "flow" : undefined;
@@ -342,6 +348,9 @@ function RecipeWorkflowContent({
         totals={totals}
         missingWeightLinks={missingWeightLinks}
         totalsGaps={totalsGaps}
+        openCostingGap={openCostingGap}
+        onCostingGapOpenChange={onCostingGapOpenChange}
+        costingCoverageResolved={costingCoverageResolved}
         wakeLock={wakeLock}
         exportFormat={exportFormat}
       />
@@ -381,6 +390,9 @@ function RecipeWorkflowControls({
   totals,
   missingWeightLinks,
   totalsGaps,
+  openCostingGap,
+  onCostingGapOpenChange,
+  costingCoverageResolved,
   wakeLock,
   exportFormat,
 }: {
@@ -392,6 +404,9 @@ function RecipeWorkflowControls({
   totals: CalculateTotalsResult | null;
   missingWeightLinks: MissingWeightLink[];
   totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
+  openCostingGap?: boolean;
+  onCostingGapOpenChange?: (open: boolean) => void;
+  costingCoverageResolved: boolean;
   wakeLock: ReturnType<typeof useWakeLock>;
   exportFormat: "nested" | "flow" | undefined;
 }) {
@@ -412,6 +427,9 @@ function RecipeWorkflowControls({
           gaps={totalsGaps}
           currentRecipeId={recipe.id}
           currentRecipeShortcode={recipe.id}
+          open={openCostingGap}
+          onOpenChange={onCostingGapOpenChange}
+          resolved={costingCoverageResolved}
         />
         <RecipeScaleControl
           recipe={recipe}
@@ -543,6 +561,9 @@ const RecipeDetailInner: React.FC<{
   onScaleChange?: (factor: number) => void;
   flowLayout?: RecipeFlowLayoutMode;
   onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
+  /** Opens the live totals-gap popover for a Problems drill-down. */
+  openCostingGap?: boolean;
+  onCostingGapOpenChange?: (open: boolean) => void;
 }> = ({
   recipe,
   leadingSections = [],
@@ -552,6 +573,8 @@ const RecipeDetailInner: React.FC<{
   onScaleChange,
   flowLayout,
   onFlowLayoutChange,
+  openCostingGap,
+  onCostingGapOpenChange,
 }) => {
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
@@ -683,6 +706,9 @@ const RecipeDetailInner: React.FC<{
           totals={totals}
           missingWeightLinks={missingWeightLinks}
           totalsGaps={totalsGaps}
+          openCostingGap={openCostingGap}
+          onCostingGapOpenChange={onCostingGapOpenChange}
+          costingCoverageResolved={costing !== null && ingMap !== null}
           wakeLock={wakeLock}
           tree={tree}
           costing={costing}

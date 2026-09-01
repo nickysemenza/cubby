@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, TriangleAlert } from "lucide-react";
+import { useEffect } from "react";
 import { match } from "ts-pattern";
 
 import { Row } from "~/components/layout";
@@ -195,13 +196,30 @@ export function RecipeTotalsCoverageButton({
   gaps,
   currentRecipeId,
   currentRecipeShortcode,
+  open,
+  onOpenChange,
+  resolved = true,
 }: {
   gaps: RecipeTotalsGap[];
   /** Scopes the "Open all in workbench" link — the workbench filters by id, not shortcode. */
   currentRecipeId: string;
   currentRecipeShortcode: string;
+  /** URL-driven when arriving from the understated-cost Problem card. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Do not clear a deep link while live costing data is still loading. */
+  resolved?: boolean;
 }) {
-  if (gaps.length === 0) return null;
+  const hasGaps = gaps.length > 0;
+
+  // A persisted Problem can be stale by the time its detail link is opened.
+  // Once the live costing pass confirms there are no blockers, remove the URL
+  // state instead of leaving a non-functional `costingGap` bookmark behind.
+  useEffect(() => {
+    if (resolved && !hasGaps && open) onOpenChange?.(false);
+  }, [hasGaps, onOpenChange, open, resolved]);
+
+  if (!hasGaps) return null;
 
   // Roll the per-measure gaps up into category counts for the popover header —
   // the breakdown the summary card's "Missing data" footer used to show.
@@ -211,7 +229,7 @@ export function RecipeTotalsCoverageButton({
   })).filter((c) => c.n > 0);
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
         className={cn(
           "inline-flex items-center gap-2 border border-warning/40 px-2 py-1 text-xs text-warning-ink hover:bg-warning/10",

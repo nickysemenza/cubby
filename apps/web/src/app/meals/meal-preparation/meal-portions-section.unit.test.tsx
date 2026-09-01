@@ -29,6 +29,8 @@ function viewWithPortions(): MealPreparationsView {
         actualYieldGrams: 500,
         yieldBasis: { kind: "actual", lowerGrams: 500, upperGrams: null },
         batchCalories: complete,
+        batchCost: complete,
+        batchProtein: complete,
         sourceSummary: {
           assignedGrams: 200,
           confirmedGrams: 0,
@@ -47,6 +49,8 @@ function viewWithPortions(): MealPreparationsView {
             confirmedAt: null,
             servedHere: true,
             calories: complete,
+            cost: complete,
+            protein: complete,
           },
         ],
       },
@@ -60,6 +64,8 @@ function viewWithPortions(): MealPreparationsView {
         actualYieldGrams: 300,
         yieldBasis: { kind: "actual", lowerGrams: 300, upperGrams: null },
         batchCalories: complete,
+        batchCost: complete,
+        batchProtein: complete,
         sourceSummary: {
           assignedGrams: 150,
           confirmedGrams: 150,
@@ -78,13 +84,25 @@ function viewWithPortions(): MealPreparationsView {
             confirmedAt: new Date("2026-08-31T19:00:00Z"),
             servedHere: true,
             calories: complete,
+            cost: complete,
+            protein: complete,
           },
         ],
       },
     ],
     totals: {
-      confirmed: { portionCount: 1, calories: complete },
-      projected: { portionCount: 2, calories: complete },
+      confirmed: {
+        portionCount: 1,
+        calories: complete,
+        cost: complete,
+        protein: complete,
+      },
+      projected: {
+        portionCount: 2,
+        calories: complete,
+        cost: complete,
+        protein: complete,
+      },
     },
   });
 }
@@ -102,6 +120,9 @@ describe("MealPortionsSection", () => {
     expect(screen.getByText("Member B")).toBeVisible();
     expect(screen.getByText("Planned")).toBeVisible();
     expect(screen.getAllByText("Confirmed")).not.toHaveLength(0);
+    expect(screen.getAllByText(/Cost \$600\.00/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/Calories 600 kcal/)).not.toHaveLength(0);
+    expect(screen.getAllByText(/Protein 600 g/)).not.toHaveLength(0);
   });
 
   it("offers the prepared-portion flow in the no-portion state", () => {
@@ -132,10 +153,14 @@ describe("MealPortionsSection", () => {
             confirmed: {
               portionCount: 0,
               calories: { status: "pending", reason: "totals_missing" },
+              cost: { status: "pending", reason: "totals_missing" },
+              protein: { status: "pending", reason: "totals_missing" },
             },
             projected: {
               portionCount: 0,
               calories: { status: "pending", reason: "totals_missing" },
+              cost: { status: "pending", reason: "totals_missing" },
+              protein: { status: "pending", reason: "totals_missing" },
             },
           },
         })}
