@@ -1,4 +1,4 @@
-import { afterAll } from "vitest";
+import { afterAll, afterEach, vi } from "vitest";
 import { closeTestDb } from "./test-setup";
 
 /**
@@ -11,4 +11,11 @@ import { closeTestDb } from "./test-setup";
  */
 afterAll(async () => {
   await closeTestDb();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
 });

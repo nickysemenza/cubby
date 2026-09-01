@@ -1,0 +1,13 @@
+import "../repo/cookbook.integration.test";
+import "../repo/image.integration.test";
+import "../repo/problems/detectors-integrity.integration.test";
+import "../repo/product/merge.integration.test";
+import "../repo/product-components.integration.test";
+import "../repo/project-tools.integration.test";
+import "../repo/soft-delete-recipe-consistency.integration.test";
+import "../repo/vendor.integration.test";
+import "../services/mutation-side-effects.integration.test";
+import "../workflows/entity-integrity-preview.integration.test";
+import "../workflows/product-staleness.integration.test";
+import "../workflows/purchase-delete-fanout.integration.test";
+import "../workflows/recipe-delete-staleness.integration.test";

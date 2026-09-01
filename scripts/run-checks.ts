@@ -52,7 +52,23 @@ const allOnlyTasks = [
   { name: "security", command: "pnpm audit:security" },
 ] as const satisfies readonly CheckTask[];
 
-export const maxCheckProcesses = 10;
+export const defaultMaxCheckProcesses = 10;
+
+export function checkProcessLimit(environment = process.env): number {
+  const configured = environment.CHECK_MAX_PROCESSES;
+  if (!configured) return defaultMaxCheckProcesses;
+  const parsed = Number(configured);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < 1 ||
+    parsed > defaultMaxCheckProcesses
+  ) {
+    throw new Error(
+      `CHECK_MAX_PROCESSES must be an integer from 1 to ${defaultMaxCheckProcesses}`,
+    );
+  }
+  return parsed;
+}
 
 export function workspaceConcurrency(environment = process.env): number {
   return environment.CI ? 2 : 4;
@@ -152,7 +168,7 @@ export async function runCheckCommands(
 ) {
   const { result } = concurrently([...commands], {
     cwd: repoRoot,
-    maxProcesses: maxCheckProcesses,
+    maxProcesses: checkProcessLimit(),
     prefix: "name",
   });
   await result;

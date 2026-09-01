@@ -1,0 +1,11 @@
+import "../repo/inventory/embedding-cascade-invariant.integration.test";
+import "../repo/inventory/inventory-bulk-add.integration.test";
+import "../repo/inventory/inventory-bulk-staleness.integration.test";
+import "../repo/inventory/inventory-move-entries.integration.test";
+import "../repo/inventory/inventory-reconcile.integration.test";
+import "../repo/inventory/inventory-softdelete-guard.integration.test";
+import "../repo/product/discard-bulk.integration.test";
+import "../repo/product/discard.integration.test";
+import "../repo/product/ownership.integration.test";
+import "../repo/product/quantity-ledger.integration.test";
+import "../services/location-valuation.integration.test";

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium, type FullConfig } from "@playwright/test";
+import { request, type FullConfig } from "@playwright/test";
 import { createTestHarness, type TestHarness } from "wrangler";
 import { z } from "zod";
 
@@ -164,74 +164,68 @@ async function globalSetup(_config: FullConfig): Promise<void> {
 
   console.log("[E2E Setup] Setting up test user authentication...");
 
-  // Use Playwright browser to authenticate
-  const browser = await chromium.launch();
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  // Authenticate through Playwright's real HTTP context. Browser contexts are
+  // intentionally per-test, and the WebKit lane should not install Chromium
+  // merely to mint the shared fixture user's durable session cookie.
+  const authRequest = await request.newContext({
+    baseURL,
+    extraHTTPHeaders: { Origin: baseURL },
+  });
 
-  await page.goto(baseURL);
-
-  // Try to sign up first
-  const signUpResponse = await page.request.post(
-    `${baseURL}/api/auth/sign-up/email`,
-    {
-      headers: { Origin: baseURL },
+  try {
+    // Try to sign up first
+    const signUpResponse = await authRequest.post("/api/auth/sign-up/email", {
       data: {
         email: testEmail,
         password: testPassword,
         name: "E2E Test User",
       },
-    },
-  );
-  let authenticationResponse = signUpResponse;
-  if (signUpResponse.ok()) {
-    console.log("[E2E Setup] Test user created and authenticated");
-  } else {
-    console.log("[E2E Setup] User already exists, signing in instead...");
-    authenticationResponse = await page.request.post(
-      `${baseURL}/api/auth/sign-in/email`,
-      {
-        headers: { Origin: baseURL },
-        data: {
-          email: testEmail,
-          password: testPassword,
+    });
+    let authenticationResponse = signUpResponse;
+    if (signUpResponse.ok()) {
+      console.log("[E2E Setup] Test user created and authenticated");
+    } else {
+      console.log("[E2E Setup] User already exists, signing in instead...");
+      authenticationResponse = await authRequest.post(
+        "/api/auth/sign-in/email",
+        {
+          data: {
+            email: testEmail,
+            password: testPassword,
+          },
         },
-      },
+      );
+    }
+
+    if (!authenticationResponse.ok()) {
+      const errorText = await authenticationResponse.text();
+      throw new Error(
+        `Failed to authenticate test user: ${authenticationResponse.status()} - ${errorText}`,
+      );
+    }
+
+    const authState = await authRequest.storageState();
+    // `session_data` is Better Auth's five-minute cookie cache. Persisting it in
+    // a suite-wide storage-state file creates a fixed expiry cliff: a test whose
+    // context starts just before that point authenticates initially, then lands
+    // on Sign In after a reload. Keep only the durable session token so every
+    // browser context obtains its own fresh cache cookie.
+    authState.cookies = authState.cookies.filter(
+      (cookie) => !cookie.name.endsWith("session_data"),
     );
+    mkdirSync(path.dirname(authFile), { recursive: true });
+    writeFileSync(authFile, JSON.stringify(authState, null, 2));
+    // The server runs with INSECURE_AUTH_COOKIES=true (see the wrangler --var
+    // above), so the session cookies are already plain (no Secure attribute, no
+    // `__Secure-` prefix) and WebKit — including the strict Linux port in CI —
+    // stores and replays them over http. The WebKit state is a straight copy;
+    // it exists only because playwright.config.ts points the WebKit project at
+    // its own file. (The old secure:false rewrite of `__Secure-` cookies was
+    // rejected by Linux WebKit's cookie-prefix enforcement.)
+    writeFileSync(webkitAuthFile, readFileSync(authFile, "utf8"));
+  } finally {
+    await authRequest.dispose();
   }
-
-  if (!authenticationResponse.ok()) {
-    const errorText = await authenticationResponse.text();
-    throw new Error(
-      `Failed to authenticate test user: ${authenticationResponse.status()} - ${errorText}`,
-    );
-  }
-
-  // Save the authentication state. `page.request` shares the BrowserContext
-  // cookie jar, so the better-auth session cookie set by the sign-in POST above
-  // is already captured — no extra page navigations needed to "establish" it
-  // (two goto + networkidle round-trips here were pure overhead every run).
-  const authState = await context.storageState();
-  // `session_data` is Better Auth's five-minute cookie cache. Persisting it in
-  // a suite-wide storage-state file creates a fixed expiry cliff: a test whose
-  // context starts just before that point authenticates initially, then lands
-  // on Sign In after a reload. Keep only the durable session token so every
-  // browser context obtains its own fresh cache cookie.
-  authState.cookies = authState.cookies.filter(
-    (cookie) => !cookie.name.endsWith("session_data"),
-  );
-  mkdirSync(path.dirname(authFile), { recursive: true });
-  writeFileSync(authFile, JSON.stringify(authState, null, 2));
-  // The server runs with INSECURE_AUTH_COOKIES=true (see the wrangler --var
-  // above), so the session cookies are already plain (no Secure attribute, no
-  // `__Secure-` prefix) and WebKit — including the strict Linux port in CI —
-  // stores and replays them over http. The WebKit state is a straight copy;
-  // it exists only because playwright.config.ts points the WebKit project at
-  // its own file. (The old secure:false rewrite of `__Secure-` cookies was
-  // rejected by Linux WebKit's cookie-prefix enforcement.)
-  writeFileSync(webkitAuthFile, readFileSync(authFile, "utf8"));
-
-  await browser.close();
 
   console.log("[E2E Setup] Authentication complete");
   console.log(`  - User: ${testEmail}`);

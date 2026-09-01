@@ -21,7 +21,7 @@ function projectGroupOrder(name: string) {
   const projectEnd = config.indexOf("\n          },", projectStart);
   assert.notEqual(projectEnd, -1, `missing end of Vitest project ${name}`);
 
-  const match = /sequence: \{ groupOrder: (\d+) \}/u.exec(
+  const match = /sequence:\s*\{\s*groupOrder:\s*(\d+)/u.exec(
     config.slice(projectStart, projectEnd),
   );
   assert.ok(match, `missing sequence group for Vitest project ${name}`);

@@ -23,6 +23,11 @@ import { getAssetsFetcher } from "~/server/cf-env";
 
 let usdaPickerHtmlPromise: Promise<string> | undefined;
 
+/** Shared-graph tests call this after each case so an asset read cannot cross files. */
+export function resetMcpAppAssetCacheForTests() {
+  usdaPickerHtmlPromise = undefined;
+}
+
 async function loadUsdaPickerHtml(): Promise<string> {
   if (usdaPickerHtmlPromise) return usdaPickerHtmlPromise;
   const loadPromise = (async () => {

@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 
-import { registerMcpApps } from "./apps";
+import { registerMcpApps, resetMcpAppAssetCacheForTests } from "./apps";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
 
 const appResourceContentSchema = z.object({
@@ -32,7 +32,10 @@ const invocationFixtureSchema = z.object({
 });
 
 describe("MCP App resources", () => {
-  afterEach(() => setCfEnv(undefined));
+  afterEach(() => {
+    resetMcpAppAssetCacheForTests();
+    setCfEnv(undefined);
+  });
 
   it("serves the USDA picker as a self-contained MCP App document", async () => {
     const assetFetch = vi.fn(
@@ -69,6 +72,32 @@ describe("MCP App resources", () => {
       const secondRead = await client.readResource({ uri: USDA_PICKER.uri });
       expect(appResourceContentSchema.parse(secondRead.contents[0]).text).toBe(
         html,
+      );
+      expect(assetFetch).toHaveBeenCalledOnce();
+    } finally {
+      await Promise.allSettled([client.close(), server.close()]);
+    }
+  });
+
+  it("reloads the USDA picker after the shared-graph test cache is reset", async () => {
+    const assetFetch = vi.fn(
+      async () => new Response("<!doctype html><p>fresh</p>"),
+    );
+    setCfEnv(fromPartial<Env>({ ASSETS: { fetch: assetFetch } }));
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpApps(server);
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test", version: "1.0.0" });
+    await Promise.all([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+
+    try {
+      const { contents } = await client.readResource({ uri: USDA_PICKER.uri });
+      expect(appResourceContentSchema.parse(contents[0]).text).toContain(
+        "<p>fresh</p>",
       );
       expect(assetFetch).toHaveBeenCalledOnce();
     } finally {
