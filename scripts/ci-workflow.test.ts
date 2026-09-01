@@ -23,6 +23,7 @@ test("scope releases independent verification lanes without installing dependenc
   assert.doesNotMatch(scope, /setup-node-with-deps/u);
   assert.doesNotMatch(scope, /pnpm check/u);
   assert.match(validation, /needs: scope/u);
+  assert.match(validation, /CHECK_MAX_PROCESSES:/u);
   assert.match(validation, /pnpm check:all &/u);
   assert.match(validation, /wait "\$\{pids\[\$index\]\}"/u);
   assert.doesNotMatch(validation, /--filter '!@cubby\/web'/u);

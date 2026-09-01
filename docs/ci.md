@@ -30,6 +30,10 @@ dependency installation. Validation, auxiliary packages, web tests,
 PostgreSQL, Rust, and browser acceptance then start independently from that
 decision. A successful exact-tree run is still required before the scope
 job's provenance marker can be reused after merge.
+GitHub validation caps its check orchestrator at four child processes so the
+two-core runner does not run every compiler and scanner simultaneously. The
+manual workflow's internal `check_processes` input exists only to compare the
+bounded two- and four-process configurations.
 
 On a `main` push, CI looks for the merged pull request and its final successful
 CI run. A prior result is reusable only when it came from this repository, has

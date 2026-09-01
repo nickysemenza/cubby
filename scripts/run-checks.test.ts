@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  checkProcessLimit,
   createCheckCommands,
+  defaultMaxCheckProcesses,
   getCheckTasks,
-  maxCheckProcesses,
   parseBenchmarkRuns,
   parseCheckMode,
   runCheckCommands,
@@ -14,6 +15,16 @@ import {
 test("typecheck uses local parallelism without oversubscribing CI", () => {
   assert.equal(workspaceConcurrency({}), 4);
   assert.equal(workspaceConcurrency({ CI: "true" }), 2);
+});
+
+test("validation process caps are explicit and bounded", () => {
+  assert.equal(checkProcessLimit({}), defaultMaxCheckProcesses);
+  assert.equal(checkProcessLimit({ CHECK_MAX_PROCESSES: "2" }), 2);
+  assert.equal(checkProcessLimit({ CHECK_MAX_PROCESSES: "4" }), 4);
+  assert.throws(
+    () => checkProcessLimit({ CHECK_MAX_PROCESSES: "11" }),
+    /integer from 1 to 10/u,
+  );
 });
 
 test("the check benchmark defaults to ten runs and validates overrides", () => {
@@ -34,7 +45,7 @@ test("duration summaries are deterministic", () => {
 });
 
 test("the fast manifest preserves every guard and runs lint and format separately", () => {
-  assert.equal(maxCheckProcesses, 10);
+  assert.equal(defaultMaxCheckProcesses, 10);
   assert.deepEqual(
     getCheckTasks("fast").map(({ name }) => name),
     [
