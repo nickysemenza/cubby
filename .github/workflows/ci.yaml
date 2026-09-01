@@ -25,8 +25,8 @@ on:
       check_processes:
         description: "Internal validation process-cap benchmark"
         type: choice
-        options: ["4", "2"]
-        default: "4"
+        options: ["2", "4"]
+        default: "2"
 
 concurrency:
   group: >-
@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
+          fetch-depth: 2
 
       - name: Classify changes and find a reusable PR run
         id: scope
@@ -278,7 +278,7 @@ jobs:
     timeout-minutes: 20
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      CHECK_MAX_PROCESSES: ${{ github.event_name == 'workflow_dispatch' && inputs.check_processes || '4' }}
+      CHECK_MAX_PROCESSES: ${{ github.event_name == 'workflow_dispatch' && inputs.check_processes || '2' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps
@@ -621,6 +621,7 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
       - name: Bound Ubuntu package mirror retries
+        if: matrix.browser == 'webkit'
         shell: bash
         run: |
           sudo sed -i \
@@ -632,6 +633,7 @@ jobs:
             'Acquire::https::Timeout "10";' \
             | sudo tee /etc/apt/apt.conf.d/99-cubby-ci >/dev/null
       - name: Install Playwright browser dependencies
+        if: matrix.browser == 'webkit'
         timeout-minutes: 2
         run: pnpm --filter @cubby/web run test:e2e:install-deps -- ${{ matrix.browser }}
       - name: Install exact Playwright browser

@@ -30,7 +30,7 @@ dependency installation. Validation, auxiliary packages, web tests,
 PostgreSQL, Rust, and browser acceptance then start independently from that
 decision. A successful exact-tree run is still required before the scope
 job's provenance marker can be reused after merge.
-GitHub validation caps its check orchestrator at four child processes so the
+GitHub validation caps its check orchestrator at two child processes so the
 two-core runner does not run every compiler and scanner simultaneously. The
 manual workflow's internal `check_processes` input exists only to compare the
 bounded two- and four-process configurations.
@@ -49,7 +49,8 @@ The web Cloudflare bundle is built once in the node-test runner and uploaded
 before that runner starts its tests. Chromium and WebKit Playwright lanes start
 in parallel on ordinary Ubuntu hosts, restore their exact-version browser
 caches, and wait for that artifact while database and browser setup proceeds.
-Their apt configuration bypasses the hosted runner's intermittently stalled
+The stock runner already carries Chromium's system libraries. WebKit's apt
+configuration bypasses the hosted runner's intermittently stalled
 Azure mirror, bounds repository retries, and caps dependency installation at
 two minutes so a mirror outage cannot consume the full job timeout.
 Chromium owns the fifteen desktop contracts and WebKit the seven mobile

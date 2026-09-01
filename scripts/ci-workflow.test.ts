@@ -19,6 +19,7 @@ test("scope releases independent verification lanes without installing dependenc
   const auxiliary = job("test-aux", "test-rust");
 
   assert.match(scope, /id: scope/u);
+  assert.match(scope, /fetch-depth: 2/u);
   assert.match(scope, /name: Classify changes and find a reusable PR run/u);
   assert.doesNotMatch(scope, /setup-node-with-deps/u);
   assert.doesNotMatch(scope, /pnpm check/u);
@@ -70,10 +71,14 @@ test("E2E browser lanes start with scope and test the uploaded artifact", () => 
   assert.match(e2e, /lane: webkit[\s\S]*expected-tests: 7/u);
   assert.match(e2e, /Restore exact Playwright browser/u);
   assert.match(e2e, /Bound Ubuntu package mirror retries/u);
+  assert.match(
+    e2e,
+    /Bound Ubuntu package mirror retries\n        if: matrix\.browser == 'webkit'/u,
+  );
   assert.match(e2e, /Acquire::http::Timeout "10"/u);
   assert.match(
     e2e,
-    /Install Playwright browser dependencies\n        timeout-minutes: 2/u,
+    /Install Playwright browser dependencies\n        if: matrix\.browser == 'webkit'\n        timeout-minutes: 2/u,
   );
   assert.match(
     e2e,
