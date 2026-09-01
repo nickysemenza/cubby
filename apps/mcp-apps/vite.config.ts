@@ -16,15 +16,15 @@ import { viteSingleFile } from "vite-plugin-singlefile";
  */
 export default defineConfig(() => {
   return {
-    root: __dirname,
+    root: import.meta.dirname,
     plugins: [viteSingleFile()],
     build: {
-      outDir: resolve(__dirname, "dist"),
+      outDir: resolve(import.meta.dirname, "dist"),
       emptyOutDir: true,
       // Hosts render this in an iframe on desktop and mobile Claude — no legacy
       // browser in that set, so skip the downlevel transforms.
       target: "es2022",
-      rollupOptions: { input: resolve(__dirname, "app.html") },
+      rollupOptions: { input: resolve(import.meta.dirname, "app.html") },
     },
   };
 });

@@ -7,7 +7,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
-import { isGitWorktree } from "./tooling/git-worktree";
+import { isGitWorktree } from "./tooling/git-worktree.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
