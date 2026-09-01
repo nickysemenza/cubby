@@ -620,7 +620,19 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
+      - name: Bound Ubuntu package mirror retries
+        shell: bash
+        run: |
+          sudo sed -i \
+            's|http://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          printf '%s\n' \
+            'Acquire::Retries "1";' \
+            'Acquire::http::Timeout "10";' \
+            'Acquire::https::Timeout "10";' \
+            | sudo tee /etc/apt/apt.conf.d/99-cubby-ci >/dev/null
       - name: Install Playwright browser dependencies
+        timeout-minutes: 2
         run: pnpm --filter @cubby/web run test:e2e:install-deps -- ${{ matrix.browser }}
       - name: Install exact Playwright browser
         if: steps.browser-cache.outputs.cache-hit != 'true'

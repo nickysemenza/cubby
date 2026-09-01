@@ -69,6 +69,12 @@ test("E2E browser lanes start with scope and test the uploaded artifact", () => 
   assert.match(e2e, /lane: chromium[\s\S]*expected-tests: 15/u);
   assert.match(e2e, /lane: webkit[\s\S]*expected-tests: 7/u);
   assert.match(e2e, /Restore exact Playwright browser/u);
+  assert.match(e2e, /Bound Ubuntu package mirror retries/u);
+  assert.match(e2e, /Acquire::http::Timeout "10"/u);
+  assert.match(
+    e2e,
+    /Install Playwright browser dependencies\n        timeout-minutes: 2/u,
+  );
   assert.match(
     e2e,
     /run test:e2e:install-deps -- \$\{\{ matrix\.browser \}\}/u,

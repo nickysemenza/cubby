@@ -49,6 +49,9 @@ The web Cloudflare bundle is built once in the node-test runner and uploaded
 before that runner starts its tests. Chromium and WebKit Playwright lanes start
 in parallel on ordinary Ubuntu hosts, restore their exact-version browser
 caches, and wait for that artifact while database and browser setup proceeds.
+Their apt configuration bypasses the hosted runner's intermittently stalled
+Azure mirror, bounds repository retries, and caps dependency installation at
+two minutes so a mirror outage cannot consume the full job timeout.
 Chromium owns the fifteen desktop contracts and WebKit the seven mobile
 contracts. Both download and test the same artifact that preview and production
 deployment consume unchanged.
