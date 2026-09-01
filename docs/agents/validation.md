@@ -3,12 +3,22 @@
 ## Test placement
 
 Choose by what can fail: unit (`*.unit.test.ts`, pure/node), UI
-(`*.unit.test.tsx`, jsdom/RTL), portable integration (`*.integration.test.ts`,
-PGlite plus PostgreSQL in CI), PostgreSQL-only integration (independent
-sessions, locks, pools, driver behavior), or E2E (`tests/e2e/**/*.spec.ts`, built
-browser app). Write the lowest tier that can expose the regression; do not
-duplicate the same assertion across tiers. Real SQL invariants remain database
-tests. Guard scripts that CI depends on remain load-bearing.
+(`*.unit.test.tsx`, jsdom/RTL), PostgreSQL contract
+(`*.integration.test.ts`, real constraints/transactions/queries), or E2E
+(`tests/e2e/**/*.spec.ts`, built browser app). Write the lowest tier that can
+expose the regression; do not duplicate the same assertion across tiers. Real
+SQL invariants remain PostgreSQL tests. PGlite is an explicit developer
+experiment, not an acceptance backend or a second copy of authoritative
+coverage. Guard scripts that CI depends on remain load-bearing.
+
+Default to real implementations at every tier. Pure tests call the real pure
+module, UI tests render the real component tree, PostgreSQL tests observe real
+database state, and browser tests use the built application. Do not mock owned
+repositories, Drizzle transactions, internal modules, or transports merely to
+avoid the appropriate tier; that couples tests to call shape instead of
+behavior. Deterministic data builders are fixtures, not substitute
+implementations. A test adapter is reserved for a genuine external seam whose
+real implementation cannot run locally.
 
 Unit and UI are separate Vitest projects — node vs. jsdom, per
 `apps/web/vitest.config.ts` — and neither runs the other's files, so a change
@@ -21,33 +31,28 @@ While editing, run one file: `pnpm test:file src/…` from the repo root. That i
 the spelling — the transcripts carried three competing ones (`pnpm vitest run`,
 `pnpm exec vitest`, `npx vitest run`) for the same job. The path is relative to
 `apps/web`, because that is where Vitest's root is; a repo-root-relative path
-matches nothing and exits 1 with "No test files found". Portable integration
-files registered in the `pglite-integration` project stay Docker-free. Use
-`pnpm test:file:postgres src/…` for a PostgreSQL-only integration file.
+matches nothing and exits 1 with "No test files found". Use
+`pnpm test:file:postgres src/…` for a PostgreSQL contract file.
 
-`pnpm test:unit`, `pnpm test:ui`, and `pnpm test:pglite` are the whole local
-Vitest tiers. `pnpm test:e2e tests/e2e/<file>.spec.ts` is the normal targeted
-browser loop; `pnpm test:e2e` runs the optional full browser suite. Those
-commands use PGlite and need no Docker. The PGlite E2E lane is intentionally
-serialized because its PostgreSQL socket multiplexer is not safe under
-concurrent mutation-heavy specs. `pnpm test:integration:postgres` and
-`pnpm test:e2e:postgres` select IntegreSQL for local parity after
-`docker compose -p cubby up -d`. Reserve full `pnpm test` or `pnpm test:local`
-for pre-PR or cross-layer work.
+`pnpm test` runs all fast unit, UI, contract, and auxiliary-package tests;
+`pnpm test:postgres` runs the retained PostgreSQL contracts; and
+`pnpm test:e2e` runs the 22 PostgreSQL-backed browser contracts. The legacy
+`test:integration:postgres` and `test:e2e:postgres` names are aliases. Start
+PostgreSQL with `docker compose -p cubby up -d` before either authoritative
+database tier. `pnpm test:all` (also `test:local`) runs the fast tier first,
+then PostgreSQL and Playwright concurrently.
+Those authoritative tiers use distinct IntegreSQL template hashes so concurrent
+template initialization cannot reset the browser database during a local run.
 
-**Full PostgreSQL integration is opt-in.** A bare `vitest run` registers the
-small portable PGlite subset, but not the complete PostgreSQL project, so it
-cannot silently cost ten minutes or require Docker. Reach the complete project
-with `--project integration`, `pnpm test:integration:postgres`, or
-`CUBBY_TEST_INTEGRATION=1`. That tier was 1,879 invocations and 12h over three
-weeks — more than unit, ui, and e2e combined — so it is a decision, not a
-reflex. CI remains authoritative: portable integration files run against both
-PGlite and PostgreSQL, and every lock/concurrency/driver contract runs against
-PostgreSQL.
+`pnpm test:pglite` is the explicit Docker-free PGlite experiment.
+`pnpm test:e2e:pglite -- tests/e2e/<file>.spec.ts` runs a targeted browser
+experiment on that backend. Neither command is part of `test`, `test:all`, CI,
+or acceptance, and PGlite-only success is never evidence that a database change
+is ready.
 
-`pnpm test:changed` is likewise Docker-free and does not register the
-PostgreSQL-only project. Use `pnpm test:changed:postgres <ref>` when changed
-integration coverage needs the real backend.
+`pnpm test:changed` is likewise Docker-free and registers neither database
+project. Use `pnpm test:changed:postgres <ref>` when changed integration
+coverage needs the real backend.
 
 **Never re-run a tier to find out what failed.** Every run ends with a compact
 list of the failing tests, and writes the same list to
@@ -67,7 +72,7 @@ PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
 from the commits being pushed. Hooks are mandatory: agents never use
 `--no-verify` to bypass a failure.
 
-CI runs affected Vitest projects on ordinary revisions and every web,
+CI runs affected authoritative projects on ordinary revisions and every web,
 PostgreSQL, browser, build, and relevant Rust gate for high-risk paths. Before
 merging, agents verify that the exact final commit has a green CI run; the path
 classifier decides whether that run is affected or full. Weekly full JS, Rust,

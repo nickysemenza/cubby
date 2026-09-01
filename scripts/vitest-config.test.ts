@@ -9,6 +9,10 @@ const config = readFileSync(
   join(repoRoot, "apps/web/vitest.config.ts"),
   "utf8",
 );
+const e2eDatabase = readFileSync(
+  join(repoRoot, "apps/web/tests/e2e/e2e-database.ts"),
+  "utf8",
+);
 
 function projectGroupOrder(name: string) {
   const projectStart = config.indexOf(`name: "${name}"`);
@@ -24,9 +28,26 @@ function projectGroupOrder(name: string) {
   return Number(match[1]);
 }
 
-test("mixed portable and PostgreSQL changed runs use distinct sequence groups", () => {
+test("explicit mixed PGlite and PostgreSQL runs use distinct sequence groups", () => {
   assert.notEqual(
     projectGroupOrder("pglite-integration"),
     projectGroupOrder("integration"),
   );
+});
+
+test("database projects are registered only by explicit selectors", () => {
+  assert.match(
+    config,
+    /project\.test\.name === "integration"\) return wantsIntegrationTier\(\)/u,
+  );
+  assert.match(
+    config,
+    /project\.test\.name === "pglite-integration"[\s\S]*return wantsPgliteTier\(\)/u,
+  );
+  assert.match(config, /explicitlySelectsProject\("pglite"\)/u);
+  assert.match(config, /explicitlySelectsProject\("pglite-integration"\)/u);
+});
+
+test("concurrent PostgreSQL and browser tiers use separate IntegreSQL templates", () => {
+  assert.match(e2eDatabase, /"\.\/tests\/e2e\/e2e-database\.ts"/u);
 });

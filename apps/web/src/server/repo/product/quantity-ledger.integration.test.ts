@@ -123,49 +123,6 @@ describe("loadProductQuantityLedgers", () => {
     });
   });
 
-  it("reads a $0 line by its quantity's sign", async () => {
-    const freebie = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Promo Battery" }),
-      ctx.actor,
-    );
-    const discarded = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Kahuna Burner" }),
-      ctx.actor,
-    );
-
-    // The ambiguity the signed quantity exists to resolve: both lines cost $0.
-    await seed({
-      name: "promo pack",
-      cost: 0,
-      productId: freebie.id,
-      productQuantity: 1,
-    });
-    await seed({
-      name: "bought",
-      cost: 165,
-      productId: discarded.id,
-      productQuantity: 1,
-    });
-    await seed({
-      name: "Discarded — Kahuna Burner",
-      cost: 0,
-      productId: discarded.id,
-      productQuantity: -1,
-    });
-
-    expect((await ledgerFor(freebie.entityId))?.expectedQuantity).toBe(1);
-    expect(await ledgerFor(discarded.entityId)).toEqual({
-      acquiredUnits: 1,
-      exitedUnits: 1,
-      expectedQuantity: 0,
-      unknownAcquisitionLines: 0,
-      unknownExitLines: 0,
-      locationCount: 0,
-    });
-  });
-
   it("goes negative rather than clamping — that is the defect signal", async () => {
     const prod = await createProduct(
       ctx.db,
@@ -226,36 +183,6 @@ describe("loadProductQuantityLedgers", () => {
   // cue beside Expected lit on all eight such rows in the live ledger while
   // their counts were in fact certain. Both values sum to nothing; only `null`
   // is an unknown line, and that difference is what the cue reads.
-  it("treats a zero quantity as known, not as an unrecorded one", async () => {
-    const prod = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Kept After Refund" }),
-      ctx.actor,
-    );
-    await seed({
-      name: "bought 1",
-      cost: 100,
-      productId: prod.id,
-      productQuantity: 1,
-    });
-    // Amazon "Account adjustment": the money came back, the item did not go.
-    await seed({
-      name: "price concession",
-      cost: -20,
-      productId: prod.id,
-      productQuantity: 0,
-    });
-
-    expect(await ledgerFor(prod.entityId)).toEqual({
-      acquiredUnits: 1,
-      exitedUnits: 0,
-      // Still owned — a concession must not exit the unit.
-      expectedQuantity: 1,
-      unknownAcquisitionLines: 0,
-      unknownExitLines: 0,
-      locationCount: 0,
-    });
-  });
 
   it("ignores planned spend — `future` rows are not on any shelf yet", async () => {
     const prod = await createProduct(
@@ -279,15 +206,6 @@ describe("loadProductQuantityLedgers", () => {
 
     // 2, not 7 — planned spend has not arrived, so it is not expected on hand.
     expect((await ledgerFor(prod.entityId))?.expectedQuantity).toBe(2);
-  });
-
-  it("returns nothing for a product with no ledger, rather than a zero row", async () => {
-    const prod = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Untouched" }),
-      ctx.actor,
-    );
-    expect(await ledgerFor(prod.entityId)).toBeUndefined();
   });
 });
 

@@ -398,6 +398,20 @@ function sortMutableGroups(
   });
 }
 
+export function groupSearchCandidates(
+  candidates: InternalSearchCandidate[],
+  relationByCandidate: Map<string, string | null>,
+  groupingEnabled: boolean,
+) {
+  const groups = collectMutableGroups(
+    candidates,
+    relationByCandidate,
+    groupingEnabled,
+  );
+  sortMutableGroups(groups, candidates);
+  return groups;
+}
+
 async function composeSearchGroups(
   db: Database,
   candidates: InternalSearchCandidate[],
@@ -413,12 +427,11 @@ async function composeSearchGroups(
       candidate.matchKind === "exact" && candidate.matchField === "shortcode",
   );
   const sourceCandidates = exactShortcode ? [exactShortcode] : candidates;
-  const mutableGroups = collectMutableGroups(
+  const mutableGroups = groupSearchCandidates(
     sourceCandidates,
     relationByCandidate,
     !input.entityTypes?.length && !exactShortcode,
   );
-  sortMutableGroups(mutableGroups, candidates);
 
   const selectedGroups = mutableGroups.slice(0, input.limit);
   const selectedProductIds = selectedGroups.flatMap((group) =>

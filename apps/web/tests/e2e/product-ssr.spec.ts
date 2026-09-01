@@ -1,4 +1,5 @@
-import { createProduct } from "./e2e-helpers";
+import { seedProductPrerequisite } from "./e2e-fixtures";
+import { waitForAppHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 const hydrationWarning =
@@ -6,13 +7,14 @@ const hydrationWarning =
 
 test.describe("product detail SSR", () => {
   test("renders authenticated detail before JavaScript and hydrates without refetching", async ({
+    baseURL,
     browser,
     page,
   }, testInfo) => {
     const productName = `E2E SSR Product ${testInfo.workerIndex}-${Date.now()}`;
-    await createProduct(page, productName);
-
-    const detailUrl = page.url();
+    const product = await seedProductPrerequisite(page, { name: productName });
+    if (!baseURL) throw new Error("Playwright baseURL is required");
+    const detailUrl = new URL(`/products/${product.id}`, baseURL).href;
     const storageState = await page.context().storageState();
 
     // JavaScript is deliberately disabled: a visible heading here can only
@@ -73,7 +75,7 @@ test.describe("product detail SSR", () => {
       await expect(
         hydratedPage.getByRole("heading", { level: 1, name: productName }),
       ).toBeVisible({ timeout: 15000 });
-      await hydratedPage.waitForLoadState("networkidle");
+      await waitForAppHydration(hydratedPage);
 
       expect(productRequests).toEqual([]);
       expect(hydrationMessages).toEqual([]);

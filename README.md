@@ -124,7 +124,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - **WASM:** `@cubby/recipebridge` wraps Rust [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
 - **Storage:** Cloudflare R2 (S3-compatible) for images
 - **Charts:** Nivo (bar, pie, treemap, sunburst, calendar, line) + d3-force, d3-hierarchy
-- **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PGlite (fast PostgreSQL contracts) · IntegreSQL (deployment-parity isolation)
+- **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PostgreSQL + IntegreSQL (authoritative contracts) · PGlite (explicit developer experiments)
 - **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry
 
 ## 📦 Monorepo Layout
@@ -314,8 +314,9 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   strict on `:3000`.
 - **Shared services:** docker-compose (Postgres/IntegresQL/Jaeger) binds fixed host
   ports — `docker-compose up -d` once from any checkout and all worktrees reuse
-  them for app development and the explicit `*:postgres` parity commands. The
-  default Vitest and Playwright commands use in-process PGlite and need no Docker.
+  them for app development and the authoritative PostgreSQL and Playwright
+  commands. Fast Vitest needs no Docker; PGlite is available only through the
+  explicit experimental commands below.
 - **⚠ Always pass `-p cubby` to compose from a worktree.** Compose derives its
   project name from the *directory* name, so `docker compose up -d` inside
   `.claude/worktrees/<branch>/` creates a **second, parallel stack**
@@ -347,21 +348,22 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run lint:fix` | Full-tree Oxlint auto-fix |
 | `pnpm run format:check` | Full-tree Oxfmt check |
 | `pnpm run format` | Full-tree Oxfmt write |
-| `pnpm run test` | Docker-free Vitest unit/UI plus portable PGlite database tests |
-| `pnpm run test:pglite` | PGlite schema contract plus portable repository integration tests |
-| `pnpm run test:integration:postgres` | Full repository integration suite on PostgreSQL/IntegreSQL (requires Docker) |
-| `pnpm run test:e2e tests/e2e/<file>.spec.ts` | Playwright E2E on PGlite; targeted files are the normal local loop |
-| `pnpm run test:e2e:postgres` | Playwright E2E on PostgreSQL/IntegreSQL for explicit local parity (requires Docker) |
-| `pnpm run test:local` | Optional full Docker-free Vitest + Playwright run |
+| `pnpm run test` | All fast unit, UI, contract, and auxiliary-package tests |
+| `pnpm run test:postgres` | The 260 authoritative PostgreSQL contracts (requires Docker) |
+| `pnpm run test:e2e` | The 22 authoritative PostgreSQL-backed Playwright tests (requires Docker) |
+| `pnpm run test:pglite` | Explicit Docker-free PGlite developer experiment |
+| `pnpm run test:e2e:pglite -- tests/e2e/<file>.spec.ts` | Explicit targeted browser experiment on PGlite |
+| `pnpm run test:all` | Fast tests, then PostgreSQL and Playwright concurrently |
+| `pnpm run test:local` | Alias of `test:all` |
 | `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
 | `pnpm --filter @cubby/web run build:cf` | Build only the main web Worker |
+| `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
+| `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
+| `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
 
 See [docs/ci.md](docs/ci.md) for CI scoping, artifact provenance, scheduled
 coverage, deployment behavior, and the measured optimizations that should not
 be reintroduced.
-| `pnpm --filter @cubby/web run preview:cf` | Run the Workers build locally |
-| `pnpm --filter @cubby/web run deploy:cf` | Deploy to Cloudflare Workers |
-| `pnpm run wasm` | Rebuild `@cubby/recipebridge` from Rust source |
 
 The auxiliary Workers (`@cubby/upc-lookup` and `@cubby/usda-api`) are included in
 recursive checks/tests. Their D1 databases do not use the web `db:push` workflow:
@@ -379,11 +381,12 @@ In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame su
 | Suffix | Purpose | Runner |
 |---|---|---|
 | `*.unit.test.ts` | Unit tests | Vitest |
-| `*.integration.test.ts` | Repository integration; portable subset also runs on PGlite | Vitest |
+| `*.integration.test.ts` | Authoritative PostgreSQL contracts | Vitest |
 | `*.spec.ts` | E2E tests | Playwright |
 
-Local E2E uses one ephemeral PGlite database per run; CI uses an IntegreSQL
-PostgreSQL clone. See `e2e-helpers.ts` for the shared browser fixtures.
+Local and CI E2E use an isolated IntegreSQL PostgreSQL clone. A targeted PGlite
+browser run is available only through `test:e2e:pglite`. See `e2e-helpers.ts`
+for the shared browser fixtures.
 
 ### File Naming Conventions
 

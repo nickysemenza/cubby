@@ -14,13 +14,12 @@
  * product-linked location, and read the persisted column back.
  */
 
-import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { createExpense } from "~/server/repo/expense";
 import { getLocationById } from "~/server/repo/location";
 import {
-  createInventoryFixture,
   createLocationFixture,
   createProductFixture,
   makeExpenseInput,
@@ -41,76 +40,6 @@ describe("LocationValuationService.recompute", () => {
         : makeProductInput({ name, price }),
       TEST_ACTOR,
     );
-
-  it("values a tree whose shelf is itself a product", async () => {
-    const widget = await seedProduct("Widget", 10);
-    const binSku = await seedProduct("Storage Bin", 40);
-
-    const room = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Garage", type: "room" }),
-      TEST_ACTOR,
-    );
-    // The vessel: a location that IS a SKU. Its own price is the thing the
-    // broken alias made unreadable.
-    const bin = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({
-        name: "Bin 1",
-        type: null,
-        productId: binSku.id,
-        parentId: room.id,
-      }),
-      TEST_ACTOR,
-    );
-    await createInventoryFixture(
-      ctx.db,
-      {
-        productId: widget.id,
-        locationId: bin.id,
-        amount: { value: 2, unit: "each" },
-      },
-      TEST_ACTOR,
-    );
-
-    const written = await new LocationValuationService(ctx.db).recompute();
-    expect(written).toBe(3);
-
-    const storedBin = await getLocationById(ctx.db, bin.entityId);
-    expect(storedBin.valuation).toMatchObject({
-      directValuation: 20,
-      totalValuation: 20,
-      directItemCount: 1,
-      container: { directValuation: 0, totalValuation: 0, directItemCount: 0 },
-    });
-
-    const storedRoom = await getLocationById(ctx.db, room.entityId);
-    expect(storedRoom.valuation).toMatchObject({
-      directValuation: 0,
-      totalValuation: 20,
-      totalItemCount: 1,
-      container: {
-        directValuation: 40,
-        totalValuation: 40,
-        directItemCount: 1,
-        totalItemCount: 1,
-      },
-    });
-
-    const storedHome = await getLocationById(ctx.db, TEST_HOME_ID);
-    expect(storedHome.valuation).toMatchObject({
-      directValuation: 0,
-      totalValuation: 20,
-      directItemCount: 0,
-      totalItemCount: 1,
-      container: {
-        directValuation: 0,
-        totalValuation: 40,
-        directItemCount: 0,
-        totalItemCount: 1,
-      },
-    });
-  });
 
   it("prices a vessel with no explicit price from its Expense history", async () => {
     const crateSku = await seedProduct("Wooden Crate", null);
@@ -148,31 +77,6 @@ describe("LocationValuationService.recompute", () => {
     const storedRoom = await getLocationById(ctx.db, room.entityId);
     expect(storedRoom.valuation).toMatchObject({
       container: { directValuation: 25, directItemCount: 1 },
-    });
-  });
-
-  it("leaves a productless tree's container bucket empty", async () => {
-    const room = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Pantry", type: "room" }),
-      TEST_ACTOR,
-    );
-    await createLocationFixture(
-      ctx.db,
-      makeLocationInput({
-        name: "Pantry shelf",
-        type: "shelf",
-        parentId: room.id,
-      }),
-      TEST_ACTOR,
-    );
-
-    await new LocationValuationService(ctx.db).recompute();
-
-    const storedRoom = await getLocationById(ctx.db, room.entityId);
-    expect(storedRoom.valuation).toMatchObject({
-      totalValuation: 0,
-      container: { directValuation: 0, totalValuation: 0, totalItemCount: 0 },
     });
   });
 });

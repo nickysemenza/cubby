@@ -25,8 +25,10 @@ const fixtureSessionSchema = z.object({
   user: z.object({ id: z.string().min(1) }).optional(),
 });
 const createdEntitySchema = z.object({ id: z.string().min(1) });
+type FixtureUserId = ReturnType<typeof testUserId>;
 
 let fixtureDb: Database | undefined;
+const fixtureUserIds = new WeakMap<object, Promise<FixtureUserId>>();
 
 function getFixtureDb(): Database {
   if (fixtureDb) return fixtureDb;
@@ -46,15 +48,25 @@ function getFixtureDb(): Database {
   return fixtureDb;
 }
 
-async function fixtureUserId(page: Page) {
-  const response = await page.request.get("/api/auth/get-session");
-  if (!response.ok()) {
-    throw new Error(`Fixture session lookup failed: ${response.status()}`);
-  }
-  const session = fixtureSessionSchema.parse(await response.json());
-  const userId = session.user?.id;
-  if (!userId) throw new Error("Fixture session has no authenticated user id");
-  return testUserId(userId);
+function fixtureUserId(page: Page): Promise<FixtureUserId> {
+  const context = page.context();
+  const existing = fixtureUserIds.get(context);
+  if (existing) return existing;
+
+  const pending = (async () => {
+    const response = await page.request.get("/api/auth/get-session");
+    if (!response.ok()) {
+      throw new Error(`Fixture session lookup failed: ${response.status()}`);
+    }
+    const session = fixtureSessionSchema.parse(await response.json());
+    const userId = session.user?.id;
+    if (!userId) {
+      throw new Error("Fixture session has no authenticated user id");
+    }
+    return testUserId(userId);
+  })();
+  fixtureUserIds.set(context, pending);
+  return pending;
 }
 
 async function createFixture<Input>(

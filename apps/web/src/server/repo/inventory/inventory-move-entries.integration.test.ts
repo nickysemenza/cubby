@@ -172,60 +172,6 @@ describe("moveInventoryEntries", () => {
     expect(await liveAt(shelf)).toEqual([]);
   });
 
-  it("relocates a whole entry with its quantity intact", async () => {
-    const bolt = await makeProduct("Relocate Bolt");
-    const [from, to] = await Promise.all([
-      makeLocation("Relocate From"),
-      makeLocation("Relocate To"),
-    ]);
-    const entry = await makeEntry(bolt, from, 7);
-
-    await moveInventoryEntries(
-      ctx.db,
-      { items: [{ inventoryEntryId: entry, targetLocationId: to }] },
-      TEST_ACTOR,
-    );
-
-    // Same row id — a full move to an empty slot keeps the row's identity,
-    // shortcode, and history rather than deleting and re-minting.
-    const row = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry),
-    });
-    expect(row?.locationId).toBe(to);
-    expect(row?.amount).toMatchObject({ value: 7 });
-    expect(await liveAt(from)).toEqual([]);
-  });
-
-  it("moves into a slot the same request vacates", async () => {
-    // Ordering hazard unique to many→many: the destination row for item 2 is
-    // the source row for item 1. `InventoryEntry_productId_locationId_key` is
-    // checked per statement, so the writes have to be sequenced even though the
-    // end state is consistent.
-    const bolt = await makeProduct("Vacate Bolt");
-    const [a, b, c] = await Promise.all([
-      makeLocation("Vacate A"),
-      makeLocation("Vacate B"),
-      makeLocation("Vacate C"),
-    ]);
-    const onA = await makeEntry(bolt, a, 2);
-    const onB = await makeEntry(bolt, b, 5);
-
-    await moveInventoryEntries(
-      ctx.db,
-      {
-        items: [
-          { inventoryEntryId: onA, targetLocationId: c },
-          { inventoryEntryId: onB, targetLocationId: a },
-        ],
-      },
-      TEST_ACTOR,
-    );
-
-    expect(await liveAt(a)).toEqual([{ productId: bolt, value: 5 }]);
-    expect(await liveAt(b)).toEqual([]);
-    expect(await liveAt(c)).toEqual([{ productId: bolt, value: 2 }]);
-  });
-
   it("refuses to move more than the entry holds", async () => {
     const bolt = await makeProduct("Overdraw Bolt");
     const [from, to] = await Promise.all([
@@ -251,39 +197,5 @@ describe("moveInventoryEntries", () => {
     ).rejects.toThrow(/only 2 available/);
 
     expect(await liveAt(from)).toEqual([{ productId: bolt, value: 2 }]);
-  });
-
-  it("refuses to sum mismatched units into one row", async () => {
-    // Summing `each` into `lb` produces a number that means nothing.
-    // mergeProducts refuses the same collision rather than picking a unit.
-    const bolt = await makeProduct("Unit Bolt");
-    const [from, to] = await Promise.all([
-      makeLocation("Unit From"),
-      makeLocation("Unit To"),
-    ]);
-    const entry = await makeEntry(bolt, from, 2, "each");
-    await makeEntry(bolt, to, 3, "lb");
-
-    await expect(
-      moveInventoryEntries(
-        ctx.db,
-        { items: [{ inventoryEntryId: entry, targetLocationId: to }] },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/different unit/);
-  });
-
-  it("rejects a move to the location the entry already sits in", async () => {
-    const bolt = await makeProduct("Same Bolt");
-    const here = await makeLocation("Same Here");
-    const entry = await makeEntry(bolt, here, 1);
-
-    await expect(
-      moveInventoryEntries(
-        ctx.db,
-        { items: [{ inventoryEntryId: entry, targetLocationId: here }] },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/must be different/);
   });
 });

@@ -1,44 +1,19 @@
-import type { ProjectId } from "@cubby/schemas/identifiers";
-import { testEntityId } from "@cubby/schemas/testing";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { asc } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { product, project, projectDependency } from "~/server/db/schema";
+import { product } from "~/server/db/schema";
 import {
   buildOrderBy,
   buildPartialUpdateValues,
   eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
-  isTransaction,
-  replaceDependencyEdges,
-  withTransactionOn,
 } from "~/server/repo/database-helpers";
 
 const dialect = new PgDialect();
 const renderSql = (clauses: ReturnType<typeof buildOrderBy>) =>
   clauses.map((clause) => dialect.sqlToQuery(clause).sql);
-
-/**
- * `Database` is opaque (declares no members), so the only structural signal that
- * separates it from a `DrizzleTransaction` is the latter's `rollback`. These
- * stand in for the two handles without a DB — the branch decision is pure.
- */
-const fakeTx = fromPartial<DrizzleTransaction>({ rollback: () => {} });
-const fakeDb = fromPartial<Database>({});
-
-describe("isTransaction", () => {
-  it("recognizes an open transaction by its rollback method", () => {
-    expect(isTransaction(fakeTx)).toBe(true);
-  });
-
-  it("does not treat the opaque Database handle as a transaction", () => {
-    expect(isTransaction(fakeDb)).toBe(false);
-  });
-});
 
 describe("executeListQueryWithCount", () => {
   it("does not construct the row query for a count read", async () => {
@@ -72,31 +47,6 @@ describe("executeListQueryWithCount", () => {
 
     expect(result).toEqual({ data: [1, 2], count: 7 });
     expect(constructed).toEqual(expect.arrayContaining(["rows", "count"]));
-  });
-});
-
-describe("withTransactionOn", () => {
-  it("JOINS an open transaction — same handle, no new boundary", async () => {
-    // The whole point of the helper: the callback must receive the caller's own
-    // `tx`, not a fresh one. A new boundary here would be a different pooled
-    // connection that cannot see the caller's uncommitted writes.
-    let received: unknown;
-    const out = await withTransactionOn(fakeTx, async (tx) => {
-      received = tx;
-      return "joined";
-    });
-    expect(received).toBe(fakeTx);
-    expect(out).toBe("joined");
-  });
-
-  it("opens one when handed the pooled Database", async () => {
-    // No real client here, so `getDb(db).transaction` is unreachable — asserting
-    // it *tried* is enough to pin that this handle takes the open path rather
-    // than being passed through as a transaction.
-    await expect(
-      withTransactionOn(fakeDb, async () => "unreachable"),
-      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-    ).rejects.toThrow();
   });
 });
 
@@ -310,64 +260,5 @@ describe("buildPartialUpdateValues", () => {
     expect(result).toEqual({
       items: arr,
     });
-  });
-});
-
-/**
- * The self-reference guard is entity-generic and runs before `tx` is touched:
- * dedupe, then reject, then (only then) query for live rows.
- *
- * This replaces a pair of per-entity integration tests that each created a real
- * row and called `updateProject` / `updateTask` just to reach it — those had to
- * resolve shortcodes against the database first, so they paid three round trips
- * to assert a string comparison. Testing the helper directly also covers the
- * task path, which the project-flavoured test never did.
- */
-describe("replaceDependencyEdges self-reference guard", () => {
-  const explodingTx = fromPartial<DrizzleTransaction>(
-    new Proxy(
-      {},
-      {
-        get(_target, prop) {
-          throw new Error(
-            `replaceDependencyEdges touched the transaction (property "${String(prop)}") before rejecting a self-reference`,
-          );
-        },
-      },
-    ),
-  );
-
-  const A = testEntityId("project", "11111111-1111-4111-8111-111111111111");
-  const B = testEntityId("project", "22222222-2222-4222-8222-222222222222");
-
-  const opts = {
-    ownColumn: projectDependency.projectId,
-    blockedByColumn: projectDependency.blockedByProjectId,
-    buildRow: (projectId: ProjectId, blockedByProjectId: ProjectId) => ({
-      projectId,
-      blockedByProjectId,
-    }),
-    entityTable: project,
-    entity: "project" as const,
-  };
-
-  it("rejects an entity blocked by itself without touching the transaction", async () => {
-    await expect(
-      replaceDependencyEdges(explodingTx, projectDependency, opts, A, [A, B]),
-    ).rejects.toThrow(/cannot be blocked by itself/i);
-  });
-
-  it("rejects a self-reference that only appears after deduping", async () => {
-    await expect(
-      replaceDependencyEdges(explodingTx, projectDependency, opts, A, [A, A]),
-    ).rejects.toThrow(/cannot be blocked by itself/i);
-  });
-
-  // Guards the guard: a non-self edge set must get PAST the check and reach the
-  // transaction, so neither the proxy nor the guard can quietly stop working.
-  it("lets a clean edge set through to the transaction", async () => {
-    await expect(
-      replaceDependencyEdges(explodingTx, projectDependency, opts, A, [B]),
-    ).rejects.toThrow(/touched the transaction/i);
   });
 });

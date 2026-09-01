@@ -1,15 +1,17 @@
-import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   createIngredientFixture,
   createProductFixture,
+  createRecipeFixture,
+  ingredientRef,
   makeProductInput,
+  makeRecipeInput,
 } from "~/server/repo/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { recomputeRecipesForPriceAffectedProducts } from "./expense-pricing.service";
-import type { RecipeCostingService } from "./recipe-costing.service";
 
 describe("recomputeRecipesForPriceAffectedProducts", () => {
   const ctx = withTestDb();
@@ -30,10 +32,22 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       makeProductInput({ name: "Non-food product" }),
       ctx.actor,
     );
-    const recomputeForIngredients = vi.fn().mockResolvedValue([]);
-    const service = fromPartial<RecipeCostingService>({
-      recomputeForIngredients,
-    });
+    await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({
+        name: "Expense-priced recipe",
+        sections: [
+          {
+            instructions: [{ instruction: "Mix" }],
+            ingredients: [ingredientRef(ingredient.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const service = createTestRequestContext(ctx.db, {
+      auth: { userId: ctx.actor.userId },
+    }).services.recipeCosting;
 
     const result = await recomputeRecipesForPriceAffectedProducts(
       ctx.db,
@@ -42,11 +56,13 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       "expense.test",
     );
 
-    expect(result).toEqual([]);
-    expect(recomputeForIngredients).toHaveBeenCalledOnce();
-    expect(recomputeForIngredients).toHaveBeenCalledWith(
-      [ingredient.entityId],
-      { source: "expense.test" },
-    );
+    expect(result).toEqual([
+      expect.objectContaining({
+        kind: "recipe-totals.recompute",
+        processor: "inline",
+        status: "succeeded",
+        totalJobs: 1,
+      }),
+    ]);
   });
 });

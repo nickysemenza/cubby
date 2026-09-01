@@ -370,7 +370,7 @@ jobs:
       matrix:
         include:
           - tier: node
-            args: --project unit --project unit-pure --project pglite --project pglite-integration --project mcp-contract
+            args: --project unit --project unit-pure --project mcp-contract
           - tier: ui
             args: --project ui
     steps:

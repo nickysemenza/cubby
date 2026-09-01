@@ -7,8 +7,7 @@ test.describe("Main navigation", () => {
     // Mobile viewport first so the page renders the (md:hidden) bottom nav from
     // the start.
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const bottomNav = page.getByRole("navigation", { name: "Main navigation" });
     await expect(bottomNav).toBeVisible();

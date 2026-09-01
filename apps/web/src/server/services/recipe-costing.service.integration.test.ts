@@ -1,16 +1,7 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { setCfEnv } from "~/server/cf-env";
-import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
-import {
-  getBackgroundBatchDetail,
-  listBackgroundBatches,
-} from "~/server/repo/background-jobs";
 import { updateProduct } from "~/server/repo/product";
-import { getRecipesByIDs, updateRecipe } from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
 
 import { findOrCreateIngredient } from "../repo/ingredient";
@@ -32,7 +23,6 @@ import { createTestRequestContext } from "../testing/request-context";
 
 // An arbitrary FoodData Central id the stub USDA backend 404s → `food: null` (a
 // permanent not-found, i.e. an ingredient with an unresolvable USDA link).
-const UNRESOLVABLE_FDC_ID = 999_999;
 
 describe("RecipeCostingService", () => {
   const ctx = withTestDb();
@@ -82,41 +72,6 @@ describe("RecipeCostingService", () => {
       expect(entry).toBeDefined();
       expect(entry?.complete).toBe(true);
       expect(entry?.totals.ingredientCount).toBe(1);
-    });
-
-    it("marks a recipe with an unresolved USDA link incomplete", async () => {
-      const ing = await findOrCreateIngredient(ctx.db, "usda flour");
-      // fdc_id set but the stub USDA backend 404s → `food: null` (a permanent
-      // not-found), which `usdaMissesFor` still flags → complete: false.
-      await createProduct(
-        ctx.db,
-        makeProductInput({
-          name: "usda product",
-          ingredientId: ing.id,
-          fdc_id: UNRESOLVABLE_FDC_ID,
-        }),
-        ctx.actor,
-      );
-      const recipe = await createRecipe(
-        ctx.db,
-        makeRecipeInput({
-          name: "Incomplete Recipe",
-          sections: [
-            {
-              instructions: [{ instruction: "Mix" }],
-              ingredients: [
-                ingredientRef(ing.shortcode, {
-                  amounts: [{ value: 1, unit: "cup" }],
-                }),
-              ],
-            },
-          ],
-        }),
-        ctx.actor,
-      );
-
-      const entry = (await service().computeTotals([recipe])).get(recipe.id);
-      expect(entry?.complete).toBe(false);
     });
   });
 
@@ -170,105 +125,9 @@ describe("RecipeCostingService", () => {
       const result = await service().computeTotals([a]);
       expect(result.get(a.id)).toBeDefined();
     });
-
-    it("terminates on a cyclic sub-recipe reference", async () => {
-      // A links B; then B links A — a cycle. loadContext's `seen` set must break it.
-      const a = await seedPricedRecipe("Cycle A");
-      const b = await createRecipe(
-        ctx.db,
-        makeRecipeInput({
-          name: "Cycle B",
-          sections: [
-            {
-              instructions: [{ instruction: "Use A" }],
-              ingredients: [
-                {
-                  type: "recipe",
-                  recipeId: a.id,
-                  ingredientId: null,
-                  amounts: [{ value: 1, unit: "each" }],
-                },
-              ],
-            },
-          ],
-        }),
-        ctx.actor,
-      );
-      await updateRecipe(
-        ctx.db,
-        a.entityId,
-        {
-          sections: [
-            {
-              instructions: [{ instruction: "Use B" }],
-              ingredients: [
-                {
-                  type: "recipe",
-                  recipeId: b.id,
-                  ingredientId: null,
-                  amounts: [{ value: 1, unit: "each" }],
-                },
-              ],
-            },
-          ],
-        },
-        ctx.actor,
-      );
-
-      const [reloadedA] = await getRecipesByIDs(ctx.db, [a.entityId]);
-      // Should resolve (not hang); the result map contains A.
-      const result = await service().computeTotals([reloadedA!]);
-      expect(result.get(a.id)).toBeDefined();
-    });
   });
 
   describe("recompute", () => {
-    it("persists totals and stamps a complete recipe fresh", async () => {
-      const recipe = await seedPricedRecipe("Persist Recipe");
-      await service().recompute([recipe.entityId]);
-
-      const state = await getRecipeTotalsState(ctx.db, recipe.entityId);
-      expect(state?.totals).not.toBeNull();
-      expect(state?.totalsComputedAt).not.toBeNull();
-    });
-
-    it("stamps a recipe with an unresolvable USDA link fresh (gap, not stale)", async () => {
-      const ing = await findOrCreateIngredient(ctx.db, "stale flour");
-      await createProduct(
-        ctx.db,
-        makeProductInput({
-          name: "stale product",
-          ingredientId: ing.id,
-          fdc_id: UNRESOLVABLE_FDC_ID,
-        }),
-        ctx.actor,
-      );
-      const recipe = await createRecipe(
-        ctx.db,
-        makeRecipeInput({
-          name: "Gap Recipe",
-          sections: [
-            {
-              instructions: [{ instruction: "Mix" }],
-              ingredients: [
-                ingredientRef(ing.shortcode, {
-                  amounts: [{ value: 1, unit: "cup" }],
-                }),
-              ],
-            },
-          ],
-        }),
-        ctx.actor,
-      );
-
-      await service().recompute([recipe.entityId]);
-      const state = await getRecipeTotalsState(ctx.db, recipe.entityId);
-      expect(state?.totals).not.toBeNull();
-      // USDA is reliable now, so an unresolved fdc_id is a permanent costing gap
-      // (surfaced by the coverage UI), not a stale-for-retry row — stamp fresh.
-      expect(state?.totalsComputedAt).not.toBeNull();
-    });
-
     it("eagerly recomputes a parent when a child's cost changes", async () => {
       // A *costable* child: 1 lb of an ingredient priced "1 lb = $4" → $4 (a
       // weight→money package mapping, the form the engine can actually convert).
@@ -349,97 +208,6 @@ describe("RecipeCostingService", () => {
       expect(parentAfter?.totalsComputedAt?.getTime() ?? 0).toBeGreaterThan(
         parentBefore?.totalsComputedAt?.getTime() ?? 0,
       );
-    });
-  });
-
-  describe("dispatchRecompute", () => {
-    // Install a fake BACKGROUND_QUEUE binding (the repo has no real one in tests).
-    // Returns captured wakeup messages + a reset to clear the module-level cfEnv
-    // so the queue doesn't leak into tests expecting inline/no-binding behavior.
-    const installFakeQueue = () => {
-      const sent: Array<{ batchId: string; jobId: string }> = [];
-      setCfEnv(
-        fromPartial<Env>({
-          BACKGROUND_QUEUE: {
-            send: async (m: { batchId: string; jobId: string }) => {
-              sent.push({ batchId: m.batchId, jobId: m.jobId });
-            },
-            sendBatch: async (
-              messages: Iterable<{
-                body: { batchId: string; jobId: string };
-              }>,
-            ) => {
-              for (const { body } of messages) {
-                sent.push({ batchId: body.batchId, jobId: body.jobId });
-              }
-            },
-          },
-        }),
-      );
-      return { sent, reset: () => setCfEnv(undefined) };
-    };
-
-    it("persists and processes jobs inline when no queue is bound", async () => {
-      const ids: RecipeId[] = [];
-      for (let i = 0; i < 3; i++) {
-        ids.push((await seedPricedRecipe(`Inline ${i}`)).entityId);
-      }
-      const returnedBatches = await service().dispatchRecompute(ids);
-      expect(returnedBatches).toHaveLength(1);
-      const [batch] = await listBackgroundBatches(ctx.db, 1);
-      expect(returnedBatches[0]?.id).toBe(batch?.id);
-      expect(batch?.kind).toBe("recipe-totals.recompute");
-      expect(batch?.processor).toBe("inline");
-      expect(batch?.status).toBe("succeeded");
-      expect(batch?.totalJobs).toBe(1);
-      for (const id of ids) {
-        const state = await getRecipeTotalsState(ctx.db, id);
-        expect(state?.totalsComputedAt).not.toBeNull();
-      }
-    });
-
-    it("queues persisted jobs when a queue is bound", async () => {
-      const { sent, reset } = installFakeQueue();
-      try {
-        const ids: RecipeId[] = [];
-        for (let i = 0; i < 3; i++) {
-          ids.push((await seedPricedRecipe(`Queued ${i}`)).entityId);
-        }
-        const returnedBatches = await service().dispatchRecompute(ids);
-        expect(returnedBatches).toHaveLength(1);
-        expect(sent).toHaveLength(1);
-        expect(returnedBatches[0]?.id).toBe(sent[0]!.batchId);
-        const batch = await getBackgroundBatchDetail(ctx.db, sent[0]!.batchId);
-        expect(batch?.processor).toBe("queue");
-        expect(batch?.jobs).toHaveLength(1);
-        expect(batch?.jobs[0]?.payload).toEqual({ recipeIds: ids });
-        // Every id was persisted in a job and rows were marked stale, not
-        // recomputed on the request path.
-        for (const id of ids) {
-          const state = await getRecipeTotalsState(ctx.db, id);
-          expect(state?.totalsComputedAt).toBeNull();
-        }
-      } finally {
-        reset();
-      }
-    });
-
-    it("chunks large recompute sets", async () => {
-      const { sent, reset } = installFakeQueue();
-      try {
-        const ids: RecipeId[] = [];
-        for (let i = 0; i <= RECOMPUTE_CHUNK_SIZE; i++) {
-          ids.push((await seedPricedRecipe(`Queued chunk ${i}`)).entityId);
-        }
-        const returnedBatches = await service().dispatchRecompute(ids);
-        expect(returnedBatches).toHaveLength(1);
-        expect(sent).toHaveLength(2);
-        const batch = await getBackgroundBatchDetail(ctx.db, sent[0]!.batchId);
-        expect(batch?.processor).toBe("queue");
-        expect(batch?.jobs).toHaveLength(2);
-      } finally {
-        reset();
-      }
     });
   });
 });

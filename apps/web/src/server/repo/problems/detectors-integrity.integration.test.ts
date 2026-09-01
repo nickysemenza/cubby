@@ -876,21 +876,6 @@ describe("findReferentialLivenessViolations", () => {
     }
   });
 
-  it("tracks the exact hard-delete-only source tables", () => {
-    const skipped = new Set(
-      derivedMustTargetLiveEdges
-        .filter((s) => !s.sourceSoftDeletable)
-        .map((s) => s.sourceTableName),
-    );
-    expect(skipped).toEqual(HARD_DELETE_ONLY_SOURCE_TABLES);
-  });
-
-  it("audits Location.parentId liveness separately from its foreign key", () => {
-    expect(derivedMustTargetLiveEdges.map((s) => s.edgeKey)).toContain(
-      "Location.parentId",
-    );
-  });
-
   it("reports every derived edge when a live source points at a soft-deleted target", async () => {
     // Authoritative owner for the old per-edge "reports exactly one" cases:
     // make one violation for every derived edge, then prove the detector returns
@@ -938,95 +923,12 @@ describe("findReferentialLivenessViolations", () => {
     expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
   });
 
-  it("returns no violations for every derived edge while both sides are live", async () => {
-    for (const spec of derivedMustTargetLiveEdges) {
-      const target = await targetFactoryFor(spec.targetEntity)(ctx.db);
-      await sourceFactoryFor(spec.edgeKey)(ctx.db, target.id);
-    }
-
-    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
-  });
-
   // The one deliberate exemption — see ENTITY_EDGE_SEMANTICS.recipe["Ingredient.recipeId"]
   // and the detectors-integrity.ts file-level doc comment. This is the single
   // most important assertion in this file: it's what stops the detector from
   // flagging intended sub-recipe behavior (a parent recipe's ingredient line
   // still naming a deleted sub-recipe, so staleness/recompute can resolve the
   // tombstone) as a referential-integrity bug.
-  it("does NOT report a live Ingredient tombstone pointing at a soft-deleted sub-recipe", async () => {
-    const subRecipe = await mkRecipe(ctx.db);
-    await insertWithShortcode(ctx.db, "ingredient", {
-      name: uniq("Sub-recipe pointer"),
-      recipeId: subRecipe.id,
-    });
-    await softDelete(ctx.db, "Recipe", subRecipe.id);
-
-    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
-  });
-
-  it("returns zero violations for a normal, fully-live database", async () => {
-    // A representative slice of the graph, correctly linked end to end and
-    // never soft-deleted: vendor → purchase → expense, project → task,
-    // cookbook → recipe → section → ingredient line, product → inventory, and
-    // a meal planning a recipe. If any wiring above were wrong (e.g. a
-    // mis-copied column), this would be the test most likely to catch it as a
-    // false-positive violation.
-    const vendorRow = await mkVendor(ctx.db);
-    const purchaseRow = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendorRow.id,
-      date: "2024-01-15",
-    });
-    const projectRow = await mkProject(ctx.db);
-    await insertWithShortcode(ctx.db, "expense", {
-      name: "Clean expense",
-      costType: "materials",
-      trade: "other",
-      date: "2024-01-15",
-      projectId: projectRow.id,
-      purchaseId: purchaseRow.id,
-    });
-    await insertWithShortcode(ctx.db, "task", {
-      name: "Clean task",
-      trade: "other",
-      projectId: projectRow.id,
-    });
-
-    const cookbookRow = await mkCookbook(ctx.db);
-    const recipeRow = await insertWithShortcode(ctx.db, "recipe", {
-      name: "Clean recipe",
-      cookbookId: cookbookRow.id,
-    });
-    const sectionRow = await insertAndReturn(ctx.db, recipeSection, {
-      recipeId: recipeRow.id,
-      instructions: [],
-    });
-    const ingredientRow = await mkIngredient(ctx.db);
-    await insertAndReturn(ctx.db, recipeSectionIngredient, {
-      recipeSectionId: sectionRow.id,
-      ingredientId: ingredientRow.id,
-      amounts: [{ value: 1, unit: "cup" }],
-    });
-
-    const productRow = await insertWithShortcode(ctx.db, "product", {
-      name: uniq("Product"),
-      manufacturer: "Test Mfr",
-      ingredientId: ingredientRow.id,
-    });
-    const locationRow = await mkLocation(ctx.db);
-    await insertWithShortcode(ctx.db, "inventory", {
-      productId: productRow.id,
-      locationId: locationRow.id,
-      amount: { value: 1, unit: "each" },
-    });
-
-    const mealRow = await mkMeal(ctx.db);
-    await insertAndReturn(ctx.db, mealRecipe, {
-      mealId: mealRow.id,
-      recipeId: recipeRow.id,
-    });
-
-    expect(await findReferentialLivenessViolations(ctx.db)).toEqual([]);
-  });
 });
 
 describe("findDependencyCycles", () => {

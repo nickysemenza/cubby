@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/related-view";
 import { testShortcode } from "@cubby/schemas/testing";
 import { vendorOut } from "@cubby/schemas/vendor";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
@@ -150,7 +150,9 @@ describe("EntityWorkbenchInspector", () => {
     expect(await screen.findByText("Fixture purchase")).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(await screen.findByText("No activity yet")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByText("No activity yet")).toBeVisible();
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Close inspector" }));
     expect(closeCount).toBe(1);

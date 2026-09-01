@@ -1,4 +1,5 @@
-import { addInventory, createLocation, createProduct } from "./e2e-helpers";
+import { seedInventoryPrerequisites } from "./e2e-fixtures";
+import { gotoAuthenticatedPage, reloadAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("recount is current-pass scoped, resumable, and completes with a summary", async ({
@@ -9,28 +10,32 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
   const firstProduct = `Recount wrench ${suffix}`;
   const secondProduct = `Recount clamp ${suffix}`;
 
-  await createLocation(page, locationName);
-  // The detail URL is the public id now, and so is the session's `parent`
-  // search param — no uuid ever reaches a URL, query string included.
-  const locationCode = page.url().split("/").pop();
+  const { location } = await seedInventoryPrerequisites(page, {
+    locationName,
+    products: [
+      { name: firstProduct, quantity: 1, unit: "each" },
+      { name: secondProduct, quantity: 1, unit: "each" },
+    ],
+  });
+  // The public id is also the session's `parent` search param — no uuid ever
+  // reaches a URL, query string included.
+  const locationCode = location.id;
   expect(locationCode).toMatch(/^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$/);
-  await createProduct(page, firstProduct);
-  await createProduct(page, secondProduct);
-  await addInventory(page, firstProduct, locationName, 1, "each");
-  await addInventory(page, secondProduct, locationName, 1, "each");
 
-  await page.goto(`/inventory/session?parent=${locationCode}`);
-  await page.waitForLoadState("networkidle");
-
-  await expect(
-    page.getByRole("button", { name: /Add something here/ }),
-  ).toBeVisible();
+  const addButton = page.getByRole("button", { name: /Add something here/ });
+  await gotoAuthenticatedPage(
+    page,
+    `/inventory/session?parent=${locationCode}`,
+    addButton,
+  );
   await expect(page.getByRole("combobox", { name: "manual add" })).toBeHidden();
   await expect(
     page.getByRole("button", { name: "Decrease quantity" }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: `Change ${firstProduct}` }).click();
+  await page
+    .getByRole("button", { name: `Change ${firstProduct}` })
+    .dispatchEvent("click");
   await expect(
     page.getByRole("button", { name: "Decrease quantity" }),
   ).toBeVisible();
@@ -53,12 +58,10 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
     page.getByText("1 location saved · 2 items confirmed"),
   ).toBeVisible();
 
-  await page.reload({ waitUntil: "networkidle" });
-  await expect(
-    page.getByRole("heading", {
-      name: `${locationName} recount complete`,
-    }),
-  ).toBeVisible();
+  const completedHeading = page.getByRole("heading", {
+    name: `${locationName} recount complete`,
+  });
+  await reloadAuthenticatedPage(page, completedHeading);
 
   await page
     .getByRole("button", { name: `Recount ${locationName} again` })

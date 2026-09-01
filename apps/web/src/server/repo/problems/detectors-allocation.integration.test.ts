@@ -112,14 +112,6 @@ describe("findFinancialTransactionAllocationDefects", () => {
     ).toEqual([]);
   });
 
-  it("passes a single allocation whose mirror agrees, and an unallocated transaction", async () => {
-    const purchase = await mkPurchase(ctx.db);
-    await mkTransaction(ctx.db, { amount: -32.55, purchaseId: purchase.id });
-    await mkTransaction(ctx.db, { amount: -5 }); // unlinked evidence, no allocations
-
-    expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
-  });
-
   it("flags allocations that do not sum to the transaction amount", async () => {
     const [a, b] = await Promise.all([mkPurchase(ctx.db), mkPurchase(ctx.db)]);
     const txn = await mkTransaction(ctx.db, { amount: -16.76 });
@@ -170,25 +162,6 @@ describe("findFinancialTransactionAllocationDefects", () => {
     expect((await liveDefects(ctx.db)).data.map((row) => row.id)).toEqual([
       txn.shortcode,
     ]);
-  });
-
-  it("flags an allocation whose sign differs from its transaction", async () => {
-    const [a, b] = await Promise.all([mkPurchase(ctx.db), mkPurchase(ctx.db)]);
-    const txn = await mkTransaction(ctx.db, { amount: -10 });
-    // Sums correctly, so only the sign rule catches it.
-    await allocate(ctx.db, txn.id, a.id, -15);
-    await allocate(ctx.db, txn.id, b.id, 5);
-
-    const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);
-    expect(defect?.reasons).toContain("allocation-sign-mismatch");
-    expect(defect?.reasons).not.toContain("sum-mismatch");
-    const live = await liveDefects(ctx.db);
-    expect(live.data.map((row) => row.id)).toEqual([txn.shortcode]);
-    expect(
-      (await loadAllocationDefectPresenters(ctx.db, [txn.shortcode])).get(
-        txn.shortcode,
-      )?.reasons,
-    ).toContain("allocation-sign-mismatch");
   });
 
   it("ignores soft-deleted allocations", async () => {

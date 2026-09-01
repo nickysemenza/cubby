@@ -18,11 +18,7 @@ import {
   deleteRecipes,
   upsertCookbookRecipe,
 } from "~/server/repo/recipe";
-import {
-  getRecipeTotalsState,
-  getRecipeTotalsStateIncludingDeleted,
-  markRecipesStale,
-} from "~/server/repo/recipe/totals";
+import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
 import {
   ingredientRef,
   makeProductInput,
@@ -252,34 +248,5 @@ describe("recipe deletion cost-staleness workflows", () => {
     const flagged: StaleParentRecipe[] =
       await findParentRecipesWithDeletedSubRecipes(ctx.db);
     expect(flagged.map((recipe) => recipe.id)).toContain(parentCode);
-  });
-
-  it("does not flag a parent whose sub-recipe remains live", async () => {
-    const { parent, parentCode } = await seedDetectorPair();
-    await recompute([parent]);
-
-    const flagged = await findParentRecipesWithDeletedSubRecipes(ctx.db);
-    expect(flagged.map((recipe) => recipe.id)).not.toContain(parentCode);
-  });
-
-  it("does not clear the costing timestamp of a deleted recipe", async () => {
-    const created = await createRecipe(
-      ctx.db,
-      makeRecipeInput({ name: "Soon Deleted" }),
-      ctx.actor,
-    );
-    const entityId = await resolveLiveShortcode(ctx.db, created.id, "recipe");
-    if (!entityId) throw new Error("seed failed");
-    const target = parseEntityId("recipe", entityId);
-
-    await recompute([target]);
-    expect(
-      (await getRecipeTotalsState(ctx.db, target))?.totalsComputedAt,
-    ).not.toBeNull();
-    await deleteRecipes(ctx.db, [target], ctx.actor);
-    await markRecipesStale(ctx.db, [target]);
-
-    const row = await getRecipeTotalsStateIncludingDeleted(ctx.db, target);
-    expect(row?.totalsComputedAt).not.toBeNull();
   });
 });

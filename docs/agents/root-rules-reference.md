@@ -10,23 +10,22 @@ The **[Tenets](../../README.md#tenets)** there are binding on design proposals: 
 - Do not delegate small or inherently sequential tasks. Do not let multiple agents edit overlapping files concurrently; use isolated worktrees and disjoint ownership for parallel write-heavy work.
 - For change, build, and fix requests, make the requested in-scope changes and validate them proportionally. Run targeted checks first; run `pnpm run check` plus relevant tests for broad or cross-layer changes.
 - **Run the narrowest tier that can fail.** `pnpm test` is Docker-free and runs
-  the repo's unit/UI tests plus its portable PGlite database subset. Prefer,
-  from the repo root: `pnpm test:unit`, `pnpm test:ui`, `pnpm test:pglite`, or
-  `pnpm test:changed` (Vitest `--changed`; pass a ref for a branch diff). A
+  the repo's fast unit/UI/contract and auxiliary-package tests. Prefer, from
+  the repo root: `pnpm test:unit`, `pnpm test:ui`, or `pnpm test:changed`
+  (Vitest `--changed`; pass a ref for a branch diff). A
   single portable file is faster still with `pnpm test:file src/…`. `unit` and
   `ui` are separate Vitest projects (`*.unit.test.ts` under node vs.
   `*.unit.test.tsx` under jsdom, per `apps/web/vitest.config.ts`) and neither
   runs the other's files, so a change touching any `.tsx` under `apps/web/src`
   needs `test:ui` too, even when `test:unit` looks like the narrowest tier.
-  Use
-  `pnpm test:file:postgres src/…` or `pnpm test:integration:postgres` only when
-  the behavior requires real independent sessions, locks, pools, or
-  node-postgres fidelity; those commands need `docker compose -p cubby up -d`.
-  Targeted `pnpm test:e2e tests/e2e/<file>.spec.ts` also uses PGlite by
-  default; CI and `pnpm test:e2e:postgres` preserve PostgreSQL parity. Reserve
-  full `pnpm test` or `pnpm test:local` for pre-PR or genuinely cross-layer
-  work. Use the [test-placement table](#test-placement) to decide which tier a
-  change can actually break.
+  Use `pnpm test:file:postgres src/…` or `pnpm test:postgres` when the behavior
+  requires real SQL, sessions, locks, pools, or node-postgres fidelity; those
+  commands need `docker compose -p cubby up -d`. `pnpm test:e2e` is likewise
+  PostgreSQL-backed. PGlite exists only through `pnpm test:pglite` and targeted
+  `pnpm test:e2e:pglite -- <spec>` experiments; it is not acceptance evidence.
+  Reserve `pnpm test:all`/`test:local` for pre-PR or genuinely cross-layer work.
+  Use the [test-placement table](#test-placement) to decide which tier a change
+  can actually break.
 - Typecheck is cheap now — TypeScript 7's native `tsc` does the whole repo in
   ~2.2s warm, ~7s cold — so run `pnpm typecheck` freely. It is not the thing
   worth skipping.

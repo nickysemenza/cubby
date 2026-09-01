@@ -85,6 +85,23 @@ test("the node test runner builds and publishes the deployable artifact", () => 
       web.indexOf("name: Run ${{ matrix.tier }} tests"),
   );
   assert.doesNotMatch(workflow, /^  build-cf:$/mu);
+  assert.doesNotMatch(web, /pglite/u);
+  assert.match(
+    web,
+    /--project unit --project unit-pure --project mcp-contract/u,
+  );
+  assert.match(web, /--project ui/u);
+});
+
+test("PostgreSQL and browser jobs use only authoritative manifests", () => {
+  const postgres = job("test-postgres", "test-aux-coverage");
+  const e2e = job("test-e2e", "report-coverage");
+  assert.match(postgres, /--project integration/u);
+  assert.doesNotMatch(postgres, /pglite/u);
+  assert.match(e2e, /run test:e2e:postgres/u);
+  assert.doesNotMatch(e2e, /pglite/u);
+  assert.match(playwrightConfig, /retries: 0/u);
+  assert.match(playwrightConfig, /workers: 1/u);
 });
 
 test("private-repository runners get timeout budgets for their lower CPU tier", () => {
