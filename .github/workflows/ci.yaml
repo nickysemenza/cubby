@@ -636,10 +636,18 @@ jobs:
             'Acquire::Retries "1";' \
             'Acquire::http::Timeout "10";' \
             'Acquire::https::Timeout "10";' \
+            'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
             | sudo tee /etc/apt/apt.conf.d/99-cubby-ci >/dev/null
+          sudo chown -R "$USER":"$(id -gn)" /var/cache/apt/archives
+      - name: Cache Playwright system packages
+        if: matrix.browser == 'webkit'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: /var/cache/apt/archives
+          key: playwright-system-deps-${{ runner.os }}-${{ runner.arch }}-${{ env.PLAYWRIGHT_VERSION }}-webkit-v1
       - name: Install Playwright browser dependencies
         if: matrix.browser == 'webkit'
-        timeout-minutes: 2
+        timeout-minutes: 5
         run: pnpm --filter @cubby/web run test:e2e:install-deps -- ${{ matrix.browser }}
       - name: Install exact Playwright browser
         if: steps.browser-cache.outputs.cache-hit != 'true'
