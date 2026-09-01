@@ -137,7 +137,11 @@ export default defineConfig({
     // reporter re-prints just the failing test names at the very end so a
     // `| tail` of the run still shows what broke. See the reporter for the
     // measured re-run waste that motivated it.
-    reporters: ["dot", "./tooling/failure-summary-reporter.ts"],
+    reporters: [
+      "dot",
+      "./tooling/failure-summary-reporter.ts",
+      "./tooling/authoritative-count-reporter.ts",
+    ],
     // Passing fixtures intentionally exercise error logging and transport
     // tracing. Printing those expected messages dominates terminal I/O in the
     // shared-graph suite; failed tests still retain their console output.
@@ -256,7 +260,7 @@ export default defineConfig({
             // registers — see `closeTestDb` in tooling/test-setup.ts.
             setupFiles: ["./tooling/integration-teardown.ts"],
             name: "integration",
-            include: ["**/*.integration.test.ts"],
+            include: ["**/integration-families/*.integration.test.ts"],
             testTimeout: 10000,
             // First-test database provisioning is the long tail; resets use the
             // full safe TRUNCATE path documented in tooling/test-setup.ts.
@@ -267,7 +271,11 @@ export default defineConfig({
             // A changed-test run can select both portable PGlite and real
             // PostgreSQL projects. Their worker caps differ, so Vitest requires
             // distinct sequence groups even though CI runs them in separate jobs.
-            sequence: { groupOrder: 3 },
+            sequence: {
+              groupOrder: 3,
+              shuffle: { files: true, tests: false },
+              seed: sharedIsolationSeed,
+            },
           },
         },
         {

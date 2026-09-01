@@ -38,16 +38,14 @@ permissions:
   pull-requests: read
 
 jobs:
-  preflight:
-    name: Preflight - check:all
+  scope:
+    name: Scope
     if: |
       github.event_name != 'pull_request' ||
       github.event.action != 'labeled' ||
       github.event.label.name == 'preview'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      NODE_OPTIONS: "--max-old-space-size=4096"
+    timeout-minutes: 5
     outputs:
       coverage: ${{ steps.scope.outputs.coverage }}
       verify: ${{ steps.scope.outputs.verify }}
@@ -156,7 +154,7 @@ jobs:
 
                 if (mainCommit.data.tree.sha === headCommit.data.tree.sha) {
                   const verificationArtifact =
-                    `pr-verification-v1-${pr.number}-${pr.head.sha}`;
+                    `pr-verification-v2-${pr.number}-${pr.head.sha}`;
                   const runs = await github.paginate(
                     github.rest.actions.listWorkflowRuns,
                     {
@@ -240,58 +238,6 @@ jobs:
               ])
               .write();
 
-      - uses: ./.github/actions/setup-node-with-deps
-        if: |
-          steps.scope.outputs.inert != 'true' &&
-          (steps.scope.outputs.verify == 'true' || steps.scope.outputs.coverage == 'true')
-        with:
-          wasm: "restore"
-      - name: Run repository preflight
-        if: |
-          steps.scope.outputs.inert != 'true' &&
-          (steps.scope.outputs.verify == 'true' || steps.scope.outputs.coverage == 'true')
-        shell: bash
-        env:
-          CHECK_DEPENDENCIES: ${{ steps.scope.outputs.dependencies }}
-          CHECK_AUX: ${{ steps.scope.outputs.aux }}
-          BUILD_USDA: ${{ steps.scope.outputs.usda }}
-          BUILD_UPC: ${{ steps.scope.outputs.upc }}
-        run: |
-          pnpm check:all &
-          pids=("$!")
-          names=("complete repository preflight")
-
-          if [[ "$CHECK_DEPENDENCIES" == "true" ]]; then
-            pnpm dedupe:check &
-            pids+=("$!")
-            names+=("dependency deduplication")
-          fi
-
-          if [[ "$CHECK_AUX" == "true" ]]; then
-            (
-              pnpm -r --no-sort --workspace-concurrency=2 --no-bail \
-                --filter '!@cubby/web' --if-present run test \
-                --maxWorkers=1 --reporter=default --reporter=github-actions
-              if [[ "$BUILD_USDA" == "true" ]]; then
-                pnpm --filter @cubby/usda-api run build
-              fi
-              if [[ "$BUILD_UPC" == "true" ]]; then
-                pnpm --filter @cubby/upc-lookup run build
-              fi
-            ) &
-            pids+=("$!")
-            names+=("auxiliary tests and builds")
-          fi
-
-          result_code=0
-          for index in "${!pids[@]}"; do
-            if ! wait "${pids[$index]}"; then
-              echo "::error::${names[$index]} failed"
-              result_code=1
-            fi
-          done
-          exit "$result_code"
-
       - name: Record reusable PR verification
         if: |
           github.event_name == 'pull_request' &&
@@ -312,18 +258,81 @@ jobs:
           steps.scope.outputs.verify == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: pr-verification-v1-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          name: pr-verification-v2-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
           path: pr-verification.txt
           retention-days: 14
 
+  validation:
+    name: Validation
+    needs: scope
+    if: |
+      !cancelled() && needs.scope.result == 'success' &&
+      needs.scope.outputs.inert != 'true' &&
+      (needs.scope.outputs.verify == 'true' || needs.scope.outputs.coverage == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: "restore"
+      - name: Run repository validation
+        shell: bash
+        env:
+          CHECK_DEPENDENCIES: ${{ needs.scope.outputs.dependencies }}
+        run: |
+          pnpm check:all &
+          pids=("$!")
+          names=("complete repository validation")
+
+          if [[ "$CHECK_DEPENDENCIES" == "true" ]]; then
+            pnpm dedupe:check &
+            pids+=("$!")
+            names+=("dependency deduplication")
+          fi
+
+          result_code=0
+          for index in "${!pids[@]}"; do
+            if ! wait "${pids[$index]}"; then
+              echo "::error::${names[$index]} failed"
+              result_code=1
+            fi
+          done
+          exit "$result_code"
+
+  test-aux:
+    name: Auxiliary tests and builds
+    needs: scope
+    if: |
+      !cancelled() && needs.scope.result == 'success' &&
+      needs.scope.outputs.verify == 'true' &&
+      needs.scope.outputs.aux == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: "false"
+      - run: >-
+          pnpm -r --no-sort --workspace-concurrency=2 --no-bail
+          --filter '!@cubby/web' --if-present run test
+          --maxWorkers=1 --reporter=default --reporter=github-actions
+      - if: needs.scope.outputs.usda == 'true'
+        run: pnpm --filter @cubby/usda-api run build
+      - if: needs.scope.outputs.upc == 'true'
+        run: pnpm --filter @cubby/upc-lookup run build
+
   test-rust:
     name: Rust - recipebridge
-    needs: preflight
+    needs: scope
     if: |
-      !cancelled() && needs.preflight.result == 'success' &&
-      (needs.preflight.outputs.verify == 'true' ||
-      needs.preflight.outputs.coverage == 'true') &&
-      (needs.preflight.outputs.rust == 'true' || needs.preflight.outputs.coverage == 'true')
+      !cancelled() && needs.scope.result == 'success' &&
+      (needs.scope.outputs.verify == 'true' ||
+      needs.scope.outputs.coverage == 'true') &&
+      (needs.scope.outputs.rust == 'true' || needs.scope.outputs.coverage == 'true')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
@@ -331,20 +340,20 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
         with:
           cache: true
-          components: ${{ needs.preflight.outputs.coverage == 'true' && 'llvm-tools-preview' || '' }}
+          components: ${{ needs.scope.outputs.coverage == 'true' && 'llvm-tools-preview' || '' }}
           cache-workspaces: "recipebridge -> target"
       - name: Install cargo-llvm-cov
-        if: needs.preflight.outputs.coverage == 'true'
+        if: needs.scope.outputs.coverage == 'true'
         uses: taiki-e/install-action@2ca9b94c269419b7b0c711c09d0b21c4e1d51145 # v2
         with:
           tool: cargo-llvm-cov
       - run: cargo fmt --manifest-path recipebridge/Cargo.toml --check
       - run: cargo clippy --manifest-path recipebridge/Cargo.toml --all-targets -- -D warnings
-      - if: needs.preflight.outputs.coverage != 'true'
+      - if: needs.scope.outputs.coverage != 'true'
         run: cargo test --manifest-path recipebridge/Cargo.toml
-      - if: needs.preflight.outputs.coverage == 'true'
+      - if: needs.scope.outputs.coverage == 'true'
         run: cargo llvm-cov --manifest-path recipebridge/Cargo.toml --lcov --output-path recipebridge/lcov.info
-      - if: needs.preflight.outputs.coverage == 'true'
+      - if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-rust
@@ -354,12 +363,12 @@ jobs:
 
   test-web:
     name: Tests - web (${{ matrix.tier }})
-    needs: preflight
+    needs: scope
     if: |
-      !cancelled() && needs.preflight.result == 'success' &&
-      (needs.preflight.outputs.verify == 'true' ||
-      needs.preflight.outputs.coverage == 'true') &&
-      needs.preflight.outputs.web == 'true'
+      !cancelled() && needs.scope.result == 'success' &&
+      (needs.scope.outputs.verify == 'true' ||
+      needs.scope.outputs.coverage == 'true') &&
+      needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -376,20 +385,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: ${{ needs.preflight.outputs.full == 'true' && 1 || 0 }}
+          fetch-depth: ${{ needs.scope.outputs.full == 'true' && 1 || 0 }}
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
       - uses: ./.github/actions/setup-web-env
       - name: Build web Cloudflare bundle
-        if: matrix.tier == 'node' && needs.preflight.outputs.verify == 'true'
+        if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
         env:
           CUBBY_SOURCE_COMMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
           CUBBY_SOURCE_BRANCH: ${{ github.event_name == 'pull_request' && format('PR#{0}', github.event.pull_request.number) || '' }}
         run: pnpm --filter @cubby/web run build:cf
       - name: Save recipebridge WASM
-        if: matrix.tier == 'node' && needs.preflight.outputs.verify == 'true'
+        if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: recipebridge-wasm
@@ -397,7 +406,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
       - name: Save Cloudflare bundle
-        if: matrix.tier == 'node' && needs.preflight.outputs.verify == 'true'
+        if: matrix.tier == 'node' && needs.scope.outputs.verify == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: cf-build
@@ -422,9 +431,9 @@ jobs:
       - name: Run ${{ matrix.tier }} tests
         shell: bash
         env:
-          BASE_SHA: ${{ needs.preflight.outputs.base-sha }}
-          COVERAGE: ${{ needs.preflight.outputs.coverage }}
-          FULL: ${{ needs.preflight.outputs.full }}
+          BASE_SHA: ${{ needs.scope.outputs.base-sha }}
+          COVERAGE: ${{ needs.scope.outputs.coverage }}
+          FULL: ${{ needs.scope.outputs.full }}
           VITEST_PROJECT_ARGS: ${{ matrix.args }}
         run: |
           read -r -a selected <<< "$VITEST_PROJECT_ARGS"
@@ -436,7 +445,7 @@ jobs:
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
       - name: Save web ${{ matrix.tier }} coverage
-        if: needs.preflight.outputs.coverage == 'true'
+        if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-web-${{ matrix.tier }}
@@ -446,16 +455,16 @@ jobs:
 
   test-postgres:
     name: PostgreSQL integration tests
-    needs: preflight
+    needs: scope
     if: |
-      !cancelled() && needs.preflight.result == 'success' &&
-      (needs.preflight.outputs.verify == 'true' ||
-      needs.preflight.outputs.coverage == 'true') &&
-      needs.preflight.outputs.web == 'true' &&
+      !cancelled() && needs.scope.result == 'success' &&
+      (needs.scope.outputs.verify == 'true' ||
+      needs.scope.outputs.coverage == 'true') &&
+      needs.scope.outputs.web == 'true' &&
       (
-        needs.preflight.outputs.full == 'true' ||
-        needs.preflight.outputs.postgres == 'true' ||
-        needs.preflight.outputs.coverage == 'true'
+        needs.scope.outputs.full == 'true' ||
+        needs.scope.outputs.postgres == 'true' ||
+        needs.scope.outputs.coverage == 'true'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -483,7 +492,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: ${{ needs.preflight.outputs.full == 'true' && 1 || 0 }}
+          fetch-depth: ${{ needs.scope.outputs.full == 'true' && 1 || 0 }}
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "restore"
@@ -492,17 +501,21 @@ jobs:
       - name: Run PostgreSQL integration tests
         shell: bash
         env:
-          BASE_SHA: ${{ needs.preflight.outputs.base-sha }}
-          COVERAGE: ${{ needs.preflight.outputs.coverage }}
-          FULL: ${{ needs.preflight.outputs.full }}
+          BASE_SHA: ${{ needs.scope.outputs.base-sha }}
+          COVERAGE: ${{ needs.scope.outputs.coverage }}
+          FULL: ${{ needs.scope.outputs.full }}
           CUBBY_TEST_INTEGRATION: "1"
         run: |
           args=(--project integration --reporter=default --reporter=github-actions)
-          if [[ "$FULL" != "true" ]]; then args+=(--changed "$BASE_SHA"); fi
+          if [[ "$FULL" == "true" ]]; then
+            export CUBBY_EXPECT_POSTGRES_TESTS=260
+          else
+            args+=(--changed "$BASE_SHA")
+          fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
       - name: Save web PostgreSQL coverage
-        if: needs.preflight.outputs.coverage == 'true'
+        if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-web-postgres
@@ -512,10 +525,10 @@ jobs:
 
   test-aux-coverage:
     name: Auxiliary package coverage
-    needs: preflight
+    needs: scope
     if: |
-      !cancelled() && needs.preflight.result == 'success' &&
-      needs.preflight.outputs.coverage == 'true'
+      !cancelled() && needs.scope.result == 'success' &&
+      needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -539,28 +552,35 @@ jobs:
           retention-days: 1
 
   test-e2e:
-    name: E2E tests
-    needs: preflight
+    name: E2E tests (${{ matrix.lane }})
+    needs: scope
     if: |
-      !cancelled() && needs.preflight.result == 'success' &&
-      needs.preflight.outputs.verify == 'true' &&
-      needs.preflight.outputs.web == 'true' &&
-      (needs.preflight.outputs.full == 'true' || needs.preflight.outputs.e2e == 'true') &&
+      !cancelled() && needs.scope.result == 'success' &&
+      needs.scope.outputs.verify == 'true' &&
+      needs.scope.outputs.web == 'true' &&
+      (needs.scope.outputs.full == 'true' || needs.scope.outputs.e2e == 'true') &&
       !(github.event_name == 'workflow_dispatch' && inputs.bypass_e2e)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
-      options: --user 1001
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: chromium
+            browser: chromium
+            test-script: test:e2e:ci:chromium
+            expected-tests: 15
+          - lane: webkit
+            browser: webkit
+            test-script: test:e2e:ci:webkit
+            expected-tests: 7
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      PLAYWRIGHT_IMAGE_VERSION: "1.62.1"
+      PLAYWRIGHT_VERSION: "1.62.1"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
       CUBBY_E2E_DATABASE: postgres
-      INTEGRESQL_URL: http://integresql:5000
-      INTEGRESQL_DATABASE_HOST: postgres
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -588,15 +608,23 @@ jobs:
         with:
           wasm: "false"
           workspace-filter: "@cubby/web..."
-          cache-pnpm-store: "false"
-      - name: Assert Playwright package matches the container
-        shell: bash
-        run: |
-          actual="$(pnpm --filter @cubby/web exec playwright --version | awk '{print $2}')"
-          [[ "$actual" == "$PLAYWRIGHT_IMAGE_VERSION" ]] || {
-            echo "::error::@playwright/test is $actual; update the CI container and PLAYWRIGHT_IMAGE_VERSION together"
-            exit 1
-          }
+      - name: Restore exact Playwright browser
+        id: browser-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
+      - name: Install Playwright browser dependencies
+        run: pnpm --filter @cubby/web run test:e2e:install-deps -- ${{ matrix.browser }}
+      - name: Install exact Playwright browser
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @cubby/web run test:e2e:install-browser -- ${{ matrix.browser }}
+      - name: Save exact Playwright browser
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-${{ matrix.browser }}
       - uses: ./.github/actions/setup-web-env
       - name: Wait for the tested Cloudflare bundle
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -639,19 +667,19 @@ jobs:
           name: recipebridge-wasm
           path: packages/wasm
       - name: Run Playwright tests
-        run: pnpm --filter @cubby/web run test:e2e:postgres
+        run: pnpm --filter @cubby/web run ${{ matrix.test-script }}
       - name: Save Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.lane }}
           path: apps/web/playwright-report/
           retention-days: 1
 
   report-coverage:
     name: Report scheduled coverage
-    needs: [preflight, test-rust, test-web, test-postgres, test-aux-coverage]
-    if: needs.preflight.outputs.coverage == 'true'
+    needs: [scope, validation, test-rust, test-web, test-postgres, test-aux-coverage]
+    if: needs.scope.outputs.coverage == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -680,18 +708,20 @@ jobs:
 
   deploy-cf:
     name: Deploy tested Cloudflare artifact
-    needs: [preflight, test-rust, test-web, test-postgres, test-e2e]
+    needs: [scope, validation, test-aux, test-rust, test-web, test-postgres, test-e2e]
     if: |
       always() && !cancelled() &&
       github.ref == 'refs/heads/main' && github.event_name != 'schedule' &&
-      inputs.mode != 'coverage' && needs.preflight.outputs.web == 'true' &&
+      inputs.mode != 'coverage' && needs.scope.outputs.web == 'true' &&
       (
-        needs.preflight.outputs.reuse == 'true' ||
+        needs.scope.outputs.reuse == 'true' ||
         (
-          needs.preflight.outputs.full == 'true' &&
-          needs.preflight.outputs.verify == 'true' &&
-          needs.preflight.result == 'success' &&
-          (needs.preflight.outputs.rust != 'true' || needs.test-rust.result == 'success') &&
+          needs.scope.outputs.full == 'true' &&
+          needs.scope.outputs.verify == 'true' &&
+          needs.scope.result == 'success' &&
+          needs.validation.result == 'success' &&
+          (needs.scope.outputs.aux != 'true' || needs.test-aux.result == 'success') &&
+          (needs.scope.outputs.rust != 'true' || needs.test-rust.result == 'success') &&
           needs.test-web.result == 'success' &&
           needs.test-postgres.result == 'success' &&
           (
@@ -731,7 +761,7 @@ jobs:
         with:
           name: cf-build
           path: apps/web/dist
-          run-id: ${{ needs.preflight.outputs.source-run-id || github.run_id }}
+          run-id: ${{ needs.scope.outputs.source-run-id || github.run_id }}
           github-token: ${{ github.token }}
       - name: Deploy web worker without rebuilding
         if: steps.current_main.outputs.current == 'true'
@@ -744,21 +774,25 @@ jobs:
 
   deploy-worker:
     name: Deploy ${{ matrix.pkg }} Worker
-    needs: preflight
+    needs: [scope, validation, test-aux]
     if: |
       always() && !cancelled() &&
       github.ref == 'refs/heads/main' && github.event_name != 'schedule' &&
-      inputs.mode != 'coverage' && needs.preflight.outputs.workers != '[]' &&
+      inputs.mode != 'coverage' && needs.scope.outputs.workers != '[]' &&
       (
-        needs.preflight.outputs.reuse == 'true' ||
-        needs.preflight.result == 'success'
+        needs.scope.outputs.reuse == 'true' ||
+        (
+          needs.scope.result == 'success' &&
+          needs.validation.result == 'success' &&
+          (needs.scope.outputs.aux != 'true' || needs.test-aux.result == 'success')
+        )
       )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        pkg: ${{ fromJSON(needs.preflight.outputs.workers) }}
+        pkg: ${{ fromJSON(needs.scope.outputs.workers) }}
     concurrency:
       group: deploy-${{ matrix.pkg }}-production
       cancel-in-progress: false

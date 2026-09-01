@@ -25,6 +25,12 @@ through explicit local developer commands and is not duplicated in CI or
 scheduled coverage. The local acceptance command runs the fast tier first, then
 PostgreSQL and Playwright concurrently with one browser worker.
 
+The dependency-free `scope` job publishes path and reuse decisions before any
+dependency installation. Validation, auxiliary packages, web tests,
+PostgreSQL, Rust, and browser acceptance then start independently from that
+decision. A successful exact-tree run is still required before the scope
+job's provenance marker can be reused after merge.
+
 On a `main` push, CI looks for the merged pull request and its final successful
 CI run. A prior result is reusable only when it came from this repository, has
 a policy-versioned provenance marker bound to the PR number and head commit,
@@ -36,10 +42,19 @@ unverified deployment.
 ## Build and deployment flow
 
 The web Cloudflare bundle is built once in the node-test runner and uploaded
-before that runner starts its tests. The single Playwright job starts in
-parallel, downloads and tests that exact artifact, and preview and production
-deployment consume it unchanged. Co-locating the build removes a runner and a
-duplicate dependency setup without removing the build gate.
+before that runner starts its tests. Chromium and WebKit Playwright lanes start
+in parallel on ordinary Ubuntu hosts, restore their exact-version browser
+caches, and wait for that artifact while database and browser setup proceeds.
+Chromium owns the fifteen desktop contracts and WebKit the seven mobile
+contracts. Both download and test the same artifact that preview and production
+deployment consume unchanged.
+
+The 260 PostgreSQL assertions remain in their original domain modules but are
+registered through eight isolated family entrypoints. Each family shares one
+module graph and one IntegreSQL database while the existing full-table reset
+restores pristine state before every test. This preserves real constraints and
+transactions without paying process, import, and database checkout cost for
+each of the 58 source modules.
 
 Production jobs serialize per worker and re-check that their workflow SHA is
 still current `main` after acquiring the deployment slot. A burst of merges can
@@ -79,6 +94,12 @@ The rewritten local-suite budgets are 15 seconds for fast tests, 40 seconds for
 PostgreSQL, 35 seconds for Playwright, and 60 seconds end to end (55-second
 median target). Re-benchmark five warm `pnpm test:all` runs after changing test
 selection, worker counts, database provisioning, or browser harness startup.
+
+The full/high-risk GitHub target is a three-minute median and four-minute p95,
+without exceeding the prior full-run total of 16m54s raw runner time or its
+rounded job-minute equivalent. PostgreSQL targets 2m15s and each browser lane
+2m45s. Compare at least ten exact-head runs; queue time and cold browser-cache
+misses are reported separately rather than hidden by retries.
 
 Deleted database and browser cases are not a ban on their behavior. Restore a
 case at the lowest tier that can fail: pure grouping, filtering, ranking,

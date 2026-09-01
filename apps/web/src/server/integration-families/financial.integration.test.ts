@@ -1,0 +1,12 @@
+import "../mcp/purchase-split-delta.integration.test";
+import "../repo/expense.integration.test";
+import "../repo/financial-transaction-allocations.integration.test";
+import "../repo/financial.integration.test";
+import "../repo/household-contribution/allocation.integration.test";
+import "../repo/household-contribution/reports.integration.test";
+import "../repo/ledger.integration.test";
+import "../repo/problems/detectors-allocation.integration.test";
+import "../repo/problems.integration.test";
+import "../repo/purchase-products.integration.test";
+import "../repo/purchase.integration.test";
+import "../repo/statement-row.integration.test";
