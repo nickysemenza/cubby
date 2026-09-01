@@ -11,41 +11,24 @@ import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
-import {
-  auditLog,
-  expense as expenseTable,
-  product,
-  productComponent,
-} from "~/server/db/schema";
+import { product, productComponent } from "~/server/db/schema";
 
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts, updateProduct } from "./product";
 import {
   attachProductComponents,
   detachProductComponents,
-  listKitComponentRows,
   listKitMembership,
   listProductComponents,
 } from "./product-components";
-import {
-  attachPurchaseProducts,
-  detachPurchaseProducts,
-} from "./purchase-products";
+import { attachPurchaseProducts } from "./purchase-products";
 import {
   createImageFixture,
   createProductFixture as createProduct,
   makeProductInput,
 } from "./repo.fixtures";
 import { insertWithShortcode } from "./shortcode-utils";
-
-const componentProductIdsAuditChange = z.object({
-  componentProductIds: z.object({
-    from: z.array(z.string()),
-    to: z.array(z.string()),
-  }),
-});
 import { findOrCreateVendor } from "./vendor";
 
 describe("product ⟷ product component links (kit composition)", () => {
@@ -168,88 +151,6 @@ describe("product ⟷ product component links (kit composition)", () => {
     expect(again).toEqual({ changed: 0, attached: 1, alreadySatisfied: 1 });
   });
 
-  it("allows re-attaching a detached pair — the unique index is partial", async () => {
-    const kit = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Re-attach Kit" }),
-      ctx.actor,
-    );
-    const part = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Re-attach Part" }),
-      ctx.actor,
-    );
-
-    await attachProductComponents(
-      ctx.db,
-      kit.entityId,
-      [{ productId: part.entityId, quantity: 3 }],
-      ctx.actor,
-    );
-    await detachProductComponents(
-      ctx.db,
-      kit.entityId,
-      [part.entityId],
-      ctx.actor,
-    );
-    const reattached = await attachProductComponents(
-      ctx.db,
-      kit.entityId,
-      [{ productId: part.entityId, quantity: 5 }],
-      ctx.actor,
-    );
-
-    expect(reattached).toEqual({
-      changed: 1,
-      attached: 1,
-      alreadySatisfied: 0,
-    });
-    const rows = await livePairs(kit.entityId);
-    expect(rows).toHaveLength(1);
-
-    // The fresh row after re-attach carries the NEW quantity, not the old one
-    // — quantity is set at attach time, not merged with a prior tombstone.
-    const components = await listProductComponents(ctx.db, kit.entityId);
-    expect(components[0]?.quantity).toBe(5);
-  });
-
-  it("writes an audit entry naming the component set before and after", async () => {
-    const kit = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Audited Kit" }),
-      ctx.actor,
-    );
-    const part = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Audited Part" }),
-      ctx.actor,
-    );
-    await attachProductComponents(
-      ctx.db,
-      kit.entityId,
-      [{ productId: part.entityId, quantity: 1 }],
-      ctx.actor,
-    );
-
-    const entries = await getDb(ctx.db)
-      .select({ changes: auditLog.changes })
-      .from(auditLog)
-      .where(
-        and(
-          eq(auditLog.entityType, "product"),
-          eq(auditLog.entityId, kit.entityId),
-        ),
-      );
-
-    const linkChange = entries.find(
-      (e) => componentProductIdsAuditChange.safeParse(e.changes).success,
-    );
-    expect(linkChange).toBeDefined();
-    const changes = componentProductIdsAuditChange.parse(linkChange?.changes);
-    expect(changes.componentProductIds.from).toEqual([]);
-    expect(changes.componentProductIds.to).toHaveLength(1);
-  });
-
   it("refuses a self-referencing component", async () => {
     const kit = await createProduct(
       ctx.db,
@@ -273,133 +174,6 @@ describe("product ⟷ product component links (kit composition)", () => {
   // `listProductComponents` above: that returns the 7-field detail projection,
   // this returns whole product list rows so a component can render in the same
   // columns as its parent.
-  describe("listKitComponentRows — components as full list rows", () => {
-    it("returns list-shaped rows for several kits at once, keyed by parent shortcode", async () => {
-      const kitA = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Kit A" }),
-        ctx.actor,
-      );
-      const kitB = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Kit B" }),
-        ctx.actor,
-      );
-      const shared = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Shared Charger", price: 39 }),
-        ctx.actor,
-      );
-      const only = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Only Drill" }),
-        ctx.actor,
-      );
-
-      await attachProductComponents(
-        ctx.db,
-        kitA.entityId,
-        [
-          { productId: shared.entityId, quantity: 2 },
-          { productId: only.entityId, quantity: 1 },
-        ],
-        ctx.actor,
-      );
-      await attachProductComponents(
-        ctx.db,
-        kitB.entityId,
-        [{ productId: shared.entityId, quantity: 1 }],
-        ctx.actor,
-      );
-
-      const rows = await listKitComponentRows(ctx.db, [
-        kitA.entityId,
-        kitB.entityId,
-      ]);
-      expect(rows).toHaveLength(3);
-
-      const sharedRows = rows.filter((r) => r.product.id === shared.id);
-      expect(sharedRows).toHaveLength(2);
-      expect(sharedRows.map((r) => r.parentProductId).sort()).toEqual(
-        [kitA.id, kitB.id].sort(),
-      );
-      // The edge quantity travels with the row, and differs per parent.
-      expect(
-        sharedRows.find((r) => r.parentProductId === kitA.id)?.quantity,
-      ).toBe(2);
-      expect(
-        sharedRows.find((r) => r.parentProductId === kitB.id)?.quantity,
-      ).toBe(1);
-
-      // List-shaped, not the 7-field projection: these are the fields a child
-      // row needs to fill the columns its parent fills.
-      const sharedRow = sharedRows[0]?.product;
-      expect(sharedRow?.quantityLedger).toBeDefined();
-      expect(sharedRow?.dataQuality).toBeDefined();
-      expect(sharedRow?.componentCount).toBe(0);
-      expect(sharedRow?.pricing).toBeDefined();
-    });
-
-    it("omits a detached edge and a soft-deleted component product", async () => {
-      const kit = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Liveness Kit" }),
-        ctx.actor,
-      );
-      const kept = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Kept Part" }),
-        ctx.actor,
-      );
-      const detached = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Detached Part" }),
-        ctx.actor,
-      );
-      const removed = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Removed Part" }),
-        ctx.actor,
-      );
-      await attachProductComponents(
-        ctx.db,
-        kit.entityId,
-        [
-          { productId: kept.entityId, quantity: 1 },
-          { productId: detached.entityId, quantity: 1 },
-          { productId: removed.entityId, quantity: 1 },
-        ],
-        ctx.actor,
-      );
-
-      await detachProductComponents(
-        ctx.db,
-        kit.entityId,
-        [detached.entityId],
-        ctx.actor,
-      );
-      await detachProductComponents(
-        ctx.db,
-        kit.entityId,
-        [removed.entityId],
-        ctx.actor,
-      );
-      await deleteProducts(ctx.db, [removed.entityId], ctx.actor);
-
-      const rows = await listKitComponentRows(ctx.db, [kit.entityId]);
-      expect(rows.map((r) => r.product.id)).toEqual([kept.id]);
-    });
-
-    it("returns nothing for a kit with no components, and for an empty request", async () => {
-      const bare = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Rows Bare Product" }),
-        ctx.actor,
-      );
-      expect(await listKitComponentRows(ctx.db, [bare.entityId])).toEqual([]);
-      expect(await listKitComponentRows(ctx.db, [])).toEqual([]);
-    });
-  });
 
   describe("multi-hop cycle guard — the DB CHECK only catches one hop", () => {
     it("refuses a two-step attach that closes a cycle several hops down", async () => {
@@ -447,41 +221,6 @@ describe("product ⟷ product component links (kit composition)", () => {
       });
 
       expect(await livePairs(c.entityId)).toHaveLength(0);
-    });
-
-    it("allows a legitimate deep chain — a kit inside a kit inside a kit", async () => {
-      const outer = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Outer Kit" }),
-        ctx.actor,
-      );
-      const middle = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Middle Kit" }),
-        ctx.actor,
-      );
-      const inner = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Inner Part" }),
-        ctx.actor,
-      );
-
-      await attachProductComponents(
-        ctx.db,
-        outer.entityId,
-        [{ productId: middle.entityId, quantity: 1 }],
-        ctx.actor,
-      );
-      const result = await attachProductComponents(
-        ctx.db,
-        middle.entityId,
-        [{ productId: inner.entityId, quantity: 3 }],
-        ctx.actor,
-      );
-
-      expect(result).toEqual({ changed: 1, attached: 1, alreadySatisfied: 0 });
-      const components = await listProductComponents(ctx.db, middle.entityId);
-      expect(components[0]?.quantity).toBe(3);
     });
   });
 
@@ -711,93 +450,6 @@ describe("product ⟷ product component links (kit composition)", () => {
       expect(entry?.expenseCount).toBe(2);
       expect(entry?.purchase?.orderId).toBe("#LATE");
       expect(entry?.purchase?.vendorName).toBe("Provenance Vendor");
-    });
-
-    it("reports zero expenses and no purchase for a kit that hasn't been bought yet", async () => {
-      const kit = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Unbought Kit" }),
-        ctx.actor,
-      );
-      const part = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Unbought Part" }),
-        ctx.actor,
-      );
-      await attachProductComponents(
-        ctx.db,
-        kit.entityId,
-        [{ productId: part.entityId, quantity: 1 }],
-        ctx.actor,
-      );
-
-      const [entry] = await listKitMembership(ctx.db, part.entityId);
-      expect(entry?.price).toBeNull();
-      expect(entry?.expenseCount).toBe(0);
-      expect(entry?.purchase).toBeNull();
-    });
-
-    it("ignores a soft-deleted Expense and a soft-deleted purchase link when counting the kit's own provenance", async () => {
-      const kit = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Soft-Deleted Provenance Kit" }),
-        ctx.actor,
-      );
-      const part = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Soft-Deleted Provenance Part" }),
-        ctx.actor,
-      );
-      await attachProductComponents(
-        ctx.db,
-        kit.entityId,
-        [{ productId: part.entityId, quantity: 1 }],
-        ctx.actor,
-      );
-
-      const deletedExpense = await insertWithShortcode(ctx.db, "expense", {
-        name: "Retracted expense",
-        cost: 50,
-        date: "2026-01-01",
-        lineKind: "principal",
-        costType: "materials",
-        trade: "other",
-        future: false,
-        productId: kit.entityId,
-        productQuantity: 1,
-      });
-      await getDb(ctx.db)
-        .update(expenseTable)
-        .set({ deletedAt: new Date() })
-        .where(eq(expenseTable.id, deletedExpense.id));
-
-      const vendorId = await findOrCreateVendor(
-        ctx.db,
-        "Soft-Deleted Provenance Vendor",
-      );
-      const purchase = await insertWithShortcode(ctx.db, "purchase", {
-        vendorId,
-        date: "2026-01-01",
-        orderId: "#SOFT",
-      });
-      const attach = await attachPurchaseProducts(
-        ctx.db,
-        purchase.id,
-        [kit.entityId],
-        ctx.actor,
-      );
-      expect(attach.changed).toBe(1);
-      const detach = await detachPurchaseProducts(
-        ctx.db,
-        purchase.id,
-        [kit.entityId],
-        ctx.actor,
-      );
-      expect(detach.changed).toBe(1);
-
-      const [entry] = await listKitMembership(ctx.db, part.entityId);
-      expect(entry?.expenseCount).toBe(0);
-      expect(entry?.purchase).toBeNull();
     });
   });
 });

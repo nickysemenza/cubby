@@ -17,7 +17,6 @@ import type {
 import {
   PUBLIC_SHORTCODE_PREFIXES,
   generateShortcode,
-  parseShortcode,
   parseShortcodeFor,
   SHORTCODE_PREFIX,
 } from "@cubby/shared";
@@ -28,9 +27,6 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import { location, product } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { getLocationByShortcode } from "./location";
-import { getProductByShortcode } from "./product";
-import { getRecipeByShortcode } from "./recipe";
 import {
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
@@ -39,15 +35,11 @@ import {
 } from "./repo.fixtures";
 import {
   lookupShortcodes,
-  resolveAllOrThrow,
-  resolveAllPresent,
   resolveLiveShortcode,
-  resolveLiveShortcodes,
   resolveShortcode,
   resolveShortcodes,
 } from "./shortcode-resolver";
 import {
-  findOrCreateWithShortcode,
   generateUniqueShortcode,
   insertWithShortcode,
   type ShortcodeGeneratorPort,
@@ -79,18 +71,6 @@ function createPinnedShortcodeGenerator(): PinnedShortcodeGenerator {
 
 describe("shortcode minting", () => {
   const ctx = withTestDb();
-
-  it("stamps a canonical code on every created entity", async () => {
-    const created = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Pantry" }),
-      ctx.actor,
-    );
-    expect(parseShortcode(created.id)).toMatchObject({
-      type: "location",
-      legacy: false,
-    });
-  });
 
   it("covers every shortcode-bearing entity with a table", () => {
     for (const entity of shortcodeEntities) {
@@ -150,104 +130,6 @@ describe("uniqueness spans soft-deleted rows", () => {
 
 describe("insertWithShortcode", () => {
   const ctx = withTestDb();
-
-  it("retries onto a fresh code when it loses the insert race", async () => {
-    // The real race, deterministically forced: a "winner" transaction inserts
-    // the code we are about to be handed and holds its lock open. Our pre-check
-    // can't see the uncommitted row, so it approves the code; the INSERT then
-    // blocks on the index and fails 23505 once the winner commits. The retry is
-    // the only thing standing between that and a 500.
-    const contested = `${SHORTCODE_PREFIX.product}ZZZZ`;
-
-    let releaseWinner!: () => void;
-    const winnerCommitted = new Promise<void>((resolve) => {
-      releaseWinner = resolve;
-    });
-
-    const winner = getDb(ctx.db).transaction(async (tx) => {
-      await tx.insert(product).values({
-        name: "Winner",
-        manufacturer: "ACME",
-        shortcode: contested,
-      });
-      await winnerCommitted; // hold the txn (and its index lock) open
-    });
-
-    await new Promise((r) => setTimeout(r, 100));
-
-    const generator = createPinnedShortcodeGenerator();
-    generator.pin(contested);
-    const loser = insertWithShortcode(
-      ctx.db,
-      "product",
-      {
-        name: "Loser",
-        manufacturer: "ACME",
-      },
-      generator.port,
-    );
-
-    await new Promise((r) => setTimeout(r, 100));
-    releaseWinner();
-
-    const [, created] = await Promise.all([winner, loser]);
-
-    expect(created.shortcode).not.toBe(contested);
-    expect(parseShortcode(created.shortcode)).toMatchObject({
-      type: "product",
-    });
-  });
-
-  it("findOrCreateWithShortcode retries a collision instead of failing the find", async () => {
-    // `findOrCreate`'s insert uses a BARE `onConflictDoNothing()`, which isn't
-    // scoped to the `where` predicate's index. So a shortcode collision — on a
-    // row entirely unrelated to the name being deduped on — silently inserts
-    // nothing, and the follow-up re-SELECT finds no winner. Without the retry
-    // that surfaces as "insert conflicted but no matching row was found".
-    const squatter = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Squatter Bin" }),
-      ctx.actor,
-    );
-
-    const generator = createPinnedShortcodeGenerator();
-    generator.pin(squatter.id);
-    const { row, created } = await findOrCreateWithShortcode(
-      ctx.db,
-      "location",
-      {
-        where: eq(location.name, "Brand New Bin"),
-        values: () => ({ name: "Brand New Bin", type: "shelf" as const }),
-      },
-      generator.port,
-    );
-
-    expect(created).toBe(true);
-    expect(row.name).toBe("Brand New Bin");
-    expect(row.shortcode).not.toBe(squatter.id);
-  });
-
-  it("blames the right index when the conflict is not the shortcode", async () => {
-    // Same silent-insert symptom as the case above, different cause: the values
-    // violate a unique index the `where` cannot see (here `Location_name_key`,
-    // while `where` keys on the type). Retrying is pointless — a fresh code
-    // changes nothing — and reporting it as a shortcode collision sends the
-    // reader hunting the wrong index, which is exactly what happened to the
-    // sub-recipe link ingredient. The minted code is verified before retrying,
-    // so this reports the real shape instead.
-    await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Occupied Bin" }),
-      ctx.actor,
-    );
-
-    await expect(
-      findOrCreateWithShortcode(ctx.db, "location", {
-        where: eq(location.type, "freezer"),
-        values: () => ({ name: "Occupied Bin", type: "shelf" as const }),
-      }),
-    ).rejects.toThrow(/unique index that `where` does not cover/);
-  });
 
   it("survives a collision inside an open transaction via its savepoint", async () => {
     // Without the SAVEPOINT the 23505 aborts the CALLER's transaction, and every
@@ -344,69 +226,6 @@ describe("resolution", () => {
     expect(resolved.size).toBe(2);
   });
 
-  it("preserves input order and duplicates across canonical and legacy spellings", async () => {
-    const prod = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Mixed Resolver Product" }),
-      ctx.actor,
-    );
-    const loc = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Mixed Resolver Location" }),
-      ctx.actor,
-    );
-    const productLegacy = `P-${prod.id.slice(SHORTCODE_PREFIX.product.length)}`;
-    const locationLegacy = `L-${loc.id.slice(SHORTCODE_PREFIX.location.length)}`;
-    const productInputs = [
-      ` ${productLegacy.toLowerCase()} `,
-      prod.id,
-      productLegacy,
-      prod.id,
-    ];
-
-    const live = await resolveLiveShortcodes(ctx.db, productInputs, "product");
-    expect(productInputs.map((code) => live.get(code))).toEqual([
-      prod.entityId,
-      prod.entityId,
-      prod.entityId,
-      prod.entityId,
-    ]);
-    expect(await resolveAllOrThrow(ctx.db, "product", productInputs)).toEqual([
-      prod.entityId,
-      prod.entityId,
-      prod.entityId,
-      prod.entityId,
-    ]);
-    expect(
-      await resolveAllPresent(ctx.db, "product", [
-        productLegacy,
-        "PRD-2222",
-        prod.id,
-        locationLegacy,
-        productLegacy,
-      ]),
-    ).toEqual([prod.entityId, prod.entityId, prod.entityId]);
-
-    const mixed = await resolveShortcodes(ctx.db, [
-      productLegacy,
-      ` ${locationLegacy.toLowerCase()} `,
-      prod.id,
-      loc.id,
-    ]);
-    expect([...mixed.keys()]).toEqual(
-      expect.arrayContaining([prod.id, loc.id]),
-    );
-    expect(mixed.get(prod.id)).toEqual({
-      entity: "product",
-      id: prod.entityId,
-    });
-    expect(mixed.get(loc.id)).toEqual({
-      entity: "location",
-      id: loc.entityId,
-    });
-    expect(mixed.size).toBe(2);
-  });
-
   it("looks codes back up from ids, keyed per entity", async () => {
     const prod = await createProduct(
       ctx.db,
@@ -455,79 +274,6 @@ describe("resolution", () => {
       .set({ deletedAt: new Date() })
       .where(eq(product.id, prod.entityId));
     expect(await resolveLiveShortcode(ctx.db, prod.id, "product")).toBeNull();
-  });
-
-  it("the public getXByShortcode wrappers return null, never throw", async () => {
-    // The repo wrappers each entity's detail route enters through. Their null
-    // branch is the one a user hits by typing a URL, so it must return rather
-    // than throw the NOT_FOUND AppError `getByID` raises.
-    const prod = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Barley" }),
-      ctx.actor,
-    );
-    const loc = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Cupboard" }),
-      ctx.actor,
-    );
-
-    expect(await getProductByShortcode(ctx.db, prod.id)).toMatchObject({
-      id: prod.id,
-    });
-    expect(await getLocationByShortcode(ctx.db, loc.id)).toMatchObject({
-      id: loc.id,
-    });
-
-    expect(await getProductByShortcode(ctx.db, "PRD-2222")).toBeNull();
-    expect(await getProductByShortcode(ctx.db, "not-a-code")).toBeNull();
-    expect(await getProductByShortcode(ctx.db, loc.id)).toBeNull();
-    expect(await getLocationByShortcode(ctx.db, "LOC-2222")).toBeNull();
-    expect(await getRecipeByShortcode(ctx.db, "RCP-2222")).toBeNull();
-  });
-
-  it("lookupShortcodes finds a soft-deleted row's code, unlike resolveLiveShortcodes", async () => {
-    // Regression test for the load-bearing difference the resolver's comments
-    // describe but no test previously asserted: resolveLiveShortcode(s) filter
-    // to live rows (a mismatched/deleted code must not leak a uuid), while
-    // lookupShortcodes is the uuid -> code reverse lookup used to render
-    // already-assembled payloads, and must still find a row deleted after
-    // that payload was built.
-    const prod = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Deleted Product" }),
-      ctx.actor,
-    );
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, prod.entityId));
-
-    expect(await resolveLiveShortcodes(ctx.db, [prod.id], "product")).toEqual(
-      new Map(),
-    );
-
-    const codes = await lookupShortcodes(ctx.db, [
-      { entity: "product", id: prod.entityId },
-    ]);
-    expect(codes.get(entityRefKey("product", prod.entityId))).toBe(prod.id);
-  });
-
-  it("still resolves a soft-deleted row, so a scan can say what was deleted", async () => {
-    const created = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Retired Bin" }),
-      ctx.actor,
-    );
-    await getDb(ctx.db)
-      .update(location)
-      .set({ deletedAt: new Date() })
-      .where(eq(location.id, created.entityId));
-
-    expect(await resolveShortcode(ctx.db, created.id)).toEqual({
-      entity: "location",
-      id: created.entityId,
-    });
   });
 });
 

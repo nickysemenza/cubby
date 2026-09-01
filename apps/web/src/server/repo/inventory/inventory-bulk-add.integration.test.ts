@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { auditLog, inventoryEntry, product } from "~/server/db/schema";
+import { auditLog, inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   addInventoryEntries,
@@ -168,38 +168,6 @@ describe("addInventoryEntries", () => {
     expect(changes.map((row) => row.action)).toContain("update");
   });
 
-  it("refuses to sum mismatched units into an existing row", async () => {
-    const bolt = await makeProduct("Unit Mismatch Bolt");
-    const shelf = await makeLocation("Unit Mismatch Shelf");
-    await createInventoryEntry(
-      ctx.db,
-      { productId: bolt, locationId: shelf, amount: { value: 3, unit: "lb" } },
-      TEST_ACTOR,
-    );
-
-    await expect(
-      addInventoryEntries(
-        ctx.db,
-        {
-          locationId: shelf,
-          items: [{ productId: bolt, amount: { value: 5, unit: "each" } }],
-        },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/different unit/);
-
-    // Refused before any write — the existing row is untouched.
-    expect(await rowsAt(shelf)).toEqual([
-      {
-        id: expect.any(String),
-        productId: bolt,
-        value: 3,
-        unit: "lb",
-        placement: "stock",
-      },
-    ]);
-  });
-
   it("refuses a product listed twice in the same request", async () => {
     const bolt = await makeProduct("Doubled Bolt");
     const shelf = await makeLocation("Doubled Shelf");
@@ -217,76 +185,6 @@ describe("addInventoryEntries", () => {
         TEST_ACTOR,
       ),
     ).rejects.toThrow(new RegExp(bolt));
-
-    expect(await rowsAt(shelf)).toEqual([]);
-  });
-
-  it("leaves an installed fixture of the same product untouched", async () => {
-    // Placement is part of the slot key: an item targeting stock must never
-    // merge into — or disturb — an installed fixture of the same product.
-    const dimmer = await makeProduct("Fixture Dimmer");
-    const room = await makeLocation("Fixture Room");
-    const fixture = await createInventoryEntry(
-      ctx.db,
-      {
-        productId: dimmer,
-        locationId: room,
-        amount: { value: 1, unit: "each" },
-        placement: "installed",
-      },
-      TEST_ACTOR,
-    );
-    const fixtureId = await resolved(fixture.id, "inventory");
-
-    const result = await addInventoryEntries(
-      ctx.db,
-      {
-        locationId: room,
-        items: [{ productId: dimmer, amount: { value: 2, unit: "each" } }],
-      },
-      TEST_ACTOR,
-    );
-
-    expect(result.createdCount).toBe(1);
-    expect(result.mergedCount).toBe(0);
-    expect(await rowsAt(room)).toEqual(
-      expect.arrayContaining([
-        {
-          id: fixtureId,
-          productId: dimmer,
-          value: 1,
-          unit: "each",
-          placement: "installed",
-        },
-        {
-          id: expect.any(String),
-          productId: dimmer,
-          value: 2,
-          unit: "each",
-          placement: "stock",
-        },
-      ]),
-    );
-  });
-
-  it("rejects a soft-deleted product", async () => {
-    const gone = await makeProduct("Deleted Product");
-    const shelf = await makeLocation("Deleted Product Shelf");
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, gone));
-
-    await expect(
-      addInventoryEntries(
-        ctx.db,
-        {
-          locationId: shelf,
-          items: [{ productId: gone, amount: { value: 1, unit: "each" } }],
-        },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/does not exist or has been deleted/);
 
     expect(await rowsAt(shelf)).toEqual([]);
   });

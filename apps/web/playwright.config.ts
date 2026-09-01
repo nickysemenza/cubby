@@ -15,8 +15,6 @@ dotenv.config({ path: path.resolve(__dirname, ".env") });
  * See https://playwright.dev/docs/test-configuration.
  */
 const isCI = !!process.env.CI;
-const localUsesPGlite =
-  !isCI && (process.env.CUBBY_E2E_DATABASE ?? "pglite") === "pglite";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -33,12 +31,11 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Local PGlite shares one WASM database, while private CI runners share two
-     CPUs between the browser, Worker, and PostgreSQL. Keep both constrained
-     lanes single-worker so client hydration is not starved under load. */
-  workers: localUsesPGlite || isCI ? 1 : undefined,
+  /* Browser canaries are deterministic contracts; retries hide flakes. */
+  retries: 0,
+  /* The browser, Worker, and database share the host. Benchmarks showed that
+     additional workers increase contention rather than reducing wall time. */
+  workers: 1,
   /* Backstop for a dead dev server, which fails every remaining test
      identically (see the exit handler in e2e-global-setup.ts): uncapped, that
      is ~20 tests x 3 attempts of ECONNREFUSED burying the one line that

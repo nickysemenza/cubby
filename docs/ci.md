@@ -18,6 +18,13 @@ Ordinary pull requests run affected tests. High-risk paths and manual
 coverage runs the full instrumented JS, Rust, and PostgreSQL tiers. This avoids
 a persistent label turning every follow-up revision into another full run.
 
+PostgreSQL is the only authoritative database backend. The retained integration
+suite is capped at 260 contract tests and Playwright at 22 browser-only tests;
+CI selects those same manifests with no retries. PGlite is available only
+through explicit local developer commands and is not duplicated in CI or
+scheduled coverage. The local acceptance command runs the fast tier first, then
+PostgreSQL and Playwright concurrently with one browser worker.
+
 On a `main` push, CI looks for the merged pull request and its final successful
 CI run. A prior result is reusable only when it came from this repository, has
 a policy-versioned provenance marker bound to the PR number and head commit,
@@ -67,6 +74,24 @@ Keep these measured negative results in mind:
 - Passing the WASM package through a producer dependency cost another runner
   acquisition (about 23 seconds median and 90 seconds p95). Compiler-capable
   consumers use the shared exact-key cache instead.
+
+The rewritten local-suite budgets are 15 seconds for fast tests, 40 seconds for
+PostgreSQL, 35 seconds for Playwright, and 60 seconds end to end (55-second
+median target). Re-benchmark five warm `pnpm test:all` runs after changing test
+selection, worker counts, database provisioning, or browser harness startup.
+
+Deleted database and browser cases are not a ban on their behavior. Restore a
+case at the lowest tier that can fail: pure grouping, filtering, ranking,
+formatting, registry, and projection contracts belong in table-driven unit
+tests; component interaction belongs in jsdom. The rewrite keeps, among other
+things, Collection matrix, tool-gallery, Product movement, conversion
+coverage, title-size detection, Wish presentation, data-quality, and Location
+vision behavior in those fast tiers. Search grouping was moved to the exported
+pure grouping seam. Removal cascades remain state-based PostgreSQL contracts;
+the fast tier keeps only their compile-time invariants rather than impersonating
+a Drizzle transaction. Do not put a pure case back into PostgreSQL merely to
+increase database coverage, and do not replace PostgreSQL with a mock database
+interface.
 
 ## Operational checks
 

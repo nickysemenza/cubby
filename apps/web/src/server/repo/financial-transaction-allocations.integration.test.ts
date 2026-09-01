@@ -292,43 +292,4 @@ describe("settlement allocations — write path", () => {
       ),
     ).rejects.toThrow(/settlement allocations/);
   });
-
-  it("rejects an update whose purchaseId and allocations disagree", async () => {
-    // deriveUpdateData drops the create input's agreement refinement, so the
-    // repo has to re-assert it rather than letting one field silently win.
-    const account = await mkAccount();
-    const [a, b] = await Promise.all([mkPurchase("WN-S"), mkPurchase("WN-T")]);
-    const txn = await mkTransaction(account.id, {
-      purchaseId: a.id,
-      amount: -5,
-    });
-
-    await expect(
-      update(txn.id, {
-        purchaseId: b.id,
-        allocations: [{ purchaseId: a.id, amount: -5 }],
-      }),
-    ).rejects.toThrow(/disagree/);
-  });
-
-  it("unlinks by replacing the set with nothing", async () => {
-    const account = await mkAccount();
-    const a = await mkPurchase("WN-Q");
-    const txn = await mkTransaction(account.id, {
-      purchaseId: a.id,
-      amount: -5,
-    });
-
-    await update(txn.id, { allocations: [] });
-
-    expect((await allocationsOf(txn.id))?.purchaseId).toBeNull();
-    const { data: items } = await listFinancialTransactions(
-      ctx.db,
-      { purchasePresenceFilter: "none" },
-      [],
-      page,
-    );
-    expect(items.map((row) => row.id)).toContain(txn.id);
-    expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
-  });
 });

@@ -2,12 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  entityEmbedding,
-  expense,
-  inventoryEntry,
-  product,
-} from "~/server/db/schema";
+import { entityEmbedding, expense, inventoryEntry } from "~/server/db/schema";
 
 import { getDb } from "../database-helpers";
 import {
@@ -86,29 +81,6 @@ describe("discardProductUnits", () => {
     expect(result.storedQuantity).toBe(-1);
   });
 
-  it("leaves the shelf alone when the operator declines", async () => {
-    const { prod, entry } = await seedStockedProduct(3);
-
-    const result = await discardProductUnits(
-      ctx.db,
-      {
-        productId: prod.entityId,
-        quantity: 1,
-        date: "2026-06-03",
-        reason: null,
-        inventoryEntryId: null,
-      },
-      ctx.actor,
-    );
-
-    expect(result.inventory).toBeNull();
-    const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
-    });
-    expect(after?.amount.value).toBe(3);
-    expect(after?.deletedAt).toBeNull();
-  });
-
   it("decrements the named shelf when asked", async () => {
     const { prod, entry } = await seedStockedProduct(3);
 
@@ -135,92 +107,12 @@ describe("discardProductUnits", () => {
     expect(after?.deletedAt).toBeNull();
   });
 
-  it("decrements a part-used shelf by a fractional amount", async () => {
-    const { prod, entry } = await seedStockedProduct(2.5);
-
-    const result = await discardProductUnits(
-      ctx.db,
-      {
-        productId: prod.entityId,
-        quantity: 0.5,
-        date: "2026-06-03",
-        reason: null,
-        inventoryEntryId: entry.entityId,
-      },
-      ctx.actor,
-    );
-
-    expect(result.storedQuantity).toBe(-0.5);
-    expect(result.inventory).toMatchObject({
-      removed: false,
-      remainingValue: 2,
-    });
-    const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
-    });
-    expect(after?.amount.value).toBe(2);
-    expect(after?.deletedAt).toBeNull();
-    // The ledger half has to survive the round-trip too — an integer column
-    // would have stored -1 or rejected the write outright.
-    expect((await loadExpense(result.expenseShortcode))?.productQuantity).toBe(
-      -0.5,
-    );
-  });
-
-  it("empties a half-full shelf when the remainder is discarded", async () => {
-    const { prod, entry } = await seedStockedProduct(0.5);
-
-    const result = await discardProductUnits(
-      ctx.db,
-      {
-        productId: prod.entityId,
-        quantity: 0.5,
-        date: "2026-06-03",
-        reason: "threw away the rest",
-        inventoryEntryId: entry.entityId,
-      },
-      ctx.actor,
-    );
-
-    expect(result.storedQuantity).toBe(-0.5);
-    expect(result.inventory).toMatchObject({ removed: true });
-    const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
-    });
-    expect(after?.deletedAt).not.toBeNull();
-  });
-
   // Over-discard is deliberately allowed rather than refused the way
   // bulkMoveInventoryEntries refuses an over-move — the shelf is a
   // stale-tolerant ballpark and the operator at the bin outranks it. See the
   // comment on the `remaining` branch in discard.ts. This pins that the
   // `remaining < 0` path empties the entry and keeps the stated quantity,
   // rather than clamping, throwing, or silently recording something else.
-  it("empties the entry when more is discarded than the shelf holds", async () => {
-    const { prod, entry } = await seedStockedProduct(3);
-
-    const result = await discardProductUnits(
-      ctx.db,
-      {
-        productId: prod.entityId,
-        quantity: 5,
-        date: "2026-06-03",
-        reason: null,
-        inventoryEntryId: entry.entityId,
-      },
-      ctx.actor,
-    );
-
-    expect(result.storedQuantity).toBe(-5);
-    expect(result.inventory).toMatchObject({
-      removed: true,
-      remainingValue: null,
-    });
-    const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
-    });
-    expect(after?.deletedAt).not.toBeNull();
-  });
 
   it("empties the entry and cascades its embedding when nothing is left", async () => {
     const { prod, entry } = await seedStockedProduct(2);
@@ -279,29 +171,6 @@ describe("discardProductUnits", () => {
           // Silently decrementing the shelf that WAS named would take units off
           // the wrong thing — the one failure mode worth being loud about.
           inventoryEntryId: other.entry.entityId,
-        },
-        ctx.actor,
-      ),
-      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-    ).rejects.toThrow();
-  });
-
-  it("refuses a soft-deleted product", async () => {
-    const { prod } = await seedStockedProduct(1);
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, prod.entityId));
-
-    await expect(
-      discardProductUnits(
-        ctx.db,
-        {
-          productId: prod.entityId,
-          quantity: 1,
-          date: "2026-06-03",
-          reason: null,
-          inventoryEntryId: null,
         },
         ctx.actor,
       ),

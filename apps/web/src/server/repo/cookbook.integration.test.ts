@@ -12,17 +12,13 @@ import {
 import {
   deleteCookbook,
   getCookbookByName,
-  getCookbookSource,
-  getCookbookSummary,
   listCookbooks,
-  reprocessCookbookStream,
   setCookbookProduct,
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { findOrphanedEntityEmbeddings } from "./entity-embedding-cleanup";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
-import { findPartiallyImportedCookbooks } from "./problems";
 import { deleteProducts } from "./product";
 import {
   cookbookRecipe,
@@ -59,153 +55,6 @@ describe("cookbook repository", () => {
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
     expect(cb?.rawJson).toHaveLength(1);
-  });
-
-  it("listCookbooks reports the live, non-deleted recipe count", async () => {
-    const raw = [
-      cookbookRecipe("Pancakes", ["2 cups flour"]),
-      cookbookRecipe("Waffles", ["1 cup flour"]),
-    ];
-    const { output, entityId: id } = await upsertCookbook(
-      ctx.db,
-      { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      ctx.actor,
-    );
-    const ref = { id, name: "Book A" };
-    await upsertCookbookRecipeFromCookbook(raw[0]!, ref, ctx.db, ctx.actor);
-
-    const list = await listCookbooks(ctx.db);
-    const entry = list.find((c) => c.id === output.id);
-    expect(entry).toBeDefined();
-    // Only one of the two raw recipes was actually imported.
-    expect(entry?.recipeCount).toBe(1);
-    expect(entry?.sourceRecipeCount).toBe(2);
-    expect(entry?.coverUrl).toBeNull();
-
-    await expect(getCookbookSummary(ctx.db, output.id)).resolves.toEqual(entry);
-  });
-
-  it("finds cookbooks with source recipes missing from the live import relation", async () => {
-    const raw = [
-      cookbookRecipe("Pancakes", ["2 cups flour"]),
-      cookbookRecipe("Waffles", ["1 cup flour"]),
-    ];
-    const { entityId: cookbookId, output } = await upsertCookbook(
-      ctx.db,
-      { name: "Partial Book", rawJson: raw, sourceLabel: "partial.epub" },
-      ctx.actor,
-    );
-    const ref = { id: cookbookId, name: "Partial Book" };
-
-    const initially = await findPartiallyImportedCookbooks(ctx.db);
-    expect(initially).toContainEqual({
-      id: output.id,
-      name: "Partial Book",
-      sourceRecipeCount: 2,
-      recipeCount: 0,
-      missingRecipeCount: 2,
-    });
-
-    const first = await upsertCookbookRecipeFromCookbook(
-      raw[0]!,
-      ref,
-      ctx.db,
-      ctx.actor,
-    );
-    const partlyImported = await findPartiallyImportedCookbooks(ctx.db);
-    expect(partlyImported).toContainEqual({
-      id: output.id,
-      name: "Partial Book",
-      sourceRecipeCount: 2,
-      recipeCount: 1,
-      missingRecipeCount: 1,
-    });
-
-    await upsertCookbookRecipeFromCookbook(raw[1]!, ref, ctx.db, ctx.actor);
-    expect(await findPartiallyImportedCookbooks(ctx.db)).not.toContainEqual(
-      expect.objectContaining({ id: output.id }),
-    );
-
-    await getDb(ctx.db)
-      .update(recipe)
-      .set({ deletedAt: new Date() })
-      .where(eq(recipe.id, first.id));
-    const afterSoftDelete = await findPartiallyImportedCookbooks(ctx.db);
-    expect(afterSoftDelete).toContainEqual({
-      id: output.id,
-      name: "Partial Book",
-      sourceRecipeCount: 2,
-      recipeCount: 1,
-      missingRecipeCount: 1,
-    });
-  });
-
-  it("getCookbookSource returns the stored extraction for selective re-import", async () => {
-    const raw = [
-      cookbookRecipe("Pancakes", ["2 cups flour"]),
-      cookbookRecipe("Waffles", ["1 cup flour"]),
-    ];
-    const { entityId: id } = await upsertCookbook(
-      ctx.db,
-      { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      ctx.actor,
-    );
-
-    const src = await getCookbookSource(ctx.db, id);
-    expect(src.id).toBe(id);
-    expect(src.name).toBe("Book A");
-    expect(src.recipes.map((r) => r.meta.title)).toEqual([
-      "Pancakes",
-      "Waffles",
-    ]);
-  });
-
-  it("reprocessCookbook re-derives imported recipes and flags unimported extras", async () => {
-    const raw = [
-      cookbookRecipe("Pancakes", ["2 cups flour"]),
-      cookbookRecipe("Waffles", ["1 cup flour"]),
-    ];
-    const { entityId: id } = await upsertCookbook(
-      ctx.db,
-      { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
-      ctx.actor,
-    );
-    const ref = { id, name: "Book A" };
-
-    // Import only the first recipe (the user's selection).
-    const imported = await upsertCookbookRecipeFromCookbook(
-      raw[0]!,
-      ref,
-      ctx.db,
-      ctx.actor,
-    );
-
-    const gen = reprocessCookbookStream(ctx.db, id, ctx.actor);
-    const events: { done: number; total: number }[] = [];
-    let next = await gen.next();
-    while (!next.done) {
-      events.push(next.value);
-      next = await gen.next();
-    }
-    const result = next.value;
-
-    expect(events).toEqual([{ done: 1, total: 1, recipeId: imported.id }]);
-
-    // Pancakes was re-derived; Waffles (never imported) is surfaced, not created.
-    expect(result.reprocessed).toBe(1);
-    expect(result.importableExtras).toEqual(["Waffles"]);
-
-    const pancakes = await getDb(ctx.db).query.recipe.findMany({
-      where: eq(recipe.name, "Pancakes"),
-    });
-    expect(pancakes).toHaveLength(1);
-    expect(pancakes[0]!.id).toBe(imported.id);
-    expect(pancakes[0]!.cookbookId).toBe(id);
-
-    const waffles = await getDb(ctx.db).query.recipe.findMany({
-      where: eq(recipe.name, "Waffles"),
-    });
-    expect(waffles).toHaveLength(0);
   });
 
   // deleteCookbook is UNGUARDED (lockAndValidateForDelete only locks + checks

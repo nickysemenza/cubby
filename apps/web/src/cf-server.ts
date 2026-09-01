@@ -309,8 +309,8 @@ const handler = {
             import("./server/db"),
             import("./server/dead-letter-queue"),
           ]);
-          await processDeadLetterBatch(db, batch, {
-            ...productionDeadLetterQueuePorts,
+          await processDeadLetterBatch(batch, {
+            ...productionDeadLetterQueuePorts(db),
             captureException: (error) => {
               Sentry.captureException(error);
             },

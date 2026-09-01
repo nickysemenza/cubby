@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -25,7 +25,13 @@ Object.defineProperty(globalThis, "localStorage", {
   value: createMemoryStorage(),
 });
 
-// Cleanup after each test
 afterEach(() => {
   cleanup();
+  document.body.replaceChildren();
+  localStorage.clear();
+  sessionStorage.clear();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.clearAllMocks();
+  vi.useRealTimers();
 });

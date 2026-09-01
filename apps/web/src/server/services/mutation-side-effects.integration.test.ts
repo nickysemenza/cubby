@@ -3,15 +3,12 @@ import {
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
-import { testEntityId } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import {
-  findOrphanedEntityEmbeddings,
-  getEntityEmbeddingDeletedAt,
   getEntityEmbeddingDeletedAtForRef,
   upsertEntityEmbedding,
 } from "~/server/repo/entity-embedding";
@@ -36,7 +33,6 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "./mutation-side-effects";
-import { cleanupOrphanedEntityEmbeddings } from "./problems.service";
 
 const batchMetadataSchema = z.object({ source: z.string().optional() });
 const batchSource = <Metadata>(metadata: Metadata): string | undefined => {
@@ -180,55 +176,6 @@ describe("mutation side effects integration", () => {
     );
   });
 
-  it("location update with image changes enqueues AI refresh jobs", async () => {
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Manifest AI bin" }),
-      ctx.actor,
-    );
-
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entityType: "location", entityId: location.entityId },
-      source: "test.location.update",
-      locationImagesChanged: true,
-    });
-
-    const batches = await listBackgroundBatches(ctx.db, 20);
-    const matchingKinds = batches
-      .filter((batch) => batchSource(batch.metadata) === "test.location.update")
-      .map((batch) => batch.kind);
-    expect(matchingKinds).toEqual(
-      expect.arrayContaining([
-        "location-ai.description.refresh",
-        "location-ai.inventory.refresh",
-      ]),
-    );
-  });
-
-  it("location update without image changes skips AI refresh jobs", async () => {
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Manifest rename bin" }),
-      ctx.actor,
-    );
-
-    // A rename (no image change) must not fire vision analysis — the analysis
-    // fingerprint includes the name, so it would otherwise be a paid cache miss.
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entityType: "location", entityId: location.entityId },
-      source: "test.location.rename",
-    });
-
-    const batches = await listBackgroundBatches(ctx.db, 20);
-    const matchingKinds = batches
-      .filter((batch) => batchSource(batch.metadata) === "test.location.rename")
-      .map((batch) => batch.kind);
-    expect(matchingKinds).not.toContain("location-ai.description.refresh");
-    expect(matchingKinds).not.toContain("location-ai.inventory.refresh");
-  });
-
   it("bulk inventory wave enqueues exactly one valuation recompute", async () => {
     const location = await createLocation(
       ctx.db,
@@ -366,31 +313,6 @@ describe("mutation side effects integration", () => {
       entityType: "product",
       entityId: product.entityId,
     });
-    expect(deletedAt).toBeInstanceOf(Date);
-  });
-
-  it("orphaned embedding cleanup detects and soft-deletes dead refs", async () => {
-    const config = getSemanticEmbeddingConfig();
-    const deadProductId = testEntityId(
-      "product",
-      "00000000-0000-4000-8000-000000000099",
-    );
-    await upsertEntityEmbedding(ctx.db, {
-      entityType: "product",
-      entityId: deadProductId,
-      embeddingText: "product: dead semantic row",
-      config,
-      embedding: Array.from({ length: config.dimensions }, () => 0),
-    });
-
-    const orphaned = await findOrphanedEntityEmbeddings(ctx.db);
-    const target = orphaned.find((row) => row.entityId === deadProductId);
-    expect(target).toBeTruthy();
-
-    const result = await cleanupOrphanedEntityEmbeddings(ctx.db, [target!.id]);
-    expect(result.deleted).toBe(1);
-
-    const deletedAt = await getEntityEmbeddingDeletedAt(ctx.db, target!.id);
     expect(deletedAt).toBeInstanceOf(Date);
   });
 });

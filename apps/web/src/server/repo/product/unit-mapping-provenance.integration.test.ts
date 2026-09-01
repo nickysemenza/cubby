@@ -60,7 +60,7 @@ describe("unit-mapping provenance is the public shortcode", () => {
       m.sourceMetadata.type === "product" ? m.sourceMetadata.productId : null,
     );
 
-  it("stamps the shortcode on every stored mapping the detail read returns", async () => {
+  it("stamps the shortcode on detail and summary mapping reads", async () => {
     const product = await seed();
     const uuid = await resolveLiveShortcode(ctx.db, product.id, "product");
     expect(uuid).not.toBeNull();
@@ -77,10 +77,6 @@ describe("unit-mapping provenance is the public shortcode", () => {
     for (const id of ids) {
       expect(parseShortcode(id ?? "")?.type).toBe("product");
     }
-  });
-
-  it("stamps the shortcode on the summaries read, which is keyed on uuids underneath", async () => {
-    const product = await seed();
 
     const summaries = await getProductSummariesWorkflow(workflowContext(), {
       ids: [product.id],

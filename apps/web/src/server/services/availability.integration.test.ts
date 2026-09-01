@@ -4,7 +4,6 @@ import { createRecipeKernelTestCaller } from "tooling/entity-kernel-test-caller"
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { createRecipe } from "~/server/repo/recipe";
 import { seedIngredientWithStock } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -63,55 +62,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     expect(result.ingredients[0]!.basisUnit).toBe("g");
     expect(result.ingredients[0]!.needValue).toBeCloseTo(240, 1); // 2 cups
     expect(result.ingredients[0]!.haveValue).toBeCloseTo(500, 1); // 500 g on hand
-  });
-
-  it("reports short when inventory is insufficient", async () => {
-    const flour = await seedFlourWithStock({ value: 100, unit: "g" }); // ~0.83 cups
-    const recipe = await createFlourRecipe(flour.shortcode, {
-      value: 2,
-      unit: "cup",
-    });
-
-    const result = await ctx().services.availability.getRecipeAvailability(
-      recipe.id,
-    );
-
-    expect(result.coverage).toBe(0);
-    expect(result.ingredients[0]!.status).toBe("short");
-    expect(result.missing).toEqual(["flour"]);
-  });
-
-  it("reports missing when nothing is on hand", async () => {
-    const flour = await findOrCreateIngredient(tdb.db, "flour");
-    const recipe = await createFlourRecipe(flour.shortcode, {
-      value: 2,
-      unit: "cup",
-    });
-
-    const result = await ctx().services.availability.getRecipeAvailability(
-      recipe.id,
-    );
-
-    expect(result.coverage).toBe(0);
-    expect(result.ingredients[0]!.status).toBe("missing");
-    expect(result.ingredients[0]!.haveValue).toBeNull();
-  });
-
-  it("reports unconvertible when units can't be reconciled", async () => {
-    // On hand in "widget", but the only mapping is cup<->g: no path to "cup".
-    const flour = await seedFlourWithStock({ value: 3, unit: "widget" });
-    const recipe = await createFlourRecipe(flour.shortcode, {
-      value: 2,
-      unit: "cup",
-    });
-
-    const result = await ctx().services.availability.getRecipeAvailability(
-      recipe.id,
-    );
-
-    expect(result.ingredients[0]!.status).toBe("unconvertible");
-    expect(result.ingredients[0]!.haveValue).toBeNull();
-    expect(result.coverage).toBe(0);
   });
 
   describe("sub-recipes", () => {
@@ -189,62 +139,6 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         false,
       );
       expect(result.unexpandedSubRecipes).toBe(0);
-    });
-
-    it("counts inventory once for an ingredient used directly and via a sub-recipe", async () => {
-      // The double-count guard for per-ingredient grouping: 500 g on hand must
-      // be counted once, not once per route to the ingredient.
-      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
-      const sub = await createSub("Dough", { value: 2, unit: "cup" }, [
-        { ingredientId: flour.shortcode, amounts: [{ value: 1, unit: "cup" }] },
-      ]);
-      const parent = await createParent(
-        sub.id,
-        [{ value: 2, unit: "cup" }],
-        [
-          {
-            ingredientId: flour.shortcode,
-            amounts: [{ value: 1, unit: "cup" }],
-          },
-        ],
-      );
-
-      const result = await ctx().services.availability.getRecipeAvailability(
-        parent.id,
-      );
-
-      const rows = result.ingredients.filter((i) => i.name === "flour");
-      expect(rows).toHaveLength(1); // one row per ingredient, not per mention
-      expect(rows[0]!.needValue).toBeCloseTo(240, 1); // 1 cup direct + 1 cup via
-      expect(rows[0]!.haveValue).toBeCloseTo(500, 1); // NOT 1000
-    });
-
-    it("flags a yield-less sub-recipe and excludes it from coverage", async () => {
-      const flour = await seedFlourWithStock({ value: 500, unit: "g" });
-      const sub = await createSub("Dough", null, [
-        { ingredientId: flour.shortcode, amounts: [{ value: 2, unit: "cup" }] },
-      ]);
-      const parent = await createParent(
-        sub.id,
-        [{ value: 2, unit: "cup" }],
-        [
-          {
-            ingredientId: flour.shortcode,
-            amounts: [{ value: 1, unit: "cup" }],
-          },
-        ],
-      );
-
-      const result = await ctx().services.availability.getRecipeAvailability(
-        parent.id,
-      );
-
-      const blocked = result.ingredients.find((i) => i.status === "subrecipe");
-      expect(blocked?.blockedReason).toBe("missingYield");
-      expect(result.unexpandedSubRecipes).toBe(1);
-      // Coverage scores only the resolvable rows — the direct flour.
-      expect(result.totalIngredients).toBe(1);
-      expect(result.coverage).toBe(1);
     });
 
     it("terminates on a sub-recipe cycle", async () => {

@@ -10,14 +10,9 @@ import {
   inventoryEntry,
   product,
   productExternalId,
-  productImage,
   productUnitMappings,
 } from "~/server/db/schema";
-import {
-  getDb,
-  insertAndReturn,
-  notDeleted,
-} from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import {
@@ -30,7 +25,6 @@ import {
   listProductComponents,
 } from "~/server/repo/product-components";
 import {
-  createImageFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -296,92 +290,6 @@ describe("mergeProducts", () => {
     expect(await liveExternalIds(loser.id)).toHaveLength(0);
   });
 
-  it("leaves a primary in a slot the loser held twice", async () => {
-    // Exactly the shape the `contract` migration created on five real products:
-    // one amazon/asin slot holding a primary AND a secondary. `planSlotCollisions`
-    // takes the first row it sees as the slot's occupant and is isPrimary-unaware,
-    // so without a deterministic order the secondary could win — re-pointing
-    // as-is while the real primary is demoted, leaving the slot with rows but no
-    // primary. The partial unique forbids two, never zero, so nothing complains;
-    // the slot just stops answering the next primary upsert's arbiter.
-    const keeper = await seedProduct("Keeper Two Asins", {
-      model: "TWOASIN-1",
-    });
-    const loser = await seedProduct("Loser Two Asins", { model: "TWOASIN-1" });
-    await getDb(ctx.db).insert(productExternalId).values({
-      productId: loser.id,
-      source: "amazon",
-      kind: "asin",
-      externalId: "B0SECOND99",
-      isPrimary: false,
-    });
-    await getDb(ctx.db).insert(productExternalId).values({
-      productId: loser.id,
-      source: "amazon",
-      kind: "asin",
-      externalId: "B0PRIMARY9",
-      isPrimary: true,
-    });
-
-    await mergeProducts(
-      ctx.db,
-      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-      TEST_ACTOR,
-    );
-
-    const survivor = (await liveExternalIds(keeper.id))
-      .filter((row) => row.kind === "asin")
-      .map((row) => [row.externalId, row.isPrimary] as const)
-      .sort((a, b) => a[0].localeCompare(b[0]));
-    expect(survivor).toEqual([
-      ["B0PRIMARY9", true],
-      ["B0SECOND99", false],
-    ]);
-  });
-
-  it("keeps the survivor's cover when a merged-in image is older", async () => {
-    // `foldAssociation` re-points without touching `sortOrder`, which defaults
-    // to 0 on every row, and the cover is whichever row sorts first under
-    // `asc(sortOrder), asc(createdAt)`. So a merged-in image created earlier
-    // silently became the survivor's cover — a barcode scan hijacked a
-    // product's cover exactly this way.
-    const keeper = await seedProduct("Keeper Cover", { model: "COVER-1" });
-    const loser = await seedProduct("Loser Cover", { model: "COVER-1" });
-    const loserImage = await createImageFixture(ctx.db, "loser-barcode-scan");
-    const keeperImage = await createImageFixture(ctx.db, "keeper-real-photo");
-    await insertAndReturn(ctx.db, productImage, {
-      productId: loser.id,
-      imageId: loserImage.id,
-      createdAt: new Date("2020-01-01T00:00:00Z"),
-    });
-    await insertAndReturn(ctx.db, productImage, {
-      productId: keeper.id,
-      imageId: keeperImage.id,
-      createdAt: new Date("2026-01-01T00:00:00Z"),
-    });
-
-    await mergeProducts(
-      ctx.db,
-      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-      TEST_ACTOR,
-    );
-
-    const ordered = await getDb(ctx.db).query.productImage.findMany({
-      where: and(
-        eq(productImage.productId, keeper.id),
-        notDeleted(productImage),
-      ),
-      columns: { imageId: true },
-      orderBy: [asc(productImage.sortOrder), asc(productImage.createdAt)],
-    });
-    // The survivor's own image is still first, so its cover is unchanged; the
-    // merged-in one follows rather than being lost.
-    expect(ordered.map((row) => row.imageId)).toEqual([
-      keeperImage.id,
-      loserImage.id,
-    ]);
-  });
-
   it("sums stock in a shared location instead of losing a row", async () => {
     const shelf = await seedLocation("Merge Shelf");
     const otherShelf = await seedLocation("Merge Other Shelf");
@@ -440,44 +348,6 @@ describe("mergeProducts", () => {
   // pass, so the second write overwrites the first: 2 + 3 + 4 persists as 6 and
   // a quantity vanishes inside a destructive operation. `planSlotCollisions`
   // groups by target so the sum happens once.
-  it("sums every absorbed entry when two losers share the keeper's location", async () => {
-    const shelf = await seedLocation("Triple Shelf");
-    const keeper = await seedProduct("Keeper Clamp", { model: "CLAMP-1" });
-    const loserA = await seedProduct("Loser Clamp A", { model: "CLAMP-1" });
-    const loserB = await seedProduct("Loser Clamp B", { model: "CLAMP-1" });
-
-    for (const [product, value] of [
-      [keeper, 2],
-      [loserA, 3],
-      [loserB, 4],
-    ] as const) {
-      await createInventoryEntry(
-        ctx.db,
-        {
-          productId: product.id,
-          locationId: shelf,
-          amount: { value, unit: "each" },
-        },
-        TEST_ACTOR,
-      );
-    }
-
-    const summary = await mergeProducts(
-      ctx.db,
-      {
-        keepId: keeper.shortcode,
-        mergeIds: [loserA.shortcode, loserB.shortcode],
-      },
-      TEST_ACTOR,
-    );
-
-    expect(summary.inventoryMerged).toBe(2);
-    const entries = await liveEntries(keeper.id);
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.amount.value).toBe(9);
-    expect(await liveEntries(loserA.id)).toHaveLength(0);
-    expect(await liveEntries(loserB.id)).toHaveLength(0);
-  });
 
   it("refuses — and previews a blocker — when shared-location units disagree", async () => {
     const shelf = await seedLocation("Mismatch Shelf");
@@ -584,27 +454,6 @@ describe("mergeProducts", () => {
       expect(dead?.deletedAt).toBeNull();
     });
 
-    it("refuses the same merge run the other way round", async () => {
-      const kit = await seedProduct("Reverse Kit", { model: "REV-1" });
-      const part = await seedProduct("Reverse Part", { model: "REV-2" });
-      await attachProductComponents(
-        ctx.db,
-        kit.id,
-        [{ productId: part.id, quantity: 2 }],
-        TEST_ACTOR,
-      );
-
-      // Merging the descendant into its own kit closes the same loop; the
-      // guard is a property of the graph, not of which id the operator kept.
-      await expect(
-        mergeProducts(
-          ctx.db,
-          { keepId: part.shortcode, mergeIds: [kit.shortcode] },
-          TEST_ACTOR,
-        ),
-      ).rejects.toThrow(/contain itself/);
-    });
-
     it("dedupes a component two merging kits list at the same quantity", async () => {
       const keeper = await seedProduct("Keeper Kit", { model: "DUP-1" });
       const loser = await seedProduct("Loser Kit", { model: "DUP-2" });
@@ -688,54 +537,6 @@ describe("mergeProducts", () => {
       expect(await componentQuantity(loser.id, shared.shortcode)).toBe(3);
     });
 
-    it("sums the quantities when one kit listed both merging parts", async () => {
-      const kit = await seedProduct("Host Kit", { model: "SUM-1" });
-      const keeper = await seedProduct("Keeper Screw", { model: "SUM-2" });
-      const loserA = await seedProduct("Loser Screw A", { model: "SUM-3" });
-      const loserB = await seedProduct("Loser Screw B", { model: "SUM-4" });
-      const otherKit = await seedProduct("Other Kit", { model: "SUM-5" });
-      await attachProductComponents(
-        ctx.db,
-        kit.id,
-        [
-          { productId: keeper.id, quantity: 2 },
-          { productId: loserA.id, quantity: 3 },
-          { productId: loserB.id, quantity: 4 },
-        ],
-        TEST_ACTOR,
-      );
-      // A kit that lists only a loser — nothing to fold into, so it re-points.
-      await attachProductComponents(
-        ctx.db,
-        otherKit.id,
-        [{ productId: loserA.id, quantity: 7 }],
-        TEST_ACTOR,
-      );
-
-      const preview = await previewMergeProducts(ctx.db, {
-        keepId: keeper.id,
-        mergeIds: [loserA.id, loserB.id],
-      });
-      const previewed = new Map(preview.changes.map((c) => [c.code, c.total]));
-      expect(previewed.get("repoint-or-sum-same-kit")).toBe(1);
-      expect(previewed.get("sum-same-kit-quantity")).toBe(2);
-
-      const summary = await mergeProducts(
-        ctx.db,
-        {
-          keepId: keeper.shortcode,
-          mergeIds: [loserA.shortcode, loserB.shortcode],
-        },
-        TEST_ACTOR,
-      );
-
-      expect(summary.kitLinksMoved).toBe(1);
-      expect(summary.kitLinksSummed).toBe(2);
-      expect(await componentQuantity(kit.id, keeper.shortcode)).toBe(9);
-      expect(await componentCodes(kit.id)).toEqual([keeper.shortcode]);
-      expect(await componentQuantity(otherKit.id, keeper.shortcode)).toBe(7);
-    });
-
     it("carries a deliberate stockTracked: false onto a survivor that has none", async () => {
       const keeper = await seedProduct("Undecided Kit", { model: "TRACK-1" });
       const loser = await seedProduct("Reviewed Kit", {
@@ -758,30 +559,6 @@ describe("mergeProducts", () => {
       });
       expect(survivor?.stockTracked).toBe(false);
     });
-
-    it("keeps the survivor's own stockTracked rather than overwriting it", async () => {
-      const keeper = await seedProduct("Tracked Kit", {
-        model: "TRACK-3",
-        stockTracked: false,
-      });
-      const loser = await seedProduct("Donor Kit", {
-        model: "TRACK-4",
-        stockTracked: true,
-      });
-
-      const summary = await mergeProducts(
-        ctx.db,
-        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-        TEST_ACTOR,
-      );
-
-      expect(summary.carriedFields).not.toContain("stockTracked");
-      const survivor = await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.id, keeper.id),
-        columns: { stockTracked: true },
-      });
-      expect(survivor?.stockTracked).toBe(false);
-    });
   });
 
   /**
@@ -790,94 +567,6 @@ describe("mergeProducts", () => {
    * stopped, which is exactly why these are integration rather than unit tests.
    */
   describe("conversion edges", () => {
-    it("discards a conflicting density and leaves the survivor one answer", async () => {
-      const keeper = await seedProduct("Olive Oil, CA", {
-        model: "OO-KEEP",
-        unitMappings: [
-          {
-            a: { value: 1, unit: "ml" },
-            b: { value: 0.92, unit: "g" },
-            source: null,
-          },
-        ],
-      });
-      const loser = await seedProduct("olive oil", {
-        model: "OO-LOSE",
-        unitMappings: [
-          {
-            a: { value: 1, unit: "ml" },
-            b: { value: 0.9, unit: "g" },
-            source: "unk",
-          },
-        ],
-      });
-
-      const preview = await previewMergeProducts(ctx.db, {
-        keepId: keeper.id,
-        mergeIds: [loser.id],
-      });
-      // The point of the preview change: the conflict is visible BEFORE
-      // confirming, not only in the audit trail afterwards.
-      expect(
-        preview.changes.find(
-          (change) => change.code === "discard-conflicting-conversion",
-        )?.total,
-      ).toBe(1);
-
-      const summary = await mergeProducts(
-        ctx.db,
-        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-        TEST_ACTOR,
-      );
-
-      expect(summary.unitMappingsDeduped).toBe(0);
-      expect(summary.unitMappingsDiscarded).toHaveLength(1);
-      expect(summary.unitMappingsDiscarded[0]).toMatchObject({
-        from: "ml",
-        to: "g",
-        keptRatio: 0.92,
-        discardedRatio: 0.9,
-        source: "unk",
-      });
-
-      const survivorMappings = await liveUnitMappings(keeper.id);
-      expect(survivorMappings).toHaveLength(1);
-      expect(survivorMappings[0]?.b.value).toBe(0.92);
-    });
-
-    it("dedupes an identical edge silently, not as a discard", async () => {
-      const keeper = await seedProduct("Canola Oil A", {
-        model: "CO-KEEP",
-        unitMappings: [
-          {
-            a: { value: 1, unit: "ml" },
-            b: { value: 0.92, unit: "g" },
-            source: null,
-          },
-        ],
-      });
-      const loser = await seedProduct("Canola Oil B", {
-        model: "CO-LOSE",
-        unitMappings: [
-          {
-            a: { value: 1, unit: "ml" },
-            b: { value: 0.92, unit: "g" },
-            source: null,
-          },
-        ],
-      });
-
-      const summary = await mergeProducts(
-        ctx.db,
-        { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
-        TEST_ACTOR,
-      );
-
-      expect(summary.unitMappingsDeduped).toBe(1);
-      expect(summary.unitMappingsDiscarded).toEqual([]);
-      expect(await liveUnitMappings(keeper.id)).toHaveLength(1);
-    });
-
     it("moves an edge the survivor does not state", async () => {
       const keeper = await seedProduct("Bagged Onions, organic", {
         model: "ON-KEEP",

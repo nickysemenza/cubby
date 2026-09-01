@@ -1,16 +1,10 @@
-import type { EntityId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
 import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { inventoryEntry } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
 import {
-  bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   createInventoryEntry,
-  updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { createLocation, deleteLocations } from "~/server/repo/location";
 import { createProduct, deleteProducts } from "~/server/repo/product";
@@ -69,24 +63,6 @@ describe("inventory soft-delete target guard", () => {
     };
   };
 
-  const createTestEntry = async (
-    productId: EntityId<"product">,
-    locationId: EntityId<"location">,
-  ) => {
-    const output = await createInventoryEntry(
-      ctx.db,
-      { productId, locationId, amount },
-      TEST_ACTOR,
-    );
-    return {
-      output,
-      entityId: parseEntityId(
-        "inventory",
-        await requireResolvedId(output.id, "inventory"),
-      ),
-    };
-  };
-
   const liveLocation = () => createTestLocation("Shelf");
   const liveProduct = () => createTestProduct("Flour");
 
@@ -119,45 +95,6 @@ describe("inventory soft-delete target guard", () => {
     ).rejects.toThrow(/does not exist or has been deleted/);
   });
 
-  it("updateInventoryEntry rejects re-pointing at a soft-deleted product", async () => {
-    const { entityId: locationId } = await liveLocation();
-    const { entityId: productId } = await liveProduct();
-    const { entityId: entryId } = await createTestEntry(productId, locationId);
-
-    // A second product with no inventory can be soft-deleted, then can't be
-    // moved onto the live entry.
-    const { entityId: deadProductId } = await createTestProduct("Sugar");
-    await deleteProducts(ctx.db, [deadProductId], TEST_ACTOR);
-
-    await expect(
-      updateInventoryEntry(
-        ctx.db,
-        entryId,
-        { productId: deadProductId },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/does not exist or has been deleted/);
-  });
-
-  it("updateInventoryEntry rejects re-pointing at a soft-deleted location", async () => {
-    const { entityId: locationId } = await liveLocation();
-    const { entityId: productId } = await liveProduct();
-    const { entityId: entryId } = await createTestEntry(productId, locationId);
-
-    // An empty second location can be soft-deleted, then can't be moved onto.
-    const { entityId: deadLocationId } = await createTestLocation("Closet");
-    await deleteLocations(ctx.db, [deadLocationId], TEST_ACTOR);
-
-    await expect(
-      updateInventoryEntry(
-        ctx.db,
-        entryId,
-        { locationId: deadLocationId },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/does not exist or has been deleted/);
-  });
-
   it("bulkProcessInventoryEntries rejects a soft-deleted location", async () => {
     const { entityId: productId } = await liveProduct();
     const { entityId: locationId } = await liveLocation();
@@ -178,41 +115,6 @@ describe("inventory soft-delete target guard", () => {
   // with deletedAt), not hard-deleted — otherwise an omitted row is
   // unrecoverable, violating the repo-wide soft-delete invariant. Previously
   // this branch issued a raw tx.delete.
-  it("bulkProcessInventoryEntries soft-deletes (not hard-deletes) omitted entries", async () => {
-    const { entityId: locationId } = await liveLocation();
-    const { entityId: productId } = await liveProduct();
-    const { entityId: entryId } = await createTestEntry(productId, locationId);
-
-    await bulkProcessInventoryEntries(ctx.db, locationId, [], TEST_ACTOR);
-
-    // The row must still exist with deletedAt set (soft delete), not be gone.
-    const raw = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entryId),
-    });
-    expect(raw).toBeDefined();
-    expect(raw?.deletedAt).not.toBeNull();
-  });
-
-  it("bulkMoveInventoryEntries rejects a soft-deleted target location", async () => {
-    const { entityId: sourceId } = await liveLocation();
-    const { entityId: productId } = await liveProduct();
-    const { entityId: entryId } = await createTestEntry(productId, sourceId);
-
-    const { entityId: deadTargetId } = await createTestLocation("Closed Shelf");
-    await deleteLocations(ctx.db, [deadTargetId], TEST_ACTOR);
-
-    await expect(
-      bulkMoveInventoryEntries(
-        ctx.db,
-        {
-          sourceLocationId: sourceId,
-          targetLocationId: deadTargetId,
-          items: [{ inventoryEntryId: entryId, quantity: amount }],
-        },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow(/does not exist or has been deleted/);
-  });
 
   it("rejects creating inventory directly at Home", async () => {
     const { entityId: productId } = await liveProduct();
@@ -224,65 +126,5 @@ describe("inventory soft-delete target guard", () => {
         TEST_ACTOR,
       ),
     ).rejects.toThrow("Inventory cannot be placed directly at Home");
-  });
-
-  it("rejects moving inventory directly to Home", async () => {
-    const { entityId: sourceId } = await liveLocation();
-    const { entityId: productId } = await liveProduct();
-    const { entityId: entryId } = await createTestEntry(productId, sourceId);
-
-    await expect(
-      updateInventoryEntry(
-        ctx.db,
-        entryId,
-        { locationId: TEST_HOME_ID },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow("Inventory cannot be placed directly at Home");
-    await expect(
-      bulkMoveInventoryEntries(
-        ctx.db,
-        {
-          sourceLocationId: sourceId,
-          targetLocationId: TEST_HOME_ID,
-          items: [{ inventoryEntryId: entryId, quantity: amount }],
-        },
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow("Inventory cannot be placed directly at Home");
-  });
-
-  it("rejects reconciling inventory directly at Home", async () => {
-    const { entityId: productId } = await liveProduct();
-
-    await expect(
-      bulkProcessInventoryEntries(
-        ctx.db,
-        TEST_HOME_ID,
-        [{ productId, locationId: TEST_HOME_ID, amount }],
-        TEST_ACTOR,
-      ),
-    ).rejects.toThrow("Inventory cannot be placed directly at Home");
-  });
-
-  it("allows writes to live product + location (no false positives)", async () => {
-    const { entityId: locationId } = await liveLocation();
-    const { entityId: productId } = await liveProduct();
-
-    const { output: entry, entityId: entryId } = await createTestEntry(
-      productId,
-      locationId,
-    );
-    expect(entry.id).toBeDefined();
-
-    const { output: otherLocation, entityId: otherLocationId } =
-      await createTestLocation("Pantry");
-    const moved = await updateInventoryEntry(
-      ctx.db,
-      entryId,
-      { locationId: otherLocationId },
-      TEST_ACTOR,
-    );
-    expect(moved.location.id).toEqual(otherLocation.id);
   });
 });

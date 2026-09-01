@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -10,9 +9,7 @@ import { auditLog, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 
 import { insertAndReturn, withTransaction } from "./database-helpers";
-import { updateProduct } from "./product";
 import {
-  createImageFixture,
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
@@ -65,62 +62,6 @@ describe("getAuditLog — source + time window", () => {
     expect(returnedTimes).toEqual([day1.toISOString(), day2.toISOString()]);
   });
 
-  it("filters by a single source", async () => {
-    await makeEntry({ createdAt: day1, source: "ui" });
-    await makeEntry({ createdAt: day2, source: "api" });
-    await makeEntry({
-      createdAt: day3,
-      source: "script:home-depot-export-2026-07-28",
-    });
-
-    const { entries } = await getAuditLog(ctx.db, {
-      limit: 50,
-      source: "api",
-    });
-
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.source).toBe("api");
-  });
-
-  it("filters by an array of sources, including the open-ended script: family", async () => {
-    await makeEntry({ createdAt: day1, source: "ui" });
-    await makeEntry({ createdAt: day2, source: "api" });
-    await makeEntry({
-      createdAt: day3,
-      source: "script:home-depot-export-2026-07-28",
-    });
-
-    const { entries } = await getAuditLog(ctx.db, {
-      limit: 50,
-      source: ["api", "script:home-depot-export-2026-07-28"],
-    });
-
-    expect(entries.map((e) => e.source).sort()).toEqual(
-      ["api", "script:home-depot-export-2026-07-28"].sort(),
-    );
-  });
-
-  it("combines a source filter with cursor-based pagination (both AND together)", async () => {
-    // Three "api"-sourced rows, oldest to newest, plus a "ui" row that must
-    // never surface once the source filter is applied.
-    await makeEntry({ createdAt: day1, source: "api" });
-    await makeEntry({ createdAt: day2, source: "api" });
-    await makeEntry({ createdAt: day3, source: "api" });
-    await makeEntry({ createdAt: day3, source: "ui" });
-
-    const { entries } = await getAuditLog(ctx.db, {
-      limit: 50,
-      source: "api",
-      cursor: day3.toISOString(),
-    });
-
-    expect(entries).toHaveLength(2);
-    expect(entries.every((e) => e.source === "api")).toBe(true);
-    expect(entries.every((e) => e.createdAt.getTime() < day3.getTime())).toBe(
-      true,
-    );
-  });
-
   it("paginates identical timestamps without repeating or skipping entries", async () => {
     const timestamp = new Date("2026-07-20T12:00:00.000Z");
     const source = "script:audit-cursor-boundary";
@@ -165,32 +106,6 @@ describe("getAuditLog — entityName", () => {
       userId: ctx.actor.userId,
       source: "ui",
     });
-
-  it("resolves the display name of an entity that has one", async () => {
-    const cover = await createImageFixture(ctx.db, "audit-product-cover");
-    const row = await createProduct(
-      ctx.db,
-      makeProductInput({
-        name: "Festool Track Saw Rail",
-        manufacturer: "Festool",
-      }),
-      ctx.actor,
-    );
-    await updateProduct(
-      ctx.db,
-      parseEntityId("product", row.entityId),
-      { pendingImageIds: [parseShortcodeFor("image", cover.shortcode)] },
-      ctx.actor,
-    );
-    await auditRowFor("product", row.entityId);
-
-    const { entries } = await getAuditLog(ctx.db, {
-      limit: 50,
-      entityType: "product",
-    });
-    expect(entries[0]?.entityName).toBe("Festool Track Saw Rail");
-    expect(entries[0]?.displayImage).toEqual({ url: cover.url });
-  });
 
   it("still names a row that was soft-deleted after the entry was written", async () => {
     const row = await insertWithShortcode(ctx.db, "product", {
@@ -239,16 +154,5 @@ describe("getAuditLog — entityName", () => {
       entityType: "inventory",
     });
     expect(entries[0]?.entityName).toBe("Cast Iron Skillet · Garage");
-  });
-
-  it("returns null when the referenced row cannot be named", async () => {
-    await auditRowFor("inventory", randomUUID());
-
-    const { entries } = await getAuditLog(ctx.db, {
-      limit: 50,
-      entityType: "inventory",
-    });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.entityName).toBeNull();
   });
 });

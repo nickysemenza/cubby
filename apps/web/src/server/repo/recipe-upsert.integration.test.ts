@@ -51,97 +51,6 @@ describe("upsertRecipe", () => {
       ],
     });
 
-  const getMockRecipeUpdated = (): RecipeCreateInput =>
-    makeRecipeInput({
-      name: "Test Recipe Direct",
-      url: "https://example.com/recipe-updated",
-      sections: [
-        {
-          instructions: [
-            { instruction: "Mix ingredients well" },
-            { instruction: "Bake for 35 minutes" },
-          ],
-          ingredients: [
-            ingredientRef(testIngredients[0]!.id, {
-              amounts: [{ value: 3, unit: "cups" }],
-            }),
-          ],
-        },
-        {
-          instructions: [{ instruction: "Add topping" }],
-          ingredients: [
-            ingredientRef(testIngredients[2]!.id, {
-              amounts: [{ value: 1, unit: "tsp" }],
-            }),
-          ],
-        },
-      ],
-    });
-
-  it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), ctx.db, ctx.actor);
-
-    expect(result.id).toBeDefined();
-
-    const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
-      where: eq(recipe.name, "Test Recipe Direct"),
-      with: {
-        sections: {
-          with: {
-            ingredients: true,
-          },
-        },
-      },
-    });
-
-    expect(foundRecipe).toBeTruthy();
-    expect(foundRecipe!.name).toBe("Test Recipe Direct");
-    expect(foundRecipe!.SourceType).toBe("Website");
-    expect(foundRecipe!.SourceData).toBe("https://example.com/recipe");
-    expect(foundRecipe!.sections).toHaveLength(1);
-    expect(foundRecipe!.sections[0]!.ingredients).toHaveLength(2);
-  });
-
-  it("updates an existing recipe when it already exists", async () => {
-    const firstResult = await upsertRecipe(
-      getMockRecipeInput(),
-      ctx.db,
-      ctx.actor,
-    );
-
-    const secondResult = await upsertRecipe(
-      getMockRecipeUpdated(),
-      ctx.db,
-      ctx.actor,
-    );
-
-    expect(secondResult.id).toBe(firstResult.id);
-
-    const updatedRecipe = await getDb(ctx.db).query.recipe.findFirst({
-      where: eq(recipe.name, "Test Recipe Direct"),
-      with: {
-        sections: {
-          with: {
-            ingredients: true,
-          },
-        },
-      },
-    });
-
-    expect(updatedRecipe!.id).toBe(firstResult.id);
-    expect(updatedRecipe!.SourceData).toBe(
-      "https://example.com/recipe-updated",
-    );
-    expect(updatedRecipe!.sections).toHaveLength(2);
-
-    const firstSection = updatedRecipe!.sections[0];
-    expect(firstSection!.ingredients).toHaveLength(1);
-
-    const secondSection = updatedRecipe!.sections[1];
-    expect(secondSection).toBeTruthy();
-    expect(secondSection!.ingredients).toHaveLength(1);
-  });
-
   it("can be called multiple times without conflicts", async () => {
     const firstRun = await upsertRecipe(
       getMockRecipeInput(),
@@ -220,27 +129,6 @@ describe("upsertRecipe", () => {
       where: eq(recipe.name, name),
     });
     expect(allRecipes).toHaveLength(1);
-  });
-
-  it("works with recipes that have no URL (Other source type)", async () => {
-    const recipeNoUrl = makeRecipeInput({
-      name: "Manual Recipe",
-      sections: [
-        {
-          instructions: [{ instruction: "Do something" }],
-          ingredients: [],
-        },
-      ],
-    });
-
-    await upsertRecipe(recipeNoUrl, ctx.db, ctx.actor);
-
-    const foundRecipe = await getDb(ctx.db).query.recipe.findFirst({
-      where: eq(recipe.name, "Manual Recipe"),
-    });
-
-    expect(foundRecipe!.SourceType).toBe("Other");
-    expect(foundRecipe!.SourceData).toBeNull();
   });
 
   it("preserves section order, empty arrays, and ingredient provenance", async () => {

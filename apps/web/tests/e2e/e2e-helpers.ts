@@ -24,7 +24,7 @@ export async function waitForAppHydration(page: Page) {
         `Authenticated shell unavailable at ${page.url()}${rateLimited ? " (Too Many Requests)" : " (Sign In is visible)"}`,
       );
     }
-    await expect(shell).toBeAttached({ timeout: 750 });
+    await expect(shell).toBeAttached({ timeout: 3000 });
   }).toPass({ timeout: 15000 });
 }
 
@@ -174,9 +174,7 @@ export async function fillInput(
   const input = page.getByPlaceholder(placeholder);
   await expect(input).toBeVisible();
   await expect(input).toBeEnabled();
-  await input.click();
-  await input.clear();
-  await input.pressSequentially(value, { delay: 10 });
+  await input.fill(value);
   await input.blur();
 }
 

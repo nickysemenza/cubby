@@ -28,13 +28,19 @@ export interface DeadLetterQueueBatch {
  * The caller owns it.
  */
 export interface DeadLetterQueuePorts {
-  readonly abandonBackgroundJob: typeof abandonBackgroundJob;
+  readonly abandonBackgroundJob: (
+    jobId: string,
+    reason: string,
+  ) => Promise<boolean>;
   readonly captureException: (error: UnparsedError) => void;
 }
 
-export const productionDeadLetterQueuePorts = {
-  abandonBackgroundJob,
-} satisfies Omit<DeadLetterQueuePorts, "captureException">;
+export const productionDeadLetterQueuePorts = (
+  db: Database,
+): Omit<DeadLetterQueuePorts, "captureException"> => ({
+  abandonBackgroundJob: (jobId, reason) =>
+    abandonBackgroundJob(db, jobId, reason),
+});
 
 /**
  * Drain a dead-letter queue.
@@ -47,7 +53,6 @@ export const productionDeadLetterQueuePorts = {
  * named domain type rather than passing `unknown` further inward.
  */
 export async function processDeadLetterBatch(
-  db: Database,
   batch: DeadLetterQueueBatch,
   ports: DeadLetterQueuePorts,
 ): Promise<void> {
@@ -56,7 +61,7 @@ export async function processDeadLetterBatch(
       if (batch.queue === "cubby-background-dlq") {
         const parsed = backgroundQueueMessageSchema.safeParse(message.body);
         if (parsed.success) {
-          await settleBackgroundDeadLetter(db, parsed.data, ports);
+          await settleBackgroundDeadLetter(parsed.data, ports);
         } else {
           // Unreadable body: there is no job id to settle, so the row (if any)
           // is left for the stranded sweep or a human.
@@ -95,16 +100,11 @@ export async function processDeadLetterBatch(
 }
 
 async function settleBackgroundDeadLetter(
-  db: Database,
   message: BackgroundQueueMessage,
   ports: DeadLetterQueuePorts,
 ): Promise<void> {
   const { batchId, jobId, kind } = message;
-  const settled = await ports.abandonBackgroundJob(
-    db,
-    jobId,
-    DEAD_LETTER_REASON,
-  );
+  const settled = await ports.abandonBackgroundJob(jobId, DEAD_LETTER_REASON);
   console.error(
     `[dead-letter] background job abandoned batch=${batchId} job=${jobId} kind=${kind} settled=${settled}`,
   );

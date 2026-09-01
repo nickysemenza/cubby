@@ -35,7 +35,14 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   // against a copy of the build config with the binding removed. This also keeps
   // AI features reported unavailable, matching pre-binding E2E behavior.
   const e2eConfig = z
-    .object({ compatibility_date: z.string(), ai: z.json().optional() })
+    .object({
+      compatibility_date: z.string(),
+      ai: z.json().optional(),
+      queues: z
+        .object({ consumers: z.array(z.json()).optional() })
+        .loose()
+        .optional(),
+    })
     .loose()
     .parse(
       JSON.parse(
@@ -44,6 +51,11 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     );
   const compatibilityDate = e2eConfig.compatibility_date;
   delete e2eConfig.ai;
+  // Browser acceptance owns request/response behavior, not queue delivery.
+  // Preserve the production producer bindings so mutations take their real
+  // dispatch path, but do not burn the one browser worker draining embedding
+  // and telemetry work that has dedicated PostgreSQL contract coverage.
+  if (e2eConfig.queues) e2eConfig.queues.consumers = [];
   writeFileSync(
     path.join(webRoot, "dist/server/wrangler.e2e.json"),
     JSON.stringify(e2eConfig),
@@ -99,6 +111,19 @@ async function globalSetup(_config: FullConfig): Promise<void> {
           name: "e2e-upc-empty",
           main: "tests/e2e/harness-services/upc-empty.ts",
           compatibility_date: compatibilityDate,
+        },
+      },
+      {
+        config: {
+          name: "e2e-queue-sink",
+          main: "tests/e2e/harness-services/queue-sink.ts",
+          compatibility_date: compatibilityDate,
+          queues: {
+            consumers: [
+              { queue: "cubby-background", max_batch_timeout: 0 },
+              { queue: "cubby-telemetry", max_batch_timeout: 0 },
+            ],
+          },
         },
       },
     ],

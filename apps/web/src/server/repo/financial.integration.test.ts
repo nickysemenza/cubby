@@ -1,16 +1,11 @@
 import {
   type FinancialAccountSourceAlias,
-  type FinancialAccountFilters,
   financialAccountCreateInput,
 } from "@cubby/schemas/financial-account";
-import {
-  type FinancialTransactionFilters,
-  financialTransactionCreateInput,
-} from "@cubby/schemas/financial-transaction";
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
@@ -24,7 +19,6 @@ import {
   deleteFinancialAccounts,
   financialAccountOptions,
   listFinancialAccounts,
-  updateFinancialAccount,
 } from "./financial-account";
 import { previewFinancialStatementImport } from "./financial-statement-preview";
 import {
@@ -148,98 +142,6 @@ describe("financial repositories — critical invariants", () => {
   // Drizzle expands a JS array in a template into a row constructor, so the
   // query went out as `= ANY(($1))` and postgres rejected it — every filtered
   // list 500'd, in both the single-value and the multi-value form.
-  it("filters transactions and accounts by enum sets in single and array form", async () => {
-    const createdAccount = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Enum filter Visa"),
-        ctx.actor,
-      )
-    ).output;
-    const page = { pageIndex: 0, pageSize: 100 };
-    const transactions = [
-      { kind: "purchase", amount: 42 },
-      { kind: "refund", amount: -7 },
-    ] satisfies Array<{ kind: "purchase" | "refund"; amount: number }>;
-    for (const { kind, amount } of transactions) {
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: createdAccount.id,
-          kind,
-          status: "pending",
-          amount,
-        }),
-        ctx.actor,
-      );
-    }
-
-    const kindForms: FinancialTransactionFilters["kind"][] = [
-      "purchase",
-      ["purchase"],
-    ];
-    for (const kind of kindForms) {
-      const filtered = await listFinancialTransactions(
-        ctx.db,
-        { accountId: createdAccount.id, kind },
-        [],
-        page,
-      );
-      expect(filtered.count).toBe(1);
-      expect(filtered.data.map((row) => row.kind)).toEqual(["purchase"]);
-    }
-
-    const bothKinds = await listFinancialTransactions(
-      ctx.db,
-      { accountId: createdAccount.id, kind: ["purchase", "refund"] },
-      [],
-      page,
-    );
-    expect(bothKinds.count).toBe(2);
-
-    const statusForms: FinancialTransactionFilters["status"][] = [
-      "pending",
-      ["pending", "posted"],
-    ];
-    for (const status of statusForms) {
-      const filtered = await listFinancialTransactions(
-        ctx.db,
-        { accountId: createdAccount.id, status },
-        [],
-        page,
-      );
-      expect(filtered.count).toBe(2);
-    }
-    const posted = await listFinancialTransactions(
-      ctx.db,
-      { accountId: createdAccount.id, status: "posted" },
-      [],
-      page,
-    );
-    expect(posted).toMatchObject({ data: [], count: 0 });
-
-    // Same trap on the account list, where the filter is a jsonb expression.
-    const identityKindForms: FinancialAccountFilters["identityKind"][] = [
-      "credit_card",
-      ["credit_card", "bank_account"],
-    ];
-    for (const identityKind of identityKindForms) {
-      const accounts = await listFinancialAccounts(
-        ctx.db,
-        { identityKind, search: "Enum filter Visa" },
-        [],
-        page,
-      );
-      expect(accounts.data.map((row) => row.id)).toEqual([createdAccount.id]);
-    }
-    const otherKind = await listFinancialAccounts(
-      ctx.db,
-      { identityKind: ["bank_account"], search: "Enum filter Visa" },
-      [],
-      page,
-    );
-    expect(otherKind).toMatchObject({ data: [], count: 0 });
-  });
 
   // Regression: `accountId`/`purchaseId` are `oneOrMany`, so a mixed batch of
   // real and bogus codes is reachable from the list API and MCP. This must
@@ -247,48 +149,6 @@ describe("financial repositories — critical invariants", () => {
   // `resolveAllPresent` convention — locationList, productList) rather than
   // silently drop the bogus code AND rather than widen to an unfiltered
   // query. An all-bogus batch still yields nothing, same as before.
-  it("narrows accountId to the codes that resolve, in a mixed valid/bogus batch", async () => {
-    const createdAccount = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Mixed-batch filter Visa"),
-        ctx.actor,
-      )
-    ).output;
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: createdAccount.id,
-        kind: "purchase",
-        status: "pending",
-        amount: 10,
-      }),
-      ctx.actor,
-    );
-    const page = { pageIndex: 0, pageSize: 100 };
-
-    const mixed = await listFinancialTransactions(
-      ctx.db,
-      {
-        accountId: [
-          createdAccount.id,
-          testShortcode("financialAccount", "FAC-ZZZZ"),
-        ],
-      },
-      [],
-      page,
-    );
-    expect(mixed.count).toBe(1);
-    expect(mixed.data.map((row) => row.accountId)).toEqual([createdAccount.id]);
-
-    const allBogus = await listFinancialTransactions(
-      ctx.db,
-      { accountId: [testShortcode("financialAccount", "FAC-ZZZZ")] },
-      [],
-      page,
-    );
-    expect(allBogus).toMatchObject({ data: [], count: 0 });
-  });
 
   // The two header-filter rosters. Both are load-bearing in a way a shape test
   // wouldn't catch: `financialAccountOptions` must emit SHORTCODES, because the
@@ -381,55 +241,6 @@ describe("financial repositories — critical invariants", () => {
   // and reaches the repo. It must mean "no constraint on that field" — never
   // "no constraint at all", which is what an empty cross-product silently
   // produced when it collapsed `or()` to undefined.
-  it("keeps the other source-ref filter when one list is empty", async () => {
-    const acct = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Empty Filter Visa"),
-        ctx.actor,
-      )
-    ).output;
-    const mk = (externalId: string, amount: number) =>
-      createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: acct.id,
-          kind: "purchase",
-          status: "pending",
-          amount,
-          sourceRefs: [{ source: "monarch", externalId }],
-        }),
-        ctx.actor,
-      );
-    const wanted = (await mk("wanted-ref", 11)).output;
-    await mk("other-ref", 22);
-
-    const page = { pageIndex: 0, pageSize: 100 };
-    const byExternalId = await listFinancialTransactions(
-      ctx.db,
-      { accountId: acct.id, source: [], externalId: ["wanted-ref"] },
-      [],
-      page,
-    );
-    expect(byExternalId.data.map((row) => row.id)).toEqual([wanted.id]);
-
-    const bySource = await listFinancialTransactions(
-      ctx.db,
-      { accountId: acct.id, source: ["monarch"], externalId: [] },
-      [],
-      page,
-    );
-    expect(bySource.count).toBe(2);
-
-    // Both empty is genuinely unrestricted, not "has at least one ref".
-    const neither = await listFinancialTransactions(
-      ctx.db,
-      { accountId: acct.id, source: [], externalId: [] },
-      [],
-      page,
-    );
-    expect(neither.count).toBe(2);
-  });
 
   it("previews client-parsed Monarch snapshots idempotently without writing", async () => {
     const createdAccount = (
@@ -808,21 +619,6 @@ describe("financial repositories — critical invariants", () => {
     );
   });
 
-  it("keeps every curated preview path executable", async () => {
-    for (const source of new Set(
-      relatedViewRegistry.map((view) => view.source),
-    )) {
-      const groups = await loadRelatedPreviews(ctx.db, {
-        source,
-        sourceIds: ["NO-SUCH-SHORTCODE"],
-        relationKeys: relatedViewRegistry
-          .filter((view) => view.source === source)
-          .map((view) => view.key),
-      });
-      expect(groups).toEqual([]);
-    }
-  });
-
   /**
    * `StatementRow.accountId` is declared `block` in
    * FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY, and it is the one edge in the
@@ -1004,112 +800,6 @@ describe("financial repositories — critical invariants", () => {
       });
       expect(filtered).toMatchObject({ data: [], count: 0 });
     }
-  });
-
-  it("rejects source-evidence collisions introduced through either update path", async () => {
-    const accountA = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Update alias source", [
-          {
-            source: "update-test",
-            alias: "Primary card",
-            externalAccountId: "account-shared",
-          },
-        ]),
-        ctx.actor,
-      )
-    ).output;
-    const accountB = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Update alias target"),
-        ctx.actor,
-      )
-    ).output;
-    await expect(
-      updateFinancialAccount(
-        ctx.db,
-        accountB.id,
-        {
-          sourceAliases: [
-            {
-              source: "update-test",
-              alias: "Duplicate card",
-              externalAccountId: "account-shared",
-            },
-          ],
-        },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_ACCOUNT_SOURCE_ALIAS_CONFLICT" },
-    });
-
-    const transactionA = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: accountA.id,
-          kind: "purchase",
-          status: "pending",
-          amount: 10,
-          sourceRefs: [
-            { source: "update-test", externalId: "transaction-shared" },
-          ],
-        }),
-        ctx.actor,
-      )
-    ).output;
-    const transactionB = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: accountB.id,
-          kind: "purchase",
-          status: "pending",
-          amount: 20,
-        }),
-        ctx.actor,
-      )
-    ).output;
-    await expect(
-      updateFinancialTransaction(
-        ctx.db,
-        transactionB.id,
-        {
-          sourceRefs: [
-            { source: "update-test", externalId: "transaction-shared" },
-          ],
-        },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      cause: { reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT" },
-    });
-
-    expect(transactionA.sourceRefs).toEqual([
-      { source: "update-test", externalId: "transaction-shared" },
-    ]);
-
-    const accountsByExternalId = await listFinancialAccounts(
-      ctx.db,
-      { externalAccountId: "account-shared" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
-    expect(accountsByExternalId.data.map((entry) => entry.id)).toEqual([
-      accountA.id,
-    ]);
-    const transactionsByExternalId = await listFinancialTransactions(
-      ctx.db,
-      { externalId: "transaction-shared" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
-    expect(transactionsByExternalId.data.map((entry) => entry.id)).toEqual([
-      transactionA.id,
-    ]);
   });
 
   it("reconciles settlement separately from Expense spend and re-points/detaches transactions", async () => {

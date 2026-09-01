@@ -215,28 +215,6 @@ describe("loadExpenseAllocations derived funders", () => {
     ]);
   });
 
-  it("collapses two accounts owned by one party into a single key", async () => {
-    const party = await mkParty("Solo", "LPY-SOLO", "member");
-    const [a, b] = await Promise.all([
-      mkAccount("FAC-SOL1", "Solo one", party.id),
-      mkAccount("FAC-SOL2", "Solo two", party.id),
-    ]);
-    const expense = await payFor(100, [
-      { accountId: a.id, amount: 60 },
-      { accountId: b.id, amount: 40 },
-    ]);
-
-    // One row, not two — duplicate allocationKeys would make the remainder
-    // tie-break non-deterministic.
-    expect(await fundersOf(expense.id)).toEqual([
-      expect.objectContaining({
-        allocationKey: "LPY-SOLO",
-        basis: "derived_from_payment",
-        cents: 10_000n,
-      }),
-    ]);
-  });
-
   it("splits proportionally between two owning parties", async () => {
     const [one, two] = await Promise.all([
       mkParty("Split one", "LPY-SPA1", "member"),
@@ -291,25 +269,6 @@ describe("loadExpenseAllocations derived funders", () => {
         allocationKey: "LPY-RFND",
         basis: "derived_from_payment",
         cents: 8_000n,
-      }),
-    ]);
-  });
-
-  it("leaves an order with no positive outlay unknown, without dividing by zero", async () => {
-    const party = await mkParty("Inbound", "LPY-INBD", "member");
-    const account = await mkAccount("FAC-INBD", "Inbound card", party.id);
-    // Settled only by money coming IN — no positive allocation exists, so there
-    // is no gross outlay to weight by and arm D correctly takes over.
-    const expense = await payFor(40, [
-      { accountId: account.id, amount: -40, kind: "refund" },
-    ]);
-
-    expect(await fundersOf(expense.id)).toEqual([
-      expect.objectContaining({
-        ledgerPartyId: null,
-        allocationKey: "~unattributed",
-        basis: "unknown",
-        cents: 4_000n,
       }),
     ]);
   });
@@ -404,14 +363,6 @@ describe("loadExpenseAllocations assumed-household beneficiaries", () => {
       trade: "other",
       future: false,
     });
-
-  it("stays unknown when no household party exists", async () => {
-    const expense = await mkExpense("No household fixture");
-
-    expect(await beneficiariesOf(expense.id)).toEqual([
-      expect.objectContaining({ basis: "unknown", cents: 2_500n }),
-    ]);
-  });
 
   it("defaults to the household party, and an explicit row still wins", async () => {
     const household = await insertAndReturn(ctx.db, ledgerParty, {

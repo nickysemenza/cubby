@@ -91,6 +91,10 @@ async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
   const hash = await integreSQL.hashFiles([
     "./src/server/db/schema.ts",
     "./src/server/db/auth.schema.ts",
+    // Browser acceptance and Vitest run concurrently in `test:all`. A distinct
+    // template prevents either process's template initialization/reset cycle
+    // from invalidating the other's checked-out databases mid-run.
+    "./tests/e2e/e2e-database.ts",
   ]);
 
   await integreSQL.initializeTemplate(hash, async (databaseConfig) => {

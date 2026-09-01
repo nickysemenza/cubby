@@ -64,10 +64,21 @@ function isPluginLoadHook(load: Plugin["load"]): load is PluginLoadHook {
 /** Keep IntegreSQL opt-in while supporting both direct and full-suite commands. */
 function wantsIntegrationTier(): boolean {
   if (process.env.CUBBY_TEST_INTEGRATION === "1") return true;
+  return explicitlySelectsProject("integration");
+}
+
+function explicitlySelectsProject(name: string): boolean {
   return process.argv.some(
     (arg, i) =>
-      arg === "--project=integration" ||
-      (arg === "--project" && process.argv[i + 1] === "integration"),
+      arg === `--project=${name}` ||
+      (arg === "--project" && process.argv[i + 1] === name),
+  );
+}
+
+function wantsPgliteTier(): boolean {
+  return (
+    explicitlySelectsProject("pglite") ||
+    explicitlySelectsProject("pglite-integration")
   );
 }
 
@@ -81,24 +92,21 @@ const mcpContractTests = [
   "src/server/mcp/mcp-output-uuid-boundary.unit.test.ts",
   "src/server/mcp/mcp-protocol.unit.test.ts",
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
+  "src/server/mcp/worker-validation.unit.test.ts",
 ];
 const pgliteIntegrationTests = [
   "src/server/background-queue-embedding-gate.integration.test.ts",
-  "src/server/repo/calendar.integration.test.ts",
-  "src/server/repo/collection.integration.test.ts",
-  "src/server/repo/entity-display-image.integration.test.ts",
-  "src/server/repo/merchant-vendor-inference.integration.test.ts",
-  "src/server/repo/meal.integration.test.ts",
-  "src/server/repo/project-tool-gallery.integration.test.ts",
-  "src/server/repo/product/analytics.integration.test.ts",
-  "src/server/repo/product/conversion-coverage.integration.test.ts",
-  "src/server/repo/product/relationship-route.integration.test.ts",
-  "src/server/repo/recipe-section-order.integration.test.ts",
-  "src/server/services/search-grouping.service.integration.test.ts",
 ];
 const pgliteTemplatePath =
   process.env.CUBBY_PGLITE_TEMPLATE_PATH ??
   join(tmpdir(), `cubby-pglite-vitest-${process.pid}.tar.gz`);
+const sharedIsolationSeed = Number.parseInt(
+  process.env.CUBBY_TEST_SHUFFLE_SEED ?? "20260831",
+  10,
+);
+if (!Number.isSafeInteger(sharedIsolationSeed)) {
+  throw new Error("CUBBY_TEST_SHUFFLE_SEED must be an integer");
+}
 // Vitest applies project `env` only in workers, while global setup runs in the
 // controller process. The path is harmless outside the PGlite project; only
 // that project's worker env selects the PGlite database provider.
@@ -129,7 +137,11 @@ export default defineConfig({
     // reporter re-prints just the failing test names at the very end so a
     // `| tail` of the run still shows what broke. See the reporter for the
     // measured re-run waste that motivated it.
-    reporters: ["default", "./tooling/failure-summary-reporter.ts"],
+    reporters: ["dot", "./tooling/failure-summary-reporter.ts"],
+    // Passing fixtures intentionally exercise error logging and transport
+    // tracing. Printing those expected messages dominates terminal I/O in the
+    // shared-graph suite; failed tests still retain their console output.
+    silent: "passed-only",
     coverage: {
       exclude: ["src/components/reui/**"],
     },
@@ -146,13 +158,19 @@ export default defineConfig({
               ...pureUnitTests,
               ...mcpContractTests,
             ],
-            // Threads reduce worker startup while preserving per-file isolation.
+            // Unit files are order-independent and clean up their mutable state.
+            // Sharing the module graph removes the dominant per-file startup cost.
             pool: "threads",
+            isolate: false,
             // Unit, unit-pure, and UI share group 0. Five workers is the
             // measured memory-efficient ceiling; keep the cap aligned across
             // the group so one project cannot starve the others.
             maxWorkers: 5,
-            sequence: { groupOrder: 0 },
+            sequence: {
+              groupOrder: 0,
+              shuffle: { files: true, tests: false },
+              seed: sharedIsolationSeed,
+            },
           },
         },
         {
@@ -212,10 +230,19 @@ export default defineConfig({
             environment: "jsdom",
             include: ["**/*.unit.test.tsx"],
             setupFiles: ["./tooling/ui-test-setup.ts"],
-            // Threads amortize jsdom construction without sharing test state.
+            // Global teardown restores DOM, storage, timers, mocks, globals,
+            // and env between tests, so workers can share one jsdom graph.
             pool: "threads",
+            isolate: false,
             maxWorkers: 5,
-            sequence: { groupOrder: 0 },
+            clearMocks: true,
+            unstubGlobals: true,
+            unstubEnvs: true,
+            sequence: {
+              groupOrder: 0,
+              shuffle: { files: true, tests: false },
+              seed: sharedIsolationSeed,
+            },
           },
         },
         {
@@ -258,10 +285,16 @@ export default defineConfig({
           },
         },
       ] satisfies TestProjectConfiguration[]
-    ).filter(
-      (project) =>
-        project.test.name !== "integration" || wantsIntegrationTier(),
-    ),
+    ).filter((project) => {
+      if (project.test.name === "integration") return wantsIntegrationTier();
+      if (
+        project.test.name === "pglite" ||
+        project.test.name === "pglite-integration"
+      ) {
+        return wantsPgliteTier();
+      }
+      return true;
+    }),
 
     env: {
       NODE_ENV: "test",
