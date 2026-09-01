@@ -79,6 +79,7 @@ test("E2E browser lanes start with scope and test the uploaded artifact", () => 
   assert.match(e2e, /\/etc\/apt\/apt-mirrors\.txt/u);
   assert.match(e2e, /Cache Playwright system packages/u);
   assert.match(e2e, /playwright-system-deps-/u);
+  assert.match(e2e, /\/var\/cache\/apt\/archives\/\*\.deb/u);
   assert.match(
     e2e,
     /Install Playwright browser dependencies\n        if: matrix\.browser == 'webkit'\n        timeout-minutes: 5/u,
