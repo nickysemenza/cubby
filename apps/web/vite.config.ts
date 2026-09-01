@@ -8,6 +8,7 @@ import viteReact from "@vitejs/plugin-react";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
 import { isGitWorktree } from "./tooling/git-worktree.ts";
+import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
@@ -21,6 +22,73 @@ const sourceBranch =
   process.env.CUBBY_SOURCE_BRANCH ||
   execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
 const r2PublicUrl = readR2PublicUrlFromWrangler();
+
+const clientCodeSplittingGroups = [
+  {
+    name: "icons",
+    test: /[\\/]lucide-react[\\/]/,
+  },
+  {
+    name: "es-toolkit",
+    test: /[\\/]es-toolkit[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "date-fns",
+    test: /[\\/]date-fns[\\/]|[\\/]@date-fns[\\/]tz[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "tanstack-router",
+    test: /[\\/]@tanstack[\\/]react-router[\\/]|[\\/]@tanstack[\\/]router-core[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "tanstack-query",
+    test: /[\\/]@tanstack[\\/]react-query[\\/]|[\\/]@tanstack[\\/]query-core[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "floating-ui",
+    test: /[\\/]@floating-ui[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "react-runtime",
+    test: /[\\/]react(?:-dom)?[\\/]|[\\/]scheduler[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "react-hook-form",
+    test: /[\\/]react-hook-form[\\/]|[\\/]@hookform[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "radix-ui",
+    test: /[\\/]@radix-ui[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "small-runtime-utils",
+    test: /[\\/]clsx[\\/]|[\\/]goober[\\/]|[\\/]pluralize[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+  {
+    name: "image-functions",
+    test: /[\\/]image\.functions\.[jt]sx?(?:$|[?#])/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
+];
 
 /**
  * Stub pg-native for CF Workers. Vite emits a bare `throw` for unresolvable
@@ -114,32 +182,35 @@ export default defineConfig(async () => {
     // Resolve tsconfig `paths` (~/*, tooling/*) natively — Vite 8 replaces the
     // vite-tsconfig-paths plugin with this built-in option.
     resolve: { tsconfigPaths: true },
-    // Consolidate the CLIENT build's request fan-out. Default Rollup splitting
+    // Consolidate the CLIENT build's request fan-out. Default Rolldown splitting
     // gives each route its own chunk (correct, keep) but also hoists every shared
     // leaf module into its own chunk — so a single `import { Clock } from
-    // "lucide-react"` used by 2+ routes became a standalone ~1KB chunk. lucide
+    // "lucide-react"` used by 2+ routes became a standalone ~1KB chunk. Lucide
     // alone fanned out into ~68 of these, i.e. dozens of HTTP requests for a few
-    // KB. experimentalMinChunkSize does NOT fix this (it won't merge a chunk
-    // shared across async boundaries), so we coalesce lucide by-package instead.
+    // KB. `experimentalMinChunkSize` does NOT fix this (it won't merge a chunk
+    // shared across async boundaries), so we coalesce selected packages with
+    // Rolldown's native code-splitting groups instead.
     //
-    // Only lucide is grouped, and deliberately so:
-    //   - Icons are tiny + ubiquitous: the whole set is 39KB (13KB gzip), already
-    //     eager via the nav, so forcing the full set eager costs ~12KB to save
-    //     ~50 requests — a clear win.
+    // Only these bounded groups are consolidated, and deliberately:
+    //   - Icons are tiny and ubiquitous. Grouping them trades one moderately
+    //     sized shared request for dozens of small leaf-module requests.
+    //   - es-toolkit, date-fns, TanStack Router/Query, Floating UI, React runtime,
+    //     hook-form, Radix UI, and small runtime utilities are bounded shared
+    //     families; entry-aware groups keep route-specific subsets local.
+    //   - Cubby's image server-function wrappers share the same client contract;
+    //     their own entry-aware group reduces request fan-out without crossing
+    //     route boundaries.
     //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
     //     but the landing page only uses ~7KB of it, so grouping would drag
-    //     lazy-route dialog/sheet code into first paint. Left split on purpose.
-    //   - Lazy-only deps (@nivo, markdown, cmdk) are untouched and stay
-    //     code-split, so first paint never pulls them in.
+    //     lazy-route dialog/sheet code into first paint. Lazy-only deps (@nivo,
+    //     markdown, cmdk) remain split for the same reason.
     // Scoped to `client` so it never reshapes the CF Worker SSR bundle (single entry).
     environments: {
       client: {
         build: {
-          rollupOptions: {
+          rolldownOptions: {
             output: {
-              manualChunks(id: string) {
-                if (id.includes("/lucide-react/")) return "icons";
-              },
+              codeSplitting: { groups: clientCodeSplittingGroups },
             },
           },
         },
@@ -195,6 +266,7 @@ export default defineConfig(async () => {
       } satisfies Plugin,
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
+      mcpAppAsset(),
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
       ...(isCloudflare
         ? [cfPgNativeStub(), cfWasmPlugin(), cfSentryShim()]
@@ -221,6 +293,13 @@ export default defineConfig(async () => {
           generateFunctionId: createServerFunctionIdGenerator(),
         },
         router: {
+          codeSplittingOptions: {
+            // Keep the route component and its recovery UI in one request. Data
+            // loaders and pending UI remain in their existing eager boundaries.
+            defaultBehavior: [
+              ["component", "errorComponent", "notFoundComponent"],
+            ],
+          },
           // Colocated unit tests (e.g. projects.index.unit.test.ts, which imports
           // the route's search schema) are not routes. Without this the generator
           // warns "does not export a Route" on every build/HMR pass. Matched

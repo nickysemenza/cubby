@@ -8,11 +8,12 @@ import { viteSingleFile } from "vite-plugin-singlefile";
  *
  * Everything is inlined on purpose: each app ships to the host as a single
  * self-contained HTML string over `resources/read`, so there is no origin to
- * fetch a sibling file from and no filesystem in the CF Worker to read one out
- * of. `apps/web/src/server/mcp/apps/index.ts` imports the output as raw HTML.
+ * fetch a sibling file from. Production `apps/web` serves the hashed document
+ * through ASSETS; only its dev/test path reads the raw output.
  *
  * Output lands in `mcp-apps/dist/`, deliberately NOT `apps/web/dist` (that one
- * gets `rm -rf`'d at the top of `build:cf`).
+ * gets `rm -rf`'d at the top of `build:cf`). The web Vite asset plugin copies
+ * the document into hashed client output; the raw file remains dev/test-only.
  */
 export default defineConfig(() => {
   return {
