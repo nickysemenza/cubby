@@ -14,6 +14,7 @@ describe("Problem diagnostic adapters", () => {
       "orphaned-entity-embeddings",
       "entities-missing-embeddings",
       "stale-parent-recipes",
+      "weight-sold-products",
       "manufacturer-spelling-variants",
       "duplicate-vendors",
       "referential-liveness-violations",
