@@ -1447,6 +1447,86 @@ fn nutrient_upper(r: &WRecipeCosting, code: &str) -> Option<f64> {
         .and_then(|n| n.upper_value)
 }
 
+fn nutrient_coverage(r: &WRecipeCosting, code: &str) -> u32 {
+    r.nutrient_coverage
+        .iter()
+        .find(|coverage| coverage.code == code)
+        .map(|coverage| coverage.covered)
+        .unwrap_or_else(|| panic!("missing coverage for nutrient {code}"))
+}
+
+#[test]
+fn nutrient_coverage_is_per_target_not_broad_nutrient_success() {
+    let complete = ingredient(
+        "complete",
+        vec![
+            mapping((1.0, "cup"), (100.0, "g")),
+            mapping((100.0, "g"), (10.0, "g protein")),
+            mapping((100.0, "g"), (100.0, "kcal")),
+        ],
+    );
+    let kcal_only = ingredient(
+        "kcal-only",
+        vec![
+            mapping((1.0, "cup"), (100.0, "g")),
+            mapping((100.0, "g"), (50.0, "kcal")),
+        ],
+    );
+    let r = cost(
+        vec![
+            row("complete", "complete", Some((1.0, "cup")), None, None),
+            row("kcal-only", "kcal-only", Some((1.0, "cup")), None, None),
+        ],
+        vec![complete, kcal_only],
+        vec![],
+    );
+
+    // Both rows have *some* nutrient conversion, so the legacy broad missing
+    // bucket is empty. Exact coverage must still identify the absent protein.
+    assert!(r.missing_by_type.nutrients.is_empty());
+    assert_eq!(nutrient_coverage(&r, "208"), 2);
+    assert_eq!(nutrient_coverage(&r, "203"), 1);
+    assert_eq!(nutrient_coverage(&r, "307"), 0);
+}
+
+#[test]
+fn partial_sub_recipe_nutrient_coverage_propagates_to_parent() {
+    let complete = ingredient(
+        "complete",
+        vec![
+            mapping((1.0, "cup"), (100.0, "g")),
+            mapping((100.0, "g"), (10.0, "g protein")),
+            mapping((100.0, "g"), (100.0, "kcal")),
+        ],
+    );
+    let kcal_only = ingredient(
+        "kcal-only",
+        vec![
+            mapping((1.0, "cup"), (100.0, "g")),
+            mapping((100.0, "g"), (50.0, "kcal")),
+        ],
+    );
+    let sauce = WCostingRecipe {
+        id: "sauce".to_string(),
+        recipe_yield: Some(amount(2.0, "cup")),
+        rows: vec![
+            row("complete", "complete", Some((1.0, "cup")), None, None),
+            row("kcal-only", "kcal-only", Some((1.0, "cup")), None, None),
+        ],
+    };
+    let r = cost(
+        vec![sub_recipe_row("sauce", (1.0, "cup"))],
+        vec![complete, kcal_only],
+        vec![sauce],
+    );
+
+    assert_eq!(r.total_ingredients, 1);
+    assert_eq!(nutrient_coverage(&r, "208"), 1);
+    // The parent can carry a numeric protein partial from the sub-recipe, but
+    // its one recipe row is not fully protein-covered.
+    assert_eq!(nutrient_coverage(&r, "203"), 0);
+}
+
 #[test]
 fn ranged_amount_yields_ranged_totals() {
     // flour "2–3 cup": 1 cup = 100 g = $1 = 364 kcal = 10 g protein.
@@ -1477,6 +1557,12 @@ fn ranged_amount_yields_ranged_totals() {
         1092.0,
         1.0,
         "kcal upper",
+    );
+    assert_close(
+        nutrient_upper(&r, "203").expect("protein ranged"),
+        30.0,
+        0.5,
+        "protein upper",
     );
 }
 

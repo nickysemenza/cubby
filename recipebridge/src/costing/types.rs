@@ -145,6 +145,17 @@ pub struct WNutrientAmount {
     pub upper_value: Option<f64>,
 }
 
+/// Coverage for one requested nutrient target. `covered` counts root recipe
+/// rows that can fully provide this exact target; it deliberately does not
+/// reuse the broader `missing_by_type.nutrients`, since a row can resolve (say)
+/// sodium while still lacking kcal or protein.
+#[derive(Tsify, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct WNutrientCoverage {
+    /// USDA nutrient code from `WCostingInput.nutrient_targets`.
+    pub code: String,
+    pub covered: u32,
+}
+
 /// All of a row's resolved nutrients, or the error every code shares. The TS
 /// wrapper derives the zod `nutrientDiagnostic` summary ({kcal, nutrientCount})
 /// from the entries.
@@ -274,6 +285,10 @@ pub struct WRecipeCosting {
     pub weight_upper: Option<f64>,
     /// Summed nutrients, first-appearance order.
     pub nutrients: Vec<WNutrientAmount>,
+    /// Per-target row coverage. Includes every requested target, including a
+    /// zero when no row can provide it, so callers never have to infer missing
+    /// coverage from an absent nutrient total.
+    pub nutrient_coverage: Vec<WNutrientCoverage>,
     pub total_ingredients: u32,
     pub missing_by_type: WMissingByType,
     /// Per-row trace + resolved measures, in input order.

@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -18,6 +18,23 @@ import {
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+// JSONB totals written before per-target nutrient coverage existed look fresh
+// by timestamp alone, but cannot safely answer protein (or any macro) portion
+// estimates. Keep the persisted data readable and let the normal stale drain
+// upgrade it; no migration/backfill stamp is needed.
+const totalsNeedNutrientCoverage = sql`(
+  ${recipe.totals} ->> 'caloriesCovered' IS NULL OR
+  ${recipe.totals} ->> 'proteinCovered' IS NULL OR
+  ${recipe.totals} ->> 'fatCovered' IS NULL OR
+  ${recipe.totals} ->> 'carbsCovered' IS NULL OR
+  ${recipe.totals} ->> 'fiberCovered' IS NULL OR
+  ${recipe.totals} ->> 'sodiumCovered' IS NULL
+)`;
+const recipeTotalsAreStale = or(
+  sql`${recipe.totalsComputedAt} IS NULL`,
+  totalsNeedNutrientCoverage,
+);
 
 /**
  * Persist computed totals for one or many recipes in one raw `UPDATE ... FROM
@@ -131,12 +148,12 @@ export const markRecipesStaleReturningTransitioned = async (
   return rows.rows.map((r) => r.id);
 };
 
-/** Count of active recipes whose persisted totals are stale (pending recompute). */
+/** Count active recipes pending recompute, including legacy totals without coverage. */
 export const countStaleRecipeTotals = async (db: Database): Promise<number> => {
   const [row] = await getDb(db)
     .select({ n: count() })
     .from(recipe)
-    .where(and(sql`${recipe.totalsComputedAt} IS NULL`, notDeleted(recipe)));
+    .where(and(recipeTotalsAreStale, notDeleted(recipe)));
   return row?.n ?? 0;
 };
 
@@ -154,11 +171,7 @@ export const selectStaleRecipeIds = async (
     .select({ id: recipe.id })
     .from(recipe)
     .where(
-      and(
-        inArray(recipe.id, ids),
-        sql`${recipe.totalsComputedAt} IS NULL`,
-        notDeleted(recipe),
-      ),
+      and(inArray(recipe.id, ids), recipeTotalsAreStale, notDeleted(recipe)),
     );
   return rows.map((r) => r.id);
 };
@@ -219,9 +232,10 @@ export const selectAllActiveRecipeIds = async (
 
 /**
  * All active recipe ids whose totals are stale — the id-returning sibling of
- * {@link countStaleRecipeTotals} (same predicate: `totalsComputedAt IS NULL`
- * AND not deleted). Used to seed a stale-only recompute pass. Backed by the
- * partial index `Recipe_totals_stale_idx`.
+ * {@link countStaleRecipeTotals} (same predicate: timestamp stale OR legacy
+ * totals missing nutrient coverage, and not deleted). Used to seed a
+ * stale-only recompute pass. Timestamp-stale rows use the partial index; the
+ * one-time legacy JSONB upgrade may scan fresh timestamp rows.
  */
 export const selectAllStaleRecipeIds = async (
   db: Database,
@@ -229,7 +243,7 @@ export const selectAllStaleRecipeIds = async (
   const rows = await getDb(db)
     .select({ id: recipe.id })
     .from(recipe)
-    .where(and(sql`${recipe.totalsComputedAt} IS NULL`, notDeleted(recipe)));
+    .where(and(recipeTotalsAreStale, notDeleted(recipe)));
   return rows.map((r) => r.id);
 };
 

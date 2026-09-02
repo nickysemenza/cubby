@@ -184,14 +184,24 @@ export const mealRecipeOut = z.object({
 });
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
-export const mealPreparationCalorieEstimate = z.discriminatedUnion("status", [
+/**
+ * A per-batch or per-portion estimate.  The state describes how much of a
+ * measure's recipe input graph was covered; callers supply the measure label
+ * instead of baking calories into the transport contract.
+ */
+export const mealPreparationEstimate = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("pending"),
     reason: z.enum(["totals_missing", "totals_stale"]),
   }),
   z.object({
     status: z.literal("unavailable"),
-    reason: z.enum(["yield_missing", "calories_uncovered"]),
+    reason: z.enum([
+      "yield_missing",
+      "cost_uncovered",
+      "calories_uncovered",
+      "protein_uncovered",
+    ]),
   }),
   z.object({
     status: z.literal("partial"),
@@ -203,9 +213,9 @@ export const mealPreparationCalorieEstimate = z.discriminatedUnion("status", [
     upper: z.number().nonnegative().nullable(),
   }),
 ]);
-export type MealPreparationCalorieEstimate = z.infer<
-  typeof mealPreparationCalorieEstimate
->;
+export type MealPreparationEstimate = z.infer<typeof mealPreparationEstimate>;
+
+export type MealPreparationCalorieEstimate = MealPreparationEstimate;
 
 export const mealPreparationYieldBasis = z.discriminatedUnion("kind", [
   z.object({
@@ -290,7 +300,9 @@ export const mealRecipePreparationPortionOut = z.object({
   grams: mealYieldGrams,
   confirmedAt: z.date().nullable(),
   servedHere: z.boolean(),
-  calories: mealPreparationCalorieEstimate,
+  calories: mealPreparationEstimate,
+  cost: mealPreparationEstimate,
+  protein: mealPreparationEstimate,
 });
 export type MealRecipePreparationPortionOut = z.infer<
   typeof mealRecipePreparationPortionOut
@@ -313,7 +325,9 @@ export const mealRecipePreparationOut = z
     estimatedYieldGrams: mealYieldGrams.nullable(),
     actualYieldGrams: mealYieldGrams.nullable(),
     yieldBasis: mealPreparationYieldBasis,
-    batchCalories: mealPreparationCalorieEstimate,
+    batchCalories: mealPreparationEstimate,
+    batchCost: mealPreparationEstimate,
+    batchProtein: mealPreparationEstimate,
     sourceSummary: mealRecipePreparationSourceSummaryOut.nullable(),
     portions: z.array(mealRecipePreparationPortionOut),
   })
@@ -326,7 +340,9 @@ export type MealRecipePreparationOut = z.infer<typeof mealRecipePreparationOut>;
 
 const mealPreparationTotalsPartOut = z.object({
   portionCount: z.number().int().nonnegative(),
-  calories: mealPreparationCalorieEstimate,
+  calories: mealPreparationEstimate,
+  cost: mealPreparationEstimate,
+  protein: mealPreparationEstimate,
 });
 
 export const getMealPreparationsOut = z.object({

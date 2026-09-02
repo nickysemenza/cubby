@@ -17,6 +17,8 @@ import {
   calorieText,
   calorieTone,
   mealLabel,
+  measureText,
+  measureTone,
   type MealPreparation,
   type PreparationEaterOption,
   type PreparationSaveRequest,
@@ -273,13 +275,21 @@ function YieldFields({
         <Stack gap={null}>
           <span className="text-sm font-medium">Yield</span>
           <Description size="xs">
-            Measure the cooked batch once; calories stay tied to this recipe
-            occurrence.
+            Measure the cooked batch once; cost, calories, and protein stay tied
+            to this recipe occurrence.
           </Description>
         </Stack>
-        <Badge variant={calorieTone(source.batchCalories)}>
-          {calorieText(source.batchCalories)}
-        </Badge>
+        <Row align="center" gap="xs" wrap>
+          <Badge variant={measureTone(source.batchCost)}>
+            {measureText(source.batchCost, "cost")}
+          </Badge>
+          <Badge variant={calorieTone(source.batchCalories)}>
+            {calorieText(source.batchCalories)}
+          </Badge>
+          <Badge variant={measureTone(source.batchProtein)}>
+            {measureText(source.batchProtein, "protein")}
+          </Badge>
+        </Row>
       </Row>
       <div className="grid grid-cols-2 gap-3">
         <Stack gap="xs">
@@ -325,7 +335,7 @@ function YieldFields({
       ) : null}
       <Description size="xs">
         {source.actualYieldGrams == null && actualYield === ""
-          ? "Made yield unlocks a per-gram calorie estimate."
+          ? "Made yield unlocks per-gram cost, calorie, and protein estimates."
           : `Basis: ${yieldBasisLabel(source.yieldBasis)}.`}
       </Description>
     </Stack>

@@ -498,6 +498,14 @@ export const understatedCostMealSchema = z.object({
   name: z.string().nullable(),
   date: plainDate,
   recipeCount: z.number().int(),
+  affectedRecipes: z.array(
+    z.object({
+      id: recipeShortcode,
+      name: z.string(),
+      costCovered: z.number().int().nonnegative(),
+      ingredientCount: z.number().int().nonnegative(),
+    }),
+  ),
 });
 
 // A live recipe with no instruction text anywhere — every live section's

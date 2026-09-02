@@ -54,9 +54,11 @@ describe("meal recipe preparations", () => {
         totals: {
           costTotal: 0,
           caloriesTotal: 800,
+          proteinTotal: 80,
           ingredientCount: 1,
           costCovered: 1,
           caloriesCovered: 1,
+          proteinCovered: 1,
         },
         totalsComputedAt: new Date(),
       })
@@ -129,10 +131,14 @@ describe("meal recipe preparations", () => {
     expect(sourceRead.totals.confirmed).toMatchObject({
       portionCount: 1,
       calories: { status: "complete", lower: 160, upper: null },
+      cost: { status: "complete", lower: 0, upper: null },
+      protein: { status: "complete", lower: 16, upper: null },
     });
     expect(targetRead.totals.confirmed).toMatchObject({
       portionCount: 1,
       calories: { status: "complete", lower: 240, upper: null },
+      cost: { status: "complete", lower: 0, upper: null },
+      protein: { status: "complete", lower: 24, upper: null },
     });
     expect(inventoryAfter?.amount).toEqual(inventoryBefore.amount);
     expect(inventoryAfter?.deletedAt).toBeNull();

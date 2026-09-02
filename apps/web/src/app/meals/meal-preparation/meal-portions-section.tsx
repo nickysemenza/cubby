@@ -7,6 +7,7 @@ import { Description } from "~/components/ui/description";
 
 import {
   calorieText,
+  measureText,
   type MealPreparation,
   type MealPreparationsView,
 } from "./types";
@@ -31,8 +32,8 @@ export function MealPortionsSection({
         <Stack gap={null}>
           <span className="text-sm font-semibold">Portions</span>
           <Description size="xs">
-            Calories are shown per recipe source; grams are never totaled across
-            foods.
+            Cost, calories, and protein are shown per recipe source; grams are
+            never totaled across foods.
           </Description>
         </Stack>
         {onAddPreparedPortion ? (
@@ -51,12 +52,12 @@ export function MealPortionsSection({
       <div className="grid gap-2 sm:grid-cols-2">
         <SummaryStat
           label="Confirmed"
-          value={calorieText(view.totals.confirmed.calories)}
+          totals={view.totals.confirmed}
           detail={`${view.totals.confirmed.portionCount} portion${view.totals.confirmed.portionCount === 1 ? "" : "s"}`}
         />
         <SummaryStat
           label="Projected"
-          value={calorieText(view.totals.projected.calories)}
+          totals={view.totals.projected}
           detail={`${view.totals.projected.portionCount} portion${view.totals.projected.portionCount === 1 ? "" : "s"}`}
         />
       </div>
@@ -71,7 +72,7 @@ export function MealPortionsSection({
             </span>
             <Description size="xs">
               {hasPreparedSource
-                ? "The batch is recorded. Add who ate it and the grams to project calories."
+                ? "The batch is recorded. Add who ate it and the grams to project cost, calories, and protein."
                 : "Record a cooked yield on a recipe row, then assign portions here or to another meal."}
             </Description>
           </Stack>
@@ -148,13 +149,18 @@ function PortionLine({
           </Badge>
         </Row>
       </Row>
-      <Row align="center" gap="xs" className="mt-1">
-        {portion.calories.status === "pending" ||
-        portion.calories.status === "unavailable" ? (
+      <Row align="start" gap="xs" className="mt-1" wrap>
+        {[portion.cost, portion.calories, portion.protein].some(
+          (estimate) =>
+            estimate.status === "pending" || estimate.status === "unavailable",
+        ) ? (
           <CircleAlert className="size-3 text-muted-foreground" />
         ) : null}
         <span className="text-2xs text-muted-foreground">
-          {calorieText(portion.calories)} from {preparation.recipe.name}
+          Cost {measureText(portion.cost, "cost")} · Calories{" "}
+          {calorieText(portion.calories)} · Protein{" "}
+          {measureText(portion.protein, "protein")} from{" "}
+          {preparation.recipe.name}
         </span>
       </Row>
     </div>
@@ -163,18 +169,28 @@ function PortionLine({
 
 function SummaryStat({
   label,
-  value,
+  totals,
   detail,
 }: {
   label: string;
-  value: string;
+  totals: MealPreparationsView["totals"]["confirmed"];
   detail: string;
 }) {
   return (
     <div className="border border-[var(--border)] bg-card px-3 py-2">
-      <Row align="center" justify="between" gap="sm">
+      <Row align="start" justify="between" gap="sm" wrap>
         <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-sm font-semibold tabular-nums">{value}</span>
+        <Stack gap={null} className="text-right text-2xs text-muted-foreground">
+          <span className="tabular-nums">
+            Cost {measureText(totals.cost, "cost")}
+          </span>
+          <span className="tabular-nums">
+            Calories {calorieText(totals.calories)}
+          </span>
+          <span className="tabular-nums">
+            Protein {measureText(totals.protein, "protein")}
+          </span>
+        </Stack>
       </Row>
       <span className="text-2xs text-muted-foreground">{detail}</span>
     </div>

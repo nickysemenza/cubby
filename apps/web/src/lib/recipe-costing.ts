@@ -201,6 +201,12 @@ export type CalculateTotalsResult = {
   nutrients: NutrientsPer100;
   /** Parallel upper-bound record, only the ranged nutrient codes present. */
   nutrientsUpper?: NutrientsPer100;
+  /**
+   * Count of fully covered recipe rows for every requested nutrient code.
+   * The WASM projection always supplies this; optional keeps older focused
+   * callers and historical test fixtures source-compatible.
+   */
+  nutrientCoverage?: Record<string, number>;
   weight: number;
   weightUpper?: number;
   totalIngredients: number;
@@ -340,6 +346,7 @@ const projectRecipeCosting = (
 ): RecipeCosting => {
   const nutrients: NutrientsPer100 = {};
   const nutrientsUpper: NutrientsPer100 = {};
+  const nutrientCoverage: Record<string, number> = {};
   let anyNutrientUpper = false;
   for (const n of w.nutrients) {
     nutrients[n.code] = n.value;
@@ -348,10 +355,14 @@ const projectRecipeCosting = (
       anyNutrientUpper = true;
     }
   }
+  for (const coverage of w.nutrient_coverage) {
+    nutrientCoverage[coverage.code] = coverage.covered;
+  }
 
   const totals: CalculateTotalsResult = {
     price: w.price,
     nutrients,
+    nutrientCoverage,
     weight: w.weight,
     totalIngredients: w.total_ingredients,
     missingByType: {

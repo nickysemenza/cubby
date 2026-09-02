@@ -49,7 +49,7 @@ import {
 import { MealPortionsSection } from "./meal-preparation/meal-portions-section";
 import { PortionSheet } from "./meal-preparation/portion-sheet";
 import type { MealPreparationsView } from "./meal-preparation/types";
-import { calorieText } from "./meal-preparation/types";
+import { calorieText, measureText } from "./meal-preparation/types";
 import { useMealPreparationController } from "./meal-preparation/use-meal-preparation-controller";
 import { meal as mealOperations } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -60,17 +60,30 @@ function mealDisplayName(meal: MealDetail): string {
   return meal.name ? meal.name : format(parseISO(meal.date), "EEE, MMM d");
 }
 
-function buildMealHeroStats(
-  meal: MealDetail,
+export function buildMealHeroStats(
+  meal: {
+    totals: MealDetail["totals"];
+    recipes: readonly unknown[];
+  },
   preparation: MealPreparationsView | undefined,
 ): DetailHeroStat[] {
-  const calorieStat =
-    preparation && preparation.totals.confirmed.portionCount > 0
-      ? {
-          label: "Consumed calories",
-          value: calorieText(preparation.totals.confirmed.calories),
-        }
-      : { label: "Calories", value: Math.round(meal.totals.caloriesTotal) };
+  const confirmed = preparation?.totals.confirmed;
+  if (confirmed && confirmed.portionCount > 0)
+    return [
+      {
+        label: "Consumed cost",
+        value: measureText(confirmed.cost, "cost"),
+      },
+      {
+        label: "Consumed calories",
+        value: calorieText(confirmed.calories),
+      },
+      {
+        label: "Consumed protein",
+        value: measureText(confirmed.protein, "protein"),
+      },
+      { label: "Recipes", value: meal.recipes.length },
+    ];
 
   return [
     {
@@ -80,7 +93,7 @@ function buildMealHeroStats(
           ? "—"
           : `${formatCurrency(meal.totals.costTotal)}${meal.totals.pending ? "+" : ""}`,
     },
-    calorieStat,
+    { label: "Calories", value: Math.round(meal.totals.caloriesTotal) },
     { label: "Recipes", value: meal.recipes.length },
   ];
 }
@@ -441,7 +454,7 @@ function MealPreparationOverlays({
         open={preparation.sourcePickerOpen}
         onOpenChange={preparation.setSourcePickerOpen}
         title="Add a prepared portion"
-        description="Choose a recipe occurrence from an earlier meal. Its measured yield and live recipe calories stay with that source."
+        description="Choose a recipe occurrence from an earlier meal. Its measured yield and live recipe cost, calories, and protein stay with that source."
         footer={
           <DialogFooter className="gap-2 sm:justify-end">
             <Button

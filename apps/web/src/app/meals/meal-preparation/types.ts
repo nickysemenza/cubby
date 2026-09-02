@@ -1,6 +1,7 @@
 import type {
   GetMealPreparationsOut,
   MealPreparationCalorieEstimate,
+  MealPreparationEstimate,
   MealRecipePreparationPortionOut,
   SaveMealRecipePreparationInput,
 } from "@cubby/schemas/meal";
@@ -12,6 +13,7 @@ import type {
  * portions are inventory movements.
  */
 export type CalorieCoverage = MealPreparationCalorieEstimate;
+export type MeasureCoverage = MealPreparationEstimate;
 type MealPreparationPortion = MealRecipePreparationPortionOut;
 export type MealPreparation = GetMealPreparationsOut["preparations"][number];
 export type MealPreparationsView = GetMealPreparationsOut;
@@ -20,22 +22,41 @@ export type PreparationEaterOption = MealPreparationPortion["eater"];
 export type PreparationSaveRequest = SaveMealRecipePreparationInput;
 
 export function calorieText(coverage: CalorieCoverage): string {
+  return measureText(coverage, "calories");
+}
+
+export function measureText(
+  coverage: MeasureCoverage,
+  measure: "cost" | "calories" | "protein",
+): string {
+  const label =
+    measure === "cost"
+      ? "Cost"
+      : measure === "protein"
+        ? "Protein"
+        : "Calories";
+  const unit =
+    measure === "cost" ? "$" : measure === "protein" ? " g" : " kcal";
+  const value = (amount: number) =>
+    measure === "cost"
+      ? `$${amount.toFixed(2)}`
+      : `${Math.round(amount)}${unit}`;
   switch (coverage.status) {
     case "pending":
-      return "Calories pending";
+      return `${label} pending`;
     case "unavailable":
-      return "Calories unavailable";
+      return `${label} unavailable`;
     case "partial":
-      return `At least ${Math.round(coverage.lower)} kcal`;
+      return `At least ${value(coverage.lower)}`;
     case "complete":
       return coverage.upper == null || coverage.lower === coverage.upper
-        ? `${Math.round(coverage.lower)} kcal`
-        : `${Math.round(coverage.lower)}–${Math.round(coverage.upper)} kcal`;
+        ? value(coverage.lower)
+        : `${value(coverage.lower)}–${value(coverage.upper)}`;
   }
 }
 
-export function calorieTone(
-  coverage: CalorieCoverage,
+export function measureTone(
+  coverage: MeasureCoverage,
 ): "outline" | "warning" | "positive" {
   switch (coverage.status) {
     case "complete":
@@ -45,6 +66,12 @@ export function calorieTone(
     default:
       return "outline";
   }
+}
+
+export function calorieTone(
+  coverage: CalorieCoverage,
+): "outline" | "warning" | "positive" {
+  return measureTone(coverage);
 }
 
 export function mealLabel(meal: PreparationTargetOption): string {
