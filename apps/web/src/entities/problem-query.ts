@@ -37,6 +37,7 @@ export type DiagnosticKey =
   | "entities-missing-embeddings"
   | "stale-parent-recipes"
   | "manufacturer-spelling-variants"
+  | "weight-sold-products"
   | "duplicate-vendors"
   | "referential-liveness-violations"
   | "dependency-cycles"

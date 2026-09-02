@@ -19,6 +19,7 @@ import type {
   OrphanedProduct,
   ProductWithBetterUpcData,
   ToolUsedOutsideOwnership,
+  WeightSoldProduct,
 } from "@cubby/schemas/problems";
 import { isMiscProduct } from "@cubby/shared";
 import {
@@ -45,6 +46,7 @@ import {
   cookbook,
   expense,
   image,
+  ingredient,
   inventoryEntry,
   location,
   product,
@@ -815,4 +817,100 @@ export const findLinkedProductIds = async (
     columns: { id: true },
   });
   return linked.map((p) => p.id);
+};
+
+/**
+ * Products priced by weight whose expense lines claim a fixed quantity, so the
+ * derived per-each price averages items that each weighed something different.
+ * See `weightSoldProductSchema` for why this is invisible to the neighbouring
+ * detectors and what the fix is.
+ *
+ * Pure SQL over indexed FK joins, so it belongs in the `fast` cost group.
+ *
+ * Thresholds are deliberately conservative — this is a worklist, and a false
+ * positive costs a human read of a product page:
+ *   - `>= 3` priced lines, so a one-off sale can't establish a spread
+ *   - `>= 2x` between the cheapest and dearest unit cost
+ *   - `>= 0.75` distinct-price fraction, which is what separates weight-sold
+ *     goods from packaged ones whose price drifted (see the schema doc)
+ * Products that already carry a unit mapping are excluded: the mapping IS the
+ * fix, so keeping them would make the section permanently red.
+ */
+export const findWeightSoldProducts = async (
+  db: Database,
+): Promise<WeightSoldProduct[]> => {
+  const res = await getDb(db).execute<{
+    id: string;
+    name: string;
+    manufacturer: string;
+    lineCount: number;
+    distinctPriceFraction: number;
+    lowUnitCost: number;
+    highUnitCost: number;
+    ingredientId: string | null;
+  }>(sql`
+    WITH priced_lines AS (
+      SELECT
+        e."productId" AS product_id,
+        -- A null quantity is the weight-sold tell itself (the importer could not
+        -- read a count off the line), so it folds to 1 rather than dropping the
+        -- row. Sign is carried by cost, so quantity is taken absolute.
+        round(
+          (e."cost" / NULLIF(ABS(COALESCE(e."productQuantity", 1)), 0))::numeric,
+          2
+        ) AS unit_cost
+      FROM ${expense} e
+      WHERE e."deletedAt" IS NULL
+        AND e."productId" IS NOT NULL
+        AND e."lineKind" = 'principal'
+        AND e."cost" > 0
+    ),
+    spread AS (
+      SELECT
+        product_id,
+        count(*)::int AS line_count,
+        count(DISTINCT unit_cost)::int AS distinct_count,
+        min(unit_cost) AS low_unit_cost,
+        max(unit_cost) AS high_unit_cost
+      FROM priced_lines
+      WHERE unit_cost IS NOT NULL
+      GROUP BY product_id
+    )
+    SELECT
+      p."shortcode" AS id,
+      p."name" AS name,
+      p."manufacturer" AS manufacturer,
+      s.line_count AS "lineCount",
+      round(s.distinct_count::numeric / s.line_count, 2)::float8 AS "distinctPriceFraction",
+      s.low_unit_cost::float8 AS "lowUnitCost",
+      s.high_unit_cost::float8 AS "highUnitCost",
+      i."shortcode" AS "ingredientId"
+    FROM spread s
+    INNER JOIN ${product} p ON p.id = s.product_id AND p."deletedAt" IS NULL
+    LEFT JOIN ${ingredient} i
+      ON i.id = p."ingredientId" AND i."deletedAt" IS NULL
+    WHERE s.line_count >= 3
+      AND s.low_unit_cost > 0
+      AND s.high_unit_cost / s.low_unit_cost >= 2
+      AND s.distinct_count::numeric / s.line_count >= 0.75
+      AND NOT EXISTS (
+        SELECT 1 FROM ${productUnitMappings} m
+        WHERE m."productId" = p.id AND m."deletedAt" IS NULL
+      )
+    ORDER BY s.line_count DESC, p."name" ASC
+  `);
+
+  return res.rows.map((row) => ({
+    id: parseShortcodeFor("product", row.id),
+    name: row.name,
+    manufacturer: row.manufacturer,
+    lineCount: row.lineCount,
+    distinctPriceFraction: row.distinctPriceFraction,
+    lowUnitCost: row.lowUnitCost,
+    highUnitCost: row.highUnitCost,
+    ingredientId:
+      row.ingredientId === null
+        ? null
+        : parseShortcodeFor("ingredient", row.ingredientId),
+  }));
 };

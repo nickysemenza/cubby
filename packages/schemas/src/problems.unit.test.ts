@@ -77,6 +77,7 @@ describe("PROBLEM_CLASS", () => {
     staleLocations: "coverage",
     unvaluedBucketProducts: "coverage",
     vendorsWithoutLogos: "coverage",
+    weightSoldProducts: "coverage",
   } satisfies Record<keyof typeof PROBLEM_CLASS, ProblemClass>;
 
   it("classes every detector exactly as pinned here", () => {

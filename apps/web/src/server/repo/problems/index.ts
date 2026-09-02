@@ -80,6 +80,7 @@ export {
   findProductsWithoutUnitMappings,
   findProductsWithUpcGaps,
   findToolsUsedOutsideOwnership,
+  findWeightSoldProducts,
   loadProductsForCoverage,
   loadSoldButStockedPresenterTotals,
   type ProductWithBetterUpcData,
