@@ -38,7 +38,10 @@ export interface WorkflowStreamRuntime {
 }
 
 const productionWorkflowStreamRuntime: WorkflowStreamRuntime = {
-  fetch,
+  // Wrap rather than store the native function: `runtime.fetch(...)` invokes
+  // it with the runtime object as `this`, which browsers reject with
+  // "Illegal invocation" and which broke every durable maintenance stream.
+  fetch: (input, init) => fetch(input, init),
   markFreshReads,
 };
 

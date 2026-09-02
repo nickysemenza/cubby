@@ -1,5 +1,5 @@
 import superjson from "superjson";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
@@ -87,5 +87,43 @@ describe("workflow JSONL stream", () => {
         // The error frame terminates before an event can be yielded.
       }
     }).rejects.toBeInstanceOf(StartOperationError);
+  });
+});
+
+describe("production workflow stream runtime", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("calls the global fetch as a free function, not as a runtime method", async () => {
+    // Regression: storing the native `fetch` on the runtime object made every
+    // call `runtime.fetch(...)`, i.e. with the runtime as `this` — browsers
+    // throw "Illegal invocation" for that, so no durable stream ever opened.
+    const fetchMock = vi.fn(async () =>
+      responseFor({
+        kind: "event",
+        payload: superjson.serialize({
+          type: "progress",
+          done: 1,
+          at: new Date("2026-08-25T12:00:00.000Z"),
+        }),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const stream = await openWorkflowStream({
+      operation: "agent.askStream",
+      kind: "query",
+      url: "/api/workflows/test-progress",
+      input: { id: "one" },
+      eventSchema,
+    });
+    for await (const _event of stream) {
+      // drain
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const receiver = fetchMock.mock.contexts[0];
+    expect(receiver === undefined || receiver === globalThis).toBe(true);
   });
 });
