@@ -299,7 +299,6 @@ function MainDashboard({ view }: { view: DashboardView }) {
   );
   const dashboardQuery = useQuery({
     ...project.dashboardSummary.queryOptions(scopeInput),
-    staleTime: 5 * 60 * 1000,
   });
 
   // Chart aggregates are ONLY fetched once the Analytics tab is actually
@@ -308,7 +307,6 @@ function MainDashboard({ view }: { view: DashboardView }) {
   // there's no separate dateFrom/dateTo spread here anymore.
   const analyticsQuery = useQuery({
     ...project.portfolioAnalytics.queryOptions(scopeInput),
-    staleTime: 5 * 60 * 1000,
     enabled: view === "analytics",
   });
 
@@ -324,7 +322,6 @@ function MainDashboard({ view }: { view: DashboardView }) {
     ...image.projectSummaries.queryOptions({
       projectIds: imageProjectIds,
     }),
-    staleTime: 5 * 60 * 1000,
     enabled: imageProjectIds.length > 0,
   });
 

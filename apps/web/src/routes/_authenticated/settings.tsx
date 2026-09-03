@@ -182,9 +182,7 @@ function DiagnosticsCard() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return timingResponseSchema.parse(await res.json());
       },
-      staleTime: 60_000,
       refetchOnWindowFocus: false,
-      retry: false,
     });
 
   return (

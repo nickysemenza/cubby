@@ -26,7 +26,14 @@ import {
 import { operationInvalidationTags } from "./operation-catalog";
 import { installOperationRecorder } from "./operation-recorder";
 import { persister } from "./persister";
-import { shouldToastQueryError } from "./query-error-policy";
+import {
+  shouldToastMutationError,
+  shouldToastQueryError,
+} from "./query-error-policy";
+import {
+  PERSISTED_QUERY_MAX_AGE,
+  QUERY_CLIENT_DEFAULT_OPTIONS,
+} from "./query-policy";
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
 const Link = ({
@@ -86,11 +93,7 @@ export function getContext(
   if (!import.meta.env.SSR) installHumanActivityFocusController();
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: {
-        staleTime: 60 * 1000,
-        retry: false,
-        refetchOnReconnect: false,
-      },
+      ...QUERY_CLIENT_DEFAULT_OPTIONS,
       dehydrate: { serializeData: superjson.serialize },
       hydrate: { deserializeData: superjson.deserialize },
     },
@@ -101,7 +104,8 @@ export function getContext(
       },
     }),
     mutationCache: new MutationCache({
-      onError: (error) => {
+      onError: (error, _variables, _onMutateResult, mutation) => {
+        if (!shouldToastMutationError(mutation)) return;
         deferToastError(error);
       },
       onSuccess: (data, variables, _onMutateResult, mutation) => {
@@ -170,7 +174,7 @@ export function Provider({
               // Bust the persisted cache whenever the deploy changes, so a
               // schema/shape change can't resurrect stale offline data.
               buster: __GIT_COMMIT__,
-              maxAge: 1000 * 60 * 60 * 24,
+              maxAge: PERSISTED_QUERY_MAX_AGE,
               dehydrateOptions: {
                 shouldDehydrateQuery: (query) => {
                   return (

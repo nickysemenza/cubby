@@ -13,9 +13,15 @@ describe("operation freshness metadata", () => {
     const tree = location.makeTree.queryOptions();
 
     expect(detail).toMatchObject({ staleTime: 300_000, gcTime: 86_400_000 });
-    expect(detail.meta).toMatchObject({ persistence: "persist" });
+    expect(detail.meta).toMatchObject({
+      cacheProfile: "persisted-detail",
+      persistence: "persist",
+    });
     expect(tree).toMatchObject({ staleTime: 120_000 });
-    expect(tree.meta).toMatchObject({ persistence: "memory" });
+    expect(tree.meta).toMatchObject({
+      cacheProfile: "browse",
+      persistence: "memory",
+    });
   });
 });
 

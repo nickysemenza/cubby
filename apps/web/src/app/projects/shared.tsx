@@ -1209,7 +1209,6 @@ export function ProjectTable({
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const { data: projectImages } = useQuery({
     ...image.projectSummaries.queryOptions({ projectIds }),
-    staleTime: 5 * 60 * 1000,
     enabled: projectIds.length > 0,
   });
   const filterOptions = useFilterOptions({

@@ -123,16 +123,15 @@ const DETAIL_POLICY = {
       entity: "product",
       observedByTransport: true,
       cacheTags: [["entity", "detail"], ["product"]],
+      cacheProfile: "persisted-detail",
       persistence: "persist",
       freshness: {
         staleTime: 300000,
         gcTime: 86400000,
-        refetchOnWindowFocus: true,
       },
     },
     staleTime: 300000,
     gcTime: 86400000,
-    refetchOnWindowFocus: true,
   },
   memory: {
     meta: {
@@ -141,6 +140,7 @@ const DETAIL_POLICY = {
       entity: "task",
       observedByTransport: true,
       cacheTags: [["entity", "detail"], ["task"]],
+      cacheProfile: "interactive",
       persistence: "memory",
     },
   },
@@ -153,14 +153,13 @@ const LIST_POLICY = {
     entity: "product",
     observedByTransport: true,
     cacheTags: [["entity", "list"], ["product"]],
+    cacheProfile: "browse",
     persistence: "memory",
     freshness: {
       staleTime: 120000,
-      refetchOnWindowFocus: true,
     },
   },
   staleTime: 120000,
-  refetchOnWindowFocus: true,
 } as const;
 
 /** The row type a set of query options resolves to. */

@@ -79,7 +79,6 @@ export function ExpenseAnalyticsView() {
 
   const { data, isLoading } = useQuery({
     ...expense.analytics.queryOptions(filters),
-    staleTime: 60 * 1000,
   });
   const analyzeConfig = useMemo(
     () => expenseAnalyzeConfigFromSearch(search, filters),

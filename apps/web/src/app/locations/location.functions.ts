@@ -36,10 +36,7 @@ export const location = defineOperationDomain("location", {
     input: z.undefined(),
     output: infLocationListOut,
     tags: [["location", "makeTree"]],
-    freshness: {
-      staleTime: 2 * 60_000,
-      refetchOnWindowFocus: true,
-    },
+    cache: "browse",
   }),
   valuationSummary: query({
     input: z.undefined(),

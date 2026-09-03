@@ -22,9 +22,14 @@ import {
 } from "./cache-tags";
 import type {
   CubbyOperationMeta,
+  OperationCacheProfile,
   OperationCacheTag,
   OperationFreshnessPolicy,
 } from "./operation-meta";
+import {
+  operationCachePolicy,
+  type ResolvedOperationCachePolicy,
+} from "./query-policy";
 import { type StartCallOptions, startOperation } from "./start-transport";
 
 type RawOperationValue = z.input<z.ZodUnknown>;
@@ -59,18 +64,12 @@ export type QueryDefinition<
 > = SharedDefinition<Input, Output> & {
   kind: "query";
   tags?: readonly OperationCacheTag[];
-  freshness?:
-    | OperationFreshnessPolicy
+  cache?:
+    | OperationCacheProfile
     | {
         bivarianceHack(
           input: z.output<Input>,
-        ): OperationFreshnessPolicy | undefined;
-      }["bivarianceHack"];
-  persistence?:
-    | "persist"
-    | "memory"
-    | {
-        bivarianceHack(input: z.output<Input>): "persist" | "memory";
+        ): OperationCacheProfile | undefined;
       }["bivarianceHack"];
 };
 
@@ -186,17 +185,10 @@ const invalidationPolicies = new Map<
   StartOperationId,
   (input: RawOperationValue) => InvalidationTagSet
 >();
-const NO_POLICY_INPUT = Symbol("no-operation-policy-input");
 
-function isFreshnessResolver<Input extends z.ZodTypeAny>(
-  policy: QueryDefinition<Input, z.ZodTypeAny>["freshness"],
-): policy is (input: z.output<Input>) => OperationFreshnessPolicy | undefined {
-  return typeof policy === "function";
-}
-
-function isPersistenceResolver<Input extends z.ZodTypeAny>(
-  policy: QueryDefinition<Input, z.ZodTypeAny>["persistence"],
-): policy is (input: z.output<Input>) => "persist" | "memory" {
+function isCacheProfileResolver<Input extends z.ZodTypeAny>(
+  policy: QueryDefinition<Input, z.ZodTypeAny>["cache"],
+): policy is (input: z.output<Input>) => OperationCacheProfile | undefined {
   return typeof policy === "function";
 }
 
@@ -333,7 +325,7 @@ const descriptorMeta = <
     | QueryDefinition<Input, Output>
     | MutationDefinition<Input, Output>,
   entity?: string,
-  input: z.output<Input> | typeof NO_POLICY_INPUT = NO_POLICY_INPUT,
+  policy?: ResolvedOperationCachePolicy,
 ): CubbyOperationMeta => {
   const meta: CubbyOperationMeta = {
     transport: "start",
@@ -351,17 +343,10 @@ const descriptorMeta = <
   const cacheTags: OperationCacheTag[] = [...(definition.tags ?? [])];
   if (entity) cacheTags.push([entity]);
   meta.cacheTags = cacheTags;
-  meta.persistence = isPersistenceResolver(definition.persistence)
-    ? input === NO_POLICY_INPUT
-      ? "memory"
-      : definition.persistence(input)
-    : (definition.persistence ?? "memory");
-  const freshness = isFreshnessResolver(definition.freshness)
-    ? input === NO_POLICY_INPUT
-      ? undefined
-      : definition.freshness(input)
-    : definition.freshness;
-  if (freshness) meta.freshness = freshness;
+  const resolved = policy ?? operationCachePolicy();
+  meta.cacheProfile = resolved.profile;
+  meta.persistence = resolved.persistence;
+  if (resolved.freshness) meta.freshness = resolved.freshness;
   return meta;
 };
 
@@ -514,7 +499,15 @@ function buildQueryDescriptor<
 ): QueryDescriptor<Input, Output> {
   const { id, definition, entity } = options;
   const operation = catalogOperation(options);
-  const meta = descriptorMeta(id, definition, entity);
+  const staticProfile = isCacheProfileResolver(definition.cache)
+    ? undefined
+    : definition.cache;
+  const meta = descriptorMeta(
+    id,
+    definition,
+    entity,
+    operationCachePolicy(staticProfile),
+  );
   const parsedQueryKey = (
     input: z.output<Input>,
   ): OperationQueryKey<z.output<Input>> => [
@@ -527,13 +520,14 @@ function buildQueryDescriptor<
     freshness?: OperationFreshnessPolicy;
   };
   const queryPolicy = (input: z.output<Input>): QueryPolicy => {
+    const profile = isCacheProfileResolver(definition.cache)
+      ? definition.cache(input)
+      : definition.cache;
+    const resolved = operationCachePolicy(profile);
     const policy: QueryPolicy = {
-      meta: descriptorMeta(id, definition, entity, input),
+      meta: descriptorMeta(id, definition, entity, resolved),
     };
-    const freshness = isFreshnessResolver(definition.freshness)
-      ? definition.freshness(input)
-      : definition.freshness;
-    if (freshness) policy.freshness = freshness;
+    if (resolved.freshness) policy.freshness = resolved.freshness;
     return policy;
   };
   return {

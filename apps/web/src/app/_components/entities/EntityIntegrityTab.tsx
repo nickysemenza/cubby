@@ -53,7 +53,6 @@ const LENS_OPTIONS: {
 
 const EMPTY_REFERENTIAL_LIVENESS_VIOLATIONS: ReferentialLivenessViolation[] =
   [];
-const REFERENTIAL_LIVENESS_STALE_TIME = 60_000;
 
 export interface EntityIntegrityOperations {
   catalog: typeof entityIntegrity.catalog;
@@ -95,7 +94,6 @@ export function EntityIntegrityTab({
       ...operations.referentialLiveness.queryOptions(
         REFERENTIAL_LIVENESS_INPUT,
       ),
-      staleTime: REFERENTIAL_LIVENESS_STALE_TIME,
       select: (result) => result.items,
     },
   );

@@ -20,8 +20,6 @@ export function useProductUnitMappingSummaries(productIds: readonly string[]) {
         include: ["unitMappings"],
       }),
       enabled: chunkIds.length > 0,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,
       select: (data: ProductSummaries) =>
         data.unitMappings ?? EMPTY_PRODUCT_UNIT_MAPPING_MAP,
     }),

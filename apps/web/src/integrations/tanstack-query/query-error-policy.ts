@@ -8,6 +8,10 @@ interface FailedQuery {
   getObserversCount: () => number;
 }
 
+interface FailedMutation {
+  options: { onError?: unknown };
+}
+
 export function shouldToastQueryError(
   error: UnparsedError,
   query: FailedQuery,
@@ -21,4 +25,13 @@ export function shouldToastQueryError(
     return false;
   }
   return !(query.meta?.speculative === true && query.getObserversCount() === 0);
+}
+
+/**
+ * A mutation-level error callback owns rollback and user presentation. Per-call
+ * `mutate(..., { onError })` callbacks are not present on `mutation.options`, so
+ * user-facing handlers belong on the descriptor/options passed to useMutation.
+ */
+export function shouldToastMutationError(mutation: FailedMutation): boolean {
+  return mutation.options.onError === undefined;
 }

@@ -22,8 +22,6 @@ function useProductImageSummaries(productIds: readonly string[]) {
         include: ["images"],
       }),
       enabled: chunkIds.length > 0,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,
       select: (data: ProductSummaries) =>
         data.images ?? EMPTY_PRODUCT_IMAGE_MAP,
     }),

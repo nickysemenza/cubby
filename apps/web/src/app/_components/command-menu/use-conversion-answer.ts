@@ -44,7 +44,6 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
       nameFilter: parsed?.name ?? "",
     }),
     enabled: parsed !== null,
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: conversion } = useQuery({

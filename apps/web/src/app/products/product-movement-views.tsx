@@ -514,7 +514,6 @@ export function ProductMovementViews({
       movementTo: search.movementTo,
       order,
     }),
-    staleTime: 60_000,
   });
 
   if (isError) {

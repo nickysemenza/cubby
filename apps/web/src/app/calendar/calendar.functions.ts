@@ -18,13 +18,11 @@ export const calendar = defineOperationDomain("calendar", {
     input: calendarRangeInput,
     output: calendarRangeOut,
     tags: [["calendar", "range"]],
-    persistence: "memory",
   }),
   getFeed: query({
     input: z.undefined(),
     output: calendarFeedOut,
     tags: [["calendar", "feed"]],
-    persistence: "memory",
   }),
   rotateFeed: mutation({
     input: z.undefined(),

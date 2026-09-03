@@ -23,7 +23,6 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { getErrorMessage } from "~/lib/error-utils";
 import { problems as problemOperations } from "~/lib/problems.functions";
 
-import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 
 /**
@@ -40,7 +39,6 @@ import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 export function useAutoFixPlan(problems: AllProblems) {
   const { data: counts } = useQuery({
     ...problemOperations.getMaintenanceCounts.queryOptions(),
-    staleTime: PROBLEMS_QUERY_STALE_TIME,
   });
 
   return buildAutoFixPlan(problems, counts);

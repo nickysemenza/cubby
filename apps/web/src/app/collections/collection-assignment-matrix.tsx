@@ -36,6 +36,7 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon, entityDetailLink } from "~/entities/entities";
 import { focusOnMount } from "~/hooks/focus-on-mount";
+import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
@@ -394,7 +395,9 @@ export function CollectionAssignmentMatrix({
 
   const mutation = useMutation({
     ...operations.set.mutationOptions(),
-    retry: 2,
+    // The command sets the final membership state rather than toggling it, so
+    // retrying a transient transport failure cannot apply the action twice.
+    retry: IDEMPOTENT_MUTATION_RETRY,
     onSuccess: (_result, variables) => {
       const key = `${variables.subject}:${variables.id}:${variables.collection}`;
       setOverrides((current) => {

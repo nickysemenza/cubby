@@ -451,10 +451,10 @@ export const calendarHouseholdRipple = (
  * client than this one. The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
  * `relatedness.product`, `entity.inspectorHealth`, `entityIntegrity` — are
  * external or derived reads with nothing that "writes" them from this app.
- * A global `staleTime: 60_000` at `root-provider.tsx:53` means none of these
- * is ever PERMANENTLY stale even when nothing invalidates it, which is why a
- * reverse-direction checker was not built. Revisit only if that default is
- * raised, or a descriptor declares `staleTime: Infinity`.
+ * The global 60-second interactive policy in `query-policy.ts` means none of
+ * these is ever PERMANENTLY stale even when nothing invalidates it, which is
+ * why a reverse-direction checker was not built. Revisit only if that default
+ * is raised, or a descriptor gains a permanently fresh cache profile.
  */
 
 /** `entityRipple` hands back the SAME array reference for the same entity, so

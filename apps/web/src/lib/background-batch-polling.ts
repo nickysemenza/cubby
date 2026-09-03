@@ -34,7 +34,6 @@ export function makeBatchStatusFetcher(
     queryClient
       .fetchQuery({
         ...operations.summary.queryOptions({ batchId }),
-        staleTime: 0,
       })
       .then((batch) => batch.status);
 }

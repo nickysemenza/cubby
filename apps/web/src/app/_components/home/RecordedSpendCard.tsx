@@ -58,7 +58,6 @@ export function describeRecordedSpendChange(
 export function RecordedSpendCard({ asOf }: { asOf: HomeAsOfWindow }) {
   const query = useQuery({
     ...expense.monthlySummary.queryOptions(asOf.spend.filters),
-    staleTime: 60 * 1000,
   });
 
   const monthly = useMemo(

@@ -40,6 +40,7 @@ export const problems = defineOperationDomain("problems", {
     input: noInput,
     output: problemsCountSchema,
     tags: [["problems", "getCounts"]],
+    cache: "stable",
   }),
   getViews: query({
     input: noInput,
@@ -70,6 +71,7 @@ export const problems = defineOperationDomain("problems", {
     input: noInput,
     output: maintenanceCountsSchema,
     tags: [["problems", "getMaintenanceCounts"]],
+    cache: "stable",
   }),
   dryRunReparse: query({
     input: noInput,

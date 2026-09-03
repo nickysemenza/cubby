@@ -13,10 +13,7 @@ export const cookbook = defineOperationDomain("cookbook", {
     input: z.null(),
     output: cookbookSummariesOut,
     tags: [["cookbook"]],
-    freshness: {
-      staleTime: 2 * 60_000,
-      refetchOnWindowFocus: true,
-    },
+    cache: "browse",
   }),
   detail: query({
     input: z.object({ shortcode: cookbookShortcode }),

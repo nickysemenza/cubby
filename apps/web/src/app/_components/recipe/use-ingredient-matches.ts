@@ -35,7 +35,6 @@ export function useIngredientMatches(
   const { data, isLoading } = useQuery({
     ...ingredient.matchNames.queryOptions({ names: uniqueNames }),
     enabled,
-    staleTime: 60_000,
   });
 
   const matchMap = useMemo<IngredientMatchMap>(() => {

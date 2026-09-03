@@ -64,7 +64,6 @@ function ProblemsBannerContent({
 }) {
   const { data: counts, isLoading } = useQuery({
     ...operations.getCounts.queryOptions(),
-    staleTime: 5 * 60 * 1000,
     enabled: isAuthed,
   });
   const defects = counts?.total ?? 0;

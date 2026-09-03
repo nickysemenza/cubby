@@ -13,6 +13,7 @@ export const project = defineOperationDomain("project", {
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectDashboardSummaryOut,
     tags: [["project", "dashboardSummary"]],
+    cache: "stable",
   }),
   tree: query({
     input: schemas.projectTreeInput,
@@ -23,6 +24,7 @@ export const project = defineOperationDomain("project", {
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,
     tags: [["project", "portfolioAnalytics"]],
+    cache: "stable",
   }),
   options: query({
     input: z.undefined(),

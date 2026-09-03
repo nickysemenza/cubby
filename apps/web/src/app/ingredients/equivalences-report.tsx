@@ -62,7 +62,6 @@ export function EquivalencesReport() {
     refetch,
   } = useQuery({
     ...recipe.harvestEquivalences.queryOptions(),
-    staleTime: 5 * 60 * 1000,
   });
   // Hydration-stable: the server renders mid-scan with no candidates, while the
   // client's first render already has the streamed ones — so the scanning

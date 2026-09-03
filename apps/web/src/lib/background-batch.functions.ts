@@ -32,7 +32,7 @@ export const backgroundBatch = defineOperationDomain("background-batch", {
     input: backgroundBatchIdInputSchema,
     output: backgroundBatchBrowserSummarySchema,
     tags: [["background-batch", "summary"]],
-    freshness: { staleTime: 0 },
+    cache: "live-status",
   }),
   jobs: query({
     input: backgroundBatchJobsInputSchema,
