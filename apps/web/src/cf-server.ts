@@ -26,6 +26,8 @@ import {
   startOperationTraceName,
 } from "./lib/start-operation-observability";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
+import { calendarFeedStateFor } from "./server/calendar/client";
+import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import type { DeadLetterQueueBatch } from "./server/dead-letter-queue";
@@ -42,6 +44,10 @@ const getHandler = () => {
   handlerPromise ??= import("@tanstack/react-start/server-entry");
   return handlerPromise;
 };
+
+const calendarFeedHandler = createCalendarFeedHandler((origin) =>
+  calendarFeedStateFor(origin),
+);
 
 interface InterceptedError {
   name: string;
@@ -143,77 +149,102 @@ const handler = {
             ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
             : "cf.fetch",
           (span, endSpan) =>
-            withRequestDb(
-              {
-                strong: env.HYPERDRIVE.connectionString,
-                boundedStale: env.HYPERDRIVE_CACHED.connectionString,
-              },
-              async () => {
-                const { default: handler } = await withTrace(
-                  "cf.importHandler",
-                  () => getHandler(),
-                );
-                // Scoped here rather than around the whole handler body: this
-                // is the only region where request-scoped work runs, and
-                // waitUntil must belong to THIS request's context.
-                const response = await withTrace("cf.handler", async () =>
-                  runWithExecutionCtx(ctx, async () => handler.fetch(request)),
-                );
-                span.setAttribute("http.response.status_code", response.status);
-
-                // If Nitro returned a 500 and we intercepted a real error, log the
-                // details so they appear in `wrangler tail` (Nitro's response body
-                // is useless) and report it to Sentry — the handler swallows it into
-                // a 500 body, so withSentry's auto-capture (thrown-error only) never
-                // sees it.
-                const interceptedError =
-                  interceptedErrorStore.getStore()?.error;
-                if (response.status >= 500 && interceptedError) {
-                  console.error(
-                    "[cf-server] Unhandled error:",
-                    JSON.stringify(interceptedError, null, 2),
+            request.method === "GET" &&
+            url.pathname.startsWith("/api/calendar/")
+              ? withTrace("cf.calendarFeed", async () => {
+                  const response = await runWithExecutionCtx(
+                    ctx,
+                    async () => await calendarFeedHandler({ request }),
+                    url.origin,
                   );
-                  const reconstructed = new Error(interceptedError.message);
-                  reconstructed.name = interceptedError.name;
-                  reconstructed.stack = interceptedError.stack;
-                  reconstructed.cause = interceptedError.cause;
-                  Sentry.captureException(reconstructed);
-                }
-
-                const correlatedResponse = withResponseDiagnostics(
-                  withHtmlNoCache(response),
-                  {
+                  span.setAttribute(
+                    "http.response.status_code",
+                    response.status,
+                  );
+                  endSpan();
+                  return withResponseDiagnostics(response, {
                     requestId: getRequestId(request.headers),
                     workerVersion: env.CF_VERSION_METADATA.id,
-                  },
-                );
-                if (request.method === "HEAD") {
-                  span.setAttributes({
-                    "cubby.response.body.outcome": "empty",
-                    "cubby.response.stream.duration_ms": 0,
                   });
-                  endSpan();
-                  return correlatedResponse;
-                }
-                return observeResponseBody(
-                  correlatedResponse,
-                  (observation) => {
-                    span.setAttributes({
-                      "cubby.response.body.outcome": observation.outcome,
-                      "cubby.response.stream.duration_ms": Math.round(
-                        observation.durationMs,
-                      ),
-                      "cubby.response.cancelled":
-                        observation.outcome === "cancelled",
-                    });
-                    if (observation.outcome === "error") {
-                      span.setError("response_stream_error");
-                    }
-                    endSpan();
+                })
+              : withRequestDb(
+                  {
+                    strong: env.HYPERDRIVE.connectionString,
+                    boundedStale: env.HYPERDRIVE_CACHED.connectionString,
                   },
-                );
-              },
-            ),
+                  async () => {
+                    const { default: handler } = await withTrace(
+                      "cf.importHandler",
+                      () => getHandler(),
+                    );
+                    // Scoped here rather than around the whole handler body: this
+                    // is the only region where request-scoped work runs, and
+                    // waitUntil must belong to THIS request's context.
+                    const response = await withTrace("cf.handler", async () =>
+                      runWithExecutionCtx(
+                        ctx,
+                        async () => handler.fetch(request),
+                        url.origin,
+                      ),
+                    );
+                    span.setAttribute(
+                      "http.response.status_code",
+                      response.status,
+                    );
+
+                    // If Nitro returned a 500 and we intercepted a real error, log the
+                    // details so they appear in `wrangler tail` (Nitro's response body
+                    // is useless) and report it to Sentry — the handler swallows it into
+                    // a 500 body, so withSentry's auto-capture (thrown-error only) never
+                    // sees it.
+                    const interceptedError =
+                      interceptedErrorStore.getStore()?.error;
+                    if (response.status >= 500 && interceptedError) {
+                      console.error(
+                        "[cf-server] Unhandled error:",
+                        JSON.stringify(interceptedError, null, 2),
+                      );
+                      const reconstructed = new Error(interceptedError.message);
+                      reconstructed.name = interceptedError.name;
+                      reconstructed.stack = interceptedError.stack;
+                      reconstructed.cause = interceptedError.cause;
+                      Sentry.captureException(reconstructed);
+                    }
+
+                    const correlatedResponse = withResponseDiagnostics(
+                      withHtmlNoCache(response),
+                      {
+                        requestId: getRequestId(request.headers),
+                        workerVersion: env.CF_VERSION_METADATA.id,
+                      },
+                    );
+                    if (request.method === "HEAD") {
+                      span.setAttributes({
+                        "cubby.response.body.outcome": "empty",
+                        "cubby.response.stream.duration_ms": 0,
+                      });
+                      endSpan();
+                      return correlatedResponse;
+                    }
+                    return observeResponseBody(
+                      correlatedResponse,
+                      (observation) => {
+                        span.setAttributes({
+                          "cubby.response.body.outcome": observation.outcome,
+                          "cubby.response.stream.duration_ms": Math.round(
+                            observation.durationMs,
+                          ),
+                          "cubby.response.cancelled":
+                            observation.outcome === "cancelled",
+                        });
+                        if (observation.outcome === "error") {
+                          span.setError("response_stream_error");
+                        }
+                        endSpan();
+                      },
+                    );
+                  },
+                ),
           {
             "http.request.method": request.method,
             "http.route": routeTemplate,
@@ -288,7 +319,14 @@ const handler = {
               ]);
             for (const message of batch.messages) {
               try {
-                await processBackgroundQueueMessage(db, message);
+                const outcome = await processBackgroundQueueMessage(
+                  db,
+                  message,
+                );
+                if (outcome === "succeeded") {
+                  const state = await calendarFeedStateFor(env.APP_ORIGIN);
+                  await state.markDirty("background-job");
+                }
               } catch (error) {
                 // Per-message identifiers are logged inside the consumer, the
                 // only place the body has been parsed. Here we just make sure
@@ -333,6 +371,21 @@ const handler = {
     await withTrace(
       "cf.scheduled",
       async () => {
+        try {
+          await withTrace(
+            "cf.scheduled.job",
+            async () =>
+              await (
+                await calendarFeedStateFor(env.APP_ORIGIN)
+              ).refreshNow("cron.daily"),
+            { "cubby.scheduled.job": "calendar-feed" },
+          );
+        } catch (error) {
+          // Calendar keeps serving its previous atomic snapshot. Keep the
+          // independent maintenance jobs below running while surfacing repair
+          // failure through both the errored child span and Sentry.
+          Sentry.captureException(error);
+        }
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
           const [
             { db },
@@ -389,6 +442,8 @@ const handler = {
     );
   },
 };
+
+export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 
 export default Sentry.withSentry(
   () => ({

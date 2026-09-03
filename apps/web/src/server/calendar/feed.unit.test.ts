@@ -1,34 +1,34 @@
-import { testUserId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
-import { Database } from "~/server/db";
-import { getCalendarRange } from "~/server/repo/calendar";
-import { findUserByCalendarFeedToken } from "~/server/repo/calendar-feed";
-
+import type { CalendarFeedState } from "./contracts";
 import { createCalendarFeedHandler } from "./feed";
 
-describe("published calendar feed read policy", () => {
-  it("authorizes against the strong handle and reads content from the stale handle", async () => {
-    const authorizationDb = new Database(() => {
-      throw new Error("The test must not open the authorization database");
-    });
-    const contentDb = new Database(() => {
-      throw new Error("The test must not open the content database");
-    });
-    const findUserByToken = vi.fn<typeof findUserByCalendarFeedToken>(
-      async () => testUserId("calendar-feed"),
-    );
-    const getRange = vi.fn<typeof getCalendarRange>(async () => ({
-      items: [],
-      days: {},
+const document = {
+  body: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+  etag: '"calendar-etag"',
+  generatedAt: "2026-09-03T12:00:00.000Z",
+  revision: 4,
+  itemCount: 2,
+};
+
+function state(read: CalendarFeedState["read"]): CalendarFeedState {
+  return {
+    getToken: async () => "token",
+    rotate: async () => "token",
+    read,
+    markDirty: async () => undefined,
+    refreshNow: async () => null,
+  };
+}
+
+describe("published calendar feed", () => {
+  it("serves a stored document without any database dependency", async () => {
+    const read = vi.fn<CalendarFeedState["read"]>(async () => ({
+      result: "served",
+      ...document,
     }));
-    const handler = createCalendarFeedHandler({
-      authorizationDb,
-      contentDb,
-      findUserByToken,
-      getRange,
-      now: () => new Date("2026-08-28T12:00:00.000Z"),
-    });
+    const resolveState = vi.fn(async () => state(read));
+    const handler = createCalendarFeedHandler(resolveState);
 
     const response = await handler({
       request: new Request(
@@ -37,17 +37,41 @@ describe("published calendar feed read policy", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(findUserByToken).toHaveBeenCalledWith(
-      authorizationDb,
-      "strong-token",
+    expect(await response.text()).toBe(document.body);
+    expect(response.headers.get("etag")).toBe(document.etag);
+    expect(resolveState).toHaveBeenCalledWith("https://cubby.example");
+    expect(read).toHaveBeenCalledWith("strong-token", "all", null);
+  });
+
+  it("returns 304 without a body for a matching ETag", async () => {
+    const handler = createCalendarFeedHandler(async () =>
+      state(async () => ({ result: "not_modified", ...document })),
     );
-    expect(getRange).toHaveBeenCalledWith(
-      contentDb,
-      expect.objectContaining({ kinds: expect.any(Array) }),
+    const response = await handler({
+      request: new Request(
+        "https://cubby.example/api/calendar/token/meals.ics",
+        { headers: { "If-None-Match": document.etag } },
+      ),
+    });
+    expect(response.status).toBe(304);
+    expect(await response.text()).toBe("");
+    expect(response.headers.get("etag")).toBe(document.etag);
+  });
+
+  it("makes unknown tokens, feeds, and malformed tokens indistinguishable", async () => {
+    const handler = createCalendarFeedHandler(async () =>
+      state(async () => ({ result: "not_found" })),
     );
-    expect(findUserByToken.mock.calls[0]?.[0]).toBe(authorizationDb);
-    expect(findUserByToken.mock.calls[0]?.[0]).not.toBe(contentDb);
-    expect(getRange.mock.calls[0]?.[0]).toBe(contentDb);
-    expect(getRange.mock.calls[0]?.[0]).not.toBe(authorizationDb);
+    for (const path of [
+      "/api/calendar/nope/tasks.ics",
+      "/api/calendar/nope/unknown.ics",
+      "/api/calendar/%E0%A4%A/all.ics",
+    ]) {
+      const response = await handler({
+        request: new Request(`https://cubby.example${path}`),
+      });
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe("Not found");
+    }
   });
 });

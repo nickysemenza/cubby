@@ -223,6 +223,13 @@ function isPublishable(
   return false;
 }
 
+export function calendarItemCount(
+  items: CalendarItem[],
+  feed: IcsFeed,
+): number {
+  return items.filter((item) => isPublishable(item, feed)).length;
+}
+
 /**
  * DTSTART/DTEND for one item — DATE-valued for a full-day event, UTC DATE-TIME
  * for a timed one.

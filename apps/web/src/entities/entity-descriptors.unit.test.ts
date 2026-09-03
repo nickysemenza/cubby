@@ -128,13 +128,11 @@ const DETAIL_POLICY = {
         staleTime: 300000,
         gcTime: 86400000,
         refetchOnWindowFocus: true,
-        refetchOnReconnect: true,
       },
     },
     staleTime: 300000,
     gcTime: 86400000,
     refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
   },
   memory: {
     meta: {
@@ -159,12 +157,10 @@ const LIST_POLICY = {
     freshness: {
       staleTime: 120000,
       refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
     },
   },
   staleTime: 120000,
   refetchOnWindowFocus: true,
-  refetchOnReconnect: true,
 } as const;
 
 /** The row type a set of query options resolves to. */

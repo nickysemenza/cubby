@@ -14,19 +14,6 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
-  // Bearer secret for the read-only iCalendar feed (routes/api/calendar.$token.$feed.ts).
-  // Calendar.app sends no cookie and can't do OAuth, so the URL itself carries
-  // the credential. Unique so the feed route can resolve a user from the token
-  // in one indexed read; nullable because a user has no feed until they mint one
-  // (Postgres allows many NULLs under a unique index).
-  //
-  // App-owned: deliberately NOT declared to better-auth as a `user.additionalFields`
-  // entry. It was, briefly — but that put the token in the SELECT better-auth runs
-  // on every session lookup (so a missing column 500s *all* auth, not just the
-  // calendar) and in the signed session cookie, and it bought nothing: the session
-  // cookie cache lags up to 5 minutes, so the UI has to read through
-  // repo/calendar-feed.ts anyway. Only that repo touches this column.
-  calendarFeedToken: text("calendar_feed_token").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

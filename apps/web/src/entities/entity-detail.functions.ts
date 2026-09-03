@@ -29,7 +29,6 @@ const stableDetailFreshness = {
   staleTime: 5 * 60_000,
   gcTime: 24 * 60 * 60_000,
   refetchOnWindowFocus: true,
-  refetchOnReconnect: true,
 } as const;
 
 /** Compatibility error shape for browser error renderers. */

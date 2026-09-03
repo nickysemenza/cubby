@@ -12,6 +12,7 @@ import type { TelemetryQueueProducer } from "./telemetry-queue-types";
 
 interface WaitUntilContext {
   waitUntil(promise: Promise<unknown>): void;
+  origin?: string;
 }
 
 /**
@@ -25,7 +26,8 @@ const executionCtxStore = new AsyncLocalStorage<WaitUntilContext>();
 export const runWithExecutionCtx = <T>(
   ctx: WaitUntilContext,
   fn: () => Promise<T>,
-): Promise<T> => executionCtxStore.run(ctx, fn);
+  origin?: string,
+): Promise<T> => executionCtxStore.run({ ...ctx, origin }, fn);
 
 /** Undefined outside a CF request (queue/cron invocations, the Node dev server). */
 export const getExecutionCtx = (): WaitUntilContext | undefined =>
@@ -72,6 +74,10 @@ export const getProblemCountsCache = ():
     put: (key, value) => binding.put(key, value),
   };
 };
+
+/** Origin-keyed durable calendar publishing state, absent in plain Vite. */
+export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
+  cfEnv?.CALENDAR_FEED;
 
 // Cubby's Cloudflare account + AI Gateway identifiers. Single source of truth
 // for the gateway binding (below) and the gateway-REST base URL built in

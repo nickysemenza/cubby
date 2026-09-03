@@ -39,7 +39,6 @@ export const location = defineOperationDomain("location", {
     freshness: {
       staleTime: 2 * 60_000,
       refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
     },
   }),
   valuationSummary: query({

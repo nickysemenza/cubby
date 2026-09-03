@@ -38,7 +38,6 @@ const stableIndexEntities = new Set<ListEntity>([
 const stableIndexFreshness = {
   staleTime: 2 * 60_000,
   refetchOnWindowFocus: true,
-  refetchOnReconnect: true,
 } as const;
 
 /** @lintignore Discovered by the operation registry generator. */

@@ -16,7 +16,6 @@ export const cookbook = defineOperationDomain("cookbook", {
     freshness: {
       staleTime: 2 * 60_000,
       refetchOnWindowFocus: true,
-      refetchOnReconnect: true,
     },
   }),
   detail: query({

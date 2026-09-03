@@ -10,6 +10,7 @@ import {
   applyBrowserReadPolicy,
   type BrowserReadPolicy,
 } from "~/server/browser-read-policy";
+import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import {
   appErrorFromUnknown,
   toPublicErrorPayload,
@@ -168,6 +169,11 @@ export interface StartOperationRuntime {
     observation: OperationObservation<Result>,
     run: (span: AppSpan) => Promise<Result>,
   ): Promise<Result>;
+  markCalendarDirty(
+    context: AuthenticatedStartOperationContext,
+    headers: Headers,
+    operation: StartOperationId,
+  ): void;
 }
 
 type OutputSchemaResolver<
@@ -281,6 +287,13 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             : options.outputSchema;
           const data = outputSchema.parse(rawOutput);
           throwIfStartOperationAborted(options.request.signal);
+          if (options.type === "mutation") {
+            runtime.markCalendarDirty(
+              context,
+              options.request.headers,
+              options.operation,
+            );
+          }
           const result: StartOperationResult<z.output<OutputSchema>> = {
             ok: true,
             data,
@@ -312,6 +325,19 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
 const productionStartOperationRuntime = {
   authenticate: authenticateStartOperation,
   observe: observeOperation,
+  markCalendarDirty: (context, headers, operation) => {
+    const headerOrigin = headers.get("origin");
+    const host = headers.get("host");
+    const origin = headerOrigin
+      ? new URL(headerOrigin).origin
+      : host
+        ? `${headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`
+        : undefined;
+    scheduleCalendarFeedDirty(`browser.${operation}`, {
+      origin,
+      db: context.db,
+    });
+  },
 } satisfies StartOperationRuntime;
 
 export const runStartOperation = createStartOperationRunner(

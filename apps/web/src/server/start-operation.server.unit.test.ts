@@ -45,10 +45,12 @@ const span: AppSpan = {
   recordException: () => undefined,
 };
 const authenticate = vi.fn<StartOperationRuntime["authenticate"]>();
+const markCalendarDirty = vi.fn<StartOperationRuntime["markCalendarDirty"]>();
 const observedOperations: string[] = [];
 const inspections: ObservedResult[] = [];
 const runtime: StartOperationRuntime = {
   authenticate,
+  markCalendarDirty,
   observe: async (definition, observation, run) => {
     observedOperations.push(definition.id);
     const result = await run(span);
@@ -147,6 +149,11 @@ describe("runStartOperation", () => {
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ db: database, readDb: database }),
       {},
+    );
+    expect(markCalendarDirty).toHaveBeenCalledWith(
+      expect.objectContaining({ db: database }),
+      expect.any(Headers),
+      "entity.mutate",
     );
   });
 
@@ -318,6 +325,7 @@ describe("runStartOperation", () => {
     });
     expect(inspections).toHaveLength(2);
     expect(inspections.every(({ error }) => error instanceof Error)).toBe(true);
+    expect(markCalendarDirty).not.toHaveBeenCalled();
   });
 
   it("does not expose unknown or invalid-output details", async () => {

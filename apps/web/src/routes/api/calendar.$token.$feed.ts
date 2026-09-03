@@ -1,9 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { calendarFeedStateFor } from "~/server/calendar/client";
 import { createCalendarFeedHandler } from "~/server/calendar/feed";
-import { boundedStaleDb, db } from "~/server/db";
-import { getCalendarRange } from "~/server/repo/calendar";
-import { findUserByCalendarFeedToken } from "~/server/repo/calendar-feed";
 
 /**
  * Published iCalendar feed: /api/calendar/<token>/<feed>.ics
@@ -16,13 +14,9 @@ import { findUserByCalendarFeedToken } from "~/server/repo/calendar-feed";
  * captures the dot, so `$feed` arrives as the literal "meals.ics".
  */
 
-const handler = createCalendarFeedHandler({
-  authorizationDb: db,
-  contentDb: boundedStaleDb,
-  findUserByToken: findUserByCalendarFeedToken,
-  getRange: getCalendarRange,
-  now: () => new Date(),
-});
+const handler = createCalendarFeedHandler((origin) =>
+  calendarFeedStateFor(origin),
+);
 
 export const Route = createFileRoute("/api/calendar/$token/$feed")({
   server: { handlers: { GET: handler } },
