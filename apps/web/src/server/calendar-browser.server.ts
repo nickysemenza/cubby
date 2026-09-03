@@ -3,6 +3,7 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getCalendarFeedWorkflow,
   getCalendarRangeWorkflow,
+  inspectCalendarFeedWorkflow,
   rotateCalendarFeedWorkflow,
 } from "~/server/workflows/calendar.server";
 
@@ -10,6 +11,8 @@ export const calendarHandlers = implementOperationDomain(calendar, {
   range: (context, input) => getCalendarRangeWorkflow(context.db, input),
   getFeed: (context) =>
     getCalendarFeedWorkflow(context.db, calendarOrigin(context.headers)),
+  inspectFeed: (context) =>
+    inspectCalendarFeedWorkflow(calendarOrigin(context.headers)),
   rotateFeed: (context) =>
     rotateCalendarFeedWorkflow(context.db, calendarOrigin(context.headers)),
 });

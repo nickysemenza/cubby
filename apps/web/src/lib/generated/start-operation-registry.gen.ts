@@ -29,6 +29,7 @@ export const START_OPERATIONS = {
   "background-job.retry": { kind: "mutation" },
   "background-job.strandedCount": { kind: "query" },
   "calendar.getFeed": { kind: "query" },
+  "calendar.inspectFeed": { kind: "query" },
   "calendar.range": { kind: "query" },
   "calendar.rotateFeed": { kind: "mutation" },
   "collection.create": { kind: "mutation" },

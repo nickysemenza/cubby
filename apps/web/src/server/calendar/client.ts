@@ -15,6 +15,10 @@ class RemoteCalendarFeedState implements CalendarFeedState {
     return this.stub.getToken();
   }
 
+  inspect() {
+    return this.stub.inspect(this.origin);
+  }
+
   rotate() {
     return this.stub.rotate(this.origin);
   }

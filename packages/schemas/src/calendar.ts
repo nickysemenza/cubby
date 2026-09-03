@@ -192,3 +192,45 @@ export type CalendarRangeOut = z.infer<typeof calendarRangeOut>;
 
 export const calendarFeedOut = z.object({ token: z.string().nullable() });
 export const calendarRotateFeedOut = z.object({ token: z.string() });
+
+const calendarFeedDocumentInspection = z.object({
+  etag: z.string(),
+  generatedAt: z.iso.datetime(),
+  revision: z.number().int().nonnegative(),
+  itemCount: z.number().int().nonnegative(),
+  byteLength: z.number().int().nonnegative(),
+});
+
+export const calendarFeedInspectionOut = z.object({
+  schemaVersion: z.literal(1),
+  inspectedAt: z.iso.datetime(),
+  runtime: z.enum(["durable-object", "memory"]),
+  origin: z.url(),
+  object: z.object({
+    id: z.string().nullable(),
+    jurisdiction: z.string().nullable(),
+  }),
+  tokenConfigured: z.boolean(),
+  snapshot: z
+    .object({
+      revision: z.number().int().nonnegative(),
+      generatedAt: z.iso.datetime().nullable(),
+    })
+    .nullable(),
+  dirty: z
+    .object({
+      reason: z.string(),
+      sequence: z.number().int().nonnegative(),
+    })
+    .nullable(),
+  alarmAt: z.iso.datetime().nullable(),
+  feeds: z.object({
+    meals: calendarFeedDocumentInspection.nullable(),
+    tasks: calendarFeedDocumentInspection.nullable(),
+    all: calendarFeedDocumentInspection.nullable(),
+  }),
+});
+export type CalendarFeedInspection = z.infer<typeof calendarFeedInspectionOut>;
+export type CalendarFeedDocumentInspection = z.infer<
+  typeof calendarFeedDocumentInspection
+>;

@@ -27,6 +27,7 @@ export const STRONG_BROWSER_QUERY_OPERATIONS = [
   "background-batch.summary",
   "background-job.strandedCount",
   "calendar.getFeed",
+  "calendar.inspectFeed",
   "mcp.listTools",
   "mcp.usageActivity",
   "mcp.usageDashboard",
