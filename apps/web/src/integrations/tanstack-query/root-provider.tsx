@@ -18,6 +18,7 @@ import {
   EMPTY_INVALIDATION_TAG_SET,
   type InvalidationTagSet,
 } from "./cache-tags";
+import { installHumanActivityFocusController } from "./human-activity-focus";
 import {
   invalidateOperationTags,
   resolveInvalidationTags,
@@ -82,11 +83,13 @@ const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
 export function getContext(
   mutationSuccessRuntime: RootMutationSuccessRuntime = productionMutationSuccessRuntime,
 ) {
+  if (!import.meta.env.SSR) installHumanActivityFocusController();
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 60 * 1000,
         retry: false,
+        refetchOnReconnect: false,
       },
       dehydrate: { serializeData: superjson.serialize },
       hydrate: { deserializeData: superjson.deserialize },

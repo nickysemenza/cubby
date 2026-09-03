@@ -9,6 +9,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
@@ -48,6 +49,14 @@ type RegisterMcpToolConfig<
   annotations: ToolAnnotations;
   handler: ToolHandler<TInput, TOutput>;
   telemetryEntity?: (params: z.output<TInput>) => string | undefined;
+};
+
+export interface McpToolRegistrationRuntime {
+  markCalendarDirty(reason: string): void;
+}
+
+const productionMcpToolRegistrationRuntime: McpToolRegistrationRuntime = {
+  markCalendarDirty: (reason) => scheduleCalendarFeedDirty(reason),
 };
 
 const toolEntityExtractors = new WeakMap<
@@ -192,7 +201,11 @@ export function getReadCaller(extra: ToolExtra): Caller {
 export function registerMcpTool<
   TInput extends z.ZodObject,
   TOutput extends StructuredOutputSchema,
->(server: McpServer, config: RegisterMcpToolConfig<TInput, TOutput>): void {
+>(
+  server: McpServer,
+  config: RegisterMcpToolConfig<TInput, TOutput>,
+  runtime: McpToolRegistrationRuntime = productionMcpToolRegistrationRuntime,
+): void {
   const inputSchema = requireObjectInputSchema(config.name, config.inputSchema);
   if (config.telemetryEntity) {
     declareToolEntityExtractor(
@@ -211,7 +224,11 @@ export function registerMcpTool<
     try {
       const parsedParams = z.parse(inputSchema, params);
       const result = await config.handler(parsedParams, extra);
-      return structuredSuccess(result, config.outputSchema);
+      const response = structuredSuccess(result, config.outputSchema);
+      if (config.annotations.readOnlyHint !== true) {
+        runtime.markCalendarDirty(`mcp.${config.name}`);
+      }
+      return response;
     } catch (error) {
       return structuredError(error);
     }

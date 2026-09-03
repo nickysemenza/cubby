@@ -64,7 +64,7 @@ const productionBackgroundQueueEmbeddingPort: BackgroundQueueEmbeddingPort = {
 export async function processBackgroundQueueMessage(
   db: Database,
   message: BackgroundQueueDeliveredMessage,
-): Promise<void> {
+): Promise<BackgroundJobOutcome> {
   const parsed = backgroundQueueMessageSchema.safeParse(message.body);
   if (!parsed.success) {
     // Ack, don't retry. A body this consumer cannot read will not become
@@ -75,7 +75,7 @@ export async function processBackgroundQueueMessage(
       issues: parsed.error.issues,
     });
     message.ack();
-    return;
+    return "skipped";
   }
   const { batchId, jobId, kind } = parsed.data;
 
@@ -109,6 +109,7 @@ export async function processBackgroundQueueMessage(
   } else {
     message.ack();
   }
+  return outcome;
 }
 
 export async function drainQueuedBackgroundJobs(

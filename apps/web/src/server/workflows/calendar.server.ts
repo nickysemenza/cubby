@@ -1,12 +1,8 @@
 import type { CalendarRangeInput } from "@cubby/schemas/calendar";
-import type { UserId } from "@cubby/schemas/identifiers";
 
+import { calendarFeedStateFor } from "~/server/calendar/client";
 import type { Database } from "~/server/db";
 import { getCalendarRange } from "~/server/repo/calendar";
-import {
-  getCalendarFeedToken,
-  rotateCalendarFeedToken,
-} from "~/server/repo/calendar-feed";
 export const getCalendarRangeWorkflow = async (
   db: Database,
   input: CalendarRangeInput,
@@ -14,12 +10,12 @@ export const getCalendarRangeWorkflow = async (
 
 export const getCalendarFeedWorkflow = async (
   db: Database,
-  userId: UserId,
+  origin: string,
 ) => ({
-  token: await getCalendarFeedToken(db, userId),
+  token: await (await calendarFeedStateFor(origin, db)).getToken(),
 });
 
 export const rotateCalendarFeedWorkflow = async (
   db: Database,
-  userId: UserId,
-) => ({ token: await rotateCalendarFeedToken(db, userId) });
+  origin: string,
+) => ({ token: await (await calendarFeedStateFor(origin, db)).rotate() });

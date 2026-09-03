@@ -76,10 +76,8 @@ function FeedRow({
 
 export function CalendarSubscribeDialog() {
   const [open, setOpen] = useState(false);
-  // Deliberately NOT `session.user.calendarFeedToken`: that copy comes from the
-  // signed cookie cache and lags by up to 5 minutes, so a just-created feed
-  // still reads as null there — and the empty state's "Create feed" button
-  // rotates, which would break a subscription the user had already added.
+  // Read the publishing state itself rather than the signed session cookie.
+  // Durable Object state changes immediately when a token is created or rotated.
   const feed = useQuery({
     ...calendar.getFeed.queryOptions(),
     enabled: open,

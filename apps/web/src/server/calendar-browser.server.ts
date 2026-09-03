@@ -9,7 +9,17 @@ import {
 export const calendarHandlers = implementOperationDomain(calendar, {
   range: (context, input) => getCalendarRangeWorkflow(context.db, input),
   getFeed: (context) =>
-    getCalendarFeedWorkflow(context.db, context.actorContext.userId),
+    getCalendarFeedWorkflow(context.db, calendarOrigin(context.headers)),
   rotateFeed: (context) =>
-    rotateCalendarFeedWorkflow(context.db, context.actorContext.userId),
+    rotateCalendarFeedWorkflow(context.db, calendarOrigin(context.headers)),
 });
+
+function calendarOrigin(headers: Headers): string {
+  const origin = headers.get("origin");
+  if (origin) return new URL(origin).origin;
+  const host = headers.get("host") ?? "localhost:3000";
+  const protocol =
+    headers.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") ? "http" : "https");
+  return `${protocol}://${host}`;
+}

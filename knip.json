@@ -50,6 +50,7 @@
         "@vitest/.+",
         "@tailwindcss/vite",
         "@opentelemetry/.+",
+        "cloudflare",
         "vite-plugin-wasm",
         "vite-plugin-top-level-await"
       ],

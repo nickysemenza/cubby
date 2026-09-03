@@ -1,6 +1,5 @@
 import "../mcp/entity-kernel.integration.test";
 import "../repo/audit-log.integration.test";
-import "../repo/calendar-feed.integration.test";
 import "../repo/product/identity.integration.test";
 import "../repo/product/unit-mapping-provenance.integration.test";
 import "../repo/shortcode.integration.test";

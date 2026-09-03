@@ -1,6 +1,6 @@
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { callMcpTool } from "./mcp-test-utils";
@@ -143,6 +143,61 @@ describe("MCP catalog schemas", () => {
     const result = await callMcpTool(server, "union_out", {}, {});
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({ total: 3 });
+  });
+
+  it("marks calendar state dirty only after a successful mutating tool", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    const markCalendarDirty = vi.fn();
+    registerMcpTool(
+      server,
+      {
+        name: "calendar_affecting_write",
+        description: "writes",
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        annotations: { readOnlyHint: false },
+        handler: async () => ({ ok: true }),
+      },
+      { markCalendarDirty },
+    );
+    await callMcpTool(server, "calendar_affecting_write", {}, {});
+    expect(markCalendarDirty).toHaveBeenCalledWith(
+      "mcp.calendar_affecting_write",
+    );
+
+    const readServer = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpTool(
+      readServer,
+      {
+        name: "calendar_read",
+        description: "reads",
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        annotations: { readOnlyHint: true },
+        handler: async () => ({ ok: true }),
+      },
+      { markCalendarDirty },
+    );
+    await callMcpTool(readServer, "calendar_read", {}, {});
+    expect(markCalendarDirty).toHaveBeenCalledTimes(1);
+
+    const failingServer = new McpServer({ name: "test", version: "1.0.0" });
+    registerMcpTool(
+      failingServer,
+      {
+        name: "calendar_failed_write",
+        description: "fails before writing",
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        annotations: { readOnlyHint: false },
+        handler: async () => {
+          throw new Error("write failed");
+        },
+      },
+      { markCalendarDirty },
+    );
+    await callMcpTool(failingServer, "calendar_failed_write", {}, {});
+    expect(markCalendarDirty).toHaveBeenCalledTimes(1);
   });
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {
