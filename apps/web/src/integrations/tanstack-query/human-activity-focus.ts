@@ -57,7 +57,6 @@ export function createHumanActivityFocusListener(
     for (const type of ACTIVITY_EVENTS) {
       environment.window.addEventListener(type, release, eventOptions);
     }
-    rearm();
 
     return () => {
       environment.document.removeEventListener("visibilitychange", rearm);
