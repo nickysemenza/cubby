@@ -25,12 +25,6 @@ const persistedDetailEntities = new Set<DetailEntity>([
   "ingredient",
   "inventory",
 ]);
-const stableDetailFreshness = {
-  staleTime: 5 * 60_000,
-  gcTime: 24 * 60 * 60_000,
-  refetchOnWindowFocus: true,
-} as const;
-
 /** Compatibility error shape for browser error renderers. */
 export class EntityDetailError extends Error {
   readonly data: { code: string; reason: string };
@@ -65,11 +59,9 @@ export const entityDetail = defineOperationDomain("entity", {
         ? null
         : getEntityDetailOutputSchema(input.entity).parse(result),
     tags: [["entity", "detail"]],
-    persistence: (input) =>
-      persistedDetailEntities.has(input.entity) ? "persist" : "memory",
-    freshness: (input) =>
+    cache: (input) =>
       persistedDetailEntities.has(input.entity)
-        ? stableDetailFreshness
+        ? "persisted-detail"
         : undefined,
   }),
 });

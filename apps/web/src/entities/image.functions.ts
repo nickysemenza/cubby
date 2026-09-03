@@ -42,7 +42,7 @@ export const image = defineOperationDomain("image", {
     input: projectImageSummariesInput,
     output: projectImageSummariesOut,
     tags: [["image", "projectSummaries"]],
-    freshness: { staleTime: 5 * 60 * 1000 },
+    cache: "stable",
   }),
 });
 

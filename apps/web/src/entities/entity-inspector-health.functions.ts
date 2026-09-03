@@ -23,6 +23,5 @@ export const entityInspectorHealth = defineOperationDomain("entity", {
     input: z.null(),
     output: entityInspectorHealthSchema,
     tags: [["entity", "inspectorHealth"]],
-    freshness: { staleTime: 60_000 },
   }),
 });

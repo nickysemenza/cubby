@@ -21,6 +21,7 @@ export const usdaFood = defineOperationDomain("usda-food", {
     input: usdaFoodIdInput,
     output: foodSummaryWithLinkedProducts.nullable(),
     tags: [["usda-food"]],
+    cache: "stable",
   }),
   alternateId: query({
     input: usdaFoodLookupInput,

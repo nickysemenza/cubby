@@ -59,8 +59,6 @@ const KindAccent: React.FC<{
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
   const { data: usdaFood, isLoading: foodLoading } = useQuery({
     ...usdaFoodOperations.detail.queryOptions({ id: fdcId }),
-    // Cache for 5 minutes since food data doesn't change often
-    staleTime: 5 * 60 * 1000,
   });
   // Hydration-stable — see the note on LazyProductPillLink below.
   const hydrated = useHydrated();
@@ -88,9 +86,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
   productId,
 }) => {
   const { data: fetched, isLoading: productLoading } = useQuery(
-    entityDetailFor("product").queryOptions(productId, {
-      staleTime: 5 * 60 * 1000,
-    }),
+    entityDetailFor("product").queryOptions(productId),
   );
   // Hydration-stable. Whether this product has landed differs between the SSR
   // render and the first client render — TanStack Start's query stream races

@@ -926,7 +926,6 @@ export function ExpenseAggregateExplorer({
       columnDimension,
       comparison,
     }),
-    staleTime: 60 * 1000,
   });
   const resetConfig = normalizeExpenseAnalyzeConfig(
     DEFAULT_EXPENSE_ANALYZE_CONFIG,

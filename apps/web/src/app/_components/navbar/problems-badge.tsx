@@ -19,7 +19,6 @@ const pl = (n: number, sing: string, plur = `${sing}s`) =>
 export function problemsBadgeQueryOptions(isAuthed: boolean) {
   return {
     ...problems.getCounts.queryOptions(),
-    staleTime: 5 * 60 * 1000,
     enabled: isAuthed,
   };
 }

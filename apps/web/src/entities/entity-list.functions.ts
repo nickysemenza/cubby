@@ -35,11 +35,6 @@ const stableIndexEntities = new Set<ListEntity>([
   "recipe",
   "ingredient",
 ]);
-const stableIndexFreshness = {
-  staleTime: 2 * 60_000,
-  refetchOnWindowFocus: true,
-} as const;
-
 /** @lintignore Discovered by the operation registry generator. */
 export const entityList = defineOperationDomain("entity", {
   list: query({
@@ -49,8 +44,8 @@ export const entityList = defineOperationDomain("entity", {
     parse: (result, input) =>
       getEntityListOutputSchema(input.entity).parse(result),
     tags: [["entity", "list"]],
-    freshness: (input) =>
-      stableIndexEntities.has(input.entity) ? stableIndexFreshness : undefined,
+    cache: (input) =>
+      stableIndexEntities.has(input.entity) ? "browse" : undefined,
   }),
 });
 

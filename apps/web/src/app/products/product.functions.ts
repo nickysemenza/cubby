@@ -26,6 +26,7 @@ export const product = defineOperationDomain("product", {
   summaries: query({
     ...productWorkflowSchemas.summaries,
     tags: [["product", "summaries"]],
+    cache: "derived-summary",
   }),
   quantitySummaries: query({
     ...productWorkflowSchemas.quantitySummaries,

@@ -137,16 +137,16 @@ export function InventorySessionWorkbench({
   const treeQuery = useQuery(location.makeTree.queryOptions());
   const { data: tree, isLoading: treeLoading } = treeQuery;
   const ensureUnknown = useMutation(
-    location.ensureGlobalUnknown.mutationOptions(),
+    location.ensureGlobalUnknown.mutationOptions({
+      onError: (error) =>
+        toast.error(`Could not create Unknown: ${getErrorMessage(error)}`),
+    }),
   );
 
   useEffect(() => {
     if (ensureUnknownStarted.current) return;
     ensureUnknownStarted.current = true;
-    ensureUnknown.mutate(undefined, {
-      onError: (error) =>
-        toast.error(`Could not create Unknown: ${getErrorMessage(error)}`),
-    });
+    ensureUnknown.mutate(undefined);
   }, [ensureUnknown]);
 
   const parent = useMemo(

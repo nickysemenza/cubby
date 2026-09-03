@@ -20,6 +20,7 @@ export const ingredient = defineOperationDomain("ingredient", {
     input: schemas.ingredientNameFilterInput,
     output: schemas.ingredientWithFoodOut.nullable(),
     tags: [["ingredient", "getByName"]],
+    cache: "stable",
   }),
   matchNames: query({
     input: schemas.ingredientNamesInput,

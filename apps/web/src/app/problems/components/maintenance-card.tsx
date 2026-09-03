@@ -30,7 +30,6 @@ import {
 } from "~/lib/problems.functions";
 import { search } from "~/lib/search.functions";
 
-import { PROBLEMS_QUERY_STALE_TIME } from "../problem-query-freshness";
 import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
 import { ProblemActionButton } from "./problem-action-button";
@@ -135,7 +134,6 @@ function RecomputeAction() {
   // clears these in seconds; a lingering count flags a stuck/lost wave.
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
-    staleTime: PROBLEMS_QUERY_STALE_TIME,
   });
   return (
     <MaintenanceDryRunRow
@@ -483,7 +481,6 @@ export function MaintenanceCard() {
   // Dry-run "N affected" figures — one cheap DB/WASM query (no USDA/UPC network).
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
-    staleTime: PROBLEMS_QUERY_STALE_TIME,
   });
 
   return (

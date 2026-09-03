@@ -16,8 +16,7 @@ const calendar = defineOperationDomain("calendar", {
     input: z.object({ start: z.string() }),
     output: z.object({ items: z.array(z.string()) }),
     tags: [["calendar", "range"]],
-    persistence: "memory",
-    freshness: { staleTime: 120_000 },
+    cache: "browse",
   }),
   rotateFeed: mutation({
     input: z.object({ household: z.string() }),
@@ -98,6 +97,7 @@ describe("operation catalog", () => {
       staleTime: 120_000,
       meta: {
         cacheTags: [["calendar", "range"]],
+        cacheProfile: "browse",
         persistence: "memory",
       },
     });

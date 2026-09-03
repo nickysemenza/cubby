@@ -69,11 +69,10 @@ export function createHumanActivityFocusListener(
   };
 }
 
-let installed = false;
-
 export function installHumanActivityFocusController(): void {
-  if (installed) return;
-  installed = true;
+  // TanStack disposes the previous listener when this is configured again.
+  // Avoid a second module-level lifecycle flag, which becomes stale under HMR
+  // and prevents a newly created browser runtime from owning the current setup.
   focusManager.setEventListener(
     createHumanActivityFocusListener({
       document,

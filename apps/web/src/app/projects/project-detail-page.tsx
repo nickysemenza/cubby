@@ -873,7 +873,6 @@ function useProjectWorkReadModel(project: ProjectOut) {
 function useProjectStructureReadModel(project: ProjectOut) {
   const { data: imageMap } = useQuery({
     ...image.projectSummaries.queryOptions({ projectIds: [project.id] }),
-    staleTime: 5 * 60 * 1000,
   });
   const { data: childProjectsPage } = useQuery(
     entityListFor("project").queryOptions({

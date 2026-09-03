@@ -122,6 +122,7 @@ export const recipe = defineOperationDomain("recipe", {
     input: z.undefined(),
     output: equivalenceReportSchema,
     tags: [["recipe", "equivalences"]],
+    cache: "stable",
   }),
   scrape: mutation({
     input: scrapeRecipeInput,

@@ -22,8 +22,6 @@ export function useProductFoodSummaries(productIds: readonly string[]) {
         include: ["food"],
       }),
       enabled: chunkIds.length > 0,
-      staleTime: 5 * 60 * 1000,
-      gcTime: 30 * 60 * 1000,
       select: (data: ProductSummaries) => data.food ?? EMPTY_PRODUCT_FOOD_MAP,
     }),
   });

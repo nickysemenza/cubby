@@ -386,7 +386,11 @@ export function ToolMatrixPage({
     };
   }, []);
 
-  const setUsage = useMutation(project.setToolUsage.mutationOptions());
+  const setUsage = useMutation(
+    project.setToolUsage.mutationOptions({
+      onError: (error) => toast.error(getErrorMessage(error)),
+    }),
+  );
 
   const toggleCell = useCallback(
     (projectId: string, productId: string, nextUsed: boolean) => {
@@ -402,10 +406,6 @@ export function ToolMatrixPage({
           setUsage.mutate(
             { projectId, productId, used: nextUsed },
             {
-              // A raw useMutation rather than useActionMutation because the
-              // overlay has to be cleared on BOTH outcomes, and that hook owns
-              // its own onError.
-              onError: (error) => toast.error(getErrorMessage(error)),
               onSettled: () => {
                 setPending((prev) => {
                   const next = new Map(prev);

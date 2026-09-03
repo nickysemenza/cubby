@@ -4,6 +4,15 @@ import { z } from "zod";
 import type { OperationTransport } from "~/lib/perf/perf-store";
 
 import type { InvalidationTagSet } from "./cache-tags";
+import type {
+  OperationCacheProfile,
+  OperationFreshnessPolicy,
+} from "./query-policy";
+
+export type {
+  OperationCacheProfile,
+  OperationFreshnessPolicy,
+} from "./query-policy";
 
 export interface CubbyOperationMeta extends Record<string, unknown> {
   transport?: OperationTransport;
@@ -18,18 +27,12 @@ export interface CubbyOperationMeta extends Record<string, unknown> {
   invalidates?: InvalidationTagSet;
   /** Whether a successful query is eligible for offline persistence. */
   persistence?: "persist" | "memory";
-  /** Descriptor-owned freshness policy, also copied onto query options. */
+  /** Named descriptor policy and the resolved timings copied onto query options. */
+  cacheProfile?: OperationCacheProfile;
   freshness?: OperationFreshnessPolicy;
 }
 
 export type OperationCacheTag = readonly [string, ...string[]];
-
-export type OperationFreshnessPolicy = {
-  staleTime?: number;
-  gcTime?: number;
-  refetchOnWindowFocus?: boolean;
-  refetchOnReconnect?: boolean;
-};
 
 declare module "@tanstack/react-query" {
   interface Register {
