@@ -183,6 +183,32 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "weightSoldProducts",
+    problemClass: PROBLEM_CLASS.weightSoldProducts,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "A result aggregates a product's whole priced expense history.",
+    },
+    freshness: { kind: "live" },
+    title: "Products priced by weight with no weight mapping",
+    description:
+      "Bought by the pound but recorded as a count, so the per-each price is an average of items that each weighed something different. Recipes measured in grams read no price at all through these.",
+    emptyMessage: "Every weight-sold product has a weight-to-money mapping.",
+    source: {
+      kind: "derived",
+      diagnostic: "weight-sold-products",
+      grain: "edge",
+      inputs: [{ entity: "product", filters: [] }],
+      operations: [
+        { label: "Group priced principal expense lines by product" },
+        { label: "Keep a 2x or wider spread in unit cost" },
+        { label: "Keep those whose prices rarely repeat" },
+        { label: "Exclude products that already have a unit mapping" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "manufacturerSpellingVariants",
     problemClass: PROBLEM_CLASS.manufacturerSpellingVariants,
     executionLane: "fast",

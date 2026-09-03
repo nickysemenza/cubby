@@ -1059,6 +1059,12 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "stale-parent-recipes",
             allProblemsSchema.shape.staleParentRecipes,
           ),
+        weightSoldProducts: () =>
+          diagnosticItems(
+            db,
+            "weight-sold-products",
+            allProblemsSchema.shape.weightSoldProducts,
+          ),
         manufacturerSpellingVariants: () =>
           diagnosticItems(
             db,
@@ -1126,6 +1132,7 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     orphanedEntityEmbeddings: r.orphanedEntityEmbeddings.items,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings.items,
     staleParentRecipes: r.staleParentRecipes.items,
+    weightSoldProducts: r.weightSoldProducts.items,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants.items,
     duplicateVendors: r.duplicateVendors.items,
     duplicateSpendCandidates: r.duplicateSpendCandidates.items,

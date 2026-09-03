@@ -40,6 +40,7 @@ import {
   findParentRecipesWithDeletedSubRecipes,
   findPartiallyImportedCookbooks,
   findProductsWithoutUnitMappings,
+  findWeightSoldProducts,
   findProductsWithUpcGaps,
   findReferentialLivenessViolations,
   findToolsUsedOutsideOwnership,
@@ -291,6 +292,12 @@ export const diagnosticAdapters = {
       healthySample(findParentRecipesWithDeletedSubRecipes(db), limit),
     count: async (db) =>
       healthyCount((await findParentRecipesWithDeletedSubRecipes(db)).length),
+  },
+  "weight-sold-products": {
+    sample: (db, _options, limit) =>
+      healthySample(findWeightSoldProducts(db), limit),
+    count: async (db) =>
+      healthyCount((await findWeightSoldProducts(db)).length),
   },
   "manufacturer-spelling-variants": {
     sample: (db, _options, limit) =>

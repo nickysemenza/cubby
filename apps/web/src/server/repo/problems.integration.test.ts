@@ -1,5 +1,6 @@
 import type {
   FinancialAccountId,
+  ProductShortcode,
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -21,8 +22,10 @@ import { createExpense } from "./expense";
 import { createMealWithEntityId } from "./meal/crud";
 import { updatePurchase } from "./purchase";
 import {
+  createProductFixture,
   createRecipeFixture,
   makeExpenseInput,
+  makeProductInput,
   makeRecipeInput,
 } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
@@ -442,3 +445,97 @@ describe("problems — purchase financial settlement mismatches", () => {
  * key. A detector whose filter works and whose card presenter is missing fails
  * only when the first real row appears, which is the worst possible moment.
  */
+
+describe("problems — weight-sold products", () => {
+  const ctx = withTestDb();
+
+  /** Book `costs` as priced principal expense lines against one product. */
+  const bookLines = async (productId: ProductShortcode, costs: number[]) => {
+    for (const [i, cost] of costs.entries()) {
+      await createExpense(
+        ctx.db,
+        expenseCreateInput.parse(
+          makeExpenseInput({
+            name: `line ${i}`,
+            cost,
+            productId,
+            productQuantity: 1,
+            lineKind: "principal",
+          }),
+        ),
+        ctx.actor,
+      );
+    }
+  };
+
+  it("separates weight-sold goods from packaged ones whose price merely drifted", async () => {
+    const [weighed, packaged, narrow] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Weighed test produce" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Packaged test good" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Steady test good" }),
+        ctx.actor,
+      ),
+    ]);
+
+    await Promise.all([
+      // Every purchase a different amount — the weight-sold signature.
+      bookLines(weighed.id, [2.7, 3.38, 5.45, 6.09]),
+      // A 2x+ spread, but only two prices repeated: a sale, not a scale.
+      bookLines(packaged.id, [2, 2, 2, 4, 4, 4]),
+      // Prices all distinct but well under the 2x spread floor.
+      bookLines(narrow.id, [4.01, 4.32, 4.55, 4.77]),
+    ]);
+
+    const rows = (await findFastProblems(ctx.db)).weightSoldProducts;
+    const ids = rows.map((row) => row.id);
+
+    expect(ids).toContain(weighed.id);
+    expect(ids).not.toContain(packaged.id);
+    expect(ids).not.toContain(narrow.id);
+
+    expect(rows.find((row) => row.id === weighed.id)).toMatchObject({
+      name: "Weighed test produce",
+      lineCount: 4,
+      distinctPriceFraction: 1,
+      lowUnitCost: 2.7,
+      highUnitCost: 6.09,
+      ingredientId: null,
+    });
+  });
+
+  it("stops reporting a product once it has a weight-to-money mapping", async () => {
+    const mapped = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Mapped test produce",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "lb" },
+            b: { value: 3, unit: "dollar" },
+            source: "test",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await bookLines(mapped.id, [2.7, 3.38, 5.45, 6.09]);
+
+    const ids = (await findFastProblems(ctx.db)).weightSoldProducts.map(
+      (row) => row.id,
+    );
+
+    // The mapping IS the fix, so keeping the row would make the section
+    // permanently red for a product that no longer has the problem.
+    expect(ids).not.toContain(mapped.id);
+  });
+});

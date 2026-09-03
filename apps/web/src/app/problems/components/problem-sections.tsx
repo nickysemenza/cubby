@@ -1480,6 +1480,36 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
+    id: "weight-sold-products",
+    label: "Weight-sold, no weight mapping",
+    select: (p) => p.weightSoldProducts,
+    problemKeys: ["weightSoldProducts"],
+    entity: "product",
+    // Coverage, but with no meter: the denominator would be "products the
+    // household buys by weight", which is exactly what this detector is
+    // inferring — there is no independently known population to be a fraction
+    // of. Same reason `unvalued-buckets` declares coverage without one.
+    coverage: { keys: ["weightSoldProducts"] },
+    renderItem: (product) => ({
+      title: product.name,
+      // The spread IS the evidence, so the card shows it rather than asserting
+      // "sold by weight" and asking the reader to take that on trust.
+      subtitle: `${product.lineCount} priced lines from ${formatCurrency(
+        product.lowUnitCost,
+      )} to ${formatCurrency(product.highUnitCost)} each — needs a weight-to-money mapping`,
+      badges: product.ingredientId
+        ? [
+            // Only a linked product can mis-cost a recipe; unlinked ones are
+            // just an unusable per-each price.
+            <Badge key="linked" variant="outline">
+              Used by a recipe
+            </Badge>,
+          ]
+        : [],
+      route: entityDetailLink("product", product.id),
+    }),
+  }),
+  section({
     id: "stale-parent-recipes",
     label: "Deleted sub-recipes",
     select: (p) => p.staleParentRecipes,

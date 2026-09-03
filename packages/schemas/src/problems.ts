@@ -90,6 +90,41 @@ export const productMissingPriceSchema = z.object({
   ),
 });
 
+/**
+ * A product sold by weight whose expense lines nonetheless claim a fixed
+ * quantity, so `derivedPrice` averages line totals for items that each weighed
+ * something different. The average is not a unit price, and a gram-denominated
+ * recipe line reading through it gets no money path at all — it drops out of
+ * `costCovered` silently rather than erroring.
+ *
+ * Distinct from `productsWithoutMappings`, which needs the pack size in the
+ * product NAME (a weight-sold item never carries one — the line reads
+ * "1 Each"), and from `productMissingPrice`, which these products pass: they
+ * look priced, which is exactly why the gap is invisible.
+ *
+ * The signature is a repeat-purchase one, so it needs history to fire:
+ * `distinctPriceFraction` separates weight-sold goods (nearly every purchase a
+ * different amount) from packaged goods whose price merely drifted across sales
+ * and years (a handful of prices repeated many times). Measured on this
+ * household's ledger, weight-sold produce and meat sit at 0.80-0.97 while
+ * per-each and packaged goods sit at 0.19-0.32.
+ *
+ * The fix is a weight-to-money unit mapping; `price` is the wrong shape here
+ * and setting it papers over the gap.
+ */
+export const weightSoldProductSchema = z.object({
+  ...productProblemFields,
+  /** Priced principal expense lines behind the verdict. */
+  lineCount: z.number().int().positive(),
+  /** Distinct unit costs ÷ `lineCount`. Near 1 means priced by weight. */
+  distinctPriceFraction: z.number(),
+  lowUnitCost: money,
+  highUnitCost: money,
+  /** Non-null means a recipe can already read through it and mis-cost. */
+  ingredientId: ingredientShortcode.nullable(),
+});
+export type WeightSoldProduct = z.infer<typeof weightSoldProductSchema>;
+
 export const negativeExpectedQuantitySchema = z.object({
   ...productProblemFields,
   expectedQuantity: z.number(),
@@ -735,6 +770,7 @@ const problemsFastFields = {
   understatedCostMeals: z.array(understatedCostMealSchema),
   unknownParkedItems: z.array(unknownParkedItemSchema),
   inventoryWithoutPricePath: z.array(inventoryWithoutPricePathSchema),
+  weightSoldProducts: z.array(weightSoldProductSchema),
   manufacturerSpellingVariants: z.array(labelVariantSchema),
   duplicateVendors: z.array(duplicateVendorSchema),
   vendorsWithoutLogos: z.array(vendorWithoutLogoSchema),
@@ -1023,6 +1059,13 @@ export const PROBLEM_CLASS = {
   // deleting the edge would bury the real defect.
   toolsUsedOutsideOwnership: "defect",
   productsWithoutMappings: "defect",
+  // COVERAGE for the same reason as `productsWithTitleDerivableSize` below: a
+  // household keeps buying weight-sold groceries, so new rows keep arriving no
+  // matter how diligently the backlog is worked. Classing it `defect` would put
+  // a standing population into the navbar badge, which is what that class is
+  // meant to keep clear. Each row is still real work — the fix is a
+  // weight-to-money mapping — it just never reaches zero and stays there.
+  weightSoldProducts: "coverage",
   // COVERAGE, not defect, and the distinction is load-bearing: only `defect`
   // rows reach `totalProblems` and the navbar badge, and there are ~1,400 of
   // these. It is also genuinely never-zero — new products keep arriving with a

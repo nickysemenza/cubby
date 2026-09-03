@@ -63,6 +63,7 @@ const PROBLEM_LABELS = {
   unreferencedImages: (n) => pl(n, "unreferenced file"),
   entitiesMissingEmbeddings: (n) => `${n} missing a search embedding`,
   staleParentRecipes: (n) => pl(n, "deleted sub-recipe reference"),
+  weightSoldProducts: (n) => pl(n, "weight-sold product without a mapping"),
   emptyCookedMeals: (n) => pl(n, "cooked meal with nothing planned"),
   understatedCostMeals: (n) => pl(n, "meal with an understated cost"),
   recipesWithoutInstructions: (n) => pl(n, "recipe without instructions"),

@@ -41,7 +41,7 @@ describe("Problem Query registry", () => {
     ).toHaveLength(35);
     expect(
       definitions.filter(({ source }) => source.kind === "derived"),
-    ).toHaveLength(19);
+    ).toHaveLength(20);
     expect(keys).toContain("productsMissingPrice");
     expect(keys).toContain("overdueTasks");
     expect(keys).toContain("duplicateVendors");
@@ -114,7 +114,7 @@ describe("Problem Query registry", () => {
       expect(definition.source.grain).toBeTruthy();
       expect(definition.source.operations.length).toBeGreaterThan(0);
     }
-    expect(diagnostics.size).toBe(19);
+    expect(diagnostics.size).toBe(20);
     expect(new Set(Object.keys(diagnosticAdapters))).toEqual(diagnostics);
   });
 
