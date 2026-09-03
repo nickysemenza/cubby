@@ -95,6 +95,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "calendar.getFeed": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.getFeed,
+  "calendar.inspectFeed": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.inspectFeed,
   "calendar.range": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.range,

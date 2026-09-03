@@ -14,6 +14,9 @@ const document = {
 function state(read: CalendarFeedState["read"]): CalendarFeedState {
   return {
     getToken: async () => "token",
+    inspect: async () => {
+      throw new Error("not used by feed handler");
+    },
     rotate: async () => "token",
     read,
     markDirty: async () => undefined,

@@ -15,6 +15,9 @@ export const getCalendarFeedWorkflow = async (
   token: await (await calendarFeedStateFor(origin, db)).getToken(),
 });
 
+export const inspectCalendarFeedWorkflow = async (origin: string) =>
+  await (await calendarFeedStateFor(origin)).inspect();
+
 export const rotateCalendarFeedWorkflow = async (
   db: Database,
   origin: string,

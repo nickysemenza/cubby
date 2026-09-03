@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ChevronDown, Wrench } from "lucide-react";
+import { ChevronDown, Copy, RefreshCw, Wrench } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { CategoryAudit } from "~/app/_components/insights/category-audit";
+import { calendar } from "~/app/calendar/calendar.functions";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -25,6 +27,7 @@ import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { StatusText } from "~/components/ui/status-text";
 import { Switch } from "~/components/ui/switch";
+import { copyText } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   FLAG_KEYS,
@@ -126,6 +129,8 @@ function SettingsPage() {
 
               <DiagnosticsCard />
 
+              <CalendarFeedInspectorCard enabled={devOpen} />
+
               <MaintenanceCard />
 
               <CategoryAudit />
@@ -138,6 +143,83 @@ function SettingsPage() {
         </Collapsible>
       </Stack>
     </Page>
+  );
+}
+
+function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
+  const { data, error, isFetching, refetch } = useQuery({
+    ...calendar.inspectFeed.queryOptions(),
+    enabled,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const json = data ? JSON.stringify(data, null, 2) : null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <Row
+          align="start"
+          justify="between"
+          gap="md"
+          className="max-md:flex-col"
+        >
+          <Stack gap="sm">
+            <CardTitle>Calendar feed state</CardTitle>
+            <CardDescription>
+              Durable Object metadata only. The bearer token and calendar
+              contents are omitted; jurisdiction is not the active colo.
+            </CardDescription>
+          </Stack>
+          <Row gap="xs" justify="end" className="shrink-0 max-md:w-full">
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw
+                className={`size-3 ${isFetching ? "animate-spin" : ""}`}
+              />
+              {isFetching ? "Reading…" : "Refresh"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              disabled={!json}
+              onClick={() => {
+                if (!json) return;
+                void copyText(json).then((copied) =>
+                  copied
+                    ? toast.success("Calendar feed state copied")
+                    : toast.error("Copy failed"),
+                );
+              }}
+            >
+              <Copy className="size-3" />
+              Copy JSON
+            </Button>
+          </Row>
+        </Row>
+      </CardHeader>
+      <CardContent>
+        {error ? (
+          <StatusText as="p" tone="destructive" className="text-xs">
+            Calendar feed inspection failed: {getErrorMessage(error)}
+          </StatusText>
+        ) : json ? (
+          <pre className="max-h-[32rem] overflow-auto bg-muted/35 p-4 font-mono text-xs">
+            {json}
+          </pre>
+        ) : (
+          <Description as="p" size="xs">
+            {isFetching ? "Reading calendar feed state…" : "No state returned."}
+          </Description>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

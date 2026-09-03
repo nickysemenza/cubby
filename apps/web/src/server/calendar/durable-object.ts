@@ -8,7 +8,11 @@ import type {
   CalendarRefreshResult,
   StoredCalendarDocument,
 } from "./contracts";
-import { createCalendarFeedToken, etagMatches } from "./contracts";
+import {
+  createCalendarFeedToken,
+  etagMatches,
+  inspectCalendarDocument,
+} from "./contracts";
 import type { IcsFeed } from "./ics";
 
 const META_KEY = "calendar:meta";
@@ -43,6 +47,48 @@ export class CalendarFeedDurableObject
 
   async getToken(): Promise<string | null> {
     return (await this.ctx.storage.get<CalendarMeta>(META_KEY))?.token ?? null;
+  }
+
+  async inspect(origin: string) {
+    const [meta, dirty, alarm, meals, tasks, all] = await Promise.all([
+      this.ctx.storage.get<CalendarMeta>(META_KEY),
+      this.ctx.storage.get<DirtyState>(DIRTY_KEY),
+      this.ctx.storage.getAlarm(),
+      this.ctx.storage.get<StoredCalendarDocument>(documentKey("meals")),
+      this.ctx.storage.get<StoredCalendarDocument>(documentKey("tasks")),
+      this.ctx.storage.get<StoredCalendarDocument>(documentKey("all")),
+    ]);
+    const generatedAt =
+      all?.generatedAt ?? meals?.generatedAt ?? tasks?.generatedAt ?? null;
+    return {
+      schemaVersion: 1 as const,
+      inspectedAt: new Date().toISOString(),
+      runtime: "durable-object" as const,
+      origin,
+      object: {
+        id: this.ctx.id.toString(),
+        jurisdiction: this.ctx.id.jurisdiction ?? null,
+      },
+      tokenConfigured: Boolean(meta?.token),
+      snapshot: meta
+        ? {
+            revision: meta.revision,
+            generatedAt,
+          }
+        : null,
+      dirty: dirty
+        ? {
+            reason: dirty.reason,
+            sequence: dirty.sequence,
+          }
+        : null,
+      alarmAt: alarm === null ? null : new Date(alarm).toISOString(),
+      feeds: {
+        meals: inspectCalendarDocument(meals),
+        tasks: inspectCalendarDocument(tasks),
+        all: inspectCalendarDocument(all),
+      },
+    };
   }
 
   async rotate(origin: string): Promise<string> {

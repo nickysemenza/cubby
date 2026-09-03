@@ -6,7 +6,11 @@ import type {
   CalendarRefreshResult,
   StoredCalendarDocument,
 } from "./contracts";
-import { createCalendarFeedToken, etagMatches } from "./contracts";
+import {
+  createCalendarFeedToken,
+  etagMatches,
+  inspectCalendarDocument,
+} from "./contracts";
 import type { IcsFeed } from "./ics";
 import { buildCalendarSnapshot, type CalendarSnapshot } from "./snapshot";
 
@@ -22,6 +26,8 @@ export class InMemoryCalendarFeedState implements CalendarFeedState {
   private revision = 0;
   private dirtyTimer: ReturnType<typeof setTimeout> | null = null;
   private dirtyReason: string | null = null;
+  private dirtySequence = 0;
+  private alarmAt: string | null = null;
 
   constructor(
     private readonly origin: string,
@@ -37,6 +43,39 @@ export class InMemoryCalendarFeedState implements CalendarFeedState {
 
   async getToken(): Promise<string | null> {
     return this.token;
+  }
+
+  async inspect() {
+    const generatedAt =
+      this.documents?.all.generatedAt ??
+      this.documents?.meals.generatedAt ??
+      this.documents?.tasks.generatedAt ??
+      null;
+    return {
+      schemaVersion: 1 as const,
+      inspectedAt: this.now().toISOString(),
+      runtime: "memory" as const,
+      origin: this.origin,
+      object: { id: null, jurisdiction: null },
+      tokenConfigured: this.token !== null,
+      snapshot:
+        this.revision > 0
+          ? {
+              revision: this.revision,
+              generatedAt,
+            }
+          : null,
+      dirty:
+        this.dirtyReason === null
+          ? null
+          : { reason: this.dirtyReason, sequence: this.dirtySequence },
+      alarmAt: this.alarmAt,
+      feeds: {
+        meals: inspectCalendarDocument(this.documents?.meals),
+        tasks: inspectCalendarDocument(this.documents?.tasks),
+        all: inspectCalendarDocument(this.documents?.all),
+      },
+    };
   }
 
   async rotate(): Promise<string> {
@@ -76,9 +115,14 @@ export class InMemoryCalendarFeedState implements CalendarFeedState {
   async markDirty(reason: string): Promise<void> {
     if (!this.token) return;
     this.dirtyReason = reason;
+    this.dirtySequence += 1;
     if (this.dirtyTimer) return;
+    this.alarmAt = new Date(
+      this.now().getTime() + DIRTY_DELAY_MS,
+    ).toISOString();
     this.dirtyTimer = setTimeout(() => {
       this.dirtyTimer = null;
+      this.alarmAt = null;
       const refreshReason = this.dirtyReason ?? "dirty";
       this.dirtyReason = null;
       void this.refreshNow(refreshReason).catch((error) => {

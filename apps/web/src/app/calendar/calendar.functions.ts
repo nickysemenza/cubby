@@ -1,5 +1,6 @@
 import {
   calendarFeedOut,
+  calendarFeedInspectionOut,
   calendarRangeInput,
   calendarRangeOut,
   calendarRotateFeedOut,
@@ -23,6 +24,12 @@ export const calendar = defineOperationDomain("calendar", {
     input: z.undefined(),
     output: calendarFeedOut,
     tags: [["calendar", "feed"]],
+  }),
+  inspectFeed: query({
+    input: z.undefined(),
+    output: calendarFeedInspectionOut,
+    tags: [["calendar", "feed"]],
+    cache: "live-status",
   }),
   rotateFeed: mutation({
     input: z.undefined(),

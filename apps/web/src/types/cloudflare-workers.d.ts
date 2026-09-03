@@ -12,6 +12,10 @@ declare module "cloudflare:workers" {
   }
 
   interface DurableObjectStatePort {
+    id: {
+      readonly jurisdiction?: string;
+      toString(): string;
+    };
     storage: DurableObjectStoragePort;
   }
 

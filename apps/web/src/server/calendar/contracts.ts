@@ -1,3 +1,8 @@
+import type {
+  CalendarFeedDocumentInspection,
+  CalendarFeedInspection,
+} from "@cubby/schemas/calendar";
+
 import type { IcsFeed } from "./ics";
 
 const CALENDAR_FEED_FILENAMES = {
@@ -35,6 +40,7 @@ export interface CalendarRefreshResult {
 
 export interface CalendarFeedState {
   getToken(): Promise<string | null>;
+  inspect(): Promise<CalendarFeedInspection>;
   rotate(): Promise<string>;
   read(
     token: string,
@@ -47,6 +53,7 @@ export interface CalendarFeedState {
 
 export interface CalendarFeedDurableObjectRpc {
   getToken(): Promise<string | null>;
+  inspect(origin: string): Promise<CalendarFeedInspection>;
   rotate(origin: string): Promise<string>;
   read(
     token: string,
@@ -58,6 +65,19 @@ export interface CalendarFeedDurableObjectRpc {
     reason: string,
     origin: string,
   ): Promise<CalendarRefreshResult | null>;
+}
+
+export function inspectCalendarDocument(
+  document: StoredCalendarDocument | null | undefined,
+): CalendarFeedDocumentInspection | null {
+  if (!document) return null;
+  return {
+    etag: document.etag,
+    generatedAt: document.generatedAt,
+    revision: document.revision,
+    itemCount: document.itemCount,
+    byteLength: new TextEncoder().encode(document.body).byteLength,
+  };
 }
 
 export function createCalendarFeedToken(): string {
