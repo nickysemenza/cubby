@@ -25,6 +25,29 @@ class FakeTarget {
 }
 
 describe("human activity focus controller", () => {
+  it.each([
+    ["hidden", true],
+    ["visible", false],
+  ] as const)(
+    "keeps initial navigation focused when starting %s and online=%s",
+    (visibilityState, online) => {
+      const window = new FakeTarget();
+      class FakeDocument extends FakeTarget {
+        visibilityState: DocumentVisibilityState = visibilityState;
+      }
+      const document = new FakeDocument();
+      const handleFocus = vi.fn();
+      const cleanup = createHumanActivityFocusListener({
+        document,
+        window,
+        isOnline: () => online,
+      })(handleFocus);
+
+      expect(handleFocus).not.toHaveBeenCalled();
+      cleanup();
+    },
+  );
+
   it.each(["pointerdown", "touchstart", "keydown", "wheel"])(
     "releases a sleeping tab on trusted %s",
     (activity) => {
