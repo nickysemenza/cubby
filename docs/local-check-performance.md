@@ -142,3 +142,41 @@ workarounds. No Bun migration is justified by this evidence. This patch reduces
 custom orchestration and repeated computation; it does **not** claim a reduction
 in dependency disk allocation. pnpm's existing content-addressed storage and the
 existing shared Cargo target cache remain in use.
+
+### Retained patch validation (2026-09-07)
+
+Code revision: `78376ae04819dc7e8cc58deb7b6abeb283bfdbf9`.
+Measurements were taken on the same busy ARM Mac and are observations, not a
+controlled speedup claim. Cold Cargo compilation is excluded from the setup
+comparison, as requested.
+
+| Measurement | Observed result |
+| --- | --- |
+| Original runner, initial `pnpm check` sample | 181.26 s |
+| Retained `pnpm check:all`, uncached | 253.59 s; all 12 gates passed |
+| Retained warm `pnpm check` | 13.83 s overall; 6/8 tasks cached |
+| Mandatory pre-commit check | Passed; Nx task duration 3.9 s |
+| Fresh worktree `pnpm agent:setup` | 67.72 s, including 45.8 s install and 16.22 s WASM preparation |
+| Existing worktree `pnpm agent:setup` | 17.00 s; tracked files remained clean |
+| Lint cache reused by a separate worktree | 1/1 cache hit; Nx task duration 397 ms |
+
+The full and fast check commands have different gate sets; do not compare their
+elapsed times as equivalent workloads. The warm six-second target was missed.
+No successful full-fast-test cache timing was recorded because the aggregate
+suite encountered timeouts. All disposable benchmark worktrees were removed.
+
+`pnpm verify:local:full` passed frozen installation, WASM preparation,
+`check:all`, deduplication, Rust formatting/Clippy, 251 Rust tests (one existing
+ignored doctest), and all three Worker builds. It then failed on three
+five-second UI test timeouts: date-picker selection, collection-matrix paging,
+and workspace navigation. The aggregate web result was 3,439 passed / 3 failed.
+All 18 tests across those three files passed in a targeted rerun. An earlier
+aggregate run had one MCP catalog-schema timeout; all five tests in that file
+also passed alone. No assertion or timeout was relaxed.
+
+The remaining acceptance tiers were run separately: all 262 PostgreSQL tests
+passed, and the browser command with the required 22-test count exited
+successfully. The full verifier is **not green**; targeted successes do not
+replace its failed aggregate result. Failed Nx tasks returned nonzero and were
+not cached. A separate hook probe verified that pre-commit propagates a failing
+`pnpm check` exit status.
