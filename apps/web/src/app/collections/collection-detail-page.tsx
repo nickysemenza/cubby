@@ -1,6 +1,7 @@
 import type {
   CollectionProductOut,
   CollectionSlug,
+  SmartCollectionMatch,
 } from "@cubby/schemas/collection";
 import { formatCollectionLabel } from "@cubby/shared/collection-tag";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +30,13 @@ import { Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { Skeleton } from "~/components/ui/skeleton";
 
 import {
@@ -51,16 +59,71 @@ export type CollectionDetailOperations = Pick<
 function CollectionMembership({
   direct,
   inherited,
-}: Pick<CollectionProductOut, "direct" | "inherited">) {
+  matches,
+}: Pick<CollectionProductOut, "direct" | "inherited" | "matches">) {
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      {direct && <Badge variant="outline">Direct</Badge>}
-      {inherited && <Badge variant="secondary">From location</Badge>}
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-1">
+        {direct && <Badge variant="outline">Direct</Badge>}
+        {inherited && <Badge variant="secondary">From location</Badge>}
+        {matches?.length ? <Badge variant="secondary">Dynamic</Badge> : null}
+      </div>
+      {matches?.length ? <SmartMatchEvidence matches={matches} /> : null}
     </div>
   );
 }
 
-function CollectionProductsTable({
+function SmartMatchEvidence({ matches }: { matches: SmartCollectionMatch[] }) {
+  return (
+    <div>
+      <p className="line-clamp-1 text-2xs leading-tight text-muted-foreground">
+        {formatSmartMatch(matches[0]!)}
+      </p>
+      <Popover>
+        <PopoverTrigger
+          openOnHover
+          closeDelay={150}
+          className="inline-flex min-h-11 items-center text-2xs text-muted-foreground underline decoration-border decoration-dotted underline-offset-2 hover:text-primary hover:decoration-primary focus-visible:outline-2 focus-visible:outline-ring md:h-5 md:min-h-0"
+          aria-label={`Why included: ${matches.length} ${matches.length === 1 ? "match" : "matches"}`}
+        >
+          Why included
+        </PopoverTrigger>
+        <PopoverContent side="bottom" align="start" className="w-80 p-0">
+          <PopoverHeader className="border-b border-border p-2">
+            <PopoverTitle>Why this Product is included</PopoverTitle>
+          </PopoverHeader>
+          <ul className="max-h-72 divide-y divide-border overflow-y-auto">
+            {matches.map((match) => (
+              <li key={`${match.ruleIndex}:${match.kind}`} className="p-2">
+                <p className="font-medium">{formatSmartMatch(match)}</p>
+                <p className="mt-0.5 text-2xs text-muted-foreground">
+                  Rule {match.ruleIndex + 1}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function formatSmartMatch(match: SmartCollectionMatch): string {
+  const evidence = match.evidence.join(" · ");
+  if (evidence) return evidence;
+  switch (match.kind) {
+    case "manufacturerEquals":
+      return `Manufacturer is ${match.value}`;
+    case "productTagEquals":
+      return `Tagged ${match.value}`;
+    case "locationNameContains":
+      return `Location contains “${match.value}”`;
+    case "historicalExpenseTrade":
+      return `Historical Trade: ${match.value}`;
+  }
+}
+
+export function CollectionProductsTable({
   products,
   totalCount,
   search,
@@ -113,8 +176,13 @@ function CollectionProductsTable({
             enableSorting: false,
             enableCellSelection: false,
             meta: {
-              className: "w-32",
-              mobile: { slot: "meta", priority: 20, label: "Membership" },
+              className: "w-48",
+              mobile: {
+                slot: "meta",
+                priority: 20,
+                label: "Membership",
+                interactive: true,
+              },
             },
             cell: ({ row }) => <CollectionMembership {...row.original} />,
           }),

@@ -56,6 +56,64 @@ export type CollectionProductPurchaseOut = z.infer<
   typeof collectionProductPurchaseOut
 >;
 
+const ruleText = z.string().trim().min(1).max(200);
+export const smartCollectionRule = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("productTagEquals"), value: ruleText }),
+  z.strictObject({ kind: z.literal("manufacturerEquals"), value: ruleText }),
+  z.strictObject({ kind: z.literal("locationNameContains"), value: ruleText }),
+  z.strictObject({
+    kind: z.literal("historicalExpenseTrade"),
+    value: tradeSchema,
+  }),
+]);
+export type SmartCollectionRule = z.infer<typeof smartCollectionRule>;
+export const smartCollectionKey = z.enum(["painting", "measuring", "festool"]);
+export type SmartCollectionKey = z.infer<typeof smartCollectionKey>;
+export const smartCollectionDefinition = z.strictObject({
+  key: smartCollectionKey,
+  name: z.string().trim().min(1).max(100),
+  rules: z.array(smartCollectionRule).max(20),
+});
+export type SmartCollectionDefinition = z.infer<
+  typeof smartCollectionDefinition
+>;
+export const SMART_COLLECTION_STARTERS: readonly SmartCollectionDefinition[] = [
+  {
+    key: "painting",
+    name: "Painting & finishing",
+    rules: [
+      { kind: "historicalExpenseTrade", value: "finishes" },
+      { kind: "locationNameContains", value: "paint" },
+      { kind: "productTagEquals", value: "collection:painting" },
+    ],
+  },
+  {
+    key: "measuring",
+    name: "Measuring & layout",
+    rules: [{ kind: "locationNameContains", value: "measuring" }],
+  },
+  {
+    key: "festool",
+    name: "Festool system",
+    rules: [
+      { kind: "manufacturerEquals", value: "Festool" },
+      { kind: "locationNameContains", value: "festool" },
+    ],
+  },
+];
+export const smartCollectionMatch = z.object({
+  ruleIndex: z.number().int().nonnegative(),
+  kind: z.enum([
+    "productTagEquals",
+    "manufacturerEquals",
+    "locationNameContains",
+    "historicalExpenseTrade",
+  ]),
+  value: z.string(),
+  evidence: z.array(z.string()),
+});
+export type SmartCollectionMatch = z.infer<typeof smartCollectionMatch>;
+
 export const collectionProductOut = z.object({
   id: productShortcode,
   name: z.string(),
@@ -63,6 +121,7 @@ export const collectionProductOut = z.object({
   imageUrl: z.string().nullable(),
   direct: z.boolean(),
   inherited: z.boolean(),
+  matches: z.array(smartCollectionMatch).optional(),
   placements: z.array(collectionProductPlacementOut),
   purchases: z.array(collectionProductPurchaseOut),
 });
@@ -159,3 +218,41 @@ export const collectionTagSetOut = z.object({
 export const collectionCreateInput = collectionSubject.and(
   z.object({ collection: collectionSlug }),
 );
+
+export const smartCollectionSummary = z.object({
+  key: smartCollectionKey,
+  name: z.string(),
+  totalCount: z.number().int().nonnegative(),
+  sourceCounts: z.object({
+    productTagEquals: z.number().int().nonnegative(),
+    manufacturerEquals: z.number().int().nonnegative(),
+    locationNameContains: z.number().int().nonnegative(),
+    historicalExpenseTrade: z.number().int().nonnegative(),
+  }),
+});
+export type SmartCollectionSummary = z.infer<typeof smartCollectionSummary>;
+export const smartCollectionListInput = z.strictObject({
+  definitions: z
+    .array(smartCollectionDefinition)
+    .max(3)
+    .refine(
+      (definitions) =>
+        new Set(definitions.map((item) => item.key)).size ===
+        definitions.length,
+      "Starter keys must be unique",
+    ),
+});
+export const smartCollectionDetailInput = z.strictObject({
+  definition: smartCollectionDefinition,
+  search: z.string().trim().max(200).optional(),
+  pagination: z.strictObject({
+    pageIndex: z.number().int().nonnegative(),
+    pageSize: z.number().int().min(1).max(100),
+  }),
+});
+export const smartCollectionDetailOut = z.object({
+  summary: smartCollectionSummary,
+  products: z.array(collectionProductOut),
+  totalCount: z.number().int().nonnegative(),
+});
+export type SmartCollectionDetailOut = z.infer<typeof smartCollectionDetailOut>;

@@ -1,5 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
+import { SmartCollectionProvider } from "~/app/collections/smart-collection-state";
+
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: ({ context }) => {
     // The root reads the signed session cookie server-side (see __root
@@ -13,5 +15,9 @@ export const Route = createFileRoute("/_authenticated")({
       });
     }
   },
-  component: () => <Outlet />,
+  component: () => (
+    <SmartCollectionProvider>
+      <Outlet />
+    </SmartCollectionProvider>
+  ),
 });

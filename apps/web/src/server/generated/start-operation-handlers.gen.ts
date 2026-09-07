@@ -119,6 +119,12 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "collection.set": async () =>
     (await import("~/server/collection-browser.server")).collectionHandlers
       .operations.set,
+  "collection.smartDetail": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.smartDetail,
+  "collection.smartList": async () =>
+    (await import("~/server/collection-browser.server")).collectionHandlers
+      .operations.smartList,
   "cookbook.detail": async () =>
     (await import("~/server/cookbook-browser.server")).cookbookHandlers
       .operations.detail,

@@ -29,7 +29,7 @@ test("E2E browser lanes start with scope and test the uploaded artifact", () => 
   const e2e = job("test-e2e", "report-coverage");
   assert.match(e2e, /needs: scope/u);
   assert.doesNotMatch(e2e, /container:/u);
-  assert.match(e2e, /lane: chromium[\s\S]*expected-tests: 15/u);
+  assert.match(e2e, /lane: chromium[\s\S]*expected-tests: 16/u);
   assert.match(e2e, /lane: webkit[\s\S]*expected-tests: 7/u);
   assert.match(e2e, /Restore exact Playwright browser/u);
   assert.match(e2e, /Bound Ubuntu package mirror retries/u);
@@ -82,10 +82,10 @@ test("PostgreSQL and browser jobs enforce authoritative counts", () => {
   const postgres = job("test-postgres", "test-aux-coverage");
   const e2e = job("test-e2e", "report-coverage");
   assert.match(postgres, /--project integration/u);
-  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=262/u);
+  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=265/u);
   assert.match(postgres, /if \[\[ "\$FULL" == "true" \]\]/u);
   assert.doesNotMatch(postgres, /pglite/u);
-  assert.match(e2e, /expected-tests: 15/u);
+  assert.match(e2e, /expected-tests: 16/u);
   assert.match(e2e, /expected-tests: 7/u);
   assert.match(playwrightConfig, /retries: 0/u);
   assert.match(playwrightConfig, /workers: 1/u);

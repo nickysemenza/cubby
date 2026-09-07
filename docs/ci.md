@@ -21,8 +21,8 @@ the peer and fails verification. It deploys nothing.
 
 Node 24, pnpm 10.34.1, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
-PostgreSQL remains authoritative with 262 integration tests; Playwright retains
-22 browser contracts, a single worker and no retries. Browser verification
+PostgreSQL remains authoritative with 265 integration tests; Playwright retains
+23 browser contracts, a single worker and no retries. Browser verification
 always follows the current web build. Pre-commit still runs `pnpm check`.
 
 ## Optional hosted suite
