@@ -14,14 +14,13 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
-use ingredient::unit::{Measure, MeasureKind, make_graph};
+use ingredient::unit::{Measure, MeasureKind, convert_with_fallback, make_graph};
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
 use crate::WAmount;
 use crate::costing::WRowKind;
-use crate::reconcile::convert_with_fallback;
 
 /// Synthetic unit standing for "one batch of the sub-recipe". Must be already
 /// lowercase and already singular so `Measure::normalize`'s `Unit::Other`

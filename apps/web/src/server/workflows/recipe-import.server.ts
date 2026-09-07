@@ -103,8 +103,8 @@ export const insertImportWorkflow = async (
     context.db,
     context.actorContext,
   );
-  if (input.image)
-    await importRecipeImageFromUrl(context.db, result.id, input.image, {
+  if (input.image?.kind === "url")
+    await importRecipeImageFromUrl(context.db, result.id, input.image.url, {
       ...productionRecipeImageImportPort,
       importFromUrl: ports.importImageFromUrl,
     });

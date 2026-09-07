@@ -81,7 +81,7 @@ export const scrapedToImportRecipe = (w: WScrapedRecipe): ImportRecipe => {
     })),
     references: [],
     servings: w.servings,
-    image: w.image,
+    image: w.image ? { kind: "url", url: w.image } : undefined,
     // Carried for provenance; the converter doesn't store it yet (see docs/todos).
     url: w.url,
   };

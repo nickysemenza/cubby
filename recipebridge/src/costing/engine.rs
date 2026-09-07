@@ -30,7 +30,8 @@ use std::collections::{HashMap, HashSet};
 
 use ingredient::classify_usage;
 use ingredient::unit::{
-    Measure, MeasureGraph, MeasureKind, convert_measure_with_graph_explained, make_graph,
+    Measure, MeasureGraph, MeasureKind, canonical_amount, convert_measure_with_graph_explained,
+    convert_with_fallback, make_graph,
 };
 use ingredient::usage::IngredientUsage;
 
@@ -42,7 +43,7 @@ use super::types::{
 };
 use crate::WConversionStep;
 use crate::food_mappings::product_non_price_mapping_pairs;
-use crate::reconcile::{canonical_amount, convert_with_fallback, finite};
+use crate::reconcile::finite;
 
 /// One recipe row paired with its resolved usage and the consumption plan that
 /// usage implies. Built up front (before the two resolution passes) so each
@@ -916,10 +917,10 @@ impl<'a> Engine<'a> {
             let (trio, own, missing_flags, missing_nutrient_codes) =
                 self.resolve_row(p.row, &p.plan, 0.0, visited, taint);
             fold(&trio, missing_flags, &p.row.name);
-            if p.plan.contributes_to_basis() {
-                if let Ok(g) = &trio.gram {
-                    basis_grams += g.value;
-                }
+            if p.plan.contributes_to_basis()
+                && let Ok(g) = &trio.gram
+            {
+                basis_grams += g.value;
             }
             outcomes[idx] = Some((trio, own, None, missing_flags, missing_nutrient_codes));
         }
@@ -990,10 +991,10 @@ impl<'a> Engine<'a> {
             let own_gram = own
                 .as_ref()
                 .and_then(|o| o.gram.as_ref().ok().map(|g| g.value));
-            if p.is_flour {
-                if let Some(g) = own_gram {
-                    flour_grams += g;
-                }
+            if p.is_flour
+                && let Some(g) = own_gram
+            {
+                flour_grams += g;
             }
             own_grams.push(own_gram);
 
