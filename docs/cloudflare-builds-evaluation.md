@@ -113,7 +113,7 @@ cost elsewhere and must not be presented as a complete solution.
 
 ## Implemented pilot
 
-Entrypoint: `bash scripts/cloudflare-ci-pilot.sh probe` or `full`, from the repository root.
+Entrypoint: `node scripts/cloudflare-ci-pilot.ts probe` or `full`, from the repository root.
 Both modes reject other branches and non-Workers/Linux x86_64 environments before
 provisioning. The outer process imposes an 18-minute deadline and supplies an
 allowlisted environment to tests; production credentials and database overrides
@@ -123,7 +123,7 @@ are not inherited. A failure stops the pipeline and cleans up disposable service
 Configure the existing Worker only after recording its current configuration:
 
 - Production branch: `codex/cloudflare-ci-pilot`; preview builds disabled.
-- Build: `bash scripts/cloudflare-ci-pilot.sh probe` initially, then `full`.
+- Build: `node scripts/cloudflare-ci-pilot.ts probe` initially, then `full`.
 - Deploy and non-production deploy: `printf 'CUBBY_PILOT_DEPLOY_NOOP\n'`.
 - Root: `/`; `NODE_VERSION=24`, `PNPM_VERSION=10.34.1`,
   `SKIP_DEPENDENCY_INSTALL=1`; no production build secrets.
@@ -192,3 +192,27 @@ Reported durations are log-derived wall time, not a claim about billed minutes.
 - Restore the original disconnected Git state after the experiment, and compare
   deployment/version listings with the preflight snapshot. Leave GitHub Actions
   and required checks unchanged.
+
+
+### Resumed pilot: unprivileged TypeScript bootstrap
+
+The entrypoint now uses Node 24 native TypeScript and argument-array subprocess
+calls. No npm dependency is needed before the required WASM-first bootstrap.
+The native fallback downloads signed Ubuntu/PGDG packages into disposable APT
+state and extracts them with `dpkg-deb`; no sudo, host installation, or package
+maintainer scripts run. PostgreSQL 17.11 and pgvector 0.8.6 packages are pinned;
+all downloaded package filenames and SHA-256 hashes are logged for comparison.
+IntegreSQL remains v1.1.0 built with Go 1.23.6.
+
+Playwright 1.62.1 dependencies use its Ubuntu 24.04 package list plus software
+EGL drivers. Its WebKit launcher is adjusted to preserve the local library path.
+The host ldconfig-cache check cannot see an extracted prefix, so it is replaced
+by real Chromium/WebKit startup probes followed by the unchanged E2E suite.
+Browser engine versions and test-count guards are unchanged.
+
+Local Ubuntu 24.04 x86_64 testing under UID 1000 verified PostgreSQL startup and
+loading both `vector` and `pg_trgm`; Chromium and WebKit both launched and
+rendered a page with the extracted libraries and software EGL renderer.
+The resumed preflight dashboard showed 14/6,000 included build minutes used.
+Hosted acceptance results are still pending;
+the two earlier failed probes count toward the original eight-build cap.
