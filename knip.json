@@ -9,8 +9,6 @@
         "scripts/check-unsafe-identifiers.unit.test.ts!",
         "scripts/check-security-audit.ts!",
         "scripts/ci-scope.ts!",
-        "scripts/cloudflare-ci-pilot.ts!",
-        "scripts/cloudflare-ci-tasks.ts!",
         "scripts/ci-scope.test.ts!",
         "scripts/ensure-wasm.ts!",
         "scripts/setup-agent-environment.ts!",
@@ -35,7 +33,6 @@
         "scripts/build-sw.ts!",
         "scripts/build-sw.unit.test.ts!",
         "scripts/ensure-db-extensions.ts!",
-        "scripts/cloudflare-ci-smoke.ts!",
         "tooling/**/*.{ts,tsx}!",
         "drizzle.config.ts!",
         "instrument.server.mjs!"

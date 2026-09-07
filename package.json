@@ -21,6 +21,8 @@
     "lint:fix": "oxlint --fix .",
     "format:check": "oxfmt --check .",
     "format": "oxfmt .",
+    "verify:local": "node scripts/ci-scope.ts",
+    "verify:local:full": "node scripts/ci-scope.ts --full",
     "verify:push": "node scripts/ci-scope.ts",
     "test": "pnpm -r --workspace-concurrency=2 test",
     "test:unit": "pnpm --filter @cubby/web test:unit",

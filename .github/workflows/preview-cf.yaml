@@ -1,8 +1,7 @@
 name: Preview Deploy
 
-# CI dispatches this workflow after publishing the same bundle used by E2E.
-# Keeping Cloudflare cancellation outside CI lets replacement PR runs start
-# immediately. Preview versions are not routed, but inherit production bindings.
+# Manually dispatch with the bundle from a completed verification run.
+# Preview versions are not routed, but inherit production bindings.
 on:
   workflow_dispatch:
     inputs:

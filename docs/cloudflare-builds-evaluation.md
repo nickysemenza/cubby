@@ -5,6 +5,9 @@ Git-disconnected configuration is restored, and both deployment and uploaded
 version listings match the original snapshots. No deployment or preview upload
 occurred. This evaluates Workers Builds, not the separate Cloudflare CI SDK.
 
+The pilot runtime has been removed after choosing local verification and manual
+GitHub CI. Runtime paths and commands below describe the historical experiment.
+
 ## Decision
 
 Do not migrate CI on this evidence. Native PostgreSQL/pgvector/IntegreSQL and both

@@ -1,75 +1,59 @@
 # Continuous integration
 
-Cubby's CI is optimized for two different paths: fast pull-request feedback and
-fast, provenance-checked deployment after merge. The workflow definitions stay
-focused on executable policy; this document records the design and the measured
-experiments that should not be rediscovered from scratch.
+Routine verification runs locally. GitHub hosts the complete suite only when
+explicitly requested; merging to `main` automatically builds and deploys affected
+production Workers without running tests or E2E again.
 
-## Work selection
+## Local verification
 
-`scripts/ci-scope.ts` is the source of truth for path classification. It maps a
-change to web, Rust, auxiliary-package, and auxiliary-worker work. A path the
-classifier does not recognize deliberately selects every suite and worker.
-Documentation, agent configuration, and editor-only files are inert for the
-expensive workflow; Markdown still runs the dedicated relative-link workflow.
+After committing, run `pnpm verify:local` (also the mandatory pre-push hook).
+It rejects uncommitted code, includes deleted paths, runs repository checks and
+selects affected web, PostgreSQL, browser, build, auxiliary and Rust gates using
+`scripts/ci-scope.ts`. Unknown paths fail safe. High-risk changes run the complete
+routine suite; `pnpm verify:local:full` forces that suite for any revision.
+Use `CUBBY_VERIFY_BASE` to override the default merge base with `origin/main`.
+The full command includes WASM preparation, dependency installation/deduplication,
+repository checks, workspace and PostgreSQL tests, Rust formatting/lint/tests,
+auxiliary builds and a fresh web build. It then runs the fast tests followed by
+PostgreSQL and browser tests concurrently through the existing `concurrently`
+npm runner. Those two tiers use isolated database templates; a failure stops
+the peer and fails verification. It deploys nothing.
 
-Ordinary pull requests run affected tests. High-risk paths and manual
-`force_full` dispatches run the complete applicable verification suite. Weekly
-coverage runs the full instrumented JS, Rust, and PostgreSQL tiers. This avoids
-a persistent label turning every follow-up revision into another full run.
+Node 24, pnpm 10.34.1, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
+browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
+PostgreSQL remains authoritative with 262 integration tests; Playwright retains
+22 browser contracts, a single worker and no retries. Browser verification
+always follows the current web build. Pre-commit still runs `pnpm check`.
 
-PostgreSQL is the only authoritative database backend. The retained integration
-suite is capped at 262 contract tests and Playwright at 22 browser-only tests;
-CI selects those same manifests with no retries. PGlite is available only
-through explicit local developer commands and is not duplicated in CI or
-scheduled coverage. The local acceptance command runs the fast tier first, then
-PostgreSQL and Playwright concurrently with one browser worker.
+## Optional hosted suite
 
-The dependency-free `scope` job publishes path and reuse decisions before any
-dependency installation. Validation, auxiliary packages, web tests,
-PostgreSQL, Rust, and browser acceptance then start independently from that
-decision. A successful exact-tree run is still required before the scope
-job's provenance marker can be reused after merge.
-GitHub validation caps its check orchestrator at two child processes so the
-two-core runner does not run every compiler and scanner simultaneously. The
-manual workflow's internal `check_processes` input exists only to compare the
-bounded two- and four-process configurations.
+Once this workflow is on the default branch, request full verification with:
 
-On a `main` push, CI looks for the merged pull request and its final successful
-CI run. A prior result is reusable only when it came from this repository, has
-a policy-versioned provenance marker bound to the PR number and head commit,
-and the pull-request head and merged commit have the same Git tree. Web changes
-additionally require a live `cf-build` artifact from that successful run.
-Anything ambiguous falls back to full verification; it never widens into an
-unverified deployment.
+```sh
+gh workflow run ci.yaml --ref <branch> -f mode=verify
+```
 
-## Build and deployment flow
+Use `-f mode=coverage` for full instrumented coverage. Neither mode deploys.
+There are no automatic PR verification or scheduled coverage runs. The separate
+Markdown link workflow is also manual. Opt-in Claude workflows remain available.
+Hosted browser lanes test the exact bundle produced by the node test lane and
+retain the existing test-count guards. Explicit manual preview dispatch remains
+available; verification no longer dispatches previews automatically.
 
-The web Cloudflare bundle is built once in the node-test runner and uploaded
-before that runner starts its tests. Chromium and WebKit Playwright lanes start
-in parallel on ordinary Ubuntu hosts, restore their exact-version browser
-caches, and wait for that artifact while database and browser setup proceeds.
-The stock runner already carries Chromium's system libraries. WebKit's apt
-configuration bypasses the hosted runner's intermittently stalled
-Azure mirror, bounds repository retries, and caps dependency installation at
-two minutes so a mirror outage cannot consume the full job timeout.
-Chromium owns the fifteen desktop contracts and WebKit the seven mobile
-contracts. Both download and test the same artifact that preview and production
-deployment consume unchanged.
+## Deployment
 
-The 262 PostgreSQL assertions remain in their original domain modules but are
-registered through eight isolated family entrypoints. Each family shares one
-module graph and one IntegreSQL database while the existing full-table reset
-restores pristine state before every test. This preserves real constraints and
-transactions without paying process, import, and database checkout cost for
-each of the 58 source modules.
+`.github/workflows/deploy.yaml` runs on `main` pushes. It classifies all changed
+paths, builds the affected Workers and deploys them. Each Worker serializes
+production deployments and checks that the commit is still current main before
+building and again before deploying. Production never depends on a test job.
+This trusts verification performed before merging. Builds/deployments still use
+GitHub Actions minutes; this policy removes repeated hosted verification costs,
+not all Actions usage. No self-hosted runner or Cloudflare Builds is required.
+The Cloudflare CI pilot is retired; its evaluation remains historical.
 
-Production jobs serialize per worker and re-check that their workflow SHA is
-still current `main` after acquiring the deployment slot. A burst of merges can
-therefore verify independently while stale commits decline to deploy.
-
-Full JS and Rust coverage runs Wednesday at 10:17 UTC, or through the manual
-coverage mode. PR verification uses the same tests without instrumentation.
+The workflow policy takes effect after merging this branch. No new combined
+local timing has been measured: approximately 2–3 minutes warm remains an
+estimate, not a guarantee.
 
 ## Measurements and rejected optimizations
 

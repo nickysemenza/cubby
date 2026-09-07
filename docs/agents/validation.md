@@ -74,16 +74,17 @@ PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
 from the commits being pushed. Hooks are mandatory: agents never use
 `--no-verify` to bypass a failure.
 
-CI runs affected authoritative projects on ordinary revisions and every web,
-PostgreSQL, browser, build, and relevant Rust gate for high-risk paths. Before
-merging, agents verify that the exact final commit has a green CI run; the path
-classifier decides whether that run is affected or full. Weekly full JS, Rust,
-and PostgreSQL coverage plus manual `force_full` dispatches provide backstops.
-`preview` and `claude-review` are opt-in PR labels.
+Local verification gates merging: run `pnpm verify:local` on the clean final
+commit. High-risk paths run the full routine suite; use `pnpm verify:local:full`
+to force it. E2E always follows a fresh web build. Hosted full verification and
+coverage are explicitly dispatched when needed (see [CI](../ci.md)). Main builds
+and deploys affected Workers automatically without repeating tests. If hosted
+verification is requested, observe its exact final commit result before merge.
+`claude-review` remains an opt-in PR label; previews are manually dispatched.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. At handoff report commands,
-results, and limitations. CI remains authoritative and runs full coverage.
+results, and limitations. Do not describe an unrun hosted suite as passing.
 
 ## Quality policy
 
