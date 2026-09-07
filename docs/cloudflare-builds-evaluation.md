@@ -1,16 +1,23 @@
 # Cloudflare Workers Builds evaluation
 
-Updated September 7, 2026. Seven of eight authorized builds have been launched;
-run 7 is complete; one build remains. This evaluates Workers Builds and keeps Cubby deployments
-and preview uploads disabled. It does not use the separate Cloudflare CI SDK.
+Updated September 7, 2026. All eight authorized builds are complete. The original
+Git-disconnected configuration is restored, and both deployment and uploaded
+version listings match the original snapshots. No deployment or preview upload
+occurred. This evaluates Workers Builds, not the separate Cloudflare CI SDK.
 
 ## Decision
 
-Do not migrate CI on the evidence collected so far. The native database and both
-browser engines work, and deliberate failure reporting works. No full hosted run
-has passed yet. Even if the two remaining full runs pass, the eight-build cap no
-longer permits the required cold success plus two warm successes at one commit.
-The final handoff must record that unmet acceptance criterion explicitly.
+Do not migrate CI on this evidence. Native PostgreSQL/pgvector/IntegreSQL and both
+browser engines work. The final hosted run passed all checks, native Rust tests,
+workspace tests, all 262 PostgreSQL contracts, both auxiliary builds and the web
+build. Authenticated E2E then failed because the pilot omitted disposable test
+credentials. Its setup correction is not hosted-verified within this budget.
+
+There is no complete hosted success and no cold-plus-two-warm result at one
+commit. The deliberate failing run correctly failed GitHub and skipped the no-op
+deployment step. Budget and restoration requirements passed; full compatibility,
+repeatability, end-to-end timing and a sustainable monthly workload remain
+unproven. No ninth build was launched.
 
 ## Confirmed platform behavior
 
@@ -60,7 +67,9 @@ The entrypoint rejects unexpected branches and environments, builds WASM before
 installing workspace dependencies, and imposes an 18-minute script deadline.
 Only an allowlisted environment reaches commands. Databases, extracted packages,
 and native services are disposable and cleaned up on failure. It never invokes
-a deployment. GitHub Actions, required checks, and weekly coverage are unchanged.
+a deployment. GitHub Actions jobs, required checks, and weekly coverage remain
+in place. The stale PostgreSQL expected count is corrected from 260 to 262 in
+both the package command and GitHub full-suite guard.
 
 Docker and sudo are unavailable on the measured Ubuntu 24.04 x86_64 image.
 The TypeScript fallback extracts signed Ubuntu/PGDG packages into a local prefix
@@ -97,6 +106,7 @@ are included in hosted duration but excluded from script timing.
 | 5 | `df0c66c53` | `fc5a5559-dc45-47b0-b931-0434b66dbf51` | Checks/Rust passed; two web test timeouts | 14m31s |
 | 6 | `df0c66c53` | `410cde3e-12e4-4020-ac69-da5302b3c58d` | Deliberate failure reached GitHub; deployment step skipped | about 22s |
 | 7 | `1aa79a50d` | `09e5bf22-6c90-49f0-bd6a-e7ed23da23f5` | All workspace and 262 PostgreSQL tests passed; stale 260-test count guard failed | about 15m23s |
+| 8 | `6c406630b` | `cae96876-219d-4ea4-ab04-b5274f0fff56` | All non-browser stages passed; E2E fixture credentials missing | about 14m20s |
 
 Run 7 stopped at the PostgreSQL count guard after all 262 assertions passed.
 Earlier changes added four contracts (PRs #975 and #977) and removed two old
@@ -112,21 +122,26 @@ before pushing run 7. Build cache was cleared before runs 5 and 7.
 
 Seconds, rounded to two decimal places. A dash means the stage was not reached.
 
-| Stage | Probe 3 | Full 4 | Full 5 |
-| --- | ---: | ---: | ---: |
-| Database setup | 52.21 | 43.22 | 53.68 |
-| Toolchain | 16.85 | 15.61 | 22.88 |
-| WASM | 147.47 | 148.52 | 127.76 |
-| Workspace install | 30.34 | 37.56 | 39.25 |
-| Database contract probe | 1.22 | 1.11 | 1.49 |
-| Browser installation | 48.17 | 77.20 | 92.33 |
-| Browser launch | 4.61 | 4.31 | 3.97 |
-| Dedupe | — | 37.45 | 32.70 |
-| Repository checks | — | 220.02, interrupted | 77.58 |
-| Rust formatting | — | 0.21 | 2.00 |
-| Rust tests | — | 288.37 | 185.15 |
-| Rust Clippy | — | 207.99 | 120.88 |
-| Workspace tests | — | — | 84.54, failed |
+| Stage | Probe 3 | Full 4 | Full 5 | Full 7 | Full 8 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Database setup | 52.21 | 43.22 | 53.68 | 56.73 | 60.63 |
+| Toolchain | 16.85 | 15.61 | 22.88 | 16.02 | 16.38 |
+| WASM | 147.47 | 148.52 | 127.76 | 134.69 | 115.98 |
+| Workspace install | 30.34 | 37.56 | 39.25 | 39.69 | 25.80 |
+| Database contract probe | 1.22 | 1.11 | 1.49 | 1.36 | 1.19 |
+| Browser installation | 48.17 | 77.20 | 92.33 | 66.64 | 47.42 |
+| Browser launch | 4.61 | 4.31 | 3.97 | 4.43 | 5.27 |
+| Dedupe | — | 37.45 | 32.70 | 33.39 | 27.48 |
+| Repository checks | — | 220.02, interrupted | 77.58 | 63.30 | 51.83 |
+| Rust formatting | — | 0.21 | 2.00 | 0.61 | 0.37 |
+| Rust tests | — | 288.37 | 185.15 | 174.12 | 151.14 |
+| Rust Clippy | — | 207.99 | 120.88 | 118.84 | 102.62 |
+| Workspace tests | — | — | 84.54, failed | 85.61 | 68.77 |
+| PostgreSQL | — | — | — | 97.68, count guard failed | 83.97 |
+| USDA build | — | — | — | — | 2.64 |
+| UPC build | — | — | — | — | 3.34 |
+| Web build | — | — | — | — | 26.80 |
+| Desktop/WebKit E2E | — | — | — | — | 44.64, fixture setup failed |
 
 Run 5 passed all 251 native Rust tests, with one existing ignored doctest.
 The web suite passed 3,435 tests and timed out on two at five seconds: calendar
@@ -140,6 +155,25 @@ In run 5, GNU time reported a maximum process RSS of 6,311,868 KiB for checks,
 tests. These are process resource readings, not a simultaneous whole-runner
 memory total. Cgroup peak memory was unavailable. Final disk use was 53% after
 probe 3 and 65% after runs 4 and 5 (run 5: 12,218,736 KiB used).
+
+Run 7 passed all 3,442 web tests and 262 PostgreSQL assertions; its stale count
+guard stopped subsequent build and E2E stages. The script took 894.34 seconds.
+Checks peaked at 3,125,300 KiB process RSS (about half run 5), Rust tests at
+657,156 KiB, Clippy at 558,844 KiB, workspace tests at 4,042,908 KiB and PostgreSQL
+at 893,256 KiB. Disk usage reached 12,426,324 KiB (66%). Its cleared pnpm cache
+reused zero packages and downloaded 1,429 during workspace installation.
+
+Run 8's script took 836.95 seconds, with disk usage at 12,538,072 KiB (67%).
+Peak process RSS was 3,076,260 KiB for checks, 667,804 KiB for Rust tests,
+558,280 KiB for Clippy, 4,058,028 KiB for workspace tests, 881,064 KiB for
+PostgreSQL, 2,505,736 KiB for the web build, and 2,120,068 KiB for E2E.
+E2E created its database and started the local Worker, but authentication setup
+returned early because `E2E_TEST_USER_EMAIL` and `E2E_TEST_USER_PASSWORD` were
+absent. Six authenticated tests failed on missing storage state, two tests passed,
+and 14 did not run. The unchanged 22-test guard also failed. The runner now sets
+explicit disposable credentials for its local test database; this correction
+has not been rerun on Cloudflare. Temporary process/pressure debug sampling was
+removed after measurement; stage timing and GNU time resource reporting remain.
 
 ## Performance fixes and comparison limits
 
@@ -169,17 +203,35 @@ speed would be misleading. GitHub's Rust runner is ARM; Cloudflare is x86_64.
 ## Budget and restoration
 
 Workers Paid was verified. The September 6–October 6 account counter began at
-8/6,000 included minutes and showed 52/6,000 before run 7, with $0 billable usage.
+8/6,000 included minutes and showed 52/6,000 before runs 7 and 8, with $0 billable usage.
 Usage was rechecked before each build and remained far above the 200-minute
-minimum. Counters lag and are account-wide; a counter delta is not an exact
+minimum. The final counter shows 82/6,000 included minutes used (5,918 remain)
+and $0.00 billable usage. Counters lag and are account-wide; a counter delta is not an exact
 per-build bill. No upgrades or intentional overage were authorized or performed.
 
 Original deployment: `4a6f9538-cd52-44f9-91d4-300f1fcb0973`.
 Original active version: `463e7540-f533-43c1-9a74-c5199092463d` (version 2398).
-Deployment/version API snapshots matched after the first two probes and before
-the resumed experiment. Final restoration is pending: disconnect the temporary
-Git integration after the last run, then compare both API listings with the
-original snapshots. Do not claim final restoration until that comparison passes.
+The temporary Git integration was disconnected after run 8. The Settings page
+shows Git repository **Connect** again. Final authenticated API reads of both
+`deployments` and `versions` have exactly the same `result` listings as the
+original snapshots. No new deployment or uploaded version exists.
+
+## Validation and handoff
+
+Local validation passed 262 PostgreSQL contracts, all 490 web test files (3,442
+tests), auxiliary tests, the Cloudflare web build and mandatory hook checks.
+The disposable E2E fixture correction passed all 22 local browser contracts
+against the built application. Six pilot environment/process guards and ten CI workflow
+contract tests passed. Local ARM success is not hosted x86 proof. The final
+follow-up commit also aligns GitHub's stale expected PostgreSQL count and removes
+temporary diagnostic sampling; it will not have a Workers Builds run because
+Git was disconnected before that push.
+
+Evidence was captured under `/tmp/cubby-cloudflare-ci-pilot/`: per-run logs,
+GitHub check JSON for runs 5–8, before/final deployment and version snapshots,
+stage measurements, and local validation/benchmark logs. The tables above retain
+the decision-relevant results; these temporary raw files are not a durable
+artifact store.
 
 ## Separate option: the Cloudflare CI SDK
 

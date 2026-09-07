@@ -120,7 +120,7 @@ test("PostgreSQL and browser jobs enforce authoritative counts", () => {
   const postgres = job("test-postgres", "test-aux-coverage");
   const e2e = job("test-e2e", "report-coverage");
   assert.match(postgres, /--project integration/u);
-  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=260/u);
+  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=262/u);
   assert.match(postgres, /if \[\[ "\$FULL" == "true" \]\]/u);
   assert.doesNotMatch(postgres, /pglite/u);
   assert.match(e2e, /expected-tests: 15/u);

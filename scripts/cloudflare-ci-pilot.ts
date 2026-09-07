@@ -66,6 +66,8 @@ async function main() {
     DATABASE_URL: "postgresql://postgres:password@localhost:5432/cubby",
     INTEGRESQL_URL: "http://localhost:5000",
     INTEGRESQL_DATABASE_HOST: "localhost",
+    E2E_TEST_USER_EMAIL: "ci-pilot@example.test",
+    E2E_TEST_USER_PASSWORD: "cubby-pilot-test-password",
   };
   let run = commandRunner(env, signal);
   const cleanups: (() => Promise<string | void>)[] = [];
@@ -75,29 +77,6 @@ async function main() {
     currentStage = name;
     const start = performance.now();
     console.log(`pilot stage=${name} event=start`);
-    const resources =
-      name === "checks"
-        ? setInterval(() => {
-            void run("ps", ["-eo", "comm,pcpu,rss", "--sort=-rss"], {
-              quiet: true,
-            })
-              .then((output) =>
-                console.log(
-                  "[DEBUG-cf-resources] " +
-                    output.split("\n").slice(0, 8).join(" | "),
-                ),
-              )
-              .catch(() => undefined);
-            void readFile("/proc/pressure/memory", "utf8")
-              .then((output) =>
-                console.log(
-                  "[DEBUG-cf-resources] memory_pressure=" +
-                    output.trim().replaceAll("\n", " | "),
-                ),
-              )
-              .catch(() => undefined);
-          }, 15_000)
-        : undefined;
     try {
       await action();
     } catch (error) {
@@ -105,8 +84,6 @@ async function main() {
         `pilot stage=${name} result=1 elapsed_seconds=${((performance.now() - start) / 1000).toFixed(2)}`,
       );
       throw error;
-    } finally {
-      if (resources) clearInterval(resources);
     }
     console.log(
       `pilot stage=${name} result=0 elapsed_seconds=${((performance.now() - start) / 1000).toFixed(2)}`,
