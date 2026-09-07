@@ -19,7 +19,7 @@ coverage runs the full instrumented JS, Rust, and PostgreSQL tiers. This avoids
 a persistent label turning every follow-up revision into another full run.
 
 PostgreSQL is the only authoritative database backend. The retained integration
-suite is capped at 260 contract tests and Playwright at 22 browser-only tests;
+suite is capped at 262 contract tests and Playwright at 22 browser-only tests;
 CI selects those same manifests with no retries. PGlite is available only
 through explicit local developer commands and is not duplicated in CI or
 scheduled coverage. The local acceptance command runs the fast tier first, then
@@ -57,7 +57,7 @@ Chromium owns the fifteen desktop contracts and WebKit the seven mobile
 contracts. Both download and test the same artifact that preview and production
 deployment consume unchanged.
 
-The 260 PostgreSQL assertions remain in their original domain modules but are
+The 262 PostgreSQL assertions remain in their original domain modules but are
 registered through eight isolated family entrypoints. Each family shares one
 module graph and one IntegreSQL database while the existing full-table reset
 restores pristine state before every test. This preserves real constraints and

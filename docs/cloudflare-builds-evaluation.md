@@ -1,16 +1,16 @@
 # Cloudflare Workers Builds evaluation
 
-Research and hosted pilot snapshot: 2026-09-07. Two hosted probes were run;
-the temporary Git connection was removed afterward. No deployment or version
-upload occurred. This evaluates Workers Builds, not the Workers runtime,
-Cloudflare Containers runtime, or Pages build allowance.
+Updated September 7, 2026. Seven of eight authorized builds have been launched;
+run 7 is complete; one build remains. This evaluates Workers Builds and keeps Cubby deployments
+and preview uploads disabled. It does not use the separate Cloudflare CI SDK.
 
 ## Decision
 
-Workers Builds is a credible candidate for Cubby's verification and deployment,
-but not yet a proven replacement for GitHub Actions. The decisive experiment is
-running disposable PostgreSQL/pgvector plus IntegreSQL and both Playwright
-browsers inside the actual build environment. Pricing alone cannot answer that.
+Do not migrate CI on the evidence collected so far. The native database and both
+browser engines work, and deliberate failure reporting works. No full hosted run
+has passed yet. Even if the two remaining full runs pass, the eight-build cap no
+longer permits the required cold success plus two warm successes at one commit.
+The final handoff must record that unmet acceptance criterion explicitly.
 
 ## Confirmed platform behavior
 
@@ -45,215 +45,161 @@ browsers inside the actual build environment. Pricing alone cannot answer that.
   validation and artifact job graph.
   [Advanced setups](https://developers.cloudflare.com/workers/ci-cd/builds/advanced-setups/)
 
-## Unresolved environment capabilities
+## Configuration and implementation
 
-Cloudflare explicitly documents Wrangler-integrated Dockerfile builds in
-[Deploy Containers](https://developers.cloudflare.com/containers/guides/deploy/).
-Neither that guide nor the build-image reference establishes general
-`docker run`/Compose access, a reachable local daemon, root/sudo package
-installation, or installed Playwright browsers and full browser dependencies.
-These are unknowns, not evidence that the capabilities are prohibited.
-Docker-in-Docker support for the Containers/Sandbox runtime does not establish
-support in Workers Builds. Native PostgreSQL provisioning could be another
-path, but would require maintaining an additional environment setup and proving
-pgvector, IntegreSQL, and disposable-database behavior.
+The original Cubby Git build integration was disconnected. The pilot temporarily
+connects only `codex/cloudflare-ci-pilot`; non-production builds remain disabled.
+The build command is `node scripts/cloudflare-ci-pilot.ts full` (or `probe`).
+The deployment command is the successful no-op
+`printf 'CUBBY_PILOT_DEPLOY_NOOP\n'`. The preview command could not be configured
+independently while preview builds were disabled; preview execution was never
+enabled. That is a deviation from the requested two explicit no-op commands.
 
-## Cubby-specific implications
+Node 24 and pnpm 10.34.1 are pinned, with `SKIP_DEPENDENCY_INSTALL=1`.
+The entrypoint rejects unexpected branches and environments, builds WASM before
+installing workspace dependencies, and imposes an 18-minute script deadline.
+Only an allowlisted environment reaches commands. Databases, extracted packages,
+and native services are disposable and cleaned up on failure. It never invokes
+a deployment. GitHub Actions, required checks, and weekly coverage are unchanged.
 
-Sources: [CI design](ci.md), [GitHub workflow](../.github/workflows/ci.yaml),
-[dependency setup](../.github/actions/setup-node-with-deps/action.yml), and
-[Docker Compose](../docker-compose.yml).
+Docker and sudo are unavailable on the measured Ubuntu 24.04 x86_64 image.
+The TypeScript fallback extracts signed Ubuntu/PGDG packages into a local prefix
+without host installation or maintainer scripts. PostgreSQL 17.11 and pgvector
+0.8.6 are pinned; IntegreSQL 1.1.0 is built with Go 1.23.6. Package filenames and
+SHA-256 hashes are logged. Loading `vector` and `pg_trgm`, creating an IntegreSQL
+template, and cloning a test database passed in the hosted probe.
 
-1. Pin Node 24, pnpm 10.34.1, and the repository Rust toolchain. Restore/build
-   WASM before workspace installation, preserving the current setup order.
-   Set `SKIP_DEPENDENCY_INSTALL=1` to own that ordering. The current GitHub Rust
-   job uses ARM; moving it here changes native architecture coverage to x86_64.
-2. Start only Compose services `db` and `integresql`; the default Compose file
-   also includes Jaeger, which the acceptance tests do not require. Pin the
-   IntegreSQL image for a reproducible pilot as the existing CI does.
-3. Check memory under concurrent validation, database tests, and browsers.
-   Six paid concurrent builds means six builds, not six independent test jobs
-   within a build. Internal test parallelism still shares one build's CPU/RAM.
-4. Keep the 260 authoritative PostgreSQL contracts and Chromium/WebKit lanes.
-   Do not substitute PGlite or a remote Chromium-only service to make CI fit.
-5. A single build could produce a Cloudflare bundle, test that same directory,
-   and deploy it without a cross-job artifact transfer. This is a proposed
-   simplification, not measured behavior.
-6. Preserve exact-source verification and the current-main deployment guard.
-   Preserve coverage scheduling and auxiliary/Rust gates before full cutover.
-   Connecting all Workers independently and repeating the full root suite in
-   each build would undermine the cost goal.
-7. Budget the complete cold path, including tool downloads, Rust/WASM compile,
-   browser setup, tests, app build, and deploy, within the build timeout.
-   Previous GitHub job-duration sums are not Cloudflare runtime estimates.
+Playwright 1.62.1's Ubuntu dependencies are extracted alongside software EGL
+libraries. The WebKit launcher is adjusted to preserve this library search path.
+The host ldconfig-cache check cannot see that prefix, so actual Chromium/WebKit
+startup probes replace it; browser versions and the complete E2E guards remain
+unchanged. This is additional setup maintenance, not ordinary out-of-box CI.
 
-## Minimum hosted experiment
+Full mode runs deduplication, `check:all`, Rust formatting/tests/Clippy, every
+routine workspace test, 262 PostgreSQL contracts, both auxiliary Worker builds,
+the Cloudflare web build, then all 22 desktop/WebKit E2E contracts. Major stages
+are sequential. Repository check concurrency is two, Rust compilation uses four
+jobs, and Playwright retains one worker. Run 7 also limits workspace tests to two
+workers and uses one native TypeScript checker.
 
-The approved pilot uses the existing Cubby Worker with a dedicated pilot branch
-and explicit no-op deployment commands. The diagnostic script should print only tool versions and test results,
-not the environment or credentials.
+## Build ledger
 
-1. Inspect OS/architecture, available memory/disk, Node/pnpm/Rust/wasm-pack, Docker
-   daemon reachability, Compose version, and noninteractive package-install
-   permission. Dockerfile build support alone does not prove container runtime
-   access, local port forwarding, or Compose support.
-2. Start disposable PostgreSQL/pgvector and IntegreSQL; verify both health and
-   template/database creation from the build process over localhost.
-3. Install version-matched Chromium and WebKit dependencies and launch each
-   against a local test server. Prove workerd can run the built application.
-4. Run the existing complete verification gates and test the exact bundle to
-   be uploaded, recording time per phase and peak resource use.
-5. Repeat cold and warm builds and verify an intentional test failure produces
-   a failing GitHub check and never reaches an upload/deploy command.
+Durations are hosted wall time from logs/UI, not individually billed minutes.
+Queue time was not exposed separately; initialization, cloning and tool setup
+are included in hosted duration but excluded from script timing.
 
-If step 2 or 3 requires maintaining a custom external database/browser fleet,
-prefer CircleCI's documented service-container/VM setup for the full CI suite.
-Build-and-deploy-only Cloudflare adoption would leave the heavy test-runner
-cost elsewhere and must not be presented as a complete solution.
+| Run | Commit | Build UUID | Result | Hosted duration |
+| --- | --- | --- | --- | --- |
+| 1 | `eb53f9a49` | `22ee58d5-3dfe-429f-96de-0e5cc1255484` | Native PG source build blocked by missing Bison | about 4m03s |
+| 2 | `adba48dea` | `7a806a4b-38aa-49d5-9d6f-841d6f0cb51d` | Package installation blocked by missing sudo | about 30s |
+| 3 | `b4fb28db7` | `e9898958-4cde-4db6-9dd9-e8c9f6311d6e` | Environment probe passed; no-op deployment step passed | 5m27s |
+| 4 | `b4fb28db7` | `cf474251-81fa-491e-ac21-d75f8afd1695` | Full run hit script deadline during checks | about 18m25s |
+| 5 | `df0c66c53` | `fc5a5559-dc45-47b0-b931-0434b66dbf51` | Checks/Rust passed; two web test timeouts | 14m31s |
+| 6 | `df0c66c53` | `410cde3e-12e4-4020-ac69-da5302b3c58d` | Deliberate failure reached GitHub; deployment step skipped | about 22s |
+| 7 | `1aa79a50d` | `09e5bf22-6c90-49f0-bd6a-e7ed23da23f5` | All workspace and 262 PostgreSQL tests passed; stale 260-test count guard failed | about 15m23s |
 
-## Implemented pilot
+Run 7 stopped at the PostgreSQL count guard after all 262 assertions passed.
+Earlier changes added four contracts (PRs #975 and #977) and removed two old
+calendar contracts (#978), but the expected count stayed at 260. The final run
+corrects that expectation without removing tests or weakening the count guard.
 
-Entrypoint: `node scripts/cloudflare-ci-pilot.ts probe` or `full`, from the repository root.
-Both modes reject other branches and non-Workers/Linux x86_64 environments before
-provisioning. The outer process imposes an 18-minute deadline and supplies an
-allowlisted environment to tests; production credentials and database overrides
-are not inherited. A failure stops the pipeline and cleans up disposable services.
-`CUBBY_PILOT_FAIL=1` deliberately fails before provisioning.
+Run 6 used `CUBBY_PILOT_FAIL=1`. Logs contain the intentional-failure message,
+and GitHub reports `Workers Builds: cubby` failed at 17:58:09 UTC. The subsequent
+no-op deployment step did not execute. The full command was restored and verified
+before pushing run 7. Build cache was cleared before runs 5 and 7.
 
-Configure the existing Worker only after recording its current configuration:
+## Stage measurements
 
-- Production branch: `codex/cloudflare-ci-pilot`; preview builds disabled.
-- Build: `node scripts/cloudflare-ci-pilot.ts probe` initially, then `full`.
-- Deploy and non-production deploy: `printf 'CUBBY_PILOT_DEPLOY_NOOP\n'`.
-- Root: `/`; `NODE_VERSION=24`, `PNPM_VERSION=10.34.1`,
-  `SKIP_DEPENDENCY_INSTALL=1`; no production build secrets.
-- Start with caching disabled for the probe. Enable caching before the measured
-  cold run, then retry the same commit twice without changing configuration.
-- Maximum eight builds, one at a time. Verify at least 200 included minutes before
-  the first build, and recheck account usage before each later build. Count failed
-  probes and retries toward the limit. Stop when usage cannot be verified.
+Seconds, rounded to two decimal places. A dash means the stage was not reached.
 
-The Docker path uses the current CI PostgreSQL major and IntegreSQL digest. The
-native fallback compiles PostgreSQL 17.6, pg_trgm, pgvector 0.8.1 and IntegreSQL
-1.1.0 (Go 1.23.6) into a disposable directory. This may consume much of the cold
-budget; it is deliberately measured rather than assumed equivalent to Docker.
-Rust follows the repository toolchain; wasm-pack is pinned to 0.13.1. Browser
-versions come from the lockfile. A template-cloning check verifies pgvector and
-pg_trgm before acceptance tests run.
+| Stage | Probe 3 | Full 4 | Full 5 |
+| --- | ---: | ---: | ---: |
+| Database setup | 52.21 | 43.22 | 53.68 |
+| Toolchain | 16.85 | 15.61 | 22.88 |
+| WASM | 147.47 | 148.52 | 127.76 |
+| Workspace install | 30.34 | 37.56 | 39.25 |
+| Database contract probe | 1.22 | 1.11 | 1.49 |
+| Browser installation | 48.17 | 77.20 | 92.33 |
+| Browser launch | 4.61 | 4.31 | 3.97 |
+| Dedupe | — | 37.45 | 32.70 |
+| Repository checks | — | 220.02, interrupted | 77.58 |
+| Rust formatting | — | 0.21 | 2.00 |
+| Rust tests | — | 288.37 | 185.15 |
+| Rust Clippy | — | 207.99 | 120.88 |
+| Workspace tests | — | — | 84.54, failed |
 
-The full mode runs Rust format/clippy/tests, deduplication, `check:all`, workspace
-and PostgreSQL tests, both auxiliary Worker builds, `build:cf`, and all 22 E2E
-contracts. Major stages are sequential, check concurrency is two, and existing
-Playwright workers, reporters and test-count guards remain intact. Weekly coverage
-instrumentation is excluded. No deployment command is invoked by this script.
+Run 5 passed all 251 native Rust tests, with one existing ignored doctest.
+The web suite passed 3,435 tests and timed out on two at five seconds: calendar
+snapshot oversized-document rejection and the date-picker calendar-button
+interaction. PostgreSQL, auxiliary builds, web build and E2E were not reached.
+Its script took 845.02 seconds including cleanup.
 
-Log lines beginning `pilot` record stage durations, outcomes, source commit,
-available disk and cgroup peak memory where supported. Collect Cloudflare build
-UUIDs, queue/start/end timestamps, cache restore logs, billed minutes and GitHub
-check conclusions separately; script elapsed time excludes checkout and queueing.
+The measured runner has four AMD EPYC vCPUs, approximately 8 GB RAM, and no swap.
+In run 5, GNU time reported a maximum process RSS of 6,311,868 KiB for checks,
+591,916 KiB for Rust tests, 470,720 KiB for Clippy, and 3,820,452 KiB for workspace
+tests. These are process resource readings, not a simultaneous whole-runner
+memory total. Cgroup peak memory was unavailable. Final disk use was 53% after
+probe 3 and 65% after runs 4 and 5 (run 5: 12,218,736 KiB used).
 
-### Execution evidence
+## Performance fixes and comparison limits
 
-- Preflight: Workers Paid active; 8 account build minutes used; no existing Cubby
-  Git connection. Production version `463e7540-f533-43c1-9a74-c5199092463d` (2398).
-- Local checks: ShellCheck, Bash syntax, four entrypoint guard tests, `pnpm check`,
-  and mandatory pre-push web tests, Cloudflare build, and auxiliary gates passed.
-  The first push attempt found a missing generated MCP app bundle; building that
-  local prerequisite resolved it without source changes.
-- Hosted probe 1 (`22ee58d5-3dfe-429f-96de-0e5cc1255484`, commit `eb53f9a49`):
-  failed after approximately 4m03s. Toolchain setup 19s, WASM 154s, dependency
-  installation 26s. Docker was not usable. Native PostgreSQL configuration failed
-  because Bison was absent. GitHub reported `Workers Builds: cubby` as failed;
-  the deployment no-op never ran.
-- Hosted probe 2 (`7a806a4b-38aa-49d5-9d6f-841d6f0cb51d`, commit `adba48dea`):
-  moved database setup first and attempted Bison/Flex installation. Failed after
-  approximately 30s (3s in the script): `sudo: command not found`. GitHub again
-  reported a failed check, with no deployment step.
-- Measured image: unprivileged buildbot user, Linux x86_64, Node 24.20.0,
-  pnpm 10.34.1, Rust 1.98.1. About 14.5 GiB disk available initially.
-  No cgroup peak-memory reading was exposed at the probed path.
-- Two of eight allowed builds used. Full-suite cold/warm runs, browser startup,
-  native database compatibility, and deliberate failure injection were not
-  reached. The natural failures prove failure propagation, not the separately
-  planned deliberate-failure scenario. No speed comparison is justified.
-- Restoration verified: Settings shows Git repository → Connect. The complete
-  deployment/version API results match the preflight snapshots; version 2398
-  remains active. Original GitHub Actions and required checks were unchanged.
+The calendar timeout exposed per-character UTF-8 array allocation during ICS
+line folding. Removing those allocations preserved output and reduced local
+calendar test execution from 927 ms to 119 ms, including five new Unicode cases.
+One native TypeScript checker reduced local peak RSS from 5.93 GB to 3.07 GB with
+similar cold wall time. Full warm checks did not get faster in the small sample.
+See [local measurements](local-check-performance.md) for commands and limitations.
+All 490 web test files (3,442 tests), auxiliary tests, mandatory checks and the
+pre-push browser/build gates passed before run 7 was pushed.
 
-### Pilot conclusion
+A prior 3.46-second Clippy result reused earlier Clippy output and was not a valid
+cold comparison. Hosted run 5 still spent 120.88 seconds checking dependencies
+after tests. Do not attribute the measured Rust improvement to profile alignment;
+compilation parallelism also changed from two jobs to four.
 
-The straightforward Docker/native bootstrap is blocked on the actual build
-image. This does not prove that unprivileged package extraction or a fully
-user-local toolchain could never work. Those approaches would add maintenance,
-and browser system-library compatibility would still need proof. Do not migrate
-full CI based on these results. Cloudflare remains a candidate for build-only
-work; full CI would require another explicitly scoped environment experiment.
-Reported durations are log-derived wall time, not a claim about billed minutes.
-- Restore the original disconnected Git state after the experiment, and compare
-  deployment/version listings with the preflight snapshot. Leave GitHub Actions
-  and required checks unchanged.
+The documented Workers Builds cache covers pnpm and supported framework output,
+not Cargo targets, generated WASM packages or Playwright browsers. The pilot
+therefore rebuilds these expensive dependencies in each disposable environment.
+No three-pass cold/warm repeatability result exists yet.
 
+A recent GitHub run is not workload-equivalent: Rust was skipped and WebKit had
+a retry. Its validation stage took about 93 seconds, but comparing whole pipeline
+speed would be misleading. GitHub's Rust runner is ARM; Cloudflare is x86_64.
 
-### Resumed pilot: unprivileged TypeScript bootstrap
+## Budget and restoration
 
-The entrypoint now uses Node 24 native TypeScript and argument-array subprocess
-calls. No npm dependency is needed before the required WASM-first bootstrap.
-The native fallback downloads signed Ubuntu/PGDG packages into disposable APT
-state and extracts them with `dpkg-deb`; no sudo, host installation, or package
-maintainer scripts run. PostgreSQL 17.11 and pgvector 0.8.6 packages are pinned;
-all downloaded package filenames and SHA-256 hashes are logged for comparison.
-IntegreSQL remains v1.1.0 built with Go 1.23.6.
+Workers Paid was verified. The September 6–October 6 account counter began at
+8/6,000 included minutes and showed 52/6,000 before run 7, with $0 billable usage.
+Usage was rechecked before each build and remained far above the 200-minute
+minimum. Counters lag and are account-wide; a counter delta is not an exact
+per-build bill. No upgrades or intentional overage were authorized or performed.
 
-Playwright 1.62.1 dependencies use its Ubuntu 24.04 package list plus software
-EGL drivers. Its WebKit launcher is adjusted to preserve the local library path.
-The host ldconfig-cache check cannot see an extracted prefix, so it is replaced
-by real Chromium/WebKit startup probes followed by the unchanged E2E suite.
-Browser engine versions and test-count guards are unchanged.
+Original deployment: `4a6f9538-cd52-44f9-91d4-300f1fcb0973`.
+Original active version: `463e7540-f533-43c1-9a74-c5199092463d` (version 2398).
+Deployment/version API snapshots matched after the first two probes and before
+the resumed experiment. Final restoration is pending: disconnect the temporary
+Git integration after the last run, then compare both API listings with the
+original snapshots. Do not claim final restoration until that comparison passes.
 
-Local Ubuntu 24.04 x86_64 testing under UID 1000 verified PostgreSQL startup and
-loading both `vector` and `pg_trgm`; Chromium and WebKit both launched and
-rendered a page with the extracted libraries and software EGL renderer.
-The resumed preflight dashboard showed 14/6,000 included build minutes used.
-Hosted acceptance results are still pending;
-the two earlier failed probes count toward the original eight-build cap.
+## Separate option: the Cloudflare CI SDK
 
+The [August 4 CI Workflows article](https://blog.cloudflare.com/ci-workflows/)
+describes `@cloudflare/ci`, which this Workers Builds pilot does not use. It
+combines Workflows and Sandbox containers, supports parallel runner steps, and
+caches environment snapshots in R2. Its documented push integration is based on
+Cloudflare Artifacts. A GitHub source/check integration would need its own
+verification before replacing Cubby's current checks.
 
-### Run 3 and first full attempt
+The [SDK README](https://github.com/cloudflare/ci) specifies a Workers runtime
+package rather than an executable Node.js library. Adopting it would require a
+separately deployed CI Worker and associated bindings; it is not a drop-in
+replacement for this pilot's local TypeScript subprocess runner.
 
-Run 3 (`e9898958-4cde-4db6-9dd9-e8c9f6311d6e`, commit `b4fb28db7`)
-passed the complete environment probe. The script took 304 seconds; the hosted
-build ran 16:48:28–16:53:55 UTC. Database setup took 52.21s, toolchain 16.85s,
-WASM 147.47s, install 30.34s, database contract 1.22s, browser installation
-48.17s, and both browser launches 4.61s. Final disk usage was 53% (9.4 GiB used).
-The GitHub check passed and the deployment log contained only the no-op sentinel.
-
-Run 4 (`cf474251-81fa-491e-ac21-d75f8afd1695`, same commit, full mode,
-cache enabled) reached the 18-minute script deadline during repository checks.
-Rust formatting, Clippy (207.99s), Rust tests (288.37s), and deduplication
-(37.45s) passed. TypeScript and Knip were terminated by the deadline; workspace,
-PostgreSQL and E2E suites were not reached. Final disk usage was 65%. Failure
-reached GitHub and the no-op deployment step did not run. This is not a passing
-cold-run measurement.
-
-The next configuration uses four Rust compilation jobs on the paid four-vCPU
-runner, while preserving two concurrent repository checks and one Playwright
-worker. Go runtime parallelism is also capped at four. GNU time reports CPU and
-maximum RSS for routine stages; the cgroup peak-memory file was unavailable.
-
-Cold local diagnostics: the unbounded native web typecheck completed in 15.10s
-with 4.11 GB maximum RSS; Knip completed in 9.21s. TypeScript reported roughly
-4.49 GB of memory with extended diagnostics. A 2 GiB Go memory target
-increased local runtime to 46.66s; 6 GiB with four Go processors completed in
-16.70s. The pilot uses the latter setting, since `NODE_OPTIONS` cannot constrain
-TypeScript 7's Go heap. Repository checks now precede native Rust compilation
-to expose any remaining platform slowdown before spending time on Rust.
-
-A local clean-target Rust experiment passed all 251 executed tests (plus one
-existing ignored doctest) in 100.83s with four compilation jobs. Clippy afterward
-still took 79.79s under its default dev profile. A subsequent Clippy run with
-`--profile test --all-targets -- -D warnings` completed in 3.46s, but that
-measurement was contaminated by the preceding Clippy run. Hosted run 5 still
-checked dependencies after tests, so the 3.46s result is not evidence of a cold
-speedup from profile alignment. Run 5 preserves all tests, lint targets, and the
-warning policy. These local timings are ARM macOS diagnostics, not an x86
-GitHub/Cloudflare benchmark.
+[Sandbox pricing](https://developers.cloudflare.com/sandbox/platform/pricing/)
+follows Containers and related Workers/Durable Objects usage. The
+[Containers allowance](https://developers.cloudflare.com/containers/platform/pricing/)
+on Workers Paid is 375 vCPU-minutes, 25 GiB-hours of memory, and 200 GB-hours of
+disk monthly, followed by metered charges. Memory and disk are based on
+provisioned resources; CPU is active usage. The 6,000 Workers Builds minutes do
+not fund Sandbox execution. Snapshot caching may address repeated setup costs,
+but this architecture needs a separate measured cost and compatibility pilot.

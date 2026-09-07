@@ -10,7 +10,7 @@
     "test:unit": "vitest run --project unit",
     "test:ui": "NODE_OPTIONS=--no-experimental-webstorage vitest run --project ui",
     "test:pglite": "vitest run --project pglite --project pglite-integration",
-    "test:postgres": "CUBBY_EXPECT_POSTGRES_TESTS=260 vitest run --project integration",
+    "test:postgres": "CUBBY_EXPECT_POSTGRES_TESTS=262 vitest run --project integration",
     "test:integration:postgres": "pnpm test:postgres",
     "test:changed": "vitest run --changed",
     "test:changed:postgres": "CUBBY_TEST_INTEGRATION=1 vitest run --changed",
