@@ -92,6 +92,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "background-job.strandedCount": async () =>
     (await import("~/server/background-batch-browser.server"))
       .backgroundJobHandlers.operations.strandedCount,
+  "calendar.getCredential": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.getCredential,
   "calendar.getFeed": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.getFeed,
@@ -101,6 +104,12 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "calendar.range": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.range,
+  "calendar.revokeCredential": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.revokeCredential,
+  "calendar.rotateCredential": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.rotateCredential,
   "calendar.rotateFeed": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.rotateFeed,

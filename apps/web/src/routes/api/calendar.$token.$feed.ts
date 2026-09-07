@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { calendarFeedStateFor } from "~/server/calendar/client";
+import { externalCalendarFeedStateFor } from "~/server/calendar/client";
 import { createCalendarFeedHandler } from "~/server/calendar/feed";
 
 /**
@@ -15,9 +15,9 @@ import { createCalendarFeedHandler } from "~/server/calendar/feed";
  */
 
 const handler = createCalendarFeedHandler((origin) =>
-  calendarFeedStateFor(origin),
+  externalCalendarFeedStateFor(origin),
 );
 
 export const Route = createFileRoute("/api/calendar/$token/$feed")({
-  server: { handlers: { GET: handler } },
+  server: { handlers: { GET: handler, HEAD: handler } },
 });

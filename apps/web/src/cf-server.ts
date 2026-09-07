@@ -26,7 +26,11 @@ import {
   startOperationTraceName,
 } from "./lib/start-operation-observability";
 import type { BackgroundQueueBatch } from "./server/background-queue-types";
-import { calendarFeedStateFor } from "./server/calendar/client";
+import {
+  calendarFeedStateFor,
+  externalCalendarFeedStateFor,
+  handleCalDavRequest,
+} from "./server/calendar/client";
 import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
@@ -46,7 +50,7 @@ const getHandler = () => {
 };
 
 const calendarFeedHandler = createCalendarFeedHandler((origin) =>
-  calendarFeedStateFor(origin),
+  externalCalendarFeedStateFor(origin),
 );
 
 interface InterceptedError {
@@ -149,12 +153,14 @@ const handler = {
             ? `cf.fetch.${startOperationTraceName(startTraceContext)}`
             : "cf.fetch",
           (span, endSpan) =>
-            request.method === "GET" &&
-            url.pathname.startsWith("/api/calendar/")
-              ? withTrace("cf.calendarFeed", async () => {
+            url.pathname === "/.well-known/caldav" ||
+            url.pathname === "/.well-known/caldav/" ||
+            url.pathname === "/api/caldav" ||
+            url.pathname.startsWith("/api/caldav/")
+              ? withTrace("cf.caldav", async () => {
                   const response = await runWithExecutionCtx(
                     ctx,
-                    async () => await calendarFeedHandler({ request }),
+                    () => handleCalDavRequest(request),
                     url.origin,
                   );
                   span.setAttribute(
@@ -167,84 +173,104 @@ const handler = {
                     workerVersion: env.CF_VERSION_METADATA.id,
                   });
                 })
-              : withRequestDb(
-                  {
-                    strong: env.HYPERDRIVE.connectionString,
-                    boundedStale: env.HYPERDRIVE_CACHED.connectionString,
-                  },
-                  async () => {
-                    const { default: handler } = await withTrace(
-                      "cf.importHandler",
-                      () => getHandler(),
-                    );
-                    // Scoped here rather than around the whole handler body: this
-                    // is the only region where request-scoped work runs, and
-                    // waitUntil must belong to THIS request's context.
-                    const response = await withTrace("cf.handler", async () =>
-                      runWithExecutionCtx(
-                        ctx,
-                        async () => handler.fetch(request),
-                        url.origin,
-                      ),
+              : (request.method === "GET" || request.method === "HEAD") &&
+                  url.pathname.startsWith("/api/calendar/")
+                ? withTrace("cf.calendarFeed", async () => {
+                    const response = await runWithExecutionCtx(
+                      ctx,
+                      async () => await calendarFeedHandler({ request }),
+                      url.origin,
                     );
                     span.setAttribute(
                       "http.response.status_code",
                       response.status,
                     );
-
-                    // If Nitro returned a 500 and we intercepted a real error, log the
-                    // details so they appear in `wrangler tail` (Nitro's response body
-                    // is useless) and report it to Sentry — the handler swallows it into
-                    // a 500 body, so withSentry's auto-capture (thrown-error only) never
-                    // sees it.
-                    const interceptedError =
-                      interceptedErrorStore.getStore()?.error;
-                    if (response.status >= 500 && interceptedError) {
-                      console.error(
-                        "[cf-server] Unhandled error:",
-                        JSON.stringify(interceptedError, null, 2),
+                    endSpan();
+                    return withResponseDiagnostics(response, {
+                      requestId: getRequestId(request.headers),
+                      workerVersion: env.CF_VERSION_METADATA.id,
+                    });
+                  })
+                : withRequestDb(
+                    {
+                      strong: env.HYPERDRIVE.connectionString,
+                      boundedStale: env.HYPERDRIVE_CACHED.connectionString,
+                    },
+                    async () => {
+                      const { default: handler } = await withTrace(
+                        "cf.importHandler",
+                        () => getHandler(),
                       );
-                      const reconstructed = new Error(interceptedError.message);
-                      reconstructed.name = interceptedError.name;
-                      reconstructed.stack = interceptedError.stack;
-                      reconstructed.cause = interceptedError.cause;
-                      Sentry.captureException(reconstructed);
-                    }
+                      // Scoped here rather than around the whole handler body: this
+                      // is the only region where request-scoped work runs, and
+                      // waitUntil must belong to THIS request's context.
+                      const response = await withTrace("cf.handler", async () =>
+                        runWithExecutionCtx(
+                          ctx,
+                          async () => handler.fetch(request),
+                          url.origin,
+                        ),
+                      );
+                      span.setAttribute(
+                        "http.response.status_code",
+                        response.status,
+                      );
 
-                    const correlatedResponse = withResponseDiagnostics(
-                      withHtmlNoCache(response),
-                      {
-                        requestId: getRequestId(request.headers),
-                        workerVersion: env.CF_VERSION_METADATA.id,
-                      },
-                    );
-                    if (request.method === "HEAD") {
-                      span.setAttributes({
-                        "cubby.response.body.outcome": "empty",
-                        "cubby.response.stream.duration_ms": 0,
-                      });
-                      endSpan();
-                      return correlatedResponse;
-                    }
-                    return observeResponseBody(
-                      correlatedResponse,
-                      (observation) => {
+                      // If Nitro returned a 500 and we intercepted a real error, log the
+                      // details so they appear in `wrangler tail` (Nitro's response body
+                      // is useless) and report it to Sentry — the handler swallows it into
+                      // a 500 body, so withSentry's auto-capture (thrown-error only) never
+                      // sees it.
+                      const interceptedError =
+                        interceptedErrorStore.getStore()?.error;
+                      if (response.status >= 500 && interceptedError) {
+                        console.error(
+                          "[cf-server] Unhandled error:",
+                          JSON.stringify(interceptedError, null, 2),
+                        );
+                        const reconstructed = new Error(
+                          interceptedError.message,
+                        );
+                        reconstructed.name = interceptedError.name;
+                        reconstructed.stack = interceptedError.stack;
+                        reconstructed.cause = interceptedError.cause;
+                        Sentry.captureException(reconstructed);
+                      }
+
+                      const correlatedResponse = withResponseDiagnostics(
+                        withHtmlNoCache(response),
+                        {
+                          requestId: getRequestId(request.headers),
+                          workerVersion: env.CF_VERSION_METADATA.id,
+                        },
+                      );
+                      if (request.method === "HEAD") {
                         span.setAttributes({
-                          "cubby.response.body.outcome": observation.outcome,
-                          "cubby.response.stream.duration_ms": Math.round(
-                            observation.durationMs,
-                          ),
-                          "cubby.response.cancelled":
-                            observation.outcome === "cancelled",
+                          "cubby.response.body.outcome": "empty",
+                          "cubby.response.stream.duration_ms": 0,
                         });
-                        if (observation.outcome === "error") {
-                          span.setError("response_stream_error");
-                        }
                         endSpan();
-                      },
-                    );
-                  },
-                ),
+                        return correlatedResponse;
+                      }
+                      return observeResponseBody(
+                        correlatedResponse,
+                        (observation) => {
+                          span.setAttributes({
+                            "cubby.response.body.outcome": observation.outcome,
+                            "cubby.response.stream.duration_ms": Math.round(
+                              observation.durationMs,
+                            ),
+                            "cubby.response.cancelled":
+                              observation.outcome === "cancelled",
+                          });
+                          if (observation.outcome === "error") {
+                            span.setError("response_stream_error");
+                          }
+                          endSpan();
+                        },
+                      );
+                    },
+                  ),
           {
             "http.request.method": request.method,
             "http.route": routeTemplate,

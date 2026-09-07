@@ -1,0 +1,20 @@
+{
+  "name": "cubby-calendar-test",
+  "main": "tooling/calendar-test-worker.ts",
+  "compatibility_date": "2026-06-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CALENDAR_FEED",
+        "class_name": "CalendarFeedDurableObject",
+      },
+    ],
+  },
+  "exports": {
+    "CalendarFeedDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+}

@@ -4,17 +4,16 @@ import {
   MEAL_SLOT_DURATION_MINUTES,
   MEAL_TYPE_START_MINUTES,
 } from "@cubby/schemas/meal-classification";
+import ICAL from "ical.js";
 
 import { householdDateTime } from "~/lib/household-date";
 
 /**
  * RFC 5545 serializer for the published calendar feed.
  *
- * Hand-rolled rather than pulling a dependency: most of a {@link CalendarItem}
- * is an all-day event, and `endDateExclusive` is already the exclusive end date
- * `DTEND;VALUE=DATE` wants, so the mapping is direct. The fiddly parts are the
- * wire format (CRLF, octet folding, TEXT escaping), which is what most of this
- * file is.
+ * `ical.js` owns RFC property escaping and component serialization. Cubby keeps
+ * the tiny final UTF-8 folding pass because ical.js intentionally does not
+ * impose a transport line-length policy.
  *
  * The one exception is a meal with a slot: it is placed at that slot's time of
  * day (see `CalendarKindSpec.timing`). Those events are emitted as UTC
@@ -71,18 +70,6 @@ const FEED_NAMES = {
 export const kindsForFeed = (feed: IcsFeed): FeedKinds => FEED_KINDS[feed];
 
 /**
- * Escape a TEXT value per RFC 5545 §3.3.11. Order matters: the backslash rule
- * must run first, or it would double-escape the separators added after it.
- */
-function escapeText(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\r?\n/g, "\\n");
-}
-
-/**
  * Fold one content line to {@link MAX_LINE_OCTETS} octets, continuing with a
  * leading space. Counted in UTF-8 octets, not characters, and never split
  * inside a multi-byte sequence — a recipe name with an emoji or an accent would
@@ -114,12 +101,18 @@ function foldLine(line: string): string {
   return out.join(`${CRLF} `);
 }
 
-/** `YYYY-MM-DD` → `YYYYMMDD`, the DATE value form. */
-const icsDate = (plain: string) => plain.replace(/-/g, "");
+/** Serialize an ical.js component with Cubby's RFC 5545 UTF-8 wire folding. */
+export function serializeCalendarComponent(component: ICAL.Component): string {
+  const lines = component
+    .toString()
+    .replace(/\r?\n[ \t]/g, "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .filter(Boolean);
+  return `${lines.map(foldLine).join(CRLF)}${CRLF}`;
+}
 
-/** UTC timestamp in the DATE-TIME form DTSTAMP and a timed DTSTART require. */
-const icsTimestamp = (at: Date) =>
-  `${at.toISOString().replace(/[-:]/g, "").split(".")[0]}Z`;
+const icalDateTime = (at: Date) => `${at.toISOString().slice(0, 19)}Z`;
 
 const MILLISECONDS_PER_MINUTE = 60_000;
 
@@ -237,48 +230,58 @@ export function calendarItemCount(
  * A timed event ignores `endDateExclusive` entirely: its end is its own
  * duration past its start, not the day after it.
  */
-function boundaryLines<K extends PublishableKind>(
+function addBoundaries<K extends PublishableKind>(
+  event: ICAL.Component,
   item: ItemOfKind<K>,
   spec: CalendarKindSpec<K>,
-): string[] {
+): void {
   const timing = spec.timing?.(item) ?? null;
   if (!timing) {
-    return [
-      `DTSTART;VALUE=DATE:${icsDate(item.startDate)}`,
-      `DTEND;VALUE=DATE:${icsDate(item.endDateExclusive)}`,
-    ];
+    event.addPropertyWithValue(
+      "dtstart",
+      ICAL.Time.fromDateString(item.startDate),
+    );
+    event.addPropertyWithValue(
+      "dtend",
+      ICAL.Time.fromDateString(item.endDateExclusive),
+    );
+    return;
   }
   const start = householdDateTime(item.startDate, timing.startMinutes);
   const end = new Date(
     start.getTime() + timing.durationMinutes * MILLISECONDS_PER_MINUTE,
   );
-  return [`DTSTART:${icsTimestamp(start)}`, `DTEND:${icsTimestamp(end)}`];
+  event.addPropertyWithValue("dtstart", icalDateTime(start));
+  event.addPropertyWithValue("dtend", icalDateTime(end));
 }
 
 function toEventFor<K extends PublishableKind>(
   item: ItemOfKind<K>,
   spec: CalendarKindSpec<K>,
   opts: IcsOptions,
-): string[] {
+): ICAL.Component {
   // UID must be stable across polls so an edit updates the event in place
   // rather than duplicating it. Shortcodes are permanent and never reassigned
   // (not even on merge), which is exactly the guarantee a UID needs.
-  const lines = [
-    "BEGIN:VEVENT",
-    `UID:${item.id}@${UID_DOMAIN}`,
-    `DTSTAMP:${icsTimestamp(opts.now)}`,
-    ...boundaryLines(item, spec),
-    `SUMMARY:${escapeText(spec.summary(item))}`,
-    `URL:${opts.origin}${spec.detailBase}/${item.id}`,
-    "TRANSP:TRANSPARENT",
-  ];
+  const event = new ICAL.Component("vevent");
+  event.addPropertyWithValue("uid", `${item.id}@${UID_DOMAIN}`);
+  event.addPropertyWithValue("dtstamp", icalDateTime(opts.now));
+  addBoundaries(event, item, spec);
+  event.addPropertyWithValue("summary", spec.summary(item));
+  event.addPropertyWithValue(
+    "url",
+    `${opts.origin}${spec.detailBase}/${item.id}`,
+  );
+  event.addPropertyWithValue("transp", "TRANSPARENT");
   const description = spec.description(item);
-  if (description) lines.push(`DESCRIPTION:${escapeText(description)}`);
-  lines.push("END:VEVENT");
-  return lines;
+  if (description) event.addPropertyWithValue("description", description);
+  return event;
 }
 
-function toEvent(item: PublishableCalendarItem, opts: IcsOptions): string[] {
+function toEvent(
+  item: PublishableCalendarItem,
+  opts: IcsOptions,
+): ICAL.Component {
   return item.kind === "meal"
     ? toEventFor(item, KIND_SPECS.meal, opts)
     : toEventFor(item, KIND_SPECS.task, opts);
@@ -300,25 +303,24 @@ export interface IcsOptions {
 }
 
 export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Cubby//Calendar Feed//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    `X-WR-CALNAME:${escapeText(FEED_NAMES[opts.feed])}`,
+  const calendar = new ICAL.Component("vcalendar");
+  calendar.addPropertyWithValue("version", "2.0");
+  calendar.addPropertyWithValue("prodid", "-//Cubby//Calendar Feed//EN");
+  calendar.addPropertyWithValue("calscale", "GREGORIAN");
+  calendar.addPropertyWithValue("method", "PUBLISH");
+  calendar.addPropertyWithValue("x-wr-calname", FEED_NAMES[opts.feed]);
+  const properties = [
     // Both spellings: REFRESH-INTERVAL is the RFC 7986 property, X-PUBLISHED-TTL
     // is what Apple and Outlook actually read.
     "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
     "X-PUBLISHED-TTL:PT1H",
   ];
+  for (const property of properties)
+    calendar.addProperty(ICAL.Property.fromString(property));
 
   for (const item of items) {
     if (!isPublishable(item, opts.feed)) continue;
-    lines.push(...toEvent(item, opts));
+    calendar.addSubcomponent(toEvent(item, opts));
   }
-
-  lines.push("END:VCALENDAR");
-  // Trailing CRLF: the document ends with a complete content line.
-  return `${lines.map(foldLine).join(CRLF)}${CRLF}`;
+  return serializeCalendarComponent(calendar);
 }

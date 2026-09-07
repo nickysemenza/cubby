@@ -193,6 +193,29 @@ export type CalendarRangeOut = z.infer<typeof calendarRangeOut>;
 export const calendarFeedOut = z.object({ token: z.string().nullable() });
 export const calendarRotateFeedOut = z.object({ token: z.string() });
 
+/**
+ * A Calendar app password is intentionally separate from the bearer token used
+ * by read-only subscriptions. The password itself is never readable after its
+ * one-time creation response.
+ */
+export const calendarCredentialOut = z.object({
+  configured: z.boolean(),
+  username: z.string(),
+  createdAt: z.iso.datetime().nullable(),
+});
+export type CalendarCredential = z.infer<typeof calendarCredentialOut>;
+
+export const calendarRotateCredentialOut = z.object({
+  username: z.string(),
+  password: z.string(),
+  createdAt: z.iso.datetime(),
+});
+export type CalendarRotateCredential = z.infer<
+  typeof calendarRotateCredentialOut
+>;
+
+export const calendarRevokeCredentialOut = z.object({ revoked: z.boolean() });
+
 const calendarFeedDocumentInspection = z.object({
   etag: z.string(),
   generatedAt: z.iso.datetime(),
@@ -229,6 +252,18 @@ export const calendarFeedInspectionOut = z.object({
     tasks: calendarFeedDocumentInspection.nullable(),
     all: calendarFeedDocumentInspection.nullable(),
   }),
+  caldav: z
+    .object({
+      counts: z.object({
+        tasks: z.number().int().nonnegative(),
+        completedTasks: z.number().int().nonnegative(),
+        meals: z.number().int().nonnegative(),
+      }),
+      pendingWrites: z.number().int().nonnegative(),
+      ready: z.boolean(),
+    })
+    .nullable()
+    .optional(),
 });
 export type CalendarFeedInspection = z.infer<typeof calendarFeedInspectionOut>;
 export type CalendarFeedDocumentInspection = z.infer<

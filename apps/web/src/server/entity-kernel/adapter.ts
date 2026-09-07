@@ -13,6 +13,8 @@ import {
   type EntitySchemaBindingEntity,
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
+import type { MealMutationHooks } from "~/server/repo/meal/crud";
+import type { TaskMutationHooks } from "~/server/repo/task/crud";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
@@ -32,6 +34,9 @@ export interface EntityKernelContext {
     recipeCosting: RecipeCostingService;
     locationValuation: LocationValuationService;
   };
+  /** Internal protocol metadata.  CalDAV uses this only to append its durable
+   * identity/receipt inside the repository-owned transaction. */
+  caldavHooks?: { meal?: MealMutationHooks; task?: TaskMutationHooks };
 }
 
 const isEntityKernelContext = (value: unknown): value is EntityKernelContext =>

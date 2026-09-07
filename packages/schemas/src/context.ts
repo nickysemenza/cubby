@@ -15,6 +15,7 @@ export const APPLICATION_AUDIT_SOURCES = [
   "epub_import",
   "api",
   "mcp",
+  "caldav",
 ] as const;
 
 /**

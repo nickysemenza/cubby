@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { CategoryAudit } from "~/app/_components/insights/category-audit";
+import { CalendarCalDavSetupDialog } from "~/app/calendar/calendar-caldav-setup-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
@@ -67,6 +68,7 @@ function SettingsPage() {
       <Stack gap="md" className="max-w-2xl pb-6 md:gap-6">
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <AppearanceCard />
+        <CalendarAccessCard />
 
         {/* Everything dev/debug/maintenance lives behind one collapsed
             disclosure so the user-facing prefs above aren't drowned in flags. */}
@@ -146,6 +148,32 @@ function SettingsPage() {
   );
 }
 
+function CalendarAccessCard() {
+  return (
+    <Card className="max-md:border-x-0">
+      <CardHeader>
+        <Row
+          align="start"
+          justify="between"
+          gap="md"
+          className="max-md:flex-col"
+        >
+          <Stack gap="tight">
+            <CardTitle>Calendar</CardTitle>
+            <CardDescription>
+              Connect Calendar.app to edit Cubby Tasks and Meals. Read-only
+              subscriptions remain available from the Calendar page.
+            </CardDescription>
+          </Stack>
+          <div className="shrink-0">
+            <CalendarCalDavSetupDialog />
+          </div>
+        </Row>
+      </CardHeader>
+    </Card>
+  );
+}
+
 function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
   const { data, error, isFetching, refetch } = useQuery({
     ...calendar.inspectFeed.queryOptions(),
@@ -165,10 +193,10 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
           className="max-md:flex-col"
         >
           <Stack gap="sm">
-            <CardTitle>Calendar feed state</CardTitle>
+            <CardTitle>Calendar state</CardTitle>
             <CardDescription>
-              Durable Object metadata only. The bearer token and calendar
-              contents are omitted; jurisdiction is not the active colo.
+              Durable Object metadata only. Credentials and calendar contents
+              are omitted; jurisdiction is not the active colo.
             </CardDescription>
           </Stack>
           <Row gap="xs" justify="end" className="shrink-0 max-md:w-full">
@@ -215,7 +243,7 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
           </pre>
         ) : (
           <Description as="p" size="xs">
-            {isFetching ? "Reading calendar feed state…" : "No state returned."}
+            {isFetching ? "Reading calendar state…" : "No state returned."}
           </Description>
         )}
       </CardContent>
