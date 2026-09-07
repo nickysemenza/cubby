@@ -51,9 +51,11 @@ GitHub Actions minutes; this policy removes repeated hosted verification costs,
 not all Actions usage. No self-hosted runner or Cloudflare Builds is required.
 The Cloudflare CI pilot is retired; its evaluation remains historical.
 
-The workflow policy takes effect after merging this branch. No new combined
-local timing has been measured: approximately 2–3 minutes warm remains an
-estimate, not a guarantee.
+The workflow policy takes effect after merging this branch. On September 7,
+2026, the complete warm `pnpm verify:local:full` passed in **124.47 seconds**
+on the local ARM Mac. The preceding pre-push run took 289.37 seconds including
+about 135 seconds of Rust compilation. These are individual observations, not
+a guaranteed runtime; see [local measurements](local-check-performance.md).
 
 ## Measurements and rejected optimizations
 
