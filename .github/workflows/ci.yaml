@@ -287,7 +287,7 @@ jobs:
         run: |
           args=(--project integration --reporter=default --reporter=github-actions)
           if [[ "$FULL" == "true" ]]; then
-            export CUBBY_EXPECT_POSTGRES_TESTS=262
+            export CUBBY_EXPECT_POSTGRES_TESTS=265
           else
             args+=(--changed "$BASE_SHA")
           fi

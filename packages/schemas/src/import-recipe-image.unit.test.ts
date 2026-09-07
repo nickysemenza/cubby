@@ -42,4 +42,21 @@ describe("recipe image source ingress", () => {
       }).success,
     ).toBe(false);
   });
+  it("rejects browser-local and embedded URL schemes", () => {
+    for (const url of [
+      "blob:https://example.com/preview-id",
+      "data:image/png;base64,AAAA",
+      "file:///tmp/photo.jpg",
+    ]) {
+      expect(
+        importRecipeSchema.safeParse({
+          ...recipe,
+          image: { kind: "url", url },
+        }).success,
+      ).toBe(false);
+      expect(
+        importRecipeSchema.safeParse({ ...recipe, image: url }).success,
+      ).toBe(false);
+    }
+  });
 });

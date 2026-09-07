@@ -330,6 +330,7 @@ export const attachFileResponse = z.object({
     .describe(
       "True when idempotencyKey matched a still-attached file and nothing was uploaded. False on a real attach — including a repeat of a key whose file was detached in between.",
     ),
+  cleanupWarning: z.string().optional(),
 });
 export type AttachFileResponse = z.infer<typeof attachFileResponse>;
 

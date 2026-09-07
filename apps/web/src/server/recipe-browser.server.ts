@@ -53,6 +53,8 @@ export const recipeHandlers = implementOperationDomain(recipeDomain, {
     imports.deleteCookbookWorkflow(context, input),
   extractCookbookChunk: (context, input) =>
     imports.extractCookbookChunkWorkflow(context, input),
+  attachCookbookRecipePhoto: (context, input) =>
+    imports.attachCookbookRecipePhotoWorkflow(context, input),
 });
 
 export const suggestionsHandlers = implementOperationDomain(suggestions, {

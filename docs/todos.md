@@ -45,71 +45,67 @@ history is the archive. Permanent product constraints live in the
    surface, allow adding shortfalls to the shopping list, and make Suggestions
    reachable from inventory as well as navigation.
 
-6. **EPUB recipe hero photos.** Carry recipebridge's in-archive `ImageRef` through
-   import, materialize the bytes into R2, and attach the image to the recipe in the
-   same synchronous cookbook-import request.
-
-7. **Recipe nutrition MCP projection.** Add
+6. **Recipe nutrition MCP projection.** Add
    `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
    return explicit mapped/unmapped coverage rather than silently presenting a
    partial total as complete.
 
-8. **Ingredient coverage visibility.** Surface nutrition/cost coverage quality on
+7. **Ingredient coverage visibility.** Surface nutrition/cost coverage quality on
    the ingredient list so heavily used ingredients without a usable Product mapping
    are easy to find and repair.
 
-9. **Guided placement pass for unlocated products.** Walk a value- or
+8. **Guided placement pass for unlocated products.** Walk a value- or
    category-bounded worklist one product at a time with three answers: not tracked,
    place here, or skip. Reuse the existing location picker and immediate-write
    inventory flows.
 
-10. **Cookbook metadata editing.** Allow imported cookbook titles and other source
+9. **Cookbook metadata editing.** Allow imported cookbook titles and other source
    metadata to be corrected after import, including malformed OPF titles.
 
-11. **Variance-targeted recount pass.** Seed a recount session from the
+10. **Variance-targeted recount pass.** Seed a recount session from the
     shelf-versus-ledger disagreement worklist so the pass visits the products that
     actually disagree wherever they live.
 
-12. **Project materials and shortfalls.** Add a project-material edge with quantity,
+11. **Project materials and shortfalls.** Add a project-material edge with quantity,
     free-text unit, optional Product resolution, and durable/consumable semantics;
     derive have/need/buy through the availability engine without reservations or
     automatic inventory decrement.
 
-13. **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
+12. **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
     by giving cookbooks durable identity plus a merge/repoint path.
 
-14. **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
+13. **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
     facet. Partial-import repair stays on the existing Problems worklist.
 
-15. **Recurring meals.** Add a focused recurrence model for meals as its own slice,
+14. **Recurring meals.** Add a focused recurrence model for meals as its own slice,
     separate from templates and nutrition goals.
 
-16. **Meal templates.** Save reusable meal compositions without coupling them to
+15. **Meal templates.** Save reusable meal compositions without coupling them to
     recurrence.
 
-17. **Meal nutrition goals.** Let meal planning compare planned nutrition with
+16. **Meal nutrition goals.** Let meal planning compare planned nutrition with
     explicit household goals using the existing recipe nutrition totals.
 
-18. **Fix Meals table filtering.** Move filtering to the server-backed list path so
+17. **Fix Meals table filtering.** Move filtering to the server-backed list path so
     a paginated client page never presents itself as the complete filtered result.
 
-19. **Fix actions for financial duplicate findings.** Give duplicate transaction
+18. **Fix actions for financial duplicate findings.** Give duplicate transaction
     source-ref and account-alias Problems findings a safe targeted action, without
     widening the general entity-merge system to money entities.
 
-20. **Saved user-created views.** Persist named filter and sort sets using the
+19. **Saved user-created views.** Persist named filter and sort sets using the
     versioned external-state pattern, and render them alongside manifest-defined
     views without creating a second query language.
 
-21. **Server-backed table intelligence.** Extend exact facet counts and honest
+20. **Server-backed table intelligence.** Extend exact facet counts and honest
     aggregate summaries from Expenses to one justified server-paginated surface at
     a time; never analyze a partially loaded client page as the full population.
 
-22. **Return parsed lines from recipe scraping.** Fold ingredient parsing into
+21. **Return parsed lines from recipe scraping.** Fold ingredient parsing into
     `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
     for the same lines.
 
-23. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
+22. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
     `get_shopping_list` is a plain structured/text tool. The remaining USDA
     Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
     the local M3 development machine. Keep it only while refinement and explicit

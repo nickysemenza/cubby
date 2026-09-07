@@ -17,7 +17,10 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import {
+  type ImportRecipe,
+  importRecipesSchema,
+} from "@cubby/schemas/import-recipe";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -100,19 +103,30 @@ export const upsertCookbook = async (
     existingId: CookbookId | null,
   ): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> =>
     withTransaction(db, async (tx) => {
+      const current = existingId
+        ? await tx.query.cookbook.findFirst({
+            where: eq(cookbook.id, existingId),
+            columns: { coverImageId: true },
+          })
+        : null;
+      const shouldAttachCover =
+        input.coverImageId !== undefined && current?.coverImageId == null;
+      const { coverImageId: _requestedCoverImageId, ...valuesWithoutCover } =
+        values;
+      const writeValues = shouldAttachCover ? values : valuesWithoutCover;
       const row = existingId
         ? await updateAndReturn(
             tx,
             cookbook,
-            values,
+            writeValues,
             eq(cookbook.id, existingId),
           )
-        : await insertWithShortcode(tx, "cookbook", values);
+        : await insertWithShortcode(tx, "cookbook", writeValues);
       const id = row.id;
 
       // The cover image is now associated → mark it uploaded (it was PENDING from
       // the presigned upload, like the recipe/product image flow).
-      if (input.coverImageId) {
+      if (shouldAttachCover && input.coverImageId) {
         await tx
           .update(image)
           .set({ status: "UPLOADED" })
@@ -317,7 +331,51 @@ export const getCookbookSource = async (
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
   }
-  return { id, name: cb.name, recipes: cb.rawJson };
+  return { id, name: cb.name, recipes: importRecipesSchema.parse(cb.rawJson) };
+};
+
+/** Resolve an EPUB image only when it still belongs to the requested live recipe. */
+export const getCookbookRecipePhotoSource = async (
+  db: Database,
+  cookbookId: CookbookId,
+  recipeId: RecipeId,
+  sourceIndex: number,
+) => {
+  const cb = await getCookbookById(db, cookbookId);
+  if (!cb) {
+    throw createAppError("COOKBOOK_NOT_FOUND", "Cookbook not found");
+  }
+  const sourceRecipe = importRecipesSchema.parse(cb.rawJson)[sourceIndex];
+  if (!sourceRecipe) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Recipe index ${sourceIndex} is out of range for this cookbook`,
+    );
+  }
+  if (sourceRecipe.image?.kind !== "epub") {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The selected cookbook recipe has no EPUB image",
+    );
+  }
+
+  const target = await getDb(db).query.recipe.findFirst({
+    where: and(
+      eq(recipe.id, recipeId),
+      eq(recipe.cookbookId, cookbookId),
+      eq(recipe.name, sourceRecipe.meta.title),
+      notDeleted(recipe),
+    ),
+    columns: { id: true },
+  });
+  if (!target) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Recipe does not match the selected cookbook source",
+    );
+  }
+
+  return sourceRecipe.image;
 };
 
 /**

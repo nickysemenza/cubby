@@ -82,6 +82,7 @@ import {
   withTransactionOn,
 } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -269,6 +270,7 @@ export const getCookbookRecipesForDiff = async (
     id: RecipeShortcode;
     entityId: RecipeId;
     sig: string;
+    hasImage: boolean;
   }>
 > => {
   const rows = await getDb(db).query.recipe.findMany({
@@ -280,6 +282,13 @@ export const getCookbookRecipesForDiff = async (
     rows.map((r) => r.id),
   );
   const byId = new Map(recipes.map((r) => [r.id, r]));
+  const hasImageById = new Map(
+    await Promise.all(
+      rows.map(
+        async (row) => [row.id, await recipeHasImages(db, row.id)] as const,
+      ),
+    ),
+  );
   return rows.flatMap((r) => {
     const full = byId.get(parseShortcodeFor("recipe", r.shortcode));
     return full
@@ -289,6 +298,7 @@ export const getCookbookRecipesForDiff = async (
             id: parseShortcodeFor("recipe", r.shortcode),
             entityId: r.id,
             sig: recipeOutSignature(full),
+            hasImage: hasImageById.get(r.id) ?? false,
           },
         ]
       : [];

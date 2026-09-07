@@ -8,7 +8,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useId, useMemo, useRef } from "react";
 
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
@@ -58,7 +58,7 @@ export function BookGroupCard({
       new Map(
         (existingRecipes ?? []).map((r) => [
           normalize(r.title),
-          { id: r.id, sig: r.sig },
+          { id: r.id, sig: r.sig, hasImage: r.hasImage },
         ]),
       ),
     [existingRecipes],
@@ -82,10 +82,6 @@ export function BookGroupCard({
 
   const allSelected =
     book.recipes.length > 0 && book.selected.size === book.recipes.length;
-
-  const doneCount = [...book.results.values()].filter(
-    (r) => r.status === "done",
-  ).length;
 
   return (
     <Card size="sm">
@@ -142,40 +138,140 @@ export function BookGroupCard({
         </Row>
       </CardHeader>
 
-      {book.expanded && (book.recipes.length > 0 || ready) && (
-        <CardContent className="space-y-2">
-          {ready && name.length === 0 && (
-            <p className="text-xs text-warning-ink">
-              Set a book name before importing.
-            </p>
-          )}
-          <FailedChunksPanel
-            book={book}
-            onRetry={() => handlers.retryExtraction(book.source)}
-          />
-          {!ready && book.recipes.length > 0 && (
-            <Description size="xs">
-              Streaming recipes as the book extracts…
-            </Description>
-          )}
-          {book.importProgress ? (
-            <BulkProgressBar verb="Importing" progress={book.importProgress} />
-          ) : (
-            doneCount > 0 && (
-              <Description size="xs">
-                {doneCount} of {book.recipes.length} imported
-              </Description>
-            )
-          )}
-          <RecipeList
-            book={book}
-            toggleRecipe={handlers.toggleRecipe}
-            existingByTitle={existingByTitle}
-            linkableTitles={linkableTitles}
-          />
-        </CardContent>
-      )}
+      <BookDetails
+        book={book}
+        handlers={handlers}
+        ready={ready}
+        name={name}
+        existingByTitle={existingByTitle}
+        linkableTitles={linkableTitles}
+      />
     </Card>
+  );
+}
+
+type ExistingRecipe = { id: string; sig: string; hasImage: boolean };
+
+function BookDetails({
+  book,
+  handlers,
+  ready,
+  name,
+  existingByTitle,
+  linkableTitles,
+}: {
+  book: Book;
+  handlers: BookHandlers;
+  ready: boolean;
+  name: string;
+  existingByTitle: Map<string, ExistingRecipe>;
+  linkableTitles: ReadonlySet<string>;
+}) {
+  if (!book.expanded || (book.recipes.length === 0 && !ready)) return null;
+  const doneCount = [...book.results.values()].filter(
+    (result) => result.status === "done",
+  ).length;
+
+  return (
+    <CardContent className="space-y-2">
+      {ready && name.length === 0 && (
+        <p className="text-xs text-warning-ink">
+          Set a book name before importing.
+        </p>
+      )}
+      <FailedChunksPanel
+        book={book}
+        onRetry={() => handlers.retryExtraction(book.source)}
+      />
+      <PhotoImportControls
+        book={book}
+        handlers={handlers}
+        existingByTitle={existingByTitle}
+      />
+      {!ready && book.recipes.length > 0 && (
+        <Description size="xs">
+          Streaming recipes as the book extracts…
+        </Description>
+      )}
+      {book.importProgress ? (
+        <BulkProgressBar verb="Importing" progress={book.importProgress} />
+      ) : doneCount > 0 ? (
+        <Description size="xs">
+          {doneCount} of {book.recipes.length} imported
+        </Description>
+      ) : null}
+      <RecipeList
+        book={book}
+        toggleRecipe={handlers.toggleRecipe}
+        retryPhoto={handlers.retryPhoto}
+        existingByTitle={existingByTitle}
+        linkableTitles={linkableTitles}
+      />
+    </CardContent>
+  );
+}
+
+function PhotoImportControls({
+  book,
+  handlers,
+  existingByTitle,
+}: {
+  book: Book;
+  handlers: BookHandlers;
+  existingByTitle: Map<string, ExistingRecipe>;
+}) {
+  const originalEpubInputId = useId();
+  const needsOriginalEpub = [...book.selected].some((index) => {
+    const imported = book.recipes[index];
+    return (
+      imported?.image?.kind === "epub" &&
+      !existingByTitle.get(normalize(imported.meta.title))?.hasImage
+    );
+  });
+  const photoWarningCount = [...book.photos.values()].filter(
+    (photo) => photo.status === "error" || photo.status === "missing-bytes",
+  ).length;
+
+  return (
+    <>
+      {book.cookbookId && needsOriginalEpub && !book.hasArchiveBytes && (
+        <Row
+          align="center"
+          gap="sm"
+          className="border border-warning/40 bg-warning/5 p-2"
+        >
+          <Description as="span" size="xs" className="text-warning-ink">
+            Recipe photos need the original EPUB.
+          </Description>
+          <label
+            htmlFor={originalEpubInputId}
+            className="cursor-pointer text-xs font-medium text-primary hover:underline"
+          >
+            Choose original EPUB
+          </label>
+          <Input
+            id={originalEpubInputId}
+            type="file"
+            accept=".epub,application/epub+zip"
+            className="hidden"
+            aria-label={`Original EPUB for ${book.name}`}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handlers.bindOriginalEpub(book.source, file);
+              event.target.value = "";
+            }}
+          />
+        </Row>
+      )}
+      {book.photoProgress ? (
+        <BulkProgressBar verb="Adding photos" progress={book.photoProgress} />
+      ) : photoWarningCount > 0 ? (
+        <Description size="xs" className="text-warning-ink">
+          {photoWarningCount} recipe photo
+          {photoWarningCount === 1 ? " needs attention" : "s need attention"}
+        </Description>
+      ) : null}
+    </>
   );
 }
 
@@ -186,12 +282,14 @@ export function BookGroupCard({
 function RecipeList({
   book,
   toggleRecipe,
+  retryPhoto,
   existingByTitle,
   linkableTitles,
 }: {
   book: Book;
   toggleRecipe: BookHandlers["toggleRecipe"];
-  existingByTitle: Map<string, { id: string; sig: string }>;
+  retryPhoto: BookHandlers["retryPhoto"];
+  existingByTitle: Map<string, ExistingRecipe>;
   linkableTitles: ReadonlySet<string>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -270,6 +368,9 @@ function RecipeList({
                 selected={book.selected.has(vi.index)}
                 onToggle={() => toggleRecipe(book.source, vi.index)}
                 result={book.results.get(vi.index)}
+                photo={book.photos.get(vi.index)}
+                photoPreviewUrl={book.photoPreviewUrls.get(vi.index)}
+                onRetryPhoto={() => retryPhoto(book.source, vi.index)}
                 references={refConfig}
               />
             </div>

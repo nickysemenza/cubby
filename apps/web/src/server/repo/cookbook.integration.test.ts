@@ -12,12 +12,14 @@ import {
 import {
   deleteCookbook,
   getCookbookByName,
+  getCookbookRecipePhotoSource,
   listCookbooks,
   setCookbookProduct,
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { findOrphanedEntityEmbeddings } from "./entity-embedding-cleanup";
+import { createPendingImageRecord } from "./image";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { deleteProducts } from "./product";
 import {
@@ -55,6 +57,98 @@ describe("cookbook repository", () => {
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
     expect(cb?.rawJson).toHaveLength(1);
+  });
+
+  it("preserves an existing cover and leaves a redundant re-import cover pending", async () => {
+    const firstCover = await createPendingImageRecord(ctx.db, {
+      key: "covers/first.jpg",
+      filename: "first.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+    });
+    const redundantCover = await createPendingImageRecord(ctx.db, {
+      key: "covers/redundant.jpg",
+      filename: "redundant.jpg",
+      contentType: "image/jpeg",
+      size: 100,
+    });
+    const first = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Covered Book",
+        rawJson: [],
+        sourceLabel: "covered.epub",
+        coverImageId: firstCover.id,
+      },
+      ctx.actor,
+    );
+    await upsertCookbook(
+      ctx.db,
+      {
+        name: "Covered Book",
+        rawJson: [],
+        sourceLabel: "covered-again.epub",
+        coverImageId: redundantCover.id,
+      },
+      ctx.actor,
+    );
+
+    const row = await getDb(ctx.db).query.cookbook.findFirst({
+      where: eq(cookbook.id, first.entityId),
+      columns: { coverImageId: true },
+    });
+    const covers = await getDb(ctx.db).query.image.findMany({
+      where: (table, { inArray }) =>
+        inArray(table.id, [firstCover.id, redundantCover.id]),
+      columns: { id: true, status: true },
+    });
+    expect(row?.coverImageId).toBe(firstCover.id);
+    expect(covers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: firstCover.id, status: "UPLOADED" }),
+        expect.objectContaining({ id: redundantCover.id, status: "PENDING" }),
+      ]),
+    );
+  });
+
+  it("authorizes an EPUB photo by live cookbook, source index, recipe membership, and title", async () => {
+    const raw = [
+      cookbookRecipe("Pancakes", ["2 cups flour"], {
+        image: {
+          kind: "epub",
+          path: "OEBPS/images/pancakes.jpg",
+          mime: "image/jpeg",
+          alt: "Pancakes",
+        },
+      }),
+    ];
+    const { entityId: cookbookId } = await upsertCookbook(
+      ctx.db,
+      { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
+      ctx.actor,
+    );
+    const imported = await upsertCookbookRecipeFromCookbook(
+      raw[0]!,
+      { id: cookbookId, name: "Book A" },
+      ctx.db,
+      ctx.actor,
+    );
+
+    await expect(
+      getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, 0),
+    ).resolves.toEqual(raw[0]!.image);
+
+    const other = await upsertCookbook(
+      ctx.db,
+      { name: "Book B", rawJson: raw, sourceLabel: "b.epub" },
+      ctx.actor,
+    );
+    await expect(
+      getCookbookRecipePhotoSource(ctx.db, other.entityId, imported.id, 0),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    await expect(
+      getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, 1),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
   });
 
   // deleteCookbook is UNGUARDED (lockAndValidateForDelete only locks + checks

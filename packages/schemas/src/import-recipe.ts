@@ -78,8 +78,15 @@ export const archiveImageRefSchema = z.object({
   alt: z.string().optional(),
 });
 
+const publicRecipeImageUrl = z
+  .url()
+  .refine(
+    (value) => /^https?:\/\//iu.test(value),
+    "Recipe image URL must use HTTP or HTTPS",
+  );
+
 export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("url"), url: z.url() }),
+  z.object({ kind: z.literal("url"), url: publicRecipeImageUrl }),
   archiveImageRefSchema.extend({ kind: z.literal("epub") }),
 ]);
 
@@ -87,7 +94,7 @@ export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
 // ingress. All consumers receive an explicit source; archive paths are not URLs.
 const importedImageSource = z.union([
   recipeImageSourceSchema,
-  z.url().transform((url) => ({ kind: "url" as const, url })),
+  publicRecipeImageUrl.transform((url) => ({ kind: "url" as const, url })),
   archiveImageRefSchema.transform((ref) => ({ kind: "epub" as const, ...ref })),
 ]);
 
@@ -190,6 +197,7 @@ export const cookbookImportEventSchema = z.discriminatedUnion("type", [
           index: z.number().int().nonnegative(),
           ok: z.literal(true),
           id: z.string(),
+          hasImage: z.boolean(),
         }),
         z.object({
           index: z.number().int().nonnegative(),
@@ -217,6 +225,7 @@ export const cookbookDiffOut = z.array(
     title: z.string(),
     id: recipeShortcode,
     sig: z.string(),
+    hasImage: z.boolean(),
   }),
 );
 
@@ -270,6 +279,18 @@ export const cookbookSummariesOut = z.array(cookbookSummary);
 
 export const deleteCookbookOut = z.object({
   deletedRecipes: z.number().int().nonnegative(),
+});
+
+export const attachCookbookRecipePhotoInput = z.object({
+  cookbookId: cookbookShortcode,
+  recipeId: recipeShortcode,
+  sourceIndex: z.number().int().nonnegative(),
+  data: z.string().min(1),
+});
+
+export const attachCookbookRecipePhotoOut = z.object({
+  status: z.enum(["attached", "reused", "skipped-existing"]),
+  cleanupWarning: z.string().optional(),
 });
 
 // Input for `recipe.extractCookbookChunk` (camelCased WASM request). Exported

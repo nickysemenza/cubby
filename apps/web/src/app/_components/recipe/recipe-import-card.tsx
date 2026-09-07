@@ -4,15 +4,17 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
-import { AlertCircle, Check, ExternalLink } from "lucide-react";
+import { AlertCircle, Check, ExternalLink, RotateCcw } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Badge, badgeVariants } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
+import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
 import { cn } from "~/lib/utils";
@@ -20,7 +22,7 @@ import { wasm } from "~/lib/wasm";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 import { normalize } from "./cookbook-import/import-order";
-import type { ImportResult } from "./cookbook-import/types";
+import type { ImportResult, PhotoResult } from "./cookbook-import/types";
 import { CopyImportRecipeParseButton } from "./copy-corpus-button";
 import { CopyJsonButton } from "./copy-debug-button";
 import { ParsedIngredientTable } from "./parsed-ingredient-table";
@@ -57,6 +59,9 @@ type RecipeImportCardProps = {
   disabled?: boolean;
   onToggle: () => void;
   result?: ImportResult;
+  photo?: PhotoResult;
+  photoPreviewUrl?: string;
+  onRetryPhoto?: () => void;
   references?: ReferenceLinking;
   /** External source link (e.g. the Notion page); shown as a ↗ in the header. */
   externalUrl?: string;
@@ -94,6 +99,8 @@ export const RecipeImportCard = memo(
     a.selected === b.selected &&
     a.disabled === b.disabled &&
     a.result === b.result &&
+    a.photo === b.photo &&
+    a.photoPreviewUrl === b.photoPreviewUrl &&
     a.references === b.references &&
     a.externalUrl === b.externalUrl &&
     (a.reasons ?? []).join("|") === (b.reasons ?? []).join("|") &&
@@ -112,6 +119,9 @@ function RecipeImportCardImpl({
   disabled,
   onToggle,
   result,
+  photo,
+  photoPreviewUrl,
+  onRetryPhoto,
   references,
   externalUrl,
 }: RecipeImportCardProps) {
@@ -161,6 +171,7 @@ function RecipeImportCardImpl({
             checked={selected}
             disabled={disabled}
             onCheckedChange={onToggle}
+            aria-label={`Select ${recipe.meta.title}`}
           />
           <Row wrap align="center" gap="sm" className="flex-1">
             <span
@@ -212,6 +223,32 @@ function RecipeImportCardImpl({
           <StatusText as="p" tone="destructive" className="mt-1 pl-6 text-xs">
             {reasons.join(" ")}
           </StatusText>
+        )}
+
+        {photo && (
+          <Row align="center" gap="sm" className="mt-2 pl-6 text-xs">
+            {photoPreviewUrl && (
+              <Image
+                src={photoPreviewUrl}
+                alt=""
+                displayWidth={40}
+                className="size-10 rounded object-cover"
+              />
+            )}
+            <PhotoStatus result={photo} />
+            {(photo.status === "error" || photo.status === "missing-bytes") &&
+              onRetryPhoto && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetryPhoto}
+                >
+                  <RotateCcw className="mr-1 size-3" />
+                  Retry photo
+                </Button>
+              )}
+          </Row>
         )}
 
         {notesMarkdown && (
@@ -348,4 +385,44 @@ function ImportStatus({ result }: { result: ImportResult | undefined }) {
       <AlertCircle className="size-4" /> {result.message}
     </Row>
   );
+}
+
+function PhotoStatus({ result }: { result: PhotoResult }) {
+  if (result.status === "ready") {
+    return <span className="text-muted-foreground">Photo ready</span>;
+  }
+  if (result.status === "pending") {
+    return (
+      <Row as="span" align="center" gap="xs" className="text-muted-foreground">
+        <Spinner className="size-3" /> Attaching photo…
+      </Row>
+    );
+  }
+  if (result.status === "attached" || result.status === "reused") {
+    return (
+      <Row as="span" align="center" gap="xs" className="text-positive">
+        <Check className="size-3" />
+        {result.status === "reused"
+          ? "Photo already attached"
+          : "Photo attached"}
+        {result.cleanupWarning ? ` ${result.cleanupWarning}` : ""}
+      </Row>
+    );
+  }
+  if (result.status === "skipped-existing") {
+    return (
+      <span className="text-muted-foreground">Existing photo preserved</span>
+    );
+  }
+  if ("message" in result) {
+    return (
+      <span className="text-warning-ink">
+        {result.message}
+        {result.status === "error" && result.cleanupWarning
+          ? ` ${result.cleanupWarning}`
+          : ""}
+      </span>
+    );
+  }
+  return null;
 }

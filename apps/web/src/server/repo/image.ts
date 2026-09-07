@@ -1265,12 +1265,20 @@ export const recipeHasImages = async (
   db: Database,
   recipeId: RecipeId,
 ): Promise<boolean> => {
-  const count = await countWhere(
-    db,
-    recipeImage,
-    and(eq(recipeImage.recipeId, recipeId), notDeleted(recipeImage)),
-  );
-  return count > 0;
+  const rows = await getDb(db)
+    .select({ id: recipeImage.id })
+    .from(recipeImage)
+    .innerJoin(
+      image,
+      and(
+        eq(image.id, recipeImage.imageId),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
+    .where(and(eq(recipeImage.recipeId, recipeId), notDeleted(recipeImage)))
+    .limit(1);
+  return rows.length > 0;
 };
 
 /**
@@ -1734,6 +1742,7 @@ export const createOrReuseAttachedImage = async (
   db: Database,
   params: Parameters<typeof createUploadedImageRecord>[1] & {
     expectedImageCount?: number;
+    pendingImageId?: ImageId;
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
@@ -1758,7 +1767,36 @@ export const createOrReuseAttachedImage = async (
       }
     }
 
-    const { expectedImageCount: _expectedImageCount, ...record } = params;
+    const {
+      expectedImageCount: _expectedImageCount,
+      pendingImageId,
+      ...record
+    } = params;
+    if (pendingImageId) {
+      const promoted = await updateAndReturn(
+        tx,
+        image,
+        {
+          ...record,
+          status: "UPLOADED",
+          targetType: entity.entity,
+          targetId: entity.id,
+        },
+        and(
+          eq(image.id, pendingImageId),
+          eq(image.status, "PENDING"),
+          notDeleted(image),
+        ),
+      );
+      await associateImageWithEntity(
+        tx,
+        entity,
+        parseEntityId("image", promoted.id),
+        documentKind,
+      );
+      return { row: promoted, reused: false };
+    }
+
     // Minted inline rather than via `insertWithShortcode`: this insert needs
     // `onConflictDoNothing` on the idempotency key, and the helper's own
     // collision retry would fight that. A code burned by a no-op conflict is
