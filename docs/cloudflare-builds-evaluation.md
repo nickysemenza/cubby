@@ -155,7 +155,10 @@ check conclusions separately; script elapsed time excludes checkout and queueing
 
 - Preflight: Workers Paid active; 8 account build minutes used; no existing Cubby
   Git connection. Production version `463e7540-f533-43c1-9a74-c5199092463d` (2398).
-- Local checks: pending final validation.
+- Local checks: ShellCheck, Bash syntax, four entrypoint guard tests, `pnpm check`,
+  and mandatory pre-push web tests, Cloudflare build, and auxiliary gates passed.
+  The first push attempt found a missing generated MCP app bundle; building that
+  local prerequisite resolved it without source changes.
 - Hosted builds: not started yet; no compatibility or speed result claimed.
 - Restore the original disconnected Git state after the experiment, and compare
   deployment/version listings with the preflight snapshot. Leave GitHub Actions
