@@ -87,16 +87,15 @@ toolchain() {
   rustc --version
   wasm-pack --version
 }
-stage toolchain toolchain
-stage wasm env RUSTFLAGS='--cfg getrandom_backend="wasm_js"' pnpm wasm
-stage install pnpm install --frozen-lockfile --prefer-offline
-cp apps/web/.env.example apps/web/.env
-echo 'NEXTAUTH_SECRET=supersecret' >> apps/web/.env
 
 native_database() {
   # Source builds keep the fallback independent of mutable apt repository candidates.
   # These versions are only for the disposable pilot, not a production database.
   [[ $(id -u) != 0 ]] || fail 'native initdb requires an unprivileged build user'
+  if ! command -v bison >/dev/null || ! command -v flex >/dev/null; then
+    sudo -n apt-get update
+    sudo -n apt-get install -y --no-install-recommends bison flex
+  fi
   fetch https://ftp.postgresql.org/pub/source/v17.6/postgresql-17.6.tar.bz2 "$pilot_dir/postgres.tar.bz2"
   tar -xjf "$pilot_dir/postgres.tar.bz2" -C "$pilot_dir"
   env -C "$pilot_dir/postgresql-17.6" ./configure --prefix="$pilot_dir/pgsql" --without-icu --without-readline --without-zlib
@@ -161,6 +160,11 @@ YAML
   fail 'IntegreSQL readiness timeout'
 }
 stage database database
+stage toolchain toolchain
+stage wasm env RUSTFLAGS='--cfg getrandom_backend="wasm_js"' pnpm wasm
+stage install pnpm install --frozen-lockfile --prefer-offline
+cp apps/web/.env.example apps/web/.env
+echo 'NEXTAUTH_SECRET=supersecret' >> apps/web/.env
 # shellcheck disable=SC2016 # SQL dollar quoting belongs to JavaScript, not Bash.
 stage database-contract pnpm --filter @cubby/web exec node --input-type=module -e '
   import pg from "pg";
