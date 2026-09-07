@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useId, useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { DatePickerInput } from "./date-picker-input";
 
@@ -27,6 +27,12 @@ function ExternallyLabeledPicker() {
 }
 
 describe("DatePickerInput", () => {
+  beforeAll(async () => {
+    // Cold transformation of the real lazy calendar belongs to setup, outside
+    // the interaction timeout when the full UI suite competes for workers.
+    await import("~/components/ui/calendar");
+  });
+
   it("renders an editable, labeled field without opening the calendar on focus", () => {
     render(<ControlledPicker initial="2026-08-18" />);
 
