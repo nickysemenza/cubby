@@ -86,7 +86,14 @@ function foldLine(line: string): string {
   let limit = MAX_LINE_OCTETS;
 
   for (const char of line) {
-    const size = encoder.encode(char).length;
+    // for-of preserves surrogate pairs; lone surrogates encode as a
+    // three-byte replacement character. Avoid allocating a byte array per
+    // character when folding large subscription documents.
+    const code = char.charCodeAt(0);
+    let size = 3;
+    if (char.length === 2) size = 4;
+    else if (code < 0x80) size = 1;
+    else if (code < 0x800) size = 2;
     if (currentOctets + size > limit) {
       out.push(current);
       current = "";
