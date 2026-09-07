@@ -6,20 +6,55 @@ import {
 } from "./import-recipe";
 
 describe("chunkResponseOut", () => {
-  it("accepts JSON response fields and rejects opaque runtime values", () => {
+  it("accepts the detailed response envelope", () => {
     expect(
       chunkResponseOut.parse({
-        recipes: [{ name: "Weeknight soup" }],
-        page: 2,
-        complete: false,
+        input: { recipes: [{ name: "Weeknight soup" }] },
+        usage: {
+          input_tokens: 42,
+          output_tokens: 12,
+          cache_creation_input_tokens: 30,
+          cache_read_input_tokens: 0,
+        },
+        truncated: false,
       }),
     ).toEqual({
-      recipes: [{ name: "Weeknight soup" }],
-      page: 2,
-      complete: false,
+      input: { recipes: [{ name: "Weeknight soup" }] },
+      usage: {
+        input_tokens: 42,
+        output_tokens: 12,
+        cache_creation_input_tokens: 30,
+        cache_read_input_tokens: 0,
+      },
+      truncated: false,
     });
+  });
+
+  it("requires explicit failure classification and JSON input", () => {
     expect(
-      chunkResponseOut.safeParse({ generatedAt: new Date() }).success,
+      chunkResponseOut.safeParse({
+        input: null,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+        truncated: true,
+        error: { message: "cut off", kind: "payload" },
+      }).success,
+    ).toBe(true);
+    expect(
+      chunkResponseOut.safeParse({
+        input: new Date(),
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+        },
+        truncated: false,
+      }).success,
     ).toBe(false);
   });
 });

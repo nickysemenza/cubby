@@ -72,13 +72,24 @@ export const recipeRefSchema = z.object({
 });
 export type RecipeRef = z.infer<typeof recipeRefSchema>;
 
-// Backlog: recipe-epub's assembled recipe carries an optional `image`
-// (an `ImageRef` = in-archive `path` + `mime`, not bytes) for the recipe's hero
-// photo. recipebridge currently emits it as None (see assemble_recipes), and
-// cubby has no image-display wiring for cookbook imports, so it isn't modeled
-// here yet. See "EPUB recipe hero photos" in docs/todos.md; when wiring it up,
-// add an optional `image` field below + materialize the bytes from the EPUB into
-// a real URL on import.
+export const archiveImageRefSchema = z.object({
+  path: z.string().min(1),
+  mime: z.string().min(1),
+  alt: z.string().optional(),
+});
+
+export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("url"), url: z.url() }),
+  archiveImageRefSchema.extend({ kind: z.literal("epub") }),
+]);
+
+// Normalize upstream scraper/EPUB output and persisted cookbook JSON once at
+// ingress. All consumers receive an explicit source; archive paths are not URLs.
+const importedImageSource = z.union([
+  recipeImageSourceSchema,
+  z.url().transform((url) => ({ kind: "url" as const, url })),
+  archiveImageRefSchema.transform((ref) => ({ kind: "epub" as const, ...ref })),
+]);
 
 export const importRecipeSchema = z.object({
   meta: importRecipeMeta,
@@ -89,11 +100,7 @@ export const importRecipeSchema = z.object({
   url: z.string().optional(),
   references: z.array(recipeRefSchema).default([]),
   servings: z.number().optional(),
-  // Image URL extracted by the URL scraper (a public URL). EPUB hero photos are
-  // not modeled yet — see the hero-photos backlog note above. Consumed twice:
-  // the scrape form imports it client-side (`PendingImageUpload.autoImportUrl`),
-  // and the server import path (`recipe.insertImport`) fetches it into R2 inline.
-  image: z.string().optional(),
+  image: importedImageSource.optional(),
 });
 export type ImportRecipe = z.infer<typeof importRecipeSchema>;
 
@@ -280,7 +287,26 @@ export const chunkRequestInput = z.object({
   escalate: z.boolean().optional(),
 });
 
-export const chunkResponseOut = z.record(z.string(), z.json());
+export const cookbookLlmUsageSchema = z.object({
+  input_tokens: z.number().int().nonnegative(),
+  output_tokens: z.number().int().nonnegative(),
+  cache_creation_input_tokens: z.number().int().nonnegative(),
+  cache_read_input_tokens: z.number().int().nonnegative(),
+});
+
+export const chunkResponseOut = z.object({
+  input: z.json().nullable(),
+  usage: cookbookLlmUsageSchema,
+  truncated: z.boolean(),
+  error: z
+    .object({
+      message: z.string(),
+      // Transport failures are retried by the authenticated TypeScript hop;
+      // payload failures are passed to upstream retry and escalation policy.
+      kind: z.enum(["payload", "transport"]),
+    })
+    .optional(),
+});
 
 export const mcpRecipeCreateFromTextSection = z.object({
   name: z

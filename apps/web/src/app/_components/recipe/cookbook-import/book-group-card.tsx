@@ -25,6 +25,7 @@ import {
   RecipeImportCard,
   type RecipeImportStatus,
 } from "../recipe-import-card";
+import { failureMessage } from "./extraction";
 import { normalize } from "./import-order";
 import type { Book, BookHandlers } from "./types";
 
@@ -323,6 +324,13 @@ function ExtractStatus({ book }: { book: Book }) {
           {failed} chunk{failed === 1 ? "" : "s"} failed
         </span>
       )}
+      {e.report && e.report.truncations.length > 0 && (
+        <span className="text-warning-ink">
+          {" · "}
+          {e.report.truncations.length} token-limit response
+          {e.report.truncations.length === 1 ? "" : "s"}
+        </span>
+      )}
     </Description>
   );
 }
@@ -364,10 +372,10 @@ function FailedChunksPanel({
           <li
             key={chunk.index}
             className="font-mono text-2xs text-muted-foreground"
-            title={chunk.reason}
+            title={failureMessage(chunk)}
           >
             #{chunk.index}
-            {chunk.docPath ? ` · ${chunk.docPath}` : ""}
+            {chunk.doc_path ? ` · ${chunk.doc_path}` : ""}
           </li>
         ))}
       </ul>

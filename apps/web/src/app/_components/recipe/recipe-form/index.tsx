@@ -234,8 +234,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     }
 
     // Hand any scraped image to PendingImageUpload for auto-import.
-    if (result.image) {
-      setScrapedImageUrl(result.image);
+    if (result.image?.kind === "url") {
+      setScrapedImageUrl(result.image.url);
     }
 
     // Surface the scraped headnote as notes unless the user already has some.

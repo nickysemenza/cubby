@@ -4,10 +4,7 @@ import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/schemas/image";
-import {
-  type ImportRecipe,
-  importRecipesSchema,
-} from "@cubby/schemas/import-recipe";
+import { type ImportRecipe } from "@cubby/schemas/import-recipe";
 import { isbnFromEpubIdentifiers } from "@cubby/schemas/isbn";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
@@ -37,42 +34,26 @@ import { imageUpload } from "~/lib/image.functions";
 import { wasm } from "~/lib/wasm";
 
 import { BookGroupCard } from "./book-group-card";
+import { callChunkWithTransportRetry } from "./chunk-transport";
 import { CookbookDropzone } from "./cookbook-dropzone";
-import { deriveBookName, withRetry } from "./import-helpers";
+import {
+  extractionProgressSchema,
+  extractionReportSchema,
+  type ExtractionReport,
+} from "./extraction";
+import { deriveBookName } from "./import-helpers";
 import { addWithReferences, topoOrderSelected } from "./import-order";
 import type {
   Book,
   ChunkRequestInput,
   ExtractPhase,
-  FailedChunk,
   ImportResult,
 } from "./types";
-
-// The `failed_chunks` array from `wasm.extract_cookbook` (WASM `WFailedChunk[]`),
-// camelCased at the boundary (`doc_path` → `docPath`). `extract_cookbook` returns
-// `any` (its `CookbookRecipe`s aren't Tsify), so we validate this shape here.
-const failedChunksSchema = z.array(
-  z
-    .object({
-      index: z.number().int().nonnegative(),
-      doc_path: z.string(),
-      reason: z.string(),
-    })
-    .transform(({ doc_path, ...rest }): FailedChunk => ({
-      ...rest,
-      docPath: doc_path,
-    })),
-);
 
 const CHUNK_CONCURRENCY = 8;
 
 const isAllowedImageType = (value: string): value is AllowedImageType =>
   ALLOWED_IMAGE_TYPES.some((type) => type === value);
-const extractResultSchema = z.object({
-  recipes: z.unknown(),
-  skipped: z.number().int().nonnegative(),
-  failed_chunks: z.unknown().optional(),
-});
 
 // Min gap between live-preview re-renders during extraction. Each re-assemble
 // re-renders the whole growing card list (re-parsing every ingredient line), so
@@ -279,14 +260,14 @@ export function CookbookImport({
       // The whole per-chunk loop — retry, model escalation, salvage, concurrency,
       // and incremental assembly — runs in Rust (`wasm.extract_cookbook`, shared
       // with the native CLI/desktop path). The browser supplies only TRANSPORT
-      // (`callChunk`, the one authenticated network hop) and RENDERING
+      // (`callChunk`, the authenticated network hop) and RENDERING
       // (`onProgress`, the live preview). See recipebridge `extract_cookbook`.
 
       const tBook = performance.now();
       const latencies: number[] = [];
       let inFlight = 0;
       let maxInFlight = 0;
-      const chunkSizes = chunks.map((c) => c.request.user.length);
+      const chunkSizes = chunks.map((c) => c.text.length);
 
       // Freeze measurement: 'longtask' entries are main-thread blocks >50ms.
       let longTasks = 0;
@@ -307,7 +288,7 @@ export function CookbookImport({
       }
 
       // TRANSPORT: one authenticated proxy hop per call. Rust decides when to call
-      // this (and whether to `escalate`); `withRetry` handles transport failures.
+      // this (and whether to `escalate`); the transport retains usage across retries.
       type ExtractChunkOutput = Awaited<
         ReturnType<typeof extractChunk.mutateAsync>
       >;
@@ -329,7 +310,9 @@ export function CookbookImport({
         inFlight++;
         if (inFlight > maxInFlight) maxInFlight = inFlight;
         const tCall = performance.now();
-        return withRetry(() => extractChunk.mutateAsync(input)).finally(() => {
+        return callChunkWithTransportRetry(() =>
+          extractChunk.mutateAsync(input),
+        ).finally(() => {
           latencies.push(performance.now() - tCall);
           inFlight--;
         });
@@ -341,33 +324,29 @@ export function CookbookImport({
       // (done === total) always renders.
       let lastPreviewAt = 0;
       const onProgress = (
-        doneCount: number,
-        total: number,
-        rawRecipes: z.input<typeof importRecipesSchema>,
+        rawProgress: z.input<typeof extractionProgressSchema>,
       ) => {
+        const {
+          done: doneCount,
+          total,
+          preview,
+        } = extractionProgressSchema.parse(rawProgress);
         setExtract(source, { status: "extracting", done: doneCount, total });
         const now = performance.now();
         const final = doneCount >= total;
         if (!final && now - lastPreviewAt < PREVIEW_THROTTLE_MS) return;
         lastPreviewAt = now;
-        try {
-          const recipes = importRecipesSchema.parse(rawRecipes);
-          updateBook(source, (b) => ({
-            ...b,
-            recipes,
-            // Auto-select everything; the import button is gated on `ready`.
-            selected: new Set(recipes.map((_, i) => i)),
-          }));
-        } catch {
-          // A transient partial-parse mid-flight is fine; the authoritative
-          // result is taken from the awaited return below.
-        }
+        if (!preview) return;
+        updateBook(source, (b) => ({
+          ...b,
+          recipes: preview,
+          selected: new Set(preview.map((_, i) => i)),
+        }));
       };
 
-      let recipes: ImportRecipe[];
-      let failedChunks: FailedChunk[];
+      let report: ExtractionReport;
       try {
-        const result = extractResultSchema.parse(
+        report = extractionReportSchema.parse(
           await wasm.extract_cookbook(
             chunks,
             source,
@@ -376,18 +355,6 @@ export function CookbookImport({
             onProgress,
           ),
         );
-        recipes = importRecipesSchema.parse(result.recipes);
-        // Prefer the per-chunk failure detail (index + doc + reason). Fall back to
-        // anonymous entries synthesized from the aggregate `skipped` count if an
-        // older WASM artifact predates `failed_chunks` — a stale build degrades to
-        // "N chunk(s) failed" rather than crashing.
-        failedChunks =
-          failedChunksSchema.safeParse(result.failed_chunks).data ??
-          Array.from({ length: result.skipped }, (_, index) => ({
-            index,
-            docPath: "",
-            reason: "Chunk failed to extract",
-          }));
       } catch (error) {
         observer?.disconnect();
         setExtract(source, {
@@ -397,6 +364,7 @@ export function CookbookImport({
         return;
       }
 
+      const { recipes, failures: failedChunks } = report;
       updateBook(source, (b) => ({
         ...b,
         recipes,
@@ -407,7 +375,7 @@ export function CookbookImport({
         // points at the wrong recipe — clear it.
         results: new Map<number, ImportResult>(),
         importProgress: undefined,
-        extract: { status: "ready", failedChunks },
+        extract: { status: "ready", failedChunks, report },
       }));
       if (recipes.length === 0) {
         toast.warning(`No recipes found in ${deriveBookName(source)}`);

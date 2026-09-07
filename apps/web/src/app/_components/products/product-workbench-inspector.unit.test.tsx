@@ -4,7 +4,13 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { product as productOperations } from "~/app/products/product.functions";
@@ -435,7 +441,9 @@ describe("ProductWorkbenchInspector", () => {
     expect(screen.getByText("Derived from those records")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
-    expect(await screen.findByText("No activity yet")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByText("No activity yet")).toBeVisible();
+    });
     expect(
       screen.queryByText("Direct relationship sections"),
     ).not.toBeInTheDocument();

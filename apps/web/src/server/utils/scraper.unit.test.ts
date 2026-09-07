@@ -54,7 +54,10 @@ describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
     // Unnamed main section.
     expect(recipe.sections[0]?.name).toBeUndefined();
     // Image is passed through for auto-import.
-    expect(recipe.image).toBe("https://example.com/pancakes.jpg");
+    expect(recipe.image).toEqual({
+      kind: "url",
+      url: "https://example.com/pancakes.jpg",
+    });
   });
 
   // End-to-end coverage that the WASM scraper (recipe-scraper crate) decodes

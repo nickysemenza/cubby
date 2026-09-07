@@ -426,10 +426,10 @@ mod tests {
     #[test]
     fn unknown_serving_unit_skips_the_mapping() {
         let mut product = promix_product("2 SCOOPS");
-        if let Some(food) = product.food.as_mut() {
-            if let Some(serving) = food.serving.as_mut() {
-                serving.serving_size_unit = Some("OZ".to_string());
-            }
+        if let Some(food) = product.food.as_mut()
+            && let Some(serving) = food.serving.as_mut()
+        {
+            serving.serving_size_unit = Some("OZ".to_string());
         }
         let mappings = product_mappings(&product);
         assert!(

@@ -23,8 +23,6 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
-use ingredient::unit::Measure;
-
 use crate::WAmount;
 
 mirror_enum! {
@@ -316,13 +314,13 @@ impl From<Decomposition> for WDecomposition {
         let mut segments = Vec::new();
         let mut prev_end = 0usize;
         for span in &d.spans {
-            if span.range.start > prev_end {
-                if let Some(gap) = d.source.get(prev_end..span.range.start) {
-                    segments.push(WSegment {
-                        text: gap.to_string(),
-                        field: None,
-                    });
-                }
+            if span.range.start > prev_end
+                && let Some(gap) = d.source.get(prev_end..span.range.start)
+            {
+                segments.push(WSegment {
+                    text: gap.to_string(),
+                    field: None,
+                });
             }
             segments.push(WSegment {
                 text: span.text.clone(),
@@ -330,13 +328,13 @@ impl From<Decomposition> for WDecomposition {
             });
             prev_end = span.range.end;
         }
-        if prev_end < d.source.len() {
-            if let Some(tail) = d.source.get(prev_end..) {
-                segments.push(WSegment {
-                    text: tail.to_string(),
-                    field: None,
-                });
-            }
+        if prev_end < d.source.len()
+            && let Some(tail) = d.source.get(prev_end..)
+        {
+            segments.push(WSegment {
+                text: tail.to_string(),
+                field: None,
+            });
         }
         WDecomposition {
             source: d.source,
@@ -382,33 +380,6 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
-/// Grams per pound — the same factor the parser normalizes weights with,
-/// restated here because it is private upstream.
-const GRAM_TO_LB: f64 = 28.3495 * 16.0;
-const ML_TO_L: f64 = 1000.0;
-
-/// Pick a shopping-friendly unit and value for a base-unit measure.
-///
-/// Returns `None` when the caller should just use the normal formatter.
-///
-/// One step per kind, at the threshold where the base unit stops being how
-/// anyone talks about the quantity. Deliberately NOT a full ladder: an
-/// intermediate ounce tier would rewrite "300 g" as "10.58 oz", which is not
-/// friendlier — it is just a different number to reconcile against a recipe
-/// that said grams. A pound is where the shelf label changes; below it, grams
-/// are already the answer.
-fn shopper_unit(unit: &str, value: f64) -> Option<(&'static str, f64)> {
-    match unit {
-        // The availability engine reconciles weights in grams, so a big
-        // shortfall arrives as "1360 g" — true, and useless at a shelf.
-        "g" if value >= GRAM_TO_LB => Some(("lb", value / GRAM_TO_LB)),
-        // Volume already ladders tsp -> tbsp -> cup upstream; only the metric
-        // base stays put, so this is just the litre step.
-        "ml" if value >= ML_TO_L => Some(("l", value / ML_TO_L)),
-        _ => None,
-    }
-}
-
 /// Format an amount the way it would be read off a shopping list rather than
 /// out of the conversion graph.
 ///
@@ -418,28 +389,9 @@ fn shopper_unit(unit: &str, value: f64) -> Option<(&'static str, f64)> {
 /// list produces, which is why a flour shortfall prints as "1360 g" instead of
 /// "3 lb".
 ///
-/// Kept here rather than upstream in `ingredient` only to avoid a cross-repo
-/// rev bump; the ladder is generic unit formatting with no cubby domain in it,
-/// so it belongs in the parser crate eventually — same migration the TODO in
-/// `reconcile.rs` describes.
 #[wasm_bindgen]
 pub fn format_amount_shopper(amount: WAmount) -> String {
-    let denormalized = amount.to_measure().denormalize();
-    let value = denormalized.value();
-
-    // Nothing better to say — fall back to the normal rendering rather than
-    // inventing a unit.
-    let Some((target, scaled)) = shopper_unit(&denormalized.unit().to_str(), value) else {
-        return denormalized.to_string();
-    };
-
-    match denormalized.upper_value() {
-        // Both ends scale by the same factor so the range stays true. `value`
-        // is non-zero here: every `shopper_unit` arm requires it to clear a
-        // positive threshold first.
-        Some(upper) => Measure::with_range(target, scaled, upper * (scaled / value)).to_string(),
-        None => Measure::new(target, scaled).to_string(),
-    }
+    amount.to_measure().format_shopper()
 }
 
 /// Render a quantity float as an *editable* ASCII fraction for the recipe editor's
@@ -465,10 +417,10 @@ pub fn parse_quantity(input: &str) -> Result<f64, String> {
     // fallback) see the same normalized input.
     let trimmed = input.trim();
     let parser = ingredient::IngredientParser::new();
-    if let Ok(measures) = parser.parse_amount(trimmed) {
-        if let Some(m) = measures.first() {
-            return Ok(m.value());
-        }
+    if let Ok(measures) = parser.parse_amount(trimmed)
+        && let Some(m) = measures.first()
+    {
+        return Ok(m.value());
     }
     parser
         .from_str(&format!("{trimmed} x"))
