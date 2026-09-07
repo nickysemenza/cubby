@@ -28,7 +28,7 @@ test("every PostgreSQL contract module belongs to exactly one family", () => {
         !path.startsWith(`${familyRoot}/`),
     )
     .toSorted();
-  assert.equal(contracts.length, 57);
+  assert.equal(contracts.length, 58);
 
   const imported = families.flatMap((family) => {
     const source = readFileSync(family, "utf8");
