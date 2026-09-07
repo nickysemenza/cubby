@@ -233,6 +233,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
 }
 
 export type PushCheck =
+  | "all-tests"
   | "web-tests"
   | "postgres"
   | "e2e"
@@ -242,16 +243,21 @@ export type PushCheck =
 
 export function selectPushChecks(
   paths: readonly string[],
+  forceFull = false,
 ): readonly PushCheck[] {
   const scope = classifyPaths(paths);
+  if (forceFull || scope.highRisk)
+    return ["rust", "aux", "cloudflare", "all-tests"];
   if (scope.inert) return [];
 
   return [
     ...(scope.web
       ? ([scope.postgres ? "postgres" : "web-tests"] as const)
       : []),
+    ...(scope.cloudflare || scope.e2e || scope.highRisk
+      ? (["cloudflare"] as const)
+      : []),
     ...(scope.e2e || scope.highRisk ? (["e2e"] as const) : []),
-    ...(scope.cloudflare ? (["cloudflare"] as const) : []),
     ...(scope.aux ? (["aux"] as const) : []),
     ...(scope.rust ? (["rust"] as const) : []),
   ];
@@ -288,17 +294,29 @@ const run = (command: string, arguments_: readonly string[]) => {
   if (result.status !== 0) process.exit(result.status ?? 1);
 };
 
+const requireCommittedCode = () => {
+  const dirty = [
+    ...capture("git", ["diff", "--name-only", "HEAD"]).split("\n"),
+    ...capture("git", ["ls-files", "--others", "--exclude-standard"]).split(
+      "\n",
+    ),
+  ].filter(Boolean);
+  if (dirty.some((path) => !classifyPaths([path]).inert)) {
+    throw new Error(
+      "Commit or stash uncommitted code before verifying the committed revision.",
+    );
+  }
+};
+
 const verifyPush = () => {
+  requireCommittedCode();
   const base = resolveBase();
-  const paths = capture("git", [
-    "diff",
-    "--name-only",
-    "--diff-filter=ACMR",
-    `${base}...HEAD`,
-  ])
+  const paths = capture("git", ["diff", "--name-only", `${base}...HEAD`])
     .split("\n")
     .filter(Boolean);
-  const checks = selectPushChecks(paths);
+  const scope = classifyPaths(paths);
+  const full = process.argv.includes("--full") || scope.highRisk;
+  const checks = selectPushChecks(paths, full);
 
   if (checks.length === 0) {
     process.stdout.write(
@@ -311,13 +329,22 @@ const verifyPush = () => {
     `[pre-push] ${paths.length} changed paths from ${base}; running ${checks.join(", ")}.\n`,
   );
 
+  if (full || scope.rust || scope.dependencies) {
+    run("pnpm", ["wasm"]);
+    run("pnpm", ["install", "--frozen-lockfile"]);
+  }
+  run("pnpm", [full ? "check:all" : "check"]);
+  if (full || scope.dependencies) run("pnpm", ["dedupe:check"]);
+
   for (const check of checks) {
+    if (check === "all-tests") run("pnpm", ["test:all"]);
     if (check === "web-tests") run("pnpm", ["test:changed", base]);
-    if (check === "postgres") run("pnpm", ["test:changed:postgres", base]);
+    if (check === "postgres")
+      run("pnpm", full ? ["test:postgres"] : ["test:changed:postgres", base]);
     if (check === "e2e") run("pnpm", ["test:e2e"]);
     if (check === "cloudflare")
       run("pnpm", ["--filter", "@cubby/web", "run", "build:cf"]);
-    if (check === "aux")
+    if (check === "aux" && !full)
       run("pnpm", [
         "-r",
         "--no-sort",
@@ -329,6 +356,10 @@ const verifyPush = () => {
         "run",
         "test",
       ]);
+    if (check === "aux") {
+      run("pnpm", ["--filter", "@cubby/usda-api", "build"]);
+      run("pnpm", ["--filter", "@cubby/upc-lookup", "build"]);
+    }
     if (check === "rust") {
       run("cargo", [
         "fmt",

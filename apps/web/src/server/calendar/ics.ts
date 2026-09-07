@@ -99,7 +99,13 @@ function foldLine(line: string): string {
   let limit = MAX_LINE_OCTETS;
 
   for (const char of line) {
-    const size = encoder.encode(char).length;
+    // for...of keeps surrogate pairs together. Count UTF-8 bytes without
+    // allocating a Uint8Array per character in large calendar documents.
+    const code = char.charCodeAt(0);
+    let size = 3;
+    if (code <= 0x7f) size = 1;
+    else if (code <= 0x7ff) size = 2;
+    else if (char.length === 2) size = 4;
     if (currentOctets + size > limit) {
       out.push(current);
       current = "";

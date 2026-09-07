@@ -166,20 +166,28 @@ test("database changes upgrade affected tests to PostgreSQL", () => {
 test("high-risk and routing changes add browser verification", () => {
   assert.deepEqual(
     selectPushChecks(["apps/web/src/server/repo/inventory/update.ts"]),
-    ["postgres", "e2e", "cloudflare"],
+    ["rust", "aux", "cloudflare", "all-tests"],
   );
   assert.deepEqual(
     selectPushChecks(["apps/web/src/routes/_authenticated/products.tsx"]),
-    ["web-tests", "e2e", "cloudflare"],
+    ["web-tests", "cloudflare", "e2e"],
   );
 });
 
 test("unknown paths fail safe across all implementation stacks", () => {
   assert.deepEqual(selectPushChecks(["new-system/config.toml"]), [
-    "postgres",
-    "e2e",
-    "cloudflare",
-    "aux",
     "rust",
+    "aux",
+    "cloudflare",
+    "all-tests",
+  ]);
+});
+
+test("explicit full verification includes every stack even for inert changes", () => {
+  assert.deepEqual(selectPushChecks(["docs/ci.md"], true), [
+    "rust",
+    "aux",
+    "cloudflare",
+    "all-tests",
   ]);
 });

@@ -104,6 +104,18 @@ describe("renderIcs wire format", () => {
     expect(unfold(ics)).toContain(`SUMMARY:${"é".repeat(80)}`);
   });
 
+  it.each(["x", "é", "界", "🍲", "\ud800"])(
+    "preserves text and the octet limit when folding %s",
+    (character) => {
+      const title = `prefix-${character.repeat(100)}-suffix`;
+      const ics = render([meal({ title })]);
+      for (const line of ics.split("\r\n")) {
+        expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
+      }
+      expect(unfold(ics)).toContain(`SUMMARY:${title}`);
+    },
+  );
+
   it("escapes backslash, semicolon, comma and newline in TEXT values", () => {
     const ics = render([
       meal({ title: String.raw`a,b;c\d`, recipeNames: ["one", "two"] }),
