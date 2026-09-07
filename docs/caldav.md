@@ -13,12 +13,10 @@ The account contains three fixed editable calendars:
   this calendar creates a completed Task.
 - **Cubby Meals**: all Meals.
 
-Calendar can create, rename, and reschedule these records. Deletion currently
-requires an `If-Match` header: tested Calendar.app requests omit it and receive
-`428`, so delete records in Cubby until that compatibility decision is resolved.
-CalDAV clients that supply the condition can delete records, subject to Cubby's
-normal deletion policies. Project membership, recipes, completion
-status, and other unrelated fields remain controlled in Cubby. Moving events
+Calendar can create, rename, and reschedule these records. Delete them in
+Cubby; CalDAV DELETE is disabled for all clients, including requests with an
+`If-Match` header. Cubby's normal deletion policies still apply. Project
+membership, recipes, completion status, and other unrelated fields remain controlled in Cubby. Moving events
 between calendars, recurrence, invitations, sharing, and calendar creation are
 not supported. Notes, locations, and alarms entered in Calendar are discarded.
 
@@ -75,3 +73,12 @@ The protocol uses [ical.js](https://github.com/mozilla-comm/ical.js),
 [Drizzle's Durable SQLite driver](https://orm.drizzle.team/docs/get-started/do-existing).
 The custom adapter deliberately implements a bounded CalDAV surface rather
 than a general calendar server.
+
+## Calendar deletion policy
+
+The HTTP adapter's `METHODS` list is the single source for accepted methods,
+`Allow`, and the advertised delete (`unbind`) privilege. DELETE is deliberately
+absent. Canonical deletion and receipt handling remain implemented internally,
+so a later PR can enable the protocol after deciding how to handle clients such
+as Calendar.app that omit `If-Match`. This is a code policy, not runtime
+configuration.

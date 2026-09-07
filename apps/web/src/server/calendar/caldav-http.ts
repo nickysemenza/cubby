@@ -19,7 +19,10 @@ import {
 const DAV = "DAV:";
 const CALDAV = "urn:ietf:params:xml:ns:caldav";
 const BASE = "/api/caldav";
-const ALLOW = "OPTIONS, PROPFIND, REPORT, GET, HEAD, PUT, DELETE";
+// Calendar.app omits DELETE preconditions. Keep deletion in Cubby until a
+// future protocol change explicitly chooses its stale-client semantics.
+const METHODS = ["OPTIONS", "PROPFIND", "REPORT", "GET", "HEAD", "PUT"];
+const ALLOW = METHODS.join(", ");
 const XML_HEADERS = {
   "Content-Type": "application/xml; charset=utf-8",
   "Cache-Control": "no-store",
@@ -177,7 +180,12 @@ function collectionProps(collection: CalDavCollection): Props {
       ),
       append(
         element(document, DAV, "D:current-user-privilege-set"),
-        ...["read", "write-content", "bind", "unbind"].map(privilege),
+        ...[
+          "read",
+          "write-content",
+          "bind",
+          ...(METHODS.includes("DELETE") ? ["unbind"] : []),
+        ].map(privilege),
       ),
       append(
         element(document, DAV, "D:supported-report-set"),
@@ -668,6 +676,16 @@ export function createCalDavHandler(
             "Cache-Control": "no-store",
           },
         });
+      if (!METHODS.includes(request.method))
+        return new Response(
+          request.method === "DELETE"
+            ? "Delete events in Cubby."
+            : "Method not allowed",
+          {
+            status: 405,
+            headers: { Allow: ALLOW },
+          },
+        );
       if (!backend.ready())
         return new Response("Calendar is initializing", {
           status: 503,

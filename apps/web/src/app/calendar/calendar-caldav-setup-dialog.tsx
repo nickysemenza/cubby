@@ -164,8 +164,9 @@ function SetupNotes() {
         calendars.
       </p>
       <p className="text-xs text-muted-foreground">
-        Meal times snap to Cubby meal slots; notes, locations, and alerts are
-        not saved. The Everything subscription remains read-only.
+        Delete events in Cubby. Meal times snap to Cubby meal slots; notes,
+        locations, and alerts are not saved. The Everything subscription remains
+        read-only.
       </p>
     </Stack>
   );

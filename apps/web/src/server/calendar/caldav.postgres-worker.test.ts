@@ -9,7 +9,7 @@ const ORIGIN = "https://calendar-postgres.example";
 const event = (uid: string, title: string) =>
   `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:${uid}\r\nSUMMARY:${title}\r\nDTSTART;VALUE=DATE:20260907\r\nDTEND;VALUE=DATE:20260908\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
 
-it("commits tsdav CRUD through the DO and recovers a committed create after SQL publication fails", async () => {
+it("commits tsdav edits, refuses calendar deletion, and recovers a committed create after SQL publication fails", async () => {
   const stub = env.CALENDAR_FEED.getByName(new URL(ORIGIN).hostname);
   const credential = await stub.rotateCalendarCredential(
     userId.parse(inject("calendarOwnerId")),
@@ -55,9 +55,9 @@ it("commits tsdav CRUD through the DO and recovers a committed create after SQL 
   expect(renamed.data).toContain("Renamed task");
   expect(
     (await client.deleteCalendarObject({ calendarObject: renamed })).status,
-  ).toBe(204);
+  ).toBe(405);
   expect(await client.fetchCalendarObjects({ calendar: tasks })).toHaveLength(
-    0,
+    1,
   );
 
   await runInDurableObject(stub, async (_instance, state) => {
@@ -105,6 +105,8 @@ it("commits tsdav CRUD through the DO and recovers a committed create after SQL 
   expect((await createRecovery("DESCRIPTION:Retry note\r\n")).status).toBe(201);
   expect((await stub.inspect(ORIGIN)).caldav?.pendingWrites).toBe(0);
   const recovered = await client.fetchCalendarObjects({ calendar: tasks });
-  expect(recovered).toHaveLength(1);
-  expect(recovered[0]?.data).toContain("Newer Cubby name");
+  expect(recovered).toHaveLength(2);
+  expect(recovered.map((object) => object.data).join("\n")).toContain(
+    "Newer Cubby name",
+  );
 });

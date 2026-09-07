@@ -438,11 +438,33 @@ describe("CalendarFeedDurableObject in workerd", () => {
         authorization,
       ),
     );
-    expect(missing.status).toBe(404);
+    expect(missing.status).toBe(405);
     const missingCondition = await stub.fetch(
       request(target, { method: "DELETE" }, authorization),
     );
-    expect(missingCondition.status).toBe(428);
+    expect(missingCondition.status).toBe(405);
+    expect(missingCondition.headers.get("allow")).not.toContain("DELETE");
+    expect(
+      await stub.fetch(
+        request(
+          target,
+          { method: "DELETE", headers: { "if-match": resource.etag } },
+          authorization,
+        ),
+      ),
+    ).toHaveProperty("status", 405);
+    expect(await stub.fetch(request(target, {}, authorization))).toHaveProperty(
+      "status",
+      200,
+    );
+    const properties = await stub.fetch(
+      request(
+        "/api/caldav/calendars/me/tasks/",
+        { method: "PROPFIND", headers: { Depth: "0" } },
+        authorization,
+      ),
+    );
+    expect(await properties.text()).not.toContain("unbind");
 
     const inspection = await stub.inspect(ORIGIN);
     expect(inspection.caldav?.pendingWrites).toBe(0);
