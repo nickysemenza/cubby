@@ -216,7 +216,31 @@ describe("CalendarFeedDurableObject in workerd", () => {
     expect(objects[0]?.data).toContain("Check the filter");
   });
 
-  it("splits requested DAV properties and escapes calendar data in XML", async () => {
+  it("answers Calendar.app's account-root principal and home discovery request", async () => {
+    const stub = await seededStub();
+    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
+    const response = await stub.fetch(
+      request(
+        "/api/caldav/",
+        {
+          method: "PROPFIND",
+          headers: { depth: "0", "content-type": "application/xml" },
+          // Calendar.app sends a property-selection body with independently
+          // prefixed DAV and CalDAV namespaces at the account root.
+          body: `<A:propfind xmlns:A="DAV:" xmlns:B="urn:ietf:params:xml:ns:caldav" xmlns:O="urn:calendar:optional"><A:prop><A:current-user-principal/><B:calendar-home-set/><A:principal-URL/><O:color/></A:prop></A:propfind>`,
+        },
+        basic(credential.username, credential.password),
+      ),
+    );
+    const body = await response.text();
+    expect(response.status).toBe(207);
+    expect(body).toContain("/api/caldav/principals/me/");
+    expect(body).toContain("/api/caldav/calendars/me/");
+    expect(body).toContain("HTTP/1.1 404 Not Found");
+    expect(body).toContain("urn:calendar:optional");
+  });
+
+  it("keeps calendar-data in REPORTs and out of PROPFIND properties", async () => {
     const escaped = {
       ...resource,
       body: resource.body.replace(
@@ -226,23 +250,38 @@ describe("CalendarFeedDurableObject in workerd", () => {
     };
     const stub = await seededStub([escaped]);
     const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
-    const response = await stub.fetch(
+    const authorization = basic(credential.username, credential.password);
+    const propfind = await stub.fetch(
       request(
         `/api/caldav/calendars/me/tasks/${escaped.filename}`,
         {
           method: "PROPFIND",
           headers: { depth: "0", "content-type": "application/xml" },
-          body: `<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:X="urn:cubby:test"><D:prop><D:getetag/><C:calendar-data/><X:missing/></D:prop></D:propfind>`,
+          body: `<D:propfind xmlns:D="DAV:" xmlns:X="urn:cubby:test"><D:prop><D:getetag/><X:missing/></D:prop></D:propfind>`,
         },
-        basic(credential.username, credential.password),
+        authorization,
       ),
     );
-    const body = await response.text();
-    expect(response.status).toBe(207);
-    expect(body).toContain("HTTP/1.1 200 OK");
-    expect(body).toContain("HTTP/1.1 404 Not Found");
-    expect(body).toContain("urn:cubby:test");
-    expect(body).toContain("SUMMARY:A &amp; B &lt; C");
+    const propfindBody = await propfind.text();
+    expect(propfind.status).toBe(207);
+    expect(propfindBody).toContain("HTTP/1.1 200 OK");
+    expect(propfindBody).toContain("HTTP/1.1 404 Not Found");
+    expect(propfindBody).toContain("urn:cubby:test");
+    expect(propfindBody).not.toContain("SUMMARY:A");
+
+    const report = await stub.fetch(
+      request(
+        "/api/caldav/calendars/me/tasks/",
+        {
+          method: "REPORT",
+          headers: { "content-type": "application/xml" },
+          body: `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:prop><D:getetag/><C:calendar-data/></D:prop><D:href>/api/caldav/calendars/me/tasks/${escaped.filename}</D:href></C:calendar-multiget>`,
+        },
+        authorization,
+      ),
+    );
+    expect(report.status).toBe(207);
+    expect(await report.text()).toContain("SUMMARY:A &amp; B &lt; C");
   });
 
   it("reports missing multiget resources and rejects malformed or unsupported reports", async () => {

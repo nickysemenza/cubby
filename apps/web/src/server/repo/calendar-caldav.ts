@@ -135,13 +135,36 @@ export async function loadCalDavProjection(db: Database): Promise<{
       if (page.length < PAGE_SIZE) break;
     }
 
-    const identities = await tx.select().from(calendarResourceIdentity);
+    const identities: Array<typeof calendarResourceIdentity.$inferSelect> = [];
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const page = await tx
+        .select()
+        .from(calendarResourceIdentity)
+        .orderBy(
+          calendarResourceIdentity.entityType,
+          calendarResourceIdentity.entityId,
+        )
+        .limit(PAGE_SIZE)
+        .offset(offset);
+      identities.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
     const identityByEntity = new Map(
       identities.map((row) => [
         projectionKey(row.entityType, row.entityId),
         row,
       ]),
     );
+    const entityIdByShortcode = new Map<string, string>([
+      ...meals.map((row): [string, string] => [
+        projectionKey("meal", row.shortcode),
+        row.id,
+      ]),
+      ...tasks.map((row): [string, string] => [
+        projectionKey("task", row.shortcode),
+        row.id,
+      ]),
+    ]);
     const projections: CalendarProjection[] = [
       ...meals.map((row) => ({
         entity: "meal" as const,
@@ -164,10 +187,9 @@ export async function loadCalDavProjection(db: Database): Promise<{
     return {
       projections,
       identities: projections.map((projection) => {
-        const entityId =
-          projection.entity === "meal"
-            ? meals.find((row) => row.shortcode === projection.id)?.id
-            : tasks.find((row) => row.shortcode === projection.id)?.id;
+        const entityId = entityIdByShortcode.get(
+          projectionKey(projection.entity, projection.id),
+        );
         const row = entityId
           ? identityByEntity.get(projectionKey(projection.entity, entityId))
           : undefined;

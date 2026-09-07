@@ -203,6 +203,19 @@ function resourceProps(resource: CalDavResource, calendarData = false): Props {
       : []),
   ];
 }
+function principalProperties(document: Document): Element[] {
+  const hrefProperty = (namespace: string, name: string, href: string) =>
+    append(
+      element(document, namespace, name),
+      element(document, DAV, "D:href", href),
+    );
+  return [
+    element(document, DAV, "D:displayname", "Cubby"),
+    hrefProperty(DAV, "D:current-user-principal", `${BASE}/principals/me/`),
+    hrefProperty(DAV, "D:principal-URL", `${BASE}/principals/me/`),
+    hrefProperty(CALDAV, "C:calendar-home-set", `${BASE}/calendars/me/`),
+  ];
+}
 function parseXml(body: string): Element {
   if (/<!DOCTYPE|<!ENTITY/i.test(body))
     throw new CalDavError(400, "DTD and entities are unsupported");
@@ -453,20 +466,14 @@ async function propfind(
             element(document, DAV, "D:resourcetype"),
             element(document, DAV, "D:collection"),
           ),
-          append(
-            element(document, DAV, "D:current-user-principal"),
-            element(document, DAV, "D:href", `${BASE}/principals/me/`),
-          ),
+          // Calendar.app requests home discovery directly on the account URL.
+          ...principalProperties(document),
         ]),
       ]);
     case "principal":
       return multistatus([
         entry(`${BASE}/principals/me/`, (document) => [
-          element(document, DAV, "D:displayname", "Cubby"),
-          append(
-            element(document, CALDAV, "C:calendar-home-set"),
-            element(document, DAV, "D:href", `${BASE}/calendars/me/`),
-          ),
+          ...principalProperties(document),
           append(
             element(document, DAV, "D:resourcetype"),
             element(document, DAV, "D:principal"),
