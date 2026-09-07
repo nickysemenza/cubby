@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "neverConnectToCloud": true,
+  "parallel": 2,
+  "maxCacheSize": "2GB",
+  "tui": {
+    "enabled": false
+  },
+  "namedInputs": {
+    "default": [
+      "{workspaceRoot}/**/*",
+      {
+        "runtime": "node --version"
+      },
+      {
+        "runtime": "node -p \"process.platform + process.arch\""
+      },
+      {
+        "env": "NODE_OPTIONS"
+      },
+      {
+        "env": "CI"
+      }
+    ]
+  },
+  "analytics": false,
+  "targetDefaults": {
+    "nx:run-commands": {
+      "inputs": ["default"],
+      "outputs": []
+    }
+  }
+}

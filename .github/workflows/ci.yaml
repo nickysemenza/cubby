@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 20
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
-      CHECK_MAX_PROCESSES: ${{ github.event_name == 'workflow_dispatch' && inputs.check_processes || '2' }}
+      NX_PARALLEL: ${{ github.event_name == 'workflow_dispatch' && inputs.check_processes || '2' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-node-with-deps

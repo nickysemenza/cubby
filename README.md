@@ -277,16 +277,15 @@ Claude Code and Codex can run parallel sessions in isolated git worktrees.
 Claude keeps managed worktrees under `.claude/worktrees/<name>`; Codex keeps
 them under `$CODEX_HOME/worktrees`. A few things to know:
 
-- **Fresh worktree setup:** Codex and Claude both run
-  [scripts/setup-agent-environment.ts](scripts/setup-agent-environment.ts)
-  automatically. Codex calls it from
-  [.codex/environments/environment.toml](.codex/environments/environment.toml);
-  Claude calls it for new linked-worktree sessions from
-  [.claude/settings.json](.claude/settings.json). It installs only when the
-  workspace lockfile is not current, then builds WASM only when missing or stale.
-  Gitignored env (`apps/web/.env`, `.env.local`) is copied automatically via
-  [.worktreeinclude](.worktreeinclude); `node_modules` and the gitignored WASM
-  package (`packages/wasm/*`) are not copied.
+- **Fresh worktree setup:** Codex and Claude run `pnpm agent:setup` from
+  their existing environment entrypoints. pnpm performs a frozen install, then
+  the existing WASM freshness gate builds only when missing or stale. Claude's
+  startup hook runs setup only in linked worktrees.
+  Gitignored env is copied via [.worktreeinclude](.worktreeinclude);
+  dependency links and the virtual store remain local to each checkout. pnpm's
+  content-addressed store and the Cargo cache already share reusable content.
+  The global virtual-store experiment and its TypeScript compatibility blocker
+  are recorded in [local check performance](docs/local-check-performance.md).
 - **Builds are shared, not cold.** The `wasm` script points `CARGO_TARGET_DIR` at a
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
   compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the
