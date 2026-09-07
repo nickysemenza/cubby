@@ -314,44 +314,16 @@ async function main() {
       await smoke("browser");
     });
     if (mode === "full") {
-      const stages: [string, string, string[]][] = [
-        ["dedupe", "pnpm", ["dedupe:check"]],
-        ["checks", "pnpm", ["check:all"]],
-        [
-          "rust-fmt",
-          "cargo",
-          ["fmt", "--manifest-path", "recipebridge/Cargo.toml", "--check"],
-        ],
-        [
-          "rust-test",
-          "cargo",
-          ["test", "--manifest-path", "recipebridge/Cargo.toml"],
-        ],
-        // Reuse test-profile dependency artifacts without dropping any lint targets.
-        [
-          "rust-clippy",
-          "cargo",
-          [
-            "clippy",
-            "--manifest-path",
-            "recipebridge/Cargo.toml",
-            "--profile",
-            "test",
-            "--all-targets",
-            "--",
-            "-D",
-            "warnings",
-          ],
-        ],
-        ["workspace-tests", "pnpm", ["test", "--maxWorkers=2"]],
-        ["postgres-tests", "pnpm", ["test:postgres"]],
-        ["usda-build", "pnpm", ["--filter", "@cubby/usda-api", "build"]],
-        ["upc-build", "pnpm", ["--filter", "@cubby/upc-lookup", "build"]],
-        ["web-build", "pnpm", ["--filter", "@cubby/web", "build:cf"]],
-        ["browser-tests", "pnpm", ["test:e2e"]],
-      ];
-      for (const [name, command, args] of stages)
-        await stage(name, () => run("time", ["-v", command, ...args]));
+      // Load npm tooling only after WASM and the frozen workspace install exist.
+      await stage("verification", () =>
+        run("node", ["scripts/cloudflare-ci-tasks.ts", "all"], {
+          env: {
+            CARGO_BUILD_JOBS: "2",
+            RUST_TEST_THREADS: "2",
+            GOMAXPROCS: "2",
+          },
+        }),
+      );
     }
     console.log(`pilot mode=${mode} passed`);
   } finally {

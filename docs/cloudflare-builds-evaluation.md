@@ -84,12 +84,49 @@ The host ldconfig-cache check cannot see that prefix, so actual Chromium/WebKit
 startup probes replace it; browser versions and the complete E2E guards remain
 unchanged. This is additional setup maintenance, not ordinary out-of-box CI.
 
-Full mode runs deduplication, `check:all`, Rust formatting/tests/Clippy, every
+The measured full runs executed deduplication, `check:all`, Rust formatting/tests/Clippy, every
 routine workspace test, 262 PostgreSQL contracts, both auxiliary Worker builds,
-the Cloudflare web build, then all 22 desktop/WebKit E2E contracts. Major stages
-are sequential. Repository check concurrency is two, Rust compilation uses four
-jobs, and Playwright retains one worker. Run 7 also limits workspace tests to two
-workers and uses one native TypeScript checker.
+the Cloudflare web build, then all 22 desktop/WebKit E2E contracts. Those major
+stages were sequential. Repository check concurrency was two and Rust compilation
+used four jobs in runs 5–8. Playwright retained one worker. Runs 7–8 limited
+workspace tests to two workers and used one native TypeScript checker.
+
+## Parallel follow-up (not hosted-measured)
+
+The post-pilot runner reuses the existing `concurrently` npm package through its
+TypeScript API in `scripts/cloudflare-ci-tasks.ts`. No additional npm dependency,
+container service, subscription or hosted build is introduced. The dependency-free
+bootstrap still finishes WASM before the frozen install and only then loads the
+npm-based task runner. Database and browser provisioning remain serial because
+they mutate a shared package prefix and environment.
+
+Verification now runs two lanes on the same Workers Builds machine:
+
+- Rust: formatting, tests, then Clippy, sharing one Cargo target directory.
+- Web: dedupe, repository checks, workspace tests, PostgreSQL contracts, auxiliary
+  builds, web build, then the unchanged 22-test browser suite.
+
+Rust compilation and test threads are capped at two; native TypeScript's Go
+scheduler is capped at two. Check process concurrency stays at two. Workspace
+packages execute one at a time with two Vitest workers, and PostgreSQL is capped
+at two workers. Playwright stays at one worker. These are subprocess/tool limits,
+not hard CPU or aggregate memory quotas. Heavy JavaScript stages cannot overlap
+one another; total concurrent memory still needs hosted measurement.
+
+Concurrently prefixes output by lane/task, records timing, requires every task
+to succeed, cancels the peer lane after a failure, and skips downstream work.
+The original 18-minute outer deadline stops the full process group before database
+cleanup; nested tasks remain in that process group. GNU time still records each
+stage's resource use. Process tests verify overlapping lanes, peer cancellation,
+downstream suppression and deadline cleanup. All ten pilot/scheduler tests passed
+on macOS and in a disposable Ubuntu 24.04 container using Node 24 x86_64.
+`pnpm check` passed. These process tests validate scheduling and cleanup, not
+full-suite performance or peak concurrent memory.
+
+The eight-build budget remains exhausted and Git remains disconnected. Existing
+timing tables describe the serial implementation, not this new scheduler. A
+speedup or monthly saving cannot be claimed until an equivalent successful
+hosted run measures the tradeoff between overlap and fewer Rust workers.
 
 ## Build ledger
 
