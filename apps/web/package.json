@@ -24,7 +24,7 @@
     "test:e2e:install-deps": "playwright install-deps",
     "test:e2e:postgres": "pnpm test:e2e",
     "test:e2e:pglite": "NODE_ENV=test CUBBY_E2E_DATABASE=pglite playwright test",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
+    "typecheck": "tsc --noEmit --checkers 1 && tsc --noEmit -p tsconfig.sw.json",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
     "db:preflight-entity-integrity": "tsx scripts/preflight-entity-relationship-integrity.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
