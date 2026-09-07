@@ -216,3 +216,42 @@ rendered a page with the extracted libraries and software EGL renderer.
 The resumed preflight dashboard showed 14/6,000 included build minutes used.
 Hosted acceptance results are still pending;
 the two earlier failed probes count toward the original eight-build cap.
+
+
+### Run 3 and first full attempt
+
+Run 3 (`e9898958-4cde-4db6-9dd9-e8c9f6311d6e`, commit `b4fb28db7`)
+passed the complete environment probe. The script took 304 seconds; the hosted
+build ran 16:48:28–16:53:55 UTC. Database setup took 52.21s, toolchain 16.85s,
+WASM 147.47s, install 30.34s, database contract 1.22s, browser installation
+48.17s, and both browser launches 4.61s. Final disk usage was 53% (9.4 GiB used).
+The GitHub check passed and the deployment log contained only the no-op sentinel.
+
+Run 4 (`cf474251-81fa-491e-ac21-d75f8afd1695`, same commit, full mode,
+cache enabled) reached the 18-minute script deadline during repository checks.
+Rust formatting, Clippy (207.99s), Rust tests (288.37s), and deduplication
+(37.45s) passed. TypeScript and Knip were terminated by the deadline; workspace,
+PostgreSQL and E2E suites were not reached. Final disk usage was 65%. Failure
+reached GitHub and the no-op deployment step did not run. This is not a passing
+cold-run measurement.
+
+The next configuration uses four Rust compilation jobs on the paid four-vCPU
+runner, while preserving two concurrent repository checks and one Playwright
+worker. Go runtime parallelism is also capped at four. GNU time reports CPU and
+maximum RSS for routine stages; the cgroup peak-memory file was unavailable.
+
+Cold local diagnostics: the unbounded native web typecheck completed in 15.10s
+with 4.11 GB maximum RSS; Knip completed in 9.21s. TypeScript reported roughly
+4.49 GB of memory with extended diagnostics. A 2 GiB Go memory target
+increased local runtime to 46.66s; 6 GiB with four Go processors completed in
+16.70s. The pilot uses the latter setting, since `NODE_OPTIONS` cannot constrain
+TypeScript 7's Go heap. Repository checks now precede native Rust compilation
+to expose any remaining platform slowdown before spending time on Rust.
+
+A local clean-target Rust experiment passed all 251 executed tests (plus one
+existing ignored doctest) in 100.83s with four compilation jobs. Clippy afterward
+still took 79.79s under its default dev profile. Aligning Clippy with the test
+profile (`--profile test --all-targets -- -D warnings`) reused dependencies and
+completed in 3.46s. The next pilot runs formatting, tests, then Clippy with this
+profile alignment. No tests, lint targets, or warning policy are removed. These
+local timings are ARM macOS diagnostics, not an x86 GitHub/Cloudflare benchmark.

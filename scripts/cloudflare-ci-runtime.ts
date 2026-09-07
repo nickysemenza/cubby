@@ -208,6 +208,7 @@ export function relocatedEnvironment(
 // Ubuntu 24.04 dependencies from Playwright 1.62.1 nativeDeps (tools, Chromium, WebKit).
 // The pilot verifies this package version before using the list.
 export const browserPackages = [
+  "time",
   // APT recommendations normally supply the software EGL renderer.
   "libegl-mesa0",
   "libgl1-mesa-dri",

@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { availableParallelism, cpus, totalmem, tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -60,7 +60,9 @@ async function main() {
     CHECK_MAX_PROCESSES: "2",
     NODE_OPTIONS: "--max-old-space-size=4096",
     CARGO_TARGET_DIR: join(root, "cargo-target"),
-    CARGO_BUILD_JOBS: "2",
+    CARGO_BUILD_JOBS: "4",
+    GOMAXPROCS: "4",
+    GOMEMLIMIT: "6GiB",
     DATABASE_URL: "postgresql://postgres:password@localhost:5432/cubby",
     INTEGRESQL_URL: "http://localhost:5000",
     INTEGRESQL_DATABASE_HOST: "localhost",
@@ -73,6 +75,29 @@ async function main() {
     currentStage = name;
     const start = performance.now();
     console.log(`pilot stage=${name} event=start`);
+    const resources =
+      name === "checks"
+        ? setInterval(() => {
+            void run("ps", ["-eo", "comm,pcpu,rss", "--sort=-rss"], {
+              quiet: true,
+            })
+              .then((output) =>
+                console.log(
+                  "[DEBUG-cf-resources] " +
+                    output.split("\n").slice(0, 8).join(" | "),
+                ),
+              )
+              .catch(() => undefined);
+            void readFile("/proc/pressure/memory", "utf8")
+              .then((output) =>
+                console.log(
+                  "[DEBUG-cf-resources] memory_pressure=" +
+                    output.trim().replaceAll("\n", " | "),
+                ),
+              )
+              .catch(() => undefined);
+          }, 15_000)
+        : undefined;
     try {
       await action();
     } catch (error) {
@@ -80,6 +105,8 @@ async function main() {
         `pilot stage=${name} result=1 elapsed_seconds=${((performance.now() - start) / 1000).toFixed(2)}`,
       );
       throw error;
+    } finally {
+      if (resources) clearInterval(resources);
     }
     console.log(
       `pilot stage=${name} result=0 elapsed_seconds=${((performance.now() - start) / 1000).toFixed(2)}`,
@@ -88,8 +115,19 @@ async function main() {
   try {
     if ((await run("pnpm", ["--version"], { quiet: true })) !== "10.34.1")
       throw Error("pnpm 10.34.1 required");
+    console.log(
+      `pilot available_cpus=${availableParallelism()} cpu_model=${cpus()[0]?.model} total_memory_bytes=${totalmem()}`,
+    );
     await run("uname", ["-srmo"]);
     await run("id", []);
+    console.log(
+      (await readFile("/proc/meminfo", "utf8"))
+        .split("\n")
+        .filter((line) =>
+          /^(MemTotal|MemAvailable|SwapTotal|SwapFree):/u.test(line),
+        )
+        .join("\n"),
+    );
     await run("df", ["-Pk", ".", "/tmp"]);
     await run("git", ["rev-parse", "HEAD"]);
     for (const port of [5432, 5000]) {
@@ -300,11 +338,19 @@ async function main() {
     });
     if (mode === "full") {
       const stages: [string, string, string[]][] = [
+        ["dedupe", "pnpm", ["dedupe:check"]],
+        ["checks", "pnpm", ["check:all"]],
         [
           "rust-fmt",
           "cargo",
           ["fmt", "--manifest-path", "recipebridge/Cargo.toml", "--check"],
         ],
+        [
+          "rust-test",
+          "cargo",
+          ["test", "--manifest-path", "recipebridge/Cargo.toml"],
+        ],
+        // Reuse test-profile dependency artifacts without dropping any lint targets.
         [
           "rust-clippy",
           "cargo",
@@ -312,19 +358,14 @@ async function main() {
             "clippy",
             "--manifest-path",
             "recipebridge/Cargo.toml",
+            "--profile",
+            "test",
             "--all-targets",
             "--",
             "-D",
             "warnings",
           ],
         ],
-        [
-          "rust-test",
-          "cargo",
-          ["test", "--manifest-path", "recipebridge/Cargo.toml"],
-        ],
-        ["dedupe", "pnpm", ["dedupe:check"]],
-        ["checks", "pnpm", ["check:all"]],
         ["workspace-tests", "pnpm", ["test"]],
         ["postgres-tests", "pnpm", ["test:postgres"]],
         ["usda-build", "pnpm", ["--filter", "@cubby/usda-api", "build"]],
@@ -333,7 +374,7 @@ async function main() {
         ["browser-tests", "pnpm", ["test:e2e"]],
       ];
       for (const [name, command, args] of stages)
-        await stage(name, () => run(command, args));
+        await stage(name, () => run("time", ["-v", command, ...args]));
     }
     console.log(`pilot mode=${mode} passed`);
   } finally {
