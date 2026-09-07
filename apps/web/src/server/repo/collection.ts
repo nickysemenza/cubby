@@ -10,6 +10,7 @@ import {
   type CollectionSlug,
   type CollectionSummaryOut,
   type CollectionTagSetInput,
+  type SmartCollectionDefinition,
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { Trade } from "@cubby/schemas/project";
 import { setCollectionTag } from "@cubby/shared/collection-tag";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -48,6 +49,7 @@ import {
   deriveCollectionMembership,
   directCollectionMembership,
 } from "./collection-membership";
+import { evaluateSmartCollections } from "./smart-collection-membership";
 
 interface GraphLocation {
   id: LocationId;
@@ -95,6 +97,7 @@ const locationPath = (
 
 const placementsByProductId = (
   graph: CollectionGraph,
+  containedOnly = false,
 ): Map<string, CollectionProductPlacementOut[]> => {
   const locations = new Map<string, Map<string, GraphLocation>>();
   const add = (productId: string, loc: GraphLocation) => {
@@ -104,10 +107,13 @@ const placementsByProductId = (
   };
   for (const entry of graph.inventory) {
     const loc = graph.locationsById.get(entry.locationId);
-    if (loc) add(entry.productId, loc);
+    if (loc && (!containedOnly || loc.productId !== entry.productId))
+      add(entry.productId, loc);
   }
-  for (const loc of graph.locations) {
-    if (loc.productId) add(loc.productId, loc);
+  if (!containedOnly) {
+    for (const loc of graph.locations) {
+      if (loc.productId) add(loc.productId, loc);
+    }
   }
   return new Map(
     [...locations].map(([productId, productLocations]) => [
@@ -234,7 +240,7 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
       })
       .from(product)
       .where(notDeleted(product))
-      .orderBy(asc(product.name)),
+      .orderBy(asc(product.name), asc(product.id)),
     client
       .select({
         id: location.id,
@@ -280,6 +286,97 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
     locationInherited,
   };
 };
+
+async function loadSmartCollections(
+  db: Database,
+  definitions: readonly SmartCollectionDefinition[],
+) {
+  const trades = [
+    ...new Set(
+      definitions.flatMap((definition) =>
+        definition.rules.flatMap((rule) =>
+          rule.kind === "historicalExpenseTrade" ? [rule.value] : [],
+        ),
+      ),
+    ),
+  ];
+  const [graph, expenses] = await Promise.all([
+    loadCollectionGraph(db),
+    trades.length > 0
+      ? getDb(db)
+          .select({
+            productId: expense.productId,
+            shortcode: expense.shortcode,
+            trade: expense.trade,
+          })
+          .from(expense)
+          .where(
+            and(
+              notDeleted(expense),
+              eq(expense.future, false),
+              isNotNull(expense.productId),
+              inArray(expense.trade, trades),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+  return {
+    graph,
+    evaluated: evaluateSmartCollections({ ...graph, expenses }, definitions),
+  };
+}
+
+export async function listSmartCollections(
+  db: Database,
+  definitions: readonly SmartCollectionDefinition[],
+) {
+  const { evaluated } = await loadSmartCollections(db, definitions);
+  return evaluated.map((item) => item.summary);
+}
+
+export async function getSmartCollectionDetail(
+  db: Database,
+  definition: SmartCollectionDefinition,
+  search: string | undefined,
+  pagination: { pageIndex: number; pageSize: number },
+) {
+  const { graph, evaluated } = await loadSmartCollections(db, [definition]);
+  const result = evaluated[0];
+  if (!result) throw new Error("Smart Collection evaluation missing");
+  const normalizedSearch = search?.toLowerCase();
+  const matching = graph.products.filter(
+    (item) =>
+      result.members.has(item.id) &&
+      (!normalizedSearch ||
+        item.name.toLowerCase().includes(normalizedSearch) ||
+        item.manufacturer.toLowerCase().includes(normalizedSearch)),
+  );
+  const page = matching.slice(
+    pagination.pageIndex * pagination.pageSize,
+    (pagination.pageIndex + 1) * pagination.pageSize,
+  );
+  const productIds = page.map((item) => item.id);
+  const placements = placementsByProductId(graph, true);
+  const [images, purchases] = await Promise.all([
+    getProductCoverImageUrlsByProductIds(db, productIds),
+    loadPurchasesByProductId(db, productIds),
+  ]);
+  return {
+    summary: result.summary,
+    totalCount: matching.length,
+    products: page.map((item) => ({
+      id: parseShortcodeFor("product", item.shortcode),
+      name: item.name,
+      manufacturer: item.manufacturer,
+      imageUrl: images.get(item.id) ?? null,
+      direct: false,
+      inherited: false,
+      matches: result.members.get(item.id) ?? [],
+      placements: placements.get(item.id) ?? [],
+      purchases: purchases.get(item.id) ?? [],
+    })),
+  };
+}
 
 const summarizeCollection = (
   graph: CollectionGraph,

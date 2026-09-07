@@ -7,6 +7,10 @@ import {
   collectionSummaryOut,
   collectionTagSetInput,
   collectionTagSetOut,
+  smartCollectionListInput,
+  smartCollectionSummary,
+  smartCollectionDetailInput,
+  smartCollectionDetailOut,
 } from "@cubby/schemas/collection";
 import { z } from "zod";
 
@@ -18,6 +22,32 @@ import {
 } from "~/integrations/tanstack-query/operation-catalog";
 
 export const collection = defineOperationDomain("collection", {
+  smartList: query({
+    cache: "live-status",
+    input: smartCollectionListInput,
+    output: z.array(smartCollectionSummary),
+    tags: [
+      ["collection", "smartList"],
+      ["product"],
+      ["location"],
+      ["inventory"],
+      ["expense"],
+      ["purchase"],
+    ],
+  }),
+  smartDetail: query({
+    cache: "live-status",
+    input: smartCollectionDetailInput,
+    output: smartCollectionDetailOut,
+    tags: [
+      ["collection", "smartDetail"],
+      ["product"],
+      ["location"],
+      ["inventory"],
+      ["expense"],
+      ["purchase"],
+    ],
+  }),
   list: query({
     input: z.null(),
     output: z.array(collectionSummaryOut),

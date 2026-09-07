@@ -131,17 +131,18 @@ history is the archive. Permanent product constraints live in the
 - **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
   show a repeatable tail imbalance or regression. Use native reporter output;
   do not add duration databases, custom sequencers, or manufactured timing runs.
-- **Persisted Collections and operational dashboard** — Promote when Collection
-  tags need metadata, rename-safe empty identity, Smart Collection rules (for
-  example, manufacturer plus minimum effective price), Trade links, or combined
+- **Persisted Collections and operational dashboard** — Temporary smart starters
+  now evaluate manufacturer, exact tags, Location/ancestor name substrings, and
+  historical actual Expense Trades, with editable OR rules and source evidence.
+  Promote when Collection tags need metadata, rename-safe empty identity,
+  durable rule editing, richer rules (for example, minimum effective price), or combined
   Project/Task/Expense views; migrate `collection:*` tags into durable records
   rather than layering on a parallel mapping. Smart membership should evaluate
   a saved Product filter at read time rather than auto-tagging matching records.
-  Include Trade predicates derived from a Product's linked Expense lines (Trade
-  belongs to each Expense, not its parent Purchase): support both “any
-  historical Trade matches” for inclusive, overlapping Collections and a
-  deterministic “primary inferred Trade matches” rule that reuses the existing
-  Product-to-Trade inference rather than introducing a second derivation.
+  Extend the existing historical Trade predicate with deterministic “primary
+  inferred Trade matches” by reusing Product-to-Trade inference. Trade remains
+  on the Product's linked Expense lines, not its parent Purchase. Dashboard
+  expansion still includes combined Project/Task/Expense views.
 - **Portion solver** — Promote if agent-side amount iteration remains painful after
   the recipe nutrition MCP projection ships; solve component weights against macro
   constraints in one call.

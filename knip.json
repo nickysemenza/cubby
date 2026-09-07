@@ -11,7 +11,6 @@
         "scripts/ci-scope.ts!",
         "scripts/ci-scope.test.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/setup-agent-environment.ts!",
         "scripts/entity-literal-generator.ts!",
         "scripts/entity-literals/entities/*.entity.ts!"
       ],

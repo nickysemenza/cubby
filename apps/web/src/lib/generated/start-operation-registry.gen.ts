@@ -40,6 +40,8 @@ export const START_OPERATIONS = {
   "collection.list": { kind: "query" },
   "collection.matrix": { kind: "query" },
   "collection.set": { kind: "mutation" },
+  "collection.smartDetail": { kind: "query" },
+  "collection.smartList": { kind: "query" },
   "cookbook.detail": { kind: "query" },
   "cookbook.list": { kind: "query" },
   "dashboard.counts": { kind: "query" },

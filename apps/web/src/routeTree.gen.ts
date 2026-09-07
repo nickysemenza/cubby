@@ -106,6 +106,7 @@ import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiWorkflowStreamOperationRouteImport } from './routes/api/workflow-stream/$operation'
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
 import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
+import { Route as AuthenticatedCollectionsSmartStarterRouteImport } from './routes/_authenticated/collections.smart.$starter'
 import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './routes/_authenticated/recipes.$shortcode_.export'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
@@ -663,6 +664,12 @@ const DotwellKnownOauthProtectedResourceApiMcpRoute =
     path: '/api/mcp',
     getParentRoute: () => DotwellKnownOauthProtectedResourceRoute,
   } as any)
+const AuthenticatedCollectionsSmartStarterRoute =
+  AuthenticatedCollectionsSmartStarterRouteImport.update({
+    id: '/collections/smart/$starter',
+    path: '/collections/smart/$starter',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecipesShortcodeExportRoute =
   AuthenticatedRecipesShortcodeExportRouteImport.update({
     id: '/recipes/$shortcode_/export',
@@ -784,6 +791,7 @@ export interface FileRoutesByFullPath {
   '/wishes/': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
+  '/collections/smart/$starter': typeof AuthenticatedCollectionsSmartStarterRoute
   '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
@@ -885,6 +893,7 @@ export interface FileRoutesByTo {
   '/wishes': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
+  '/collections/smart/$starter': typeof AuthenticatedCollectionsSmartStarterRoute
   '/recipes/$shortcode/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
@@ -989,6 +998,7 @@ export interface FileRoutesById {
   '/_authenticated/wishes/': typeof AuthenticatedWishesIndexRoute
   '/.well-known/oauth-authorization-server/api/auth': typeof DotwellKnownOauthAuthorizationServerApiAuthRoute
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
+  '/_authenticated/collections/smart/$starter': typeof AuthenticatedCollectionsSmartStarterRoute
   '/_authenticated/recipes/$shortcode_/export': typeof AuthenticatedRecipesShortcodeExportRoute
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
@@ -1093,6 +1103,7 @@ export interface FileRouteTypes {
     | '/wishes/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
+    | '/collections/smart/$starter'
     | '/recipes/$shortcode/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -1194,6 +1205,7 @@ export interface FileRouteTypes {
     | '/wishes'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
+    | '/collections/smart/$starter'
     | '/recipes/$shortcode/export'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -1297,6 +1309,7 @@ export interface FileRouteTypes {
     | '/_authenticated/wishes/'
     | '/.well-known/oauth-authorization-server/api/auth'
     | '/.well-known/oauth-protected-resource/api/mcp'
+    | '/_authenticated/collections/smart/$starter'
     | '/_authenticated/recipes/$shortcode_/export'
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
@@ -2000,6 +2013,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRouteImport
       parentRoute: typeof DotwellKnownOauthProtectedResourceRoute
     }
+    '/_authenticated/collections/smart/$starter': {
+      id: '/_authenticated/collections/smart/$starter'
+      path: '/collections/smart/$starter'
+      fullPath: '/collections/smart/$starter'
+      preLoaderRoute: typeof AuthenticatedCollectionsSmartStarterRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/recipes/$shortcode_/export': {
       id: '/_authenticated/recipes/$shortcode_/export'
       path: '/recipes/$shortcode/export'
@@ -2113,6 +2133,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
   AuthenticatedVendorsIndexRoute: typeof AuthenticatedVendorsIndexRoute
   AuthenticatedWishesIndexRoute: typeof AuthenticatedWishesIndexRoute
+  AuthenticatedCollectionsSmartStarterRoute: typeof AuthenticatedCollectionsSmartStarterRoute
   AuthenticatedRecipesShortcodeExportRoute: typeof AuthenticatedRecipesShortcodeExportRoute
   AuthenticatedUsdaNdbCodeRoute: typeof AuthenticatedUsdaNdbCodeRoute
   AuthenticatedUsdaUpcCodeRoute: typeof AuthenticatedUsdaUpcCodeRoute
@@ -2215,6 +2236,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
   AuthenticatedVendorsIndexRoute: AuthenticatedVendorsIndexRoute,
   AuthenticatedWishesIndexRoute: AuthenticatedWishesIndexRoute,
+  AuthenticatedCollectionsSmartStarterRoute:
+    AuthenticatedCollectionsSmartStarterRoute,
   AuthenticatedRecipesShortcodeExportRoute:
     AuthenticatedRecipesShortcodeExportRoute,
   AuthenticatedUsdaNdbCodeRoute: AuthenticatedUsdaNdbCodeRoute,

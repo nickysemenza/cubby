@@ -10,13 +10,13 @@ In a new worktree, install with `pnpm install --frozen-lockfile`, then time the
 first `pnpm check`. It should complete within twenty seconds on the reference
 machine; 22.8 seconds is the accepted initial-worktree ceiling when dependency
 and compiler caches are also cold. In the same worktree, run
-`pnpm benchmark:check`; six seconds remains the warm target. Record machine,
+`hyperfine --warmup 1 --runs 10 'pnpm check'`; six seconds remains the warm target. Record machine,
 commit, minimum, median, mean, and maximum even when the target is missed so
 later changes compare like with like.
 
-`scripts/run-checks.test.ts` injects a failure into every `pnpm check` task and
-proves the orchestrator reports failure without cancelling peer diagnostics.
-The individual guard suites remain responsible for their domain fixtures.
+`scripts/ci-workflow.test.ts` checks the declarative gate manifest and live
+verification hooks. The individual guard suites own their domain fixtures.
+Use `NX_SKIP_NX_CACHE=true` to measure execution rather than cached results.
 
 ### Recorded warm sample
 
