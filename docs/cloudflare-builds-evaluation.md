@@ -1,7 +1,8 @@
 # Cloudflare Workers Builds evaluation
 
-Research snapshot: 2026-09-07. No hosted experiment, account change, or deployment
-has been performed. This evaluates Workers Builds, not the Workers runtime,
+Research and hosted pilot snapshot: 2026-09-07. Two hosted probes were run;
+the temporary Git connection was removed afterward. No deployment or version
+upload occurred. This evaluates Workers Builds, not the Workers runtime,
 Cloudflare Containers runtime, or Pages build allowance.
 
 ## Decision
@@ -159,7 +160,35 @@ check conclusions separately; script elapsed time excludes checkout and queueing
   and mandatory pre-push web tests, Cloudflare build, and auxiliary gates passed.
   The first push attempt found a missing generated MCP app bundle; building that
   local prerequisite resolved it without source changes.
-- Hosted builds: not started yet; no compatibility or speed result claimed.
+- Hosted probe 1 (`22ee58d5-3dfe-429f-96de-0e5cc1255484`, commit `eb53f9a49`):
+  failed after approximately 4m03s. Toolchain setup 19s, WASM 154s, dependency
+  installation 26s. Docker was not usable. Native PostgreSQL configuration failed
+  because Bison was absent. GitHub reported `Workers Builds: cubby` as failed;
+  the deployment no-op never ran.
+- Hosted probe 2 (`7a806a4b-38aa-49d5-9d6f-841d6f0cb51d`, commit `adba48dea`):
+  moved database setup first and attempted Bison/Flex installation. Failed after
+  approximately 30s (3s in the script): `sudo: command not found`. GitHub again
+  reported a failed check, with no deployment step.
+- Measured image: unprivileged buildbot user, Linux x86_64, Node 24.20.0,
+  pnpm 10.34.1, Rust 1.98.1. About 14.5 GiB disk available initially.
+  No cgroup peak-memory reading was exposed at the probed path.
+- Two of eight allowed builds used. Full-suite cold/warm runs, browser startup,
+  native database compatibility, and deliberate failure injection were not
+  reached. The natural failures prove failure propagation, not the separately
+  planned deliberate-failure scenario. No speed comparison is justified.
+- Restoration verified: Settings shows Git repository → Connect. The complete
+  deployment/version API results match the preflight snapshots; version 2398
+  remains active. Original GitHub Actions and required checks were unchanged.
+
+### Pilot conclusion
+
+The straightforward Docker/native bootstrap is blocked on the actual build
+image. This does not prove that unprivileged package extraction or a fully
+user-local toolchain could never work. Those approaches would add maintenance,
+and browser system-library compatibility would still need proof. Do not migrate
+full CI based on these results. Cloudflare remains a candidate for build-only
+work; full CI would require another explicitly scoped environment experiment.
+Reported durations are log-derived wall time, not a claim about billed minutes.
 - Restore the original disconnected Git state after the experiment, and compare
   deployment/version listings with the preflight snapshot. Leave GitHub Actions
   and required checks unchanged.
