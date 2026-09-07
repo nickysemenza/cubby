@@ -112,7 +112,9 @@ test("smart Collection rules remain temporary across navigation and refresh", as
   ).toBeVisible();
   await expect(productLink).toHaveCount(0);
 
-  await editorTrigger.click();
+  if ((await editorTrigger.getAttribute("aria-expanded")) !== "true") {
+    await editorTrigger.click();
+  }
   await nameInput.fill("Finishing bench");
   await conditionValue.fill("finishing");
   await expect(productLink).toBeVisible();
