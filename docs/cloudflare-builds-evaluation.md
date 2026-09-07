@@ -250,8 +250,10 @@ to expose any remaining platform slowdown before spending time on Rust.
 
 A local clean-target Rust experiment passed all 251 executed tests (plus one
 existing ignored doctest) in 100.83s with four compilation jobs. Clippy afterward
-still took 79.79s under its default dev profile. Aligning Clippy with the test
-profile (`--profile test --all-targets -- -D warnings`) reused dependencies and
-completed in 3.46s. The next pilot runs formatting, tests, then Clippy with this
-profile alignment. No tests, lint targets, or warning policy are removed. These
-local timings are ARM macOS diagnostics, not an x86 GitHub/Cloudflare benchmark.
+still took 79.79s under its default dev profile. A subsequent Clippy run with
+`--profile test --all-targets -- -D warnings` completed in 3.46s, but that
+measurement was contaminated by the preceding Clippy run. Hosted run 5 still
+checked dependencies after tests, so the 3.46s result is not evidence of a cold
+speedup from profile alignment. Run 5 preserves all tests, lint targets, and the
+warning policy. These local timings are ARM macOS diagnostics, not an x86
+GitHub/Cloudflare benchmark.

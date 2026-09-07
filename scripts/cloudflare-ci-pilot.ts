@@ -366,7 +366,7 @@ async function main() {
             "warnings",
           ],
         ],
-        ["workspace-tests", "pnpm", ["test"]],
+        ["workspace-tests", "pnpm", ["test", "--maxWorkers=2"]],
         ["postgres-tests", "pnpm", ["test:postgres"]],
         ["usda-build", "pnpm", ["--filter", "@cubby/usda-api", "build"]],
         ["upc-build", "pnpm", ["--filter", "@cubby/upc-lookup", "build"]],
