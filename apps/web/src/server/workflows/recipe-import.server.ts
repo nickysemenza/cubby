@@ -4,6 +4,7 @@ import {
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
+  attachCookbookRecipePhotoInput,
   chunkRequestInput,
   cookbookDiffInput,
   cookbookIdInput,
@@ -28,15 +29,17 @@ import {
   importRecipeSignature,
   recipeOutSignature,
 } from "~/lib/recipe-signature";
-import { createAppError } from "~/server/errors/app-error";
+import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import {
   deleteCookbook,
   getCookbookByName,
+  getCookbookRecipePhotoSource,
   getCookbookSource,
   reprocessCookbookStream,
   setCookbookProduct,
   upsertCookbook,
 } from "~/server/repo/cookbook";
+import { recipeHasImages } from "~/server/repo/image";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
@@ -57,6 +60,7 @@ import {
   productionRecipeImageImportPort,
 } from "~/server/services/image-import";
 import {
+  attachFileToEntity,
   deleteStoredObjects,
   importImageFromUrl as importStoredImageFromUrl,
 } from "~/server/services/image-storage.service";
@@ -78,6 +82,7 @@ import {
 
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
 const productShortcodes = bindShortcodeResolver("product");
+const recipeShortcodes = bindShortcodeResolver("recipe");
 
 export const scrapeWorkflow = (input: z.output<typeof scrapeRecipeInput>) =>
   scrapeToImportRecipe(input);
@@ -170,8 +175,77 @@ export const getCookbookSourceWorkflow = async (
   return { ...source, id: input.cookbookId };
 };
 
+type CookbookRecipePhotoInput = z.output<typeof attachCookbookRecipePhotoInput>;
+
+export interface CookbookRecipePhotoPorts {
+  attachFile: typeof attachFileToEntity;
+}
+
+const productionCookbookRecipePhotoPorts: CookbookRecipePhotoPorts = {
+  attachFile: attachFileToEntity,
+};
+
+export const attachCookbookRecipePhotoWorkflow = async (
+  context: Pick<AuthenticatedStartOperationContext, "db">,
+  input: CookbookRecipePhotoInput,
+  ports: CookbookRecipePhotoPorts = productionCookbookRecipePhotoPorts,
+) => {
+  const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
+  const recipeId = await recipeShortcodes.one(context.db, input.recipeId);
+  const source = await getCookbookRecipePhotoSource(
+    context.db,
+    cookbookId,
+    recipeId,
+    input.sourceIndex,
+  );
+  if (await recipeHasImages(context.db, recipeId)) {
+    return { status: "skipped-existing" as const };
+  }
+  const filename = source.path.split("/").at(-1) || "recipe-photo";
+  const pathDigest = Array.from(
+    new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(source.path),
+      ),
+    ),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  const idempotencyKey = `epub-photo:${input.recipeId}:${pathDigest}`;
+
+  try {
+    const attached = await ports.attachFile(context.db, {
+      entityType: "recipe",
+      entityId: input.recipeId,
+      data: input.data,
+      contentType: source.mime,
+      filename,
+      idempotencyKey,
+      expectedImageCount: 0,
+    });
+    const status = attached.reused
+      ? ("reused" as const)
+      : ("attached" as const);
+    if (attached.cleanupWarning) {
+      return { status, cleanupWarning: attached.cleanupWarning };
+    }
+    return { status };
+  } catch (error) {
+    const appError = appErrorFromUnknown(error);
+    if (appError?.reason === "IMAGE_PRECONDITION_FAILED") {
+      return { status: "skipped-existing" as const };
+    }
+    if (appError) throw appError;
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "Could not attach the cookbook recipe photo",
+      error,
+    );
+  }
+};
+
 type ImportItemResult =
-  | { index: number; ok: true; id: RecipeShortcode }
+  | { index: number; ok: true; id: RecipeShortcode; hasImage: boolean }
   | { index: number; ok: false; error: string };
 type ImportSummary = { succeeded: number; failed: number };
 export async function* importCookbookWorkflow(
@@ -203,7 +277,12 @@ export async function* importCookbookWorkflow(
         importContext,
       );
       insertedIds.push(id);
-      return { index, ok: true, id: parseShortcodeFor("recipe", shortcode) };
+      return {
+        index,
+        ok: true,
+        id: parseShortcodeFor("recipe", shortcode),
+        hasImage: await recipeHasImages(context.db, id),
+      };
     },
     {
       onError: (index, _i, error) => ({

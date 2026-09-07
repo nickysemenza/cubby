@@ -43,11 +43,18 @@ import {
 } from "./extraction";
 import { deriveBookName } from "./import-helpers";
 import { addWithReferences, topoOrderSelected } from "./import-order";
+import {
+  discardBookPhotoResources,
+  resetReextractedBook,
+  shouldPreparePhoto,
+} from "./photo-lifecycle";
+import { bytesToBase64, selectedArchivePhotoIndices } from "./photos";
 import type {
   Book,
   ChunkRequestInput,
   ExtractPhase,
   ImportResult,
+  PhotoResult,
 } from "./types";
 
 const CHUNK_CONCURRENCY = 8;
@@ -70,11 +77,14 @@ export function CookbookImport({
     recipe.extractCookbookChunk.mutationOptions(),
   );
   const upsertCookbook = useMutation(recipe.upsertCookbook.mutationOptions());
+  const attachCookbookRecipePhoto = useMutation(
+    recipe.attachCookbookRecipePhoto.mutationOptions(),
+  );
   // Per-recipe outcome streamed back from `importCookbookStream`, keyed by the
   // recipe's index in `book.recipes` so each card maps to its result. `start` is
   // referentially stable, so destructure it for the importBook callback's deps.
   const { start: startCookbookImport } = useBulkStream<
-    | { index: number; ok: true; id: string }
+    | { index: number; ok: true; id: string; hasImage: boolean }
     | { index: number; ok: false; error: string },
     { succeeded: number; failed: number }
   >();
@@ -86,6 +96,12 @@ export function CookbookImport({
   // bytes are large and never drive a render. JSON / from-source books have no
   // entry (they can't fail chunks).
   const epubBytesRef = useRef<Map<string, Uint8Array>>(new Map());
+  // A recipe image path only has meaning inside its EPUB. Cache by path within
+  // each loaded book so shared archive art is read once but never crosses books.
+  const archiveImageBytesRef = useRef<Map<string, Map<string, Uint8Array>>>(
+    new Map(),
+  );
+  const previewUrlsRef = useRef<Map<string, Map<number, string>>>(new Map());
 
   // Extraction (minutes of concurrent LLM calls) and import both live entirely in
   // this component's state — there's no server-side record to resume from. Warn
@@ -95,7 +111,8 @@ export function CookbookImport({
     (b) =>
       b.extract.status === "pending" ||
       b.extract.status === "extracting" ||
-      b.importProgress !== undefined,
+      b.importProgress !== undefined ||
+      b.photoProgress !== undefined,
   );
   // `beforeunload` alone only catches a tab close or reload — an in-app click on
   // the nav rail is a router navigation, which never fires it, and used to drop
@@ -108,6 +125,25 @@ export function CookbookImport({
     enableBeforeUnload: () => busy,
     withResolver: true,
   });
+
+  const discardBookBytes = useCallback((source: string) => {
+    epubBytesRef.current.delete(source);
+    discardBookPhotoResources(
+      archiveImageBytesRef.current,
+      previewUrlsRef.current,
+      source,
+      URL.revokeObjectURL,
+    );
+  }, []);
+
+  useEffect(
+    () => () => {
+      for (const previews of previewUrlsRef.current.values()) {
+        previews.forEach((url) => URL.revokeObjectURL(url));
+      }
+    },
+    [],
+  );
 
   // Upload raw image bytes through the presigned-R2 flow (mirrors PendingImageUpload):
   // initiate → PUT to the presigned URL → return the new (PENDING) image id.
@@ -163,6 +199,8 @@ export function CookbookImport({
               recipes,
               selected: new Set<number>(),
               results: new Map<number, ImportResult>(),
+              photos: new Map<number, PhotoResult>(),
+              photoPreviewUrls: new Map<number, string>(),
               extract: { status: "ready", failedChunks: [] },
               expanded: true,
             },
@@ -176,6 +214,57 @@ export function CookbookImport({
   const updateBook = useCallback((source: string, patch: (b: Book) => Book) => {
     setBooks((prev) => prev.map((b) => (b.source === source ? patch(b) : b)));
   }, []);
+
+  const setPhotoResult = useCallback(
+    (source: string, index: number, result: PhotoResult) =>
+      updateBook(source, (book) => ({
+        ...book,
+        photos: new Map(book.photos).set(index, result),
+      })),
+    [updateBook],
+  );
+
+  const clearBookPhotoPreviews = useCallback(
+    (source: string) =>
+      updateBook(source, (book) => ({
+        ...book,
+        photoPreviewUrls: new Map<number, string>(),
+      })),
+    [updateBook],
+  );
+
+  const setPhotoPreview = useCallback(
+    (source: string, index: number, bytes: Uint8Array, mime: string) => {
+      const byIndex = previewUrlsRef.current.get(source) ?? new Map();
+      const previous = byIndex.get(index);
+      if (previous) URL.revokeObjectURL(previous);
+      const buffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buffer).set(bytes);
+      const url = URL.createObjectURL(new Blob([buffer], { type: mime }));
+      byIndex.set(index, url);
+      previewUrlsRef.current.set(source, byIndex);
+      updateBook(source, (book) => ({
+        ...book,
+        photoPreviewUrls: new Map(book.photoPreviewUrls).set(index, url),
+      }));
+    },
+    [updateBook],
+  );
+
+  const discardPhotoPreview = useCallback(
+    (source: string, index: number) => {
+      const previews = previewUrlsRef.current.get(source);
+      const url = previews?.get(index);
+      if (url) URL.revokeObjectURL(url);
+      previews?.delete(index);
+      updateBook(source, (book) => {
+        const photoPreviewUrls = new Map(book.photoPreviewUrls);
+        photoPreviewUrls.delete(index);
+        return { ...book, photoPreviewUrls };
+      });
+    },
+    [updateBook],
+  );
 
   const setExtract = useCallback(
     (source: string, extract: ExtractPhase) =>
@@ -365,6 +454,12 @@ export function CookbookImport({
       }
 
       const { recipes, failures: failedChunks } = report;
+      discardBookPhotoResources(
+        archiveImageBytesRef.current,
+        previewUrlsRef.current,
+        source,
+        URL.revokeObjectURL,
+      );
       updateBook(source, (b) => ({
         ...b,
         recipes,
@@ -373,8 +468,10 @@ export function CookbookImport({
         // repopulates `recipes` from scratch (fresh on the first run, a different
         // list on a re-extraction retry), so any prior per-index import state now
         // points at the wrong recipe — clear it.
-        results: new Map<number, ImportResult>(),
-        importProgress: undefined,
+        ...resetReextractedBook(!!b.cookbookId),
+        // A local re-extraction changes index → recipe identity. Persist it
+        // before the index-addressed import/photo operations can run again.
+        needsCookbookUpsert: b.cookbookId ? true : b.needsCookbookUpsert,
         extract: { status: "ready", failedChunks, report },
       }));
       if (recipes.length === 0) {
@@ -437,33 +534,54 @@ export function CookbookImport({
         toast.error("Drop one or more .epub files");
         return;
       }
-      const newBooks: Book[] = epubs
-        // Skip a file already loaded (same name) so a re-drop doesn't duplicate.
-        .filter((f) => !books.some((b) => b.source === f.name))
-        .map((f) => ({
-          source: f.name,
-          name: deriveBookName(f.name),
+      const newBooks: Book[] = [];
+      const filesToExtract: Array<{ source: string; file: File }> = [];
+      const rebinds: Array<{ source: string; file: File }> = [];
+      for (const file of epubs) {
+        const exact = books.find((book) => book.source === file.name);
+        if (exact) {
+          // A re-drop of an open book refreshes its transient bytes only; its
+          // already-reviewed extraction remains authoritative.
+          rebinds.push({ source: exact.source, file });
+          continue;
+        }
+        const title = deriveBookName(file.name);
+        const book: Book = {
+          source: file.name,
+          name: title,
           recipes: [],
           selected: new Set<number>(),
           results: new Map<number, ImportResult>(),
+          photos: new Map<number, PhotoResult>(),
+          photoPreviewUrls: new Map<number, string>(),
           extract: { status: "pending" },
           expanded: true,
-        }));
-      if (newBooks.length === 0) return;
-      setBooks((prev) => [...prev, ...newBooks]);
+        };
+        newBooks.push(book);
+        filesToExtract.push({ source: book.source, file });
+      }
+      if (newBooks.length) setBooks((prev) => [...prev, ...newBooks]);
+
+      for (const { source, file } of rebinds) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        discardBookBytes(source);
+        clearBookPhotoPreviews(source);
+        epubBytesRef.current.set(source, bytes);
+        updateBook(source, (book) => ({ ...book, hasArchiveBytes: true }));
+        toast.message(`Reconnected ${file.name} for recipe photos`);
+      }
 
       // Extract sequentially across books to keep the gateway load bounded
       // (chunks within a book already run concurrently).
-      for (const book of newBooks) {
-        const file = epubs.find((f) => f.name === book.source);
-        if (!file) continue;
+      for (const { source, file } of filesToExtract) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         // Cache for a later retry (re-run extraction without re-dropping the file).
-        epubBytesRef.current.set(book.source, bytes);
-        await extractBook(book.source, bytes);
+        epubBytesRef.current.set(source, bytes);
+        updateBook(source, (book) => ({ ...book, hasArchiveBytes: true }));
+        await extractBook(source, bytes);
       }
     },
-    [books, extractBook],
+    [books, clearBookPhotoPreviews, discardBookBytes, extractBook, updateBook],
   );
 
   // Re-run extraction for one book from its cached EPUB bytes — the retry path for
@@ -512,6 +630,8 @@ export function CookbookImport({
       recipes,
       selected: new Set(recipes.map((_, i) => i)),
       results: new Map<number, ImportResult>(),
+      photos: new Map<number, PhotoResult>(),
+      photoPreviewUrls: new Map<number, string>(),
       extract: { status: "ready" as const, failedChunks: [] },
       expanded: true,
     }));
@@ -520,6 +640,187 @@ export function CookbookImport({
       ...loaded.filter((l) => !prev.some((b) => b.source === l.source)),
     ]);
   }, []);
+
+  const getArchivePhotoBytes = useCallback(
+    (book: Book, index: number): Uint8Array | null => {
+      const source = book.recipes[index]?.image;
+      if (!source || source.kind !== "epub") return null;
+      const epub = epubBytesRef.current.get(book.source);
+      if (!epub) {
+        setPhotoResult(book.source, index, {
+          status: "missing-bytes",
+          message: "Choose the original EPUB to add this photo.",
+        });
+        return null;
+      }
+      let byPath = archiveImageBytesRef.current.get(book.source);
+      if (!byPath) {
+        byPath = new Map();
+        archiveImageBytesRef.current.set(book.source, byPath);
+      }
+      let bytes = byPath.get(source.path);
+      if (!bytes) {
+        try {
+          const extracted = wasm.read_image(epub, source.path);
+          if (!extracted) {
+            setPhotoResult(book.source, index, {
+              status: "error",
+              message: `The EPUB does not contain ${source.path}.`,
+            });
+            return null;
+          }
+          bytes = new Uint8Array(extracted);
+          byPath.set(source.path, bytes);
+        } catch (error) {
+          setPhotoResult(book.source, index, {
+            status: "error",
+            message: getErrorMessage(error),
+          });
+          return null;
+        }
+      }
+
+      return bytes;
+    },
+    [setPhotoResult],
+  );
+
+  const prepareSelectedPhotos = useCallback(
+    (book: Book, indices: readonly number[]) => {
+      for (const index of selectedArchivePhotoIndices(book.recipes, indices)) {
+        const source = book.recipes[index]?.image;
+        const bytes = getArchivePhotoBytes(book, index);
+        if (bytes && source?.kind === "epub") {
+          setPhotoPreview(book.source, index, bytes, source.mime);
+          // Reconnecting an EPUB must preserve a prior failure's Retry photo
+          // action, and an attached result remains terminal even if selection
+          // changes later in the review.
+          if (shouldPreparePhoto(book.photos.get(index))) {
+            setPhotoResult(book.source, index, { status: "ready" });
+          }
+        }
+      }
+    },
+    [getArchivePhotoBytes, setPhotoPreview, setPhotoResult],
+  );
+
+  useEffect(() => {
+    for (const book of books) {
+      if (!book.hasArchiveBytes) continue;
+      const unprepared = selectedArchivePhotoIndices(book.recipes, [
+        ...book.selected,
+      ]).filter((index) => shouldPreparePhoto(book.photos.get(index)));
+      if (unprepared.length) prepareSelectedPhotos(book, unprepared);
+    }
+  }, [books, prepareSelectedPhotos]);
+
+  const bindOriginalEpub = useCallback(
+    async (source: string, file: File) => {
+      if (!/\.epub$/i.test(file.name)) {
+        toast.error("Choose the original .epub file");
+        return;
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      discardBookBytes(source);
+      clearBookPhotoPreviews(source);
+      epubBytesRef.current.set(source, bytes);
+      updateBook(source, (book) => ({ ...book, hasArchiveBytes: true }));
+      const book = books.find((candidate) => candidate.source === source);
+      if (book) prepareSelectedPhotos(book, [...book.selected]);
+      toast.message(`Original EPUB ready for ${file.name}`);
+    },
+    [
+      books,
+      clearBookPhotoPreviews,
+      discardBookBytes,
+      prepareSelectedPhotos,
+      updateBook,
+    ],
+  );
+
+  const attachPhoto = useCallback(
+    async (book: Book, cookbookId: string, index: number, recipeId: string) => {
+      const source = book.recipes[index]?.image;
+      if (!source || source.kind !== "epub") return;
+      const bytes = getArchivePhotoBytes(book, index);
+      if (!bytes) return;
+      setPhotoPreview(book.source, index, bytes, source.mime);
+      setPhotoResult(book.source, index, { status: "pending" });
+      try {
+        const result = await attachCookbookRecipePhoto.mutateAsync({
+          cookbookId,
+          recipeId,
+          sourceIndex: index,
+          data: bytesToBase64(bytes),
+        });
+        setPhotoResult(book.source, index, result);
+      } catch (error) {
+        setPhotoResult(book.source, index, {
+          status: "error",
+          message: getErrorMessage(error),
+        });
+      }
+    },
+    [
+      attachCookbookRecipePhoto,
+      getArchivePhotoBytes,
+      setPhotoPreview,
+      setPhotoResult,
+    ],
+  );
+
+  const attachImportedPhotos = useCallback(
+    async (
+      book: Book,
+      cookbookId: string,
+      recipeIds: ReadonlyMap<number, { id: string; hasImage: boolean }>,
+    ) => {
+      const indices = selectedArchivePhotoIndices(book.recipes, [
+        ...recipeIds.keys(),
+      ]).filter((index) => !recipeIds.get(index)?.hasImage);
+      if (indices.length === 0) return;
+      updateBook(book.source, (current) => ({
+        ...current,
+        photoProgress: { done: 0, total: indices.length },
+      }));
+      let done = 0;
+      for (const index of indices) {
+        const recipe = recipeIds.get(index);
+        if (recipe) await attachPhoto(book, cookbookId, index, recipe.id);
+        done++;
+        updateBook(book.source, (current) => ({
+          ...current,
+          photoProgress: { done, total: indices.length },
+        }));
+      }
+      updateBook(book.source, (current) => ({
+        ...current,
+        photoProgress: undefined,
+      }));
+    },
+    [attachPhoto, updateBook],
+  );
+
+  const retryPhoto = useCallback(
+    async (source: string, index: number) => {
+      const book = books.find((candidate) => candidate.source === source);
+      const recipeResult = book?.results.get(index);
+      if (!book?.cookbookId || recipeResult?.status !== "done") return;
+      updateBook(source, (current) => ({
+        ...current,
+        photoProgress: { done: 0, total: 1 },
+      }));
+      try {
+        await attachPhoto(book, book.cookbookId, index, recipeResult.id);
+      } finally {
+        updateBook(source, (current) => ({
+          ...current,
+          photoProgress: undefined,
+        }));
+      }
+    },
+    [attachPhoto, books, updateBook],
+  );
 
   // Import one book's selected recipes. First create/refresh the Cookbook row
   // (stores the full raw extraction + OPF metadata, and is the FK target), then
@@ -549,7 +850,7 @@ export function CookbookImport({
       // extraction (not just the selected recipes) so reprocess / add-from-source
       // work later, and the cover (best-effort) is uploaded + attached now.
       let cookbookId: string;
-      if (book.cookbookId) {
+      if (book.cookbookId && !book.needsCookbookUpsert) {
         cookbookId = book.cookbookId;
       } else {
         let coverImageId: string | undefined;
@@ -580,11 +881,22 @@ export function CookbookImport({
           if (book.epubMeta?.isbn) cookbookInput.isbn = book.epubMeta.isbn;
           const cookbook = await upsertCookbook.mutateAsync(cookbookInput);
           cookbookId = cookbook.id;
+          updateBook(source, (current) => ({
+            ...current,
+            cookbookId,
+            needsCookbookUpsert: false,
+            cover: undefined,
+          }));
         } catch (error) {
           toast.error(`Couldn't save cookbook: ${getErrorMessage(error)}`);
           return;
         }
       }
+
+      // Read selected archive images only after the cookbook identity is known,
+      // but before recipe persistence so the review shows the exact photo queued
+      // for each selected recipe. This is in-memory extraction, never an upload.
+      prepareSelectedPhotos(book, orderedIndices);
 
       const setResult = (i: number, result: ImportResult) =>
         updateBook(source, (b) => ({
@@ -604,6 +916,10 @@ export function CookbookImport({
       // recipes are already persisted in the cookbook's rawJson by the upsert above,
       // so the server reads them by index, upserts in order, and does a single
       // batched recompute. Per-recipe results + overall progress stream back.
+      const persistedRecipeIds = new Map<
+        number,
+        { id: string; hasImage: boolean }
+      >();
       await startCookbookImport(
         (signal) =>
           recipeStreams.importCookbookStream.open(
@@ -611,13 +927,25 @@ export function CookbookImport({
             { signal },
           ),
         {
-          onItem: (item) =>
+          onItem: (item) => {
+            if (item.ok) {
+              persistedRecipeIds.set(item.index, {
+                id: item.id,
+                hasImage: item.hasImage,
+              });
+              if (item.hasImage) {
+                setPhotoResult(source, item.index, {
+                  status: "skipped-existing",
+                });
+              }
+            }
             setResult(
               item.index,
               item.ok
-                ? { status: "done", id: item.id }
+                ? { status: "done", id: item.id, hasImage: item.hasImage }
                 : { status: "error", message: item.error },
-            ),
+            );
+          },
           onProgress: (done, total) =>
             updateBook(source, (b) => ({
               ...b,
@@ -628,47 +956,79 @@ export function CookbookImport({
           successToast: (r) => `Imported ${r.succeeded} from ${bookName}`,
         },
       );
+      await attachImportedPhotos(book, cookbookId, persistedRecipeIds);
     },
-    [books, startCookbookImport, upsertCookbook, updateBook, uploadImageBytes],
+    [
+      attachImportedPhotos,
+      books,
+      prepareSelectedPhotos,
+      setPhotoResult,
+      startCookbookImport,
+      updateBook,
+      upsertCookbook,
+      uploadImageBytes,
+    ],
   );
 
   // Stable ref so memoized RecipeCards don't re-render every streaming pass just
   // because the parent re-rendered (the rest of `handlers` can be inline).
   const toggleRecipe = useCallback(
-    (source: string, i: number) =>
-      updateBook(source, (b) => {
-        const selected = new Set(b.selected);
-        if (selected.has(i)) {
-          // Deselect is single — a referenced recipe may be wanted on its own.
-          selected.delete(i);
-          return { ...b, selected };
-        }
+    (source: string, i: number) => {
+      const book = books.find((candidate) => candidate.source === source);
+      if (!book) return;
+      const selected = new Set(book.selected);
+      if (selected.has(i)) {
+        selected.delete(i);
+        discardPhotoPreview(source, i);
+      } else {
         // Select cascades: also check the recipes this one references
         // (transitively, in-book) so their cross-recipe links resolve on import.
-        addWithReferences(b.recipes, selected, i);
-        return { ...b, selected };
-      }),
-    [updateBook],
+        addWithReferences(book.recipes, selected, i);
+        if (book.hasArchiveBytes) {
+          prepareSelectedPhotos(book, [...selected]);
+        }
+      }
+      updateBook(source, (current) => ({ ...current, selected }));
+    },
+    [books, discardPhotoPreview, prepareSelectedPhotos, updateBook],
+  );
+
+  const toggleAll = useCallback(
+    (source: string) => {
+      const book = books.find((candidate) => candidate.source === source);
+      if (!book) return;
+      const selectingAll = book.selected.size !== book.recipes.length;
+      const selected = selectingAll
+        ? new Set(book.recipes.map((_, index) => index))
+        : new Set<number>();
+      if (selectingAll && book.hasArchiveBytes) {
+        prepareSelectedPhotos(book, [...selected]);
+      }
+      if (!selectingAll) {
+        for (const index of book.photoPreviewUrls.keys()) {
+          discardPhotoPreview(source, index);
+        }
+      }
+      updateBook(source, (current) => ({ ...current, selected }));
+    },
+    [books, discardPhotoPreview, prepareSelectedPhotos, updateBook],
   );
 
   const handlers = {
     rename: (source: string, name: string) =>
       updateBook(source, (b) => ({ ...b, name })),
     toggleRecipe,
-    toggleAll: (source: string) =>
-      updateBook(source, (b) => ({
-        ...b,
-        selected:
-          b.selected.size === b.recipes.length
-            ? new Set<number>()
-            : new Set(b.recipes.map((_, i) => i)),
-      })),
+    toggleAll,
     toggleExpanded: (source: string) =>
       updateBook(source, (b) => ({ ...b, expanded: !b.expanded })),
-    remove: (source: string) =>
-      setBooks((prev) => prev.filter((b) => b.source !== source)),
+    remove: (source: string) => {
+      discardBookBytes(source);
+      setBooks((prev) => prev.filter((b) => b.source !== source));
+    },
     import: importBook,
     retryExtraction,
+    retryPhoto,
+    bindOriginalEpub,
   };
 
   return (

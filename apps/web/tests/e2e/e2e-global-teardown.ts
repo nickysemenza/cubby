@@ -21,6 +21,8 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
       console.log("[E2E Teardown] Database stopped");
     }
 
+    await globalThis.__E2E_OBJECT_STORAGE__?.close();
+    globalThis.__E2E_OBJECT_STORAGE__ = undefined;
     globalThis.__E2E_HARNESS__ = undefined;
     globalThis.__E2E_DATABASE__ = undefined;
     delete process.env.E2E_DATABASE_URL;

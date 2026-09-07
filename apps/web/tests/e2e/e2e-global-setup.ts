@@ -6,6 +6,7 @@ import { createTestHarness, type TestHarness } from "wrangler";
 import { z } from "zod";
 
 import { createE2EDatabase } from "./e2e-database";
+import { createE2EObjectStorage } from "./e2e-object-storage";
 import "./e2e-runtime-state";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +25,8 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   // Install the provider before starting the harness so global teardown can
   // always close the PGlite socket and WASM database after Worker shutdown.
   globalThis.__E2E_DATABASE__ = database;
+  const objectStorage = await createE2EObjectStorage();
+  globalThis.__E2E_OBJECT_STORAGE__ = objectStorage;
 
   // 2. Start the Cloudflare test harness against the production build.
   const webRoot = path.join(__dirname, "../..");
@@ -81,6 +84,10 @@ async function globalSetup(_config: FullConfig): Promise<void> {
           // browser contexts, so disable it only for this isolated test host.
           E2E_AUTH_TEST_MODE: "true",
           DATABASE_URL: databaseUrl,
+          R2_ENDPOINT: objectStorage.url,
+          R2_PUBLIC_URL: objectStorage.url,
+          R2_BUCKET_NAME: "e2e-bucket",
+          R2_KEY_PREFIX: "e2e",
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",
           // USDA enrichment must fail locally and immediately in E2E.
@@ -138,6 +145,8 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     harness.debug();
     await harness.close();
     await database.close();
+    await objectStorage.close();
+    globalThis.__E2E_OBJECT_STORAGE__ = undefined;
     globalThis.__E2E_DATABASE__ = undefined;
     throw error;
   }

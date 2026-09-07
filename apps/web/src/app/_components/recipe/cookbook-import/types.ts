@@ -9,8 +9,19 @@ import type { ExtractionReport, FailedChunk } from "./extraction";
 /** Result of importing a single recipe into the DB. */
 export type ImportResult =
   | { status: "importing" }
-  | { status: "done"; id: string }
+  | { status: "done"; id: string; hasImage?: boolean }
   | { status: "error"; message: string };
+
+/** Photo work is independent from recipe persistence, so a failed photo can retry alone. */
+export type PhotoResult =
+  | { status: "ready" }
+  | { status: "pending" }
+  | {
+      status: "attached" | "reused" | "skipped-existing";
+      cleanupWarning?: string;
+    }
+  | { status: "missing-bytes"; message: string }
+  | { status: "error"; message: string; cleanupWarning?: string };
 
 /** Where a book is in the in-browser extraction pipeline. */
 export type ExtractPhase =
@@ -41,12 +52,22 @@ export type Book = {
    * `upsertCookbook` and imports straight against this id.
    */
   cookbookId?: string;
+  /** Current extraction differs from the raw JSON persisted for cookbookId. */
+  needsCookbookUpsert?: boolean;
+  /** Original EPUB bytes are available in this browser session for archive photos. */
+  hasArchiveBytes?: boolean;
   /** Selected recipe indices into `recipes`. */
   selected: Set<number>;
   /** Per-recipe import status, by index. */
   results: Map<number, ImportResult>;
+  /** Per-recipe EPUB-photo outcome, separate from the recipe import result. */
+  photos: Map<number, PhotoResult>;
+  /** Transient object URLs for archive-image previews, keyed by recipe index. */
+  photoPreviewUrls: Map<number, string>;
   /** Overall import progress while `importCookbookStream` runs; absent when idle. */
   importProgress?: { done: number; total: number };
+  /** Photo attachment progress, absent when no photo work is in flight. */
+  photoProgress?: { done: number; total: number };
   extract: ExtractPhase;
   expanded: boolean;
 };
@@ -68,6 +89,8 @@ export type BookHandlers = {
   toggleExpanded: (source: string) => void;
   remove: (source: string) => void;
   import: (source: string) => void | Promise<void>;
+  retryPhoto: (source: string, index: number) => void | Promise<void>;
+  bindOriginalEpub: (source: string, file: File) => void | Promise<void>;
   /** Re-run extraction for this book from its cached EPUB bytes (retry failed chunks). */
   retryExtraction: (source: string) => void;
 };

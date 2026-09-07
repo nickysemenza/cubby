@@ -521,6 +521,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "purchase.split": async () =>
     (await import("~/server/purchase-browser.server")).purchaseHandlers
       .operations.split,
+  "recipe.attachCookbookRecipePhoto": async () =>
+    (await import("~/server/recipe-browser.server")).recipeHandlers.operations
+      .attachCookbookRecipePhoto,
   "recipe.deleteCookbook": async () =>
     (await import("~/server/recipe-browser.server")).recipeHandlers.operations
       .deleteCookbook,

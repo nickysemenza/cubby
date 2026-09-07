@@ -1,6 +1,8 @@
 import { recipeAvailabilityOut } from "@cubby/schemas/availability";
 import { equivalenceReportSchema } from "@cubby/schemas/equivalences";
 import {
+  attachCookbookRecipePhotoInput,
+  attachCookbookRecipePhotoOut,
   chunkRequestInput,
   chunkResponseOut,
   cookbookDiffInput,
@@ -168,6 +170,11 @@ export const recipe = defineOperationDomain("recipe", {
     input: chunkRequestInput,
     output: chunkResponseOut,
     invalidates: ripple.none,
+  }),
+  attachCookbookRecipePhoto: mutation({
+    input: attachCookbookRecipePhotoInput,
+    output: attachCookbookRecipePhotoOut,
+    invalidates: ripple.recipe,
   }),
 });
 

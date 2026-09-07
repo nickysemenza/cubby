@@ -18,6 +18,7 @@ const PNG_BASE64 =
 type TestDatabase = { readonly scope: "image-storage" };
 const database: TestDatabase = { scope: "image-storage" };
 const stagedImageId = testEntityId("image", "staged-upload");
+const attachmentPendingImageId = testEntityId("image", "attachment-pending");
 const productId = testEntityId("product", "attachment-target");
 const stagedUploadCode = testShortcode("image", "IMG-2222");
 const existingImageCode = testShortcode("image", "IMG-3333");
@@ -76,6 +77,8 @@ class MemoryImageStorage {
   };
   createUploadError: Error | null = null;
   createAttachmentError: Error | null = null;
+  deleteObjectError: Error | null = null;
+  uploadError: Error | null = null;
   attachableEntityError: Error | null = null;
   existingAttachment: {
     shortcode: string;
@@ -105,7 +108,7 @@ class MemoryImageStorage {
       },
       createPendingImageRecord: async (_database, params) => {
         this.createdPending.push(params);
-        return { shortcode: "IMG-2AAA" };
+        return { id: attachmentPendingImageId, shortcode: "IMG-2AAA" };
       },
       createUploadedImageRecord: async (_database, params) => {
         if (this.createUploadError) throw this.createUploadError;
@@ -136,6 +139,7 @@ class MemoryImageStorage {
       contentTypeToExtension: (contentType) =>
         contentType === "image/png" ? "png" : "jpg",
       deleteObject: async (key) => {
+        if (this.deleteObjectError) throw this.deleteObjectError;
         this.deletedKeys.push(key);
       },
       extractKeyFromUrl: () => null,
@@ -148,6 +152,7 @@ class MemoryImageStorage {
       getPublicUrl: (key) => `https://images.example/${key}`,
       isOurBucketUrl: () => false,
       upload: async ({ key, body, contentType }) => {
+        if (this.uploadError) throw this.uploadError;
         this.uploaded.push({ key, contentType, size: body.length });
       },
     },
@@ -281,6 +286,21 @@ describe("attachFileToEntity", () => {
     ]);
   });
 
+  it("registers a pending row before upload so interrupted work is sweepable", async () => {
+    storage.uploadError = new Error("upload interrupted");
+    storage.deleteObjectError = new Error("object store unavailable");
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow(/partial object could not be cleaned up/);
+    expect(storage.createdPending).toHaveLength(1);
+    expect(storage.deletedImageIds).toEqual([]);
+  });
+
   it("parses data URI content types and classifies PDFs as documents", async () => {
     const image = await service.attachFileToEntity(database, {
       ...attachmentTarget,
@@ -363,6 +383,21 @@ describe("attachFileToEntity", () => {
     expect(storage.deletedKeys).toEqual(["cubby/images/attachment.png"]);
   });
 
+  it("reports when a losing idempotent upload cannot be removed", async () => {
+    storage.reuseAttachment = true;
+    storage.deleteObjectError = new Error("object store unavailable");
+
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      data: PNG_BASE64,
+      contentType: "image/png",
+      idempotencyKey: "race-key",
+    });
+
+    expect(result.reused).toBe(true);
+    expect(result.cleanupWarning).toMatch(/redundant upload/);
+  });
+
   it("consumes a pending staged upload and deletes its staging row", async () => {
     const result = await service.attachFileToEntity(database, {
       ...attachmentTarget,
@@ -372,6 +407,18 @@ describe("attachFileToEntity", () => {
     expect(result.kind).toBe("image");
     expect(storage.deletedImageIds).toEqual([stagedImageId]);
     expect(storage.deletedKeys).toContain("cubby/images/staged.png");
+  });
+
+  it("reports when a consumed staged upload object cannot be removed", async () => {
+    storage.deleteObjectError = new Error("object store unavailable");
+
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      uploadId: stagedUploadCode,
+    });
+
+    expect(result.reused).toBe(false);
+    expect(result.cleanupWarning).toMatch(/staged upload/);
   });
 
   it("rejects a missing attachment target before writing an object", async () => {
@@ -495,5 +542,20 @@ describe("attachFileToEntity", () => {
       }),
     ).rejects.toThrow("gone");
     expect(storage.deletedKeys).toEqual(["cubby/images/attachment.png"]);
+  });
+
+  it("surfaces both attachment and rollback failures", async () => {
+    storage.createAttachmentError = new Error("database unavailable");
+    storage.deleteObjectError = new Error("object store unavailable");
+
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        data: PNG_BASE64,
+        contentType: "image/png",
+      }),
+    ).rejects.toThrow(
+      "File attachment failed and its uploaded object could not be cleaned up",
+    );
   });
 });

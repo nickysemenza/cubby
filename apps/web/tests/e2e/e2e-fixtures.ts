@@ -1,3 +1,5 @@
+import { importRecipesSchema } from "@cubby/schemas/import-recipe";
+import { upsertCookbook } from "~/server/repo/cookbook";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
@@ -198,3 +200,51 @@ export const seedInventoryPrerequisites = (
     }
     return { products, location };
   })();
+
+export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
+  const db = getFixtureDb();
+  const context = requireActor(
+    createTestRequestContext(db, {
+      auth: { userId: await fixtureUserId(page) },
+    }),
+  );
+  const result = await upsertCookbook(
+    db,
+    {
+      name,
+      sourceLabel: "photo-fixture.epub",
+      rawJson: importRecipesSchema.parse([
+        {
+          meta: { title: `${name} carrots` },
+          sections: [
+            {
+              ingredients: ["2 carrots"],
+              instructions: ["Roast the carrots."],
+            },
+          ],
+          image: {
+            kind: "epub",
+            path: "OEBPS/images/hero.png",
+            mime: "image/png",
+          },
+        },
+        {
+          meta: { title: `${name} potatoes` },
+          sections: [
+            {
+              ingredients: ["2 potatoes"],
+              instructions: ["Roast the potatoes."],
+            },
+          ],
+          image: {
+            kind: "epub",
+            path: "OEBPS/images/hero.png",
+            mime: "image/png",
+          },
+        },
+      ]),
+    },
+    context.actorContext,
+  );
+  return result.output;
+}

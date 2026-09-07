@@ -101,7 +101,7 @@ export interface ImageStoragePorts<TDatabase> {
     createPendingImageRecord: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof createPendingImageRecord>
-    ) => Promise<{ shortcode: string }>;
+    ) => Promise<{ id: string; shortcode: string }>;
     createUploadedImageRecord: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof createUploadedImageRecord>
@@ -158,7 +158,7 @@ export interface ImageStoragePorts<TDatabase> {
   };
 }
 
-const productionImageStoragePorts = {
+export const productionImageStoragePorts = {
   repository: {
     assertAttachableEntityExists,
     createOrReuseAttachedImage,
@@ -476,6 +476,7 @@ const readStagedUpload = async <TDatabase>(
   contentType: string;
   filename: string;
   stagedImageId: ImageId;
+  stagedKey: string;
 }> => {
   const notFound = (cause?: unknown) =>
     createAppError(
@@ -525,6 +526,7 @@ const readStagedUpload = async <TDatabase>(
     contentType: staged.contentType,
     filename: staged.filename,
     stagedImageId: stagedImageUuid,
+    stagedKey: staged.key,
   };
 };
 
@@ -533,6 +535,7 @@ type AttachmentSource = {
   contentType: string | undefined;
   sourceFilename?: string;
   stagedImageId?: ImageId;
+  stagedKey?: string;
 };
 
 const readUrlAttachmentSource = async <TDatabase>(
@@ -642,17 +645,22 @@ const attachmentResponse = <TDatabase>(
   row: AttachedImageRecord,
   input: McpAttachFileInput,
   reused: boolean,
-): AttachFileResponse => ({
-  imageId: parseShortcodeFor("image", row.shortcode),
-  url: ports.objectStorage.getPublicUrl(row.key),
-  filename: row.filename,
-  contentType: row.contentType,
-  kind: row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
-  entityType: input.entityType,
-  entityId: input.entityId,
-  idempotencyKey: row.idempotencyKey,
-  reused,
-});
+  cleanupWarning?: string,
+): AttachFileResponse => {
+  const response: AttachFileResponse = {
+    imageId: parseShortcodeFor("image", row.shortcode),
+    url: ports.objectStorage.getPublicUrl(row.key),
+    filename: row.filename,
+    contentType: row.contentType,
+    kind: row.contentType === PDF_CONTENT_TYPE ? "document" : "image",
+    entityType: input.entityType,
+    entityId: input.entityId,
+    idempotencyKey: row.idempotencyKey,
+    reused,
+  };
+  if (cleanupWarning) response.cleanupWarning = cleanupWarning;
+  return response;
+};
 
 /**
  * Store a file in R2 and associate it with a product / recipe / location /
@@ -701,8 +709,7 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   const { contentType, isDocument, inspected } =
     await validateAttachmentSource(source);
 
-  // 3. Store in R2, then record the row — rolling back the object if the DB
-  // insert fails (mirrors importImageFromUrl).
+  // Allocate the final key, then register it before writing bytes.
   const extension = isDocument
     ? "pdf"
     : ports.objectStorage.contentTypeToExtension(contentType);
@@ -714,10 +721,32 @@ const attachFileToEntityWithPorts = async <TDatabase>(
     ? await allocateAttachmentDocumentKey(ports, db, filename, input.entityId)
     : ports.objectStorage.generateImageKey(filename);
 
-  await ports.objectStorage.upload({ key, body: source.bytes, contentType });
-  // 4. Insert the row + associate in one transaction (owned by the repo), so a
-  // failure in either step (e.g. the target was deleted since step 0) rolls back
-  // the DB write; the catch then removes the now-orphaned R2 object.
+  // Register the object before writing it so a process interruption between
+  // R2 and association remains discoverable by the existing PENDING sweep.
+  const pending = await ports.repository.createPendingImageRecord(db, {
+    key,
+    filename,
+    contentType,
+    size: source.bytes.length,
+  });
+  const pendingImageId = parseEntityId("image", pending.id);
+  try {
+    await ports.objectStorage.upload({ key, body: source.bytes, contentType });
+  } catch (error) {
+    try {
+      await ports.objectStorage.deleteObject(key);
+      await ports.repository.deleteImages(db, [pendingImageId]);
+    } catch (cleanupError) {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        "File upload failed and its partial object could not be cleaned up",
+        { uploadError: error, cleanupError },
+      );
+    }
+    throw error;
+  }
+  // Promote the pending row + associate it in one repository transaction. A
+  // failure removes the object before its pending cleanup record.
   let created: { row: AttachedImageRecord; reused: boolean };
   try {
     created = await ports.repository.createOrReuseAttachedImage(
@@ -727,6 +756,7 @@ const attachFileToEntityWithPorts = async <TDatabase>(
         filename,
         size: source.bytes.length,
         ...inspected,
+        pendingImageId,
         idempotencyKey: input.idempotencyKey,
         expectedImageCount: input.expectedImageCount,
       },
@@ -734,19 +764,28 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       input.documentKind,
     );
   } catch (error) {
-    await ports.objectStorage.deleteObject(key).catch((cleanupError) => {
-      console.error("Failed to roll back attached file object:", cleanupError);
-    });
+    try {
+      await ports.objectStorage.deleteObject(key);
+      await ports.repository.deleteImages(db, [pendingImageId]);
+    } catch (cleanupError) {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        "File attachment failed and its uploaded object could not be cleaned up",
+        { attachmentError: error, cleanupError },
+      );
+    }
     throw error;
   }
 
+  let cleanupWarning: string | undefined;
   if (created.reused) {
-    await ports.objectStorage.deleteObject(key).catch((cleanupError) => {
-      console.error(
-        "Failed to remove losing idempotent attachment object:",
-        cleanupError,
-      );
-    });
+    try {
+      await ports.objectStorage.deleteObject(key);
+      await ports.repository.deleteImages(db, [pendingImageId]);
+    } catch {
+      cleanupWarning =
+        "The attachment was reused, but its redundant upload could not be cleaned up.";
+    }
   }
 
   // The staging row and its object have served their purpose — the attachment
@@ -755,19 +794,28 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   // rather than leaking them, and must not fail an attachment that succeeded.
   if (source.stagedImageId) {
     try {
+      if (!source.stagedKey) {
+        throw new Error("Staged attachment source is missing its storage key");
+      }
+      await ports.objectStorage.deleteObject(source.stagedKey);
       // The uuid `readStagedUpload` already resolved from the `IMG-` code —
       // `deleteImages` writes against the uuid PK, and a shortcode here would
       // silently delete nothing and strand the staged object.
-      const { deletedKeys } = await ports.repository.deleteImages(db, [
-        source.stagedImageId,
-      ]);
-      await deleteStoredObjectsWithPorts(ports, deletedKeys);
+      await ports.repository.deleteImages(db, [source.stagedImageId]);
     } catch (cleanupError) {
       console.error("Failed to clean up staged upload:", cleanupError);
+      cleanupWarning =
+        "The attachment succeeded, but its staged upload could not be cleaned up.";
     }
   }
 
-  return attachmentResponse(ports, created.row, input, created.reused);
+  return attachmentResponse(
+    ports,
+    created.row,
+    input,
+    created.reused,
+    cleanupWarning,
+  );
 };
 
 /**

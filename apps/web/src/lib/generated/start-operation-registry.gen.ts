@@ -249,6 +249,7 @@ export const START_OPERATIONS = {
   "purchase.merge": { kind: "mutation" },
   "purchase.products": { kind: "query" },
   "purchase.split": { kind: "mutation" },
+  "recipe.attachCookbookRecipePhoto": { kind: "mutation" },
   "recipe.deleteCookbook": { kind: "mutation" },
   "recipe.dryRunRecomputeTotals": { kind: "query" },
   "recipe.duplicate": { kind: "mutation" },
