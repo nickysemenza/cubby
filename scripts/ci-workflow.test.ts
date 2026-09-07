@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { z } from "zod";
 
 const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
 const playwrightConfig = readFileSync("apps/web/playwright.config.ts", "utf8");
@@ -130,4 +131,92 @@ test("manual verification and coverage retain their test tiers", () => {
     assert.match(verification, /needs\.scope\.outputs\.verify == 'true'/u);
     assert.match(verification, /needs\.scope\.outputs\.coverage == 'true'/u);
   }
+});
+
+test("local checks retain every required gate and keep stateful verification live", () => {
+  const project = z
+    .object({
+      targets: z.record(
+        z.string(),
+        z.object({
+          command: z.string(),
+          cache: z.boolean(),
+        }),
+      ),
+    })
+    .parse(JSON.parse(readFileSync("project.json", "utf8")));
+  const manifest = z
+    .object({ scripts: z.record(z.string(), z.string()) })
+    .parse(JSON.parse(readFileSync("package.json", "utf8")));
+  const fast = [
+    "entity",
+    "start-ops",
+    "types",
+    "lint",
+    "format",
+    "soft-delete",
+    "identifiers",
+    "knip",
+  ];
+  const extra = ["bindings", "openapi", "script-tests", "security"];
+  const commands = {
+    entity: "node scripts/entity-literal-generator.ts --check",
+    "start-ops": "node scripts/start-operation-registry-generator.ts --check",
+    types: "pnpm typecheck",
+    lint: "oxlint .",
+    format: "oxfmt --check .",
+    "soft-delete": "node scripts/check-soft-delete-filters.ts",
+    knip: "knip --no-config-hints --cache",
+    bindings:
+      "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --workspace-concurrency=2 types:check",
+    openapi: "pnpm --filter @cubby/usda-api generate:openapi:check",
+    "script-tests": "pnpm test:scripts",
+    security: "pnpm audit:security",
+    "fast-tests":
+      "pnpm -r --workspace-concurrency=2 test && touch apps/web/.vitest-failures.txt",
+  };
+  for (const [name, command] of Object.entries(commands))
+    assert.equal(project.targets[name]?.command, command, name);
+  assert.match(
+    manifest.scripts.check!,
+    new RegExp(`--targets=${fast.join(",")}(?: |$)`),
+  );
+  assert.match(
+    manifest.scripts["check:all"]!,
+    new RegExp(`--targets=${[...fast, ...extra].join(",")}(?: |$)`),
+  );
+  assert.equal(
+    project.targets.identifiers?.command,
+    "node scripts/check-unsafe-identifiers.ts --include-tests && node --test scripts/check-unsafe-identifiers.unit.test.ts",
+  );
+  for (const name of [
+    "soft-delete",
+    "security",
+    "script-tests",
+    "bindings",
+    "openapi",
+  ])
+    assert.equal(project.targets[name]?.cache, false, name);
+  assert.equal(manifest.scripts["verify:local"], "node scripts/ci-scope.ts");
+  assert.equal(
+    readFileSync(".husky/pre-commit", "utf8").trim().endsWith("pnpm check"),
+    true,
+  );
+  assert.equal(
+    readFileSync(".husky/pre-push", "utf8").trim().endsWith("pnpm verify:push"),
+    true,
+  );
+});
+
+test("task caching is bounded and cannot connect to Nx Cloud", () => {
+  const config = z
+    .object({
+      neverConnectToCloud: z.boolean(),
+      parallel: z.number(),
+      maxCacheSize: z.string(),
+    })
+    .parse(JSON.parse(readFileSync("nx.json", "utf8")));
+  assert.equal(config.neverConnectToCloud, true);
+  assert.equal(config.parallel, 2);
+  assert.equal(config.maxCacheSize, "2GB");
 });

@@ -71,3 +71,74 @@ Changing Rust test/Clippy order was explored but not retained locally. The
 three-second Clippy result reused earlier Clippy output and was not a valid cold
 comparison. No tests, required checks, production APIs, or schemas were removed
 or weakened to obtain these results.
+
+## Declarative local tooling
+
+`project.json` replaces the custom check runner. Nx runs two tasks concurrently;
+`NX_PARALLEL` overrides that limit. Existing package scripts and mandatory Git
+hooks remain the entrypoints. Nx Cloud and analytics are disabled; the shared
+local task cache has a 2 GB limit with built-in eviction. Set
+`NX_SKIP_NX_CACHE=true` for a fresh run. Workspace typechecking also caps package
+concurrency at two.
+
+Cached checks hash the workspace source/configuration, lockfile, patches,
+Node/platform, and Node options. Typechecks additionally hash generated WASM
+declarations. Fast tests additionally hash the commit, ignored WASM/environment
+files, and test-specific environment settings. MCP App bundles and an empty
+failure-summary file are restored, so an older failed run cannot leave a stale
+failure list after a successful cache hit. Git-index-sensitive soft-delete
+checks, Knip, network audit, tooling tests, bindings/OpenAPI, PostgreSQL, browser
+acceptance, and Git-aware verification remain live.
+
+Deleted: `run-checks.ts` (192 lines), `run-checks.test.ts` (111), and
+`setup-agent-environment.ts` (49). Required-gate assertions move into the existing
+configuration tests. Total `scripts/` lines fall from 12,955 to 12,692; the two
+Nx configurations add 137 lines, for a net reduction of 126 lines across those
+files. No new custom tooling scripts were added.
+
+Setup uses `pnpm install --frozen-lockfile && node scripts/ensure-wasm.ts`.
+Claude's startup condition was exercised against a main checkout (skips setup)
+and a linked worktree (invokes setup).
+
+Use external measurement tools:
+
+```sh
+hyperfine --warmup 1 --runs 10 'pnpm check'
+hyperfine --warmup 1 --runs 10 'NX_SKIP_NX_CACHE=true pnpm check'
+```
+
+A lint-cache probe passed, failed after adding a debugger statement, then reused
+the successful result after source restoration in 2.27 seconds. The first run
+took 42.09 seconds under contention; these are not idle-machine guarantees.
+Node 26.7.0 was used locally; `.nvmrc` still requests Node 24.
+
+### Shared dependency-store experiment: not adopted
+
+Disposable checkouts of the pre-change revision used the same lockfile, without
+household environment files. Warm-store pnpm 10.34.1 trials took 36.74/60.04
+seconds with isolated virtual stores and 74.99/103.67 seconds with the global
+layout. Other local jobs were compiling throughout these measurements.
+
+This matches [pnpm #11112](https://github.com/pnpm/pnpm/issues/11112), where fresh
+projects reimport populated global entries. pnpm 11.22.0 with the existing
+resolution/build policy took 357.16 seconds to populate its separate store,
+then 10.66 seconds for a fresh install. Its checkout-local dependency links
+reported 1.8 MB versus about 1.4 GB for the isolated layout. These `du` totals
+exclude the shared store and do not measure physically reclaimed APFS blocks.
+Concurrent minimal projects correctly resolved distinct Zod 3 and 4 versions.
+
+The application validation rejected adoption: the global layout exposed an
+undeclared Vitest peer in jest-dom and lost React declaration resolution in
+Lucide/chart libraries. A narrow Vitest peer extension fixed the UI import, but
+TypeScript's `typeRoots` did not fix the React declarations. `preserveSymlinks`
+was also rejected: a negative type probe accepted an invalid chart-axis property,
+showing that seemingly improved compilation would weaken checking. This matches
+the class of failures in [pnpm #9739](https://github.com/pnpm/pnpm/issues/9739).
+All experimental dependency and compiler adjustments were reverted.
+
+Keep pnpm 10 and its existing storage layout until shared-store compatibility
+can pass the complete type/build/test gates without a growing set of local
+workarounds. No Bun migration is justified by this evidence. This patch reduces
+custom orchestration and repeated computation; it does **not** claim a reduction
+in dependency disk allocation. pnpm's existing content-addressed storage and the
+existing shared Cargo target cache remain in use.

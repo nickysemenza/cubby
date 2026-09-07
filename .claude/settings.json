@@ -11,14 +11,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pnpm",
+            "command": "sh",
             "args": [
-              "--dir",
-              "${CLAUDE_PROJECT_DIR}",
-              "run",
-              "agent:setup",
-              "--",
-              "--worktree-only"
+              "-c",
+              "if [ \"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-dir)\" != \"$(git -C \"$CLAUDE_PROJECT_DIR\" rev-parse --path-format=absolute --git-common-dir)\" ]; then pnpm --dir \"$CLAUDE_PROJECT_DIR\" run agent:setup; fi"
             ],
             "timeout": 600
           }
