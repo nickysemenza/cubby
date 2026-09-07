@@ -1,15 +1,7 @@
 name: Documentation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "**/*.md"
-      - "**/*.mdx"
-  pull_request:
-    paths:
-      - "**/*.md"
-      - "**/*.mdx"
+  workflow_dispatch:
 
 permissions:
   contents: read

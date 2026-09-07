@@ -2,12 +2,8 @@
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist", "src/sw.ts"],
   "compilerOptions": {
-    // Re-measured 2026-08-17 on TypeScript 7.0.2 (the native Go tsc): **7.1s
-    // cold, ~0.8s warm** on this program, and 2.2s for a warm `pnpm typecheck`
-    // across all 10 packages. The figures previously recorded here — 97s cold
-    // vs ~12s warm — predate the native compiler and are no longer true;
-    // they were load-bearing enough to misdirect a whole round of test-speed
-    // work, so keep them current.
+    // The typecheck script uses one native checker to avoid duplicating the
+    // large generic type graph. Measurements: docs/local-check-performance.md.
     //
     // The default buildinfo path is beside this tsconfig, which is what keeps
     // parallel worktrees from clobbering each other's cache — do not point it

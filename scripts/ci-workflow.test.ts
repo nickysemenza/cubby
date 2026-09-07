@@ -13,54 +13,16 @@ function job(id: string, nextId: string) {
   return workflow.slice(start, end);
 }
 
-test("scope releases independent verification lanes without installing dependencies", () => {
-  const scope = job("scope", "validation");
-  const validation = job("validation", "test-aux");
-  const auxiliary = job("test-aux", "test-rust");
-
-  assert.match(scope, /id: scope/u);
-  assert.match(scope, /fetch-depth: 2/u);
-  assert.match(scope, /name: Classify changes and find a reusable PR run/u);
-  assert.doesNotMatch(scope, /setup-node-with-deps/u);
-  assert.doesNotMatch(scope, /pnpm check/u);
-  assert.match(validation, /needs: scope/u);
-  assert.match(validation, /CHECK_MAX_PROCESSES:/u);
-  assert.match(validation, /pnpm check:all &/u);
-  assert.match(validation, /wait "\$\{pids\[\$index\]\}"/u);
-  assert.doesNotMatch(validation, /--filter '!@cubby\/web'/u);
-  assert.match(auxiliary, /needs: scope/u);
-  assert.match(auxiliary, /--filter '!@cubby\/web'/u);
-  assert.match(scope, /name: Save PR verification provenance/u);
-  assert.match(scope, /name: pr-verification-v2-/u);
-});
-
-test("ordinary PR verification is reusable only from an exact successful tree", () => {
-  const scope = job("scope", "validation");
-  assert.match(
-    scope,
-    /`pr-verification-v2-\$\{pr\.number\}-\$\{pr\.head\.sha\}`/u,
+test("hosted CI is manual and always selects the complete suite", () => {
+  const triggers = workflow.slice(0, workflow.indexOf("concurrency:"));
+  assert.match(triggers, /workflow_dispatch:/u);
+  assert.doesNotMatch(
+    triggers,
+    /pull_request:|push:|schedule:|bypass_e2e|force_full/u,
   );
-  assert.match(scope, /artifactNames\.has\(verificationArtifact\)/u);
-  assert.match(scope, /pr\.merge_commit_sha === context\.sha/u);
-  assert.match(scope, /pr\.head\.repo\?\.full_name/u);
-  assert.match(
-    scope,
-    /mainCommit\.data\.tree\.sha === headCommit\.data\.tree\.sha/u,
-  );
-  assert.match(scope, /run\.conclusion === "success"/u);
-  assert.match(scope, /run\.head_sha === pr\.head\.sha/u);
-  assert.match(scope, /classified\.web && !artifactNames\.has\("cf-build"\)/u);
-  assert.match(scope, /context\.ref === "refs\/heads\/main"/u);
-});
-
-test("only the preview label spends a CI runner", () => {
-  const scope = job("scope", "validation");
-  assert.match(scope, /github\.event\.action != 'labeled'/u);
-  assert.match(scope, /github\.event\.label\.name == 'preview'/u);
-  assert.match(
-    workflow,
-    /github\.event\.action == 'labeled' && github\.event\.label\.name \|\| 'verify'/u,
-  );
+  assert.match(triggers, /options: \[verify, coverage\]/u);
+  assert.match(job("scope", "validation"), /full: 'true'/u);
+  assert.doesNotMatch(workflow, /^  deploy-/mu);
 });
 
 test("E2E browser lanes start with scope and test the uploaded artifact", () => {
@@ -120,7 +82,7 @@ test("PostgreSQL and browser jobs enforce authoritative counts", () => {
   const postgres = job("test-postgres", "test-aux-coverage");
   const e2e = job("test-e2e", "report-coverage");
   assert.match(postgres, /--project integration/u);
-  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=264/u);
+  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=266/u);
   assert.match(postgres, /if \[\[ "\$FULL" == "true" \]\]/u);
   assert.doesNotMatch(postgres, /pglite/u);
   assert.match(e2e, /expected-tests: 15/u);
@@ -142,31 +104,23 @@ test("private-repository runners keep bounded timeout budgets", () => {
   assert.match(playwrightConfig, /timeout: isCI \? 120_000 : 30_000/u);
 });
 
-test("deployment accepts exact PR reuse or every full fallback result", () => {
-  const deploy = job("deploy-cf", "deploy-worker");
-  assert.match(
+test("main builds and deploys without rerunning verification", () => {
+  const deploy = readFileSync(".github/workflows/deploy.yaml", "utf8");
+  assert.match(deploy, /push:\n    branches: \[main\]/u);
+  assert.doesNotMatch(
     deploy,
-    /needs: \[scope, validation, test-aux, test-rust, test-web, test-postgres, test-e2e\]/u,
+    /pull_request:|test:e2e|pnpm check|test-postgres|test-web/u,
   );
-  for (const result of [
-    "needs.scope.result == 'success'",
-    "needs.validation.result == 'success'",
-    "needs.test-web.result == 'success'",
-    "needs.test-postgres.result == 'success'",
-    "needs.test-e2e.result == 'success'",
-  ]) {
-    assert.match(deploy, new RegExp(result.replaceAll(".", "\\."), "u"));
-  }
-  assert.match(deploy, /needs\.scope\.outputs\.reuse == 'true'/u);
-  assert.match(deploy, /needs\.test-aux\.result == 'success'/u);
-  assert.match(
-    deploy,
-    /inputs\.bypass_e2e && needs\.test-e2e\.result == 'skipped'/u,
-  );
-  assert.doesNotMatch(deploy, /run: pnpm --filter @cubby\/web run build:cf/u);
+  assert.match(deploy, /classifyPaths\(paths\)/u);
+  assert.match(deploy, /needs: scope/u);
+  assert.match(deploy, /deploy-cubby-production/u);
+  assert.match(deploy, /Re-check current main before deployment/u);
+  assert.match(deploy, /run: pnpm --filter @cubby\/web run build:cf/u);
+  assert.match(deploy, /deploy --config dist\/server\/wrangler.json/u);
+  assert.ok(deploy.indexOf("run build:cf") < deploy.indexOf("deploy --config"));
 });
 
-test("reused main runs skip tests while scheduled coverage keeps its tiers", () => {
+test("manual verification and coverage retain their test tiers", () => {
   for (const [id, nextId] of [
     ["test-rust", "test-web"],
     ["test-web", "test-postgres"],
