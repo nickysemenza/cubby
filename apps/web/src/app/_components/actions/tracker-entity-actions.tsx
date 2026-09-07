@@ -30,9 +30,7 @@ import type {
   EntityActionResolutionContext,
   EntityActionRow,
 } from "./entity-actions";
-
-export const trackerEntities = ["expense", "task"] as const;
-export type TrackerEntity = (typeof trackerEntities)[number];
+import type { TrackerEntity } from "./tracker-entities";
 type StageSource = "row" | "catalog";
 
 interface TrackerActionRow extends EntityActionRow {

@@ -13,8 +13,11 @@ The account contains three fixed editable calendars:
   this calendar creates a completed Task.
 - **Cubby Meals**: all Meals.
 
-Calendar can create, rename, reschedule, and delete these records. Cubby's
-normal deletion policies still apply. Project membership, recipes, completion
+Calendar can create, rename, and reschedule these records. Deletion currently
+requires an `If-Match` header: tested Calendar.app requests omit it and receive
+`428`, so delete records in Cubby until that compatibility decision is resolved.
+CalDAV clients that supply the condition can delete records, subject to Cubby's
+normal deletion policies. Project membership, recipes, completion
 status, and other unrelated fields remain controlled in Cubby. Moving events
 between calendars, recurrence, invitations, sharing, and calendar creation are
 not supported. Notes, locations, and alarms entered in Calendar are discarded.
