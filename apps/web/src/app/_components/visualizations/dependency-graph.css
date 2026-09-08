@@ -7,8 +7,8 @@
 .dependency-graph .node polygon,
 .dependency-graph .node path,
 .dependency-graph .node ellipse {
-  fill: var(--card);
-  stroke: var(--border);
+  fill: color-mix(in srgb, var(--node-color, var(--border)) 10%, var(--card));
+  stroke: var(--node-color, var(--border));
 }
 .dependency-graph text {
   fill: var(--foreground);
@@ -26,8 +26,20 @@
   fill: var(--muted);
   stroke: var(--border);
 }
-.dependency-graph .completed {
-  opacity: 0.6;
+.dependency-graph .record-project {
+  --node-color: var(--chart-4);
+}
+.dependency-graph .record-task {
+  --node-color: var(--chart-3);
+}
+.dependency-graph .record-recipe {
+  --node-color: var(--chart-5);
+}
+.dependency-graph .completed polygon {
+  stroke-dasharray: 5 3;
+}
+.dependency-graph .completed text {
+  fill: var(--muted-foreground);
 }
 .dependency-graph .overdue polygon,
 .dependency-graph .cycle polygon {

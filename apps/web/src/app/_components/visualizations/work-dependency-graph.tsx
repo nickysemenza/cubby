@@ -44,6 +44,7 @@ export function WorkDependencyGraph({
           const due = effectiveTaskDueDate(node);
           return {
             id: node.id,
+            kind: node.kind,
             name: node.name,
             metadata: [
               node.status.replaceAll("_", " "),

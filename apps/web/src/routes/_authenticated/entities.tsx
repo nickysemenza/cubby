@@ -48,6 +48,7 @@ const searchSchema = z.object({
     .enum(["all", "upstream", "downstream"])
     .optional()
     .catch(undefined),
+  workKind: z.enum(["all", "project", "task"]).optional().catch(undefined),
   grouped: z.boolean().optional().catch(undefined),
   completed: z.boolean().optional().catch(undefined),
   q: z.string().optional().catch(undefined),
@@ -126,6 +127,7 @@ function GraphTab({ recipes }: { recipes: boolean }) {
   const filters = useMemo<GraphFilters>(
     () => ({
       focus: search.focus,
+      workKind: recipes ? "all" : (search.workKind ?? "all"),
       direction: search.direction ?? "all",
       grouped: search.grouped ?? true,
       hideCompleted: search.completed ?? true,
@@ -134,6 +136,7 @@ function GraphTab({ recipes }: { recipes: boolean }) {
     }),
     [
       search.focus,
+      search.workKind,
       search.direction,
       search.grouped,
       search.completed,
@@ -155,6 +158,7 @@ function GraphTab({ recipes }: { recipes: boolean }) {
         focus,
         direction: next.direction,
         grouped: next.grouped,
+        workKind: recipes ? previous.workKind : next.workKind,
         completed: recipes ? previous.completed : next.hideCompleted,
         hide: recipes ? next.hideUnconnected : previous.hide,
         reduce: next.reduceEdges,

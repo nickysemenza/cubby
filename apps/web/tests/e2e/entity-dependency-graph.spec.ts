@@ -50,12 +50,19 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
     )
     .toBe(true);
 
+  const types = page.getByRole("combobox", { name: "Record types" });
+  await types.selectOption("project");
+  await expect(graphLink).toHaveCount(0);
+  await types.selectOption("task");
+  await expect(graphLink).toBeVisible();
+
   const find = page.getByRole("textbox", { name: "Find graph record" });
   await find.fill(name);
   await expect(page).toHaveURL((url) => url.searchParams.get("q") === name);
   await page.reload();
   await waitForAppHydration(page);
   await expect(find).toHaveValue(name);
+  await expect(types).toHaveValue("task");
   await expect(graph).toBeVisible({ timeout: 15_000 });
 
   await page.screenshot({

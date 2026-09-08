@@ -138,6 +138,21 @@ export function DependencyGraphViewer({
         show hierarchy; solid arrows show dependencies. Drag to pan; use the
         buttons to zoom.
       </p>
+      <Row wrap gap="md" className="text-sm" aria-label="Graph legend">
+        {graph.nodes.some((node) => node.kind === "project") && (
+          <span className="text-chart-4">● Projects</span>
+        )}
+        {graph.nodes.some((node) => node.kind === "task") && (
+          <span className="text-chart-3">● Tasks</span>
+        )}
+        {graph.nodes.some((node) => node.kind === "recipe") && (
+          <span className="text-chart-5">● Recipes</span>
+        )}
+        <span className="text-muted-foreground">
+          Dashed border: completed or outside scope
+        </span>
+        <span className="text-destructive">Red border: overdue or cycle</span>
+      </Row>
       {graph.cycleIds.length > 0 && (
         <output className="text-sm text-destructive">
           Dependency cycle detected. Cycle records are marked in the graph and

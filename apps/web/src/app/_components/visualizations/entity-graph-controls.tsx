@@ -26,6 +26,21 @@ export function EntityGraphControls({
   return (
     <Stack gap="sm">
       <Row wrap gap="sm">
+        {!recipes && (
+          <NativeSelect
+            aria-label="Record types"
+            value={filters.workKind ?? "all"}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === "all" || value === "project" || value === "task")
+                onChange({ workKind: value, focus: undefined });
+            }}
+          >
+            <option value="all">Projects & tasks</option>
+            <option value="project">Projects only</option>
+            <option value="task">Tasks only</option>
+          </NativeSelect>
+        )}
         <Input
           aria-label="Find graph record"
           placeholder="Find a record by name or code…"
@@ -43,6 +58,12 @@ export function EntityGraphControls({
         >
           <option value="">All records</option>
           {data.nodes
+            .filter(
+              (node) =>
+                !filters.workKind ||
+                filters.workKind === "all" ||
+                node.kind === filters.workKind,
+            )
             .filter(
               (node) =>
                 node.id === filters.focus ||
