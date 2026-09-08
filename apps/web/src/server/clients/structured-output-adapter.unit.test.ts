@@ -1,6 +1,8 @@
-import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { createAnthropicChat } from "@cloudflare/tanstack-ai/adapters/anthropic";
+import { type AnyTextAdapter, chat, type StreamChunk } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai/client";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { surfaceStructuredOutputRunErrors } from "./structured-output-adapter";
 
@@ -57,6 +59,40 @@ async function collect(stream: AsyncIterable<StreamChunk>) {
 }
 
 describe("surfaceStructuredOutputRunErrors", () => {
+  it("preserves class adapter methods through structured generation", async () => {
+    const provider = createAnthropicChat("claude-opus-4-1", {
+      binding: {
+        async run() {
+          return Response.json({
+            id: "msg_test",
+            type: "message",
+            role: "assistant",
+            model: "claude-opus-4-1",
+            content: [
+              {
+                type: "tool_use",
+                id: "tool_test",
+                name: "structured_output",
+                input: { title: "Test recipe" },
+              },
+            ],
+            stop_reason: "tool_use",
+            usage: { input_tokens: 10, output_tokens: 10 },
+          });
+        },
+      },
+    });
+    const adapter = surfaceStructuredOutputRunErrors(provider);
+
+    await expect(
+      chat({
+        adapter,
+        messages: [{ role: "user", content: "Generate a recipe title" }],
+        outputSchema: z.object({ title: z.string() }),
+      }),
+    ).resolves.toEqual({ title: "Test recipe" });
+  });
+
   it("throws the original provider error from the combined chat stream", async () => {
     const runError = {
       type: EventType.RUN_ERROR,

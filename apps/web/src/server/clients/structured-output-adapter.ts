@@ -44,8 +44,13 @@ export function surfaceStructuredOutputRunErrors<T extends AnyTextAdapter>(
     return throwProviderRunErrors(adapter.structuredOutputStream(options));
   };
 
+  // Providers are class instances: spreading them drops prototype methods.
+  // Delegate the text-adapter contract with the original instance as receiver.
   return {
     ...adapter,
+    structuredOutput: adapter.structuredOutput.bind(adapter),
+    supportsCombinedToolsAndSchema:
+      adapter.supportsCombinedToolsAndSchema?.bind(adapter),
     chatStream,
     structuredOutputStream: adapter.structuredOutputStream
       ? structuredOutputStream
