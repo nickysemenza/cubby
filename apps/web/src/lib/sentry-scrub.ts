@@ -13,6 +13,7 @@
 import { z } from "zod";
 
 import { httpRouteTemplate } from "./http-route-template";
+import { sentryEnvironment } from "./sentry-environment";
 
 const REDACTED = "[REDACTED]";
 
@@ -82,6 +83,7 @@ function redactQueryString(query: string): string {
  */
 export function scrubSentryEvent<
   T extends {
+    environment?: string;
     request?: { url?: string; query_string?: unknown };
   },
 >(event: T): T {
@@ -89,6 +91,7 @@ export function scrubSentryEvent<
   if (!request) return event;
 
   if (request.url !== undefined) {
+    event.environment = sentryEnvironment(request.url, event.environment);
     request.url = redactUrl(request.url);
   }
 

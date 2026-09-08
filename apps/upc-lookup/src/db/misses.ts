@@ -10,8 +10,8 @@ import type { UpcMiss } from "./schema";
 // UPCs on every scan).
 const MISS_TTL_DAYS = 30;
 
-// D1 caps bound parameters per statement; chunk IN-lists well under the limit.
-const IN_CHUNK = 100;
+// D1 allows 100 binds; the TTL predicate consumes one in addition to the UPCs.
+const IN_CHUNK = 99;
 
 export async function recordMiss(db: Database, upc: string): Promise<void> {
   await db

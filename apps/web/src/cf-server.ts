@@ -19,6 +19,7 @@ import {
 import { httpRouteTemplate } from "./lib/http-route-template";
 import { observeResponseBody } from "./lib/response-body-observer";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
+import { sentryEnvironment } from "./lib/sentry-environment";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
 import {
   readStartOperationTraceContext,
@@ -472,20 +473,20 @@ const handler = {
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 
 export default Sentry.withSentry(
-  () => ({
+  (env: Env) => ({
     dsn: SENTRY_DSN,
     sendDefaultPii: false,
     release: `cubby@${__GIT_COMMIT__}`,
-    // Explicit rather than relying on the SDK default, which is also
-    // "production" — stating it keeps the three init sites (here, router.tsx,
-    // instrument.server.mjs) readable as a set, so a future reader can see at a
-    // glance which one owns which environment. Branch preview deploys
-    // (`versions upload`) also run this worker and so also report production;
-    // they hit the prod database, so that is the honest label.
-    environment: "production",
+    // Covers queue/cron events without request URLs. Deployed previews retain
+    // production reporting because they access the production database.
+    environment: sentryEnvironment(
+      env.APP_ORIGIN,
+      env.E2E_AUTH_TEST_MODE === "true" ? "test" : "production",
+    ),
     // Keep the scrubber as defense in depth for manually attached request data,
     // even though the SDK no longer sends default PII.
     beforeSend: scrubSentryEvent,
+    beforeSendTransaction: scrubSentryEvent,
     // Mirror the client's prod 10% trace sampling (router.tsx). Head-based
     // sampling decisions propagate client→server via the `sentry-trace` header,
     // so matching the rate keeps front-to-back traces connected without the
