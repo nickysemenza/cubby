@@ -3,11 +3,7 @@ import type {
   TaskShortcode,
   MealShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  userId,
-  taskShortcode,
-  mealShortcode,
-} from "@cubby/schemas/identifiers";
+import { taskShortcode, mealShortcode } from "@cubby/schemas/identifiers";
 import type { MealType } from "@cubby/schemas/meal-classification";
 import { mealTypeSchema } from "@cubby/schemas/meal-classification";
 import type { TaskStatus } from "@cubby/schemas/project";
@@ -62,16 +58,11 @@ export interface CalDavEventInput {
   mealType: MealType | null;
 }
 export interface CalDavWrite {
-  operationId: string;
   actorId: UserId;
   collection: CalDavCollection;
   filename: string;
   expected: CalDavResource | null;
-  event: CalDavEventInput | null;
-}
-export interface CalDavWriteResult {
-  shortcode: string;
-  deleted: boolean;
+  event: CalDavEventInput;
 }
 export class CalDavError extends Error {
   constructor(
@@ -94,7 +85,7 @@ export interface CalDavBackend {
     actorId: UserId;
     collection: CalDavCollection;
     filename: string;
-    event: CalDavEventInput | null;
+    event: CalDavEventInput;
     ifMatch: string | null;
     ifNoneMatch: string | null;
     body: string | null;
@@ -120,30 +111,3 @@ export const calendarProjectionSchema = z.discriminatedUnion("entity", [
     updatedAt: z.string(),
   }),
 ]);
-const collectionSchema = z.enum(["tasks", "completed-tasks", "meals"]);
-const resourceSchema = z.object({
-  collection: collectionSchema,
-  filename: z.string(),
-  uid: z.string(),
-  body: z.string(),
-  etag: z.string(),
-  start: z.string(),
-  end: z.string(),
-  projection: calendarProjectionSchema,
-});
-export const calDavWriteSchema = z.object({
-  operationId: z.string(),
-  actorId: userId,
-  collection: collectionSchema,
-  filename: z.string(),
-  expected: resourceSchema.nullable(),
-  event: z
-    .object({
-      uid: z.string(),
-      summary: z.string(),
-      startDate: z.string(),
-      endDateExclusive: z.string(),
-      mealType: mealTypeSchema.nullable(),
-    })
-    .nullable(),
-});

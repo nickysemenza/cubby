@@ -1405,63 +1405,6 @@ export const taskDependency = pgTable(
 );
 
 /**
- * The durable Calendar projection owns the rendered resource bodies, but the
- * identity of a Cubby entity in a CalDAV client must survive rebuilding that
- * projection.  Keep that durable identity with the canonical entity data so a
- * retry cannot create a second Task/Meal after Postgres committed but the DO
- * did not publish its response.
- *
- * `entityId` intentionally has no FK: one table spans Meal and Task and the
- * identity is a tombstone after a soft delete (a UID/resource path is never
- * recycled).  Entity mutation code is its sole writer.
- */
-export const calendarResourceIdentity = pgTable(
-  "CalendarResourceIdentity",
-  {
-    id: pkUuid(),
-    entityType: text("entityType").notNull().$type<"meal" | "task">(),
-    entityId: uuid("entityId").notNull(),
-    shortcode: text("shortcode").notNull(),
-    filename: text("filename").notNull(),
-    uid: text("uid").notNull(),
-    ...baseTimestamps(),
-  },
-  (table) => [
-    uniqueIndex("CalendarResourceIdentity_entity_key").on(
-      table.entityType,
-      table.entityId,
-    ),
-    // A resource path is collection + filename. Tasks can move between their
-    // two collections without changing this identity, while a Meal and Task
-    // may legitimately both use a client-chosen `event.ics` filename.
-    uniqueIndex("CalendarResourceIdentity_entity_filename_key").on(
-      table.entityType,
-      table.filename,
-    ),
-    uniqueIndex("CalendarResourceIdentity_uid_key").on(table.uid),
-  ],
-);
-
-/**
- * A committed CalDAV operation is the recovery receipt for the Durable Object.
- * It is written in the same canonical entity transaction as the mutation, so
- * retrying an interrupted request can return the original result without
- * replaying a create/update/delete.
- */
-export const calendarWriteReceipt = pgTable("CalendarWriteReceipt", {
-  operationId: text("operationId").primaryKey(),
-  entityType: text("entityType").notNull().$type<"meal" | "task">(),
-  entityId: uuid("entityId").notNull(),
-  action: text("action").notNull().$type<"created" | "updated" | "deleted">(),
-  shortcode: text("shortcode").notNull(),
-  deleted: boolean("deleted").notNull(),
-  sideEffectsCompleted: boolean("sideEffectsCompleted")
-    .notNull()
-    .default(false),
-  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-});
-
-/**
  * The roster of places money goes. `Vendor ──< Purchase ──< Expense`: this was
  * a free-text `vendor` column repeated on every ledger row until the charge got
  * its own table, which is why a vendor's documents and contractor metadata had

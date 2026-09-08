@@ -6,13 +6,13 @@ import {
 import { useCallback, useMemo } from "react";
 
 import { listChromePage } from "~/app/_components/routing/entity-routes";
+import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
 import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
 import {
   calendarSearchDefaults,
   calendarSearchSchema,
 } from "~/app/calendar/calendar-search";
-import { CalendarSubscribeDialog } from "~/app/calendar/calendar-subscribe-dialog";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import { pageTitle } from "~/lib/page-title";
 
@@ -22,7 +22,7 @@ import { pageTitle } from "~/lib/page-title";
 const CalendarRoute = listChromePage({
   title: "Calendar",
   layout: "full",
-  actions: () => <CalendarSubscribeDialog />,
+  actions: () => <CalendarConnectDialog />,
   page: CalendarBody,
 });
 

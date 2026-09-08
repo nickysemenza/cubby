@@ -92,6 +92,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "background-job.strandedCount": async () =>
     (await import("~/server/background-batch-browser.server"))
       .backgroundJobHandlers.operations.strandedCount,
+  "calendar.clearUncertainWrite": async () =>
+    (await import("~/server/calendar-browser.server")).calendarHandlers
+      .operations.clearUncertainWrite,
   "calendar.getCredential": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.getCredential,

@@ -9,20 +9,16 @@ export const getCalendarRangeWorkflow = async (
   input: CalendarRangeInput,
 ) => await getCalendarRange(db, input);
 
-export const getCalendarFeedWorkflow = async (
-  db: Database,
-  origin: string,
-) => ({
-  token: await (await calendarFeedStateFor(origin, db)).getToken(),
+export const getCalendarFeedWorkflow = async (origin: string) => ({
+  token: await (await calendarFeedStateFor(origin)).getToken(),
 });
 
 export const inspectCalendarFeedWorkflow = async (origin: string) =>
   await (await calendarFeedStateFor(origin)).inspect();
 
-export const rotateCalendarFeedWorkflow = async (
-  db: Database,
-  origin: string,
-) => ({ token: await (await calendarFeedStateFor(origin, db)).rotate() });
+export const rotateCalendarFeedWorkflow = async (origin: string) => ({
+  token: await (await calendarFeedStateFor(origin)).rotate(),
+});
 
 export const getCalendarCredentialWorkflow = async (
   origin: string,
@@ -41,4 +37,17 @@ export const revokeCalendarCredentialWorkflow = async (
 ) => {
   await (await calendarFeedStateFor(origin)).revokeCalendarCredential(userId);
   return { revoked: true };
+};
+
+export const clearCalendarUncertainWriteWorkflow = async (
+  origin: string,
+  input: {
+    collection: import("~/server/calendar/caldav-types").CalDavCollection;
+    filename: string;
+  },
+) => {
+  await (
+    await calendarFeedStateFor(origin)
+  ).clearUncertainWrite(input.collection, input.filename);
+  return { cleared: true };
 };

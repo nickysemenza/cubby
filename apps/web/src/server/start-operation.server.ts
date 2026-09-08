@@ -325,7 +325,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
 const productionStartOperationRuntime = {
   authenticate: authenticateStartOperation,
   observe: observeOperation,
-  markCalendarDirty: (context, headers, operation) => {
+  markCalendarDirty: (_context, headers, operation) => {
     const headerOrigin = headers.get("origin");
     const host = headers.get("host");
     const origin = headerOrigin
@@ -335,7 +335,6 @@ const productionStartOperationRuntime = {
         : undefined;
     scheduleCalendarFeedDirty(`browser.${operation}`, {
       origin,
-      db: context.db,
     });
   },
 } satisfies StartOperationRuntime;

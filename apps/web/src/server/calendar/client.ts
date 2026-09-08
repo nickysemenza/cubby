@@ -1,7 +1,6 @@
 import type { UserId } from "@cubby/schemas/identifiers";
 
 import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
-import type { Database } from "~/server/db";
 
 import type { CalendarFeedState, CalendarCredentialState } from "./contracts";
 
@@ -15,6 +14,11 @@ class RemoteCalendarFeedState
     private readonly stub: CalendarFeedStub,
   ) {}
 
+  clearUncertainWrite(
+    ...args: Parameters<CalendarCredentialState["clearUncertainWrite"]>
+  ) {
+    return this.stub.clearUncertainWrite(...args);
+  }
   getToken() {
     return this.stub.getToken();
   }
@@ -52,34 +56,14 @@ class RemoteCalendarFeedState
 
 export async function calendarFeedStateFor(
   origin: string,
-  db?: Database,
 ): Promise<CalendarFeedState & CalendarCredentialState> {
   const namespace = getCalendarFeedNamespace();
-  if (namespace) {
-    const hostname = new URL(origin).hostname;
-    return new RemoteCalendarFeedState(origin, namespace.getByName(hostname));
-  }
-  const { getInMemoryCalendarFeedState } = await import("./local-state");
-  const state = getInMemoryCalendarFeedState(origin, db);
-  return Object.assign(state, {
-    getCalendarCredential: async (_owner: UserId) => ({
-      configured: false,
-      username: "",
-      createdAt: null,
-    }),
-    rotateCalendarCredential: async (
-      _owner: UserId,
-    ): Promise<{ username: string; password: string; createdAt: string }> => {
-      throw new Error(
-        "Calendar app passwords require the Cloudflare Worker runtime",
-      );
-    },
-    revokeCalendarCredential: async (_owner: UserId) => {
-      throw new Error(
-        "Calendar app passwords require the Cloudflare Worker runtime",
-      );
-    },
-  });
+  if (!namespace)
+    throw new Error("Calendar requires the Cloudflare Worker runtime");
+  return new RemoteCalendarFeedState(
+    origin,
+    namespace.getByName(new URL(origin).hostname),
+  );
 }
 
 /** External subscriptions never fall back to a database-backed local projection. */
@@ -106,12 +90,12 @@ export async function handleCalDavRequest(request: Request): Promise<Response> {
 
 export function scheduleCalendarFeedDirty(
   reason: string,
-  options: { origin?: string; db?: Database } = {},
+  options: { origin?: string } = {},
 ): void {
   const execution = getExecutionCtx();
   const origin = execution?.origin ?? options.origin;
-  if (!origin) return;
-  const task = calendarFeedStateFor(origin, options.db)
+  if (!origin || !getCalendarFeedNamespace()) return;
+  const task = calendarFeedStateFor(origin)
     .then(async (state) => await state.markDirty(reason))
     .catch((error) => {
       console.error("[calendar-feed] failed to mark snapshot dirty", error);

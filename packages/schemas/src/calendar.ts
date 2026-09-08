@@ -227,7 +227,7 @@ const calendarFeedDocumentInspection = z.object({
 export const calendarFeedInspectionOut = z.object({
   schemaVersion: z.literal(1),
   inspectedAt: z.iso.datetime(),
-  runtime: z.enum(["durable-object", "memory"]),
+  runtime: z.literal("durable-object"),
   origin: z.url(),
   object: z.object({
     id: z.string().nullable(),
@@ -259,7 +259,15 @@ export const calendarFeedInspectionOut = z.object({
         completedTasks: z.number().int().nonnegative(),
         meals: z.number().int().nonnegative(),
       }),
-      pendingWrites: z.number().int().nonnegative(),
+      uncertainWrites: z.array(
+        z.object({
+          collection: z.enum(["tasks", "completed-tasks", "meals"]),
+          filename: z.string(),
+          shortcode: z.string().nullable(),
+          startedAt: z.iso.datetime(),
+        }),
+      ),
+      refreshFailedAt: z.iso.datetime().nullable(),
       ready: z.boolean(),
     })
     .nullable()
@@ -269,3 +277,8 @@ export type CalendarFeedInspection = z.infer<typeof calendarFeedInspectionOut>;
 export type CalendarFeedDocumentInspection = z.infer<
   typeof calendarFeedDocumentInspection
 >;
+
+export const clearCalendarUncertainWriteInput = z.object({
+  collection: z.enum(["tasks", "completed-tasks", "meals"]),
+  filename: z.string().min(1),
+});

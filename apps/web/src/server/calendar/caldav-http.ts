@@ -613,18 +613,16 @@ async function write(
 ): Promise<Response> {
   if (target.root !== "resource" || !target.filename.endsWith(".ics"))
     throw new CalDavError(409, "Write requires an .ics resource path");
-  const body = request.method === "PUT" ? await requestBody(request) : null;
-  let event = null;
-  if (body !== null) {
-    try {
-      event = parseCalDavEvent(body, target.collection);
-    } catch (error) {
-      throw new CalDavError(
-        400,
-        error instanceof Error ? error.message : "Invalid event",
-        "valid-calendar-data",
-      );
-    }
+  const body = await requestBody(request);
+  let event;
+  try {
+    event = parseCalDavEvent(body, target.collection);
+  } catch (error) {
+    throw new CalDavError(
+      400,
+      error instanceof Error ? error.message : "Invalid event",
+      "valid-calendar-data",
+    );
   }
   const result = await backend.write({
     actorId,
@@ -700,7 +698,6 @@ export function createCalDavHandler(
         case "HEAD":
           return read(request, target, backend);
         case "PUT":
-        case "DELETE":
           return await write(request, target, backend, userId.parse(actorId));
         default:
           return new Response("Method not allowed", {

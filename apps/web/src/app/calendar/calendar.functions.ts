@@ -1,5 +1,6 @@
 import {
   calendarCredentialOut,
+  clearCalendarUncertainWriteInput,
   calendarFeedOut,
   calendarFeedInspectionOut,
   calendarRangeInput,
@@ -39,6 +40,11 @@ export const calendar = defineOperationDomain("calendar", {
     output: calendarFeedInspectionOut,
     tags: [["calendar", "feed"]],
     cache: "live-status",
+  }),
+  clearUncertainWrite: mutation({
+    input: clearCalendarUncertainWriteInput,
+    output: z.object({ cleared: z.boolean() }),
+    invalidates: ripple.calendarFeed,
   }),
   rotateFeed: mutation({
     input: z.undefined(),

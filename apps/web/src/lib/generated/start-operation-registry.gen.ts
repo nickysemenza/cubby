@@ -28,6 +28,7 @@ export const START_OPERATIONS = {
   "background-job.drain": { kind: "mutation" },
   "background-job.retry": { kind: "mutation" },
   "background-job.strandedCount": { kind: "query" },
+  "calendar.clearUncertainWrite": { kind: "mutation" },
   "calendar.getCredential": { kind: "query" },
   "calendar.getFeed": { kind: "query" },
   "calendar.inspectFeed": { kind: "query" },

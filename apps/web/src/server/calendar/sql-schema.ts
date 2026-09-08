@@ -16,6 +16,7 @@ export const calendarMeta = sqliteTable("calendar_meta", {
   generatedAt: text("generated_at"),
   origin: text("origin"),
   dirtyReason: text("dirty_reason"),
+  refreshFailedAt: text("refresh_failed_at"),
   dirtySequence: integer("dirty_sequence").notNull().default(0),
 });
 export const calendarResources = sqliteTable(
@@ -63,9 +64,30 @@ export const calendarCredentials = sqliteTable("calendar_credentials", {
   hash: text("hash").notNull(),
   createdAt: text("created_at").notNull(),
 });
-export const calendarPending = sqliteTable("calendar_pending", {
-  operationId: text("operation_id").primaryKey(),
-  fingerprint: text("fingerprint").notNull().unique(),
-  payload: text("payload").notNull(),
-  origin: text("origin").notNull(),
-});
+// Durable identities are independent of replaceable publication generations.
+export const calendarIdentities = sqliteTable(
+  "calendar_identities",
+  {
+    shortcode: text("shortcode").primaryKey(),
+    entity: text("entity").$type<"task" | "meal">().notNull(),
+    filename: text("filename").notNull(),
+    uid: text("uid").notNull().unique(),
+  },
+  (table) => [
+    uniqueIndex("calendar_identity_path").on(table.entity, table.filename),
+  ],
+);
+
+// A marker blocks an uncertain resource; it contains no replayable mutation.
+export const calendarUncertainWrites = sqliteTable(
+  "calendar_uncertain_writes",
+  {
+    entity: text("entity").$type<"task" | "meal">().notNull(),
+    collection: text("collection").$type<CalDavCollection>().notNull(),
+    filename: text("filename").notNull(),
+    uid: text("uid").notNull().unique(),
+    shortcode: text("shortcode"),
+    startedAt: text("started_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.entity, table.filename] })],
+);
