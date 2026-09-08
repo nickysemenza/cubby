@@ -10,6 +10,7 @@ import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
 import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
 import { SENTRY_DSN } from "~/lib/sentry-dsn";
+import { sentryEnvironment } from "~/lib/sentry-environment";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
 
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
@@ -69,16 +70,10 @@ export const getRouter = () => {
       dsn: SENTRY_DSN,
       sendDefaultPii: false,
       release: `cubby@${__GIT_COMMIT__}`,
-      // Without this the SDK defaults to "production", so every error from
-      // `vite dev` on localhost lands in the same bucket as a real user's.
-      // That is not hypothetical: CUBBY-DY accumulated 761 events over 11 days
-      // tagged production, all of them from http://localhost:3000, and it made
-      // a genuine-looking prod issue out of transient HMR noise.
-      //
-      // Keyed on the build, not the hostname: a local `build:cf` preview is a
-      // production bundle and should report as one — dev-server noise is the
-      // thing being separated out here.
-      environment: isProd ? "production" : "development",
+      environment: sentryEnvironment(
+        window.location.origin,
+        isProd ? "production" : "development",
+      ),
       // Keep the scrubber as defense in depth for manually attached request
       // data, even though the SDK no longer sends default PII.
       beforeSend: (event, hint) => {
