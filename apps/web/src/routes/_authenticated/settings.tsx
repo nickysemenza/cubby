@@ -5,8 +5,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { CategoryAudit } from "~/app/_components/insights/category-audit";
-import { CalendarCalDavSetupDialog } from "~/app/calendar/calendar-caldav-setup-dialog";
+import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
@@ -161,12 +162,11 @@ function CalendarAccessCard() {
           <Stack gap="tight">
             <CardTitle>Calendar</CardTitle>
             <CardDescription>
-              Connect Calendar.app to edit Cubby Tasks and Meals. Read-only
-              subscriptions remain available from the Calendar page.
+              Set up editable Calendar access or read-only subscriptions.
             </CardDescription>
           </Stack>
           <div className="shrink-0">
-            <CalendarCalDavSetupDialog />
+            <CalendarConnectDialog />
           </div>
         </Row>
       </CardHeader>
@@ -182,6 +182,11 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
     refetchOnReconnect: false,
   });
   const json = data ? JSON.stringify(data, null, 2) : null;
+  const clearWrite = useActionMutation({
+    mutationFn: calendar.clearUncertainWrite.mutationOptions,
+    success: "Uncertain write cleared",
+    error: "The uncertain write could not be cleared. Try again.",
+  });
 
   return (
     <Card>
@@ -235,12 +240,37 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
       <CardContent>
         {error ? (
           <StatusText as="p" tone="destructive" className="text-xs">
-            Calendar feed inspection failed: {getErrorMessage(error)}
+            Calendar state could not be loaded. Try again shortly.
           </StatusText>
         ) : json ? (
-          <pre className="max-h-[32rem] overflow-auto bg-muted/35 p-4 font-mono text-xs">
-            {json}
-          </pre>
+          <Stack gap="md">
+            {data?.caldav?.uncertainWrites.map((write) => (
+              <Stack key={`${write.collection}/${write.filename}`} gap="xs">
+                <Description as="p" size="xs">
+                  Uncertain write: {write.collection}/{write.filename}
+                  {write.shortcode ? ` (${write.shortcode})` : ""}. Check this
+                  record in Cubby before clearing. Clearing only unblocks
+                  calendar edits; it never repeats or deletes a change.
+                </Description>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={clearWrite.isPending}
+                  onClick={() =>
+                    clearWrite.mutate({
+                      collection: write.collection,
+                      filename: write.filename,
+                    })
+                  }
+                >
+                  Clear uncertain write
+                </Button>
+              </Stack>
+            ))}
+            <pre className="max-h-[32rem] overflow-auto bg-muted/35 p-4 font-mono text-xs">
+              {json}
+            </pre>
+          </Stack>
         ) : (
           <Description as="p" size="xs">
             {isFetching ? "Reading calendar state…" : "No state returned."}

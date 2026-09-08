@@ -317,42 +317,6 @@ async function getFileDb() {
 }
 
 /**
- * Allocate one independently-owned IntegreSQL database for a non-Node test
- * runtime such as workerd. Unlike {@link withTestDb}, this does not register
- * Vitest hooks or share the file-scoped pool: the caller receives only a
- * connection string and must call `close` after its external runtime stops.
- */
-export async function allocateCalendarTestDatabase(): Promise<{
-  connectionString: string;
-  ownerId: ActorContext["userId"];
-  close(): Promise<void>;
-}> {
-  if (!hash) await setup();
-  const databaseConfig = await integreSQL.getTestDatabase(hash);
-  const testId = Number(/_(\d+)$/.exec(databaseConfig.database)?.[1]);
-  if (!Number.isInteger(testId)) {
-    throw new Error(
-      `calendar test database has an unrecognised name: ${databaseConfig.database}`,
-    );
-  }
-  const connectionString = integreSQL.databaseConfigToConnectionUrl(
-    remapDBConfig(databaseConfig),
-  );
-  const pool = new Pool({ connectionString });
-  try {
-    await seedTestUser(drizzle(pool));
-    await seedTestHome(drizzle(pool));
-  } finally {
-    await pool.end();
-  }
-  return {
-    connectionString,
-    ownerId: testUserId(TEST_USER_ID),
-    close: async () => await releaseTestDb(testId),
-  };
-}
-
-/**
  * Restore the pristine-database contract between tests.
  *
  * One statement clears all 40 tables: ordering doesn't matter (the only cycles

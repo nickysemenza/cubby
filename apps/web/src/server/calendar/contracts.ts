@@ -4,9 +4,14 @@ import type {
 } from "@cubby/schemas/calendar";
 import type { UserId } from "@cubby/schemas/identifiers";
 
+import type { CalDavCollection } from "./caldav-types";
 import type { IcsFeed } from "./ics";
 
 export interface CalendarCredentialState {
+  clearUncertainWrite(
+    collection: CalDavCollection,
+    filename: string,
+  ): Promise<void>;
   getCalendarCredential(owner: UserId): Promise<{
     configured: boolean;
     username: string;
@@ -66,6 +71,10 @@ export interface CalendarFeedState {
 }
 
 export interface CalendarFeedDurableObjectRpc {
+  clearUncertainWrite(
+    collection: CalDavCollection,
+    filename: string,
+  ): Promise<void>;
   getCalendarCredential(owner: UserId): Promise<{
     configured: boolean;
     username: string;

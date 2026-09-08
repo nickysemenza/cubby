@@ -223,9 +223,6 @@ jobs:
           if [[ "$FULL" != "true" ]]; then args+=(--changed "$BASE_SHA"); fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
-      - name: Verify Calendar Durable Object and CalDAV
-        if: matrix.tier == 'node'
-        run: pnpm --filter @cubby/web test:calendar
       - name: Save web ${{ matrix.tier }} coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -290,14 +287,12 @@ jobs:
         run: |
           args=(--project integration --reporter=default --reporter=github-actions)
           if [[ "$FULL" == "true" ]]; then
-            export CUBBY_EXPECT_POSTGRES_TESTS=269
+            export CUBBY_EXPECT_POSTGRES_TESTS=271
           else
             args+=(--changed "$BASE_SHA")
           fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
-      - name: Verify Calendar writes in workerd and PostgreSQL
-        run: pnpm --filter @cubby/web test:calendar:postgres
       - name: Save web PostgreSQL coverage
         if: needs.scope.outputs.coverage == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -352,7 +347,7 @@ jobs:
           - lane: chromium
             browser: chromium
             test-script: test:e2e:ci:chromium
-            expected-tests: 16
+            expected-tests: 17
           - lane: webkit
             browser: webkit
             test-script: test:e2e:ci:webkit

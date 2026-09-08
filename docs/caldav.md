@@ -1,84 +1,76 @@
-# Calendar.app access
+# Connect Calendar
 
-Settings → **Set up Calendar app** creates a separate Calendar password. Copy
-the server address, generated username, and password into Calendar.app → Add
-Account → Other CalDAV Account → Manual. Use HTTPS. The password is displayed
-once; replacing or revoking it invalidates the old password on every device.
+Open **Connect Calendar** from Settings or the calendar page. Both open the
+same setup dialog. Create a separate Calendar app password, then enter the
+server address, username, and password in Calendar.app → Add Account → Other
+CalDAV Account → Manual. Use HTTPS. Passwords are displayed once; replacing or
+revoking one invalidates it on every connected device.
 
-The account contains three fixed editable calendars:
+The account exposes **Cubby Tasks**, **Cubby Completed Tasks**, and **Cubby
+Meals**. Create, rename, and reschedule records in Calendar. Delete records and
+complete or reopen Tasks in Cubby. Creating in Completed Tasks creates a
+completed Task. Meal times snap to the nearest household-local slot, with ties
+choosing the earlier slot. All-day Meals are unslotted. Tasks become all-day
+ranges; Calendar notes, locations, and alarms are discarded. Recurrence,
+invitations, sharing, calendar creation, and cross-calendar moves are unsupported.
 
-- **Cubby Tasks**: dated Tasks that are not completed.
-- **Cubby Completed Tasks**: dated completed Tasks. Toggle this calendar to
-  show or hide them. Complete or reopen Tasks in Cubby; creating directly in
-  this calendar creates a completed Task.
-- **Cubby Meals**: all Meals.
+The secondary **Read-only subscriptions** section provides Everything, Meals,
+and Tasks feeds. Their URL tokens are independent of the app password. These
+retain the rolling subscription window; CalDAV includes all Meals and dated
+Tasks. Everything does not include the in-app calendar's expenses/project spans.
 
-Calendar can create, rename, and reschedule these records. Delete them in
-Cubby; CalDAV DELETE is disabled for all clients, including requests with an
-`If-Match` header. Cubby's normal deletion policies still apply. Project
-membership, recipes, completion status, and other unrelated fields remain controlled in Cubby. Moving events
-between calendars, recurrence, invitations, sharing, and calendar creation are
-not supported. Notes, locations, and alarms entered in Calendar are discarded.
+## Storage and writes
 
-Tasks use dates, so timed events become all-day date ranges. A one-day all-day
-Meal is unslotted. Timed Meals snap to the nearest household-local slot:
-09:00 breakfast, 11:00 brunch, 12:00 lunch, 15:00 snack, 19:00 dinner, or
-20:00 dessert. Equal distances choose the earlier slot. Meals return as
-30-minute events; multi-day or cross-midnight Meals are rejected.
+All external calendar reads, including authentication and discovery, use the
+Calendar Durable Object's SQLite storage. No cache miss opens PostgreSQL. Before
+a publication exists the DO returns temporary unavailability.
 
-Existing read-only subscription feeds remain available in the Calendar
-subscription dialog. Their combined feed contains Tasks and Meals; it does
-not publish the in-app calendar's expenses or project spans.
+PostgreSQL owns Tasks and Meals. The DO owns credentials and durable resource
+identities. Cubby-created records use shortcode-based filenames and UIDs;
+client-created records keep their UID and filename. Identity mappings survive
+snapshot replacement, temporarily undated Tasks, completion/reopening, and
+deletion. Resetting DO storage loses client identity metadata.
 
-## Runtime and storage
+Creates and updates use the canonical entity kernel, auditing, search updates,
+and normal after-commit side effects. Transactional comparison of projected
+fields protects against stale edits. There are no PostgreSQL calendar metadata
+tables, operation receipts, preallocated entity IDs, or automatic mutation replay.
 
-All external calendar reads use the Calendar Durable Object's local SQLite
-storage, including credential verification. No cache miss or read request
-opens PostgreSQL. CalDAV requires the Cloudflare Worker runtime; the ordinary
-Node development server cannot issue Calendar credentials.
+A minimal resource marker is stored before each write. Successful publication
+or a known precommit refusal removes it. An uncertain outcome blocks that
+resource (including the other Task collection and matching UID), while reads,
+unrelated writes, and projection refresh remain available. In Settings →
+Calendar state, inspect the record in Cubby before choosing **Clear uncertain
+write**. Clearing only releases the marker; it does not repeat, undo, or delete
+anything. Unknown creates can appear under a shortcode-based resource after
+refresh if their client mapping was never saved; inspect for duplicates before
+creating again.
 
-Background refreshes publish all dated entities into a coherent SQL generation.
-Subscription documents retain their existing rolling window. Dirty notifications
-and the daily scheduled refresh reconcile changes made in Cubby. The Settings
-inspector reports publication status and pending writes without returning
-credentials or event bodies.
+Dirty notifications refresh promptly; the daily cron is the backstop. Refresh
+publishes current entity state even with uncertain markers. Failed refreshes
+retain the previous complete generation. Refresh cannot recover uncommitted
+intent, lost mappings, duplicates, or arbitrary missed after-commit side effects.
 
-CalDAV writes pass through the canonical entity kernel and repositories. Their
-PostgreSQL transaction persists resource identity and a write receipt. The DO
-publishes the committed result before acknowledging success. An interrupted
-operation remains in its SQL journal and is reconciled by its alarm; receipts
-prevent repeated canonical mutations. Until recovery succeeds, reads continue
-to serve the previous generation.
+DELETE is absent from the HTTP adapter's `METHODS` policy and advertised
+privileges. A future PR must add its canonical implementation and decide how
+to handle clients that omit `If-Match`; there is no environment switch.
 
-## Deployment and validation
+## Validation and cutover
 
-This feature uses a clean calendar-storage cutover. The SQLite migration runs
-on DO initialization and removes obsolete calendar-owned KV keys. Old
-subscription URLs may stop working: generate replacement URLs after deployment.
-Apply the additive PostgreSQL calendar identity/receipt schema before using the
-new code. Calendar credentials trigger the initial background publication;
-until it finishes CalDAV reports temporary unavailability.
+Focused parser and canonical write tests live in the existing suites. Run
+`pnpm --filter @cubby/web test:calendar` manually for the small workerd/SQLite
+smoke suite. It is not appended to normal tests, hooks, or hosted CI. Verify
+Calendar.app on disposable data after protocol/setup changes.
 
-Run `pnpm --filter @cubby/web test:calendar` for real workerd/SQLite protocol
-tests, including an independent `tsdav` client. `pnpm --filter @cubby/web
-test:calendar:postgres` exercises real DO-to-PostgreSQL CRUD and recovery after
-a committed write fails publication, using a disposable IntegreSQL database.
-Pure ICS tests use the normal `pnpm test:file` command. Canonical write contracts
-require PostgreSQL. Run the
-Cloudflare build and verify Calendar.app discovery and CRUD on disposable data
-before claiming client compatibility.
+Deploy the simplified code before dropping the old PostgreSQL metadata tables.
+The new DO migration resets only calendar-owned publications, subscription
+credentials, app passwords, and pending writes once, with no data transfer or
+compatibility bridge. Rebuild from canonical entities, generate fresh calendar
+credentials/URLs, and reconnect clients. Tasks, Meals, accounts, and audit data
+remain intact.
 
-The protocol uses [ical.js](https://github.com/mozilla-comm/ical.js),
-[@xmldom/xmldom](https://github.com/xmldom/xmldom), and
-[Drizzle's Durable SQLite driver](https://orm.drizzle.team/docs/get-started/do-existing).
-The custom adapter deliberately implements a bounded CalDAV surface rather
-than a general calendar server.
-
-## Calendar deletion policy
-
-The HTTP adapter's `METHODS` list is the single source for accepted methods,
-`Allow`, and the advertised delete (`unbind`) privilege. DELETE is deliberately
-absent. Canonical deletion and receipt handling remain implemented internally,
-so a later PR can enable the protocol after deciding how to handle clients such
-as Calendar.app that omit `If-Match`. This is a code policy, not runtime
-configuration.
+After confirming the deployed Worker no longer references either table and
+calendar setup/create/edit/refresh work, apply
+[`drop-calendar-metadata.sql`](../scripts/sql/drop-calendar-metadata.sql) to the
+production database as one coordinated schema operation. It drops only
+`CalendarResourceIdentity` and `CalendarWriteReceipt`, without `CASCADE`.

@@ -26,12 +26,7 @@ export const mealEntityAdapter = defineEntityAdapter({
     list: (ctx, filters, sorts, pagination) =>
       mealList(ctx.db, filters, sorts, pagination),
     create: (ctx, data) =>
-      createMealWithEntityId(
-        ctx.db,
-        data,
-        ctx.actorContext,
-        ctx.caldavHooks?.meal,
-      ),
+      createMealWithEntityId(ctx.db, data, ctx.actorContext),
     update: async (ctx, id, data) => {
       const entityId = await mealShortcodes.one(ctx.db, id);
       return {
@@ -50,7 +45,6 @@ export const mealEntityAdapter = defineEntityAdapter({
         ctx.db,
         await mealShortcodes.all(ctx.db, ids),
         ctx.actorContext,
-        ctx.caldavHooks?.meal,
       );
       return { deletedReferences: entityMutationReferences("meal", ids) };
     },

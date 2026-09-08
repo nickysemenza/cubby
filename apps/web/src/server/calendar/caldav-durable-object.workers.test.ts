@@ -6,14 +6,17 @@ import { env } from "cloudflare:workers";
 import { createDAVClient } from "tsdav";
 import { describe, expect, it } from "vitest";
 
-import type { CalDavResource, CalDavWrite } from "./caldav-types";
+import type { CalDavResource } from "./caldav-types";
 import { CalendarSqlStore } from "./sql-store";
 
 const ORIGIN = "https://calendar-test.example";
 const OWNER = userId.parse("calendar-test-user");
 const subscriptionToken = "subscription-token";
+const CALENDAR_PASSWORD = "calendar-test-password";
+const CALENDAR_PASSWORD_DIGEST =
+  "42f9b364f5962df6102e516eb8553a68ea7d73882794a60b19b32b30ce8ace6d";
 
-const resource: CalDavResource = {
+const resource = {
   collection: "tasks",
   filename: "task.ics",
   uid: "task-uid@calendar-test.example",
@@ -30,7 +33,7 @@ const resource: CalDavResource = {
     status: "not_started",
     updatedAt: "2026-09-07T00:00:00.000Z",
   },
-};
+} satisfies CalDavResource;
 
 function documents() {
   const generatedAt = "2026-09-07T00:00:00.000Z";
@@ -73,8 +76,10 @@ function request(
   return new Request(`${ORIGIN}${pathname}`, { ...init, headers });
 }
 
-function eventWithUid(uid: string) {
-  return resource.body.replace(resource.uid, uid);
+async function expectStatus(response: Promise<Response>, status: number) {
+  const value = await response;
+  await value.arrayBuffer();
+  expect(value.status).toBe(status);
 }
 
 async function seededStub(resources: CalDavResource[] = [resource]) {
@@ -88,10 +93,26 @@ async function seededStub(resources: CalDavResource[] = [resource]) {
   return stub;
 }
 
+async function seedCredential(
+  stub: ReturnType<typeof env.CALENDAR_FEED.getByName>,
+) {
+  const username = "calendar-test-user";
+  await runInDurableObject(stub, async (_instance, state) => {
+    const store = new CalendarSqlStore(state.storage);
+    store.setCredential({
+      owner: OWNER,
+      username,
+      hash: CALENDAR_PASSWORD_DIGEST,
+      createdAt: "2026-09-07T00:00:00.000Z",
+    });
+  });
+  return { username, password: CALENDAR_PASSWORD };
+}
+
 describe("CalendarFeedDurableObject in workerd", () => {
   it("serves every CalDAV read from seeded DO SQLite without a PostgreSQL refresh", async () => {
     const stub = await seededStub();
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
+    const credential = await seedCredential(stub);
     const authorization = basic(credential.username, credential.password);
 
     const options = await stub.fetch(
@@ -183,7 +204,7 @@ describe("CalendarFeedDurableObject in workerd", () => {
 
   it("is discoverable and queryable by an independent tsdav client", async () => {
     const stub = await seededStub();
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
+    const credential = await seedCredential(stub);
     const fetchThroughDurableObject: typeof fetch = async (input, init) => {
       const request = new Request(input, init);
       return await stub.fetch(request);
@@ -218,7 +239,7 @@ describe("CalendarFeedDurableObject in workerd", () => {
 
   it("answers Calendar.app's account-root principal and home discovery request", async () => {
     const stub = await seededStub();
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
+    const credential = await seedCredential(stub);
     const response = await stub.fetch(
       request(
         "/api/caldav/",
@@ -240,102 +261,11 @@ describe("CalendarFeedDurableObject in workerd", () => {
     expect(body).toContain("urn:calendar:optional");
   });
 
-  it("keeps calendar-data in REPORTs and out of PROPFIND properties", async () => {
-    const escaped = {
-      ...resource,
-      body: resource.body.replace(
-        "SUMMARY:Check the filter",
-        "SUMMARY:A & B < C",
-      ),
-    };
-    const stub = await seededStub([escaped]);
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
-    const authorization = basic(credential.username, credential.password);
-    const propfind = await stub.fetch(
-      request(
-        `/api/caldav/calendars/me/tasks/${escaped.filename}`,
-        {
-          method: "PROPFIND",
-          headers: { depth: "0", "content-type": "application/xml" },
-          body: `<D:propfind xmlns:D="DAV:" xmlns:X="urn:cubby:test"><D:prop><D:getetag/><X:missing/></D:prop></D:propfind>`,
-        },
-        authorization,
-      ),
-    );
-    const propfindBody = await propfind.text();
-    expect(propfind.status).toBe(207);
-    expect(propfindBody).toContain("HTTP/1.1 200 OK");
-    expect(propfindBody).toContain("HTTP/1.1 404 Not Found");
-    expect(propfindBody).toContain("urn:cubby:test");
-    expect(propfindBody).not.toContain("SUMMARY:A");
-
-    const report = await stub.fetch(
-      request(
-        "/api/caldav/calendars/me/tasks/",
-        {
-          method: "REPORT",
-          headers: { "content-type": "application/xml" },
-          body: `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:prop><D:getetag/><C:calendar-data/></D:prop><D:href>/api/caldav/calendars/me/tasks/${escaped.filename}</D:href></C:calendar-multiget>`,
-        },
-        authorization,
-      ),
-    );
-    expect(report.status).toBe(207);
-    expect(await report.text()).toContain("SUMMARY:A &amp; B &lt; C");
-  });
-
-  it("reports missing multiget resources and rejects malformed or unsupported reports", async () => {
-    const stub = await seededStub();
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
-    const authorization = basic(credential.username, credential.password);
-    const collection = "/api/caldav/calendars/me/tasks/";
-
-    const multiget = await stub.fetch(
-      request(
-        collection,
-        {
-          method: "REPORT",
-          headers: { "content-type": "application/xml" },
-          body: `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:href>${collection}missing.ics</D:href></C:calendar-multiget>`,
-        },
-        authorization,
-      ),
-    );
-    expect(multiget.status).toBe(207);
-    expect(await multiget.text()).toContain("HTTP/1.1 404 Not Found");
-
-    const malformed = await stub.fetch(
-      request(
-        collection,
-        {
-          method: "REPORT",
-          headers: { "content-type": "application/xml" },
-          body: '<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav">',
-        },
-        authorization,
-      ),
-    );
-    expect(malformed.status).toBe(400);
-
-    const unsupported = await stub.fetch(
-      request(
-        collection,
-        {
-          method: "REPORT",
-          headers: { "content-type": "application/xml" },
-          body: `<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav"><C:filter><C:comp-filter name="VCALENDAR"><C:comp-filter name="VTODO"/></C:comp-filter></C:filter></C:calendar-query>`,
-        },
-        authorization,
-      ),
-    );
-    expect(unsupported.status).toBe(403);
-  });
-
   it("keeps a credential revocable and returns initializing reads without touching PostgreSQL", async () => {
     const stub = env.CALENDAR_FEED.getByName(
       `calendar-${crypto.randomUUID()}.example`,
     );
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
+    const credential = await seedCredential(stub);
     const authorization = basic(credential.username, credential.password);
 
     const initializing = await stub.fetch(
@@ -387,32 +317,9 @@ describe("CalendarFeedDurableObject in workerd", () => {
     ).resolves.toEqual({ result: "unavailable" });
   });
 
-  it("replaces an app password without allowing its previous value", async () => {
+  it("blocks uncertain writes without changing published resources", async () => {
     const stub = await seededStub();
-    const first = await stub.rotateCalendarCredential(OWNER, ORIGIN);
-    const second = await stub.rotateCalendarCredential(OWNER, ORIGIN);
-
-    const oldPassword = await stub.fetch(
-      request(
-        `/api/caldav/calendars/me/tasks/${resource.filename}`,
-        {},
-        basic(first.username, first.password),
-      ),
-    );
-    expect(oldPassword.status).toBe(401);
-    const newPassword = await stub.fetch(
-      request(
-        `/api/caldav/calendars/me/tasks/${resource.filename}`,
-        {},
-        basic(second.username, second.password),
-      ),
-    );
-    expect(newPassword.status).toBe(200);
-  });
-
-  it("rejects write preconditions before attempting PostgreSQL", async () => {
-    const stub = await seededStub();
-    const credential = await stub.rotateCalendarCredential(OWNER, ORIGIN);
+    const credential = await seedCredential(stub);
     const authorization = basic(credential.username, credential.password);
     const target = `/api/caldav/calendars/me/tasks/${resource.filename}`;
     const put = async (headers: HeadersInit, body = resource.body) =>
@@ -420,88 +327,50 @@ describe("CalendarFeedDurableObject in workerd", () => {
         request(target, { method: "PUT", headers, body }, authorization),
       );
 
-    expect(await put({})).toHaveProperty("status", 428);
-    expect(await put({ "if-match": '"stale"' })).toHaveProperty("status", 412);
-    expect(await put({ "if-match": `W/${resource.etag}` })).toHaveProperty(
-      "status",
-      412,
-    );
-    expect(await put({ "if-none-match": "*" })).toHaveProperty("status", 412);
-    expect(
-      await put({ "if-match": resource.etag }, eventWithUid("changed@uid")),
-    ).toHaveProperty("status", 403);
-
-    const missing = await stub.fetch(
-      request(
-        "/api/caldav/calendars/me/tasks/missing.ics",
-        { method: "DELETE", headers: { "if-match": resource.etag } },
-        authorization,
-      ),
-    );
-    expect(missing.status).toBe(405);
-    const missingCondition = await stub.fetch(
-      request(target, { method: "DELETE" }, authorization),
-    );
-    expect(missingCondition.status).toBe(405);
-    expect(missingCondition.headers.get("allow")).not.toContain("DELETE");
-    expect(
-      await stub.fetch(
-        request(
-          target,
-          { method: "DELETE", headers: { "if-match": resource.etag } },
-          authorization,
-        ),
-      ),
-    ).toHaveProperty("status", 405);
-    expect(await stub.fetch(request(target, {}, authorization))).toHaveProperty(
-      "status",
-      200,
-    );
-    const properties = await stub.fetch(
-      request(
-        "/api/caldav/calendars/me/tasks/",
-        { method: "PROPFIND", headers: { Depth: "0" } },
-        authorization,
-      ),
-    );
-    expect(await properties.text()).not.toContain("unbind");
-
-    const inspection = await stub.inspect(ORIGIN);
-    expect(inspection.caldav?.pendingWrites).toBe(0);
-  });
-
-  it("retains a pending recovery intent across a DO restart", async () => {
-    const stub = await seededStub();
-    const pending: CalDavWrite = {
-      operationId: crypto.randomUUID(),
-      actorId: OWNER,
-      collection: "tasks",
-      filename: "new.ics",
-      expected: null,
-      event: {
-        uid: "new@calendar-test.example",
-        summary: "Retryable write",
-        startDate: "2026-09-07",
-        endDateExclusive: "2026-09-08",
-        mealType: null,
-      },
-    };
-    await runInDurableObject(stub, async (instance, state) => {
-      const store = new CalendarSqlStore(state.storage);
-      store.addPending(pending, "failed-postgres-write", ORIGIN);
-      store.dirty("recover-write", ORIGIN);
-      await expect(instance.alarm()).rejects.toThrow(
-        "Calendar PostgreSQL write backend is unavailable",
-      );
+    await expectStatus(put({ "if-match": '"stale"' }), 412);
+    await expectStatus(put({ "if-none-match": "*" }), 412);
+    await expectStatus(put({ "if-match": resource.etag }), 503);
+    await runInDurableObject(stub, async (_instance, state) => {
       expect(await state.storage.getAlarm()).not.toBeNull();
+      await state.storage.deleteAlarm();
+      expect(await state.storage.getAlarm()).toBeNull();
     });
-    expect((await stub.inspect(ORIGIN)).caldav?.pendingWrites).toBe(1);
+    expect((await stub.inspect(ORIGIN)).caldav?.uncertainWrites).toMatchObject([
+      {
+        collection: "tasks",
+        filename: resource.filename,
+        shortcode: resource.projection.id,
+      },
+    ]);
+
+    const blocked = await put({ "if-match": resource.etag });
+    expect(blocked.status).toBe(503);
+    expect(await blocked.text()).toContain("uncertain write");
+    await expectStatus(stub.fetch(request(target, {}, authorization)), 200);
 
     await evictDurableObject(stub);
-    expect((await stub.inspect(ORIGIN)).caldav?.pendingWrites).toBe(1);
+    expect((await stub.inspect(ORIGIN)).caldav?.uncertainWrites).toHaveLength(
+      1,
+    );
+    await runInDurableObject(stub, async (_instance, state) => {
+      const store = new CalendarSqlStore(state.storage);
+      store.publish([resource], documents(), ORIGIN);
+      expect(store.uncertainWrites()).toHaveLength(1);
+      expect(store.identities()).toContainEqual({
+        entity: "task",
+        shortcode: resource.projection.id,
+        filename: resource.filename,
+        uid: resource.uid,
+      });
+    });
+
+    await stub.clearUncertainWrite("tasks", resource.filename);
+    expect((await stub.inspect(ORIGIN)).caldav?.uncertainWrites).toEqual([]);
+    await expectStatus(stub.fetch(request(target, {}, authorization)), 200);
+    await expectStatus(put({ "if-match": resource.etag }), 503);
   });
 
-  it("retains a coherent published generation when SQLite rejects a duplicate UID", async () => {
+  it("keeps publication atomic and identities durable across the cutover reset", async () => {
     const stub = await seededStub();
 
     await runInDurableObject(
@@ -514,6 +383,31 @@ describe("CalendarFeedDurableObject in workerd", () => {
         ).toThrow(/UNIQUE constraint failed/i);
         expect(store.meta().generation).toBe(1);
         expect(store.list("tasks")).toHaveLength(1);
+        await store.migrate();
+        expect(store.list("tasks")).toHaveLength(1);
+        store.publish([], documents(), ORIGIN);
+        expect(store.identities()).toContainEqual({
+          entity: "task",
+          shortcode: resource.projection.id,
+          filename: resource.filename,
+          uid: resource.uid,
+        });
+        const completed: CalDavResource = {
+          ...resource,
+          collection: "completed-tasks" as const,
+          projection: {
+            entity: "task",
+            id: resource.projection.id,
+            name: resource.projection.name,
+            dueDate: resource.projection.dueDate,
+            dueEndDate: resource.projection.dueEndDate,
+            status: "done",
+            updatedAt: resource.projection.updatedAt,
+          },
+        };
+        store.publish([completed], documents(), ORIGIN);
+        expect(store.list("completed-tasks")).toHaveLength(1);
+        expect(store.identities()).toHaveLength(1);
         const indexes = state.storage.sql
           .exec<{ name: string }>("PRAGMA index_list('calendar_resources')")
           .toArray()

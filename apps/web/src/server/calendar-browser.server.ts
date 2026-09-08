@@ -1,6 +1,7 @@
 import { calendar } from "~/app/calendar/calendar.functions";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  clearCalendarUncertainWriteWorkflow,
   getCalendarCredentialWorkflow,
   getCalendarFeedWorkflow,
   getCalendarRangeWorkflow,
@@ -13,7 +14,7 @@ import {
 export const calendarHandlers = implementOperationDomain(calendar, {
   range: (context, input) => getCalendarRangeWorkflow(context.db, input),
   getFeed: (context) =>
-    getCalendarFeedWorkflow(context.db, calendarOrigin(context.headers)),
+    getCalendarFeedWorkflow(calendarOrigin(context.headers)),
   getCredential: (context) =>
     getCalendarCredentialWorkflow(
       calendarOrigin(context.headers),
@@ -21,8 +22,10 @@ export const calendarHandlers = implementOperationDomain(calendar, {
     ),
   inspectFeed: (context) =>
     inspectCalendarFeedWorkflow(calendarOrigin(context.headers)),
+  clearUncertainWrite: (context, input) =>
+    clearCalendarUncertainWriteWorkflow(calendarOrigin(context.headers), input),
   rotateFeed: (context) =>
-    rotateCalendarFeedWorkflow(context.db, calendarOrigin(context.headers)),
+    rotateCalendarFeedWorkflow(calendarOrigin(context.headers)),
   rotateCredential: (context) =>
     rotateCalendarCredentialWorkflow(
       calendarOrigin(context.headers),

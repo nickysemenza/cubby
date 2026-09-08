@@ -6,19 +6,21 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import type {
   CalDavCollection,
   CalDavResource,
-  CalDavWrite,
+  CalendarIdentity,
 } from "./caldav-types";
-import { calendarProjectionSchema, calDavWriteSchema } from "./caldav-types";
+import { calendarProjectionSchema } from "./caldav-types";
 import type { StoredCalendarDocument } from "./contracts";
 import type { IcsFeed } from "./ics";
 import migration from "./migrations/0000_bright_tyger_tiger.sql?raw";
+import resetMigration from "./migrations/0001_watery_tomas.sql?raw";
 import journal from "./migrations/meta/_journal.json";
 import {
   calendarMeta,
   calendarResources,
   calendarDocuments,
   calendarCredentials,
-  calendarPending,
+  calendarIdentities,
+  calendarUncertainWrites,
 } from "./sql-schema";
 
 export class CalendarSqlStore {
@@ -28,7 +30,10 @@ export class CalendarSqlStore {
   }
 
   async migrate() {
-    await migrate(this.db, { journal, migrations: { m0000: migration } });
+    await migrate(this.db, {
+      journal,
+      migrations: { m0000: migration, m0001: resetMigration },
+    });
     this.db.insert(calendarMeta).values({ id: 1 }).onConflictDoNothing().run();
   }
 
@@ -78,6 +83,15 @@ export class CalendarSqlStore {
     const generation = this.meta().generation + 1;
     this.db.transaction((tx) => {
       for (const resource of resources) {
+        tx.insert(calendarIdentities)
+          .values({
+            entity: resource.projection.entity,
+            shortcode: resource.projection.id,
+            uid: resource.uid,
+            filename: resource.filename,
+          })
+          .onConflictDoNothing({ target: calendarIdentities.shortcode })
+          .run();
         tx.insert(calendarResources)
           .values({
             generation,
@@ -101,7 +115,12 @@ export class CalendarSqlStore {
           .run();
       }
       tx.update(calendarMeta)
-        .set({ generation, generatedAt: documents.all.generatedAt, origin })
+        .set({
+          generation,
+          generatedAt: documents.all.generatedAt,
+          origin,
+          refreshFailedAt: null,
+        })
         .where(eq(calendarMeta.id, 1))
         .run();
       tx.delete(calendarResources)
@@ -149,13 +168,8 @@ export class CalendarSqlStore {
   byUid(uid: string) {
     return this.db
       .select()
-      .from(calendarResources)
-      .where(
-        and(
-          eq(calendarResources.generation, this.meta().generation),
-          eq(calendarResources.uid, uid),
-        ),
-      )
+      .from(calendarIdentities)
+      .where(eq(calendarIdentities.uid, uid))
       .get();
   }
 
@@ -173,12 +187,6 @@ export class CalendarSqlStore {
       else counts[row.collection] = row.total;
     }
     return counts;
-  }
-
-  pendingCount() {
-    return (
-      this.db.select({ total: count() }).from(calendarPending).get()?.total ?? 0
-    );
   }
 
   document(feed: IcsFeed): StoredCalendarDocument | null {
@@ -219,31 +227,53 @@ export class CalendarSqlStore {
       .run();
   }
 
-  pending() {
-    return this.db
-      .select()
-      .from(calendarPending)
-      .all()
-      .map((row) => ({
-        ...row,
-        write: calDavWriteSchema.parse(JSON.parse(row.payload)),
-      }));
+  identities() {
+    return this.db.select().from(calendarIdentities).all();
   }
-  addPending(write: CalDavWrite, fingerprint: string, origin: string) {
+  rememberIdentity(identity: CalendarIdentity) {
     this.db
-      .insert(calendarPending)
-      .values({
-        operationId: write.operationId,
-        fingerprint,
-        origin,
-        payload: JSON.stringify(write),
-      })
+      .insert(calendarIdentities)
+      .values(identity)
+      .onConflictDoNothing({ target: calendarIdentities.shortcode })
       .run();
   }
-  removePending(operationId: string) {
+  identityAt(entity: "task" | "meal", filename: string) {
+    return this.db
+      .select()
+      .from(calendarIdentities)
+      .where(
+        and(
+          eq(calendarIdentities.entity, entity),
+          eq(calendarIdentities.filename, filename),
+        ),
+      )
+      .get();
+  }
+  uncertainWrites() {
+    return this.db.select().from(calendarUncertainWrites).all();
+  }
+  startWrite(value: typeof calendarUncertainWrites.$inferInsert) {
+    this.db.insert(calendarUncertainWrites).values(value).run();
+  }
+  clearUncertainWrite(collection: CalDavCollection, filename: string) {
     this.db
-      .delete(calendarPending)
-      .where(eq(calendarPending.operationId, operationId))
+      .delete(calendarUncertainWrites)
+      .where(
+        and(
+          eq(
+            calendarUncertainWrites.entity,
+            collection === "meals" ? "meal" : "task",
+          ),
+          eq(calendarUncertainWrites.filename, filename),
+        ),
+      )
+      .run();
+  }
+  refreshFailed() {
+    this.db
+      .update(calendarMeta)
+      .set({ refreshFailedAt: new Date().toISOString() })
+      .where(eq(calendarMeta.id, 1))
       .run();
   }
 }

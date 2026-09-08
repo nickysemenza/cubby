@@ -34,8 +34,7 @@ export interface EntityKernelContext {
     recipeCosting: RecipeCostingService;
     locationValuation: LocationValuationService;
   };
-  /** Internal protocol metadata.  CalDAV uses this only to append its durable
-   * identity/receipt inside the repository-owned transaction. */
+  /** Internal protocol metadata for a transactional CalDAV stale-write check. */
   caldavHooks?: { meal?: MealMutationHooks; task?: TaskMutationHooks };
 }
 
