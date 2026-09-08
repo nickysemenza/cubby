@@ -32,6 +32,7 @@ export function RecipeDependencyGraph({
       nodes:
         data?.nodes.map((node) => ({
           id: node.id,
+          kind: "recipe" as const,
           name: node.name,
           metadata: node.cookbookName ? [node.cookbookName] : [],
           parentId: node.cookbookId,

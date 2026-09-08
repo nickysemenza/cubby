@@ -240,3 +240,57 @@ describe("graphToDot", () => {
     expect(position("parent")).not.toBe(position("child"));
   });
 });
+
+it("packs a large recipe overview into a usable aspect ratio", async () => {
+  const nodes = Array.from({ length: 240 }, (_, i) => ({
+    id: `recipe${i}`,
+    name: `Example recipe ${i}`,
+    metadata: ["Example cookbook"],
+    parentId: "cookbook",
+    href: `/recipes/recipe${i}`,
+  }));
+  const edges = Array.from({ length: 120 }, (_, i) => ({
+    source: `recipe${i * 2}`,
+    target: `recipe${i * 2 + 1}`,
+    kind: "dependency" as const,
+    label: "uses",
+  }));
+  const viz = await instance();
+  const plain = viz.renderString(
+    graphToDot(prepareGraph({ nodes, edges }, defaults), true),
+    { format: "plain" },
+  );
+  const [, , width, height] = plain.split("\n")[0]!.split(" ").map(Number);
+  expect(height! / width!).toBeLessThan(3);
+  expect(width! / height!).toBeLessThan(3);
+});
+
+it("shows only the requested work kind without opposite-kind ancestors or dangling edges", () => {
+  const data: GraphData = {
+    nodes: [
+      {
+        id: "p",
+        name: "Project",
+        kind: "project",
+        metadata: [],
+        href: "/projects/p",
+      },
+      {
+        id: "t",
+        name: "Task",
+        kind: "task",
+        parentId: "p",
+        metadata: [],
+        href: "/todos/t",
+      },
+    ],
+    edges: [{ source: "p", target: "t", kind: "hierarchy" }],
+  };
+  for (const workKind of ["project", "task"] as const) {
+    const prepared = prepareGraph(data, { ...defaults, workKind });
+    expect(prepared.nodes.map((node) => node.kind)).toEqual([workKind]);
+    expect(prepared.edges).toEqual([]);
+    expect(prepared.hiddenNodeCount).toBe(1);
+    expect(graphToDot(prepared, true)).toContain(`record-${workKind}`);
+  }
+});

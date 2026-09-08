@@ -5,8 +5,10 @@
 interface GraphNode {
   id: string;
   name: string;
+  kind?: "project" | "task" | "recipe";
   metadata: string[];
   parentId?: string | null;
+  parentName?: string;
   completed?: boolean;
   overdue?: boolean;
   external?: boolean;
@@ -28,6 +30,7 @@ export interface GraphData {
 
 export interface GraphFilters {
   focus?: string;
+  workKind?: "all" | "project" | "task";
   direction: "all" | "upstream" | "downstream";
   hideCompleted: boolean;
   hideUnconnected: boolean;
@@ -339,6 +342,11 @@ export function prepareGraph(
   const allEdges = graphEdges(data, allIds);
   const selected = selectedNodeIds(allIds, allEdges, filters, nodeById);
   const visible = completedVisibility(selected, nodeById, filters);
+  if (filters.workKind && filters.workKind !== "all") {
+    for (const id of visible.ids) {
+      if (nodeById.get(id)?.kind !== filters.workKind) visible.ids.delete(id);
+    }
+  }
   const initialEdges = graphEdges(
     { nodes: allNodes, edges: allEdges },
     visible.ids,
@@ -350,7 +358,12 @@ export function prepareGraph(
     visible.contextIds,
   );
   const edges = graphEdges({ nodes: allNodes, edges: initialEdges }, included);
-  const nodes = allNodes.filter((node) => included.has(node.id));
+  const nodes = allNodes
+    .filter((node) => included.has(node.id))
+    .map((node) => ({
+      ...node,
+      parentName: node.parentId ? nodeById.get(node.parentId)?.name : undefined,
+    }));
   const analysis = dependencyAnalysis(nodes, edges);
   const reduced = filters.reduceEdges
     ? removeRedundantDependencies(edges, analysis.cyclic)
@@ -391,7 +404,7 @@ function wrapText(value: string, width = 40): string {
 }
 
 function nodeAttributes(node: GraphNode, cycleIds: Set<string>) {
-  const classes = ["dependency-graph-node"];
+  const classes = ["dependency-graph-node", `record-${node.kind ?? "task"}`];
   if (node.completed)
     classes.push("completed", "dependency-graph-node--completed");
   if (node.overdue) classes.push("overdue", "dependency-graph-node--overdue");
@@ -453,7 +466,10 @@ function appendGroups(
     appendGroup(
       lines,
       parentId,
-      parent?.name ?? children[0]?.metadata[0] ?? parentId,
+      parent?.name ??
+        children[0]?.parentName ??
+        children[0]?.metadata[0] ??
+        parentId,
       children,
       cycleIds,
       clustered,
@@ -462,23 +478,33 @@ function appendGroups(
   return clustered;
 }
 
-function appendRankLines(lines: string[], prepared: PreparedGraph) {
-  const dependencyIds = new Set(
-    prepared.edges
-      .filter((edge) => edge.kind === "dependency")
-      .flatMap((edge) => [edge.source, edge.target]),
+/** Independent relationship components must not share rank constraints or cookbook clusters. */
+function connectedComponents(prepared: PreparedGraph): PreparedGraph[] {
+  const neighbors = new Map(
+    prepared.nodes.map((node) => [node.id, new Set<string>()]),
   );
-  const byLevel = new Map<number, string[]>();
-  for (const node of prepared.nodes) {
-    if (!dependencyIds.has(node.id)) continue;
-    const level = prepared.levels[node.id] ?? 0;
-    const ids = byLevel.get(level) ?? [];
-    ids.push(quote(node.id));
-    byLevel.set(level, ids);
+  for (const edge of prepared.edges) {
+    neighbors.get(edge.source)?.add(edge.target);
+    neighbors.get(edge.target)?.add(edge.source);
   }
-  for (const [, ids] of [...byLevel.entries()].sort(([a], [b]) => a - b)) {
-    lines.push(`{ rank=same; ${ids.join("; ")}; }`);
+  const unseen = new Set(neighbors.keys());
+  const components: PreparedGraph[] = [];
+  for (const start of unseen) {
+    const ids = new Set<string>();
+    const pending = [start];
+    while (pending.length) {
+      const id = pending.pop();
+      if (id == null || !unseen.delete(id)) continue;
+      ids.add(id);
+      pending.push(...(neighbors.get(id) ?? []));
+    }
+    components.push({
+      ...prepared,
+      nodes: prepared.nodes.filter((node) => ids.has(node.id)),
+      edges: prepared.edges.filter((edge) => ids.has(edge.source)),
+    });
   }
+  return components;
 }
 
 function edgeAttributes(edge: GraphEdge): string {
@@ -499,20 +525,35 @@ export function graphToDot(prepared: PreparedGraph, grouped: boolean): string {
   const cycleIds = new Set(prepared.cycleIds);
   const lines = [
     "digraph dependency_graph {",
-    'graph [rankdir=LR, newrank=true, fontname="Inter", fontsize=12];',
+    'graph [rankdir=LR, pack=24, packmode="array", fontname="Inter", fontsize=12];',
     'node [shape=box, fontname="Inter", fontsize=12, margin="0.25,0.15"];',
     'edge [class="dependency-graph-edge", fontname="Inter", fontsize=12];',
   ];
-  const clustered = appendGroups(lines, prepared, grouped, cycleIds);
-  for (const node of prepared.nodes) {
-    if (!clustered.has(node.id))
-      lines.push(`${quote(node.id)} [${nodeAttributes(node, cycleIds)}];`);
-  }
-  appendRankLines(lines, prepared);
-  for (const edge of prepared.edges) {
-    lines.push(
-      `${quote(edge.source)} -> ${quote(edge.target)} [${edgeAttributes(edge)}];`,
+  for (const [index, component] of connectedComponents(prepared).entries()) {
+    lines.push(`subgraph "component${index}" {`);
+    // Cluster IDs must be unique when a cookbook spans disconnected components.
+    const componentLines: string[] = [];
+    const clustered = appendGroups(
+      componentLines,
+      component,
+      grouped,
+      cycleIds,
     );
+    lines.push(
+      ...componentLines.map((line) =>
+        line.replace('subgraph "cluster:', `subgraph "cluster:${index}:`),
+      ),
+    );
+    for (const node of component.nodes) {
+      if (!clustered.has(node.id))
+        lines.push(`${quote(node.id)} [${nodeAttributes(node, cycleIds)}];`);
+    }
+    for (const edge of component.edges) {
+      lines.push(
+        `${quote(edge.source)} -> ${quote(edge.target)} [${edgeAttributes(edge)}];`,
+      );
+    }
+    lines.push("}");
   }
   lines.push("}");
   return lines.join("\n");
