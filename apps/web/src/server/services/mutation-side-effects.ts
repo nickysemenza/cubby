@@ -1,28 +1,10 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
-import {
-  cookbookId,
-  expenseId,
-  financialAccountId,
-  financialTransactionId,
-  imageId,
-  ingredientId,
-  inventoryId,
-  locationId,
-  mealId,
-  productId,
-  projectId,
-  purchaseId,
-  recipeId,
-  taskId,
-  vendorId,
-  wishId,
-} from "@cubby/schemas/identifiers";
+import type { EntityRef } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
   SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { uniqBy } from "es-toolkit";
-import { z } from "zod";
 
 import {
   dispatchBackgroundJobs,
@@ -48,43 +30,47 @@ import {
   refreshSearchDocuments,
 } from "~/server/repo/search-document";
 
-const mutationEntityRefSchema = z.discriminatedUnion("entityType", [
-  z.object({ entityType: z.literal("product"), entityId: productId }),
-  z.object({ entityType: z.literal("location"), entityId: locationId }),
-  z.object({ entityType: z.literal("ingredient"), entityId: ingredientId }),
-  z.object({ entityType: z.literal("recipe"), entityId: recipeId }),
-  z.object({ entityType: z.literal("cookbook"), entityId: cookbookId }),
-  z.object({ entityType: z.literal("inventory"), entityId: inventoryId }),
-  z.object({ entityType: z.literal("meal"), entityId: mealId }),
-  z.object({ entityType: z.literal("project"), entityId: projectId }),
-  z.object({ entityType: z.literal("task"), entityId: taskId }),
-  z.object({ entityType: z.literal("vendor"), entityId: vendorId }),
-  z.object({ entityType: z.literal("purchase"), entityId: purchaseId }),
-  z.object({
-    entityType: z.literal("financialAccount"),
-    entityId: financialAccountId,
-  }),
-  z.object({
-    entityType: z.literal("financialTransaction"),
-    entityId: financialTransactionId,
-  }),
-  z.object({ entityType: z.literal("expense"), entityId: expenseId }),
-  z.object({ entityType: z.literal("wish"), entityId: wishId }),
-  z.object({ entityType: z.literal("image"), entityId: imageId }),
-]);
+const mutationSideEffectEntities = [
+  "product",
+  "location",
+  "ingredient",
+  "recipe",
+  "cookbook",
+  "inventory",
+  "meal",
+  "project",
+  "task",
+  "vendor",
+  "purchase",
+  "financialAccount",
+  "financialTransaction",
+  "expense",
+  "wish",
+  "image",
+] as const;
 
-export const mutationSideEffectEventSchema = z.object({
-  action: z.enum(["created", "updated", "deleted"]),
-  entity: mutationEntityRefSchema,
-  source: z.string().min(1),
+type MutationSideEffectEntity = (typeof mutationSideEffectEntities)[number];
+export type MutationSideEffectEntityRef = EntityRef<MutationSideEffectEntity>;
+
+export type MutationSideEffectEvent = {
+  action: "created" | "updated" | "deleted";
+  entity: MutationSideEffectEntityRef;
+  source: string;
   // Gates the location AI refresh: vision analysis only re-runs when images
   // actually changed (see enqueueLocationAiRefresh). Absent ⇒ no AI refresh.
-  locationImagesChanged: z.boolean().optional(),
-});
+  locationImagesChanged?: boolean;
+};
 
-export type MutationSideEffectEvent = z.infer<
-  typeof mutationSideEffectEventSchema
->;
+const mutationSideEffectEntitySet = new Set<string>(mutationSideEffectEntities);
+
+export const isMutationSideEffectEntity = (
+  entity: string,
+): entity is MutationSideEffectEntity =>
+  mutationSideEffectEntitySet.has(entity);
+
+export const isMutationSideEffectRef = (
+  ref: EntityRef,
+): ref is MutationSideEffectEntityRef => isMutationSideEffectEntity(ref.entity);
 
 export interface MutationSideEffectPorts {
   readonly dispatchBackgroundJobs: typeof dispatchBackgroundJobs;
@@ -134,7 +120,7 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
     await refreshSearchDocuments(...args);
   },
 };
-type MutationEntityType = MutationSideEffectEvent["entity"]["entityType"];
+type MutationEntityType = MutationSideEffectEvent["entity"]["entity"];
 type MutationAction = MutationSideEffectEvent["action"];
 
 interface HandlerContext {
@@ -162,10 +148,10 @@ const isSearchableEntity = (
 const ownEmbeddingRef = (
   event: MutationSideEffectEvent,
 ): SearchableEntityRef | null =>
-  isSearchableEntity(event.entity.entityType)
+  isSearchableEntity(event.entity.entity)
     ? {
-        entityType: event.entity.entityType,
-        entityId: event.entity.entityId,
+        entityType: event.entity.entity,
+        entityId: event.entity.id,
       }
     : null;
 
@@ -213,7 +199,10 @@ async function enqueueEntityEmbeddingRefreshMany(
     metadata: {
       source: event.source,
       action: event.action,
-      entity: event.entity,
+      entity: {
+        entityType: event.entity.entity,
+        entityId: event.entity.id,
+      },
       refCount: uniqueRefs.length,
     },
     jobs: uniqueRefs.map((ref) => ({
@@ -244,95 +233,91 @@ const collectOwnEmbeddingRef: EmbeddingRefCollector = async (ctx) => {
 const collectInventoryEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "product") return [];
+  if (ctx.event.entity.entity !== "product") return [];
   return await ctx.ports.findInventoryEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectTaskEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "product") return [];
+  if (ctx.event.entity.entity !== "product") return [];
   return await ctx.ports.findTaskEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectWishEmbeddingRefsForProduct: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "product") return [];
+  if (ctx.event.entity.entity !== "product") return [];
   return await ctx.ports.findWishEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectInventoryEmbeddingRefsForLocation: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "location") return [];
+  if (ctx.event.entity.entity !== "location") return [];
   return await ctx.ports.findInventoryEmbeddingRefsForLocations(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectRecipeEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "ingredient") return [];
+  if (ctx.event.entity.entity !== "ingredient") return [];
   return await ctx.ports.findRecipeEmbeddingRefsForIngredients(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectMealEmbeddingRefsForRecipe: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "recipe") return [];
+  if (ctx.event.entity.entity !== "recipe") return [];
   return await ctx.ports.findMealEmbeddingRefsForRecipes(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "project") return [];
+  if (ctx.event.entity.entity !== "project") return [];
   return await ctx.ports.findTrackerEmbeddingRefsForProjects(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectEmbeddingRefsForVendor: EmbeddingRefCollector = async (ctx) => {
-  if (ctx.event.entity.entityType !== "vendor") return [];
-  return ctx.ports.findEmbeddingRefsForVendors(ctx.db, [
-    ctx.event.entity.entityId,
-  ]);
+  if (ctx.event.entity.entity !== "vendor") return [];
+  return ctx.ports.findEmbeddingRefsForVendors(ctx.db, [ctx.event.entity.id]);
 };
 
 const collectEmbeddingRefsForPurchase: EmbeddingRefCollector = async (ctx) => {
-  if (ctx.event.entity.entityType !== "purchase") return [];
-  return ctx.ports.findEmbeddingRefsForPurchases(ctx.db, [
-    ctx.event.entity.entityId,
-  ]);
+  if (ctx.event.entity.entity !== "purchase") return [];
+  return ctx.ports.findEmbeddingRefsForPurchases(ctx.db, [ctx.event.entity.id]);
 };
 
 const collectTransactionEmbeddingRefsForAccount: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "financialAccount") return [];
+  if (ctx.event.entity.entity !== "financialAccount") return [];
   return ctx.ports.findTransactionEmbeddingRefsForAccounts(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
 const collectCommercialEmbeddingRefsForExpense: EmbeddingRefCollector = async (
   ctx,
 ) => {
-  if (ctx.event.entity.entityType !== "expense") return [];
+  if (ctx.event.entity.entity !== "expense") return [];
   return ctx.ports.findCommercialEmbeddingRefsForExpenses(ctx.db, [
-    ctx.event.entity.entityId,
+    ctx.event.entity.id,
   ]);
 };
 
@@ -508,13 +493,13 @@ const embeddingRefCollectorByHandler = new Map<
 async function enqueueLocationAiRefresh(
   ctx: HandlerContext,
 ): Promise<BackgroundBatchRef[]> {
-  if (ctx.event.entity.entityType !== "location") return [];
+  if (ctx.event.entity.entity !== "location") return [];
   if (ctx.event.source.startsWith("location-ai.")) return [];
   // The analysis fingerprint includes the location name, so a rename would force
   // a cache miss and fire two Anthropic vision calls (description + inventory
   // detection) for no benefit. Only refresh when images actually changed.
   if (!ctx.event.locationImagesChanged) return [];
-  const locationIdValue = ctx.event.entity.entityId;
+  const locationIdValue = ctx.event.entity.id;
   const batches: BackgroundBatchRef[] = [];
   for (const kind of [
     "location-ai.description.refresh",
@@ -526,7 +511,10 @@ async function enqueueLocationAiRefresh(
       metadata: {
         source: ctx.event.source,
         action: ctx.event.action,
-        entity: ctx.event.entity,
+        entity: {
+          entityType: ctx.event.entity.entity,
+          entityId: ctx.event.entity.id,
+        },
       },
       jobs: [
         {
@@ -654,7 +642,7 @@ export const mutationSideEffectManifest = {
 // exists. Before `location.productId`, a fresh location was always empty and
 // could not move any number, which is why creation used to be exempt.
 function needsValuationRecompute(event: MutationSideEffectEvent): boolean {
-  switch (event.entity.entityType) {
+  switch (event.entity.entity) {
     case "inventory":
       return true;
     case "product":
@@ -673,7 +661,7 @@ function needsValuationRecompute(event: MutationSideEffectEvent): boolean {
 const handlersFor = (
   event: MutationSideEffectEvent,
 ): MutationSideEffectBatchHandler[] => {
-  const manifest = mutationSideEffectManifest[event.entity.entityType];
+  const manifest = mutationSideEffectManifest[event.entity.entity];
   const key = (
     {
       created: "onCreate",
@@ -728,19 +716,18 @@ export async function runMutationSideEffects(
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<BackgroundBatchRef[]> {
-  const parsed = mutationSideEffectEventSchema.parse(event);
-  await refreshOwnSearchDocument(db, parsed, ports);
-  const batches = await runManifestHandlers(db, parsed, ports);
-  if (needsValuationRecompute(parsed)) {
+  await refreshOwnSearchDocument(db, event, ports);
+  const batches = await runManifestHandlers(db, event, ports);
+  if (needsValuationRecompute(event)) {
     const dispatched = await ports.dispatchLocationValuationRecompute(
       db,
-      parsed.source,
+      event.source,
     );
     batches.push(dispatched.batch);
   }
   const problemCounts = await enqueueProblemCountsRefreshBestEffort(
     db,
-    parsed.source,
+    event.source,
     ports,
   );
   if (problemCounts) batches.push(problemCounts);
@@ -752,11 +739,8 @@ export async function runMutationSideEffectsForEntities(
   events: MutationSideEffectEvent[],
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<BackgroundBatchRef[]> {
-  const parsed = events.map((event) =>
-    mutationSideEffectEventSchema.parse(event),
-  );
   const ownSearchRefs = uniqBy(
-    parsed.flatMap((event) => {
+    events.flatMap((event) => {
       if (event.action === "deleted") return [];
       const ref = ownEmbeddingRef(event);
       return ref ? [ref] : [];
@@ -769,7 +753,7 @@ export async function runMutationSideEffectsForEntities(
     } catch (error) {
       console.error("search.document.bulk-sync-refresh.failed", {
         refCount: ownSearchRefs.length,
-        source: parsed[0]?.source ?? "mutation.bulk",
+        source: events[0]?.source ?? "mutation.bulk",
         error,
       });
     }
@@ -779,7 +763,7 @@ export async function runMutationSideEffectsForEntities(
   // refs are collected across the whole wave and dispatched once below
   // instead of once per entity (was N transactions for N entities).
   const waveEmbeddingRefs: SearchableEntityRef[] = [];
-  for (const event of parsed) {
+  for (const event of events) {
     for (const handler of handlersFor(event)) {
       const collector = embeddingRefCollectorByHandler.get(handler);
       if (collector) {
@@ -789,7 +773,7 @@ export async function runMutationSideEffectsForEntities(
       batches.push(...(await handler({ db, event, ports })));
     }
   }
-  const firstEvent = parsed[0];
+  const firstEvent = events[0];
   if (waveEmbeddingRefs.length > 0 && firstEvent) {
     batches.push(
       ...(await enqueueEntityEmbeddingRefreshMany(
@@ -802,17 +786,17 @@ export async function runMutationSideEffectsForEntities(
   }
   // Valuation is whole-tree, so a bulk wave needs exactly one recompute, not one
   // per entity (the previous per-entity fan-out ran N whole-tree recomputes).
-  if (parsed.some(needsValuationRecompute)) {
+  if (events.some(needsValuationRecompute)) {
     const dispatched = await ports.dispatchLocationValuationRecompute(
       db,
-      parsed[0]?.source ?? "mutation.bulk",
+      events[0]?.source ?? "mutation.bulk",
     );
     batches.push(dispatched.batch);
   }
-  if (parsed.length > 0) {
+  if (events.length > 0) {
     const problemCounts = await enqueueProblemCountsRefreshBestEffort(
       db,
-      parsed[0]?.source ?? "mutation.bulk",
+      events[0]?.source ?? "mutation.bulk",
       ports,
     );
     if (problemCounts) batches.push(problemCounts);

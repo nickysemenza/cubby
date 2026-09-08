@@ -111,7 +111,7 @@ export const productEntityAdapter = defineEntityAdapter({
           ctx.db,
           ids.map((entityId) => ({
             action: "deleted" as const,
-            entity: { entityType: "product" as const, entityId },
+            entity: { entity: "product" as const, id: entityId },
             source: "product.delete",
           })),
         ),
@@ -156,7 +156,7 @@ export const productEntityAdapter = defineEntityAdapter({
         ctx.db,
         ids.map((entityId) => ({
           action: "updated" as const,
-          entity: { entityType: "product" as const, entityId },
+          entity: { entity: "product" as const, id: entityId },
           source: "product.bulkUpdate",
         })),
       );
@@ -187,15 +187,12 @@ export const productEntityAdapter = defineEntityAdapter({
         ...(await runMutationSideEffectsForEntities(ctx.db, [
           {
             action: "updated" as const,
-            entity: {
-              entityType: "product" as const,
-              entityId: summary.keepEntityId,
-            },
+            entity: { entity: "product" as const, id: summary.keepEntityId },
             source: "product.merge",
           },
           ...summary.deletedEntityIds.map((entityId) => ({
             action: "deleted" as const,
-            entity: { entityType: "product" as const, entityId },
+            entity: { entity: "product" as const, id: entityId },
             source: "product.merge",
           })),
         ])),

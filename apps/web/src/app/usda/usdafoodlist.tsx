@@ -25,7 +25,6 @@ import { nutrientCount } from "~/lib/usda-food-stats";
 
 import { createEntityInlineLinkColumn } from "../_components/data-table/columnHelpers";
 import type { TableStateReturn } from "../_components/data-table/useTableState";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
@@ -83,19 +82,6 @@ export function USDAFoodList({
 }: {
   operations?: USDAFoodListOperations;
 }) {
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    dockedInspector,
-    preview,
-    inspectorToggle,
-  } = useEntityPreview("usda-food", {
-    idField: "fdc_id",
-    responsiveInspector: true,
-  });
   const queryOptions = useCallback<
     ListQueryOptionsFn<USDAListFilters, USDAListRow>
   >(
@@ -300,16 +286,27 @@ export function USDAFoodList({
     [columnHelper],
   );
 
-  const { workbench } = useEntityList<USDAListRow, USDAListFilters>({
-    entity: "usda-food",
-    onInspectRow: inspectRow,
-    queryOptions,
-    buildFilters: buildUSDAFilters,
-    columns,
-    tableStateOptions: USDA_TABLE_STATE,
-    layoutKey: "usdaFood",
-    legacyLayoutSizingKey: "usdaFood",
-  });
+  const { workbench, inspection } = useEntityList<USDAListRow, USDAListFilters>(
+    {
+      entity: "usda-food",
+      preview: { idField: "fdc_id", responsiveInspector: true },
+      queryOptions,
+      buildFilters: buildUSDAFilters,
+      columns,
+      tableStateOptions: USDA_TABLE_STATE,
+      layoutKey: "usdaFood",
+      legacyLayoutSizingKey: "usdaFood",
+    },
+  );
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    dockedInspector,
+    preview,
+    inspectorToggle,
+  } = inspection;
 
   return (
     <>

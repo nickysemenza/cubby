@@ -3,3 +3,12 @@ export function inspect(value: unknown): boolean {
 }
 
 export const identity = (value: unknown): unknown => value;
+
+declare const textSchema: { parse(value: unknown): string };
+
+export function parseAndLeak(value: unknown): unknown {
+  textSchema.parse(value);
+  return value;
+}
+
+type Consumer = (value: unknown) => void;

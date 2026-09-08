@@ -40,7 +40,7 @@ export async function fetchVendorLogoWorkflow(
   );
   await runMutationSideEffects(ctx.db, {
     action: "updated",
-    entity: { entityType: "vendor", entityId },
+    entity: { entity: "vendor", id: entityId },
     source: "vendor.fetchLogo",
   });
   return output;

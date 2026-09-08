@@ -75,7 +75,7 @@ export const taskBulkReorderWorkflow = async (
     db,
     entityIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "task" as const, entityId },
+      entity: { entity: "task" as const, id: entityId },
       source: "task.bulkReorder",
     })),
   );

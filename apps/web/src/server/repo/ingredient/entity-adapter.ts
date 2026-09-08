@@ -74,7 +74,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
         ctx.db,
         ids.map((entityId) => ({
           action: "deleted" as const,
-          entity: { entityType: "ingredient" as const, entityId },
+          entity: { entity: "ingredient" as const, id: entityId },
           source: "ingredient.delete",
         })),
       );
@@ -107,10 +107,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
           ctx.db,
           summary.deletedEntityIds.map((deletedEntityId) => ({
             action: "deleted" as const,
-            entity: {
-              entityType: "ingredient" as const,
-              entityId: deletedEntityId,
-            },
+            entity: { entity: "ingredient" as const, id: deletedEntityId },
             source: "ingredient.merge",
           })),
         )),

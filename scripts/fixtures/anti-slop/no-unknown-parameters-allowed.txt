@@ -4,3 +4,20 @@ export function isText(value: unknown): value is string {
 
 export const isNumber = (value: unknown): value is number =>
   typeof value === "number";
+
+declare const textSchema: {
+  parse(value: unknown): string;
+  safeParse(value: unknown): { success: boolean };
+};
+
+export function parseText(value: unknown): string;
+export function parseText(value: unknown): string {
+  return textSchema.parse(value);
+}
+
+type TextParser = (value: unknown) => string;
+
+export const parseWithContract: TextParser = (value: unknown) =>
+  textSchema.parse(value);
+
+export const decodeText = (value: unknown) => textSchema.safeParse(value);

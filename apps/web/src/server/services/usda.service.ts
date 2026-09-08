@@ -37,6 +37,9 @@ export class USDAService {
     private getLinkedProductsBatch?: (
       lookups: FoodLookupParam[],
     ) => Promise<ProductTopLevelOut[][]>,
+    private countLinkedProducts?: (
+      lookups: FoodLookupParam[],
+    ) => Promise<number[]>,
   ) {}
 
   async findFood(
@@ -227,26 +230,58 @@ export class USDAService {
       return true;
     });
 
-    const enriched = await this.enrichFoodsWithLinkedProducts(filtered);
+    const linkedCounts =
+      sort.orderBy === "linkedProducts"
+        ? this.countLinkedProducts
+          ? await this.countLinkedProducts(
+              filtered.map((food) => this.foodLookup(food)),
+            )
+          : await Promise.all(
+              filtered.map(
+                async (food) =>
+                  (await this.getLinkedProducts(this.foodLookup(food))).length,
+              ),
+            )
+        : [];
+    if (
+      sort.orderBy === "linkedProducts" &&
+      linkedCounts.length !== filtered.length
+    ) {
+      throw new Error("USDA product count cardinality mismatch");
+    }
 
     const direction = sort.direction === "asc" ? 1 : -1;
-    const sorted = enriched.sort((a, b) => {
-      const result =
-        sort.orderBy === "linkedProducts"
-          ? a.linkedProducts.length - b.linkedProducts.length
-          : sort.orderBy === "data_type"
-            ? a.foodInfo.data_type.localeCompare(b.foodInfo.data_type)
-            : sort.orderBy === "fdc_id"
-              ? a.fdc_id - b.fdc_id
-              : a.foodInfo.description.localeCompare(b.foodInfo.description);
-      return result === 0
-        ? a.foodInfo.description.localeCompare(b.foodInfo.description)
-        : result * direction;
-    });
+    const sorted = filtered
+      .map((food, index) => ({
+        food,
+        linkedCount: linkedCounts[index],
+      }))
+      .sort((a, b) => {
+        const result =
+          sort.orderBy === "linkedProducts"
+            ? (a.linkedCount ?? 0) - (b.linkedCount ?? 0)
+            : sort.orderBy === "data_type"
+              ? a.food.foodInfo.data_type.localeCompare(
+                  b.food.foodInfo.data_type,
+                )
+              : sort.orderBy === "fdc_id"
+                ? a.food.fdc_id - b.food.fdc_id
+                : a.food.foodInfo.description.localeCompare(
+                    b.food.foodInfo.description,
+                  );
+        return result === 0
+          ? a.food.foodInfo.description.localeCompare(
+              b.food.foodInfo.description,
+            )
+          : result * direction;
+      });
 
     const start = pagination.pageIndex * pagination.pageSize;
+    const selected = sorted
+      .slice(start, start + pagination.pageSize)
+      .map(({ food }) => food);
     return {
-      data: sorted.slice(start, start + pagination.pageSize),
+      data: await this.enrichFoodsWithLinkedProducts(selected),
       count: sorted.length,
     };
   }

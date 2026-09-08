@@ -120,13 +120,13 @@ export function nonEmptyTuple<T>(values: readonly T[]): [T, ...T[]] {
 }
 
 /** Parse an untrusted or storage-originated value into one entity's UUID brand. */
-export function parseEntityId<E extends ShortcodeEntity, TInput>(
+export function parseEntityId<E extends ShortcodeEntity>(
   entity: E,
-  value: TInput,
+  value: unknown,
 ): EntityId<E>;
-export function parseEntityId<TInput>(
+export function parseEntityId(
   entity: ShortcodeEntity,
-  value: TInput,
+  value: unknown,
 ): AnyEntityId {
   return ENTITY_ID_SCHEMA[entity].parse(value);
 }
@@ -150,14 +150,14 @@ type ParsedEntityRef<E extends ShortcodeEntity, Schema extends z.ZodType> = {
   id: z.output<Schema>;
 };
 
-type EntityRefParser = <TInput>(value: TInput) => EntityRef;
+type EntityRefParser = (value: unknown) => EntityRef;
 
 const entityRefParser =
   <E extends ShortcodeEntity, Schema extends z.ZodType>(
     entity: E,
     schema: Schema,
   ) =>
-  <TInput>(value: TInput): ParsedEntityRef<E, Schema> => ({
+  (value: unknown): ParsedEntityRef<E, Schema> => ({
     entity,
     id: schema.parse(value),
   });
@@ -187,13 +187,13 @@ const PARSE_ENTITY_REF = {
 } as const satisfies Record<ShortcodeEntity, EntityRefParser>;
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
-export function parseEntityRef<E extends ShortcodeEntity, TInput>(
+export function parseEntityRef<E extends ShortcodeEntity>(
   entity: E,
-  value: TInput,
+  value: unknown,
 ): EntityRef<E>;
-export function parseEntityRef<TInput>(
+export function parseEntityRef(
   entity: ShortcodeEntity,
-  value: TInput,
+  value: unknown,
 ): EntityRef {
   return PARSE_ENTITY_REF[entity](value);
 }

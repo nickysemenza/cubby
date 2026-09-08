@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Database } from "~/server/db";
 
 import {
-  mutationSideEffectEventSchema,
   mutationSideEffectManifest,
+  type MutationSideEffectEvent,
   type MutationSideEffectPorts,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
@@ -30,7 +30,10 @@ function batch(totalJobs: number): BackgroundBatchRef {
 }
 
 class InMemoryMutationSideEffectPorts {
-  readonly backgroundJobs: Array<{ jobs: Array<{ dedupeKey: string }> }> = [];
+  readonly backgroundJobs: Array<{
+    jobs: Array<{ dedupeKey: string }>;
+    metadata: unknown;
+  }> = [];
   readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
   readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
     [];
@@ -38,7 +41,7 @@ class InMemoryMutationSideEffectPorts {
 
   readonly ports = {
     dispatchBackgroundJobs: async (_db, input) => {
-      this.backgroundJobs.push({ jobs: input.jobs });
+      this.backgroundJobs.push({ jobs: input.jobs, metadata: input.metadata });
       return {
         batch: batch(input.jobs.length),
         batchId: "batch-1",
@@ -91,7 +94,7 @@ describe("runMutationSideEffectsForEntities batching", () => {
       db,
       inventoryIds.map((entityId) => ({
         action: "created" as const,
-        entity: { entityType: "inventory" as const, entityId },
+        entity: { entity: "inventory" as const, id: entityId },
         source: "test.bulk",
       })),
       memory.ports,
@@ -129,12 +132,12 @@ describe("runMutationSideEffectsForEntities batching", () => {
       [
         {
           action: "updated",
-          entity: { entityType: "product", entityId: productId },
+          entity: { entity: "product", id: productId },
           source: "test.bulk",
         },
         {
           action: "updated",
-          entity: { entityType: "inventory", entityId: inventoryId },
+          entity: { entity: "inventory", id: inventoryId },
           source: "test.bulk",
         },
       ],
@@ -164,11 +167,8 @@ describe("runMutationSideEffectsForEntities batching", () => {
         {
           action: "updated",
           entity: {
-            entityType: "project",
-            entityId: testEntityId(
-              "project",
-              "00000000-0000-4000-8000-000000000006",
-            ),
+            entity: "project",
+            id: testEntityId("project", "00000000-0000-4000-8000-000000000006"),
           },
           source: "project.update",
         },
@@ -184,32 +184,47 @@ describe("runMutationSideEffectsForEntities batching", () => {
     );
     consoleError.mockRestore();
   });
+
+  it("keeps dispatched metadata at the legacy wire-reference boundary", async () => {
+    const locationId = testEntityId(
+      "location",
+      "00000000-0000-4000-8000-000000000007",
+    );
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "location", id: locationId },
+        source: "location.updateImages",
+        locationImagesChanged: true,
+      },
+      memory.ports,
+    );
+
+    expect(memory.backgroundJobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            entity: { entityType: "location", entityId: locationId },
+          }),
+        }),
+      ]),
+    );
+  });
 });
 
 describe("mutation side effects manifest", () => {
-  it("parses typed mutation entity refs", () => {
-    expect(
-      mutationSideEffectEventSchema.parse({
-        action: "updated",
-        entity: {
-          entityType: "product",
-          entityId: "00000000-0000-4000-8000-000000000001",
-        },
-        source: "test.product",
-      }),
-    ).toMatchObject({ entity: { entityType: "product" } });
-  });
-
-  it("rejects mismatched entity ids", () => {
-    // A product-shaped event must carry a product UUID; accepting a malformed
-    // id would let a side-effect handler enqueue work for an unreachable row.
-    expect(() =>
-      mutationSideEffectEventSchema.parse({
-        action: "updated",
-        entity: { entityType: "product", entityId: "not-a-uuid" },
-        source: "test.product",
-      }),
-    ).toThrow(/Invalid UUID/);
+  it("correlates supported entity names with canonical branded ids", () => {
+    const event: MutationSideEffectEvent = {
+      action: "updated",
+      entity: {
+        entity: "product",
+        id: testEntityId("product", "00000000-0000-4000-8000-000000000001"),
+      },
+      source: "test.product",
+    };
+    expect(event.entity.entity).toBe("product");
   });
 
   it("declares lifecycle hooks for every supported entity", () => {

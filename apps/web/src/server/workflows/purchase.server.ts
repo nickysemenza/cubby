@@ -46,7 +46,7 @@ export async function linkExpensesToPurchaseWorkflow(
     ctx.db,
     resolvedIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "expense" as const, entityId },
+      entity: { entity: "expense" as const, id: entityId },
       source: "purchase.link",
     })),
   );
@@ -74,8 +74,8 @@ export async function splitExpenseWorkflow(
           {
             action: "deleted" as const,
             entity: {
-              entityType: "expense" as const,
-              entityId: parseEntityId("expense", originalRef.id),
+              entity: "expense" as const,
+              id: parseEntityId("expense", originalRef.id),
             },
             source: "purchase.split",
           },
@@ -83,7 +83,7 @@ export async function splitExpenseWorkflow(
       : []),
     ...newIds.map((entityId) => ({
       action: "created" as const,
-      entity: { entityType: "expense" as const, entityId },
+      entity: { entity: "expense" as const, id: entityId },
       source: "purchase.split",
     })),
   ]);
@@ -111,10 +111,7 @@ export async function mergePurchasesWorkflow(
   if (entityId) {
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: {
-        entityType: "purchase",
-        entityId: parseEntityId("purchase", entityId),
-      },
+      entity: { entity: "purchase", id: parseEntityId("purchase", entityId) },
       source: "purchase.merge",
     });
   }

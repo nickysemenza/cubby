@@ -37,7 +37,6 @@ import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { ScopeChip } from "../_components/data-table/ScopeChip";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
@@ -383,38 +382,34 @@ export function ExpenseList() {
   // reused rather than duplicated.
   const scopeChips = useExpenseScopeChips();
 
+  // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
+  // whose input is a union with a query skip sentinel, so it would land on
+  // `unknown` — and `currentFilters` goes straight to `expense.analytics`,
+  // which wants the real shape.
+  const { workbench, currentFilters, totalCount, data, inspection } =
+    useEntityList<ExpenseOut, ExpenseFilters>({
+      entity: "expense",
+      preview: { responsiveInspector: true },
+      queryOptions: listQueryOptions,
+      filterOptions: projectFilterOptions,
+      columns,
+      // The expense contract's own list query, delete, and invalidation fan-out.
+      deletable: true,
+      nameEditable,
+      // Purchase is visible by default; its Order # detail remains opt-in.
+      // `lineBasis` reads "Line item" on all but a handful of rows, so the column
+      // is dead weight by default; its header filter is the surface that matters.
+      initialColumnVisibility: { orderId: false, lineBasis: false },
+    });
   const {
     onRowClick,
-    inspectRow,
     onRowHover,
     onRowHoverEnd,
     PreviewSheet,
     preview,
     dockedInspector,
     inspectorToggle,
-  } = useEntityPreview("expense", { responsiveInspector: true });
-
-  // `TFilters` is given explicitly: it can't be inferred from `queryOptions`,
-  // whose input is a union with a query skip sentinel, so it would land on
-  // `unknown` — and `currentFilters` goes straight to `expense.analytics`,
-  // which wants the real shape.
-  const { workbench, currentFilters, totalCount, data } = useEntityList<
-    ExpenseOut,
-    ExpenseFilters
-  >({
-    entity: "expense",
-    onInspectRow: inspectRow,
-    queryOptions: listQueryOptions,
-    filterOptions: projectFilterOptions,
-    columns,
-    // The expense contract's own list query, delete, and invalidation fan-out.
-    deletable: true,
-    nameEditable,
-    // Purchase is visible by default; its Order # detail remains opt-in.
-    // `lineBasis` reads "Line item" on all but a handful of rows, so the column
-    // is dead weight by default; its header filter is the surface that matters.
-    initialColumnVisibility: { orderId: false, lineBasis: false },
-  });
+  } = inspection;
   usePageCount(totalCount);
 
   // `currentFilters` is the ledger query's own filter object — including the

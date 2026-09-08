@@ -105,6 +105,87 @@ export type ExternalFetchOptions = Omit<RequestInit, "fetcher"> & {
   maxRedirects?: number;
 };
 
+function responseWithDeadline(
+  response: Response,
+  signal: AbortSignal,
+  cleanup: () => void,
+): Response {
+  if (!response.body) {
+    cleanup();
+    return response;
+  }
+
+  const reader = response.body.getReader();
+  let closed = false;
+  let reading = false;
+  let released = false;
+  let streamController: ReadableStreamDefaultController<Uint8Array>;
+
+  const release = () => {
+    if (released || reading) return;
+    released = true;
+    reader.releaseLock();
+  };
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    signal.removeEventListener("abort", abortBody);
+    cleanup();
+  };
+  const abortBody = () => {
+    if (closed) return;
+    const reason = signal.reason;
+    finish();
+    void reader
+      .cancel(reason)
+      .finally(release)
+      .catch(() => undefined);
+    streamController.error(reason);
+  };
+  signal.addEventListener("abort", abortBody, { once: true });
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      streamController = controller;
+      if (signal.aborted) abortBody();
+    },
+    async pull(controller) {
+      reading = true;
+      try {
+        const { done, value } = await reader.read();
+        if (closed) return;
+        if (done) {
+          finish();
+          controller.close();
+        } else if (value) {
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        if (closed) return;
+        finish();
+        controller.error(error);
+      } finally {
+        reading = false;
+        if (closed) release();
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        finish();
+        release();
+      }
+    },
+  });
+
+  return new Response(body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
 /** Fetch with a bounded redirect chain, validating every redirect target. */
 export async function fetchExternalResponse(
   value: string | URL,
@@ -116,18 +197,42 @@ export async function fetchExternalResponse(
     maxRedirects = DEFAULT_MAX_REDIRECTS,
     ...init
   } = options;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let current = validateExternalHttpUrl(value);
+  const controller = new AbortController();
+  const callerSignal = init.signal;
+  const abortFromCaller = () => controller.abort(callerSignal?.reason);
+  callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  if (callerSignal?.aborted) abortFromCaller();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const cleanup = () => {
+    clearTimeout(timeout);
+    callerSignal?.removeEventListener("abort", abortFromCaller);
+  };
+  let responseOwnsDeadline = false;
 
   try {
     for (let redirects = 0; ; redirects += 1) {
+      if (controller.signal.aborted) throw controller.signal.reason;
       const response = await fetcher(current, {
         ...init,
         redirect: "manual",
         signal: controller.signal,
       });
-      if (response.status < 300 || response.status >= 400) return response;
+      if (controller.signal.aborted) {
+        void response.body
+          ?.cancel(controller.signal.reason)
+          .catch(() => undefined);
+        throw controller.signal.reason;
+      }
+      if (response.status < 300 || response.status >= 400) {
+        const boundedResponse = responseWithDeadline(
+          response,
+          controller.signal,
+          cleanup,
+        );
+        responseOwnsDeadline = true;
+        return boundedResponse;
+      }
 
       await response.body?.cancel();
       if (redirects >= maxRedirects) {
@@ -146,7 +251,7 @@ export async function fetchExternalResponse(
       current = validateExternalHttpUrl(new URL(location, current));
     }
   } finally {
-    clearTimeout(timeout);
+    if (!responseOwnsDeadline) cleanup();
   }
 }
 

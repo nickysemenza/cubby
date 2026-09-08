@@ -77,7 +77,7 @@ export const recipeEntityAdapter = defineEntityAdapter({
           ctx.db,
           ids.map((entityId) => ({
             action: "deleted" as const,
-            entity: { entityType: "recipe" as const, entityId },
+            entity: { entity: "recipe" as const, id: entityId },
             source: "recipe.delete",
           })),
         ),

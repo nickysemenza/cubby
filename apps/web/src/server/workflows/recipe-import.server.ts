@@ -119,7 +119,7 @@ export const insertImportWorkflow = async (
   });
   await runMutationSideEffects(context.db, {
     action: "updated",
-    entity: { entityType: "recipe", entityId: result.id },
+    entity: { entity: "recipe", id: result.id },
     source: "recipe.import",
   });
   return { id: parseShortcodeFor("recipe", result.shortcode) };
@@ -135,7 +135,7 @@ export const upsertCookbookWorkflow = async (
   });
   await runMutationSideEffects(context.db, {
     action: "updated",
-    entity: { entityType: "cookbook", entityId: result.entityId },
+    entity: { entity: "cookbook", id: result.entityId },
     source: "cookbook.upsert",
   });
   if (input.isbn) {
@@ -300,7 +300,7 @@ export async function* importCookbookWorkflow(
             context.db,
             insertedIds.map((id) => ({
               action: "updated" as const,
-              entity: { entityType: "recipe" as const, entityId: id },
+              entity: { entity: "recipe" as const, id: id },
               source,
             })),
           );
@@ -434,7 +434,7 @@ export async function* importNotionSyncWorkflow(
             context.db,
             insertedIds.map((id) => ({
               action: "updated" as const,
-              entity: { entityType: "recipe" as const, entityId: id },
+              entity: { entity: "recipe" as const, id: id },
               source,
             })),
           );
@@ -481,7 +481,7 @@ export const deleteCookbookWorkflow = async (
     context.db,
     deletedRecipeIds.map((id) => ({
       action: "deleted" as const,
-      entity: { entityType: "recipe" as const, entityId: id },
+      entity: { entity: "recipe" as const, id: id },
       source: "recipe.deleteCookbook",
     })),
   );

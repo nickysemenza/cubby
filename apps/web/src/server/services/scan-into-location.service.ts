@@ -142,7 +142,7 @@ export async function scanAtLocation(
     await markInventoryEntryVerified(db, entryId, actor);
     const backgroundBatches = await runMutationSideEffects(db, {
       action: "updated",
-      entity: { entityType: "inventory", entityId: entryId },
+      entity: { entity: "inventory", id: entryId },
       source: "inventory.scanAtLocation",
     });
     return {
@@ -178,7 +178,7 @@ export async function scanAtLocation(
       );
       const backgroundBatches = await runMutationSideEffects(db, {
         action: "created",
-        entity: { entityType: "inventory", entityId },
+        entity: { entity: "inventory", id: entityId },
         source: "inventory.scanAtLocation",
       });
       return {
@@ -267,7 +267,7 @@ export async function resolveScanStrays(
   const moved = await moveInventoryEntries(db, { items }, actor);
   const backgroundBatches = await runMutationSideEffects(db, {
     action: "updated",
-    entity: { entityType: "location", entityId: targetLocationId },
+    entity: { entity: "location", id: targetLocationId },
     source: "inventory.resolveScanStrays",
   });
 

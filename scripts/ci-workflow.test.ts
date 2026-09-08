@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
 const playwrightConfig = readFileSync("apps/web/playwright.config.ts", "utf8");
+const webPackage = readFileSync("apps/web/package.json", "utf8");
 
 function job(id: string, nextId: string) {
   const start = workflow.indexOf(`  ${id}:\n`);
@@ -30,8 +31,8 @@ test("E2E browser lanes start with scope and test the uploaded artifact", () => 
   const e2e = job("test-e2e", "report-coverage");
   assert.match(e2e, /needs: scope/u);
   assert.doesNotMatch(e2e, /container:/u);
-  assert.match(e2e, /lane: chromium[\s\S]*expected-tests: 17/u);
-  assert.match(e2e, /lane: webkit[\s\S]*expected-tests: 7/u);
+  assert.match(e2e, /lane: chromium[\s\S]*browser: chromium/u);
+  assert.match(e2e, /lane: webkit[\s\S]*browser: webkit/u);
   assert.match(e2e, /Restore exact Playwright browser/u);
   assert.match(e2e, /Bound Ubuntu package mirror retries/u);
   assert.match(
@@ -79,21 +80,26 @@ test("the node test runner builds and publishes the deployable artifact", () => 
   assert.match(web, /--project ui/u);
 });
 
-test("PostgreSQL and browser jobs enforce authoritative counts", () => {
+test("PostgreSQL and browser jobs select the authoritative suites", () => {
   const postgres = job("test-postgres", "test-aux-coverage");
-  const e2e = job("test-e2e", "report-coverage");
   assert.match(postgres, /--project integration/u);
-  assert.match(postgres, /export CUBBY_EXPECT_POSTGRES_TESTS=271/u);
-  assert.match(postgres, /if \[\[ "\$FULL" == "true" \]\]/u);
+  assert.match(
+    postgres,
+    /--reporter=\.\/tooling\/test-run-contract-reporter\.ts/u,
+  );
+  assert.match(
+    job("test-web", "test-postgres"),
+    /--reporter=\.\/tooling\/test-run-contract-reporter\.ts/u,
+  );
+  assert.match(postgres, /if \[\[ "\$FULL" != "true" \]\]/u);
   assert.doesNotMatch(postgres, /pglite/u);
-  assert.match(e2e, /expected-tests: 17/u);
-  assert.match(e2e, /expected-tests: 7/u);
+  assert.doesNotMatch(workflow, /expected-tests|CUBBY_EXPECT_POSTGRES_TESTS/u);
+  assert.doesNotMatch(webPackage, /CUBBY_EXPECT_(?:POSTGRES|E2E)_TESTS/u);
   assert.match(playwrightConfig, /retries: 0/u);
   assert.match(playwrightConfig, /workers: 1/u);
 });
 
 test("Playwright package and CI browser cache use the same exact version", () => {
-  const webPackage = readFileSync("apps/web/package.json", "utf8");
   const installed = webPackage.match(/"@playwright\/test": "([^"]+)"/u)?.[1];
   const configured = workflow.match(/PLAYWRIGHT_VERSION: "([^"]+)"/u)?.[1];
   assert.equal(configured, installed);

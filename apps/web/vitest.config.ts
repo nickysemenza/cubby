@@ -140,7 +140,7 @@ export default defineConfig({
     reporters: [
       "dot",
       "./tooling/failure-summary-reporter.ts",
-      "./tooling/authoritative-count-reporter.ts",
+      "./tooling/test-run-contract-reporter.ts",
     ],
     // Passing fixtures intentionally exercise error logging and transport
     // tracing. Printing those expected messages dominates terminal I/O in the

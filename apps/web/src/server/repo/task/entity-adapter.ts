@@ -53,7 +53,7 @@ export const taskEntityAdapter = defineEntityAdapter({
         ctx.db,
         result.updatedIds.map((entityId) => ({
           action: "updated" as const,
-          entity: { entityType: "task" as const, entityId },
+          entity: { entity: "task" as const, id: entityId },
           source: "task.bulkUpdate",
         })),
       );

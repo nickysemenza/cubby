@@ -15,7 +15,7 @@ import { match } from "ts-pattern";
 
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
-import { inventoryEntry, product } from "~/server/db/schema";
+import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 
@@ -28,7 +28,14 @@ import {
 import { enrichProductRowsWithPricing } from "./pricing";
 
 const productMatchesFoodLookup = (
-  linkedProduct: ProductTopLevelOut,
+  linkedProduct: {
+    fdc_id: number | null;
+    externalIds: ReadonlyArray<{
+      source: string;
+      kind: string;
+      externalId: string;
+    }>;
+  },
   lookup: FoodLookupParam,
 ): boolean =>
   match(lookup)
@@ -47,6 +54,17 @@ const productMatchesFoodLookup = (
       );
     })
     .exhaustive();
+
+const productFoodLinkCondition = (lookups: readonly FoodLookupParam[]) =>
+  or(
+    ...lookups.map((lookup) =>
+      match(lookup)
+        .with({ kind: "upc" }, (value) => productHasGtin(value.gtin_upc))
+        .with({ kind: "fdc" }, (value) => eq(product.fdc_id, value.fdc_id))
+        .with({ kind: "ndb" }, () => sql`false`)
+        .exhaustive(),
+    ),
+  );
 
 /**
  * Resolve every USDA identifier with one product projection.
@@ -74,15 +92,7 @@ export const findProductsByFoodIdentifiers = async (
   // `productHasGtin` normalizes, which is a recall FIX as well as a port: USDA
   // hands us a 12-digit `gtin_upc`, and a product holding the 13- or 14-digit
   // form of that same barcode never matched the old `eq(product.upc, ...)`.
-  const linkCondition = or(
-    ...lookups.map((lookup) =>
-      match(lookup)
-        .with({ kind: "upc" }, (value) => productHasGtin(value.gtin_upc))
-        .with({ kind: "fdc" }, (value) => eq(product.fdc_id, value.fdc_id))
-        .with({ kind: "ndb" }, () => sql`false`)
-        .exhaustive(),
-    ),
-  );
+  const linkCondition = productFoodLinkCondition(lookups);
 
   const res = await getDb(db).query.product.findMany({
     where: and(linkCondition, notDeleted(product)),
@@ -104,6 +114,32 @@ export const findProductsByFoodIdentifiers = async (
     linkedProducts.filter((linkedProduct) =>
       productMatchesFoodLookup(linkedProduct, lookup),
     ),
+  );
+};
+
+/**
+ * Count live product links for USDA foods without loading images, pricing, or
+ * data-quality. List sorting needs only this association; the selected page is
+ * enriched by {@link findProductsByFoodIdentifiers} afterwards.
+ */
+export const countProductsByFoodIdentifiers = async (
+  db: Database,
+  rawLookups: readonly FoodLookupParam[],
+): Promise<number[]> => {
+  if (rawLookups.length === 0) return [];
+
+  const lookups = rawLookups.map((lookup) => foodLookupParam.parse(lookup));
+  const linkCondition = productFoodLinkCondition(lookups);
+  const products = await getDb(db).query.product.findMany({
+    where: and(linkCondition, notDeleted(product)),
+    columns: { fdc_id: true },
+    with: { externalIds: { where: notDeleted(productExternalId) } },
+  });
+  return lookups.map(
+    (lookup) =>
+      products.filter((linkedProduct) =>
+        productMatchesFoodLookup(linkedProduct, lookup),
+      ).length,
   );
 };
 

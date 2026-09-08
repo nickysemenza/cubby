@@ -236,7 +236,7 @@ export async function quickCreateProductWorkflow(
   const entityId = await productShortcodes.one(context.db, product.id);
   await runMutationSideEffects(context.db, {
     action: "created",
-    entity: { entityType: "product", entityId },
+    entity: { entity: "product", id: entityId },
     source: "product.quickCreate",
   });
   return product;
@@ -447,7 +447,7 @@ export async function discardProductWorkflow(
     [
       {
         action: "created",
-        entity: { entityType: "expense", entityId: result.expenseId },
+        entity: { entity: "expense", id: result.expenseId },
         source: "product.discard",
       },
       ...(result.inventory
@@ -457,8 +457,8 @@ export async function discardProductWorkflow(
                 ? ("deleted" as const)
                 : ("updated" as const),
               entity: {
-                entityType: "inventory" as const,
-                entityId: result.inventory.entryId,
+                entity: "inventory" as const,
+                id: result.inventory.entryId,
               },
               source: "product.discard",
             },
@@ -508,7 +508,7 @@ export async function* createManyProductsWorkflow(
       );
       await runMutationSideEffects(context.db, {
         action: "created",
-        entity: { entityType: "product", entityId },
+        entity: { entity: "product", id: entityId },
         source: "product.createMany",
       });
       if (product.ingredient?.id) {
@@ -556,7 +556,7 @@ export async function* markProductsUsdaUnavailableWorkflow(
       );
       await runMutationSideEffects(context.db, {
         action: "updated",
-        entity: { entityType: "product", entityId: id },
+        entity: { entity: "product", id: id },
         source: "product.markUsdaUnavailableMany",
       });
     },

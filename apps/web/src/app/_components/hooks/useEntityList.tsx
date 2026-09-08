@@ -38,6 +38,10 @@ import {
   useEntityListPresentation,
   useEntityListPresentationState,
 } from "./useEntityListPresentation";
+import {
+  useEntityPreview,
+  type UseEntityPreviewOptions,
+} from "./useEntityPreview";
 import { useInfiniteTableList } from "./useInfiniteTableList";
 import { ListBulkActionBar } from "./useListBulkActions";
 import type { ListQueryOptionsFn } from "./usePaginatedTableCore";
@@ -49,6 +53,19 @@ export interface BaseListRow {
   createdAt?: string | Date;
   updatedAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
+}
+
+interface EntityListPreviewOptions extends UseEntityPreviewOptions {
+  /** Override the list entity, or use each row's entityType when null. */
+  entity?: Entity | null;
+}
+
+function fixedPreviewEntity(
+  listEntity: Entity,
+  options: EntityListPreviewOptions | undefined,
+): Entity | undefined {
+  if (!options || options.entity === null) return undefined;
+  return options.entity ?? listEntity;
 }
 
 const routeSearchSchema = z.record(
@@ -125,6 +142,8 @@ export interface UseEntityListOptions<
   bulkActions?: BulkActionsConfig<TData>;
   /** Presentation-only Inspect action for one checked canonical row. */
   onInspectRow?: (row: { id?: string; original: TData }) => void;
+  /** Canonical preview behavior for a top-level roster. */
+  preview?: EntityListPreviewOptions;
   /** False for embedded specialist tables with their own contextual actions. */
   includeCatalogActions?: boolean;
   extraActions?: (row: TData) => ReactNode;
@@ -178,6 +197,7 @@ export interface UseEntityListReturn<
   data: TRow[];
   requestDelete: (item: TData) => void;
   totalCount: number | undefined;
+  inspection: ReturnType<typeof useEntityPreview>;
 }
 
 type FlatEntityListOptions<
@@ -265,6 +285,7 @@ export function useEntityList<
   tableStateOptions,
   bulkActions,
   onInspectRow,
+  preview: previewOptions,
   includeCatalogActions,
   extraActions,
   deletable,
@@ -287,6 +308,12 @@ export function useEntityList<
   TRow
 > {
   const [grouped, setGrouped] = useState(false);
+  const inspection = useEntityPreview(
+    fixedPreviewEntity(entity, previewOptions),
+    previewOptions,
+  );
+  const effectiveOnInspectRow =
+    onInspectRow ?? (previewOptions ? inspection.inspectRow : undefined);
 
   const onGroupedChange = useCallback((value: boolean) => {
     setGrouped(value);
@@ -330,7 +357,7 @@ export function useEntityList<
     deletable: effectiveDeletable,
     extraActions,
     bulkActions,
-    onInspectRow,
+    onInspectRow: effectiveOnInspectRow,
     includeCatalogActions,
     deleteEmptyLabel,
     selectionScope: effectiveBuildFilters,
@@ -556,5 +583,6 @@ export function useEntityList<
     // default totalCount to 0 pre-response, which would otherwise flash
     // "0 …" in the eyebrow before the real count arrives.
     totalCount: isLoading ? undefined : totalCount,
+    inspection,
   };
 }

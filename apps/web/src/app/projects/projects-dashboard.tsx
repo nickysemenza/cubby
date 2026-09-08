@@ -26,10 +26,7 @@ import {
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import {
-  type PreviewPresentation,
-  useEntityPreview,
-} from "~/app/_components/hooks/useEntityPreview";
+import type { PreviewPresentation } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
@@ -692,17 +689,6 @@ function ServerProjectGallery({
   completionYears: string[];
 }) {
   const helper = useMemo(() => createCubbyColumnHelper<ProjectOut>(), []);
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    dockedInspector,
-    inspectorToggle,
-    preview,
-    presentation,
-  } = useEntityPreview("project", { responsiveInspector: true });
   const projectOptions = useDeferredFilterOptions("project");
   const filterOptions = useFilterOptions({
     project: projectOptions,
@@ -728,13 +714,23 @@ function ServerProjectGallery({
   >((params) => entityListFor("project").listQueryPlan(params), []);
   const list = useEntityList<ProjectOut, ProjectFilters>({
     entity: "project",
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
     queryOptions: listQueryOptions,
     columns,
     filterOptions,
     layoutKey: "project:gallery",
     legacyLayoutSizingKey: "project",
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    dockedInspector,
+    inspectorToggle,
+    preview,
+    presentation,
+  } = list.inspection;
   const ids = useMemo(
     () => list.data.map((project) => project.id),
     [list.data],

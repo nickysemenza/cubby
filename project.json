@@ -105,9 +105,6 @@
           "env": "CUBBY_TEST_DB_PROVIDER"
         },
         {
-          "env": "CUBBY_EXPECT_POSTGRES_TESTS"
-        },
-        {
           "env": "VITEST_MAX_THREADS"
         }
       ],

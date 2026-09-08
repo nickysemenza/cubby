@@ -82,7 +82,7 @@ test("runtime typeof is allowed only in explicitly annotated predicates", () => 
   );
 });
 
-test("unknown input is allowed only at an explicitly typed predicate seam", () => {
+test("unknown input is allowed at predicates and genuine decoder seams", () => {
   const allowed = lintFixture(
     "no-unknown-parameters",
     "no-unknown-parameters-allowed.txt",
@@ -95,7 +95,7 @@ test("unknown input is allowed only at an explicitly typed predicate seam", () =
   assert.deepEqual(allowed, []);
   assert.deepEqual(
     rejected.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 5],
+    [1, 5, 9, 14],
   );
 });
 

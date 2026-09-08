@@ -33,7 +33,6 @@ import {
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
@@ -86,17 +85,6 @@ export function InventoryItemList() {
     () => createCubbyColumnHelper<InventoryListItem>(),
     [],
   );
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("inventory", { responsiveInspector: true });
-
   const clearProductScope = useCallback(() => {
     void inventoryNavigate({
       search: (prev) => ({ ...prev, productId: undefined }),
@@ -297,10 +285,10 @@ export function InventoryItemList() {
   // Not `EntityListPage`: this page switches between a table and a shelf view
   // off the same query, so it reads `data` and the workbench's own table,
   // loading state, and delete dialog directly.
-  const { workbench, data, totalCount } = useEntityList({
+  const { workbench, data, totalCount, inspection } = useEntityList({
     entity: "inventory",
     queryOptions: entityListFor("inventory").listQueryPlan,
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
     subject: PRODUCT_SUBJECT,
     // Inventory has custom columns (product image, amount instead of name)
     columns,
@@ -313,6 +301,15 @@ export function InventoryItemList() {
       category: false,
     },
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   usePageCount(totalCount);
 
   const [view, setView] = useState<ShelfView>("table");

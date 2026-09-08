@@ -2,7 +2,6 @@ import { isEqual } from "es-toolkit";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
 
 import { entityEditRegistry } from "./definitions";
 import {
@@ -21,13 +20,9 @@ import type {
   RuntimeEntityEditRequest,
 } from "./types";
 import { useEntityCommands } from "./use-entity-commands";
+import { entityEditValueBagSchema } from "./value-schema";
 
 type RuntimeEntityEditDraft = FieldValues;
-
-const entityEditValueBagSchema = z.record(
-  z.string(),
-  z.union([z.json(), z.date(), z.undefined()]),
-);
 
 export interface EntityEditSession<E extends EditableEntity> {
   /** Exposed so specialized form adapters can use RHF's native field helpers. */

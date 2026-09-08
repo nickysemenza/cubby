@@ -146,7 +146,7 @@ export const bulkProcessInventoryWorkflow = async (
     db,
     entityIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "inventory" as const, entityId },
+      entity: { entity: "inventory" as const, id: entityId },
       source: "inventory.bulkProcess",
     })),
   );
@@ -211,7 +211,7 @@ export const bulkAddInventoryWorkflow = async (
     db,
     entityIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "inventory" as const, entityId },
+      entity: { entity: "inventory" as const, id: entityId },
       source: "inventory.bulkAdd",
     })),
   );
@@ -268,7 +268,7 @@ export const bulkDiscardInventoryWorkflow = async (
     result.items.flatMap((line) => [
       {
         action: "created" as const,
-        entity: { entityType: "expense" as const, entityId: line.expenseId },
+        entity: { entity: "expense" as const, id: line.expenseId },
         source: "inventory.bulkDiscard",
       },
       // An entry that emptied was soft-deleted; one that was drawn down was
@@ -281,8 +281,8 @@ export const bulkDiscardInventoryWorkflow = async (
                 ? ("deleted" as const)
                 : ("updated" as const),
               entity: {
-                entityType: "inventory" as const,
-                entityId: line.inventory.entryId,
+                entity: "inventory" as const,
+                id: line.inventory.entryId,
               },
               source: "inventory.bulkDiscard",
             },
@@ -361,7 +361,7 @@ export const bulkMoveInventoryWorkflow = async (
     db,
     entityIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "inventory" as const, entityId },
+      entity: { entity: "inventory" as const, id: entityId },
       source: "inventory.bulkMove",
     })),
   );
@@ -410,7 +410,7 @@ export const moveInventoryEntriesWorkflow = async (
     db,
     entityIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "inventory" as const, entityId },
+      entity: { entity: "inventory" as const, id: entityId },
       source: "inventory.moveEntries",
     })),
   );
@@ -488,12 +488,12 @@ export const reconcileInventorySessionWorkflow = async (
     ? await runMutationSideEffectsForEntities(db, [
         ...survivingEntityIds.map((entityId) => ({
           action: "updated" as const,
-          entity: { entityType: "inventory" as const, entityId },
+          entity: { entity: "inventory" as const, id: entityId },
           source: "inventory.reconcileSession",
         })),
         ...removedIds.map((entityId) => ({
           action: "deleted" as const,
-          entity: { entityType: "inventory" as const, entityId },
+          entity: { entity: "inventory" as const, id: entityId },
           source: "inventory.reconcileSession",
         })),
       ])

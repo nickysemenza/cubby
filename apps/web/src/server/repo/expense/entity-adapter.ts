@@ -78,7 +78,7 @@ export const expenseEntityAdapter = defineEntityAdapter({
         ctx.db,
         result.updatedIds.map((entityId) => ({
           action: "updated" as const,
-          entity: { entityType: "expense" as const, entityId },
+          entity: { entity: "expense" as const, id: entityId },
           source: "expense.bulkUpdate",
         })),
       );

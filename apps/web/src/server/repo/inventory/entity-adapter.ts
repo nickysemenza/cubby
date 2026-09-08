@@ -80,7 +80,7 @@ export const inventoryEntityAdapter = defineEntityAdapter({
         ctx.db,
         ids.map((entityId) => ({
           action: "deleted" as const,
-          entity: { entityType: "inventory" as const, entityId },
+          entity: { entity: "inventory" as const, id: entityId },
           source: "inventory.delete",
         })),
       );

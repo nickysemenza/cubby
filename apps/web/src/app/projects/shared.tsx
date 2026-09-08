@@ -82,7 +82,6 @@ import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useEntitySelection } from "~/app/_components/hooks/useEntitySelection";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
@@ -1219,17 +1218,6 @@ export function ProjectTable({
       label: value,
     })),
   });
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("project", { responsiveInspector: true });
-
   const updateProjectMutation = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("project", "update"),
     entity: "project",
@@ -1425,13 +1413,13 @@ export function ProjectTable({
   );
 
   const tableStateOptions = useMemo(() => ({ initialSort: "startDate" }), []);
-  const { workbench, data, totalCount } = useEntityList<
+  const { workbench, data, totalCount, inspection } = useEntityList<
     ProjectTreeRow,
     ProjectFilters,
     ProjectOut
   >({
     entity: "project",
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
     queryOptions: listQueryOptions,
     columns,
     filterOptions,
@@ -1442,6 +1430,15 @@ export function ProjectTable({
     tableStateOptions,
     tree: projectRowsConfig,
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   const { table } = workbench;
 
   // Hydrate covers only for loaded rows.

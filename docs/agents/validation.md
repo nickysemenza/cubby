@@ -38,7 +38,7 @@ small real-PostgreSQL family without bypassing the authoritative manifest.
 
 `pnpm test` runs all fast unit, UI, contract, and auxiliary-package tests;
 `pnpm test:postgres` runs the retained PostgreSQL contracts; and
-`pnpm test:e2e` runs the 24 PostgreSQL-backed browser contracts. The legacy
+`pnpm test:e2e` runs the PostgreSQL-backed browser contracts. The legacy
 `test:integration:postgres` and `test:e2e:postgres` names are aliases. Start
 PostgreSQL with `docker compose -p cubby up -d` before either authoritative
 database tier. `pnpm test:all` (also `test:local`) runs the fast tier first,

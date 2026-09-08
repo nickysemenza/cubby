@@ -22,6 +22,7 @@ import type {
   EntityEditValue,
   EntityEditValueBag,
 } from "./types";
+import { entityEditValueSchema } from "./value-schema";
 
 const editable: EntityEditAccess = { mode: "editable" };
 
@@ -30,12 +31,11 @@ const readOnly = (reason: string): EntityEditAccess => ({
   reason,
 });
 
-const editValueSchema = z.union([z.json(), z.date(), z.undefined()]);
 const valueFor = (record: EntityEditRecord | undefined, id: string) => {
   const candidate = Object.entries(record ?? {}).find(
     ([key]) => key === id,
   )?.[1];
-  return editValueSchema.parse(candidate);
+  return entityEditValueSchema.parse(candidate);
 };
 
 const changed = (

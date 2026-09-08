@@ -75,7 +75,7 @@ export const duplicateWorkflow = async (
   );
   const backgroundBatches = await runMutationSideEffects(context.db, {
     action: "created",
-    entity: { entityType: "recipe", entityId },
+    entity: { entity: "recipe", id: entityId },
     source: "recipe.duplicate",
   });
   return {

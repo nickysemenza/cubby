@@ -5,6 +5,7 @@ import type {
   collectionTagSetInput,
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -70,7 +71,10 @@ async function setCollectionTag(
   await runMutationSideEffectsForEntities(context.db, [
     {
       action: "updated",
-      entity,
+      entity: parseEntityRef<"product" | "location">(
+        entity.entityType,
+        entity.entityId,
+      ),
       source:
         entity.entityType === "product" ? "product.update" : "location.update",
     },

@@ -1,6 +1,8 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
+  parseEntityRef,
 } from "@cubby/schemas/identifiers";
 import {
   buildPaginatedResponse,
@@ -12,7 +14,7 @@ import { z } from "zod";
 import { createAppError } from "~/server/errors/app-error";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
-  mutationSideEffectEventSchema,
+  isMutationSideEffectRef,
   runMutationSideEffects,
 } from "~/server/services/mutation-side-effects";
 
@@ -84,13 +86,15 @@ const runSideEffects = async <
   entityId: EntityInternalId<E>,
   source: string,
 ) => {
-  if (!binding.sideEffects) return [];
-  const event = mutationSideEffectEventSchema.parse({
+  // Binding lookup erases the entity/id correlation; restore it at this
+  // boundary before routing to the subset that has side effects.
+  const entityRef = parseEntityRef<ShortcodeEntity>(binding.entity, entityId);
+  if (!binding.sideEffects || !isMutationSideEffectRef(entityRef)) return [];
+  return await runMutationSideEffects(ctx.db, {
     action,
-    entity: { entityType: binding.entity, entityId },
+    entity: entityRef,
     source,
   });
-  return await runMutationSideEffects(ctx.db, event);
 };
 
 export const defineEntityOperations = <

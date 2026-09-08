@@ -1,6 +1,5 @@
 import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import type { Entity } from "@cubby/schemas/entity";
-import type { JSONType } from "zod";
 
 import type {
   EntityBrowserMutationCommand,
@@ -23,6 +22,7 @@ import type {
   EntityEditIntent as TypedEntityEditIntent,
   TypedEntityEditOperation,
 } from "./intent-types";
+import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 
 /**
  * Entities with the standard create/update router contract. The editing
@@ -83,8 +83,7 @@ export interface EntityEditIssue {
 }
 
 /** Concrete runtime values accepted by semantic editor fields. */
-export type EntityEditValue = JSONType | Date | undefined;
-export type EntityEditValueBag = Record<string, EntityEditValue>;
+export type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 export type EntityEditDraftData<E extends EditableEntity> = Readonly<
   Partial<EntityEditDraft<E>>
 >;

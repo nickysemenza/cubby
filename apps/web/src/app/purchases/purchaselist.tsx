@@ -30,7 +30,6 @@ import {
 import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -317,23 +316,12 @@ export function PurchaseList() {
     [columnHelper],
   );
 
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("purchase", { responsiveInspector: true });
-
-  const { workbench, data, totalCount } = useEntityList<
+  const { workbench, data, totalCount, inspection } = useEntityList<
     PurchaseOut,
     PurchaseFilters
   >({
     entity: "purchase",
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
     queryOptions: listQueryOptions,
     filterOptions,
     columns,
@@ -344,6 +332,15 @@ export function PurchaseList() {
       dataGaps: false,
     },
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   usePageCount(totalCount);
 
   // Loaded-pages figures, and labelled as such: there's no purchase-side
