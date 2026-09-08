@@ -27,9 +27,22 @@ describe("recipeFlowPlanSchema", () => {
         },
       ],
       outputOperationIds: ["mix"],
+      walkthrough: {
+        overview: "Mix the batter, then bake it.",
+        stops: [
+          {
+            id: "make-batter",
+            title: "Make the batter",
+            explanation:
+              "This combines the recipe's only ingredient before baking.",
+            operationIds: ["mix"],
+          },
+        ],
+      },
     });
 
     expect(result.outputOperationIds).toEqual(["mix"]);
+    expect(result.walkthrough?.stops[0]?.operationIds).toEqual(["mix"]);
   });
 
   it("rejects unsafe node ids and empty operation inputs", () => {
@@ -97,6 +110,50 @@ describe("recipeFlowAiPlanSchema", () => {
     expect(result.sources).toEqual([
       { id: "flour", kind: "usage", usageId, role: null },
     ]);
+  });
+
+  it("keeps a provider walkthrough when it is present", () => {
+    const result = normalizeRecipeFlowAiPlan(
+      recipeFlowAiPlanSchema.parse({
+        schemaVersion: 1,
+        setup: [],
+        sources: [
+          {
+            id: "flour",
+            kind: "usage",
+            usageId,
+            role: null,
+            label: null,
+            instructionRefs: [],
+          },
+        ],
+        operations: [
+          {
+            id: "mix",
+            label: "mix",
+            outputLabel: "batter",
+            inputs: [{ kind: "source", id: "flour" }],
+            instructionRefs: [{ sectionId, instructionIndex: 0 }],
+            annotations: [],
+          },
+        ],
+        outputOperationIds: ["mix"],
+        walkthrough: {
+          overview: "Make the batter.",
+          stops: [
+            {
+              id: "make-batter",
+              title: "Make the batter",
+              explanation:
+                "This brings the flour together as the recipe directs.",
+              operationIds: ["mix"],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(result.walkthrough?.overview).toBe("Make the batter.");
   });
 });
 

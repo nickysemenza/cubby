@@ -100,6 +100,23 @@ const validPlan = (): RecipeFlowPlan => ({
     },
   ],
   outputOperationIds: ["bake"],
+  walkthrough: {
+    overview: "Mix the dough, then bake it.",
+    stops: [
+      {
+        id: "make-dough",
+        title: "Make the dough",
+        explanation: "This combines the flour and water into the dough.",
+        operationIds: ["mix"],
+      },
+      {
+        id: "bake-bread",
+        title: "Bake the bread",
+        explanation: "Bake the prepared dough to finish the bread.",
+        operationIds: ["bake"],
+      },
+    ],
+  },
 });
 
 describe("validateRecipeFlowPlan", () => {
@@ -142,6 +159,109 @@ describe("validateRecipeFlowPlan", () => {
       expect.arrayContaining([
         expect.stringContaining("operation dependency cycle"),
       ]),
+    );
+  });
+
+  it("rejects duplicate stop IDs, invalid operation references, repeated operations, and dependency inversions", () => {
+    const plan = validPlan();
+    plan.walkthrough!.stops = [
+      {
+        id: "bake-first",
+        title: "Bake first",
+        explanation: "An invalid ordering for validation coverage.",
+        operationIds: ["bake", "mix", "bake", "missing"],
+      },
+      {
+        id: "bake-first",
+        title: "Still bake first",
+        explanation: "A duplicate stop ID for validation coverage.",
+        operationIds: ["mix"],
+      },
+    ];
+
+    const result = validateRecipeFlowPlan(recipe, plan);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected invalid walkthrough");
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        "walkthrough stop bake-first appears more than once",
+        "walkthrough operation bake appears more than once",
+        "walkthrough stop bake-first references unknown operation missing",
+        "walkthrough orders operation bake before dependency mix",
+      ]),
+    );
+  });
+
+  it("rejects a walkthrough that omits an operation", () => {
+    const plan = validPlan();
+    plan.walkthrough!.stops[0]!.operationIds = ["mix"];
+    plan.walkthrough!.stops.splice(1, 1);
+
+    const result = validateRecipeFlowPlan(recipe, plan);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected invalid walkthrough");
+    expect(result.issues).toContain("walkthrough omits operation bake");
+  });
+
+  it("keeps operations that cite the same instruction in one walkthrough stop", () => {
+    const plan = validPlan();
+    plan.operations[1]!.instructionRefs = [
+      { sectionId: SECTION_ID, instructionIndex: 0 },
+    ];
+    plan.setup.push({
+      id: "prepare-oven",
+      label: "Prepare the oven",
+      instructionRefs: [{ sectionId: SECTION_ID, instructionIndex: 1 }],
+      annotations: [],
+    });
+
+    const result = validateRecipeFlowPlan(recipe, plan);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected fragmented instruction");
+    expect(result.issues).toContain(
+      `walkthrough separates instruction ${SECTION_ID}:0 across stops make-dough and bake-bread`,
+    );
+  });
+
+  it("requires a walkthrough to cover every nonempty instruction through setup or an operation", () => {
+    const plan = validPlan();
+    plan.operations[1]!.instructionRefs = [
+      { sectionId: SECTION_ID, instructionIndex: 0 },
+    ];
+    plan.sources.push({
+      id: "steam-water",
+      kind: "unlisted",
+      label: "water for steam",
+      instructionRefs: [{ sectionId: SECTION_ID, instructionIndex: 1 }],
+    });
+    plan.operations[1]!.inputs.push({
+      kind: "source",
+      id: "steam-water",
+    });
+
+    const result = validateRecipeFlowPlan(recipe, plan);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected incomplete walkthrough");
+    expect(result.issues).toContain(
+      "walkthrough omits instruction 2 in the recipe",
+    );
+  });
+
+  it("keeps incomplete instruction coverage as a warning for legacy flows", () => {
+    const plan = validPlan();
+    delete plan.walkthrough;
+    plan.operations[1]!.instructionRefs = [
+      { sectionId: SECTION_ID, instructionIndex: 0 },
+    ];
+
+    const result = validateRecipeFlowPlan(recipe, plan);
+    expect(result).toEqual(
+      expect.objectContaining({
+        ok: true,
+        warnings: expect.arrayContaining([
+          expect.objectContaining({ code: "unreferenced-instruction" }),
+        ]),
+      }),
     );
   });
 

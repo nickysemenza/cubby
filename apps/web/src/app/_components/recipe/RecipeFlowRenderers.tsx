@@ -33,19 +33,24 @@ function usageMap(recipe: RecipeOut): Map<string, SectionIngredientOut> {
   );
 }
 
-function FlowSourceContent({
+export function FlowSourceContent({
   source,
   usages,
+  readable = false,
 }: {
   source: RecipeFlowSource;
   usages: Map<string, SectionIngredientOut>;
+  readable?: boolean;
 }) {
   if (source.kind === "unlisted") {
     return (
       <>
         <span className="flex min-w-0 items-center gap-1 font-medium text-warning-ink">
           <AlertTriangle className="size-3.5 shrink-0" />
-          <span className="truncate" title={source.label}>
+          <span
+            className={readable ? "break-words" : "truncate"}
+            title={source.label}
+          >
             {source.label}
           </span>
         </span>
@@ -66,13 +71,21 @@ function FlowSourceContent({
 
   return (
     <>
-      <span className="min-w-0 text-xs leading-tight font-medium">
+      <span
+        className={cn(
+          "min-w-0 font-medium",
+          readable ? "text-sm leading-relaxed" : "text-xs leading-tight",
+        )}
+      >
         {usage.type === "recipe" ? (
           <Link
             to="/recipes/$shortcode"
             params={{ shortcode: usage.recipe.id }}
             search={{ view: "flow" }}
-            className={dottedEntityLink}
+            className={cn(
+              dottedEntityLink,
+              readable && "inline-flex min-h-11 items-center",
+            )}
             title={`Open ${name} flow`}
           >
             {name}
@@ -82,21 +95,30 @@ function FlowSourceContent({
             displayImage={null}
             entity="ingredient"
             id={id}
-            className={dottedEntityLink}
+            className={cn(
+              dottedEntityLink,
+              readable && "min-h-11 items-center",
+            )}
           >
             {name}
           </EntityPreviewLink>
         )}
         <IngredientModifier modifier={usage.modifier} />
         {source.role && (
-          <span className="block font-mono text-2xs tracking-wider text-slate uppercase">
+          <span
+            className={
+              readable
+                ? "block text-xs text-muted-foreground"
+                : "block font-mono text-2xs tracking-wider text-slate uppercase"
+            }
+          >
             {source.role}
           </span>
         )}
       </span>
       <IngredientQuantities
         quantities={quantities}
-        className="text-2xs"
+        className={readable ? "text-sm" : "text-2xs"}
         emptyText="—"
       />
     </>

@@ -67,12 +67,32 @@ export const recipeFlowOperationSchema = z.object({
 });
 export type RecipeFlowOperation = z.infer<typeof recipeFlowOperationSchema>;
 
+export const recipeFlowWalkthroughStopSchema = z.object({
+  id: recipeFlowNodeId,
+  title: z.string().min(1).max(160),
+  // This is supplementary context for the cook. The cited operations remain
+  // the authoritative recipe instructions, quantities, and timing.
+  explanation: z.string().min(1).max(500),
+  operationIds: z.array(recipeFlowNodeId).min(1),
+});
+export type RecipeFlowWalkthroughStop = z.infer<
+  typeof recipeFlowWalkthroughStopSchema
+>;
+
+export const recipeFlowWalkthroughSchema = z.object({
+  overview: z.string().min(1).max(500),
+  stops: z.array(recipeFlowWalkthroughStopSchema).min(1),
+});
+export type RecipeFlowWalkthrough = z.infer<typeof recipeFlowWalkthroughSchema>;
+
 export const recipeFlowPlanSchema = z.object({
   schemaVersion: z.literal(1),
   setup: z.array(recipeFlowSetupSchema),
   sources: z.array(recipeFlowSourceSchema),
   operations: z.array(recipeFlowOperationSchema).min(1),
   outputOperationIds: z.array(recipeFlowNodeId).min(1),
+  // Legacy persisted flows predate narrative walkthroughs.
+  walkthrough: recipeFlowWalkthroughSchema.optional(),
 });
 export type RecipeFlowPlan = z.infer<typeof recipeFlowPlanSchema>;
 
@@ -127,6 +147,19 @@ export const recipeFlowAiPlanSchema = z.object({
     }),
   ),
   outputOperationIds: z.array(z.string()),
+  walkthrough: z
+    .object({
+      overview: z.string(),
+      stops: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          explanation: z.string(),
+          operationIds: z.array(z.string()),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type RecipeFlowAiPlan = z.infer<typeof recipeFlowAiPlanSchema>;
 
