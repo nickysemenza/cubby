@@ -16,7 +16,15 @@ use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-use crate::{from_js, to_js};
+use crate::from_js;
+
+// EPUB reports contain flattened recipe metadata. Serialize maps as plain
+// objects so the browser adapter validates the same shape as persisted JSON.
+fn to_js<T: Serialize>(value: &T, context: &str) -> Result<JsValue, String> {
+    value
+        .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))
+        .map_err(|error| format!("Failed to serialize {context}: {error}"))
+}
 
 #[derive(Debug, Clone, Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]

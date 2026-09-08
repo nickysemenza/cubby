@@ -1,18 +1,17 @@
 /**
  * WASM Module - Loaded at module initialization via top-level await
  *
- * Usage: Import `wasm` and call methods synchronously - works everywhere.
+ * Usage: Import `wasm`; parsing is synchronous, extraction drivers return Promises.
  * Vite handles the top-level await natively.
  */
 
 import type * as RecipeBridge from "@cubby/recipebridge";
-import { flatten } from "flat";
 import { LRUCache } from "lru-cache";
 import type { ReadonlyDeep } from "type-fest";
 
 import { getFlag } from "~/lib/flags";
-import { recordWasmCache, recordWasmExec } from "~/lib/perf/perf-store";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { recordWasmCache } from "~/lib/perf/perf-store";
+import { executeWasm } from "~/lib/wasm-execution";
 
 type WasmType = typeof RecipeBridge;
 
@@ -35,14 +34,6 @@ type ImmutableWasm<T> = {
 
 // Load WASM at module initialization (Vite handles top-level await)
 const instance: WasmType = await import("@cubby/recipebridge");
-
-/**
- * Warn when a single synchronous WASM call exceeds one 60fps frame
- * (~16ms) and thus janks the UI. Set above normal-but-slow calls (parse_rich_text
- * runs ~2-8ms on long instructions) so the warning flags real frame drops rather
- * than spamming every recipe page. Tunable.
- */
-const SLOW_WASM_THRESHOLD_MS = 16;
 
 /**
  * Memoize results for these methods, keyed by their args. They are *pure*
@@ -102,71 +93,10 @@ const resultCache = new LRUCache<string, NonNullable<WasmResult>>({
   max: 2048,
 });
 
-const isStringArgument = <TArgument>(
-  arg: TArgument,
-): arg is Extract<TArgument, string> => typeof arg === "string";
-
-const isObjectArgument = <TArgument>(
-  arg: TArgument,
-): arg is Extract<TArgument, object> => arg !== null && typeof arg === "object";
-
-/** Compact, non-dumping summary of a WASM call's args for the slow-call warning. */
-const summarizeArg = <TArgument>(arg: TArgument): string => {
-  if (arg instanceof Uint8Array || arg instanceof ArrayBuffer) {
-    return `Uint8Array(${arg.byteLength})`;
-  }
-  if (isStringArgument(arg)) {
-    return arg.length > 64 ? `"${arg.slice(0, 61)}…"` : JSON.stringify(arg);
-  }
-  if (Array.isArray(arg)) return `Array(${arg.length})`;
-  if (isObjectArgument(arg)) return "{…}";
-  return String(arg);
-};
-
-/** Invoke the real WASM method inside a trace span (+ dev slow-call warning). */
-const tracedCall = <TArgs extends WasmParameters, TResult>(
-  name: string,
-  method: (...args: TArgs) => TResult,
-  args: TArgs,
-): TResult => {
-  const tracer = getTracer();
-  return tracer.startActiveSpan(TraceNames.wasm(name), (span) => {
-    const recording = span.isRecording();
-    const start = performance.now();
-    let threw = false;
-    try {
-      return method(...args);
-    } catch (err) {
-      threw = true;
-      throw err;
-    } finally {
-      const durationMs = performance.now() - start;
-      // The expensive attribute work (`flatten` + `setAttributes`) is gated on
-      // `isRecording()`: in the browser the tracer is a no-op, so it would
-      // otherwise run on every call and be thrown away.
-      if (recording) {
-        span.setAttributes({
-          "wasm.method": name,
-          "wasm.duration_us": Math.round(durationMs * 1000),
-          data: flatten(args),
-        });
-      }
-      if (getFlag("perfOverlay")) recordWasmExec(name, durationMs, threw);
-      // Flag-gated (default on in dev, off in CF prod) — flippable on /settings.
-      if (getFlag("wasmSlowWarn") && durationMs > SLOW_WASM_THRESHOLD_MS) {
-        console.warn(
-          `[wasm] ${name} took ${durationMs.toFixed(1)}ms`,
-          args.map(summarizeArg).join(", "),
-        );
-      }
-      span.end();
-    }
-  });
-};
-
 /**
  * WASM module with OpenTelemetry tracing + a result cache for pure methods.
- * All methods are synchronous - WASM is guaranteed loaded at module init.
+ * WASM is guaranteed loaded at module init. Most methods are synchronous;
+ * driver methods retain tracing until their returned Promise settles.
  */
 const instrumentedWasm = new Proxy(instance, {
   get(target, prop) {
@@ -177,12 +107,12 @@ const instrumentedWasm = new Proxy(instance, {
       return method;
     }
     const name = String(prop);
-    // SAFETY: Every runtime value exported by recipebridge is a synchronous
-    // function whose generated argument and return types are members of these
+    // SAFETY: Every runtime value exported by recipebridge is a function
+    // whose generated argument and return types are members of these
     // unions; the Proxy handler cannot retain the key-to-signature correlation.
     const fn = method as (...args: WasmParameters) => WasmResult;
     if (!cacheableMethods.has(name)) {
-      return (...args: WasmParameters) => tracedCall(name, fn, args);
+      return (...args: WasmParameters) => executeWasm(name, fn, args);
     }
     return (...args: WasmParameters) => {
       const key = `${name}:${JSON.stringify(args)}`;
@@ -192,7 +122,7 @@ const instrumentedWasm = new Proxy(instance, {
           recordWasmCache(name, true, resultCache.size);
         return cached;
       }
-      const result = tracedCall(name, fn, args);
+      const result = executeWasm(name, fn, args);
       if (result !== null && result !== undefined) resultCache.set(key, result);
       if (getFlag("perfOverlay"))
         recordWasmCache(name, false, resultCache.size);

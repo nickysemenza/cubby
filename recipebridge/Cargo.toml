@@ -28,11 +28,11 @@ tsify-next = { version = "0.5", features = ["js"] }
 # Pin the shared upstream commit so every CI job builds identical Rust sources.
 # Renovate follows main weekly and updates all three refs together. Locally the
 # global ~/.cargo/config.toml patch (above) can still override to a working copy.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "e5586425fa3a9c559dd2fa28678427a64acebde4" }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "e5586425fa3a9c559dd2fa28678427a64acebde4" }
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786" }
 # EPUB cookbook extraction — the pure subset only (no reqwest/fs). `chunk_epub`
 # + `assemble_recipes` run client-side; the LLM call is proxied through Cubby.
-recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "e5586425fa3a9c559dd2fa28678427a64acebde4", default-features = false }
+recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"

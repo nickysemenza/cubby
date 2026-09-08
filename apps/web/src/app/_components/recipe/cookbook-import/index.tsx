@@ -1,4 +1,4 @@
-import type { WChunkRequest, WCookbookChunk } from "@cubby/recipebridge";
+import type { WCookbookChunk } from "@cubby/recipebridge";
 import { cookbookBundleSchema } from "@cubby/schemas/cookbook";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -12,7 +12,6 @@ import { sum } from "es-toolkit";
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { z } from "zod";
 
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { recipe, recipeStreams } from "~/app/recipes/recipe.functions";
@@ -34,11 +33,10 @@ import { imageUpload } from "~/lib/image.functions";
 import { wasm } from "~/lib/wasm";
 
 import { BookGroupCard } from "./book-group-card";
-import { callChunkWithTransportRetry } from "./chunk-transport";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import {
-  extractionProgressSchema,
-  extractionReportSchema,
+  extractCookbook,
+  type ExtractionProgress,
   type ExtractionReport,
 } from "./extraction";
 import { deriveBookName } from "./import-helpers";
@@ -378,30 +376,11 @@ export function CookbookImport({
 
       // TRANSPORT: one authenticated proxy hop per call. Rust decides when to call
       // this (and whether to `escalate`); the transport retains usage across retries.
-      type ExtractChunkOutput = Awaited<
-        ReturnType<typeof extractChunk.mutateAsync>
-      >;
-      const callChunk = (
-        request: WChunkRequest,
-        escalate: boolean,
-      ): Promise<ExtractChunkOutput> => {
-        const input: ChunkRequestInput = {
-          system: request.system,
-          user: request.user,
-          toolName: request.tool_name,
-          // WASM emits the schema as a JSON string (a serde_json::Value would
-          // cross as a JS Map); parse it back to a plain object.
-          toolSchema: z
-            .record(z.string(), z.json())
-            .parse(JSON.parse(request.tool_schema)),
-          escalate,
-        };
+      const callChunk = (input: ChunkRequestInput) => {
         inFlight++;
         if (inFlight > maxInFlight) maxInFlight = inFlight;
         const tCall = performance.now();
-        return callChunkWithTransportRetry(() =>
-          extractChunk.mutateAsync(input),
-        ).finally(() => {
+        return extractChunk.mutateAsync(input).finally(() => {
           latencies.push(performance.now() - tCall);
           inFlight--;
         });
@@ -412,14 +391,11 @@ export function CookbookImport({
       // re-render (each re-render re-parses every line). The final tick
       // (done === total) always renders.
       let lastPreviewAt = 0;
-      const onProgress = (
-        rawProgress: z.input<typeof extractionProgressSchema>,
-      ) => {
-        const {
-          done: doneCount,
-          total,
-          preview,
-        } = extractionProgressSchema.parse(rawProgress);
+      const onProgress = ({
+        done: doneCount,
+        total,
+        preview,
+      }: ExtractionProgress) => {
         setExtract(source, { status: "extracting", done: doneCount, total });
         const now = performance.now();
         const final = doneCount >= total;
@@ -435,15 +411,14 @@ export function CookbookImport({
 
       let report: ExtractionReport;
       try {
-        report = extractionReportSchema.parse(
-          await wasm.extract_cookbook(
-            chunks,
-            source,
-            CHUNK_CONCURRENCY,
-            callChunk,
-            onProgress,
-          ),
-        );
+        report = await extractCookbook({
+          chunks,
+          source,
+          concurrency: CHUNK_CONCURRENCY,
+          callChunk,
+          onProgress,
+          onDiagnostic: (message) => toast.warning(message),
+        });
       } catch (error) {
         observer?.disconnect();
         setExtract(source, {

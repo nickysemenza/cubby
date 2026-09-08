@@ -304,38 +304,14 @@ pub struct WDecomposition {
 
 impl From<Decomposition> for WDecomposition {
     fn from(d: Decomposition) -> Self {
-        // Walk the sorted, non-overlapping spans, emitting any gap text before
-        // each labeled span, then the span itself, then the trailing gap.
-        //
-        // Slice via `get` (not `[..]`): the spans are upstream byte ranges from a
-        // parser pinned to an upstream commit. A range that's out of bounds,
-        // overlapping (`start < prev_end`), or lands mid-UTF-8 would panic an
-        // index — `get` yields `None` and we skip that gap instead of trapping.
-        let mut segments = Vec::new();
-        let mut prev_end = 0usize;
-        for span in &d.spans {
-            if span.range.start > prev_end
-                && let Some(gap) = d.source.get(prev_end..span.range.start)
-            {
-                segments.push(WSegment {
-                    text: gap.to_string(),
-                    field: None,
-                });
-            }
-            segments.push(WSegment {
-                text: span.text.clone(),
-                field: Some(span.field.into()),
-            });
-            prev_end = span.range.end;
-        }
-        if prev_end < d.source.len()
-            && let Some(tail) = d.source.get(prev_end..)
-        {
-            segments.push(WSegment {
-                text: tail.to_string(),
-                field: None,
-            });
-        }
+        let segments = d
+            .segments()
+            .into_iter()
+            .map(|segment| WSegment {
+                text: segment.text,
+                field: segment.field.map(Into::into),
+            })
+            .collect();
         WDecomposition {
             source: d.source,
             segments,
@@ -885,9 +861,7 @@ mod tests {
         );
     }
 
-    /// Defensive: the spans are upstream byte ranges from a parser pinned to an
-    /// moving `branch = main`. A range landing mid-UTF-8 (here byte 1 of the
-    /// 2-byte 'é') must not panic the gap slice — pre-fix `source[0..1]` did.
+    /// Malformed spans lose highlighting, never authored text or WASM availability.
     #[test]
     fn decomposition_tolerates_non_char_boundary_span() {
         use ingredient::FieldSpan;
@@ -899,8 +873,9 @@ mod tests {
                 text: "x".to_string(),
             }],
         });
-        // No panic; the mid-char gap is skipped, the span text still emitted.
-        assert!(w.segments.iter().any(|s| s.text == "x"));
+        assert_eq!(w.segments.len(), 1);
+        assert_eq!(w.segments[0].text, "é");
+        assert!(w.segments[0].field.is_none());
     }
 
     /// Empty-spans case (whole-line recognizer / name-only fallback): a single
