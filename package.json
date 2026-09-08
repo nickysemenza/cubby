@@ -16,9 +16,9 @@
     "knip": "knip --no-config-hints --cache",
     "dedupe:check": "pnpm dedupe --check",
     "audit:security": "node scripts/check-security-audit.ts",
-    "lint": "oxlint .",
+    "lint": "NX_DAEMON=false nx run cubby-checks:lint --outputStyle=stream",
     "lint:fix": "oxlint --fix .",
-    "format:check": "oxfmt --check .",
+    "format:check": "NX_DAEMON=false nx run cubby-checks:format --outputStyle=stream",
     "format": "oxfmt .",
     "verify:local": "node scripts/ci-scope.ts",
     "verify:local:full": "node scripts/ci-scope.ts --full",
@@ -55,5 +55,5 @@
     "typescript": "^7.0.2",
     "zod": "^4.4.3"
   },
-  "packageManager": "pnpm@10.34.1"
+  "packageManager": "pnpm@11.22.0"
 }

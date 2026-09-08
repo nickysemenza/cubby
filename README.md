@@ -231,7 +231,7 @@ uses the same generated manifest for its bounded core view; see
 
 ## 🛠️ Development Setup
 
-Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — `packageManager: pnpm@10.34.1`), and **wrangler** (for CF Workers work). Docker is optional for the normal test loop; use it for the local app database and explicit PostgreSQL-parity tests.
+Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — the `packageManager` field), and **wrangler** (for CF Workers work). Docker is optional for the normal test loop; use it for the local app database and explicit PostgreSQL-parity tests.
 
 ```sh
 # 1. Install
@@ -279,28 +279,32 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 
 - **Fresh worktree setup:** Codex and Claude run `pnpm agent:setup` from
   their existing environment entrypoints. pnpm performs a frozen install, then
-  the existing WASM freshness gate builds only when missing or stale. Claude's
+  the existing WASM entrypoint restores a matching Nx artifact or builds it. Claude's
   startup hook runs setup only in linked worktrees.
   Gitignored env is copied via [.worktreeinclude](.worktreeinclude);
-  dependency links and the virtual store remain local to each checkout. pnpm's
-  content-addressed store and the Cargo cache already share reusable content.
-  The global virtual-store experiment and its TypeScript compatibility blocker
-  are recorded in [local check performance](docs/local-check-performance.md).
+  dependency links remain local, while pnpm 11 shares completed dependency graphs
+  through its global virtual store. The type-fixer config dependency and explicit
+  type peers preserve TypeScript resolution without changing compiler strictness.
+  Measurements are recorded in [local check performance](docs/local-check-performance.md).
 - **Builds are shared, not cold.** The `wasm` script points `CARGO_TARGET_DIR` at a
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the
   compiled Rust deps — a worktree `pnpm run wasm` is an incremental build, not the
   ~90s cold one, and there's no 1.3GB `target/` per worktree.
 - **WASM never silently drifts.** [scripts/ensure-wasm.ts](scripts/ensure-wasm.ts)
-  rebuilds the gitignored WASM only when a source it's built from is newer than the
-  built binary. "Sources" is `recipebridge/` **plus every local path-dependency**
-  `cargo metadata` reports (`source: null`) — notably the
-  [ingredient-parser](https://github.com/nickysemenza/ingredient-parser) working
-  copy the global `~/.cargo` `[patch]` redirects to, so editing the parser locally is
-  caught too (no patch → only `recipebridge/`, same as CI). It runs on `pnpm dev`
-  (so a local parser edit rebuilds on the next dev start) and on `git pull`/`git
-  checkout` (husky `post-merge`/`post-checkout`, for a pulled rev bump or branch
-  switch) — on the **main** checkout too. cargo does the real incremental compile;
-  this is just the staleness gate that skips the ~10s wasm-bindgen/opt when fresh.
+  supplies Cargo's resolved dependency graph, local dependency file contents,
+  Cargo configuration and tool versions to the shared Nx cache. This includes
+  the [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
+  working copy selected by a global Cargo patch. Changed contents, added/deleted
+  files and dependency revisions invalidate the package; checkout timestamps do
+  not. Missing Cargo metadata fails setup rather than reusing an unverified build.
+  A hit restores the complete `packages/wasm` package and skips Cargo,
+  wasm-bindgen and wasm-opt. The same entrypoint runs from dev and the
+  post-merge/post-checkout hooks. `pnpm wasm` remains an explicit uncached build.
+  Nx owns artifact storage and the existing 2 GB cache limit.
+- **Read-only checks reuse results.** `pnpm lint` and `pnpm format:check` use
+  the same Nx targets as `pnpm check`. Documentation and Rust-only edits do not
+  invalidate those two targets. `pnpm lint:fix` and `pnpm format` always execute
+  their tools because they edit files. Set `NX_SKIP_NX_CACHE=true` for a live run.
 - **Ports.** The main checkout is always `:3000` (`vite.config.ts` uses `strictPort`,
   so it fails loudly rather than drifting). Worktree dev servers auto-pick a free
   port — the preview harness via `autoPort` (injects `PORT`), or a terminal

@@ -1,9 +1,8 @@
 # Gitignored files Claude Code and Codex copy into each managed worktree
 # (gitignore syntax; only files that are BOTH gitignored AND matched here are
 # copied). See README "Worktrees". Deliberately env-only — the WASM package is
-# NOT copied (copying it blindly drifts stale); it's built per-worktree via
-# `pnpm run wasm`, kept warm by a shared CARGO_TARGET_DIR and rebuilt-when-stale
-# by scripts/ensure-wasm.ts.
+# NOT copied blindly. scripts/ensure-wasm.ts restores a verified Nx artifact
+# using resolved Rust inputs, or builds it with the shared CARGO_TARGET_DIR.
 
 # Local env / secrets the dev server (and e2e) need
 apps/web/.env
