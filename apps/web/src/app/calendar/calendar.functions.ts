@@ -1,8 +1,11 @@
 import {
+  calendarCredentialOut,
   calendarFeedOut,
   calendarFeedInspectionOut,
   calendarRangeInput,
   calendarRangeOut,
+  calendarRevokeCredentialOut,
+  calendarRotateCredentialOut,
   calendarRotateFeedOut,
 } from "@cubby/schemas/calendar";
 import { z } from "zod";
@@ -25,6 +28,12 @@ export const calendar = defineOperationDomain("calendar", {
     output: calendarFeedOut,
     tags: [["calendar", "feed"]],
   }),
+  getCredential: query({
+    input: z.undefined(),
+    output: calendarCredentialOut,
+    tags: [["calendar", "credential"]],
+    cache: "live-status",
+  }),
   inspectFeed: query({
     input: z.undefined(),
     output: calendarFeedInspectionOut,
@@ -35,5 +44,15 @@ export const calendar = defineOperationDomain("calendar", {
     input: z.undefined(),
     output: calendarRotateFeedOut,
     invalidates: ripple.calendarFeed,
+  }),
+  rotateCredential: mutation({
+    input: z.undefined(),
+    output: calendarRotateCredentialOut,
+    invalidates: ripple.calendarCredential,
+  }),
+  revokeCredential: mutation({
+    input: z.undefined(),
+    output: calendarRevokeCredentialOut,
+    invalidates: ripple.calendarCredential,
   }),
 });

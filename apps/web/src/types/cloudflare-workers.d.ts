@@ -2,26 +2,12 @@
 // ambient generation stays disabled because the full Workers library collides
 // with browser DOM globals; this declaration covers only the imported base.
 declare module "cloudflare:workers" {
-  interface DurableObjectStoragePort {
-    get<T>(key: string): Promise<T | undefined>;
-    put<Value>(key: string, value: Value): Promise<void>;
-    put<Entries extends object>(entries: Entries): Promise<void>;
-    delete(key: string): Promise<boolean>;
-    getAlarm(): Promise<number | null>;
-    setAlarm(scheduledTimeMs: number): Promise<void>;
-  }
-
-  interface DurableObjectStatePort {
-    id: {
-      readonly jurisdiction?: string;
-      toString(): string;
-    };
-    storage: DurableObjectStoragePort;
-  }
+  import type { DurableObjectState } from "@cloudflare/workers-types";
 
   export abstract class DurableObject<Environment> {
-    protected readonly ctx: DurableObjectStatePort;
+    protected readonly ctx: DurableObjectState;
     protected readonly env: Environment;
-    constructor(ctx: DurableObjectStatePort, env: Environment);
+    constructor(ctx: DurableObjectState, env: Environment);
   }
+  export const env: Env;
 }

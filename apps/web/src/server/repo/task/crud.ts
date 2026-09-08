@@ -91,6 +91,19 @@ export const TASK_DELETE_EDGE_POLICY = {
 
 type TaskUpdateData = TaskUpdateInput["data"];
 
+/** See MealMutationHooks: CalDAV records protocol identity/receipts inside the
+ * existing canonical Task transaction without taking over Task mutation. */
+export type TaskMutationHooks = {
+  afterCreate?: (
+    tx: DrizzleTransaction,
+    created: { id: TaskId; shortcode: string },
+  ) => Promise<void>;
+  beforeUpdate?: (tx: DrizzleTransaction, id: TaskId) => Promise<void>;
+  afterUpdate?: (tx: DrizzleTransaction, id: TaskId) => Promise<void>;
+  beforeDelete?: (tx: DrizzleTransaction, ids: TaskId[]) => Promise<void>;
+  afterDelete?: (tx: DrizzleTransaction, ids: TaskId[]) => Promise<void>;
+};
+
 const fetchTaskRow = (db: Database, id: TaskId) =>
   getDb(db).query.task.findFirst({
     where: and(eq(task.id, id), notDeleted(task)),
@@ -321,6 +334,7 @@ export const createTask = async (
   db: Database,
   data: TaskCreateInput,
   actor: ActorContext,
+  hooks?: TaskMutationHooks,
 ): Promise<{ output: TaskOut; entityId: TaskId }> => {
   const id = await withTransaction(db, async (tx) => {
     // `projectId` and `parentTaskId` both default to null through zod (see
@@ -365,6 +379,7 @@ export const createTask = async (
       dueEndDate: data.dueEndDate,
       trade: data.trade,
     });
+    await hooks?.afterCreate?.(tx, created);
     await logAuditEntry(tx, actor, {
       entityType: "task",
       entityId: created.id,
@@ -391,6 +406,7 @@ export const updateTask = async (
   shortcode: TaskShortcode,
   data: TaskUpdateData,
   actor: ActorContext,
+  hooks?: TaskMutationHooks,
 ): Promise<{ output: TaskOut; entityId: TaskId }> => {
   const id = await resolveOrThrow(db, "task", shortcode);
 
@@ -404,6 +420,7 @@ export const updateTask = async (
       : undefined;
 
   await withTransaction(db, async (tx) => {
+    await hooks?.beforeUpdate?.(tx, id);
     let parentTaskId: TaskId | null | undefined;
     if (data.parentTaskId !== undefined && data.parentTaskId !== null) {
       if (data.parentTaskId === shortcode) {
@@ -497,6 +514,7 @@ export const updateTask = async (
         changes,
       });
     }
+    await hooks?.afterUpdate?.(tx, id);
   });
 
   return { output: await getTaskByID(db, id), entityId: id };
@@ -832,12 +850,14 @@ export const deleteTasks = async (
   db: Database,
   shortcodes: TaskShortcode[],
   actor: ActorContext,
+  hooks?: TaskMutationHooks,
 ): Promise<{ deletedShortcodes: TaskShortcode[] }> => {
   if (shortcodes.length === 0) return { deletedShortcodes: [] };
 
   return await withTransaction(db, async (tx) => {
     const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
     await lockAndValidateForDelete(tx, task, ids, "Task");
+    await hooks?.beforeDelete?.(tx, ids);
 
     const liveSubtasks = await fetchLiveSubtasks(tx, ids);
     const explicitlyDeletedIds = new Set(ids);
@@ -867,6 +887,7 @@ export const deleteTasks = async (
         },
       ],
     });
+    await hooks?.afterDelete?.(tx, allIds);
     return {
       deletedShortcodes: [
         ...shortcodes,

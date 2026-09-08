@@ -298,3 +298,7 @@ logs remain under /tmp.
 
 PR preparation refreshed the stale count guards (59 contract files, 268 PostgreSQL
 tests, 24 browser tests) so mandatory pre-push validation can run without bypasses.
+
+Merging the subsequent CalDAV change from main adds one contract file and four
+PostgreSQL cases; the combined branch retains its calendar Worker tests and uses
+60 contract files / 272 PostgreSQL tests.

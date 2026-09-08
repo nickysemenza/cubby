@@ -191,3 +191,13 @@ describe("tracker entity actions", () => {
     expect(harness.queryClient.getMutationCache().getAll()).toHaveLength(0);
   });
 });
+
+it("keeps tracker actions registered when their dialogs load the action catalog", async () => {
+  const { entityActionCatalogDescriptors } = await import("./entity-actions");
+  for (const verb of ["moveToProject", "setTrade"]) {
+    expect(
+      entityActionCatalogDescriptors.find((action) => action.verb === verb)
+        ?.entities,
+    ).toEqual(["expense", "task"]);
+  }
+});

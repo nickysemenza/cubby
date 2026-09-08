@@ -27,7 +27,7 @@ const responseHeaders = (
 
 export type CalendarFeedStateResolver = (
   origin: string,
-) => Promise<CalendarFeedState>;
+) => Promise<CalendarFeedState | null>;
 
 export const createCalendarFeedHandler =
   (stateForOrigin: CalendarFeedStateResolver) =>
@@ -37,15 +37,28 @@ export const createCalendarFeedHandler =
     if (!parsed) return notFound();
 
     const state = await stateForOrigin(url.origin);
+    if (!state)
+      return new Response("Calendar temporarily unavailable", {
+        status: 503,
+        headers: { "Retry-After": "30" },
+      });
     const result = await state.read(
       parsed.token,
       parsed.feed,
       request.headers.get("if-none-match"),
     );
+    if (result.result === "unavailable")
+      return new Response("Calendar is initializing", {
+        status: 503,
+        headers: { "Retry-After": "30" },
+      });
     if (result.result === "not_found") return notFound();
     const headers = responseHeaders(parsed.feed, result);
     if (result.result === "not_modified") {
       return new Response(null, { status: 304, headers });
     }
-    return new Response(result.body, { status: 200, headers });
+    return new Response(request.method === "HEAD" ? null : result.body, {
+      status: 200,
+      headers,
+    });
   };
