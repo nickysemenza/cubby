@@ -14,14 +14,22 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { financialTransaction, recipe } from "~/server/db/schema";
+import {
+  financialTransaction,
+  productComponent,
+  recipe,
+} from "~/server/db/schema";
 
 import { findFastProblems } from "../services/problems.service";
+import { setDataException } from "./data-quality";
 import { getDb } from "./database-helpers";
-import { createExpense } from "./expense";
+import { createExpense, updateExpense } from "./expense";
+import { updateFinancialTransaction } from "./financial-transaction";
 import { createMealWithEntityId } from "./meal/crud";
-import { updatePurchase } from "./purchase";
+import { findEntitiesMissingEmbeddings } from "./problems";
+import { getPurchaseByID, updatePurchase } from "./purchase";
 import {
+  createIngredientFixture,
   createProductFixture,
   createRecipeFixture,
   makeExpenseInput,
@@ -42,6 +50,133 @@ const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
 // banner, the headline card — must count only rows that can reach zero;
 // coverage rows (un-itemized bins, un-photographed tools, un-recounted shelves)
 // never can, and folding them in is what made the badge permanently red.
+
+describe("problems — unlinked exit expenses", () => {
+  const ctx = withTestDb();
+
+  const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
+    unwrap(
+      createExpense(
+        ctx.db,
+        expenseCreateInput.parse(makeExpenseInput(overrides)),
+        ctx.actor,
+      ),
+    );
+
+  it("reports only itemized principal lines from disposal purchases", async () => {
+    const sharedPurchase = {
+      vendor: "Example resale marketplace",
+      orderId: "EXAMPLE-SALE-1",
+    };
+    const soldItem = await seedLine({
+      ...sharedPurchase,
+      name: "Sold item without identified product",
+      cost: -100,
+      lineKind: "principal",
+      lineBasis: "item_line",
+    });
+    const taxCredit = await seedLine({
+      ...sharedPurchase,
+      name: "Tax refund",
+      cost: -8,
+      lineKind: "tax",
+      lineBasis: "item_line",
+    });
+    const allocatedCredit = await seedLine({
+      ...sharedPurchase,
+      name: "Allocated marketplace credit",
+      cost: -12,
+      lineKind: "principal",
+      lineBasis: "allocation",
+    });
+
+    expect(taxCredit.purchaseId).toBe(soldItem.purchaseId);
+    expect(allocatedCredit.purchaseId).toBe(soldItem.purchaseId);
+
+    const ids = (await findFastProblems(ctx.db)).unlinkedExitExpenses.map(
+      (row) => row.id,
+    );
+
+    expect(ids).toContain(soldItem.id);
+    expect(ids).not.toContain(taxCredit.id);
+    expect(ids).not.toContain(allocatedCredit.id);
+  });
+});
+
+describe("problems — orphaned products", () => {
+  const ctx = withTestDb();
+
+  it("does not report either side of a live product composition", async () => {
+    const [kit, component, orphan] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Example composed kit" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Example kit component" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Example orphan candidate" }),
+        ctx.actor,
+      ),
+    ]);
+    await getDb(ctx.db).insert(productComponent).values({
+      parentProductId: kit.entityId,
+      componentProductId: component.entityId,
+      quantity: 1,
+    });
+
+    const ids = (await findFastProblems(ctx.db)).orphanedProducts.map(
+      (row) => row.id,
+    );
+
+    expect(ids).not.toContain(kit.id);
+    expect(ids).not.toContain(component.id);
+    expect(ids).toContain(orphan.id);
+  });
+});
+
+describe("problems — missing embeddings", () => {
+  const ctx = withTestDb();
+
+  it("excludes recipe-backed ingredient proxies that cannot be embedded", async () => {
+    const realIngredient = await createIngredientFixture(
+      ctx.db,
+      { name: "Example real ingredient", aliases: [] },
+      ctx.actor,
+    );
+    const recipeRow = await insertWithShortcode(ctx.db, "recipe", {
+      name: "Example proxy recipe",
+    });
+    const proxy = await insertWithShortcode(ctx.db, "ingredient", {
+      name: "Recipe: Example proxy recipe",
+      aliases: [],
+      recipeId: recipeRow.id,
+    });
+
+    const missing = await findEntitiesMissingEmbeddings(
+      ctx.db,
+      {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+      },
+      { limit: 1_000 },
+    );
+    const ingredientIds = missing
+      .filter((row) => row.entityType === "ingredient")
+      .map((row) => row.entityId);
+
+    expect(ingredientIds).toContain(realIngredient.id);
+    expect(ingredientIds).not.toContain(
+      parseShortcodeFor("ingredient", proxy.shortcode),
+    );
+  });
+});
 
 describe("problems — understated meal cost", () => {
   const ctx = withTestDb();
@@ -350,7 +485,7 @@ describe("problems — purchase financial settlement mismatches", () => {
       "purchase",
       (await resolveLiveShortcode(ctx.db, purchaseShortcode, "purchase"))!,
     );
-    await insertSettlementTransaction(ctx.db, {
+    return await insertSettlementTransaction(ctx.db, {
       accountId,
       purchaseId,
       kind: "purchase",
@@ -407,6 +542,91 @@ describe("problems — purchase financial settlement mismatches", () => {
         delta: -25,
       },
     });
+  });
+
+  it("hides only an active, reasoned settlement mismatch while retaining its financial delta", async () => {
+    const mismatched = await seedLine({
+      name: "documented card residual",
+      cost: 120,
+      vendor: "Settle Depot",
+      orderId: "SD-RESIDUAL",
+    });
+    const account = await seedAccount();
+    if (!mismatched.purchaseId) throw new Error("Fixture has no Purchase");
+    const purchaseShortcode = mismatched.purchaseId;
+    const transaction = await postCharge(
+      account.id,
+      parseShortcodeFor("purchase", purchaseShortcode),
+      119.98,
+    );
+
+    expect((await mismatches()).map((row) => row.id)).toEqual([
+      purchaseShortcode,
+    ]);
+
+    const quality = await setDataException(
+      ctx.db,
+      {
+        entityId: purchaseShortcode,
+        check: "settlement_mismatch",
+        reason: "expected_mismatch",
+        note: "Vendor confirmation is $120.00; posted bank evidence totals $119.98.",
+      },
+      ctx.actor,
+    );
+    expect(quality.exceptions).toContainEqual(
+      expect.objectContaining({
+        check: "settlement_mismatch",
+        reason: "expected_mismatch",
+        state: "active",
+      }),
+    );
+    expect(await mismatches()).toEqual([]);
+
+    const purchaseId = parseEntityId(
+      "purchase",
+      (await resolveLiveShortcode(ctx.db, purchaseShortcode, "purchase"))!,
+    );
+    const financial = (await getPurchaseByID(ctx.db, purchaseId))
+      .financialReconciliation;
+    expect(financial.status).toBe("mismatch");
+    expect(financial.delta).toBeCloseTo(-0.02);
+
+    // Expense writes advance the Purchase evidence clock, so the acceptance
+    // cannot silently survive a changed ledger total.
+    await updateExpense(ctx.db, mismatched.id, { cost: 120.01 }, ctx.actor);
+    expect((await mismatches()).map((row) => row.id)).toEqual([
+      purchaseShortcode,
+    ]);
+    expect(
+      (await getPurchaseByID(ctx.db, purchaseId)).dataQuality.exceptions.find(
+        (exception) => exception.check === "settlement_mismatch",
+      )?.state,
+    ).toBe("stale");
+
+    await setDataException(
+      ctx.db,
+      {
+        entityId: purchaseShortcode,
+        check: "settlement_mismatch",
+        reason: "expected_mismatch",
+        note: "The revised expense total still differs from the posted bank evidence.",
+      },
+      ctx.actor,
+    );
+    expect(await mismatches()).toEqual([]);
+
+    // FinancialTransaction writes use the same target touch through the
+    // allocation path, including the single-allocation amount shorthand.
+    await updateFinancialTransaction(
+      ctx.db,
+      parseShortcodeFor("financialTransaction", transaction.shortcode),
+      { amount: 119.97 },
+      ctx.actor,
+    );
+    expect((await mismatches()).map((row) => row.id)).toEqual([
+      purchaseShortcode,
+    ]);
   });
 
   it("compares against incurred spend only, so a planned line can't manufacture a mismatch", async () => {

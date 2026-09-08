@@ -92,6 +92,9 @@ const embeddingSources = {
     idColumn: ingredient.id,
     shortcodeColumn: ingredient.shortcode,
     deletedAtColumn: ingredient.deletedAt,
+    // Recipe proxies are indexed as recipes, never as ingredients; the text
+    // loader and SearchDocument population both exclude these rows.
+    liveness: () => isNull(ingredient.recipeId),
   },
   cookbook: {
     table: cookbook,

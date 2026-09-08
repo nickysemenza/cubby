@@ -1,3 +1,4 @@
+import { expenseCreateInput } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda-schemas";
@@ -6,9 +7,20 @@ import { describe, expect, it } from "vitest";
 
 import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
+import { createExpense } from "~/server/repo/expense";
 import { quickCreateProduct } from "~/server/repo/product";
+import {
+  createProductFixture,
+  makeExpenseInput,
+  makeProductInput,
+} from "~/server/repo/repo.fixtures";
+import { LocationValuationService } from "~/server/services/location-valuation.service";
+import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
+import { createProductWriteActions } from "~/server/services/product.service";
+import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 
 import {
+  applyUpcDataWithSideEffects,
   findOrCreateByCode,
   findOrCreateByUPC,
 } from "./product-orchestration.service";
@@ -224,5 +236,88 @@ describe("findOrCreateByCode", () => {
 
     expect([a.created, b.created].sort()).toEqual([false, true]);
     expect(a.product.id).toBe(b.product.id);
+  });
+});
+
+describe("applyUpcDataWithSideEffects", () => {
+  const ctx = withTestDb();
+
+  it("uses the UPC price only when the Product has no purchase history", async () => {
+    const upc = "076666666666";
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Unpriced widget", upc }),
+      ctx.actor,
+    );
+    const result = await applyUpcDataWithSideEffects(
+      {
+        db: ctx.db,
+        product: createProductWriteActions(ctx.db, usdaClient()),
+        recipeCosting: new RecipeCostingService(ctx.db, usdaClient()),
+        locationValuation: new LocationValuationService(ctx.db),
+        upcLookupClient: upcLookupClient(async () =>
+          upcResponse({ upc, priceDollars: 9.99 }),
+        ),
+      },
+      { id: product.entityId, upc },
+      ctx.actor,
+    );
+
+    expect(result.pricing).toMatchObject({
+      derivedPrice: null,
+      effectivePrice: 9.99,
+      source: "explicit",
+    });
+  });
+
+  it("keeps an Expense-derived price and omits the corresponding UPC proposal", async () => {
+    const upc = "077777777777";
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Ledger-priced widget", upc }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse(
+        makeExpenseInput({
+          name: "Ledger-priced widget purchase",
+          cost: 12,
+          productId: product.id,
+          productQuantity: 2,
+        }),
+      ),
+      ctx.actor,
+    );
+    const lookup = upcLookupClient(async () =>
+      upcResponse({ upc, priceDollars: 9.99 }),
+    );
+    const result = await applyUpcDataWithSideEffects(
+      {
+        db: ctx.db,
+        product: createProductWriteActions(ctx.db, usdaClient()),
+        recipeCosting: new RecipeCostingService(ctx.db, usdaClient()),
+        locationValuation: new LocationValuationService(ctx.db),
+        upcLookupClient: lookup,
+      },
+      { id: product.entityId, upc },
+      ctx.actor,
+    );
+
+    expect(result.price).toBeNull();
+    expect(result.pricing).toMatchObject({
+      derivedPrice: 6,
+      effectivePrice: 6,
+      source: "derived",
+    });
+
+    const diagnostic = await runDiagnostic(
+      ctx.db,
+      "products-with-better-upc-data",
+      { upcLookupClient: unexpectedUpcLookupClient() },
+      { kind: "sample", limit: 12 },
+    );
+    expect(diagnostic.items).toEqual([]);
+    expect(diagnostic.count).toBe(0);
   });
 });

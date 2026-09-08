@@ -40,6 +40,9 @@ describe("proposeSizeFromTitle", () => {
       "272479-6PK Spray Primer 1-2-3 Plus, 13 oz, White, 6 Pack",
       "Swedish Sour Peach Fish Candy, 5.2oz (2-Pack)",
       "Clear PET Spray Bottles, 2 oz, 10-Pack",
+      "Frozen Snack Bites, 14 oz, 4-Count",
+      "Glass Bowls, 7 oz, Set of 4",
+      "Fruit Candy, 10.5 oz, 24 Snack Packs",
     ])("refuses %s", (title) => {
       expect(proposeSizeFromTitle(title)).toBeNull();
     });
@@ -204,6 +207,34 @@ describe("proposeSizeFromTitle", () => {
         expect(
           proposeSizeFromTitle("Nursery Perennial PP#12949 — 1 gal")?.amount,
         ).toEqual({ value: 1, unit: "gallon" });
+      });
+    });
+
+    describe("capacity and compatibility are not purchased quantity", () => {
+      it.each([
+        "Four Step Ladder with Tool Tray, Lightweight 330 lbs Portable Steel Step Stool",
+        "Utility Chain, 1/8 in. x 33 ft., 350 lbs Safe Working Load",
+        "Heavy Duty 5 gal. Metal Bucket Grid",
+        "Steel Paddle Mixer, Ideal Mixing Tool for 5 Gallon Bucket",
+        "Heavy Duty Plate Casters with Brakes, 500Lbs",
+        "Moving Straps, Carry Furniture Up to 800 lbs Safely",
+        "Handheld Camera Stabilizer, 5.5 lb Payload",
+        "Compact 12 gal. Shopvac",
+        "Cordless 2.5 Gallon Wet/Dry Vacuum",
+        "7 Gal. Tough Storage Tote",
+        "Insulated Water Bottle, 16.9 oz",
+        "20 oz Insulated Tumbler",
+        "Insulated Tumbler with Lid and Straw, 24 oz",
+        "Insulated Travel Tumbler with Straw, 24 oz",
+      ])("refuses %s", (title) => {
+        expect(proposeSizeFromTitle(title)).toBeNull();
+      });
+
+      it.each([
+        ["Interior Wall Paint, 1 gal", 1, "gallon"],
+        ["Lightweight Spackling Filler, 32 oz Tub", 32, "oz"],
+      ])("keeps the purchased quantity in %s", (title, value, unit) => {
+        expect(proposeSizeFromTitle(title)?.amount).toEqual({ value, unit });
       });
     });
   });

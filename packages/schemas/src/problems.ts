@@ -1029,30 +1029,25 @@ export const PROBLEM_CLASS = {
   // (delete the parent's entry, or the parts', or fix the ledger), and deleting
   // inventory has no restore path.
   kitsCountedTwice: "defect",
-  // Every row is a sale whose product was never identified, so the ledger
-  // cannot say what left. Converges: each row is either linked to a product or
-  // recorded as an exception. No auto-fix — deciding WHICH product a marketplace
-  // payout describes is the whole of the work, and guessing it would write a
-  // false ownership history that `soldButStillStocked` would then trust.
-  unlinkedExitExpenses: "defect",
-  // `coverage`, NOT `defect`, and the distinction is the whole point of the
-  // detector existing separately from `unlinkedExitExpenses` above.
-  //
-  // That one is a defect because every row it reports is genuinely a sale
-  // missing its product. This one reports negative lines with no Purchase, and
-  // roughly half of those are legitimately productless — a family
-  // contribution, a neighbour's share of a shared cost. There is no signal
-  // separating those from a hand-entered cash sale, so a red count here would
-  // be permanently non-zero and would train the reader to ignore it. Advisory
-  // means it can carry that ambiguity honestly. No auto-fix for the same
-  // reason.
+  // A negative itemized principal line in a disposal Purchase with no Product
+  // link. This is useful provenance coverage, but it is not uniformly a defect:
+  // apparel, collectibles, and other deliberately untracked goods legitimately
+  // remain productless. No auto-fix — guessing a Product would write false
+  // ownership history that `soldButStillStocked` would then trust.
+  unlinkedExitExpenses: "coverage",
+  // Negative lines with no Purchase are also ambiguous coverage: a family
+  // contribution or a neighbour's share of a shared cost can legitimately be
+  // productless, while a hand-entered cash sale may need provenance. There is
+  // no signal separating those cases, so keep every row available for review
+  // without adding it to the defect count. No auto-fix for the same reason as
+  // `unlinkedExitExpenses` above.
   purchaselessExitExpenses: "coverage",
-  // A contradiction, not a shortfall: more units left than ever arrived, so
-  // some row is wrong and fixing it removes the product from the list for
-  // good. `coverage` would be wrong — there is no denominator, and no reported
-  // row is legitimately correct as it stands. No auto-fix: the repair is
-  // whichever line is missing or miscounted, which only a human can decide.
-  negativeExpectedQuantity: "defect",
+  // Recorded exits exceed recorded acquisitions, but acquisition history is
+  // intentionally incomplete for goods owned before Cubby's ledger began.
+  // Keep the arithmetic visible as coverage without claiming that an inferred
+  // acquisition should be invented. A human can add source-backed history or
+  // correct a genuine quantity error when evidence exists.
+  negativeExpectedQuantity: "coverage",
   // The edge asserts something that could not have happened, and the gate that
   // now rejects new ones means the list only shrinks. No auto-fix: detaching is
   // usually right, but a missing acquisition Expense produces the same row and

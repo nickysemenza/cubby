@@ -67,8 +67,10 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import {
+  calculateFinancialReconciliation,
   postedRefundPredicate,
   postedRefundTotalSql,
+  purchaseFinancialMismatchRawSql,
   settlementReferenceAbsentSql,
   settlementReferencePredicate,
 } from "~/server/repo/financial-reconciliation";
@@ -76,6 +78,11 @@ import {
   displayableImageRawSql,
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
+import {
+  emptyPurchaseFinancialAggregate,
+  loadPurchaseFinancialAggregates,
+  type PurchaseFinancialAggregate,
+} from "~/server/repo/purchase-financial-aggregates";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 const AMAZON_SOURCE = "amazon";
@@ -137,6 +144,10 @@ const EXCEPTION_REASONS = {
   stated_total: ["not_issued", "unavailable"],
   primary_document: ["not_issued", "unavailable"],
   settlement_reference: ["not_applicable", "insufficient_detail"],
+  // Settlement evidence and the expense ledger can both be correct while a
+  // source leaves a small residual. This is never a tolerance: it requires a
+  // reasoned, evidence-bound exception and reopens on any evidence change.
+  settlement_mismatch: ["expected_mismatch"],
   paperwork_mismatch: ["expected_mismatch"],
   amazon_asin: ["unavailable", "insufficient_detail"],
   // A check absent from this map admits NO reason at all, so its gap can never
@@ -472,6 +483,9 @@ const purchaseGapRaw = (check: PurchaseDataCheck): string => {
       AND NOT ${refundAdjusted}
       AND ${exceptionAbsent})`;
   }
+  if (check === "settlement_mismatch") {
+    return `(${purchaseFinancialMismatchRawSql('"Purchase"')} AND ${exceptionAbsent})`;
+  }
   return `(${settlementReferenceAbsentSql('"Purchase"')} AND ${exceptionAbsent})`;
 };
 
@@ -512,6 +526,104 @@ type FingerprintedGap = DataQualityGap & { fingerprint: string };
 // `activeException` above for the failure mode if that ever stops holding.
 const evidenceFingerprint = (check: DataCheck, updatedAt: Date): string =>
   `${check}:${updatedAt.getTime()}`;
+
+type PurchaseQualityExpense = {
+  cost: number | null;
+  future: boolean;
+};
+
+type PurchaseQualityPurchase = {
+  date: string | null;
+  orderId: string | null;
+  statedTotal: number | null;
+};
+
+const purchaseBaseQualityGaps = (
+  row: PurchaseQualityPurchase,
+  expenses: readonly PurchaseQualityExpense[],
+  documents: readonly { documentKind: string }[],
+  postedRefundTotal: number,
+): Array<[PurchaseDataCheck, string]> => {
+  const gaps: Array<[PurchaseDataCheck, string]> = [];
+  if (row.date === null)
+    gaps.push(["purchase_date", "Purchase date is not recorded."]);
+  if (row.orderId === null)
+    gaps.push(["order_id", "Vendor order or receipt ID is not recorded."]);
+  if (row.statedTotal === null)
+    gaps.push(["stated_total", "Literal vendor-stated total is not recorded."]);
+  if (
+    !documents.some((document) =>
+      primaryPurchaseDocumentKinds.some(
+        (kind) => kind === document.documentKind,
+      ),
+    )
+  ) {
+    gaps.push([
+      "primary_document",
+      "No primary order confirmation, sales order, invoice, or receipt is attached.",
+    ]);
+  }
+  if (expenses.length === 0) {
+    gaps.push(["empty_expenses", "Purchase has no live Expenses."]);
+  }
+  const unpriced = expenses.filter((item) => item.cost === null).length;
+  if (unpriced > 0) {
+    gaps.push([
+      "unpriced_expense",
+      `${unpriced} linked Expense${unpriced === 1 ? " is" : "s are"} unpriced.`,
+    ]);
+  }
+  if (
+    reconcilePurchase({
+      statedTotal: row.statedTotal,
+      expenseTotal: sumBy(expenses, (item) => item.cost ?? 0),
+      expenseCount: expenses.length,
+      unpricedExpenseCount: unpriced,
+      postedRefundTotal,
+    }) === "mismatch"
+  ) {
+    gaps.push([
+      "paperwork_mismatch",
+      "Expense total differs from the literal vendor-stated total, and posted refunds do not fully explain it.",
+    ]);
+  }
+  return gaps;
+};
+
+/**
+ * Settlement evidence is separate from a Purchase's own paperwork. Keep these
+ * two checks together so the active-exception gate and the hydrated detail
+ * projection use the same raw financial verdict.
+ */
+const settlementQualityGaps = (
+  purchaseId: PurchaseId,
+  expenses: readonly PurchaseQualityExpense[],
+  settlementCovered: ReadonlySet<PurchaseId>,
+  financial: PurchaseFinancialAggregate,
+): Array<[PurchaseDataCheck, string]> => {
+  const gaps: Array<[PurchaseDataCheck, string]> = [];
+  if (!settlementCovered.has(purchaseId)) {
+    gaps.push([
+      "settlement_reference",
+      "No posted qualifying FinancialTransaction with external or cash-account evidence is linked.",
+    ]);
+  }
+  const settleableExpenses = expenses.filter((item) => !item.future);
+  const settlement = calculateFinancialReconciliation({
+    ...financial,
+    settleableExpenseTotal: sumBy(settleableExpenses, (item) => item.cost ?? 0),
+    settleableUnpricedExpenseCount: settleableExpenses.filter(
+      (item) => item.cost === null,
+    ).length,
+  });
+  if (settlement.status === "mismatch") {
+    gaps.push([
+      "settlement_mismatch",
+      "Settlement evidence differs from incurred Expenses. Review the ledger and source evidence, or record a reasoned expected mismatch.",
+    ]);
+  }
+  return gaps;
+};
 
 const qualityStatus = (gaps: DataQualityGap[]): DataQuality["status"] =>
   gaps.some((gap) => gap.kind === "defect")
@@ -940,90 +1052,95 @@ export const loadPurchaseDataQualities = async (
 ): Promise<Map<PurchaseId, DataQuality>> => {
   const uniqueIds = uniq(ids);
   if (uniqueIds.length === 0) return new Map();
-  const [purchases, documents, expenses, qualifyingTransactions] =
-    await Promise.all([
-      getDb(db)
-        .select({
-          id: purchase.id,
-          shortcode: purchase.shortcode,
-          date: purchase.date,
-          orderId: purchase.orderId,
-          statedTotal: purchase.statedTotal,
-          dataExceptions: purchase.dataExceptions,
-          updatedAt: purchase.updatedAt,
-        })
-        .from(purchase)
-        .where(and(inArray(purchase.id, uniqueIds), notDeleted(purchase))),
-      getDb(db)
-        .select({
-          purchaseId: purchaseImage.purchaseId,
-          documentKind: purchaseImage.documentKind,
-        })
-        .from(purchaseImage)
-        .innerJoin(
-          image,
-          and(eq(image.id, purchaseImage.imageId), notDeleted(image)),
-        )
-        .where(
-          and(
-            inArray(purchaseImage.purchaseId, uniqueIds),
-            notDeleted(purchaseImage),
+  const [
+    purchases,
+    documents,
+    expenses,
+    qualifyingTransactions,
+    financialAggregates,
+  ] = await Promise.all([
+    getDb(db)
+      .select({
+        id: purchase.id,
+        shortcode: purchase.shortcode,
+        date: purchase.date,
+        orderId: purchase.orderId,
+        statedTotal: purchase.statedTotal,
+        dataExceptions: purchase.dataExceptions,
+        updatedAt: purchase.updatedAt,
+      })
+      .from(purchase)
+      .where(and(inArray(purchase.id, uniqueIds), notDeleted(purchase))),
+    getDb(db)
+      .select({
+        purchaseId: purchaseImage.purchaseId,
+        documentKind: purchaseImage.documentKind,
+      })
+      .from(purchaseImage)
+      .innerJoin(
+        image,
+        and(eq(image.id, purchaseImage.imageId), notDeleted(image)),
+      )
+      .where(
+        and(
+          inArray(purchaseImage.purchaseId, uniqueIds),
+          notDeleted(purchaseImage),
+        ),
+      ),
+    getDb(db)
+      .select({
+        purchaseId: expense.purchaseId,
+        cost: expense.cost,
+        productId: expense.productId,
+        future: expense.future,
+      })
+      .from(expense)
+      .where(and(inArray(expense.purchaseId, uniqueIds), notDeleted(expense))),
+    getDb(db)
+      .select({
+        purchaseId: financialTransactionAllocation.purchaseId,
+        hasSettlementReference: sql<boolean>`bool_or(${sql.raw(
+          settlementReferencePredicate(
+            '"FinancialTransaction"',
+            '"FinancialAccount"',
           ),
-        ),
-      getDb(db)
-        .select({
-          purchaseId: expense.purchaseId,
-          cost: expense.cost,
-          productId: expense.productId,
-        })
-        .from(expense)
-        .where(
-          and(inArray(expense.purchaseId, uniqueIds), notDeleted(expense)),
-        ),
-      getDb(db)
-        .select({
-          purchaseId: financialTransactionAllocation.purchaseId,
-          hasSettlementReference: sql<boolean>`bool_or(${sql.raw(
-            settlementReferencePredicate(
-              '"FinancialTransaction"',
-              '"FinancialAccount"',
-            ),
-          )})`,
-          // The allocation's share, matching postedRefundTotalSql — its raw-SQL
-          // twin powering the dataGap/dataStatus list filters. These two must
-          // stay meaning-equivalent or the filter and the row badge disagree
-          // about the same purchase.
-          postedRefundTotal: sql<number>`COALESCE(sum(${financialTransactionAllocation.amount}) FILTER (
+        )})`,
+        // The allocation's share, matching postedRefundTotalSql — its raw-SQL
+        // twin powering the dataGap/dataStatus list filters. These two must
+        // stay meaning-equivalent or the filter and the row badge disagree
+        // about the same purchase.
+        postedRefundTotal: sql<number>`COALESCE(sum(${financialTransactionAllocation.amount}) FILTER (
             WHERE ${sql.raw(postedRefundPredicate('"FinancialTransaction"'))}
           ), 0)::double precision`,
-        })
-        .from(financialTransactionAllocation)
-        .innerJoin(
-          financialTransaction,
-          and(
-            eq(
-              financialTransaction.id,
-              financialTransactionAllocation.transactionId,
-            ),
-            notDeleted(financialTransaction),
+      })
+      .from(financialTransactionAllocation)
+      .innerJoin(
+        financialTransaction,
+        and(
+          eq(
+            financialTransaction.id,
+            financialTransactionAllocation.transactionId,
           ),
-        )
-        // LEFT, not INNER: account liveness is part of the COVERAGE rule (it reads
-        // the account's identity), but not of the refund total — a refund happened
-        // whether or not its account row was later retired. An inner join here
-        // silently applied the coverage rule to the refund sum too.
-        .leftJoin(
-          financialAccount,
-          eq(financialAccount.id, financialTransaction.accountId),
-        )
-        .where(
-          and(
-            inArray(financialTransactionAllocation.purchaseId, uniqueIds),
-            notDeleted(financialTransactionAllocation),
-          ),
-        )
-        .groupBy(financialTransactionAllocation.purchaseId),
-    ]);
+          notDeleted(financialTransaction),
+        ),
+      )
+      // LEFT, not INNER: account liveness is part of the COVERAGE rule (it reads
+      // the account's identity), but not of the refund total — a refund happened
+      // whether or not its account row was later retired. An inner join here
+      // silently applied the coverage rule to the refund sum too.
+      .leftJoin(
+        financialAccount,
+        eq(financialAccount.id, financialTransaction.accountId),
+      )
+      .where(
+        and(
+          inArray(financialTransactionAllocation.purchaseId, uniqueIds),
+          notDeleted(financialTransactionAllocation),
+        ),
+      )
+      .groupBy(financialTransactionAllocation.purchaseId),
+    loadPurchaseFinancialAggregates(db, uniqueIds),
+  ]);
   const expensesByPurchase = groupBy(expenses, (row) => row.purchaseId ?? "");
   const documentsByPurchase = groupBy(documents, (row) => row.purchaseId);
   const settlementCovered = new Set(
@@ -1058,56 +1175,21 @@ export const loadPurchaseDataQualities = async (
         fingerprint: evidenceFingerprint(check, row.updatedAt),
       });
     };
-    if (row.date === null)
-      add("purchase_date", "Purchase date is not recorded.");
-    if (row.orderId === null)
-      add("order_id", "Vendor order or receipt ID is not recorded.");
-    if (row.statedTotal === null)
-      add("stated_total", "Literal vendor-stated total is not recorded.");
-    if (
-      !(documentsByPurchase[row.id] ?? []).some((document) =>
-        primaryPurchaseDocumentKinds.some(
-          (kind) => kind === document.documentKind,
-        ),
-      )
-    ) {
-      add(
-        "primary_document",
-        "No primary order confirmation, sales order, invoice, or receipt is attached.",
-      );
+    for (const [check, message] of purchaseBaseQualityGaps(
+      row,
+      purchaseExpenses,
+      documentsByPurchase[row.id] ?? [],
+      postedRefundByPurchase.get(row.id) ?? 0,
+    )) {
+      add(check, message);
     }
-    if (purchaseExpenses.length === 0) {
-      add("empty_expenses", "Purchase has no live Expenses.");
-    }
-    const unpriced = purchaseExpenses.filter(
-      (item) => item.cost === null,
-    ).length;
-    if (unpriced > 0) {
-      add(
-        "unpriced_expense",
-        `${unpriced} linked Expense${unpriced === 1 ? " is" : "s are"} unpriced.`,
-      );
-    }
-    const expenseTotal = sumBy(purchaseExpenses, (item) => item.cost ?? 0);
-    if (
-      reconcilePurchase({
-        statedTotal: row.statedTotal,
-        expenseTotal,
-        expenseCount: purchaseExpenses.length,
-        unpricedExpenseCount: unpriced,
-        postedRefundTotal: postedRefundByPurchase.get(row.id) ?? 0,
-      }) === "mismatch"
-    ) {
-      add(
-        "paperwork_mismatch",
-        "Expense total differs from the literal vendor-stated total, and posted refunds do not fully explain it.",
-      );
-    }
-    if (!settlementCovered.has(row.id)) {
-      add(
-        "settlement_reference",
-        "No posted qualifying FinancialTransaction with external or cash-account evidence is linked.",
-      );
+    for (const [check, message] of settlementQualityGaps(
+      row.id,
+      purchaseExpenses,
+      settlementCovered,
+      financialAggregates.get(row.id) ?? emptyPurchaseFinancialAggregate(),
+    )) {
+      add(check, message);
     }
     const seenProducts = new Set<ProductId>();
     const relatedGaps: DataQualityGap[] = [];
