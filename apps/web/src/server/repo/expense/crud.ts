@@ -726,6 +726,7 @@ export const updateExpense = async (
       await auditNestedChanges(tx, state, output);
       if (
         data.cost !== undefined ||
+        data.future !== undefined ||
         data.productId !== undefined ||
         data.purchaseId !== undefined
       ) {

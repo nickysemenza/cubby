@@ -177,7 +177,7 @@ async function runUpcProposals(
           ? (lookup.manufacturer ?? lookup.brand)
           : null,
       price:
-        candidate.price == null && lookup.priceDollars != null
+        candidate.effectivePrice == null && lookup.priceDollars != null
           ? lookup.priceDollars
           : null,
       imageUrl:

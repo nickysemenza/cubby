@@ -125,13 +125,14 @@ overrides:
   qs: ^6.15.2
   rollup: ^4.59.0
   seroval: ^1.4.1
-  sharp@0.34.5: 0.35.2
+  sharp: 0.35.4
+  js-yaml@4.3.1: 4.3.2
   undici@7.28.0: 7.29.0
   vite: ^8.0.0
   webpack: ^5.104.1
   wrangler: 4.120.0
 
-packageExtensionsChecksum: sha256-u34iuHK82K1A2bfSeP4KdFVOcGuPdxLtxwqoBInK3ys=
+packageExtensionsChecksum: sha256-xbtpofkCmH2KRY7nlAozhGf2upuYthnPp+WiszXZNLU=
 
 patchedDependencies:
   '@electric-sql/pglite-socket@0.2.10': d22528faa1b7e29f8d88a905deccd1033dd43a46f11b98b0c114a4d0efe4cc0f
@@ -228,7 +229,7 @@ importers:
         version: 0.11.11(hono@4.13.0)
       '@sentry/cloudflare':
         specifier: ^10.66.0
-        version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))
+        version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@13.0.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
@@ -247,7 +248,7 @@ importers:
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: 1.51.1
-        version: 1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))
+        version: 1.51.1(@types/node@26.2.0)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))
       '@cloudflare/workers-types':
         specifier: ^5.20260719.1
         version: 5.20260816.1
@@ -268,7 +269,7 @@ importers:
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.120.0
-        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)
+        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)
 
   apps/usda-api:
     dependencies:
@@ -289,7 +290,7 @@ importers:
         version: 0.11.11(hono@4.13.0)
       '@sentry/cloudflare':
         specifier: ^10.66.0
-        version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))
+        version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))
       better-sqlite3:
         specifier: ^13.0.0
         version: 13.0.1
@@ -338,7 +339,7 @@ importers:
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.120.0
-        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)
+        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)
 
   apps/web:
     dependencies:
@@ -347,10 +348,10 @@ importers:
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.17)(date-fns@4.4.0)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@better-auth/oauth-provider':
         specifier: ^1.6.25
-        version: 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@1.3.7(zod@4.4.3))
+        version: 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@1.3.7(zod@4.4.3))
       '@better-auth/passkey':
         specifier: ^1.6.25
-        version: 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@1.3.7(zod@4.4.3))(nanostores@1.4.0)
+        version: 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@1.3.7(zod@4.4.3))(nanostores@1.4.0)
       '@cfworker/json-schema':
         specifier: ^4.1.1
         version: 4.1.1
@@ -386,10 +387,10 @@ importers:
         version: 1.5.0
       '@daveyplate/better-auth-tanstack':
         specifier: ^1.3.6
-        version: 1.3.6(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
+        version: 1.3.6(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@daveyplate/better-auth-ui':
         specifier: 3.4.0
-        version: 3.4.0(ba27bbb69515b35530ae58f2e7ad1d29)
+        version: 3.4.0(d45a2599ed2228656717f348399ea314)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
@@ -455,10 +456,10 @@ importers:
         version: 1.43.0
       '@sentry/cloudflare':
         specifier: ^10.66.0
-        version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))
+        version: 10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))
       '@sentry/tanstackstart-react':
         specifier: ^10.66.0
-        version: 10.70.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.220.0(@opentelemetry/api@1.9.1))(react@19.2.7)(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+        version: 10.70.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.220.0(@opentelemetry/api@1.9.1))(react@19.2.7)(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       '@t3-oss/env-core':
         specifier: ^0.13.11
         version: 0.13.11(typescript@7.0.2)(zod@4.4.3)
@@ -500,7 +501,7 @@ importers:
         version: 1.167.1(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(@tanstack/router-core@1.171.27)(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@tanstack/react-start':
         specifier: ^1.168.49
-        version: 1.168.49(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+        version: 1.168.49(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       '@tanstack/react-store':
         specifier: ^0.11.1
         version: 0.11.1(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
@@ -530,7 +531,7 @@ importers:
         version: 3.0.0
       better-auth:
         specifier: ^1.6.25
-        version: 1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9)
+        version: 1.6.25(18359ed25fb7609f7efc73ed604a4fbb)
       chrono-node:
         specifier: ^2.10.1
         version: 2.10.1
@@ -645,10 +646,10 @@ importers:
     devDependencies:
       '@cloudflare/vite-plugin':
         specifier: 1.51.1
-        version: 1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))
+        version: 1.51.1(@types/node@26.2.0)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))
       '@cloudflare/vitest-plugin':
         specifier: ^1.1.5
-        version: 1.1.5(@cloudflare/workers-types@5.20260816.1)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10)
+        version: 1.1.5(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10)
       '@cloudflare/workers-types':
         specifier: 5.20260816.1
         version: 5.20260816.1
@@ -768,7 +769,7 @@ importers:
         version: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
       wrangler:
         specifier: 4.120.0
-        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)
+        version: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)
 
   packages/design-tokens: {}
 
@@ -1927,160 +1928,160 @@ packages:
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
 
-  '@img/sharp-darwin-arm64@0.35.2':
-    resolution: {integrity: sha512-eEieHsMksAW4IiO5NzauESRl2D2qz3J/kwUxUrSfV06A93eEaRfMpHXyUb1mAqrR7i8U9A0GRqE9pjn6u1Jjpg==}
+  '@img/sharp-darwin-arm64@0.35.4':
+    resolution: {integrity: sha512-Uhfl4V4lhP2nbUVF9+hyH1+luj86f1gUFeo8ALYxFoULoU+G87D43BfeMP8XHsk9boxAnCY/bf2EHwhA7MuGsA==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@img/sharp-darwin-x64@0.35.2':
-    resolution: {integrity: sha512-BaktuGPCeHJMARpodR8jK4uKiZrPAy9WrfQW0sdI37clracq8Bp01AYS3SZgi5FS/y5twa9t4+LIuuxQjqRrWw==}
+  '@img/sharp-darwin-x64@0.35.4':
+    resolution: {integrity: sha512-hWniXY3bG5qKpkKrAwPe4y+VTPmf086YQAnkxWh7uA1YrlRouWGa0M0Mxj3ZjnXFkv7/TD1bTy9lGUK26vRvWw==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@img/sharp-freebsd-wasm32@0.35.2':
-    resolution: {integrity: sha512-YoAxdnd8hPUkvLHd3bWY+YA8nw3xM/RyRopYucNsWHVSan8NLVM3X2volsfoRDcXdUJPg6tXahSd7HXPK7lRnw==}
+  '@img/sharp-freebsd-wasm32@0.35.4':
+    resolution: {integrity: sha512-lIsKw/BU+kjB4eZjxrYrZmwOJYi3Ajrv66iAlBmUPyKc3HpnloevB1g3wxGD9P/5BbQ1brBGl65VRRrCvQDEqA==}
     engines: {node: '>=20.9.0'}
     os: [freebsd]
 
-  '@img/sharp-libvips-darwin-arm64@1.3.1':
-    resolution: {integrity: sha512-4V/M3roRMTYjiwZY9IOVQOE8OyeCxFAkYmyZDrZl51uOKjibm3oeEJ4WAmLxutAfzFbC9jqUiPs2gbnGflH+7g==}
+  '@img/sharp-libvips-darwin-arm64@1.3.3':
+    resolution: {integrity: sha512-suTBPTDGrI9WodccaDdwZItTSaBYASlBk1NSfElSHrUfzu3szG6lvIF58+WiFvnfzuK8ZBFS5zE00PxqxnRiPg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@img/sharp-libvips-darwin-x64@1.3.1':
-    resolution: {integrity: sha512-c0/DxItpJv2+dGhgycJBBgotdqruGYDvA79drdh0MD1dFpy7JzJ/PlXwi1H4rFf0eTy8tgbI91aHDnZIceY3jQ==}
+  '@img/sharp-libvips-darwin-x64@1.3.3':
+    resolution: {integrity: sha512-FVJZ5mITMobmXIz/hPDTw0EintTW5H3WfrxwLqEqjiIihlu+hVRyGrFQ60xl0Lxn7Bt3zdpevPaQi0HEzqz9fw==}
     cpu: [x64]
     os: [darwin]
 
-  '@img/sharp-libvips-linux-arm64@1.3.1':
-    resolution: {integrity: sha512-JznefmcK9j1JKPz8AkQDh89kjojubyfOasWBPKfzMIhPwsgDy9evpE/naJTXXXmghS1iFwR8u/kTwh/I2/+GCw==}
+  '@img/sharp-libvips-linux-arm64@1.3.3':
+    resolution: {integrity: sha512-0DaL0A6Xu6sQSQFwe4iVCrKWU2cCTItnRsYsCdxAMm9NF6twAA9BKnoqy4hqz4+azQ0JHuA26qiUKsf1XJ/v5A==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-libvips-linux-arm@1.3.1':
-    resolution: {integrity: sha512-aGGy9aWzXgHBG7HNyQPWorZthlp7+x6fDRoPAQbGO3ThcttuTyKIx3NuSHb6zb4gBNq6/yNn9f1cy9nFKS/Vmg==}
+  '@img/sharp-libvips-linux-arm@1.3.3':
+    resolution: {integrity: sha512-3rbU4vqXXc3hY/OiXdl52xZvT0F1yEngWfvqudtPJg/KkyiaQw2DRsFrNzpmLvfavbwOq3qXn36GP8obHRULQA==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-libvips-linux-ppc64@1.3.1':
-    resolution: {integrity: sha512-1EkwGNCZk6iWNCMWqrvdJ+r1j0PT1zIz60CNPhYnJlK/zyeWqlsPZIe+ocBVqPF8k/Ssee/NCk+tE9Ryrko6ng==}
+  '@img/sharp-libvips-linux-ppc64@1.3.3':
+    resolution: {integrity: sha512-cdn1OvUBwsXhbC0zSzJnNzf5MZ/mTrobawDvNXBTxe8VtqKAm0sRuEY2Evzovb/w9JMk4TvRxqt1mekSuJz64w==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-libvips-linux-riscv64@1.3.1':
-    resolution: {integrity: sha512-Ilays+w2bXdnxzxtQdmXR62u8o8GYa3eL4+Gr+1KiE4xperMZUslRaVPJwwPkzlHEjGfXAfRVAa/7CYCtSqsBw==}
+  '@img/sharp-libvips-linux-riscv64@1.3.3':
+    resolution: {integrity: sha512-HjPVx7yKz+0lqdhDlTw1tt90wamBoxhiXpvl1XZpJLiHH4RCJ5yDTqH+VlYPv2fwFs89JFw4c1IexYOcQUi4IQ==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-libvips-linux-s390x@1.3.1':
-    resolution: {integrity: sha512-VfBwVHQTbRoj4XlpA/KLZ7ltgMpz+4WSejFzQ+GnoImjo1PtEJ59QB2qR1xQEeRPYIkNrPIm2L4cICMvz4C2ew==}
+  '@img/sharp-libvips-linux-s390x@1.3.3':
+    resolution: {integrity: sha512-neWLh+3yCNThxnfy3c4BbVBeGgt9aftno+XbT56iK28RgeDs3UOFWviLWlUu0bArYVYJaFDK+RRohbicUNCm8Q==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-libvips-linux-x64@1.3.1':
-    resolution: {integrity: sha512-+c8ukgwU62DS54nCAjw7keOfHUkmr0B5QHEdcOqRnodF/MNXJbVI8Eopoj4B/0H8Asr65I+A4Amrn7a85/md6A==}
+  '@img/sharp-libvips-linux-x64@1.3.3':
+    resolution: {integrity: sha512-4vKmvAst9nrowcqquKFAyZJUDolUaIp8uRiN0mWFguJ1IplC9/pitXtlnnlU4aa/eJw3J7i67V+pwUL+wZGdsA==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-libvips-linuxmusl-arm64@1.3.1':
-    resolution: {integrity: sha512-qlKb/pwbkAi1WMsJrYHk7CuDrd12s27U2QnRhFYUoJNrRCmkosMTttuRFat/DDB3IlDm5qE1TJgZ4JDnHX8Ldw==}
+  '@img/sharp-libvips-linuxmusl-arm64@1.3.3':
+    resolution: {integrity: sha512-Y9kQaLMuNoB0bPYOOdcZMaseNrFpPodIWWMrx+CZyydf2xn68j9WYc6sWWRrDwNkzCQjKYfc68L7jKjGlHMibw==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@img/sharp-libvips-linuxmusl-x64@1.3.1':
-    resolution: {integrity: sha512-yO21HwoUVLN8Qa+/SBjQLMYwBWAVJjeGPNe+hc0OUeMeifEtJqu5a1c4HayE1nNpDih9y3/KkoltfkDodmKAlg==}
+  '@img/sharp-libvips-linuxmusl-x64@1.3.3':
+    resolution: {integrity: sha512-fj8Mv0HHfD1Rr+4I68+3agJynxDWtBFgicTbSOb9Bke6pIwzGcJ+RX/yHjmiEGFMCavY/dxvem7MyNaJF+wDiw==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@img/sharp-linux-arm64@0.35.2':
-    resolution: {integrity: sha512-af12Pnd0ZGu2HfP8NayB0kk6eC/lrfbQE6HlR4jD+34wdJ1Vw9TF6TMn6ZvffT+WgqVsl0hRbmNvz2u/23VmwA==}
+  '@img/sharp-linux-arm64@0.35.4':
+    resolution: {integrity: sha512-De4jpEnAU8Hd5oT0j1G3uL4ZvTuipVMn7YC6vPaJhy6/7EwEae0SVAoBrUMYQbkLGDm85taVWwuPc1a44LTzCQ==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-linux-arm@0.35.2':
-    resolution: {integrity: sha512-SE4kzF2mepn6z+6E7L6lsV8FzuLL6IPQdyX8ZiwROAG/G8td+hP/m7FsFPwidtrF19gvajuC9l6TxAVcsA4S7A==}
+  '@img/sharp-linux-arm@0.35.4':
+    resolution: {integrity: sha512-7OAS8gI0EReKGVN2HssHlM6umJgxF5VI3xN0p9FA91p/YO+ou5hiNghLdZ5BEHztwaaK5+bLKRf8x/o2L2nk9A==}
     engines: {node: '>=20.9.0'}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-linux-ppc64@0.35.2':
-    resolution: {integrity: sha512-hYSBm7zcNtDCozCxQHYZJiu63b/bXsgRZuOxCIBZsStMM9Vap47iFHdbX4kCvQsblPB/k+clhELpdQJHQLSHvg==}
+  '@img/sharp-linux-ppc64@0.35.4':
+    resolution: {integrity: sha512-2oYZJeIl4kCcMGk4ouZVjnkCtFrpQFlNEtJ6GbxzhHQchwH0NH/qEb9ykmOl29dqwMq+JhFdZn+1ak2FKhI9fQ==}
     engines: {node: '>=20.9.0'}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-linux-riscv64@0.35.2':
-    resolution: {integrity: sha512-qQt0Kc13+Hoan/Awq/qMSQw3L+RI1NCRPgD5cUJ/1WSSmIoysLOc72jlRM3E0OHN9Yr313jgeQ2T+zW+F03QFA==}
+  '@img/sharp-linux-riscv64@0.35.4':
+    resolution: {integrity: sha512-cPbNChoRURAWdebDIHSenxRpgEdy7JkPydSnUxRm9VvKD7m0/xVaR/8Fzlu81pk5nHEvHH87UZUA7cTtwnbJSA==}
     engines: {node: '>=20.9.0'}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-linux-s390x@0.35.2':
-    resolution: {integrity: sha512-E4fLLfRPzDLlEeDaTzI98OFLcv++WL5ChLLMwPoVd0CIoZQqupBSNbOisPL5am9XsbQ9T84+iiMpUvbFtkunbA==}
+  '@img/sharp-linux-s390x@0.35.4':
+    resolution: {integrity: sha512-RY0JFY8Fd6RonCBtHz+DvadaPkXDSI1AUn6yWL9TipqkZ1vY8w8evqdgyDFnkm4/K1ve1TvZiaePP5oSd4+WVQ==}
     engines: {node: '>=20.9.0'}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-linux-x64@0.35.2':
-    resolution: {integrity: sha512-gi0zFJJRLswfCZmHtJdikXPOc5u7qamSOS3NHedLqLd4W8Q0NqjdBr6TTRIgsfFjqfTsHFgdfvJ9LwqSgcHiAA==}
+  '@img/sharp-linux-x64@0.35.4':
+    resolution: {integrity: sha512-9qvvEAuk8k89TfWUoX2htWjbAMX8p+NxCppjpcg5k6xMsjhBQPTsoIh36h9Qde4WRuGpJeYnOjdosDn/cnv+OA==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@img/sharp-linuxmusl-arm64@0.35.2':
-    resolution: {integrity: sha512-siWbOW1u6HFnFLrp0waKyW7VEf7jYvcDWdrXEFa8AkdAQgEvuu5Fz8/Y70w9EeqAdwDtfU012BhEHHaDqvQNzg==}
+  '@img/sharp-linuxmusl-arm64@0.35.4':
+    resolution: {integrity: sha512-KB5jxpfWQTr0nc3xdHtWChdbifHrBGsd2SM62Eyxrl8afikm+f5qGBU75SJIZBT/S1MC8XyacdlXBMSWq6OURA==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@img/sharp-linuxmusl-x64@0.35.2':
-    resolution: {integrity: sha512-YBqMMcjDi4QGYiSn4vNOYBhmlC4z5AXqkOUUqI2e0AFA4urNv4ESgOgwNl3K+4etQhha0twXlzeF20bbULm9Yg==}
+  '@img/sharp-linuxmusl-x64@0.35.4':
+    resolution: {integrity: sha512-f+eZJZIQNEEd26RPSW+76chwOf1XtA2Y/O+5ocVyLliHkeih3e+jhLVBdNTd2rS3IbNXK8+ug93Vf5ZXtF5Lxg==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@img/sharp-wasm32@0.35.2':
-    resolution: {integrity: sha512-Mrv4JQNYVQ94xH+jzZ9r+gowleN8mv2FTgKT+PI6bx5C0G8TdNYndu161pg2i7uoBwxy2ImPMHrJOM2LZef7Bw==}
+  '@img/sharp-wasm32@0.35.4':
+    resolution: {integrity: sha512-zQnl4Kwp7Q6NHsENtU2T/00Zi+w3AQNwz3+UaTyVBy2FpXrzXzGjndpK61onhZjRtRpQXxCTeqw19bVyXOh7jA==}
     engines: {node: '>=20.9.0'}
 
-  '@img/sharp-webcontainers-wasm32@0.35.2':
-    resolution: {integrity: sha512-QNV27pxs9wpApEiCfvHM1RDoP1w1+2KrUWWDPEhEwg+latvOrfuhWrHWZKwdSFwU6jh3myjw/yOCRsUIuOft3g==}
+  '@img/sharp-webcontainers-wasm32@0.35.4':
+    resolution: {integrity: sha512-ESfNkywmCfPNyaZjxooddJQiQ+l/nTpGEOGthxiLnIHXC/CmcBixnfwUleX9mCz9ovrUUvKMap/pm8RYbzfwaA==}
     engines: {node: '>=20.9.0'}
     cpu: [wasm32]
 
-  '@img/sharp-win32-arm64@0.35.2':
-    resolution: {integrity: sha512-BiVRYc/t6/Vl3e1hBx0hugG4oN9Pydf4fgMSpxTQJmwGUg/YoXTWHiFeRymHfCZzifxu4F4rpk/I67D0LQ20wQ==}
+  '@img/sharp-win32-arm64@0.35.4':
+    resolution: {integrity: sha512-iNdlBX9gLVvqe2I3uIJSIKTq6wckP/DYxZtcqxm09x5Gi24DnFBmPAWZmr60ZyYMG0xlzo6goG3670ar+RXvRw==}
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [win32]
 
-  '@img/sharp-win32-ia32@0.35.2':
-    resolution: {integrity: sha512-YYEhx9PImCC7T0tI8JDMi4DB9LwLCXCU5OWNYEXAxh5Q1ShKkyC6byxzoBJ3gEFDnH2lQckWuDe70G7mB2XJog==}
+  '@img/sharp-win32-ia32@0.35.4':
+    resolution: {integrity: sha512-kqRsbaa5CS6KHlpxnN7WhE6vAAugXyZButpRdvDWetlv6Qv4N9WTcrWzF7tXfB9T7MsoadqdI8hmwLq6UlLvtw==}
     engines: {node: ^20.9.0}
     cpu: [ia32]
     os: [win32]
 
-  '@img/sharp-win32-x64@0.35.2':
-    resolution: {integrity: sha512-imoOyBcoM/iiUr4J6VPpCNjPnjvP/Gks95898yB8YqoGGYmHYbOyCuNv9FMhFgtaiHFGbHW8bxKqRV6VjtXThQ==}
+  '@img/sharp-win32-x64@0.35.4':
+    resolution: {integrity: sha512-XtmnYhBcrORsJ4XJngyzr/EWP0hRZLAZRFaApdKuviyqF78+ylxh2y06ZmtULAMOnObJ3ucpN0AcwSWnMowTRg==}
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [win32]
@@ -7897,8 +7898,8 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
-  js-yaml@4.3.1:
-    resolution: {integrity: sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ==}
+  js-yaml@4.3.2:
+    resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
 
   jsdom@30.0.0:
@@ -8450,7 +8451,6 @@ packages:
       imagemin: '*'
       lightningcss: '*'
       postcss: '*'
-      sharp: '*'
       svgo: '*'
       uglify-js: '*'
       webpack: ^5.104.1
@@ -8480,8 +8480,6 @@ packages:
       lightningcss:
         optional: true
       postcss:
-        optional: true
-      sharp:
         optional: true
       svgo:
         optional: true
@@ -9394,9 +9392,14 @@ packages:
     engines: {node: '>=20.18.1'}
     hasBin: true
 
-  sharp@0.35.2:
-    resolution: {integrity: sha512-FVtFjtBCMiJS6yb5CX7Sop45WFMpeGw6oRKuJnXYgf/f1ms/D7LE/ZUSNxnW7rZ/dbslQWYkoqFHGPaDBtaK4w==}
+  sharp@0.35.4:
+    resolution: {integrity: sha512-n++8XWcj+jCOr2IOl7h8LbKnGBDY4aPbmprMONBNFdn0ImXqpGVv5zliDs0V9HbmbCQLpbuo2ej9rAoOQTvMDA==}
     engines: {node: '>=20.9.0'}
+    peerDependencies:
+      '@types/node': '*'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   shebang-command@2.0.0:
     resolution: {integrity: sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA==}
@@ -10613,11 +10616,11 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@better-auth/api-key@1.6.23(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@2.0.2(zod@4.4.3))':
+  '@better-auth/api-key@1.6.23(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@2.0.2(zod@4.4.3))':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
-      better-auth: 1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9)
+      better-auth: 1.6.25(18359ed25fb7609f7efc73ed604a4fbb)
       better-call: 2.0.2(zod@4.4.3)
       zod: 4.4.3
 
@@ -10660,24 +10663,24 @@ snapshots:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/oauth-provider@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@1.3.7(zod@4.4.3))':
+  '@better-auth/oauth-provider@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@1.3.7(zod@4.4.3))':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
-      better-auth: 1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9)
+      better-auth: 1.6.25(18359ed25fb7609f7efc73ed604a4fbb)
       better-call: 1.3.7(zod@4.4.3)
       jose: 6.2.8
       zod: 4.4.3
 
-  '@better-auth/passkey@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@1.3.7(zod@4.4.3))(nanostores@1.4.0)':
+  '@better-auth/passkey@1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@1.3.7(zod@4.4.3))(nanostores@1.4.0)':
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/utils': 0.4.2
       '@better-fetch/fetch': 1.3.1
       '@simplewebauthn/browser': 13.3.0
       '@simplewebauthn/server': 13.3.2
-      better-auth: 1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9)
+      better-auth: 1.6.25(18359ed25fb7609f7efc73ed604a4fbb)
       better-call: 1.3.7(zod@4.4.3)
       nanostores: 1.4.0
       zod: 4.4.3
@@ -10762,31 +10765,33 @@ snapshots:
     optionalDependencies:
       workerd: 1.20260801.1
 
-  '@cloudflare/vite-plugin@1.51.1(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))':
+  '@cloudflare/vite-plugin@1.51.1(@types/node@26.2.0)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))':
     dependencies:
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260801.1)
-      miniflare: 5.20260801.1-alpha
+      miniflare: 5.20260801.1-alpha(@types/node@26.2.0)
       unenv: 2.0.0-rc.24
       vite: 8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
       workerd: 1.20260801.1
-      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)
+      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)
       ws: 8.21.0
     transitivePeerDependencies:
+      - '@types/node'
       - bufferutil
       - utf-8-validate
 
-  '@cloudflare/vitest-plugin@1.1.5(@cloudflare/workers-types@5.20260816.1)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10)':
+  '@cloudflare/vitest-plugin@1.1.5(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)(@vitest/runner@4.1.10)(@vitest/snapshot@4.1.10)(vitest@4.1.10)':
     dependencies:
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
       cjs-module-lexer: 1.2.3
       esbuild: 0.28.1
-      miniflare: 5.20260907.0-alpha
+      miniflare: 5.20260907.0-alpha(@types/node@26.2.0)
       vitest: 4.1.10(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@30.0.0(@noble/hashes@2.2.0))(msw@2.12.9(@types/node@26.2.0)(typescript@7.0.2))(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))
-      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)
+      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)
       zod: 4.4.3
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
+      - '@types/node'
       - bufferutil
       - utf-8-validate
 
@@ -10852,21 +10857,21 @@ snapshots:
 
   '@date-fns/tz@1.5.0': {}
 
-  '@daveyplate/better-auth-tanstack@1.3.6(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)':
+  '@daveyplate/better-auth-tanstack@1.3.6(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@tanstack/query-core': 5.101.2
       '@tanstack/react-query': 5.101.2(react@19.2.7)
-      better-auth: 1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9)
+      better-auth: 1.6.25(18359ed25fb7609f7efc73ed604a4fbb)
       react: 19.2.7
       react-dom: 19.2.7(@types/react@19.2.17)(react@19.2.7)
 
-  '@daveyplate/better-auth-ui@3.4.0(ba27bbb69515b35530ae58f2e7ad1d29)':
+  '@daveyplate/better-auth-ui@3.4.0(d45a2599ed2228656717f348399ea314)':
     dependencies:
-      '@better-auth/api-key': 1.6.23(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@2.0.2(zod@4.4.3))
-      '@better-auth/passkey': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(better-call@1.3.7(zod@4.4.3))(nanostores@1.4.0)
+      '@better-auth/api-key': 1.6.23(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@2.0.2(zod@4.4.3))
+      '@better-auth/passkey': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(better-call@1.3.7(zod@4.4.3))(nanostores@1.4.0)
       '@better-fetch/fetch': 1.3.1
       '@captchafox/react': 1.10.0(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
-      '@daveyplate/better-auth-tanstack': 1.3.6(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
+      '@daveyplate/better-auth-tanstack': 1.3.6(@tanstack/query-core@5.101.2)(@tanstack/react-query@5.101.2(react@19.2.7))(better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@hcaptcha/react-hcaptcha': 2.0.2
       '@hookform/resolvers': 5.9.0(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(effect@3.22.1)(react-hook-form@7.85.0(react@19.2.7))(zod@4.4.3)
       '@instantdb/react': 0.22.47(react@19.2.7)
@@ -10891,7 +10896,7 @@ snapshots:
       '@triplit/client': 1.0.50(better-sqlite3@12.11.1)(typescript@7.0.2)
       '@triplit/react': 1.0.51(better-sqlite3@12.11.1)(react@19.2.7)(typescript@7.0.2)
       '@wojtekmaj/react-recaptcha-v3': 0.1.4(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
-      better-auth: 1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9)
+      better-auth: 1.6.25(18359ed25fb7609f7efc73ed604a4fbb)
       better-call: 2.0.2(zod@4.4.3)
       bowser: 2.14.1
       class-variance-authority: 0.7.1
@@ -11331,108 +11336,108 @@ snapshots:
 
   '@img/colour@1.1.0': {}
 
-  '@img/sharp-darwin-arm64@0.35.2':
+  '@img/sharp-darwin-arm64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-darwin-arm64': 1.3.1
+      '@img/sharp-libvips-darwin-arm64': 1.3.3
     optional: true
 
-  '@img/sharp-darwin-x64@0.35.2':
+  '@img/sharp-darwin-x64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-darwin-x64': 1.3.1
+      '@img/sharp-libvips-darwin-x64': 1.3.3
     optional: true
 
-  '@img/sharp-freebsd-wasm32@0.35.2':
+  '@img/sharp-freebsd-wasm32@0.35.4':
     dependencies:
-      '@img/sharp-wasm32': 0.35.2
+      '@img/sharp-wasm32': 0.35.4
     optional: true
 
-  '@img/sharp-libvips-darwin-arm64@1.3.1':
+  '@img/sharp-libvips-darwin-arm64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-darwin-x64@1.3.1':
+  '@img/sharp-libvips-darwin-x64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-arm64@1.3.1':
+  '@img/sharp-libvips-linux-arm64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-arm@1.3.1':
+  '@img/sharp-libvips-linux-arm@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-ppc64@1.3.1':
+  '@img/sharp-libvips-linux-ppc64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-riscv64@1.3.1':
+  '@img/sharp-libvips-linux-riscv64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-s390x@1.3.1':
+  '@img/sharp-libvips-linux-s390x@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linux-x64@1.3.1':
+  '@img/sharp-libvips-linux-x64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linuxmusl-arm64@1.3.1':
+  '@img/sharp-libvips-linuxmusl-arm64@1.3.3':
     optional: true
 
-  '@img/sharp-libvips-linuxmusl-x64@1.3.1':
+  '@img/sharp-libvips-linuxmusl-x64@1.3.3':
     optional: true
 
-  '@img/sharp-linux-arm64@0.35.2':
+  '@img/sharp-linux-arm64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-arm64': 1.3.1
+      '@img/sharp-libvips-linux-arm64': 1.3.3
     optional: true
 
-  '@img/sharp-linux-arm@0.35.2':
+  '@img/sharp-linux-arm@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-arm': 1.3.1
+      '@img/sharp-libvips-linux-arm': 1.3.3
     optional: true
 
-  '@img/sharp-linux-ppc64@0.35.2':
+  '@img/sharp-linux-ppc64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-ppc64': 1.3.1
+      '@img/sharp-libvips-linux-ppc64': 1.3.3
     optional: true
 
-  '@img/sharp-linux-riscv64@0.35.2':
+  '@img/sharp-linux-riscv64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-riscv64': 1.3.1
+      '@img/sharp-libvips-linux-riscv64': 1.3.3
     optional: true
 
-  '@img/sharp-linux-s390x@0.35.2':
+  '@img/sharp-linux-s390x@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-s390x': 1.3.1
+      '@img/sharp-libvips-linux-s390x': 1.3.3
     optional: true
 
-  '@img/sharp-linux-x64@0.35.2':
+  '@img/sharp-linux-x64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linux-x64': 1.3.1
+      '@img/sharp-libvips-linux-x64': 1.3.3
     optional: true
 
-  '@img/sharp-linuxmusl-arm64@0.35.2':
+  '@img/sharp-linuxmusl-arm64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linuxmusl-arm64': 1.3.1
+      '@img/sharp-libvips-linuxmusl-arm64': 1.3.3
     optional: true
 
-  '@img/sharp-linuxmusl-x64@0.35.2':
+  '@img/sharp-linuxmusl-x64@0.35.4':
     optionalDependencies:
-      '@img/sharp-libvips-linuxmusl-x64': 1.3.1
+      '@img/sharp-libvips-linuxmusl-x64': 1.3.3
     optional: true
 
-  '@img/sharp-wasm32@0.35.2':
+  '@img/sharp-wasm32@0.35.4':
     dependencies:
       '@emnapi/runtime': 1.11.3
     optional: true
 
-  '@img/sharp-webcontainers-wasm32@0.35.2':
+  '@img/sharp-webcontainers-wasm32@0.35.4':
     dependencies:
-      '@img/sharp-wasm32': 0.35.2
+      '@img/sharp-wasm32': 0.35.4
     optional: true
 
-  '@img/sharp-win32-arm64@0.35.2':
+  '@img/sharp-win32-arm64@0.35.4':
     optional: true
 
-  '@img/sharp-win32-ia32@0.35.2':
+  '@img/sharp-win32-ia32@0.35.4':
     optional: true
 
-  '@img/sharp-win32-x64@0.35.2':
+  '@img/sharp-win32-x64@0.35.4':
     optional: true
 
   '@inquirer/ansi@1.0.2':
@@ -14146,7 +14151,7 @@ snapshots:
       '@sentry/replay': 10.70.0
       '@sentry/replay-canvas': 10.70.0
 
-  '@sentry/bundler-plugins@10.70.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@sentry/bundler-plugins@10.70.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@sentry/cli': 2.58.6(supports-color@10.2.2)
@@ -14157,7 +14162,7 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       rollup: 4.62.2
-      webpack: 5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)
+      webpack: 5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -14206,7 +14211,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@sentry/cloudflare@10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1))':
+  '@sentry/cloudflare@10.70.0(@cloudflare/workers-types@5.20260816.1)(supports-color@10.2.2)(wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0))':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@sentry/core': 10.70.0
@@ -14214,7 +14219,7 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       '@cloudflare/workers-types': 5.20260816.1
-      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)
+      wrangler: 4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -14292,7 +14297,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@sentry/tanstackstart-react@10.70.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.220.0(@opentelemetry/api@1.9.1))(react@19.2.7)(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@sentry/tanstackstart-react@10.70.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.220.0(@opentelemetry/api@1.9.1))(react@19.2.7)(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
       '@opentelemetry/api': 1.9.1
       '@sentry/browser-utils': 10.70.0
@@ -14300,7 +14305,7 @@ snapshots:
       '@sentry/core': 10.70.0
       '@sentry/node': 10.70.0(@opentelemetry/core@2.10.0(@opentelemetry/api@1.9.1))(@opentelemetry/exporter-trace-otlp-http@0.220.0(@opentelemetry/api@1.9.1))(supports-color@10.2.2)
       '@sentry/react': 10.70.0(react@19.2.7)
-      '@sentry/vite-plugin': 5.4.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@sentry/vite-plugin': 5.4.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
     transitivePeerDependencies:
       - '@opentelemetry/core'
       - '@opentelemetry/exporter-trace-otlp-http'
@@ -14310,9 +14315,9 @@ snapshots:
       - supports-color
       - webpack
 
-  '@sentry/vite-plugin@5.4.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@sentry/vite-plugin@5.4.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
-      '@sentry/bundler-plugins': 10.70.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@sentry/bundler-plugins': 10.70.0(rollup@4.62.2)(supports-color@10.2.2)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
     transitivePeerDependencies:
       - encoding
       - rollup
@@ -14762,14 +14767,14 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@tanstack/react-start-rsc@0.1.48(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@tanstack/react-start-rsc@0.1.48(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
       '@tanstack/react-router': 1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@tanstack/router-core': 1.171.27
       '@tanstack/router-utils': 1.162.2(supports-color@10.2.2)
       '@tanstack/start-client-core': 1.170.27
       '@tanstack/start-fn-stubs': 1.162.0
-      '@tanstack/start-plugin-core': 1.171.39(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@tanstack/start-plugin-core': 1.171.39(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       '@tanstack/start-storage-context': 1.167.29
       pathe: 2.0.3
       react: 19.2.7
@@ -14800,15 +14805,15 @@ snapshots:
       - '@types/react'
       - crossws
 
-  '@tanstack/react-start@1.168.49(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@tanstack/react-start@1.168.49(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
       '@tanstack/react-router': 1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@tanstack/react-start-client': 1.168.30(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
-      '@tanstack/react-start-rsc': 0.1.48(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@tanstack/react-start-rsc': 0.1.48(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       '@tanstack/react-start-server': 1.167.37(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       '@tanstack/router-utils': 1.162.2(supports-color@10.2.2)
       '@tanstack/start-client-core': 1.170.27
-      '@tanstack/start-plugin-core': 1.171.39(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@tanstack/start-plugin-core': 1.171.39(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       '@tanstack/start-server-core': 1.169.31(crossws@0.4.4(srvx@0.11.22))
       pathe: 2.0.3
       react: 19.2.7
@@ -14891,7 +14896,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tanstack/router-plugin@1.168.35(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@tanstack/router-plugin@1.168.35(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/template': 7.29.7
@@ -14900,12 +14905,12 @@ snapshots:
       '@tanstack/router-generator': 1.167.33(supports-color@10.2.2)
       '@tanstack/router-utils': 1.162.2(supports-color@10.2.2)
       chokidar: 5.0.0
-      unplugin: 3.3.0(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      unplugin: 3.3.0(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       zod: 4.4.3
     optionalDependencies:
       '@tanstack/react-router': 1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)
       vite: 8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
-      webpack: 5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)
+      webpack: 5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rspack/core'
@@ -14943,14 +14948,14 @@ snapshots:
 
   '@tanstack/start-fn-stubs@1.162.0': {}
 
-  '@tanstack/start-plugin-core@1.171.39(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))':
+  '@tanstack/start-plugin-core@1.171.39(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))':
     dependencies:
       '@babel/code-frame': 7.27.1
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/types': 7.29.8
       '@tanstack/router-core': 1.171.27
       '@tanstack/router-generator': 1.167.33(supports-color@10.2.2)
-      '@tanstack/router-plugin': 1.168.35(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@tanstack/router-plugin': 1.168.35(@tanstack/react-router@1.170.32(@types/react@19.2.17)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7))(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       '@tanstack/router-utils': 1.162.2(supports-color@10.2.2)
       '@tanstack/start-server-core': 1.169.31(crossws@0.4.4(srvx@0.11.22))
       exsolve: 1.1.1
@@ -15653,7 +15658,7 @@ snapshots:
 
   basic-auth@3.0.0: {}
 
-  better-auth@1.6.25(fb02f0102d07c1a9ec4bbc9b66cbc0c9):
+  better-auth@1.6.25(18359ed25fb7609f7efc73ed604a4fbb):
     dependencies:
       '@better-auth/core': 1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0)
       '@better-auth/drizzle-adapter': 1.6.25(@better-auth/core@1.6.25(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260816.1)(@opentelemetry/api@1.9.1)(better-call@1.3.7(zod@4.4.3))(jose@6.2.8)(kysely@0.29.3)(nanostores@1.4.0))(@better-auth/utils@0.4.2)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2)))
@@ -15674,7 +15679,7 @@ snapshots:
       zod: 4.4.3
     optionalDependencies:
       '@prisma/client': 6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2)
-      '@tanstack/react-start': 1.168.49(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      '@tanstack/react-start': 1.168.49(@types/react@19.2.17)(crossws@0.4.4(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.7(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(rolldown@1.2.3)(rollup@4.62.2)(supports-color@10.2.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       better-sqlite3: 12.11.1
       drizzle-kit: 0.31.10
       drizzle-orm: 0.45.2(@cloudflare/workers-types@5.20260816.1)(@electric-sql/pglite@0.5.7)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.1)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))(typescript@7.0.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(kysely@0.29.3)(pg@8.23.0)(prisma@6.17.0(magicast@0.3.5)(typescript@7.0.2))
@@ -16014,7 +16019,7 @@ snapshots:
     dependencies:
       env-paths: 2.2.1
       import-fresh: 3.3.1
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
       parse-json: 5.2.0
     optionalDependencies:
       typescript: 7.0.2
@@ -17077,7 +17082,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.1:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 
@@ -17748,27 +17753,29 @@ snapshots:
 
   min-indent@1.0.1: {}
 
-  miniflare@5.20260801.1-alpha:
+  miniflare@5.20260801.1-alpha(@types/node@26.2.0):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
-      sharp: 0.35.2
+      sharp: 0.35.4(@types/node@26.2.0)
       undici: 7.29.0
       workerd: 1.20260801.1
       ws: 8.21.0
       youch: 4.1.0-beta.10
     transitivePeerDependencies:
+      - '@types/node'
       - bufferutil
       - utf-8-validate
 
-  miniflare@5.20260907.0-alpha:
+  miniflare@5.20260907.0-alpha(@types/node@26.2.0):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
-      sharp: 0.35.2
+      sharp: 0.35.4(@types/node@26.2.0)
       undici: 7.29.0
       workerd: 1.20260907.1
       ws: 8.21.0
       youch: 4.1.0-beta.10
     transitivePeerDependencies:
+      - '@types/node'
       - bufferutil
       - utf-8-validate
 
@@ -17786,19 +17793,21 @@ snapshots:
 
   minimist@1.2.8: {}
 
-  minimizer-webpack-plugin@5.10.0(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)):
+  minimizer-webpack-plugin@5.10.0(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
+      sharp: 0.35.4(@types/node@26.2.0)
       terser: 5.51.2
-      webpack: 5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)
+      webpack: 5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)
     optionalDependencies:
       '@swc/core': 1.15.43
       esbuild: 0.28.1
       lightningcss: 1.33.0
       postcss: 8.5.25
-      sharp: 0.35.2
+    transitivePeerDependencies:
+      - '@types/node'
     optional: true
 
   minipass@7.1.3: {}
@@ -19016,37 +19025,38 @@ snapshots:
       - supports-color
       - typescript
 
-  sharp@0.35.2:
+  sharp@0.35.4(@types/node@26.2.0):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
       semver: 7.8.5
     optionalDependencies:
-      '@img/sharp-darwin-arm64': 0.35.2
-      '@img/sharp-darwin-x64': 0.35.2
-      '@img/sharp-freebsd-wasm32': 0.35.2
-      '@img/sharp-libvips-darwin-arm64': 1.3.1
-      '@img/sharp-libvips-darwin-x64': 1.3.1
-      '@img/sharp-libvips-linux-arm': 1.3.1
-      '@img/sharp-libvips-linux-arm64': 1.3.1
-      '@img/sharp-libvips-linux-ppc64': 1.3.1
-      '@img/sharp-libvips-linux-riscv64': 1.3.1
-      '@img/sharp-libvips-linux-s390x': 1.3.1
-      '@img/sharp-libvips-linux-x64': 1.3.1
-      '@img/sharp-libvips-linuxmusl-arm64': 1.3.1
-      '@img/sharp-libvips-linuxmusl-x64': 1.3.1
-      '@img/sharp-linux-arm': 0.35.2
-      '@img/sharp-linux-arm64': 0.35.2
-      '@img/sharp-linux-ppc64': 0.35.2
-      '@img/sharp-linux-riscv64': 0.35.2
-      '@img/sharp-linux-s390x': 0.35.2
-      '@img/sharp-linux-x64': 0.35.2
-      '@img/sharp-linuxmusl-arm64': 0.35.2
-      '@img/sharp-linuxmusl-x64': 0.35.2
-      '@img/sharp-webcontainers-wasm32': 0.35.2
-      '@img/sharp-win32-arm64': 0.35.2
-      '@img/sharp-win32-ia32': 0.35.2
-      '@img/sharp-win32-x64': 0.35.2
+      '@img/sharp-darwin-arm64': 0.35.4
+      '@img/sharp-darwin-x64': 0.35.4
+      '@img/sharp-freebsd-wasm32': 0.35.4
+      '@img/sharp-libvips-darwin-arm64': 1.3.3
+      '@img/sharp-libvips-darwin-x64': 1.3.3
+      '@img/sharp-libvips-linux-arm': 1.3.3
+      '@img/sharp-libvips-linux-arm64': 1.3.3
+      '@img/sharp-libvips-linux-ppc64': 1.3.3
+      '@img/sharp-libvips-linux-riscv64': 1.3.3
+      '@img/sharp-libvips-linux-s390x': 1.3.3
+      '@img/sharp-libvips-linux-x64': 1.3.3
+      '@img/sharp-libvips-linuxmusl-arm64': 1.3.3
+      '@img/sharp-libvips-linuxmusl-x64': 1.3.3
+      '@img/sharp-linux-arm': 0.35.4
+      '@img/sharp-linux-arm64': 0.35.4
+      '@img/sharp-linux-ppc64': 0.35.4
+      '@img/sharp-linux-riscv64': 0.35.4
+      '@img/sharp-linux-s390x': 0.35.4
+      '@img/sharp-linux-x64': 0.35.4
+      '@img/sharp-linuxmusl-arm64': 0.35.4
+      '@img/sharp-linuxmusl-x64': 0.35.4
+      '@img/sharp-webcontainers-wasm32': 0.35.4
+      '@img/sharp-win32-arm64': 0.35.4
+      '@img/sharp-win32-ia32': 0.35.4
+      '@img/sharp-win32-x64': 0.35.4
+      '@types/node': 26.2.0
 
   shebang-command@2.0.0:
     dependencies:
@@ -19467,7 +19477,7 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-  unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)):
+  unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.3)(rollup@4.62.2)(vite@8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0))(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
       picomatch: 4.0.5
@@ -19477,7 +19487,7 @@ snapshots:
       rolldown: 1.2.3
       rollup: 4.62.2
       vite: 8.2.0(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.1)(yaml@2.9.0)
-      webpack: 5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)
+      webpack: 5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)
 
   until-async@3.0.2:
     optional: true
@@ -19670,7 +19680,7 @@ snapshots:
 
   webpack-virtual-modules@0.6.2: {}
 
-  webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2):
+  webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25):
     dependencies:
       '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
@@ -19685,7 +19695,7 @@ snapshots:
       events: 3.3.0
       graceful-fs: 4.2.11
       mime-db: 1.54.0
-      minimizer-webpack-plugin: 5.10.0(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2)(webpack@5.110.3(@swc/core@1.15.43)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(sharp@0.35.2))
+      minimizer-webpack-plugin: 5.10.0(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25)(webpack@5.110.3(@swc/core@1.15.43)(@types/node@26.2.0)(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.25))
       neo-async: 2.6.2
       schema-utils: 4.3.3
       tapable: 2.3.3
@@ -19697,6 +19707,7 @@ snapshots:
       - '@swc/core'
       - '@swc/css'
       - '@swc/html'
+      - '@types/node'
       - clean-css
       - cssnano
       - csso
@@ -19705,7 +19716,6 @@ snapshots:
       - imagemin
       - lightningcss
       - postcss
-      - sharp
       - svgo
       - uglify-js
     optional: true
@@ -19768,13 +19778,13 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20260907.1
       '@cloudflare/workerd-windows-64': 1.20260907.1
 
-  wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1):
+  wrangler@4.120.0(patch_hash=c1aa6a67cedc1d27b8ec6e99bf1ce7fedf26b721f2d78d061ee978dc7b355a85)(@cloudflare/workers-types@5.20260816.1)(@types/node@26.2.0):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.1(unenv@2.0.0-rc.24)(workerd@1.20260801.1)
       blake3-wasm: 2.1.5
       esbuild: 0.28.1
-      miniflare: 5.20260801.1-alpha
+      miniflare: 5.20260801.1-alpha(@types/node@26.2.0)
       path-to-regexp: 6.3.0
       unenv: 2.0.0-rc.24
       workerd: 1.20260801.1
@@ -19782,6 +19792,7 @@ snapshots:
       '@cloudflare/workers-types': 5.20260816.1
       fsevents: 2.3.3
     transitivePeerDependencies:
+      - '@types/node'
       - bufferutil
       - utf-8-validate
 
@@ -19831,7 +19842,7 @@ snapshots:
       '@oozcitak/dom': 2.0.2
       '@oozcitak/infra': 2.0.2
       '@oozcitak/util': 10.0.0
-      js-yaml: 4.3.1
+      js-yaml: 4.3.2
 
   xmlchars@2.2.0: {}
 

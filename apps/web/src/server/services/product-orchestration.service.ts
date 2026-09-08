@@ -189,7 +189,10 @@ export async function applyUpcDataWithSideEffects(
   ) {
     data.manufacturer = lookupManufacturer;
   }
-  if (current.price == null && lookup?.priceDollars != null) {
+  // Product.price is an intentional replacement-price override. A known
+  // Expense-derived price is the household's actual purchase history, so a
+  // provider's advisory current offer must not displace it.
+  if (current.pricing.effectivePrice == null && lookup?.priceDollars != null) {
     data.price = lookup.priceDollars;
   }
 

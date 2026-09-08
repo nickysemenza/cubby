@@ -958,10 +958,11 @@ const DECLARED_SECTIONS = [
   }),
   section({
     id: "unlinked-exit-expenses",
-    label: "Sold without a product",
+    label: "Productless disposal lines",
     select: (p) => p.unlinkedExitExpenses,
     problemKeys: ["unlinkedExitExpenses"],
     entity: "expense",
+    coverage: { keys: ["unlinkedExitExpenses"] },
     renderItem: (row) => ({
       title: row.name,
       subtitle: unlinkedExitSubtitle(row),
@@ -991,6 +992,7 @@ const DECLARED_SECTIONS = [
     problemKeys: ["negativeExpectedQuantity"],
     totalKey: "negativeExpectedQuantity",
     entity: "product",
+    coverage: { keys: ["negativeExpectedQuantity"] },
     renderItem: (row) => ({
       title: row.name,
       subtitle: negativeExpectedSubtitle(row),

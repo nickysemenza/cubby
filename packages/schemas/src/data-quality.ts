@@ -10,6 +10,7 @@ export const purchaseDataCheck = z.enum([
   "unpriced_expense",
   "paperwork_mismatch",
   "settlement_reference",
+  "settlement_mismatch",
 ]);
 export type PurchaseDataCheck = z.infer<typeof purchaseDataCheck>;
 
@@ -82,6 +83,7 @@ export const dataCheckFacet = {
   unpriced_expense: "ledger",
   paperwork_mismatch: "paperwork",
   settlement_reference: "settlement",
+  settlement_mismatch: "settlement",
   product_manufacturer: "identity",
   product_category: "identity",
   product_model: "identity",
@@ -95,6 +97,7 @@ export const dataCheckFacet = {
 
 export const defectDataChecks = [
   "paperwork_mismatch",
+  "settlement_mismatch",
   "duplicate_external_id",
 ] as const satisfies readonly DataCheck[];
 
