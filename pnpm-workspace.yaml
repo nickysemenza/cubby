@@ -10,7 +10,10 @@ allowBuilds:
   '@prisma/engines': false
   '@sentry/cli': false
   '@swc/core': false
-  better-sqlite3: true
+  better-sqlite3@12.11.1: true
+  # v13 bundles native binaries; binding.gyp otherwise triggers an implicit
+  # node-gyp rebuild even though no install script is needed.
+  better-sqlite3@13.0.1: false
   core-js: false
   esbuild: true
   msw: false
