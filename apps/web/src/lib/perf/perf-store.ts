@@ -159,6 +159,7 @@ export function recordWasmExec(
   method: string,
   durationMs: number,
   threw = false,
+  executionMode: "sync" | "async" = "sync",
 ): void {
   if (paused) return;
   const s = wasm.get(method) ?? emptyWasm();
@@ -168,7 +169,7 @@ export function recordWasmExec(
   if (durationMs > s.maxMs) s.maxMs = durationMs;
   if (threw) s.throws += 1;
   wasm.set(method, s);
-  recordSlow("wasm", method, durationMs);
+  if (executionMode === "sync") recordSlow("wasm", method, durationMs);
 }
 
 export function recordWasmCache(

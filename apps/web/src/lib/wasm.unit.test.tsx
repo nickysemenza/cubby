@@ -28,4 +28,20 @@ describe("WASM under the jsdom test environment", () => {
     // imports — `columnHelpers` reaches WASM through it, via `cell-data`.
     expect(wasm.parse_ingredient("3 tbsp butter").name).toBe("butter");
   });
+
+  it("preserves authored Unicode through the shared Decomposition projection", () => {
+    const source = "½ cup jalapeño, émincé";
+    const result = wasm.decompose_ingredient(source);
+
+    expect(result.source).toBe(source);
+    expect(result.segments.map((segment) => segment.text).join("")).toBe(
+      source,
+    );
+    expect(result.segments.some((segment) => segment.field === "amount")).toBe(
+      true,
+    );
+    expect(result.segments.some((segment) => segment.field === "name")).toBe(
+      true,
+    );
+  });
 });
