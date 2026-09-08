@@ -70,7 +70,6 @@ credentials/URLs, and reconnect clients. Tasks, Meals, accounts, and audit data
 remain intact.
 
 After confirming the deployed Worker no longer references either table and
-calendar setup/create/edit/refresh work, apply
-[`drop-calendar-metadata.sql`](../scripts/sql/drop-calendar-metadata.sql) to the
-production database as one coordinated schema operation. It drops only
-`CalendarResourceIdentity` and `CalendarWriteReceipt`, without `CASCADE`.
+calendar setup/create/edit/refresh work, use the normal Drizzle `db:push`
+workflow to apply the removed `CalendarResourceIdentity` and
+`CalendarWriteReceipt` schema declarations. No separate SQL cleanup is needed.
