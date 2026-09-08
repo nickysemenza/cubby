@@ -475,7 +475,9 @@ Rules:
 10. The operation graph must be acyclic. Every source and operation must lead to a listed terminal output; listed outputs cannot feed another operation.
 11. Use unique lowercase kebab-case node IDs beginning with a letter.
 12. Every source object must include all provider fields. For a "usage" source, set label to null and instructionRefs to []; for an "unlisted" source, set usageId and role to null.
-13. Return schemaVersion 1.`,
+13. Return a walkthrough with a compact overview and a handful of meaningful ordered stops. Combine consecutive operations where that helps the cook. Operations that cite the same authored instruction must be in the same stop. Every operation must appear exactly once across stop operationIds. Stops must order dependent operations after their dependencies, including operations in the same stop.
+14. The walkthrough overview, titles, and explanations are supplementary only. Ground them in the referenced operations and their cited instructions; do not invent or repeat amounts, temperatures, timings, substitutions, or cooking directions.
+15. Return schemaVersion 1.`,
       ],
       messages: [
         {

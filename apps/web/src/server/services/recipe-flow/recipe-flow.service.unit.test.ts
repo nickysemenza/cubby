@@ -82,6 +82,17 @@ const validPlan = (): RecipeFlowPlan => ({
     },
   ],
   outputOperationIds: ["toast"],
+  walkthrough: {
+    overview: "Toast the bread.",
+    stops: [
+      {
+        id: "toast-bread",
+        title: "Toast the bread",
+        explanation: "This is the recipe's only cooking operation.",
+        operationIds: ["toast"],
+      },
+    ],
+  },
 });
 
 const validCandidate = (): RecipeFlowAiPlan => ({
@@ -104,7 +115,7 @@ const artifact = (fingerprint: string): RecipeFlowArtifact => ({
   warnings: [],
   contentFingerprint: fingerprint,
   model: "claude-haiku-4-5",
-  promptVersion: "2026-07-29.1",
+  promptVersion: "2026-09-07.1",
   generatedAt: new Date("2026-07-29T12:00:00Z"),
 });
 
@@ -192,6 +203,17 @@ describe("recipe-flow service", () => {
     invalid.sources = [];
     invalid.operations[0]!.inputs = [{ kind: "source", id: "missing-bread" }];
     memory.generated.push(invalid, validCandidate());
+
+    await expect(
+      generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
+    ).resolves.toMatchObject({ model: "claude-sonnet-4-6" });
+    expect(memory.repairRequests).toHaveLength(1);
+  });
+
+  it("repairs a newly generated plan that omits its walkthrough", async () => {
+    const missingWalkthrough = validCandidate();
+    delete missingWalkthrough.walkthrough;
+    memory.generated.push(missingWalkthrough, validCandidate());
 
     await expect(
       generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),

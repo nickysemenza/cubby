@@ -157,6 +157,13 @@ function assessRecipeFlowCandidate(
     };
   }
 
+  if (!normalized.data.walkthrough) {
+    return {
+      ok: false,
+      issues: ["generated recipe flow is missing its walkthrough"],
+    };
+  }
+
   const validation = validateRecipeFlowPlan(recipe, normalized.data);
   return validation.ok
     ? {

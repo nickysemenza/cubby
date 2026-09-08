@@ -48,6 +48,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Side-by-side recipe comparison
 - Cost rollups via product unit mappings
 - Prep-sheet, nested (spec), ingredient × component matrix, and AI-assembled step-flow views, plus a print/export route
+- Recipe flows open as guided walkthroughs: ordered stops pair scaled ingredients with original instructions and expandable AI explanations; map and table layouts remain available
 - Client-side scaling (multiplier / target weight / anchor ingredient)
 
 **Cookbooks**

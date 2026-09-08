@@ -39,7 +39,7 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = {
 export const RECIPE_FLOW_PRIMARY_FEATURE = {
   feature: "recipe-flow",
   model: "claude-haiku-4-5",
-  promptVersion: "2026-07-29.1",
+  promptVersion: "2026-09-07.1",
   schema: recipeFlowArtifactSchema,
 } satisfies AiFeature<RecipeFlowArtifact>;
 

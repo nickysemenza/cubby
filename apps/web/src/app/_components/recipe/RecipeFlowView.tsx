@@ -6,6 +6,7 @@ import type {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  BookOpen,
   GitBranch,
   RefreshCw,
   Sparkles,
@@ -33,15 +34,16 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
-import { useIsMobile } from "~/hooks/useMobile";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { CopyJsonButton } from "./copy-debug-button";
 import { RecipeFlowMap, RecipeFlowTable } from "./RecipeFlowRenderers";
+import { RecipeWalkthrough } from "./RecipeWalkthrough";
 
-export type RecipeFlowLayoutMode = "map" | "table";
+export type RecipeFlowLayoutMode = "walkthrough" | "map" | "table";
 
 const FLOW_LAYOUT_OPTIONS: ViewSwitcherOption<RecipeFlowLayoutMode>[] = [
+  { value: "walkthrough", label: "Walkthrough", icon: BookOpen },
   { value: "map", label: "Map", icon: GitBranch },
   { value: "table", label: "Table", icon: Table2 },
 ];
@@ -130,7 +132,9 @@ function FlowStatus({
           <RefreshCw className={generating ? "animate-spin" : ""} />
           <AlertTitle>Recipe changed</AlertTitle>
           <AlertDescription>
-            Showing the previous flow while Cubby generates an updated one.
+            {generating
+              ? "Generating an updated flow from the current recipe."
+              : "Regenerate the flow to use the latest recipe instructions."}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -235,7 +239,7 @@ function FlowPlan({
         error={generationError}
       />
 
-      {artifact.plan.setup.length > 0 && (
+      {layout !== "walkthrough" && artifact.plan.setup.length > 0 && (
         <div className="grid gap-1 border-b px-4 py-2 sm:grid-cols-2">
           {artifact.plan.setup.map((setup) => (
             <div
@@ -278,7 +282,38 @@ function FlowPlan({
       )}
 
       <div className="p-4">
-        {layout === "map" ? (
+        {layout === "walkthrough" ? (
+          stale ? (
+            <p className="text-sm text-muted-foreground">
+              The recipe has changed.{" "}
+              {generating
+                ? "Updating the walkthrough…"
+                : "Regenerate the flow to read an updated walkthrough."}
+            </p>
+          ) : artifact.plan.walkthrough ? (
+            <RecipeWalkthrough
+              key={`${recipe.id}:${artifact.contentFingerprint}:${artifact.generatedAt.toISOString()}`}
+              recipe={recipe}
+              plan={artifact.plan}
+            />
+          ) : (
+            <div className="grid justify-items-start gap-3 py-4">
+              <p className="max-w-prose text-sm leading-relaxed">
+                Turn this recipe flow into a guided walkthrough, with
+                ingredients beside the original instructions and explanations
+                along the way.
+              </p>
+              <Button
+                type="button"
+                onClick={onRegenerate}
+                disabled={generating}
+              >
+                <BookOpen />
+                Generate walkthrough
+              </Button>
+            </div>
+          )
+        ) : layout === "map" ? (
           <RecipeFlowMap
             recipe={recipe}
             plan={artifact.plan}
@@ -433,10 +468,9 @@ export function RecipeFlowView({
   onLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
   onReadyChange?: (ready: boolean) => void;
 }) {
-  const isMobile = useIsMobile();
   const [internalLayout, setInternalLayout] =
-    useState<RecipeFlowLayoutMode>("table");
-  const layout = controlledLayout ?? (isMobile ? "map" : internalLayout);
+    useState<RecipeFlowLayoutMode>("walkthrough");
+  const layout = controlledLayout ?? internalLayout;
   const setLayout = onLayoutChange ?? setInternalLayout;
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(
     null,

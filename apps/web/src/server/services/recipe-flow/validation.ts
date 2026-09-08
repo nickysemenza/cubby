@@ -201,6 +201,112 @@ const validateOperationCycles = (plan: RecipeFlowPlan, issues: string[]) => {
   for (const operation of plan.operations) visitOperation(operation.id);
 };
 
+const validateWalkthrough = (plan: RecipeFlowPlan, issues: string[]) => {
+  const walkthrough = plan.walkthrough;
+  if (!walkthrough) return;
+
+  const operationIds = new Set(
+    plan.operations.map((operation) => operation.id),
+  );
+  const stopIds = new Set<string>();
+  const positions = new Map<string, number>();
+  let position = 0;
+  for (const stop of walkthrough.stops) {
+    if (stopIds.has(stop.id)) {
+      issues.push(`walkthrough stop ${stop.id} appears more than once`);
+    }
+    stopIds.add(stop.id);
+    for (const operationId of stop.operationIds) {
+      if (!operationIds.has(operationId)) {
+        issues.push(
+          `walkthrough stop ${stop.id} references unknown operation ${operationId}`,
+        );
+        continue;
+      }
+      if (positions.has(operationId)) {
+        issues.push(
+          `walkthrough operation ${operationId} appears more than once`,
+        );
+        continue;
+      }
+      positions.set(operationId, position++);
+    }
+  }
+  for (const operationId of operationIds) {
+    if (!positions.has(operationId)) {
+      issues.push(`walkthrough omits operation ${operationId}`);
+    }
+  }
+  for (const operation of plan.operations) {
+    const operationPosition = positions.get(operation.id);
+    if (operationPosition === undefined) continue;
+    for (const input of operation.inputs) {
+      if (input.kind !== "operation") continue;
+      const inputPosition = positions.get(input.id);
+      if (inputPosition === undefined || inputPosition < operationPosition)
+        continue;
+      issues.push(
+        `walkthrough orders operation ${operation.id} before dependency ${input.id}`,
+      );
+    }
+  }
+
+  validateWalkthroughInstructionGrouping(plan, issues);
+};
+
+const validateWalkthroughInstructionGrouping = (
+  plan: RecipeFlowPlan,
+  issues: string[],
+) => {
+  if (!plan.walkthrough) return;
+  const operationById = new Map(
+    plan.operations.map((operation) => [operation.id, operation]),
+  );
+  const instructionStops = new Map<string, string>();
+  for (const stop of plan.walkthrough.stops) {
+    for (const operationId of stop.operationIds) {
+      const operation = operationById.get(operationId);
+      if (!operation) continue;
+      for (const ref of operation.instructionRefs) {
+        const key = instructionRefKey(ref);
+        const previousStopId = instructionStops.get(key);
+        if (previousStopId && previousStopId !== stop.id) {
+          issues.push(
+            `walkthrough separates instruction ${key} across stops ${previousStopId} and ${stop.id}`,
+          );
+          continue;
+        }
+        instructionStops.set(key, stop.id);
+      }
+    }
+  }
+};
+
+const validateWalkthroughInstructionCoverage = (
+  recipe: RecipeOut,
+  plan: RecipeFlowPlan,
+  issues: string[],
+) => {
+  if (!plan.walkthrough) return;
+
+  const coveredInstructions = new Set<string>();
+  for (const node of [...plan.setup, ...plan.operations]) {
+    for (const ref of node.instructionRefs) {
+      coveredInstructions.add(instructionRefKey(ref));
+    }
+  }
+  for (const section of recipe.sections) {
+    section.instructions.forEach((instruction, instructionIndex) => {
+      if (!instruction.instruction.trim()) return;
+      const ref = { sectionId: section.id, instructionIndex };
+      if (coveredInstructions.has(instructionRefKey(ref))) return;
+      issues.push(
+        `walkthrough omits instruction ${instructionIndex + 1} in ${section.name ?? "the recipe"}`,
+      );
+    });
+  }
+};
+
 const reachesOutput = (
   start: string,
   outputIds: Set<string>,
@@ -282,6 +388,8 @@ export function validateRecipeFlowPlan(
   const outgoing = validateOperations(plan, sections, issues);
   const outputIds = validateOutputs(plan, outgoing, issues);
   validateOperationCycles(plan, issues);
+  validateWalkthrough(plan, issues);
+  validateWalkthroughInstructionCoverage(recipe, plan, issues);
   validateReachability(plan, outputIds, outgoing, issues);
   appendCoverageWarnings(recipe, plan, warnings);
   if (plan.outputOperationIds.length > 1) {

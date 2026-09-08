@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
+import { RECIPE_FLOW_PRIMARY_FEATURE } from "../../src/server/ai/features";
 import { fillInput, waitForFormHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-const MODEL = "claude-haiku-4-5";
-const PROMPT_VERSION = "2026-07-29.1";
+const MODEL = RECIPE_FLOW_PRIMARY_FEATURE.model;
+const PROMPT_VERSION = RECIPE_FLOW_PRIMARY_FEATURE.promptVersion;
 
 test.describe("Recipe Flow", () => {
-  test("renders a validated cached flow and opens authored instructions", async ({
+  test("renders a cached walkthrough and retains table instruction details", async ({
     page,
   }) => {
     await page.goto("/recipes/new");
@@ -49,16 +50,17 @@ test.describe("Recipe Flow", () => {
 
       const sectionResult = await pool.query<{
         id: string;
-        instructions: Array<{ instruction: string }>;
+        instructions: Array<{ text: string }>;
         name: string | null;
       }>(
         `SELECT "id", "name", "instructions" FROM "RecipeSection"
          WHERE "recipeId" = $1 AND "deletedAt" IS NULL
-         ORDER BY "sortOrder" ASC NULLS LAST, "createdAt" ASC
-         LIMIT 1`,
+         ORDER BY "sortOrder" ASC NULLS LAST, "createdAt" ASC`,
         [recipeId],
       );
-      const sectionRow = sectionResult.rows[0];
+      const sectionRow = sectionResult.rows.find(
+        (section) => section.instructions.length > 0,
+      );
       if (!sectionRow) throw new Error("Recipe fixture missing");
 
       const fingerprint = createHash("sha256")
@@ -66,19 +68,17 @@ test.describe("Recipe Flow", () => {
           JSON.stringify({
             recipe: {
               title: recipeRow.name,
-              sections: [
-                {
-                  sectionId: sectionRow.id,
-                  name: sectionRow.name,
-                  ingredients: [],
-                  instructions: sectionRow.instructions.map(
-                    (instruction, instructionIndex) => ({
-                      instructionIndex,
-                      text: instruction.instruction,
-                    }),
-                  ),
-                },
-              ],
+              sections: sectionResult.rows.map((section) => ({
+                sectionId: section.id,
+                name: section.name,
+                ingredients: [],
+                instructions: section.instructions.map(
+                  (instruction, instructionIndex) => ({
+                    instructionIndex,
+                    text: instruction.text,
+                  }),
+                ),
+              })),
             },
             guidance: null,
           }),
@@ -111,6 +111,18 @@ test.describe("Recipe Flow", () => {
             },
           ],
           outputOperationIds: ["mix-dough"],
+          walkthrough: {
+            overview: "Bring the dough together, then knead until smooth.",
+            stops: [
+              {
+                id: "dough",
+                title: "Make the dough",
+                explanation:
+                  "The source instruction brings mixing and kneading together in one step.",
+                operationIds: ["mix-dough"],
+              },
+            ],
+          },
         },
         guidance: null,
         warnings: [
@@ -149,6 +161,30 @@ test.describe("Recipe Flow", () => {
     await expect(
       page.getByRole("heading", { name: "E2E Branching Biscuits", level: 2 }),
     ).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByRole("navigation", { name: "Walkthrough stops" }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", {
+          name: "Recipe instructions for Make the dough",
+        })
+        .getByText(
+          "Mix in two tablespoons of water, then knead until smooth.",
+          { exact: true },
+        ),
+    ).toBeVisible();
+    await page
+      .getByText("Why this step · AI explanation", { exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "The source instruction brings mixing and kneading together in one step.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Table view", exact: true }).click();
     await expect(page.getByText("Water", { exact: true })).toBeVisible();
     await expect(page.getByText("Mix dough", { exact: true })).toBeVisible();
     await expect(page.getByText("until smooth", { exact: true })).toBeVisible();
