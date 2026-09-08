@@ -9,7 +9,7 @@ use recipe_epub::{
     EpubMeta, ImageRef, ModelTier, OrchestrationOptions, Usage, build_chunk_request,
     chunk_epub as chunk_epub_internal, cover_image_ref as cover_image_ref_internal,
     epub_metadata as epub_metadata_internal, extract_chunks_with,
-    read_image as read_image_internal, try_extract_chunk_detailed,
+    read_image as read_image_internal, try_extract_chunk_detailed_for_chunk,
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
@@ -257,7 +257,6 @@ pub async fn extract_cookbook(
         move |_index, chunk, tier| {
             let call_chunk = call_chunk.clone();
             async move {
-                let doc_path = chunk.doc_path.clone();
                 let request = build_chunk_request(&chunk);
                 let tool_schema = serde_json::to_string(&request.tool_schema).map_err(|error| {
                     ChunkExtractionFailure::from(EpubError::Proxy(format!(
@@ -275,7 +274,7 @@ pub async fn extract_cookbook(
                 )
                 .map_err(|error| ChunkExtractionFailure::from(EpubError::Proxy(error)))?;
                 let fallback = matches!(tier, ModelTier::Fallback);
-                let driven = try_extract_chunk_detailed(&doc_path, || {
+                let driven = try_extract_chunk_detailed_for_chunk(&chunk, || {
                     call_proxy(&request, fallback, &call_chunk)
                 })
                 .await?;
