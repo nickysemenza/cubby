@@ -2,8 +2,21 @@ import type {
   CalendarFeedDocumentInspection,
   CalendarFeedInspection,
 } from "@cubby/schemas/calendar";
+import type { UserId } from "@cubby/schemas/identifiers";
 
 import type { IcsFeed } from "./ics";
+
+export interface CalendarCredentialState {
+  getCalendarCredential(owner: UserId): Promise<{
+    configured: boolean;
+    username: string;
+    createdAt: string | null;
+  }>;
+  rotateCalendarCredential(
+    owner: UserId,
+  ): Promise<{ username: string; password: string; createdAt: string }>;
+  revokeCalendarCredential(owner: UserId): Promise<void>;
+}
 
 const CALENDAR_FEED_FILENAMES = {
   "meals.ics": "meals",
@@ -22,6 +35,7 @@ export interface StoredCalendarDocument {
 }
 
 export type CalendarFeedReadResult =
+  | { result: "unavailable" }
   | { result: "not_found" }
   | {
       result: "not_modified";
@@ -52,6 +66,16 @@ export interface CalendarFeedState {
 }
 
 export interface CalendarFeedDurableObjectRpc {
+  getCalendarCredential(owner: UserId): Promise<{
+    configured: boolean;
+    username: string;
+    createdAt: string | null;
+  }>;
+  rotateCalendarCredential(
+    owner: UserId,
+    origin: string,
+  ): Promise<{ username: string; password: string; createdAt: string }>;
+  revokeCalendarCredential(owner: UserId): Promise<void>;
   getToken(): Promise<string | null>;
   inspect(origin: string): Promise<CalendarFeedInspection>;
   rotate(origin: string): Promise<string>;

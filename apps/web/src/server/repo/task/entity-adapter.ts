@@ -28,13 +28,16 @@ export const taskEntityAdapter = defineEntityAdapter({
     get: (ctx, id) => getTaskByShortcode(ctx.db, id),
     list: (ctx, filters, sorts, pagination) =>
       taskList(ctx.db, filters, sorts, pagination),
-    create: (ctx, data) => createTask(ctx.db, data, ctx.actorContext),
-    update: (ctx, id, data) => updateTask(ctx.db, id, data, ctx.actorContext),
+    create: (ctx, data) =>
+      createTask(ctx.db, data, ctx.actorContext, ctx.caldavHooks?.task),
+    update: (ctx, id, data) =>
+      updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),
     delete: async (ctx, ids) => {
       const { deletedShortcodes } = await deleteTasks(
         ctx.db,
         ids,
         ctx.actorContext,
+        ctx.caldavHooks?.task,
       );
       return {
         deletedReferences: entityMutationReferences("task", deletedShortcodes),

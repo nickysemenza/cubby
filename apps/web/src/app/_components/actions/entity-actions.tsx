@@ -40,6 +40,7 @@ import { mergeEntityActionDefinitions } from "./merge-entity-actions";
 import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
 import { recipeEntityActionDefinitions } from "./recipe-entity-actions";
 import { specialistLifecycleEntityActionDefinitions } from "./specialist-lifecycle-entity-actions";
+import { trackerEntities } from "./tracker-entities";
 import {
   useCreateProjectFromTasksAction,
   useMarkExpensePurchasedAction,
@@ -48,7 +49,6 @@ import {
   useSetTaskDueDateAction,
   useSetTaskStatusAction,
   useSetTradeEntityAction,
-  trackerEntities,
 } from "./tracker-entity-actions";
 import { useAddToInventoryAction } from "./use-add-to-inventory-action";
 import { useDiscardInventoryAction } from "./use-discard-inventory-action";

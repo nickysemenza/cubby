@@ -338,9 +338,14 @@ const verifyPush = () => {
 
   for (const check of checks) {
     if (check === "all-tests") run("pnpm", ["test:all"]);
-    if (check === "web-tests") run("pnpm", ["test:changed", base]);
-    if (check === "postgres")
-      run("pnpm", full ? ["test:postgres"] : ["test:changed:postgres", base]);
+    if (check === "web-tests") {
+      run("pnpm", ["test:changed", base]);
+      run("pnpm", ["--filter", "@cubby/web", "test:calendar"]);
+    }
+    if (check === "postgres") {
+      run("pnpm", ["test:changed:postgres", base]);
+      run("pnpm", ["--filter", "@cubby/web", "test:calendar:postgres"]);
+    }
     if (check === "e2e") run("pnpm", ["test:e2e"]);
     if (check === "cloudflare")
       run("pnpm", ["--filter", "@cubby/web", "run", "build:cf"]);

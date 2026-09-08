@@ -179,7 +179,7 @@ describe("CollectionAssignmentMatrix mobile projection", () => {
     expect(mobile.queryByText("Product 26")).not.toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Next 25 assignments" }),
+      screen.getByLabelText("Next 25 assignments", { selector: "button" }),
     );
 
     expect(await mobile.findByText("Product 26")).toBeVisible();

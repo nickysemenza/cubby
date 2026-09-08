@@ -19,7 +19,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   meal,
@@ -58,6 +58,24 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { dbMealToAPI } from "./helpers";
 
 type MealMutationResult = { output: MealOut; entityId: MealId };
+
+/**
+ * Narrow transaction hooks for protocol adapters that must record their own
+ * durable operation receipt in the same transaction as Cubby's canonical
+ * mutation. They are deliberately not a general extension point: callers may
+ * observe the row and append data, but the Meal repository remains the only
+ * owner of Meal writes, audit records, and deletion policy.
+ */
+export type MealMutationHooks = {
+  afterCreate?: (
+    tx: DrizzleTransaction,
+    created: { id: MealId; shortcode: string },
+  ) => Promise<void>;
+  beforeUpdate?: (tx: DrizzleTransaction, id: MealId) => Promise<void>;
+  afterUpdate?: (tx: DrizzleTransaction, id: MealId) => Promise<void>;
+  beforeDelete?: (tx: DrizzleTransaction, ids: MealId[]) => Promise<void>;
+  afterDelete?: (tx: DrizzleTransaction, ids: MealId[]) => Promise<void>;
+};
 
 export const MEAL_DELETE_EDGE_POLICY = {
   "MealRecipe.mealId": {
@@ -242,6 +260,7 @@ export const createMealWithEntityId = async (
   db: Database,
   data: MealCreateInput,
   actor: ActorContext,
+  hooks?: MealMutationHooks,
 ): Promise<MealMutationResult> => {
   const id = await withTransaction(db, async (tx) => {
     const mealValues = {
@@ -256,6 +275,7 @@ export const createMealWithEntityId = async (
       Object.assign(mealValues, { mealKind: data.mealKind });
     }
     const created = await insertWithShortcode(tx, "meal", mealValues);
+    await hooks?.afterCreate?.(tx, created);
     if (data.recipes?.length) {
       // `resolveAllOrThrow` returns ids positionally, one per input code, so
       // `recipeIds[i]` pairs with `data.recipes[i]` — the documented zip case.
@@ -300,9 +320,11 @@ export const updateMeal = async (
     mealKind?: MealKind;
   },
   actor: ActorContext,
+  hooks?: MealMutationHooks,
 ): Promise<MealOut> => {
   // Mutation + audit in one transaction so the change is never left unrecorded.
   await withTransaction(db, async (tx) => {
+    await hooks?.beforeUpdate?.(tx, id);
     const mealPatch: typeof data = {};
     if (data.date !== undefined) mealPatch.date = data.date;
     if (data.name !== undefined) mealPatch.name = data.name;
@@ -315,6 +337,7 @@ export const updateMeal = async (
       entityId: id,
       action: "update",
     });
+    await hooks?.afterUpdate?.(tx, id);
   });
   return requireMeal(db, id);
 };
@@ -327,10 +350,12 @@ export const deleteMeals = async (
   db: Database,
   ids: MealId[],
   actor: ActorContext,
+  hooks?: MealMutationHooks,
 ): Promise<{ deleted: number }> => {
   if (ids.length === 0) return { deleted: 0 };
   return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, meal, ids, "Meal");
+    await hooks?.beforeDelete?.(tx, ids);
     const sourceOccurrences = await tx
       .select({ id: mealRecipe.id })
       .from(mealRecipe)
@@ -375,6 +400,7 @@ export const deleteMeals = async (
         },
       ],
     });
+    await hooks?.afterDelete?.(tx, ids);
     return { deleted };
   });
 };

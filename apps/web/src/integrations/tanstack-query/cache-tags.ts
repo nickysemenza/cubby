@@ -158,6 +158,7 @@ export const ripple = {
   connectedApps: exactRippleTags([["oauth", "connectedApps"]]),
   orphanedOAuth: exactRippleTags([["oauth", "orphaned"]]),
   calendarFeed: exactRippleTags([["calendar", "feed"]]),
+  calendarCredential: exactRippleTags([["calendar", "credential"]]),
   calendar: exactRippleTags([["calendar"]]),
   relatednessProduct: exactRippleTags([["relatedness", "product"]]),
   projectOnly: exactRippleTags([["project"]]),
