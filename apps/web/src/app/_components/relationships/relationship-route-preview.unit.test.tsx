@@ -179,6 +179,18 @@ describe("RelationshipRoutePreview", () => {
     await waitFor(() => expect(failure.requestCount()).toBe(2));
   });
 
+  it.each(["cookbook", "usda-food", "vendor"] as const)(
+    "waits for a source ID before observing a %s preview",
+    (entity) => {
+      const { result } = renderHook(
+        () => useRelationshipRouteSource(entity, undefined),
+        { wrapper: harness.wrapper },
+      );
+      expect(result.current).toBeNull();
+      expect(harness.queryClient.isFetching()).toBe(0);
+    },
+  );
+
   it("reads an already-loaded source preview without fetching it", () => {
     harness.queryClient.setQueryData(
       entityPreviewQueryOptions("vendor", sourceId).queryKey,
