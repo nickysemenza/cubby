@@ -136,12 +136,10 @@ showing that seemingly improved compilation would weaken checking. This matches
 the class of failures in [pnpm #9739](https://github.com/pnpm/pnpm/issues/9739).
 All experimental dependency and compiler adjustments were reverted.
 
-Keep pnpm 10 and its existing storage layout until shared-store compatibility
-can pass the complete type/build/test gates without a growing set of local
-workarounds. No Bun migration is justified by this evidence. This patch reduces
-custom orchestration and repeated computation; it does **not** claim a reduction
-in dependency disk allocation. pnpm's existing content-addressed storage and the
-existing shared Cargo target cache remain in use.
+That experiment retained pnpm 10 and its existing layout. The follow-up below
+addresses the missing type dependencies through package metadata rather than
+compiler workarounds. These original measurements remain historical; they did
+not demonstrate dependency disk savings or justify a Bun migration.
 
 ### Retained patch validation (2026-09-07)
 
@@ -180,3 +178,123 @@ successfully. The full verifier is **not green**; targeted successes do not
 replace its failed aggregate result. Failed Nx tasks returned nonzero and were
 not cached. A separate hook probe verified that pre-commit propagates a failing
 `pnpm check` exit status.
+
+
+## Worktree setup follow-up (September 7, 2026)
+
+The failed setup was a separate correctness problem: a global Cargo path patch
+selected an ingredient-parser checkout older than Cubby's required API. Pulling
+that checkout resolved the Rust imports; changing the installer would not have
+fixed those missing APIs.
+
+The subsequent successful setup log contained 72.9 seconds of pnpm installation
+and 122 seconds of WASM work. Cargo's 87-second portion included an artifact-lock
+wait. There were no crate-compilation messages in that run. The remaining roughly
+35 seconds includes binding-tool preparation, binding generation, optimization,
+and packaging; it is not a measurement of wasm-opt alone.
+
+### Measured causes
+
+- pnpm 10's global content store avoided downloads, but every checkout recreated
+  an isolated virtual store. The inspected checkout contained 105,398 files,
+  18,618 directories and 4,783 symlinks. An instrumented install found cached
+  packages within 2.7 seconds but took 41.6 seconds overall, mostly importing files
+  with APFS clones. Separate hard-link and clone trials took 68.9 and 68.8 seconds;
+  hard linking increased system CPU and was not adopted.
+- A warm Cargo compile took 0.66 seconds, while the full wasm-pack command took
+  28.1 seconds. Its finished JS/declaration/WASM package was not shared between
+  worktrees, so every fresh checkout repeated the binding and optimization work.
+- Direct lint and format checks bypassed the existing Nx targets. A deliberately
+  invalid TypeScript file correctly invalidated the new lint cache and failed.
+  An independent bounded lint profile found about 0.5–0.6 seconds of fixed JS
+  plugin/AST bridge overhead, with essentially no change when all custom rules
+  were disabled. Changing rule implementations or thread counts was not justified.
+- Warm Knip took 5.2 seconds: file discovery, dependency reconciliation and cache
+  loading dominated; parsing was already cached. It remains live.
+
+The machine ran other worktrees, Rust builds, desktop apps and Time Machine
+throughout parts of this investigation. Its one-minute load exceeded 200 and
+swap usage reached about 6.8 GiB. These observations are not idle-machine
+speed guarantees or controlled before/after comparisons. All executed Node
+commands reported 26.7.0, including the local binary at the node@24 Homebrew path;
+that path's name is not evidence of Node 24 validation.
+
+### Retained implementation
+
+pnpm 11.22.0 shares completed dependency graphs with `enableGlobalVirtualStore`.
+`allowBuilds` preserves the two approved build scripts; `strictDepBuilds: false`
+preserves the previous warning-only treatment of unapproved scripts. Explicit
+`minimumReleaseAge: 0` preserves the previous dependency-update policy.
+
+The maintained `@pnpm/plugin-types-fixer` config dependency uses `fullMetadata`
+to repair published packages' missing type dependencies. Packages that omit their
+monorepo devDependencies from their published metadata have explicit optional
+React type peers; jest-dom declares its Vitest peer. Nivo line also needs its
+undeclared runtime Lodash dependency supplied explicitly, and vite-ssr-components
+needs its Vite peer declared for the UPC build. No compiler flags, application
+types, test assertions or global-store symlinks are weakened to make this work.
+Both a valid web/service-worker typecheck and negative Nivo-axis/Lucide-event
+probes were exercised in the exploratory global-store checkout.
+
+Nx now stores the complete WASM package. The existing ensure-wasm entrypoint
+supplies resolved Cargo metadata, local source/asset contents, Cargo configuration,
+tool versions and build environment as a content fingerprint. Normalization occurs
+before sorting local source roots. Metadata failure fails closed. The tracked
+WASM package manifest and ignore file are also inputs because cache restoration
+writes them. Deleting the generated binary in a separate checkout and restoring
+it produced identical binary bytes; that cache-hit command took 0.83 seconds.
+
+Read-only `lint` and `format:check` reuse the same Nx targets as `check`; their
+inputs exclude Markdown, Rust, TOML and lock files that those tools do not inspect.
+The YAML pnpm lockfile remains an input. Editing commands still always execute.
+No new custom tooling script was added. Nx owns artifact storage and eviction.
+The WASM target explicitly excludes Nx's implicit all-JavaScript-dependencies
+input: its assembled graph differs across installs but cannot change the raw
+Rust build. The root package script, Rust fingerprint and tool versions remain
+inputs. A real cross-checkout restore after deleting the destination binary
+passed with identical SHA-256 bytes in 8.37 seconds under concurrent load.
+
+### Validation results
+
+An exploratory fresh checkout completed setup in 8.94 seconds with no downloads;
+a repeat setup completed in 4.83 seconds. With the final configuration, a new
+checkout completed in 34.05 seconds while host load exceeded 200: the initial
+pnpm graph linking took 12.7 seconds, the explicit frozen install 3 seconds, and
+Nx reported a verified WASM cache hit (7.3 seconds including hashing). It did not
+compile or optimize WASM. The paired root pnpm invocation also hit (22.41 seconds
+overall). These final measurements include much more contention than the earlier
+single-digit-second runs; they are not a sub-five-second end-to-end guarantee. The final ordinary `pnpm check` passed with six
+cache hits in 2.7 seconds. These runs had different host load, so the timings are
+observations rather than fixed latency promises.
+
+The fast suite passed, including all 498 web files / 3,477 web tests. All 54
+orchestration tests ran: 53 passed, including the affected WASM/cache tests;
+the pre-existing contract-manifest guard expects 58 files while HEAD contains 59.
+Commit `22ce652e7` added the cookbook-photo contract without updating that count.
+`check:all` passed its other gates, including bindings, OpenAPI and security.
+The final production web build, dependency deduplication and regular `check`
+also passed after supplying Nivo's missing runtime dependency. PostgreSQL passed
+all 268 tests across eight families, but its reporter failed the unchanged
+expected count of 265. The same baseline commit added the three extra cases;
+PR preparation updates those counts to match the existing cases.
+The committed-revision verifier refuses uncommitted changes; its underlying
+checks were exercised directly while this proposal remains uncommitted. USDA and
+UPC production builds passed. Cargo formatting and Clippy passed; Rust tests
+passed 246 cases with one ignored doctest. Knip excludes the root-only Vitest/Vite dependency findings produced by
+package-extension peers; application workspace dependency checks remain enabled.
+
+The browser run passed 23 cases and had one initialization failure caused by this
+repair's concurrent WASM rebuild temporarily removing the source package. The
+isolated iPhone WebKit calendar case passed once setup activity stopped. The full
+run is therefore not reported as a green authoritative run. Its 24 discovered
+cases also exceed the current configured count of 23. No browser assertions were changed. PR preparation updates the total to 24
+and the Chromium lane to 17, retaining seven WebKit cases.
+
+The final `pnpm check` passed all eight targets in 57.7 seconds after the final
+configuration changes invalidated its caches. The host's one-minute load was
+337 at completion. Final `pnpm dedupe:check` and all 12 affected script tests
+passed. Temporary benchmark checkouts and their Nx daemon were removed; measured
+logs remain under /tmp.
+
+PR preparation refreshed the stale count guards (59 contract files, 268 PostgreSQL
+tests, 24 browser tests) so mandatory pre-push validation can run without bypasses.

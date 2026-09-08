@@ -287,7 +287,7 @@ jobs:
         run: |
           args=(--project integration --reporter=default --reporter=github-actions)
           if [[ "$FULL" == "true" ]]; then
-            export CUBBY_EXPECT_POSTGRES_TESTS=265
+            export CUBBY_EXPECT_POSTGRES_TESTS=268
           else
             args+=(--changed "$BASE_SHA")
           fi
@@ -347,7 +347,7 @@ jobs:
           - lane: chromium
             browser: chromium
             test-script: test:e2e:ci:chromium
-            expected-tests: 16
+            expected-tests: 17
           - lane: webkit
             browser: webkit
             test-script: test:e2e:ci:webkit

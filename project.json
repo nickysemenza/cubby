@@ -22,11 +22,27 @@
     },
     "lint": {
       "command": "oxlint .",
-      "cache": true
+      "cache": true,
+      "inputs": [
+        "default",
+        "!{workspaceRoot}/**/*.md",
+        "!{workspaceRoot}/**/*.mdx",
+        "!{workspaceRoot}/**/*.rs",
+        "!{workspaceRoot}/**/*.toml",
+        "!{workspaceRoot}/**/*.lock"
+      ]
     },
     "format": {
       "command": "oxfmt --check .",
-      "cache": true
+      "cache": true,
+      "inputs": [
+        "default",
+        "!{workspaceRoot}/**/*.md",
+        "!{workspaceRoot}/**/*.mdx",
+        "!{workspaceRoot}/**/*.rs",
+        "!{workspaceRoot}/**/*.toml",
+        "!{workspaceRoot}/**/*.lock"
+      ]
     },
     "soft-delete": {
       "command": "node scripts/check-soft-delete-filters.ts",
@@ -99,6 +115,24 @@
         "{workspaceRoot}/apps/mcp-apps/dist",
         "{workspaceRoot}/apps/web/.vitest-failures.txt"
       ]
+    },
+    "wasm": {
+      "command": "pnpm run wasm",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/recipebridge/**/*",
+        "{workspaceRoot}/packages/wasm/package.json",
+        "{workspaceRoot}/packages/wasm/.gitignore",
+        "{workspaceRoot}/scripts/ensure-wasm.ts",
+        "{workspaceRoot}/package.json",
+        {
+          "externalDependencies": []
+        },
+        {
+          "runtime": "node scripts/ensure-wasm.ts --fingerprint"
+        }
+      ],
+      "outputs": ["{workspaceRoot}/packages/wasm"]
     }
   }
 }

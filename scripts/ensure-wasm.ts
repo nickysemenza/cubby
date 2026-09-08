@@ -1,50 +1,45 @@
 #!/usr/bin/env node
-// Rebuild the gitignored @cubby/recipebridge WASM only when a source it's built
-// from is newer than the built binary. "Sources" is recipebridge/ AND every local
-// path-dependency cargo resolves it against — notably the ingredient-parser
-// working copy a `~/.cargo` `[patch]` redirects to (the local dev loop). `cargo
-// metadata` is the source of truth for those paths, so a path patch is picked up
-// automatically; with no patch (CI / fresh clone) the parser resolves from a
-// pinned git rev and only recipebridge/ is watched — same as before.
-//
-// cargo does the real incremental compile (kept warm across worktrees by the
-// shared CARGO_TARGET_DIR in the root `wasm` script); this script is just the
-// staleness gate that skips the ~4s wasm-bindgen/opt when nothing changed. Wired
-// into `pnpm dev` (so a local parser edit rebuilds on the next dev start) and the
-// .husky post-merge / post-checkout hooks (so a pull that bumps the pinned rev,
-// or a branch switch, rebuilds too).
-
+// Nx owns artifact storage and eviction. This existing entrypoint supplies the
+// Rust inputs outside Nx's workspace: Cargo resolution, local path dependencies,
+// compiler configuration and tool versions. A metadata failure must fail closed;
+// restoring an old package would hide an incompatible local parser checkout.
 import { execFileSync } from "node:child_process";
-import { type Dirent, existsSync, readdirSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const ART = join(ROOT, "packages/wasm/recipebridge_bg.wasm");
 const PRUNE = new Set(["target", ".git", "node_modules"]);
-const WATCH_EXT = [".rs", ".toml", ".lock"];
 
-const newestMtime = (directory: string): number => {
-  let newest = 0;
-  let entries: Dirent[];
-  try {
-    entries = readdirSync(directory, { withFileTypes: true });
-  } catch {
-    return newest;
-  }
-  for (const entry of entries) {
+// Include assets consumed by include_str!/include_bytes!, additions and deletions.
+// Checkout paths and mtimes aren't inputs: identical worktrees share one artifact.
+export const sourceDigest = (directory: string): string => {
+  const hash = createHash("sha256");
+  for (const entry of readdirSync(directory, { withFileTypes: true }).sort(
+    (left, right) => left.name.localeCompare(right.name),
+  )) {
+    if (PRUNE.has(entry.name)) continue;
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) {
-      if (!PRUNE.has(entry.name)) newest = Math.max(newest, newestMtime(path));
-    } else if (WATCH_EXT.some((extension) => entry.name.endsWith(extension))) {
-      try {
-        newest = Math.max(newest, statSync(path).mtimeMs);
-      } catch {}
-    }
+    const digest = entry.isDirectory()
+      ? sourceDigest(path)
+      : createHash("sha256").update(readFileSync(path)).digest("hex");
+    hash.update(JSON.stringify([entry.name, digest]));
   }
-  return newest;
+  return hash.digest("hex");
 };
+
+export const sourceInputs = (roots: string[], workspace: string): string =>
+  JSON.stringify(
+    roots
+      .map((root): [string, string] => [
+        root.replaceAll(workspace, "<workspace>"),
+        sourceDigest(root),
+      ])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
 
 export const cargoMetadataSchema = z.object({
   packages: z.array(
@@ -55,60 +50,84 @@ export const cargoMetadataSchema = z.object({
   ),
 });
 
-const log = (msg: string) => process.stderr.write(`[ensure-wasm] ${msg}\n`);
+const command = (program: string, args: string[]) =>
+  execFileSync(program, args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+    maxBuffer: 1 << 26,
+  });
 
-const build = () =>
-  execFileSync("pnpm", ["run", "wasm"], { cwd: ROOT, stdio: "inherit" });
-
-// Source roots whose changes invalidate the WASM: recipebridge/ plus any local
-// path dependency. `source === null` in cargo metadata marks a path dep (incl. a
-// crate patched to a local path); git/registry deps are immutable, so they're
-// never watched. cargo unavailable/offline → fall back to recipebridge/ only.
-const sourceRoots = () => {
-  const roots = new Set([join(ROOT, "recipebridge")]);
-  try {
-    const out = execFileSync(
-      "cargo",
-      [
-        "metadata",
-        "--format-version=1",
-        "--manifest-path",
-        join(ROOT, "recipebridge/Cargo.toml"),
-      ],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-        maxBuffer: 1 << 26,
-      },
-    );
-    for (const p of cargoMetadataSchema.parse(JSON.parse(out)).packages) {
-      if (p.source === null) roots.add(dirname(p.manifest_path));
+const fingerprint = () => {
+  const metadata = command("cargo", [
+    "metadata",
+    "--format-version=1",
+    "--manifest-path",
+    join(ROOT, "recipebridge/Cargo.toml"),
+  ]);
+  const roots = new Set(
+    cargoMetadataSchema
+      .parse(JSON.parse(metadata))
+      .packages.filter((pkg) => pkg.source === null)
+      .map((pkg) => dirname(pkg.manifest_path)),
+  );
+  const hash = createHash("sha256");
+  const add = (value: string) =>
+    hash.update(value.replaceAll(ROOT, "<workspace>"));
+  add(metadata);
+  add(sourceInputs([...roots], ROOT));
+  // Cargo reads configuration from the invocation directory's ancestors and
+  // CARGO_HOME. Preserve that behavior, including explicit local dev overrides.
+  const configDirectories = new Set([
+    process.env.CARGO_HOME ?? join(homedir(), ".cargo"),
+  ]);
+  for (let path = ROOT; ; path = dirname(path)) {
+    configDirectories.add(join(path, ".cargo"));
+    if (dirname(path) === path) break;
+  }
+  for (const directory of configDirectories) {
+    for (const name of ["config", "config.toml"]) {
+      const path = join(directory, name);
+      if (existsSync(path)) add(readFileSync(path, "utf8"));
     }
+  }
+  add(command("rustc", ["-vV"]));
+  add(command("wasm-pack", ["--version"]));
+  // wasm-pack can provision its own optimizer when none is installed on PATH.
+  try {
+    add(command("wasm-opt", ["--version"]));
   } catch {
-    log("cargo metadata unavailable — watching recipebridge/ only");
+    add("wasm-pack-managed optimizer");
   }
-  return [...roots];
-};
-
-const main = () => {
-  if (!existsSync(ART)) {
-    log("no WASM build — building…");
-    build();
-    return;
-  }
-
-  const artMtime = statSync(ART).mtimeMs;
-  const stale = sourceRoots().some((r) => newestMtime(r) > artMtime);
-
-  if (!stale) return;
-
-  log("recipebridge or a local path-dep changed — building…");
-  build();
+  add(
+    JSON.stringify(
+      Object.entries(process.env)
+        .filter(([name]) => /^(CARGO_|RUST|WASM_|CC$|CFLAGS$|AR$)/u.test(name))
+        .sort(([left], [right]) => left.localeCompare(right)),
+    ),
+  );
+  return hash.digest("hex");
 };
 
 if (
   process.argv[1] !== undefined &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  main();
+  if (process.argv[2] === "--fingerprint") {
+    console.log(fingerprint());
+  } else {
+    execFileSync(
+      process.execPath,
+      [
+        fileURLToPath(import.meta.resolve("nx/bin/nx.js")),
+        "run",
+        "cubby-checks:wasm",
+      ],
+      {
+        cwd: ROOT,
+        stdio: "inherit",
+        env: { ...process.env, NX_DAEMON: "false" },
+      },
+    );
+  }
 }
