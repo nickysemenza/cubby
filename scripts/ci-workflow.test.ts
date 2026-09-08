@@ -141,6 +141,18 @@ test("local checks retain every required gate and keep stateful verification liv
         z.object({
           command: z.string(),
           cache: z.boolean(),
+          inputs: z
+            .array(
+              z.union([
+                z.string(),
+                z.record(
+                  z.string(),
+                  z.union([z.string(), z.array(z.string())]),
+                ),
+              ]),
+            )
+            .optional(),
+          outputs: z.array(z.string()).optional(),
         }),
       ),
     })
@@ -174,6 +186,7 @@ test("local checks retain every required gate and keep stateful verification liv
     security: "pnpm audit:security",
     "fast-tests":
       "pnpm -r --workspace-concurrency=2 test && touch apps/web/.vitest-failures.txt",
+    wasm: "pnpm run wasm",
   };
   for (const [name, command] of Object.entries(commands))
     assert.equal(project.targets[name]?.command, command, name);
@@ -198,6 +211,37 @@ test("local checks retain every required gate and keep stateful verification liv
   ])
     assert.equal(project.targets[name]?.cache, false, name);
   assert.equal(manifest.scripts["verify:local"], "node scripts/ci-scope.ts");
+  assert.match(manifest.scripts.lint!, /nx run cubby-checks:lint\b/u);
+  assert.match(
+    manifest.scripts["format:check"]!,
+    /nx run cubby-checks:format\b/u,
+  );
+  assert.equal(manifest.scripts["lint:fix"], "oxlint --fix .");
+  assert.equal(manifest.scripts.format, "oxfmt .");
+  assert.equal(project.targets.wasm?.cache, true);
+  assert.deepEqual(project.targets.wasm?.outputs, [
+    "{workspaceRoot}/packages/wasm",
+  ]);
+  for (const input of [
+    "{workspaceRoot}/packages/wasm/package.json",
+    "{workspaceRoot}/packages/wasm/.gitignore",
+  ])
+    assert.ok(project.targets.wasm?.inputs?.includes(input));
+  assert.ok(
+    project.targets.wasm?.inputs?.some(
+      (input) =>
+        JSON.stringify(input) ===
+        JSON.stringify({
+          runtime: "node scripts/ensure-wasm.ts --fingerprint",
+        }),
+    ),
+  );
+  assert.ok(
+    project.targets.wasm?.inputs?.some(
+      (input) =>
+        JSON.stringify(input) === JSON.stringify({ externalDependencies: [] }),
+    ),
+  );
   assert.equal(
     readFileSync(".husky/pre-commit", "utf8").trim().endsWith("pnpm check"),
     true,

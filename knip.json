@@ -14,7 +14,8 @@
         "scripts/entity-literal-generator.ts!",
         "scripts/entity-literals/entities/*.entity.ts!"
       ],
-      "project": ["scripts/**/*.ts!"]
+      "project": ["scripts/**/*.ts!"],
+      "ignoreDependencies": ["vitest", "vite"]
     },
     "apps/web": {
       "entry": [
