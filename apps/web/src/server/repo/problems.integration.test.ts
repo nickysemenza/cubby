@@ -27,7 +27,7 @@ import { createExpense, updateExpense } from "./expense";
 import { updateFinancialTransaction } from "./financial-transaction";
 import { createMealWithEntityId } from "./meal/crud";
 import { findEntitiesMissingEmbeddings } from "./problems";
-import { getPurchaseByID, updatePurchase } from "./purchase";
+import { getPurchaseByID, purchaseList, updatePurchase } from "./purchase";
 import {
   createIngredientFixture,
   createProductFixture,
@@ -45,6 +45,8 @@ import { insertWithShortcode } from "./shortcode-utils";
  */
 const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
+
+const page = { pageIndex: 0, pageSize: 100 };
 
 // The defect/coverage split. `totalProblems` — the navbar badge, the homepage
 // banner, the headline card — must count only rows that can reach zero;
@@ -563,6 +565,11 @@ describe("problems — purchase financial settlement mismatches", () => {
     expect((await mismatches()).map((row) => row.id)).toEqual([
       purchaseShortcode,
     ]);
+    expect(
+      (await purchaseList(ctx.db, { dataStatus: "defect" }, [], page)).data.map(
+        (row) => row.id,
+      ),
+    ).toContain(purchaseShortcode);
 
     const quality = await setDataException(
       ctx.db,
@@ -582,6 +589,11 @@ describe("problems — purchase financial settlement mismatches", () => {
       }),
     );
     expect(await mismatches()).toEqual([]);
+    expect(
+      (await purchaseList(ctx.db, { dataStatus: "defect" }, [], page)).data.map(
+        (row) => row.id,
+      ),
+    ).not.toContain(purchaseShortcode);
 
     const purchaseId = parseEntityId(
       "purchase",
@@ -595,6 +607,25 @@ describe("problems — purchase financial settlement mismatches", () => {
     // Expense writes advance the Purchase evidence clock, so the acceptance
     // cannot silently survive a changed ledger total.
     await updateExpense(ctx.db, mismatched.id, { cost: 120.01 }, ctx.actor);
+    expect((await mismatches()).map((row) => row.id)).toEqual([
+      purchaseShortcode,
+    ]);
+
+    await setDataException(
+      ctx.db,
+      {
+        entityId: purchaseShortcode,
+        check: "settlement_mismatch",
+        reason: "expected_mismatch",
+        note: "The changed settlement amount is documented separately.",
+      },
+      ctx.actor,
+    );
+    expect(await mismatches()).toEqual([]);
+
+    // Moving a line between planned and incurred spend changes the comparison
+    // total even though its money value stays fixed.
+    await updateExpense(ctx.db, mismatched.id, { future: true }, ctx.actor);
     expect((await mismatches()).map((row) => row.id)).toEqual([
       purchaseShortcode,
     ]);

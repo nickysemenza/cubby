@@ -507,7 +507,12 @@ const purchaseMissingDataCondition = (): SQL =>
   );
 
 export const purchaseDefectCondition = (): SQL =>
-  sql.raw(purchaseGapRaw("paperwork_mismatch"));
+  sql`(${sql.join(
+    purchaseDataCheck.options
+      .filter(isDefectDataCheck)
+      .map((check) => sql.raw(purchaseGapRaw(check))),
+    sql` OR `,
+  )})`;
 
 export const purchaseNeedsDataCondition = (): SQL =>
   sql`(${purchaseMissingDataCondition()} AND NOT ${purchaseDefectCondition()})`;
