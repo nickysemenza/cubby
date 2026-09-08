@@ -91,7 +91,7 @@ type ProductWithUpcGapCandidate = {
   name: string;
   manufacturer: string;
   upc: string;
-  price: number | null;
+  effectivePrice: number | null;
   hasImage: boolean;
 };
 
@@ -213,6 +213,21 @@ export const findOrphanedProducts = async (
         ...Object.keys(PRODUCT_EDGE_ROLES)
           .filter(isRetainingEdgeKey)
           .map((key) => PRODUCT_RETAINING_NOT_EXISTS[key](dbClient)),
+        // A composition parent owns no retaining incoming edge: deleting it
+        // merely removes its ProductComponent rows. It is still a meaningful
+        // live product, though, so offering it as an orphan would discard the
+        // kit or multi-pack identity represented by those rows.
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(productComponent)
+            .where(
+              and(
+                eq(productComponent.parentProductId, product.id),
+                notDeleted(productComponent),
+              ),
+            ),
+        ),
       ),
     );
 
@@ -575,10 +590,11 @@ export const synthesizeEffectiveMappings = (
 };
 
 // ProductWithBetterUpcData (productWithBetterUpcDataSchema): a product whose
-// stored UPC-sourced fields have a gap (no manufacturer, price, or image) that a
-// *fresh* UPC lookup could fill. `proposed` carries the value the live lookup
-// would write per field (null ⇒ no change), so the panel can show the actual
-// before→after, not just which fields are missing.
+// stored UPC-sourced fields have a gap (no manufacturer, price, or image) that
+// a *fresh* UPC lookup could fill. A purchase-derived price already closes the
+// price gap. `proposed` carries the value the live lookup would write per field
+// (null ⇒ no change), so the panel can show the actual before→after, not just
+// which fields are missing.
 
 // DB-only prefilter for ProductWithBetterUpcData. The service layer owns the UPC
 // client call and proposed-value construction; the repo layer only identifies
@@ -626,6 +642,7 @@ export const findProductsWithUpcGaps = async (
     db,
     rows.map((r) => r.id),
   );
+  const pricing = await loadProductPricing(db, rows);
 
   // No-network candidate filter: only gappy, non-misc products need a lookup.
   // `displayGtin`, not the stored GTIN-14: this value is handed to the UPC
@@ -633,14 +650,18 @@ export const findProductsWithUpcGaps = async (
   const candidates = rows
     .map((r) => {
       const stored = gtins.get(r.id) ?? null;
-      return { ...r, upc: stored === null ? null : displayGtin(stored) };
+      return {
+        ...r,
+        upc: stored === null ? null : displayGtin(stored),
+        effectivePrice: pricing.get(r.id)?.effectivePrice ?? null,
+      };
     })
     .filter(
       (r): r is typeof r & { upc: string } =>
         r.upc != null &&
         !isMiscProduct(r.name) &&
         (isUnspecifiedManufacturer(r.manufacturer) ||
-          r.price == null ||
+          r.effectivePrice == null ||
           !r.hasImage),
     );
 

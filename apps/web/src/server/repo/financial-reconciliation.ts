@@ -81,10 +81,11 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
 
 /**
  * Correlated SQL form of `calculateFinancialReconciliation(...).status ===
- * "mismatch"`. Purchase lists and the detector share its incurred-expense
- * fragments and settlement-kind roster, so list pagination/counts stay exact.
+ * "mismatch"`, before a reasoned `settlement_mismatch` exception is applied.
+ * The raw verdict remains available to data quality and detail reads: accepting
+ * a documented discrepancy must not falsify the actual bank/ledger delta.
  */
-export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
+export const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
   ${settleableUnpricedExpenseCountSql(purchaseAlias)} = 0
   AND (
     SELECT count(DISTINCT a."transactionId")
@@ -118,6 +119,22 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
         AND ft."status" = 'posted'
     ) END
   ) * 100 + 0.5) IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
+
+/**
+ * The canonical worklist predicate. A settlement mismatch stays a raw financial
+ * fact, but an active, evidence-bound exception removes it from the actionable
+ * Problems list. This deliberately names one check rather than adding a cents
+ * tolerance: every accepted difference remains explicit and goes stale when
+ * the Purchase's evidence clock advances.
+ */
+export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
+  (${purchaseFinancialMismatchRawSql(purchaseAlias)})
+  AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(${purchaseAlias}."dataExceptions") exception
+    WHERE exception->>'check' = 'settlement_mismatch'
+      AND exception->>'fingerprint' = 'settlement_mismatch:'
+        || floor(extract(epoch FROM ${purchaseAlias}."updatedAt") * 1000)::bigint::text
+  )`;
 
 /**
  * `kind = 'refund' AND status = 'posted'` — the atom behind every posted-refund

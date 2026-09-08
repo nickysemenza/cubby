@@ -273,10 +273,10 @@ export const viewManifest = defineViewManifest({
       // off, and without "in the ledger" by stocked products that have no
       // product-linked Expense at all (a provenance gap, not a counting one).
       //
-      // A worklist, not a defect list: it never converges to zero, which is why
-      // it lives here rather than as a Problems section. The genuine defect —
-      // more units gone than ever arrived — IS a Problems section
-      // (`negativeExpectedQuantity`), and that one does converge.
+      // A broad shelf-reconciliation worklist: it never converges to zero,
+      // which is why it lives here rather than as a Problems section. The
+      // narrower acquisition-history gap — more recorded units gone than
+      // arrived — is surfaced separately as `negativeExpectedQuantity`.
       filters: [{ id: "quantityVariance", value: "mismatched" }],
       // Both hidden by default on a table this wide, so the view has to reveal
       // them — otherwise it selects rows on a signal nothing on screen explains.
@@ -557,12 +557,11 @@ export const viewManifest = defineViewManifest({
     },
     {
       id: "over-exited",
-      label: "Sold more than bought",
-      description: "More units gone than the ledger can account for buying",
-      // The schema already calls `expectedQuantityMax: -1` "a real data defect,
-      // and the reason this is not clamped at zero" — this view is that
-      // sentence, and the detector that separately re-derived it with a grouped
-      // HAVING is gone.
+      label: "Exit exceeds history",
+      description: "Recorded exits exceed the available acquisition history",
+      // This view is the `expectedQuantityMax: -1` worklist, and the detector
+      // that separately re-derived the same predicate with a grouped HAVING is
+      // gone.
       //
       // Deliberately LOOSER than "sold but still stocked", which keys on
       // disposal Purchases. Not an inconsistency — a different question. "Was
@@ -582,10 +581,10 @@ export const viewManifest = defineViewManifest({
       filters: [{ id: "expectedQuantity", value: "negative" }],
       problem: {
         key: "negativeExpectedQuantity",
-        title: "More units gone than acquired",
+        title: "Exits exceed recorded acquisitions",
         description:
-          "The ledger says more units left than ever arrived. Usually a missing acquisition line or a quantity typed on the wrong row.",
-        emptyMessage: "No product has exited more units than it acquired.",
+          "Recorded exits exceed recorded arrivals. Older acquisitions may predate the ledger, so review the available history before correcting a quantity.",
+        emptyMessage: "No product has more recorded exits than acquisitions.",
       },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
@@ -1010,16 +1009,19 @@ const standaloneEntityProblems = [
     executionLane: "fast",
     continuation: { kind: "entity-list" as const },
     freshness: { kind: "live" as const },
-    title: "Exit expenses without a product",
+    title: "Productless lines in disposal purchases",
     description:
-      "Disposal purchases with a negative principal line that names no product.",
-    emptyMessage: "Every disposal line names the product that left.",
+      "Negative itemized principal lines without a product link. Some describe intentionally untracked goods; review them as provenance coverage.",
+    emptyMessage:
+      "No itemized principal disposal line is missing a product link.",
     source: {
       kind: "entity" as const,
       entity: "expense" as const,
       filters: [
         { id: "future", value: "false" },
         { id: "costSign", value: "negative" },
+        { id: "lineKind", value: ["principal"] },
+        { id: "lineBasis", value: ["item_line"] },
         { id: "product", value: "none" },
         { id: "disposalPurchasePresenceFilter", value: "has" },
       ],

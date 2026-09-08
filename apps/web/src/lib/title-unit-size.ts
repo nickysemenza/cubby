@@ -13,13 +13,28 @@ export type TitleSizeProposal = {
 };
 
 const PACK_MARKER =
-  /\b(?:pack\s+of\s+\d+|case\s+of\s+\d+|box\s+of\s+\d+|\d+\s*-?\s*(?:pack|pk)s?\b|\d+\s*(?:ct|count)\b|\d+\s*servings?\b)/i;
+  /\b(?:pack\s+of\s+\d+|case\s+of\s+\d+|box\s+of\s+\d+|set\s+of\s+\d+|\d+\s*-?\s*(?:pack|pk)s?\b|\d+\s*-?\s*(?:ct|count)\b|\d+\s+snack\s+packs?\b|\d+\s*servings?\b)/i;
 
 /** Match only immediately before a size; title-wide `x` usually means dimensions. */
 const MULTIPLIER_PREFIX = /\d+(?:\.\d+)?\s*[x×]\s*$/i;
 
 const COMPATIBILITY_MARKER =
   /\b(?:fits|compatible\s+with|replacement\s+for)\b/i;
+
+/** Ratings describe what hardgoods support, not the quantity purchased. */
+const LOAD_RATING_MARKER =
+  /\b(?:capacity|safe\s+working\s+load|working\s+load|load\s+rating|payload|rated\s+(?:for|to|at)|(?:holds?\s+)?up\s+to\s+\d+(?:\.\d+)?)\b/i;
+const HIGH_LOAD_HARDGOOD = /\b(?:ladders?|step\s+stools?|casters?)\b/i;
+const BUCKET_COMPATIBILITY_PREFIX = /\b(?:for|fits?)\s*$/i;
+const BUCKET_SUFFIX = /^\s*\.?\s+bucket\b/i;
+const BUCKET_ACCESSORY_SUFFIX =
+  /^\s*\.?\s+(?:(?:metal|plastic|steel)\s+)?bucket\s+(?:grid|lid|liner|insert|tool)\b/i;
+const VOLUME_CAPACITY_PRODUCT =
+  /\b(?:shop\s?vac|wet\/dry(?:\s+shop)?\s+vacuum|storage\s+tote)\b/i;
+const VESSEL_BEFORE_SIZE =
+  /\b(?:(?:insulated\s+)?water\s+bottle|insulated(?:\s+travel)?\s+tumbler(?:\s+with\b[^,]*)?)[,:-]?\s*$/i;
+const VESSEL_AFTER_SIZE =
+  /^\s*\.?\s+(?:(?:insulated\s+)?water\s+bottle|insulated(?:\s+travel)?\s+tumbler)\b/i;
 
 /** Recipe measures describe capacity/parts in catalog titles, not package size. */
 const RECIPE_MEASURE_STEMS = new Set([
@@ -89,39 +104,82 @@ const normalize = (value: string) =>
 
 const SIZED_KINDS = new Set(["weight", "volume"]);
 
+const findUnambiguousSizeMatch = (name: string) => {
+  const { worded, bare, range } = getVocabulary();
+  if (range.test(name)) return null;
+
+  const matches = [...name.matchAll(worded), ...name.matchAll(bare)];
+  if (matches.length === 0) return null;
+
+  // Any multiplied occurrence makes attribution to one `each` ambiguous.
+  const hasMultiplier = matches.some(
+    (match) =>
+      match.index !== undefined &&
+      MULTIPLIER_PREFIX.test(name.slice(0, match.index)),
+  );
+  if (hasMultiplier) return null;
+
+  // Repeated identical sizes are harmless; distinct sizes are ambiguous.
+  const distinct = new Set(matches.map((match) => normalize(match[0])));
+  return distinct.size === 1 ? (matches[0] ?? null) : null;
+};
+
+const isHighLoadHardgood = (name: string, amount: Amount, kind: string) =>
+  kind === "weight" &&
+  amount.unit === "lb" &&
+  amount.value >= 100 &&
+  HIGH_LOAD_HARDGOOD.test(name);
+
+const hasContextualCapacity = (
+  name: string,
+  match: RegExpMatchArray,
+  kind: string,
+) => {
+  if (match.index === undefined) return false;
+
+  const before = name.slice(0, match.index);
+  const after = name.slice(match.index + match[0].length);
+  if (VESSEL_BEFORE_SIZE.test(before) || VESSEL_AFTER_SIZE.test(after)) {
+    return true;
+  }
+
+  return (
+    kind === "volume" &&
+    (VOLUME_CAPACITY_PRODUCT.test(name) ||
+      BUCKET_ACCESSORY_SUFFIX.test(after) ||
+      (BUCKET_COMPATIBILITY_PREFIX.test(before) && BUCKET_SUFFIX.test(after)))
+  );
+};
+
+const hasNonPackageContext = (
+  name: string,
+  match: RegExpMatchArray,
+  amount: Amount,
+  kind: string,
+) =>
+  LOAD_RATING_MARKER.test(name) ||
+  isHighLoadHardgood(name, amount, kind) ||
+  hasContextualCapacity(name, match, kind);
+
 /** Returns null for ambiguity or invalid arbitrary catalog text; never throws. */
 export const proposeSizeFromTitle = (
   name: string,
 ): TitleSizeProposal | null => {
   if (PACK_MARKER.test(name) || COMPATIBILITY_MARKER.test(name)) return null;
 
-  const { worded, bare, range } = getVocabulary();
-  if (range.test(name)) return null;
-  const matches = [...name.matchAll(worded), ...name.matchAll(bare)];
-  if (matches.length === 0) return null;
-
-  // Any multiplied occurrence makes attribution to one `each` ambiguous.
-  if (
-    matches.some(
-      (match) =>
-        match.index !== undefined &&
-        MULTIPLIER_PREFIX.test(name.slice(0, match.index)),
-    )
-  ) {
-    return null;
-  }
-
-  // Repeated identical sizes are harmless; distinct sizes are ambiguous.
-  const distinct = new Set(matches.map((m) => normalize(m[0])));
-  if (distinct.size !== 1) return null;
-
-  const token = matches[0]?.[0];
+  const match = findUnambiguousSizeMatch(name);
+  if (match === null) return null;
+  const token = match[0];
   if (token === undefined) return null;
 
   try {
     const amount = wasm.parse_amount(token);
     if (!Number.isFinite(amount.value) || amount.value <= 0) return null;
-    if (!SIZED_KINDS.has(wasm.amount_kind(amount))) return null;
+    const kind = wasm.amount_kind(amount);
+    if (!SIZED_KINDS.has(kind)) return null;
+
+    if (hasNonPackageContext(name, match, amount, kind)) return null;
+
     return { amount: { value: amount.value, unit: amount.unit }, token };
   } catch {
     return null;
