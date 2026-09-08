@@ -16,7 +16,6 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { usePageCount } from "~/components/page/Page";
 import { cookbook } from "~/entities/cookbook.functions";
 
@@ -36,17 +35,6 @@ export function CookbookList() {
   const { data: cookbooks } = useSuspenseQuery(
     cookbook.list.queryOptions(null),
   );
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("cookbook", { responsiveInspector: true });
-
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<CookbookSummary>((add) => {
@@ -110,12 +98,21 @@ export function CookbookList() {
     [columnHelper],
   );
 
-  const { workbench } = useClientEntityList<CookbookSummary>({
+  const { workbench, inspection } = useClientEntityList<CookbookSummary>({
     entity: "cookbook",
     data: cookbooks,
     columns,
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   usePageCount(cookbooks.length);
 
   return (

@@ -44,7 +44,7 @@ export const reparentLocationsInBulk = async (
     db,
     ids.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "location" as const, entityId },
+      entity: { entity: "location" as const, id: entityId },
       source: "location.bulkUpdateParent",
     })),
   );

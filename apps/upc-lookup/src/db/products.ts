@@ -116,6 +116,7 @@ export type ListProductsOptions = {
   source?: string;
   page?: number;
   pageSize?: number;
+  offset?: number;
 };
 
 export type ListProductsResult = {
@@ -127,10 +128,12 @@ export type ListProductsResult = {
 
 export async function listProducts(
   db: Database,
-  { q, source, page = 1, pageSize = 25 }: ListProductsOptions = {},
+  { q, source, page = 1, pageSize = 25, offset }: ListProductsOptions = {},
 ): Promise<ListProductsResult> {
   const safePage = Math.max(page, 1);
   const safePageSize = clamp(pageSize, 1, 100);
+  const safeOffset =
+    offset === undefined ? (safePage - 1) * safePageSize : offset;
 
   const conditions = [];
   if (q && q.trim().length > 0) {
@@ -154,7 +157,7 @@ export async function listProducts(
       where,
       orderBy: [desc(schema.products.createdAt)],
       limit: safePageSize,
-      offset: (safePage - 1) * safePageSize,
+      offset: safeOffset,
     }),
     db
       .select({ count: sql<number>`count(*)` })

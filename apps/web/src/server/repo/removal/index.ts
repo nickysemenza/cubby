@@ -10,5 +10,6 @@
 
 export type { RemovableEntity } from "./core";
 export { cascadeRemoval } from "./core";
+export { executeDeleteWithEffects } from "./delete-effects";
 export type { ChildCascade } from "./entity";
 export { removeEntity } from "./entity";

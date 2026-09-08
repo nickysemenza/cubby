@@ -68,10 +68,7 @@ import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { useDeferredFilterOptions } from "../_components/hooks/useDeferredFilterOptions";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import {
-  type EntityPreviewRendererProps,
-  useEntityPreview,
-} from "../_components/hooks/useEntityPreview";
+import type { EntityPreviewRendererProps } from "../_components/hooks/useEntityPreview";
 import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
@@ -225,19 +222,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     () => createCubbyColumnHelper<ProductTreeRow>(),
     [],
   );
-  const {
-    onRowClick: selectPreview,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    preview,
-    PreviewSheet,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("product", {
-    responsiveInspector: true,
-    renderInspector: renderProductInspector,
-  });
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
   const { options: tagOptions } = useProductTagOptions();
   const projectOptions = useDeferredFilterOptions("project");
@@ -1008,44 +992,53 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
     [componentsByParent],
   );
 
-  const { workbench, data, totalCount, currentFilters } = useEntityList<
-    ProductTreeRow,
-    ProductFilters,
-    ProductListItem
-  >({
-    entity: "product",
-    queryOptions: productListQueryOptions,
-    onInspectRow: inspectRow,
-    getMappings: getProductListMappings,
-    tableStateOptions,
-    columns,
-    // The product contract's own delete and invalidation fan-out.
-    deletable: true,
-    filterOptions,
-    extraActions,
-    nameEditable,
-    initialColumnVisibility: {
-      tags: false,
-      fdc_id: false,
-      model: false,
-      manufacturer: false,
-      createdAt: false,
-      notes: false,
-      expenseTotal: false,
-      expectedQuantity: false,
-      quantityVariance: false,
-      dataQuality: false,
-      dataGaps: false,
-      externalIds: false,
-      modelPresence: false,
-      upcPresence: false,
-      notesPresence: false,
-      stockTracked: false,
-      components: false,
-    },
-    groupConfig,
-    tree: productTree,
-  });
+  const { workbench, data, totalCount, currentFilters, inspection } =
+    useEntityList<ProductTreeRow, ProductFilters, ProductListItem>({
+      entity: "product",
+      queryOptions: productListQueryOptions,
+      preview: {
+        responsiveInspector: true,
+        renderInspector: renderProductInspector,
+      },
+      getMappings: getProductListMappings,
+      tableStateOptions,
+      columns,
+      // The product contract's own delete and invalidation fan-out.
+      deletable: true,
+      filterOptions,
+      extraActions,
+      nameEditable,
+      initialColumnVisibility: {
+        tags: false,
+        fdc_id: false,
+        model: false,
+        manufacturer: false,
+        createdAt: false,
+        notes: false,
+        expenseTotal: false,
+        expectedQuantity: false,
+        quantityVariance: false,
+        dataQuality: false,
+        dataGaps: false,
+        externalIds: false,
+        modelPresence: false,
+        upcPresence: false,
+        notesPresence: false,
+        stockTracked: false,
+        components: false,
+      },
+      groupConfig,
+      tree: productTree,
+    });
+  const {
+    onRowClick: selectPreview,
+    onRowHover,
+    onRowHoverEnd,
+    preview,
+    PreviewSheet,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   usePageCount(totalCount);
 
   // Same shape as the food-hydration effect below: derive the id set from the

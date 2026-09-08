@@ -37,7 +37,7 @@ const mealShortcodes = bindShortcodeResolver("meal");
 const refreshMealEmbedding = (db: Database, id: MealId, source: string) =>
   runMutationSideEffects(db, {
     action: "updated",
-    entity: { entityType: "meal", entityId: id },
+    entity: { entity: "meal", id: id },
     source,
   });
 

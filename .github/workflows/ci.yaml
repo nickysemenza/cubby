@@ -219,7 +219,7 @@ jobs:
           # Private-repository standard runners have half the CPUs of public
           # runners. Keep the same assertions while allowing CPU-bound tests
           # the equivalent wall-clock budget.
-          args=("${selected[@]}" --testTimeout=10000 --reporter=default --reporter=github-actions)
+          args=("${selected[@]}" --testTimeout=10000 --reporter=default --reporter=github-actions --reporter=./tooling/test-run-contract-reporter.ts)
           if [[ "$FULL" != "true" ]]; then args+=(--changed "$BASE_SHA"); fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
           pnpm --dir apps/web exec vitest run "${args[@]}"
@@ -285,10 +285,8 @@ jobs:
           FULL: ${{ needs.scope.outputs.full }}
           CUBBY_TEST_INTEGRATION: "1"
         run: |
-          args=(--project integration --reporter=default --reporter=github-actions)
-          if [[ "$FULL" == "true" ]]; then
-            export CUBBY_EXPECT_POSTGRES_TESTS=271
-          else
+          args=(--project integration --reporter=default --reporter=github-actions --reporter=./tooling/test-run-contract-reporter.ts)
+          if [[ "$FULL" != "true" ]]; then
             args+=(--changed "$BASE_SHA")
           fi
           if [[ "$COVERAGE" == "true" ]]; then args+=(--coverage); fi
@@ -347,11 +345,9 @@ jobs:
           - lane: chromium
             browser: chromium
             test-script: test:e2e:ci:chromium
-            expected-tests: 17
           - lane: webkit
             browser: webkit
             test-script: test:e2e:ci:webkit
-            expected-tests: 7
     env:
       NODE_OPTIONS: "--max-old-space-size=4096"
       PLAYWRIGHT_VERSION: "1.62.1"

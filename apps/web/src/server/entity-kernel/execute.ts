@@ -1,4 +1,5 @@
-import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { ENTITY_LABEL, parseEntityRef } from "@cubby/schemas/identifiers";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
@@ -10,7 +11,7 @@ import {
 import { executeGeneratedRelationMutation } from "~/server/generated/entity-relation-bindings.gen";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
-  mutationSideEffectEventSchema,
+  isMutationSideEffectRef,
   runMutationSideEffects,
 } from "~/server/services/mutation-side-effects";
 import {
@@ -62,20 +63,17 @@ const executeMerge = async (
   }
   const result = await mergeOperation.execute(ctx, command.data);
   await deleteStoredObjects(result.detachedImageKeys);
+  const entityRef = result.entityId
+    ? parseEntityRef<ShortcodeEntity>(binding.entity, result.entityId)
+    : null;
   const backgroundBatches = [
     ...(result.backgroundBatches ?? []),
-    ...(result.entityId && binding.sideEffects
-      ? await runMutationSideEffects(
-          ctx.db,
-          mutationSideEffectEventSchema.parse({
-            action: "updated",
-            entity: {
-              entityType: binding.entity,
-              entityId: result.entityId,
-            },
-            source: `${binding.entity}.merge`,
-          }),
-        )
+    ...(entityRef && binding.sideEffects && isMutationSideEffectRef(entityRef)
+      ? await runMutationSideEffects(ctx.db, {
+          action: "updated",
+          entity: entityRef,
+          source: `${binding.entity}.merge`,
+        })
       : []),
   ];
   return entityMutationResultSchema.parse({

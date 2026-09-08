@@ -83,7 +83,7 @@ export const ensureGlobalUnknownWorkflow = async (
   const entityId = await shortcodes.one(ctx.db, location.id);
   await runMutationSideEffects(ctx.db, {
     action: "updated",
-    entity: { entityType: "location", entityId },
+    entity: { entity: "location", id: entityId },
     source: "location.ensureGlobalUnknown",
   });
   return location;

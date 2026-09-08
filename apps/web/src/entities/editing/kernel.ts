@@ -1,5 +1,3 @@
-import { z } from "zod";
-
 import { type EntityEditRegistry, getEntityEditDefinition } from "./registry";
 import type {
   EditableEntity,
@@ -15,12 +13,9 @@ import type {
   EntityEditValueBag,
   RuntimeEntityEditRequest,
 } from "./types";
+import { entityEditValueBagSchema } from "./value-schema";
 
 const EMPTY_CONTEXT: EntityEditContext = {};
-const entityEditValueBagSchema = z.record(
-  z.string(),
-  z.union([z.json(), z.date(), z.undefined()]),
-);
 type EntityEditDefaultsFactory = (
   context: EntityEditContext,
 ) => Readonly<EntityEditValueBag>;

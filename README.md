@@ -241,9 +241,9 @@ pnpm install
 cp apps/web/.env.example apps/web/.env
 # Edit apps/web/.env — see "Environment Variables" below
 
-# 3. Local services for app development and PostgreSQL-parity tests
-#    (not needed for the default Vitest or Playwright commands)
-docker-compose up -d
+# 3. Local services for app development, PostgreSQL tests, and default Playwright
+#    (not needed for default Vitest or service-free `pnpm test:e2e:pglite`)
+docker compose -p cubby up -d
 
 # 4. Web DB schema
 pnpm --filter @cubby/web run db:push

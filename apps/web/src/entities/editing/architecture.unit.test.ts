@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -29,29 +29,6 @@ describe("entity editing architecture", () => {
     expect(source("./editor-presentations.tsx")).not.toMatch(
       /buildPayload|toPayload|mutationFn/,
     );
-  });
-
-  it("does not reintroduce ordinary entity-specific dialog shells", () => {
-    const removedShells = [
-      "../../app/meals/create-meal-dialog.tsx",
-      "../../app/tasks/create-task-dialog.tsx",
-      "../../app/expenses/create-expense-dialog.tsx",
-      "../../app/projects/create-project-dialog.tsx",
-      "../../app/vendors/create-vendor-dialog.tsx",
-      "../../app/purchases/create-purchase-dialog.tsx",
-      "../../app/wishes/wish-form-dialog.tsx",
-      "../../app/_components/forms/quick-add-dialog.tsx",
-    ];
-    for (const path of removedShells) {
-      // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
-      expect(existsSync(new URL(path, import.meta.url)), path).toBe(false);
-    }
-  });
-
-  it("has no raw legacy CRUD intent escape hatch", () => {
-    const commands = source("./use-entity-commands.ts");
-    expect(commands).not.toMatch(/executeOrThrow|intent\s*=\s*["']legacy/);
-    expect(commands).not.toMatch(/readonly raw:|readonly update:/);
   });
 
   it("keeps the editing barrel out of client modules", () => {

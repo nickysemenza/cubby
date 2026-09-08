@@ -26,7 +26,6 @@ import { ListWorkbench } from "../_components/data-table/ListWorkbench";
 import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { formatMealCost, mealDateLabel } from "./meal-format";
 import {
@@ -62,16 +61,6 @@ export function MealTable({
 }: {
   operations?: MealTableOperations;
 }) {
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    dockedInspector,
-    preview,
-    inspectorToggle,
-  } = useEntityPreview("meal", { responsiveInspector: true });
   const columnHelper = useMemo(() => createCubbyColumnHelper<MealOut>(), []);
 
   const updateMealMutation = useUpdateMutation({
@@ -237,16 +226,25 @@ export function MealTable({
   // Neither `buildFilters` nor `filters` is passed: the `meal` entry in
   // `entities/filter-manifest.tsx` drives the Type/Kind header controls, the
   // server `MealFilters` object, and the URL round-trip at once.
-  const { workbench } = useEntityList<MealOut, MealFilters>({
+  const { workbench, inspection } = useEntityList<MealOut, MealFilters>({
     entity: "meal",
     queryOptions: operations.list,
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
     columns,
     deletable: deletableConfig,
     // Same fallback the Name column uses, so the confirm dialog names an
     // unnamed meal by its date instead of its UUID.
     deleteEmptyLabel: mealDateLabel,
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    dockedInspector,
+    preview,
+    inspectorToggle,
+  } = inspection;
 
   return (
     <>

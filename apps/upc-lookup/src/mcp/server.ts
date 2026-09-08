@@ -109,8 +109,11 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
     },
     withErrorHandling(async ({ q, limit, offset }) => {
       const pageSize = limit ?? 20;
-      const page = Math.floor((offset ?? 0) / pageSize) + 1;
-      const { rows, total } = await listProducts(db, { q, page, pageSize });
+      const { rows, total } = await listProducts(db, {
+        q,
+        offset: offset ?? 0,
+        pageSize,
+      });
       return json({
         products: rows.map((p) => productToJson(p, baseUrl)),
         total,

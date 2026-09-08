@@ -43,7 +43,7 @@ export const locationEntityAdapter = defineEntityAdapter({
       const entityId = await locationShortcodes.one(ctx.db, output.id);
       const backgroundBatches = await runMutationSideEffects(ctx.db, {
         action: "created",
-        entity: { entityType: "location", entityId },
+        entity: { entity: "location", id: entityId },
         source: "location.create",
         locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
       });
@@ -62,7 +62,7 @@ export const locationEntityAdapter = defineEntityAdapter({
       );
       const backgroundBatches = await runMutationSideEffects(ctx.db, {
         action: "updated",
-        entity: { entityType: "location", entityId },
+        entity: { entity: "location", id: entityId },
         source: "location.update",
         locationImagesChanged: imagesChanged,
       });
@@ -90,7 +90,7 @@ export const locationEntityAdapter = defineEntityAdapter({
         ctx.db,
         ids.map((entityId) => ({
           action: "deleted" as const,
-          entity: { entityType: "location" as const, entityId },
+          entity: { entity: "location" as const, id: entityId },
           source: "location.delete",
         })),
       );

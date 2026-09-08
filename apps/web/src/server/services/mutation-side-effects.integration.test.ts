@@ -76,7 +76,7 @@ describe("mutation side effects integration", () => {
 
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "product", entityId: product.entityId },
+      entity: { entity: "product", id: product.entityId },
       source: "test.product.update",
     });
 
@@ -144,7 +144,7 @@ describe("mutation side effects integration", () => {
     );
     await runMutationSideEffects(ctx.db, {
       action: "updated",
-      entity: { entityType: "project", entityId: projectId },
+      entity: { entity: "project", id: projectId },
       source: "test.project.rename",
     });
 
@@ -207,10 +207,7 @@ describe("mutation side effects integration", () => {
       ctx.db,
       entries.map((entry) => ({
         action: "updated" as const,
-        entity: {
-          entityType: "inventory" as const,
-          entityId: entry.entityId,
-        },
+        entity: { entity: "inventory" as const, id: entry.entityId },
         source: "test.inventory.bulk",
       })),
     );
@@ -255,10 +252,7 @@ describe("mutation side effects integration", () => {
       ctx.db,
       entries.map((entry) => ({
         action: "created" as const,
-        entity: {
-          entityType: "inventory" as const,
-          entityId: entry.entityId,
-        },
+        entity: { entity: "inventory" as const, id: entry.entityId },
         source: "test.embedding.bulk",
       })),
     );

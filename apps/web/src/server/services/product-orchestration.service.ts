@@ -82,7 +82,7 @@ export async function createProductWithSideEffects(
   );
   const backgroundBatches = await runMutationSideEffects(services.db, {
     action: "created",
-    entity: { entityType: "product", entityId },
+    entity: { entity: "product", id: entityId },
     source: "product.create",
   });
 
@@ -135,7 +135,7 @@ export async function updateProductWithSideEffects(
   );
   const backgroundBatches = await runMutationSideEffects(services.db, {
     action: "updated",
-    entity: { entityType: "product", entityId: id },
+    entity: { entity: "product", id: id },
     source: "product.update",
   });
   const ingredientShortcodes = uniq(
@@ -199,7 +199,7 @@ export async function applyUpcDataWithSideEffects(
     await services.product.updateProduct(input.id, data, actor);
     backgroundBatches = await runMutationSideEffects(services.db, {
       action: "updated",
-      entity: { entityType: "product", entityId: input.id },
+      entity: { entity: "product", id: input.id },
       source: "product.applyUpcData",
     });
   }
@@ -350,7 +350,7 @@ export async function findOrCreateByUPC(
     const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
       action: "created",
-      entity: { entityType: "product", entityId },
+      entity: { entity: "product", id: entityId },
       source: "product.findOrCreateByUPC",
     });
     return { product, created: true };
@@ -465,7 +465,7 @@ async function findOrCreateByISBN(
     const entityId = await resolveCreatedOrInvariant(db, "product", product.id);
     await runMutationSideEffects(db, {
       action: "created",
-      entity: { entityType: "product", entityId },
+      entity: { entity: "product", id: entityId },
       source: "product.findOrCreateByCode",
     });
     return { product, created: true };

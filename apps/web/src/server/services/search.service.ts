@@ -115,8 +115,8 @@ type SearchDocumentRepairBatch = Awaited<
   ReturnType<typeof findLatestBackgroundWorkflow>
 >;
 
-const readSearchDocumentRepairMetadata = <Payload>(
-  value: Payload,
+const readSearchDocumentRepairMetadata = (
+  value: unknown,
 ): SearchDocumentRepairMetadata | null => {
   const parsed = searchDocumentRepairCoordinatorPayloadSchema.safeParse(value);
   return parsed.success ? parsed.data : null;

@@ -86,8 +86,8 @@ export const resolveOrCreateWorkflow = async (
     created.map((ingredient) => ({
       action: "created" as const,
       entity: {
-        entityType: "ingredient" as const,
-        entityId: parseEntityId("ingredient", ingredient.entityId),
+        entity: "ingredient" as const,
+        id: parseEntityId("ingredient", ingredient.entityId),
       },
       source: "ingredient.resolveOrCreate",
     })),

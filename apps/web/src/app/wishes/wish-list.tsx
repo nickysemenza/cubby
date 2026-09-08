@@ -12,7 +12,6 @@ import {
 } from "~/app/_components/data-table/table-features";
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import {
@@ -83,20 +82,6 @@ const wishMobileDetailsHref = (row: WishRow) =>
 
 export function WishList() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<WishRow>(), []);
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview(undefined, {
-    idField: "previewId",
-    responsiveInspector: true,
-  });
-
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<WishRow>((add) => {
@@ -292,20 +277,33 @@ export function WishList() {
   // Neither `buildFilters` nor `filters` is passed: the `wish` entry in
   // `entities/filter-manifest.tsx` drives the Name search box, the server
   // `WishFilters` object, and the `?q=` URL round-trip.
-  const { workbench, data, totalCount } = useEntityList<
+  const { workbench, data, totalCount, inspection } = useEntityList<
     WishRow,
     WishFilters,
     WishOut
   >({
     entity: "wish",
     queryOptions: wishListQueryOptions,
-    onInspectRow: inspectRow,
+    preview: {
+      entity: null,
+      idField: "previewId",
+      responsiveInspector: true,
+    },
     columns,
     // The wish contract's own list query, delete, and invalidation fan-out.
     deletable: true,
     tree: WISH_TREE_CONFIG,
     filterOptions,
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   usePageCount(totalCount);
 
   const candidateProductIds = useMemo(

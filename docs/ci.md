@@ -21,9 +21,11 @@ the peer and fails verification. It deploys nothing.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
-PostgreSQL remains authoritative with 265 integration tests; Playwright retains
-23 browser contracts, a single worker and no retries. Browser verification
-always follows the current web build. Pre-commit still runs `pnpm check`.
+PostgreSQL remains the authoritative integration tier; Playwright retains a
+single worker and no retries. Both tiers reject an empty selection or an
+unexpected skipped test without freezing the suite to a hand-maintained count.
+Browser verification always follows the current web build. Pre-commit still
+runs `pnpm check`.
 
 ## Optional hosted suite
 
@@ -37,8 +39,9 @@ Use `-f mode=coverage` for full instrumented coverage. Neither mode deploys.
 There are no automatic PR verification or scheduled coverage runs. The separate
 Markdown link workflow is also manual. Opt-in Claude workflows remain available.
 Hosted browser lanes test the exact bundle produced by the node test lane and
-retain the existing test-count guards. Explicit manual preview dispatch remains
-available; verification no longer dispatches previews automatically.
+retain the same discovery and no-skip guard as local runs. Explicit manual
+preview dispatch remains available; verification no longer dispatches previews
+automatically.
 
 ## Deployment
 

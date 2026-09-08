@@ -4,7 +4,9 @@ import {
   getMealPreparationsInput,
   getMealPreparationsOut,
   mealMcpOut,
+  mealRecipeIdInput,
   mealScale,
+  mealUpdateRecipeInput,
   shoppingListOut,
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
@@ -89,11 +91,9 @@ export function registerMealTools(server: McpServer) {
     inputSchema: z.object({
       // mealRecipe.id is a declared exception — no shortcode exists for the
       // meal-recipe join row, so this stays the raw uuid.
-      id: z
-        .string()
-        .describe(
-          "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
-        ),
+      id: mealUpdateRecipeInput.shape.id.describe(
+        "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+      ),
       scale: mealScale.optional().describe("New scale multiplier (e.g. 1.5)"),
       sortOrder: z
         .number()
@@ -120,11 +120,9 @@ export function registerMealTools(server: McpServer) {
     description: "Remove a planned recipe from its meal.",
     inputSchema: z.object({
       // mealRecipe.id is a declared exception — see update_meal_recipe above.
-      id: z
-        .string()
-        .describe(
-          "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
-        ),
+      id: mealRecipeIdInput.shape.id.describe(
+        "Meal-recipe ID (the `id` inside a meal's recipes[], NOT the recipe id)",
+      ),
     }),
     outputSchema: mealMcpOut,
     annotations: WRITE_CLOSED,

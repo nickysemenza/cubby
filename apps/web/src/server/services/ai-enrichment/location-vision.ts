@@ -255,7 +255,7 @@ export async function describeLocation(
       await updateLocationAiDescription(db, locationId, cached.description);
       await runMutationSideEffects(db, {
         action: "updated",
-        entity: { entityType: "location", entityId: locationId },
+        entity: { entity: "location", id: locationId },
         source: "location-ai.description",
       });
     }
@@ -293,7 +293,7 @@ export async function describeLocation(
   await updateLocationAiDescription(db, locationId, result.description);
   await runMutationSideEffects(db, {
     action: "updated",
-    entity: { entityType: "location", entityId: locationId },
+    entity: { entity: "location", id: locationId },
     source: "location-ai.description",
   });
 
@@ -552,10 +552,7 @@ export async function approveDetectedInventoryItem(
       backgroundBatches.push(
         ...(await runMutationSideEffects(db, {
           action: "created",
-          entity: {
-            entityType: "product",
-            entityId: productId,
-          },
+          entity: { entity: "product", id: productId },
           source: "location-ai.inventory.approve",
         })),
       );
@@ -591,10 +588,7 @@ export async function approveDetectedInventoryItem(
   backgroundBatches.push(
     ...(await runMutationSideEffects(db, {
       action: "created",
-      entity: {
-        entityType: "inventory",
-        entityId: inventoryEntityId,
-      },
+      entity: { entity: "inventory", id: inventoryEntityId },
       source: "location-ai.inventory.approve",
     })),
   );

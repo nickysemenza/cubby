@@ -40,7 +40,6 @@ import { EntityInlineLink } from "../_components/EntityInlineLink";
 import { EntityInlineLinkList } from "../_components/EntityInlineLinkList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { TruncatedList } from "../_components/TruncatedList";
 
@@ -132,16 +131,6 @@ export function IngredientList() {
     () => createCubbyColumnHelper<IngredientListItem>(),
     [],
   );
-  const {
-    onRowClick,
-    inspectRow,
-    onRowHover,
-    onRowHoverEnd,
-    PreviewSheet,
-    preview,
-    dockedInspector,
-    inspectorToggle,
-  } = useEntityPreview("ingredient", { responsiveInspector: true });
   const [foodHydrationIds, setFoodHydrationIds] = useState<readonly string[]>(
     [],
   );
@@ -266,14 +255,23 @@ export function IngredientList() {
     [columnHelper],
   );
 
-  const { workbench, data, totalCount } = useEntityList({
+  const { workbench, data, totalCount, inspection } = useEntityList({
     entity: "ingredient",
     queryOptions: entityListFor("ingredient").listQueryPlan,
-    onInspectRow: inspectRow,
+    preview: { responsiveInspector: true },
     getMappings: getIngredientListMappings,
     columns,
     deletable: deletableConfig,
   });
+  const {
+    onRowClick,
+    onRowHover,
+    onRowHoverEnd,
+    PreviewSheet,
+    preview,
+    dockedInspector,
+    inspectorToggle,
+  } = inspection;
   usePageCount(totalCount);
 
   const productIds = useMemo(

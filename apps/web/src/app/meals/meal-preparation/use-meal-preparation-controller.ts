@@ -1,6 +1,6 @@
 import type { MealShortcode } from "@cubby/schemas/identifiers";
 import type { MealOut } from "@cubby/schemas/meal";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -71,27 +71,28 @@ export function useMealPreparationController({
   const preparationQuery = useQuery(
     mealOperations.getPreparations.queryOptions({ mealId }),
   );
-  const preparationDate = mealDate ?? format(new Date(), "yyyy-MM-dd");
-  const targetMealsQuery = useQuery({
-    ...mealOperations.getByDateRange.queryOptions({
-      from: format(subDays(parseISO(preparationDate), 30), "yyyy-MM-dd"),
-      to: format(addDays(parseISO(preparationDate), 30), "yyyy-MM-dd"),
-    }),
-    enabled: preparationQuery.data != null,
-  });
-  const sourceMealsQuery = useQuery({
-    ...mealOperations.getByDateRange.queryOptions({
-      from: format(subDays(parseISO(preparationDate), 30), "yyyy-MM-dd"),
-      to: preparationDate,
-    }),
-    enabled: preparationQuery.data != null,
+  const dateRangeQueries =
+    mealDate != null && preparationQuery.data != null
+      ? [
+          mealOperations.getByDateRange.queryOptions({
+            from: format(subDays(parseISO(mealDate), 30), "yyyy-MM-dd"),
+            to: format(addDays(parseISO(mealDate), 30), "yyyy-MM-dd"),
+          }),
+          mealOperations.getByDateRange.queryOptions({
+            from: format(subDays(parseISO(mealDate), 30), "yyyy-MM-dd"),
+            to: mealDate,
+          }),
+        ]
+      : [];
+  const [targetMealsQuery, sourceMealsQuery] = useQueries({
+    queries: dateRangeQueries,
   });
   const eatersQuery = useQuery({
     ...ledgerParty.options.queryOptions(null),
     enabled: preparationQuery.data != null,
   });
   const targetMeals: PreparationTargetOption[] =
-    targetMealsQuery.data
+    targetMealsQuery?.data
       ?.map((target) => ({
         id: target.id,
         date: target.date,
@@ -107,8 +108,8 @@ export function useMealPreparationController({
         party.kind === "member" || party.kind === "guest",
     ) ?? [];
   const sourceChoices = sourceChoicesFor(
-    sourceMealsQuery.data,
-    preparationDate,
+    sourceMealsQuery?.data,
+    mealDate ?? "",
   );
   const selectedSourceChoice = sourceChoices.find(
     (choice) => choice.value === sourceSelectionId,

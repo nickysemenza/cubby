@@ -1,4 +1,11 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -85,6 +92,41 @@ describe("useEntityList", () => {
     expect(result.current.workbench.table.getRow("PRD-TWO").original).toEqual({
       id: "PRD-TWO",
     });
+  });
+
+  it("wires the canonical preview into the single-row Inspect action", async () => {
+    const { result } = renderHook(
+      () =>
+        useEntityList<TestRow, Record<string, never>>({
+          entity: "product",
+          queryOptions: listQueryOptions,
+          buildFilters: () => ({}),
+          columns: NO_COLUMNS,
+          preview: {},
+        }),
+      { wrapper: harness.routerWrapper },
+    );
+
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    act(() => {
+      result.current.workbench.table.getRow("PRD-TWO").toggleSelected(true);
+    });
+    await waitFor(() =>
+      expect(
+        result.current.workbench.table.getSelectedRowModel().rows,
+      ).toHaveLength(1),
+    );
+
+    render(result.current.workbench.bulkActionBar);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
+
+    await waitFor(() =>
+      expect(result.current.inspection.preview).toEqual({
+        entityType: "product",
+        id: "PRD-TWO",
+        rowKey: "PRD-TWO",
+      }),
+    );
   });
 
   it("clears a bulk selection when its query scope changes", async () => {

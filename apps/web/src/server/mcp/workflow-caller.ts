@@ -1,10 +1,3 @@
-import { ingredientRecipeUsagesOut } from "@cubby/schemas/ingredient";
-import {
-  getMealPreparationsInput,
-  mealRecipeIdInput,
-  mealUpdateRecipeInput,
-  saveMealRecipePreparationInput,
-} from "@cubby/schemas/meal";
 import {
   type patchProductExternalIdsInput,
   type productExternalIdCollisionInput,
@@ -163,9 +156,7 @@ export const createMcpWorkflowCaller = (
   },
   ingredient: {
     recipeUsages: async (input: Parameters<typeof recipeUsagesWorkflow>[1]) =>
-      ingredientRecipeUsagesOut.parse(
-        await recipeUsagesWorkflow(context.readDb, input),
-      ),
+      await recipeUsagesWorkflow(context.readDb, input),
     resolveOrCreate: (input: Parameters<typeof resolveOrCreateWorkflow>[1]) =>
       resolveOrCreateWorkflow(context.db, input),
   },
@@ -174,29 +165,21 @@ export const createMcpWorkflowCaller = (
       moveInventoryEntriesWorkflow(context.db, context.actorContext, input),
   },
   meal: {
-    getPreparations: (input: z.input<typeof getMealPreparationsInput>) =>
-      getMealPreparationsWorkflow(
-        context.readDb,
-        getMealPreparationsInput.parse(input),
-      ),
+    getPreparations: (
+      input: Parameters<typeof getMealPreparationsWorkflow>[1],
+    ) => getMealPreparationsWorkflow(context.readDb, input),
     addRecipe: (input: Parameters<typeof addRecipeToMealWorkflow>[1]) =>
       addRecipeToMealWorkflow(context.db, input, context.actorContext),
-    updateRecipe: (input: z.input<typeof mealUpdateRecipeInput>) =>
-      updateMealRecipeWorkflow(
-        context.db,
-        mealUpdateRecipeInput.parse(input),
-        context.actorContext,
-      ),
-    removeRecipe: (input: z.input<typeof mealRecipeIdInput>) =>
-      removeMealRecipeWorkflow(
-        context.db,
-        mealRecipeIdInput.parse(input),
-        context.actorContext,
-      ),
-    savePreparation: (input: z.input<typeof saveMealRecipePreparationInput>) =>
+    updateRecipe: (input: Parameters<typeof updateMealRecipeWorkflow>[1]) =>
+      updateMealRecipeWorkflow(context.db, input, context.actorContext),
+    removeRecipe: (input: Parameters<typeof removeMealRecipeWorkflow>[1]) =>
+      removeMealRecipeWorkflow(context.db, input, context.actorContext),
+    savePreparation: (
+      input: Parameters<typeof saveMealRecipePreparationWorkflow>[1],
+    ) =>
       saveMealRecipePreparationWorkflow(
         context.db,
-        saveMealRecipePreparationInput.parse(input),
+        input,
         context.actorContext,
       ),
     getShoppingList: (input: Parameters<typeof getShoppingListWorkflow>[1]) =>

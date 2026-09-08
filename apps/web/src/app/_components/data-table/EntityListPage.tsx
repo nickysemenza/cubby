@@ -47,7 +47,7 @@ export interface EntityListPageProps<
   TFilters extends object,
 >
   extends
-    Omit<UseEntityListOptions<TData, TFilters, TData>, "tree">,
+    Omit<UseEntityListOptions<TData, TFilters, TData>, "preview" | "tree">,
     WorkbenchProps<TData> {
   /**
    * Row-preview sheet. Defaults to the entity's own preview keyed on `id`;

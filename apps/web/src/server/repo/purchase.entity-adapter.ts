@@ -45,12 +45,12 @@ export const purchaseEntityAdapter = defineEntityAdapter({
         [
           ...detached.expenseIds.map((entityId) => ({
             action: "updated" as const,
-            entity: { entityType: "expense" as const, entityId },
+            entity: { entity: "expense" as const, id: entityId },
             source: "purchase.delete",
           })),
           ...detached.financialTransactionIds.map((entityId) => ({
             action: "updated" as const,
-            entity: { entityType: "financialTransaction" as const, entityId },
+            entity: { entity: "financialTransaction" as const, id: entityId },
             source: "purchase.delete",
           })),
         ],

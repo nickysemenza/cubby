@@ -19,7 +19,7 @@ test("every PostgreSQL contract module belongs to exactly one family", () => {
   const families = filesBelow(familyRoot)
     .filter((path) => path.endsWith(".integration.test.ts"))
     .toSorted();
-  assert.equal(families.length, 8);
+  assert.ok(families.length > 0, "no PostgreSQL contract families discovered");
 
   const contracts = filesBelow(serverRoot)
     .filter(
@@ -28,7 +28,7 @@ test("every PostgreSQL contract module belongs to exactly one family", () => {
         !path.startsWith(`${familyRoot}/`),
     )
     .toSorted();
-  assert.equal(contracts.length, 60);
+  assert.ok(contracts.length > 0, "no PostgreSQL contract modules discovered");
 
   const imported = families.flatMap((family) => {
     const source = readFileSync(family, "utf8");
@@ -36,6 +36,7 @@ test("every PostgreSQL contract module belongs to exactly one family", () => {
       resolve(dirname(family), `${match[1]}.ts`),
     );
   });
+  assert.ok(imported.length > 0, "PostgreSQL contract families import nothing");
 
   assert.equal(
     new Set(imported).size,

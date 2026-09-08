@@ -40,13 +40,9 @@ export const calculateAffectedDeleteEdges = (
   }));
 
 /**
- * Measure the concrete incoming rows a successful delete changed.
- *
- * Delete repositories run their own locking and mutation transaction; this
- * report uses the same live-row predicate as those mutations. A `block` edge
- * can only reach a successful result at zero, while a `preserve` edge is
- * intentionally left untouched. Every other effect changes the live rows that
- * point at the deleted targets.
+ * Run a delete with its incoming-edge accounting in one repeatable-read
+ * repository transaction. The repository owns both the Drizzle transaction
+ * adapter and the before/delete/after sequence.
  */
 export async function executeDeleteWithEffects<
   E extends ShortcodeEntity,

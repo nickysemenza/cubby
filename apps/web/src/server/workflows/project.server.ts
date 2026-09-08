@@ -94,12 +94,12 @@ export const projectCreateFromTasksWorkflow = async (
   await runMutationSideEffectsForEntities(db, [
     {
       action: "created",
-      entity: { entityType: "project", entityId: projectEntityId },
+      entity: { entity: "project", id: projectEntityId },
       source: "project.createFromTasks",
     },
     ...taskEntityIds.map((entityId) => ({
       action: "updated" as const,
-      entity: { entityType: "task" as const, entityId },
+      entity: { entity: "task" as const, id: entityId },
       source: "project.createFromTasks",
     })),
   ]);

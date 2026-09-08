@@ -45,11 +45,7 @@ import type {
   EntityMutationExecution,
   RuntimeEntityEditRequest,
 } from "./types";
-
-const entityEditValueBagSchema = z.record(
-  z.string(),
-  z.union([z.json(), z.date(), z.undefined()]),
-);
+import { entityEditValueBagSchema } from "./value-schema";
 
 /**
  * A Start refusal already says which field failed and what lifecycle edge

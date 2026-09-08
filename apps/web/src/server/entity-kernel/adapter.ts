@@ -14,12 +14,11 @@ import {
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
 import type { MealMutationHooks } from "~/server/repo/meal/crud";
+import { executeDeleteWithEffects } from "~/server/repo/removal";
 import type { TaskMutationHooks } from "~/server/repo/task/crud";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
-
-import { executeDeleteWithEffects } from "./delete-effects";
 export interface EntityKernelContext {
   /** Authoritative adapter for strong reads, mutations, and side effects. */
   db: Database;

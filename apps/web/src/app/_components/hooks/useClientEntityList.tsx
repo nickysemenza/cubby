@@ -15,6 +15,7 @@ import {
   useEntityListPresentation,
   useEntityListPresentationState,
 } from "./useEntityListPresentation";
+import { useEntityPreview } from "./useEntityPreview";
 import { ListBulkActionBar } from "./useListBulkActions";
 import type { FilterInput } from "./useStandardColumns";
 
@@ -59,6 +60,7 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "hiddenFilterColumns"
   | "subject"
   | "onInspectRow"
+  | "preview"
   | "includeCatalogActions"
 >;
 
@@ -97,6 +99,7 @@ interface UseClientEntityListOptions<
 interface UseClientEntityListReturn<TData extends BaseListRow> {
   workbench: ListWorkbenchModel<TData>;
   requestDelete: UseEntityListReturn<TData>["requestDelete"];
+  inspection: UseEntityListReturn<TData>["inspection"];
 }
 
 /**
@@ -131,10 +134,21 @@ export function useClientEntityList<TData extends BaseListRow>({
   rowIsEntity,
   bulkActions,
   onInspectRow,
+  preview,
   includeCatalogActions,
   deleteEmptyLabel,
   subject,
 }: UseClientEntityListOptions<TData>): UseClientEntityListReturn<TData> {
+  const inspection = useEntityPreview(
+    preview
+      ? preview.entity === null
+        ? undefined
+        : (preview.entity ?? entity)
+      : undefined,
+    preview,
+  );
+  const effectiveOnInspectRow =
+    onInspectRow ?? (preview ? inspection.inspectRow : undefined);
   const clientTableStateOptions = useMemo(
     () => ({
       initialPagination: { pageIndex: 0, pageSize: DEFAULT_CLIENT_PAGE_SIZE },
@@ -149,7 +163,7 @@ export function useClientEntityList<TData extends BaseListRow>({
     deletable: resolvedDeletable,
     extraActions,
     bulkActions,
-    onInspectRow,
+    onInspectRow: effectiveOnInspectRow,
     includeCatalogActions,
     deleteEmptyLabel,
     selectionScope: (state) => state.allFilters,
@@ -260,5 +274,6 @@ export function useClientEntityList<TData extends BaseListRow>({
       deleteDialog: presentationState.deleteDialog,
     },
     requestDelete: presentationState.requestDelete,
+    inspection,
   };
 }
