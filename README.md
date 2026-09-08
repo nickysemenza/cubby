@@ -282,9 +282,8 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   the existing WASM entrypoint restores a matching Nx artifact or builds it. Claude's
   startup hook runs setup only in linked worktrees.
   Gitignored env is copied via [.worktreeinclude](.worktreeinclude);
-  dependency links remain local, while pnpm 11 shares completed dependency graphs
-  through its global virtual store. The type-fixer config dependency and explicit
-  type peers preserve TypeScript resolution without changing compiler strictness.
+  dependency links remain local. The type-fixer config dependency and explicit type
+  peers preserve TypeScript resolution without changing compiler strictness.
   Measurements are recorded in [local check performance](docs/local-check-performance.md).
 - **Builds are shared, not cold.** The `wasm` script points `CARGO_TARGET_DIR` at a
   shared cache (`~/.cache/cubby/recipebridge-target`), so worktrees reuse the

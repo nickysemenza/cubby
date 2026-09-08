@@ -19,7 +19,7 @@ PostgreSQL and browser tests concurrently through the existing `concurrently`
 npm runner. Those two tiers use isolated database templates; a failure stops
 the peer and fails verification. It deploys nothing.
 
-Node 24, pnpm 11.22.0, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
+Node 24, pnpm 12.3.4, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
 PostgreSQL remains authoritative with 265 integration tests; Playwright retains
 23 browser contracts, a single worker and no retries. Browser verification

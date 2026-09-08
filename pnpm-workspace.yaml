@@ -5,9 +5,18 @@ packages:
 # Preserve the existing install-script allowlist and warning-only policy.
 allowBuilds:
   '@google/genai': false
+  '@openrouter/sdk': false
+  '@prisma/client': false
+  '@prisma/engines': false
   '@sentry/cli': false
+  '@swc/core': false
   better-sqlite3: true
+  core-js: false
   esbuild: true
+  msw: false
+  nx: false
+  prisma: false
+  protobufjs: false
   workerd: false
 strictDepBuilds: false
 minimumReleaseAge: 0
@@ -416,10 +425,7 @@ peerDependencyRules:
     typescript: ">=5 <8"
 
 # Reuse completed dependency graphs across fresh worktrees.
-enableGlobalVirtualStore: true
+enableGlobalVirtualStore: false
 
 configDependencies:
   '@pnpm/plugin-types-fixer': 0.1.0
-
-# The type fixer needs devDependencies from registry metadata during resolution.
-fullMetadata: true

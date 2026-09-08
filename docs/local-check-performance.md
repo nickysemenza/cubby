@@ -221,13 +221,16 @@ that path's name is not evidence of Node 24 validation.
 
 ### Retained implementation
 
-pnpm 11.22.0 shares completed dependency graphs with `enableGlobalVirtualStore`.
+pnpm 12.3.4 uses a local virtual store so package peer resolution remains rooted in
+each workspace package. This is slightly less aggressive about sharing completed
+dependency graphs across fresh worktrees, but avoids global-store symlink resolution
+issues in CLI tools such as Drizzle Kit.
 `allowBuilds` preserves the two approved build scripts; `strictDepBuilds: false`
 preserves the previous warning-only treatment of unapproved scripts. Explicit
 `minimumReleaseAge: 0` preserves the previous dependency-update policy.
 
-The maintained `@pnpm/plugin-types-fixer` config dependency uses `fullMetadata`
-to repair published packages' missing type dependencies. Packages that omit their
+The maintained `@pnpm/plugin-types-fixer` config dependency repairs published
+packages' missing type dependencies. Packages that omit their
 monorepo devDependencies from their published metadata have explicit optional
 React type peers; jest-dom declares its Vitest peer. Nivo line also needs its
 undeclared runtime Lodash dependency supplied explicitly, and vite-ssr-components
