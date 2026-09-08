@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/image";
 import { type ImportRecipe } from "@cubby/schemas/import-recipe";
 import { isbnFromEpubIdentifiers } from "@cubby/schemas/isbn";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
 import { sum } from "es-toolkit";
 import { AlertTriangle } from "lucide-react";
@@ -175,15 +175,13 @@ export function CookbookImport({
   // "Add from source": re-open a cookbook's stored extraction as a ready Book so
   // the user can selectively re-import (no EPUB, no LLM). The cookbookId marks it
   // so importBook skips upsertCookbook; BookGroupCard flags already-imported titles.
-  const source = useQuery({
-    ...recipe.getCookbookSource.queryOptions({
-      cookbookId: loadCookbookId ?? "",
-    }),
-    enabled: !!loadCookbookId,
-  });
+  const sourceQueries = loadCookbookId
+    ? [recipe.getCookbookSource.queryOptions({ cookbookId: loadCookbookId })]
+    : [];
+  const [source] = useQueries({ queries: sourceQueries });
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
-    if (!source.data || seeded) return;
+    if (!source?.data || seeded) return;
     const { id, name, recipes } = source.data;
     setBooks((prev) =>
       prev.some((b) => b.cookbookId === id)
@@ -205,7 +203,7 @@ export function CookbookImport({
           ],
     );
     setSeeded(true);
-  }, [source.data, seeded]);
+  }, [source?.data, seeded]);
 
   // Mutate one book in place by source key; always produces a new array so React
   // re-renders, and a new Set/Map where those change (no in-place mutation).

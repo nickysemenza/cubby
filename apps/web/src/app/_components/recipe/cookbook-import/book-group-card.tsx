@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertCircle,
@@ -49,10 +49,12 @@ export function BookGroupCard({
   // The id links to the existing Cubby recipe; the content signature lets each
   // card show "no changes" vs "will update". Also lets a cross-recipe reference
   // link to a recipe that already exists.
-  const { data: existingRecipes } = useQuery({
-    ...recipe.getCookbookDiff.queryOptions({ book: name }),
-    enabled: ready && name.length > 0,
-  });
+  const existingQueries =
+    ready && name.length > 0
+      ? [recipe.getCookbookDiff.queryOptions({ book: name })]
+      : [];
+  const [existingQuery] = useQueries({ queries: existingQueries });
+  const existingRecipes = existingQuery?.data;
   const existingByTitle = useMemo(
     () =>
       new Map(

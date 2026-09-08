@@ -74,7 +74,7 @@ export default function BulkInventoryForm({
   // search, so this fetch exists only to seed the field — looking the id up in
   // a first page of locations silently failed for anything further down.
   const { data: initialLocation } = useQuery({
-    ...entityDetailFor("location").queryOptions(initialLocationId!),
+    ...entityDetailFor("location").queryOptions(initialLocationId ?? ""),
     enabled: !!initialLocationId,
   });
 
