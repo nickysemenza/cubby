@@ -4,6 +4,7 @@ import {
   projectAttachResourcesWorkflow,
   projectCreateFromTasksWorkflow,
   projectDashboardSummaryWorkflow,
+  projectDependencyGraphWorkflow,
   projectDetachResourcesWorkflow,
   projectOptionsWorkflow,
   projectPortfolioAnalyticsWorkflow,
@@ -16,6 +17,8 @@ import {
 } from "~/server/workflows/project.server";
 
 export const projectHandlers = implementOperationDomain(project, {
+  getDependencyGraph: (context, input) =>
+    projectDependencyGraphWorkflow(context.db, input),
   tree: (context, input) => projectTreeWorkflow(context.db, input),
   dashboardSummary: (context, input) =>
     projectDashboardSummaryWorkflow(context.db, input),

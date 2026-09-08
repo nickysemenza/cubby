@@ -6,6 +6,7 @@ import {
 import {
   createProjectFromTasksInput,
   projectDashboardFiltersSchema,
+  projectDependencyGraphInput,
   projectDashboardSummaryOut,
   projectOptionsOut,
   projectPortfolioAnalyticsOut,
@@ -31,6 +32,7 @@ import {
   attachProjectResources,
   detachProjectResources,
   listProjectResources,
+  getProjectDependencyGraph,
   projectDashboardSummary,
   projectNameOptions,
   projectPortfolioAnalytics,
@@ -56,8 +58,20 @@ export {
   projectToolMatrixInput,
   projectToolUsageSetInput,
   projectTreeInput,
+  projectDependencyGraphInput,
   repointProjectUsesInput,
 };
+
+export const projectDependencyGraphWorkflow = async (
+  db: Database,
+  input: z.output<typeof projectDependencyGraphInput>,
+) =>
+  getProjectDependencyGraph(
+    db,
+    input?.projectId
+      ? await resolveOrThrow(db, "project", input.projectId)
+      : undefined,
+  );
 
 export const projectTreeWorkflow = (
   db: Database,

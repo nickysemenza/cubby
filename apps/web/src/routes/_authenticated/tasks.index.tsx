@@ -1,8 +1,11 @@
+import { projectShortcode } from "@cubby/schemas/identifiers";
 import {
   createFileRoute,
+  Link,
   stripSearchParams,
   useNavigate,
 } from "@tanstack/react-router";
+import { Share2 } from "lucide-react";
 import { lazy, Suspense } from "react";
 
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
@@ -12,6 +15,7 @@ import { TaskList } from "~/app/tasks/tasklist";
 import { TasksStatsStrip } from "~/app/tasks/TasksStatsStrip";
 import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
+import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import {
   ViewSwitcher,
@@ -61,6 +65,7 @@ export const Route = createFileRoute("/_authenticated/tasks/")({
 
 function TasksPage() {
   const search = Route.useSearch();
+  const graphProject = projectShortcode.safeParse(search.project);
   const { q } = search;
   // Next is an explicitly labeled actionable-work renderer. A search deep
   // link lands on List so its ordinary filter is never ignored.
@@ -82,7 +87,23 @@ function TasksPage() {
       bodyGutter={view === "list" || view === "board" ? "none" : "standard"}
       // Header-level "New task" so it's reachable from every view (Next/Board
       // have no list toolbar of their own to hang it off).
-      actions={<CreateDialogAction request={taskCaptureRequest()} />}
+      actions={
+        <>
+          <Link
+            to="/entities"
+            search={{
+              tab: "work",
+              projectId: graphProject.success ? graphProject.data : undefined,
+            }}
+          >
+            <Button variant="outline">
+              <Share2 />
+              Graph
+            </Button>
+          </Link>
+          <CreateDialogAction request={taskCaptureRequest()} />
+        </>
+      }
       workbenchControls={
         <ViewSwitcher
           ariaLabel="Tasks view"

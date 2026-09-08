@@ -14,6 +14,7 @@ import {
   createProject,
   deleteProjects,
   getProjectByID,
+  getProjectDependencyGraph,
   projectTreePage,
   updateProject,
 } from "./project";
@@ -107,6 +108,107 @@ describe("project repository", () => {
         costEstimate: null,
       },
     });
+  });
+
+  it("returns a scoped subtree with direct dependency and hierarchy context", async () => {
+    const { output: root, entityId: rootId } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "graph root" }),
+      ctx.actor,
+    );
+    const { output: child } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({
+        name: "graph child",
+        parentProjectId: root.id,
+      }),
+      ctx.actor,
+    );
+    const { output: outside } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "graph outside" }),
+      ctx.actor,
+    );
+    await updateProject(
+      ctx.db,
+      root.id,
+      { blockedByIds: [outside.id] },
+      ctx.actor,
+    );
+
+    const { output: parentTask } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "graph parent task",
+        projectId: child.id,
+        trade: "other",
+      }),
+      ctx.actor,
+    );
+    const { output: childTask } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "graph child task",
+        parentTaskId: parentTask.id,
+        trade: "other",
+      }),
+      ctx.actor,
+    );
+    const { output: blocker } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        name: "graph external blocker",
+        projectId: outside.id,
+        trade: "other",
+      }),
+      ctx.actor,
+    );
+    await updateTask(
+      ctx.db,
+      childTask.id,
+      { blockedByIds: [blocker.id] },
+      ctx.actor,
+    );
+
+    const graph = await getProjectDependencyGraph(ctx.db, rootId);
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+    expect(byId.get(root.id)).toMatchObject({
+      external: false,
+      kind: "project",
+    });
+    expect(byId.get(child.id)).toMatchObject({
+      external: false,
+      parentId: root.id,
+    });
+    expect(byId.get(outside.id)).toMatchObject({
+      external: true,
+      kind: "project",
+    });
+    expect(byId.get(blocker.id)).toMatchObject({
+      external: true,
+      parentId: outside.id,
+    });
+    expect(graph.edges).toEqual(
+      expect.arrayContaining([
+        { source: root.id, target: child.id, kind: "hierarchy" },
+        { source: child.id, target: parentTask.id, kind: "hierarchy" },
+        { source: parentTask.id, target: childTask.id, kind: "hierarchy" },
+        { source: outside.id, target: root.id, kind: "dependency" },
+        { source: blocker.id, target: childTask.id, kind: "dependency" },
+      ]),
+    );
+  });
+
+  it("includes inbox tasks when no project scope is selected", async () => {
+    const { output: inbox } = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "graph inbox task", trade: "other" }),
+      ctx.actor,
+    );
+
+    expect((await getProjectDependencyGraph(ctx.db)).nodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: inbox.id })]),
+    );
   });
 
   it("rejects a dependency cycle against the whole projected graph", async () => {

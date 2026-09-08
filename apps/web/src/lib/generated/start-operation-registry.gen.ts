@@ -239,6 +239,7 @@ export const START_OPERATIONS = {
   "project.createFromTasks": { kind: "mutation" },
   "project.dashboardSummary": { kind: "query" },
   "project.detachResources": { kind: "mutation" },
+  "project.getDependencyGraph": { kind: "query" },
   "project.options": { kind: "query" },
   "project.portfolioAnalytics": { kind: "query" },
   "project.resources": { kind: "query" },

@@ -28,6 +28,7 @@
     "./equivalences": "./src/equivalences.ts",
     "./ingredient-usage": "./src/ingredient-usage.ts",
     "./recipe-dependency-graph": "./src/recipe-dependency-graph.ts",
+    "./project-dependency-graph": "./src/project-dependency-graph.ts",
     "./recipe-shared": "./src/recipe-shared.ts",
     "./image": "./src/image.ts",
     "./image-summary": "./src/image-summary.ts",
