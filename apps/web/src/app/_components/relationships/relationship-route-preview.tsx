@@ -5,7 +5,7 @@ import {
   type RelatedViewDefinition,
   relatedViewsFor,
 } from "@cubby/schemas/related-view";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 import { type ReactNode, useMemo } from "react";
 import { z } from "zod";
@@ -193,7 +193,12 @@ export function useRelationshipRouteSource(
   // SAFETY: dynamic entity selection chooses one generated query-options member,
   // but React Query cannot retain that correlated union through this call.
   const query = useQuery({
-    ...entityPreviewQueryOptions(entity, sourceId ?? ""),
+    ...(sourceId
+      ? entityPreviewQueryOptions(entity, sourceId)
+      : {
+          queryKey: ["relationship-route", entity, "no-source"],
+          queryFn: skipToken,
+        }),
     enabled: false,
   } as never);
   return useMemo(() => {

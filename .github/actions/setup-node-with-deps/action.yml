@@ -66,11 +66,12 @@ runs:
     - name: Build recipebridge WASM
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
       shell: bash
-      run: pnpm wasm
+      # pnpm 12 otherwise installs dependencies before running this script,
+      # breaking the WASM-before-install ordering above.
+      run: wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge
       env:
         RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
-        # The root `wasm` script honours ${CARGO_TARGET_DIR:-…}; pin it so
-        # rust-cache's cache-workspaces above actually covers the build output.
+        # Match rust-cache's cache-workspaces above.
         CARGO_TARGET_DIR: ${{ github.workspace }}/recipebridge/target
 
     - name: Save WASM pkg to cache
