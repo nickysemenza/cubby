@@ -48,6 +48,7 @@ export {
   updateProject,
 } from "./crud";
 export { projectDashboardSummary } from "./dashboard-summary";
+export { getProjectDependencyGraph } from "./dependency-graph";
 export { projectList, projectNameOptions } from "./lookup";
 export { projectPortfolioAnalytics } from "./portfolio-analytics";
 export { projectToolGallery } from "./tool-gallery";

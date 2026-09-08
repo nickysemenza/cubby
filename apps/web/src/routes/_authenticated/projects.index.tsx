@@ -1,4 +1,10 @@
-import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { projectShortcode } from "@cubby/schemas/identifiers";
+import {
+  createFileRoute,
+  Link,
+  stripSearchParams,
+} from "@tanstack/react-router";
+import { Share2 } from "lucide-react";
 
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import {
@@ -6,6 +12,7 @@ import {
   ProjectsDashboard,
 } from "~/app/projects/projects-dashboard";
 import { Page } from "~/components/page/Page";
+import { Button } from "~/components/ui/button";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 import { projectCaptureRequest } from "~/entities/editing/editor-requests";
 import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
@@ -39,6 +46,7 @@ export const Route = createFileRoute("/_authenticated/projects/")({
 
 function ProjectsPage() {
   const search = Route.useSearch();
+  const graphProject = projectShortcode.safeParse(search.parent);
   const navigate = Route.useNavigate();
   const view =
     DASHBOARD_VIEW_OPTIONS.find((option) => option.value === search.view)
@@ -65,9 +73,23 @@ function ProjectsPage() {
         />
       }
       actions={
-        <CreateDialogAction request={projectCaptureRequest()}>
-          New Project
-        </CreateDialogAction>
+        <>
+          <Link
+            to="/entities"
+            search={{
+              tab: "work",
+              projectId: graphProject.success ? graphProject.data : undefined,
+            }}
+          >
+            <Button variant="outline">
+              <Share2 />
+              Graph
+            </Button>
+          </Link>
+          <CreateDialogAction request={projectCaptureRequest()}>
+            New Project
+          </CreateDialogAction>
+        </>
       }
     >
       <ProjectsDashboard />

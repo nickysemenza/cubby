@@ -55,6 +55,11 @@ import {
   sortPaginationFields,
 } from "./pagination";
 
+export {
+  projectDependencyGraphInput,
+  projectDependencyGraphSchema,
+} from "./project-dependency-graph";
+
 export { plainDate } from "./base-entity";
 
 /**

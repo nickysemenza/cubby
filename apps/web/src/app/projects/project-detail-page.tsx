@@ -7,6 +7,7 @@ import {
   taskStatusValues,
 } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import {
   AlertTriangle,
@@ -19,6 +20,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Share2,
   ShoppingCart,
   Wallet,
   Wrench,
@@ -1368,6 +1370,16 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
         tone: project.status === "done" ? "green" : "ink",
       }}
       heroStats={heroStats}
+      heroActions={{
+        secondary: (
+          <Link to="/entities" search={{ tab: "work", projectId: project.id }}>
+            <Button variant="outline">
+              <Share2 />
+              Graph
+            </Button>
+          </Link>
+        ),
+      }}
     >
       <DetailSections
         sections={sections}

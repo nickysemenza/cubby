@@ -491,6 +491,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "project.detachResources": async () =>
     (await import("~/server/project-browser.server")).projectHandlers.operations
       .detachResources,
+  "project.getDependencyGraph": async () =>
+    (await import("~/server/project-browser.server")).projectHandlers.operations
+      .getDependencyGraph,
   "project.options": async () =>
     (await import("~/server/project-browser.server")).projectHandlers.operations
       .options,

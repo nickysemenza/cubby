@@ -1,21 +1,35 @@
 import { entitySchema } from "@cubby/schemas/entity";
-import { cookbookShortcode } from "@cubby/schemas/identifiers";
+import {
+  cookbookShortcode,
+  projectShortcode,
+  taskShortcode,
+  recipeShortcode,
+} from "@cubby/schemas/identifiers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useId } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { z } from "zod";
 
 import { EntityIntegrityTab } from "~/app/_components/entities/EntityIntegrityTab";
 import { EntityManifestGrid } from "~/app/_components/entities/EntityManifestGrid";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
-import { RecipeDependencyGraph } from "~/app/_components/visualizations/recipe-dependency-graph";
-import { Row, Stack } from "~/components/layout";
+import type { GraphFilters } from "~/app/_components/visualizations/dependency-graph-model";
+const RecipeDependencyGraph = lazy(() =>
+  import("~/app/_components/visualizations/recipe-dependency-graph").then(
+    (module) => ({ default: module.RecipeDependencyGraph }),
+  ),
+);
+const WorkDependencyGraph = lazy(() =>
+  import("~/app/_components/visualizations/work-dependency-graph").then(
+    (module) => ({ default: module.WorkDependencyGraph }),
+  ),
+);
+import { Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
 import { pageTitle } from "~/lib/page-title";
 
-const tabSchema = z.enum(["recipes", "schema", "integrity"]);
+const tabSchema = z.enum(["recipes", "work", "schema", "integrity"]);
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
   // it preserves the pre-merge /entities content (and its zero-query cost);
@@ -25,6 +39,19 @@ const searchSchema = z.object({
   // at the route boundary so garbage ?cookbookId= values are rejected here.
   cookbookId: cookbookShortcode.optional().catch(undefined),
   hide: z.boolean().optional().catch(true),
+  projectId: projectShortcode.optional().catch(undefined),
+  focus: z
+    .union([projectShortcode, taskShortcode, recipeShortcode])
+    .optional()
+    .catch(undefined),
+  direction: z
+    .enum(["all", "upstream", "downstream"])
+    .optional()
+    .catch(undefined),
+  grouped: z.boolean().optional().catch(undefined),
+  completed: z.boolean().optional().catch(undefined),
+  q: z.string().optional().catch(undefined),
+  reduce: z.boolean().optional().catch(undefined),
   entity: entitySchema.optional().catch(undefined),
 });
 
@@ -39,15 +66,24 @@ function EntitiesRoute() {
   const navigate = useNavigate();
 
   const tabs = useTabParam(tab, "schema", tabSchema, (next) =>
-    navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
+    navigate({
+      to: ".",
+      search: (prev) => ({
+        ...prev,
+        tab: next,
+        focus: undefined,
+        q: undefined,
+      }),
+    }),
   );
 
   return (
     <Page variant="list" title="Entities" compact decoration="none">
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
-        <TabsList variant="line">
+        <TabsList variant="line" className="h-auto flex-wrap gap-2">
           <TabsTrigger value="schema">Schema</TabsTrigger>
           <TabsTrigger value="integrity">Integrity</TabsTrigger>
+          <TabsTrigger value="work">Projects &amp; tasks</TabsTrigger>
           <TabsTrigger value="recipes">Recipe graph</TabsTrigger>
         </TabsList>
         <TabsContent value="schema">
@@ -70,56 +106,120 @@ function EntitiesRoute() {
         {/* Filters + graph live inside the tab content so their queries
             (listCookbooks, getDependencyGraph) fire only when this tab opens. */}
         <TabsContent value="recipes">
-          <RecipeGraphTab />
+          <Suspense fallback={<p>Loading graph…</p>}>
+            <GraphTab recipes />
+          </Suspense>
+        </TabsContent>
+        <TabsContent value="work">
+          <Suspense fallback={<p>Loading graph…</p>}>
+            <GraphTab recipes={false} />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </Page>
   );
 }
 
-function RecipeGraphTab() {
-  const { cookbookId: selectedCookbook, hide } = Route.useSearch();
-  const hideUnconnected = hide ?? true;
+function GraphTab({ recipes }: { recipes: boolean }) {
+  const search = Route.useSearch();
   const navigate = useNavigate();
-  const hideId = useId();
-
+  const filters = useMemo<GraphFilters>(
+    () => ({
+      focus: search.focus,
+      direction: search.direction ?? "all",
+      grouped: search.grouped ?? true,
+      hideCompleted: search.completed ?? true,
+      hideUnconnected: recipes && (search.hide ?? true),
+      reduceEdges: search.reduce ?? false,
+    }),
+    [
+      search.focus,
+      search.direction,
+      search.grouped,
+      search.completed,
+      search.hide,
+      search.reduce,
+      recipes,
+    ],
+  );
+  const onChange = (patch: Partial<GraphFilters>) => {
+    const next = { ...filters, ...patch };
+    const focus = z
+      .union([projectShortcode, taskShortcode, recipeShortcode])
+      .optional()
+      .parse(next.focus);
+    void navigate({
+      to: ".",
+      search: (previous) => ({
+        ...previous,
+        focus,
+        direction: next.direction,
+        grouped: next.grouped,
+        completed: recipes ? previous.completed : next.hideCompleted,
+        hide: recipes ? next.hideUnconnected : previous.hide,
+        reduce: next.reduceEdges,
+      }),
+    });
+  };
+  const onSearch = (q: string) => {
+    void navigate({
+      to: ".",
+      replace: true,
+      search: (previous) => ({ ...previous, q: q || undefined }),
+    });
+  };
+  if (!recipes)
+    return (
+      <Stack gap="md">
+        <p className="text-sm text-muted-foreground">
+          Dependency arrows point from blockers to blocked work. Dotted
+          hierarchy connectors show projects and subtasks. Click a record to
+          open it.
+        </p>
+        <WorkDependencyGraph
+          search={search.q ?? ""}
+          onSearch={onSearch}
+          projectId={search.projectId}
+          filters={filters}
+          onChange={onChange}
+          onScopeChange={(projectId) => {
+            void navigate({
+              to: ".",
+              search: (previous) => ({
+                ...previous,
+                projectId,
+                focus: undefined,
+              }),
+            });
+          }}
+        />
+      </Stack>
+    );
   return (
     <Stack gap="md">
       <p className="text-sm text-muted-foreground">
-        Each arrow points from a recipe to the sub-recipe it uses as an
-        ingredient. Click a node to open that recipe.
+        Each arrow means “uses”: it points from a recipe to the sub-recipe it
+        uses as an ingredient. Click a record to open it.
       </p>
-
-      <Row align="center" wrap gap="md">
-        <CookbookSelect
-          value={selectedCookbook}
-          onChange={(id) =>
-            navigate({
-              to: ".",
-              search: (prev) => ({ ...prev, cookbookId: id }),
-            })
-          }
-        />
-        <Row align="center" gap="sm" className="text-sm">
-          <Checkbox
-            id={hideId}
-            checked={hideUnconnected}
-            onCheckedChange={(checked) =>
-              navigate({
-                to: ".",
-                search: (prev) => ({ ...prev, hide: checked === true }),
-              })
-            }
-          />
-          <label htmlFor={hideId} className="text-muted-foreground">
-            Hide unconnected recipes
-          </label>
-        </Row>
-      </Row>
-
+      <CookbookSelect
+        value={search.cookbookId}
+        onChange={(cookbookId) => {
+          void navigate({
+            to: ".",
+            search: (previous) => ({
+              ...previous,
+              cookbookId,
+              focus: undefined,
+            }),
+          });
+        }}
+      />
       <RecipeDependencyGraph
-        cookbookId={selectedCookbook}
-        hideUnconnected={hideUnconnected}
+        search={search.q ?? ""}
+        onSearch={onSearch}
+        cookbookId={search.cookbookId}
+        filters={filters}
+        onChange={onChange}
       />
     </Stack>
   );

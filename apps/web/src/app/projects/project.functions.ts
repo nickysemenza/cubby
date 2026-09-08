@@ -20,6 +20,11 @@ export const project = defineOperationDomain("project", {
     output: schemas.projectTreeOut,
     tags: [["project", "tree"]],
   }),
+  getDependencyGraph: query({
+    input: schemas.projectDependencyGraphInput,
+    output: schemas.projectDependencyGraphSchema,
+    tags: [["project", "dependencyGraph"]],
+  }),
   portfolioAnalytics: query({
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectPortfolioAnalyticsOut,

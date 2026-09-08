@@ -1,0 +1,44 @@
+.dependency-graph svg {
+  font-family: var(--font-sans);
+}
+.dependency-graph .graph > polygon {
+  fill: transparent;
+}
+.dependency-graph .node polygon,
+.dependency-graph .node path,
+.dependency-graph .node ellipse {
+  fill: var(--card);
+  stroke: var(--border);
+}
+.dependency-graph text {
+  fill: var(--foreground);
+  font-family: var(--font-sans);
+}
+.dependency-graph .edge path {
+  stroke: var(--muted-foreground);
+}
+.dependency-graph .edge polygon {
+  fill: var(--muted-foreground);
+  stroke: var(--muted-foreground);
+}
+.dependency-graph .cluster polygon,
+.dependency-graph .cluster path {
+  fill: var(--muted);
+  stroke: var(--border);
+}
+.dependency-graph .completed {
+  opacity: 0.6;
+}
+.dependency-graph .overdue polygon,
+.dependency-graph .cycle polygon {
+  stroke: var(--destructive);
+  stroke-width: 2;
+}
+.dependency-graph .external polygon {
+  stroke-dasharray: 4 3;
+}
+.dependency-graph a:focus text,
+.dependency-graph a:hover text {
+  fill: var(--primary);
+  text-decoration: underline;
+}
