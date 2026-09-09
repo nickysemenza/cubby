@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import {
+  canReusePrecacheUrl,
   isBypassedPath,
   isCriticalPrecacheUrl,
   shouldFillPrecache,
@@ -63,6 +64,24 @@ sw.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
+      const shellCaches = (await caches.keys()).filter((name) =>
+        name.startsWith("cubby-shell-"),
+      );
+      const precache = async (url: string) => {
+        // Hashed URLs identify the same bytes across deployments. Copy them
+        // before activation removes the old shell, preserving offline coverage
+        // without downloading unchanged WASM/fonts/styles again.
+        if (canReusePrecacheUrl(url)) {
+          for (const cacheName of shellCaches) {
+            const response = await caches.match(url, { cacheName });
+            if (response?.ok) {
+              await cache.put(url, response);
+              return;
+            }
+          }
+        }
+        await cache.add(new Request(url, { cache: "reload" }));
+      };
       const critical = PRECACHE_URLS.filter(isCriticalPrecacheUrl);
       const optional = PRECACHE_URLS.filter(
         (url) => !isCriticalPrecacheUrl(url),
@@ -72,12 +91,8 @@ sw.addEventListener("install", (event) => {
       // is deliberately NOT in this set (see `isCriticalPrecacheUrl`) — it's
       // ~80% of the payload, and the fetch handler falls back to the network
       // for anything the optional pass didn't manage to cache.
-      await cache.addAll(
-        critical.map((url) => new Request(url, { cache: "reload" })),
-      );
-      await Promise.allSettled(
-        optional.map((url) => cache.add(new Request(url, { cache: "reload" }))),
-      );
+      await Promise.all(critical.map(precache));
+      await Promise.allSettled(optional.map(precache));
       // Do not skip waiting: force-activating this worker would mix its cache
       // with pages still executing the previous deployment's application code.
     })(),

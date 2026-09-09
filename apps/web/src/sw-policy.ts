@@ -25,3 +25,8 @@ export function shouldFillPrecache(
 ): boolean {
   return responseOk && search === "" && precacheUrls.has(pathname);
 }
+
+/** Only Vite content-addressed assets can be copied between shell generations. */
+export function canReusePrecacheUrl(url: string): boolean {
+  return /^\/assets\/[^/]+-[\w-]{8}\.(?:wasm|css|woff2|svg)$/.test(url);
+}

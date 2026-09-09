@@ -1,3 +1,4 @@
+import { createClientOnlyFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type svgPanZoom from "svg-pan-zoom";
 
@@ -25,6 +26,14 @@ async function getRenderer() {
     });
   return renderer;
 }
+
+const loadGraphLibraries = createClientOnlyFn(async () => {
+  const [viz, panZoomModule] = await Promise.all([
+    getRenderer(),
+    import("svg-pan-zoom"),
+  ]);
+  return { viz, panZoomModule };
+});
 
 /** Fit large graphs, but keep small graphs at readable record-label scale. */
 function fitGraph(instance: ReturnType<typeof svgPanZoom>) {
@@ -58,10 +67,7 @@ export function DependencyGraphViewer({
     setState("Loading graph layout…");
     const render = async () => {
       try {
-        const [viz, panZoomModule] = await Promise.all([
-          getRenderer(),
-          import("svg-pan-zoom"),
-        ]);
+        const { viz, panZoomModule } = await loadGraphLibraries();
         if (disposed || !container) return;
         const svg = viz.renderSVGElement(dot);
         svg.setAttribute("width", "100%");
