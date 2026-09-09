@@ -1,22 +1,10 @@
 import { seedTaskPrerequisite } from "./e2e-fixtures";
-import { expectViewportBounded, waitForAppHydration } from "./e2e-helpers";
+import {
+  expectViewportBounded,
+  waitForAppHydration,
+  waitForFormHydration,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-
-function sameTransformWithinTolerance(
-  initial: string | null,
-  current: string | null,
-) {
-  if (!initial || !current) return initial === current;
-  const initialValues = initial.match(/-?[\d.]+/gu)?.map(Number);
-  const currentValues = current.match(/-?[\d.]+/gu)?.map(Number);
-  if (!initialValues || !currentValues) return false;
-  return (
-    initialValues.length === currentValues.length &&
-    initialValues.every(
-      (value, index) => Math.abs(value - (currentValues[index] ?? NaN)) < 0.001,
-    )
-  );
-}
 
 test("work graph renders through Viz, restores filters, and opens a graph node", async ({
   page,
@@ -33,22 +21,26 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
   const graphLink = graph.locator("a").filter({ hasText: name });
   await expect(graphLink).toHaveAttribute("xlink:href", `/tasks/${task.id}`);
 
-  const viewport = graph.locator(".svg-pan-zoom_viewport");
+  const viewport = page.getByRole("region", {
+    name: "Scrollable dependency graph",
+  });
   await expect(viewport).toBeVisible();
-  const initialTransform = await viewport.getAttribute("transform");
-  await page.getByRole("button", { name: "Zoom in" }).click();
+  const initialWidth = await graph.evaluate(
+    (svg) => svg.getBoundingClientRect().width,
+  );
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect
-    .poll(() => viewport.getAttribute("transform"))
-    .not.toBe(initialTransform);
-  await page.getByRole("button", { name: "Reset view" }).click();
+    .poll(() => graph.evaluate((svg) => svg.getBoundingClientRect().width))
+    .toBeGreaterThan(initialWidth);
+  await page
+    .getByRole("button", { name: "Readable view", exact: true })
+    .click();
   await expect
-    .poll(async () =>
-      sameTransformWithinTolerance(
-        initialTransform,
-        await viewport.getAttribute("transform"),
-      ),
-    )
-    .toBe(true);
+    .poll(() => graph.evaluate((svg) => svg.getBoundingClientRect().width))
+    .toBeCloseTo(initialWidth, 1);
+  await expect(page.getByLabel("Graph zoom", { exact: true })).toHaveText(
+    "100%",
+  );
 
   const types = page.getByRole("combobox", { name: "Record types" });
   await types.selectOption("project");
@@ -95,6 +87,17 @@ test("work graph renders through Viz, restores filters, and opens a graph node",
 test("legacy recipe graph URL still opens its graph controls", async ({
   page,
 }) => {
+  await page.goto("/recipes/new");
+  await waitForFormHydration(page);
+  await page
+    .getByPlaceholder("Enter recipe name")
+    .fill(`E2E graph recipe ${Date.now()}`);
+  await page.getByRole("button", { name: /Add Instruction/i }).click();
+  await page.getByRole("textbox", { name: "Step" }).fill("Stir until smooth.");
+  await page.getByRole("button", { name: /^Create$/i }).click();
+  await expect(page).toHaveURL(/\/recipes\/RCP-[A-Z0-9]{4}/, {
+    timeout: 15000,
+  });
   await page.goto("/entities?tab=recipes&hide=false");
   await waitForAppHydration(page);
 
