@@ -41,6 +41,43 @@ export function EntityGraphControls({
             <option value="task">Tasks only</option>
           </NativeSelect>
         )}
+        {!recipes && (
+          <Row
+            as="label"
+            align="center"
+            gap="sm"
+            className="max-w-full min-w-0"
+          >
+            <span>Location</span>
+            <NativeSelect
+              className="min-w-0"
+              value={
+                filters.location === undefined
+                  ? "all"
+                  : `location:${filters.location}`
+              }
+              onChange={(event) =>
+                onChange({
+                  location:
+                    event.target.value === "all"
+                      ? undefined
+                      : event.target.value.slice("location:".length),
+                  focus: undefined,
+                })
+              }
+            >
+              <option value="all">All locations</option>
+              <option value="location:">No location</option>
+              {[...new Set(data.nodes.flatMap((node) => node.locations ?? []))]
+                .sort()
+                .map((location) => (
+                  <option key={location} value={`location:${location}`}>
+                    {location}
+                  </option>
+                ))}
+            </NativeSelect>
+          </Row>
+        )}
         <Input
           aria-label="Find graph record"
           placeholder="Find a record by name or code…"
@@ -63,6 +100,13 @@ export function EntityGraphControls({
                 !filters.workKind ||
                 filters.workKind === "all" ||
                 node.kind === filters.workKind,
+            )
+            .filter(
+              (node) =>
+                filters.location === undefined ||
+                (filters.location === ""
+                  ? !node.locations?.length
+                  : node.locations?.includes(filters.location)),
             )
             .filter(
               (node) =>
@@ -101,9 +145,46 @@ export function EntityGraphControls({
         </NativeSelect>
       </Row>
       <Row wrap gap="md">
+        {!recipes && (
+          <Row
+            as="label"
+            align="center"
+            gap="sm"
+            className="max-w-full min-w-0"
+          >
+            <span>Group by</span>
+            <NativeSelect
+              className="min-w-0"
+              value={
+                filters.groupByLocation
+                  ? filters.grouped
+                    ? "both"
+                    : "location"
+                  : filters.grouped
+                    ? "hierarchy"
+                    : "none"
+              }
+              onChange={(event) =>
+                onChange({
+                  grouped:
+                    event.target.value === "hierarchy" ||
+                    event.target.value === "both",
+                  groupByLocation:
+                    event.target.value === "location" ||
+                    event.target.value === "both",
+                })
+              }
+            >
+              <option value="hierarchy">Hierarchy</option>
+              <option value="location">Location</option>
+              <option value="both">Location & hierarchy</option>
+              <option value="none">None</option>
+            </NativeSelect>
+          </Row>
+        )}
         {(
           [
-            { key: "grouped", label: "Group hierarchy" },
+            { key: "grouped", label: "Group by cookbook" },
             { key: "reduceEdges", label: "Hide redundant dependency edges" },
             recipes
               ? {
@@ -112,20 +193,22 @@ export function EntityGraphControls({
                 }
               : { key: "hideCompleted" as const, label: "Hide completed work" },
           ] as const
-        ).map(({ key, label }) => (
-          <Row key={key} align="center" gap="sm">
-            <Checkbox
-              id={`${id}-${key}`}
-              checked={filters[key]}
-              onCheckedChange={(checked) =>
-                onChange({ [key]: checked === true })
-              }
-            />
-            <label htmlFor={`${id}-${key}`} className="text-sm">
-              {label}
-            </label>
-          </Row>
-        ))}
+        )
+          .filter(({ key }) => recipes || key !== "grouped")
+          .map(({ key, label }) => (
+            <Row key={key} align="center" gap="sm">
+              <Checkbox
+                id={`${id}-${key}`}
+                checked={filters[key]}
+                onCheckedChange={(checked) =>
+                  onChange({ [key]: checked === true })
+                }
+              />
+              <label htmlFor={`${id}-${key}`} className="text-sm">
+                {label}
+              </label>
+            </Row>
+          ))}
       </Row>
     </Stack>
   );

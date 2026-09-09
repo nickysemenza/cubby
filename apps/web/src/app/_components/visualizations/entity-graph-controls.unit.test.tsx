@@ -53,6 +53,33 @@ afterEach(() => {
 });
 
 describe("EntityGraphControls", () => {
+  it("can scope unassigned work and restore all locations", () => {
+    render(<ControlsHarness />);
+    const location = screen.getByRole("combobox", { name: "Location" });
+    fireEvent.change(location, { target: { value: "location:" } });
+    expect(onChange).toHaveBeenLastCalledWith({
+      location: "",
+      focus: undefined,
+    });
+    fireEvent.change(location, { target: { value: "all" } });
+    expect(onChange).toHaveBeenLastCalledWith({
+      location: undefined,
+      focus: undefined,
+    });
+  });
+
+  it("switches work grouping between location, hierarchy, and none", () => {
+    render(<ControlsHarness />);
+    const grouping = screen.getByRole("combobox", { name: "Group by" });
+    for (const value of ["location", "hierarchy", "both", "none"]) {
+      fireEvent.change(grouping, { target: { value } });
+      expect(onChange).toHaveBeenLastCalledWith({
+        grouped: value === "hierarchy" || value === "both",
+        groupByLocation: value === "location" || value === "both",
+      });
+    }
+  });
+
   it("filters focus choices and emits work-specific graph filters", () => {
     render(<ControlsHarness />);
 

@@ -22,6 +22,7 @@ type ProjectRow = {
   name: string;
   status: "planning" | "not_started" | "in_progress" | "done";
   parentProjectId: ProjectId | null;
+  locations: string[];
 };
 type TaskRow = {
   id: TaskId;
@@ -67,6 +68,7 @@ const fetchGraphRows = async (db: Database): Promise<GraphRows> => {
           name: true,
           status: true,
           parentProjectId: true,
+          locations: true,
         },
       }),
       dbClient.query.task.findMany({
@@ -250,6 +252,7 @@ const projectNodes = (
         kind: "project" as const,
         name: row.name,
         status: row.status,
+        locations: row.locations,
         dueDate: null,
         dueEndDate: null,
         parentId: row.parentProjectId
@@ -262,6 +265,7 @@ const projectNodes = (
 
 const taskNodes = (
   rows: TaskRow[],
+  projects: Map<ProjectId, ProjectRow>,
   scope: GraphScope,
   codes: GraphCodes,
 ): ProjectGraphNode[] =>
@@ -279,6 +283,9 @@ const taskNodes = (
         kind: "task" as const,
         name: row.name,
         status: row.status,
+        locations: row.projectId
+          ? (projects.get(row.projectId)?.locations ?? [])
+          : [],
         dueDate: row.dueDate,
         dueEndDate: row.dueEndDate,
         parentId,
@@ -355,7 +362,7 @@ export const getProjectDependencyGraph = async (
   return {
     nodes: [
       ...projectNodes(rows.projects, scope, codes),
-      ...taskNodes(rows.tasks, scope, codes),
+      ...taskNodes(rows.tasks, projects, scope, codes),
     ],
     edges: graphEdges(rows, codes),
   };

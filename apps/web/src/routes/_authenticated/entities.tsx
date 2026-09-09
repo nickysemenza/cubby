@@ -49,6 +49,8 @@ const searchSchema = z.object({
     .optional()
     .catch(undefined),
   workKind: z.enum(["all", "project", "task"]).optional().catch(undefined),
+  graphLocation: z.string().optional().catch(undefined),
+  groupByLocation: z.boolean().optional().catch(undefined),
   grouped: z.boolean().optional().catch(undefined),
   completed: z.boolean().optional().catch(undefined),
   q: z.string().optional().catch(undefined),
@@ -130,6 +132,8 @@ function GraphTab({ recipes }: { recipes: boolean }) {
       workKind: recipes ? "all" : (search.workKind ?? "all"),
       direction: search.direction ?? "all",
       grouped: search.grouped ?? true,
+      location: recipes ? undefined : search.graphLocation,
+      groupByLocation: !recipes && (search.groupByLocation ?? false),
       hideCompleted: search.completed ?? true,
       hideUnconnected: recipes && (search.hide ?? true),
       reduceEdges: search.reduce ?? false,
@@ -139,6 +143,8 @@ function GraphTab({ recipes }: { recipes: boolean }) {
       search.workKind,
       search.direction,
       search.grouped,
+      search.groupByLocation,
+      search.graphLocation,
       search.completed,
       search.hide,
       search.reduce,
@@ -158,6 +164,10 @@ function GraphTab({ recipes }: { recipes: boolean }) {
         focus,
         direction: next.direction,
         grouped: next.grouped,
+        graphLocation: recipes ? previous.graphLocation : next.location,
+        groupByLocation: recipes
+          ? previous.groupByLocation
+          : next.groupByLocation,
         workKind: recipes ? previous.workKind : next.workKind,
         completed: recipes ? previous.completed : next.hideCompleted,
         hide: recipes ? next.hideUnconnected : previous.hide,

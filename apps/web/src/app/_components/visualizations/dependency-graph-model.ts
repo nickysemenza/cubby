@@ -9,6 +9,7 @@ interface GraphNode {
   metadata: string[];
   parentId?: string | null;
   parentName?: string;
+  locations?: string[];
   completed?: boolean;
   overdue?: boolean;
   external?: boolean;
@@ -36,6 +37,8 @@ export interface GraphFilters {
   hideUnconnected: boolean;
   reduceEdges: boolean;
   grouped: boolean;
+  groupByLocation?: boolean;
+  location?: string;
 }
 
 export interface PreparedGraph extends GraphData {
@@ -347,6 +350,17 @@ export function prepareGraph(
       if (nodeById.get(id)?.kind !== filters.workKind) visible.ids.delete(id);
     }
   }
+  if (filters.location !== undefined) {
+    for (const id of visible.ids) {
+      const locations = nodeById.get(id)?.locations ?? [];
+      if (
+        filters.location === ""
+          ? locations.length > 0
+          : !locations.includes(filters.location)
+      )
+        visible.ids.delete(id);
+    }
+  }
   const initialEdges = graphEdges(
     { nodes: allNodes, edges: allEdges },
     visible.ids,
@@ -386,7 +400,17 @@ function wrapText(value: string, width = 40): string {
   return value
     .split(/\r?\n/)
     .flatMap((line) => {
-      const words = line.split(/\s+/).filter(Boolean);
+      const words = line
+        .split(/\s+/)
+        .filter(Boolean)
+        .flatMap((word) => {
+          const characters = [...word];
+          return Array.from(
+            { length: Math.ceil(characters.length / width) },
+            (_, index) =>
+              characters.slice(index * width, (index + 1) * width).join(""),
+          );
+        });
       const lines: string[] = [];
       let current = "";
       for (const word of words) {
@@ -417,11 +441,24 @@ function nodeAttributes(node: GraphNode, cycleIds: Set<string>) {
     node.external ? "Outside scope" : null,
     cycleIds.has(node.id) ? "Cycle" : null,
   ].filter((indicator): indicator is string => indicator != null);
-  const label = [node.name, node.id, ...node.metadata, ...indicators]
-    .map((line) => wrapText(line))
-    .join("\n");
+  const escapeHtml = (value: string) =>
+    value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  const title = wrapText(node.name, 32)
+    .split("\n")
+    .map(escapeHtml)
+    .join('<BR ALIGN="LEFT"/>');
+  const details = [node.id, ...node.metadata, ...indicators]
+    .map((line) => wrapText(line, 38))
+    .join("\n")
+    .split("\n")
+    .map(escapeHtml)
+    .join('<BR ALIGN="LEFT"/>');
   return [
-    `label=${quote(label)}`,
+    `label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2"><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="16"><B>${title}</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="13">${details}</FONT></TD></TR></TABLE>>`,
     `URL=${quote(node.href)}`,
     `tooltip=${quote([node.name, ...node.metadata].join(" — "))}`,
     `class=${quote(classes.join(" "))}`,
@@ -478,14 +515,76 @@ function appendGroups(
   return clustered;
 }
 
-/** Independent relationship components must not share rank constraints or cookbook clusters. */
-function connectedComponents(prepared: PreparedGraph): PreparedGraph[] {
+function appendLocationGroups(
+  lines: string[],
+  prepared: PreparedGraph,
+  cycleIds: Set<string>,
+  grouped: boolean,
+): Set<string> {
+  const groups = new Map<string, { label: string; nodes: GraphNode[] }>();
+  for (const node of prepared.nodes) {
+    const locations = [...new Set(node.locations ?? [])].sort();
+    const key = JSON.stringify(locations);
+    const group = groups.get(key) ?? {
+      label: locations.join(" / ") || "No location",
+      nodes: [],
+    };
+    group.nodes.push(node);
+    groups.set(key, group);
+  }
+  const clustered = new Set<string>();
+  for (const [key, group] of groups) {
+    lines.push(`subgraph ${quote(`cluster:location:${key}`)} {`);
+    lines.push(`label=${quote(group.label)}; class="dependency-graph-group";`);
+    const hierarchyLines: string[] = [];
+    const hierarchyNodes = appendGroups(
+      hierarchyLines,
+      { ...prepared, nodes: group.nodes },
+      grouped,
+      cycleIds,
+    );
+    // A parent can have children in multiple locations; each cluster needs its own ID.
+    lines.push(
+      ...hierarchyLines.map((line) =>
+        line.replace(
+          'subgraph "cluster:',
+          `subgraph "cluster:location:${encodeURIComponent(key)}:`,
+        ),
+      ),
+    );
+    for (const node of group.nodes) {
+      if (!hierarchyNodes.has(node.id))
+        lines.push(`${quote(node.id)} [${nodeAttributes(node, cycleIds)}];`);
+      clustered.add(node.id);
+    }
+    lines.push("}");
+  }
+  return clustered;
+}
+
+/** Keep selected groups together even when their parent is outside the visible graph. */
+function connectedComponents(
+  prepared: PreparedGraph,
+  grouped: boolean,
+): PreparedGraph[] {
   const neighbors = new Map(
     prepared.nodes.map((node) => [node.id, new Set<string>()]),
   );
   for (const edge of prepared.edges) {
     neighbors.get(edge.source)?.add(edge.target);
     neighbors.get(edge.target)?.add(edge.source);
+  }
+  if (grouped) {
+    const firstChild = new Map<string, string>();
+    for (const node of prepared.nodes) {
+      if (node.parentId == null || node.kind !== "task") continue;
+      const sibling = firstChild.get(node.parentId);
+      if (sibling == null) firstChild.set(node.parentId, node.id);
+      else {
+        neighbors.get(sibling)?.add(node.id);
+        neighbors.get(node.id)?.add(sibling);
+      }
+    }
   }
   const unseen = new Set(neighbors.keys());
   const components: PreparedGraph[] = [];
@@ -520,25 +619,70 @@ function edgeAttributes(edge: GraphEdge): string {
     .join(", ");
 }
 
+/** Leaf siblings have no ordering relationship; invisible chains pack wide fans into rows. */
+function leafSiblingGroups(graph: PreparedGraph, groupByLocation: boolean) {
+  const constrained = new Set(
+    graph.edges.flatMap((edge) =>
+      edge.kind === "dependency" ? [edge.source, edge.target] : [edge.source],
+    ),
+  );
+  const siblings = new Map<string, GraphNode[]>();
+  for (const node of graph.nodes) {
+    if (constrained.has(node.id)) continue;
+    const key = JSON.stringify([
+      node.parentId ?? null,
+      groupByLocation ? [...new Set(node.locations ?? [])].sort() : null,
+    ]);
+    const group = siblings.get(key) ?? [];
+    group.push(node);
+    siblings.set(key, group);
+  }
+  return [...siblings.values()];
+}
+
+function appendSiblingLayout(
+  lines: string[],
+  graph: PreparedGraph,
+  groupByLocation: boolean,
+) {
+  for (const nodes of leafSiblingGroups(graph, groupByLocation)) {
+    const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length / 2)));
+    for (let index = 1; index < nodes.length; index++) {
+      if (index % columns !== 0)
+        lines.push(
+          `${quote(nodes[index - 1]!.id)} -> ${quote(nodes[index]!.id)} [style=invis];`,
+        );
+    }
+  }
+}
+
 /** Serializes a prepared graph to safe, deterministic Graphviz DOT. */
-export function graphToDot(prepared: PreparedGraph, grouped: boolean): string {
+export function graphToDot(
+  prepared: PreparedGraph,
+  grouped: boolean,
+  groupByLocation = false,
+  overlayTargets: ReadonlySet<string> = new Set(),
+): string {
   const cycleIds = new Set(prepared.cycleIds);
+  const components = groupByLocation
+    ? [prepared]
+    : connectedComponents(prepared, grouped);
+  const packing = groupByLocation
+    ? "array"
+    : `array${Math.max(1, Math.ceil(Math.sqrt(components.length * 2)))}`;
   const lines = [
     "digraph dependency_graph {",
-    'graph [rankdir=LR, pack=24, packmode="array", fontname="Inter", fontsize=12];',
-    'node [shape=box, fontname="Inter", fontsize=12, margin="0.25,0.15"];',
-    'edge [class="dependency-graph-edge", fontname="Inter", fontsize=12];',
+    `graph [rankdir=LR, pack=24, packmode="${packing}", fontname="Arial", fontsize=12];`,
+    'node [shape=box, fontname="Arial", fontsize=12, margin="0.25,0.15"];',
+    'edge [class="dependency-graph-edge", fontname="Arial", fontsize=12];',
   ];
-  for (const [index, component] of connectedComponents(prepared).entries()) {
+  for (const [index, component] of components.entries()) {
     lines.push(`subgraph "component${index}" {`);
     // Cluster IDs must be unique when a cookbook spans disconnected components.
     const componentLines: string[] = [];
-    const clustered = appendGroups(
-      componentLines,
-      component,
-      grouped,
-      cycleIds,
-    );
+    const clustered = groupByLocation
+      ? appendLocationGroups(componentLines, component, cycleIds, grouped)
+      : appendGroups(componentLines, component, grouped, cycleIds);
     lines.push(
       ...componentLines.map((line) =>
         line.replace('subgraph "cluster:', `subgraph "cluster:${index}:`),
@@ -548,7 +692,10 @@ export function graphToDot(prepared: PreparedGraph, grouped: boolean): string {
       if (!clustered.has(node.id))
         lines.push(`${quote(node.id)} [${nodeAttributes(node, cycleIds)}];`);
     }
+    appendSiblingLayout(lines, component, groupByLocation);
     for (const edge of component.edges) {
+      if (edge.kind === "hierarchy" && overlayTargets.has(edge.target))
+        continue;
       lines.push(
         `${quote(edge.source)} -> ${quote(edge.target)} [${edgeAttributes(edge)}];`,
       );
@@ -557,4 +704,26 @@ export function graphToDot(prepared: PreparedGraph, grouped: boolean): string {
   }
   lines.push("}");
   return lines.join("\n");
+}
+
+/** Route repeated fan-out links after placement so they cannot stretch sibling rows. */
+export function layoutGraph(
+  prepared: PreparedGraph,
+  grouped: boolean,
+  groupByLocation = false,
+) {
+  const targets = new Set<string>();
+  for (const nodes of leafSiblingGroups(prepared, groupByLocation)) {
+    if (nodes.length < 8) continue;
+    const columns = Math.ceil(Math.sqrt(nodes.length / 2));
+    nodes.forEach((node, index) => {
+      if (index % columns !== 0) targets.add(node.id);
+    });
+  }
+  return {
+    dot: graphToDot(prepared, grouped, groupByLocation, targets),
+    hierarchyEdges: prepared.edges.filter(
+      (edge) => edge.kind === "hierarchy" && targets.has(edge.target),
+    ),
+  };
 }

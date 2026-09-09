@@ -10,6 +10,7 @@ const projectGraphNodeSchema = z.object({
   kind: z.enum(["project", "task"]),
   name: z.string(),
   status: z.string(),
+  locations: z.array(z.string()).optional(),
   dueDate: plainDate.nullable(),
   dueEndDate: plainDate.nullable(),
   parentId: projectGraphNodeId.nullable(),

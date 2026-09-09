@@ -120,6 +120,7 @@ describe("project repository", () => {
       ctx.db,
       projectCreateInput.parse({
         name: "graph child",
+        locations: ["Workshop", "Garden"],
         parentProjectId: root.id,
       }),
       ctx.actor,
@@ -179,7 +180,10 @@ describe("project repository", () => {
     expect(byId.get(child.id)).toMatchObject({
       external: false,
       parentId: root.id,
+      locations: ["Workshop", "Garden"],
     });
+    expect(byId.get(parentTask.id)?.locations).toEqual(["Workshop", "Garden"]);
+    expect(byId.get(root.id)?.locations).toEqual([]);
     expect(byId.get(outside.id)).toMatchObject({
       external: true,
       kind: "project",

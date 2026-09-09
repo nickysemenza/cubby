@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   graphToDot,
+  layoutGraph,
   prepareGraph,
   type GraphData,
 } from "./dependency-graph-model";
@@ -241,6 +242,38 @@ describe("graphToDot", () => {
   });
 });
 
+it("keeps task siblings together when the project is filtered out", () => {
+  const nodes: GraphData["nodes"] = Array.from({ length: 40 }, (_, i) => ({
+    id: `task${i}`,
+    name: `Task ${i}`,
+    kind: "task",
+    metadata: [],
+    parentId: "project",
+    parentName: "Example project",
+    href: `/tasks/task${i}`,
+  }));
+  const dot = graphToDot(
+    prepareGraph(
+      {
+        nodes: [
+          {
+            id: "project",
+            name: "Example project",
+            kind: "project",
+            metadata: [],
+            href: "/projects/project",
+          },
+          ...nodes,
+        ],
+        edges: [],
+      },
+      { ...defaults, workKind: "task" },
+    ),
+    true,
+  );
+  expect(dot.match(/label="Example project"/g)).toHaveLength(1);
+});
+
 it("packs a large recipe overview into a usable aspect ratio", async () => {
   const nodes = Array.from({ length: 240 }, (_, i) => ({
     id: `recipe${i}`,
@@ -294,3 +327,126 @@ it("shows only the requested work kind without opposite-kind ancestors or dangli
     expect(graphToDot(prepared, true)).toContain(`record-${workKind}`);
   }
 });
+
+describe("location grouping", () => {
+  it("groups disconnected records together without duplicating multi-location work or losing edges", async () => {
+    const data = graph();
+    data.nodes[0]!.locations = ["Garage"];
+    data.nodes[1]!.locations = ["Kitchen", "Garage"];
+    data.nodes[2]!.locations = ["Garage", "Kitchen"];
+    data.nodes[3]!.locations = ["Garage"];
+    data.nodes.push({
+      id: "unassigned",
+      name: "Unassigned",
+      metadata: [],
+      href: "/tasks/unassigned",
+    });
+    const dot = graphToDot(prepareGraph(data, defaults), false, true);
+    const viz = await instance();
+    const svg = viz.renderString(dot, { format: "svg" });
+    expect(dot.match(/class="dependency-graph-group"/g)).toHaveLength(3);
+    expect(svg).toContain("Garage / Kitchen");
+    expect(svg).toContain("No location");
+    for (const node of data.nodes)
+      expect(
+        dot.split("\n").filter((line) => line.startsWith(`"${node.id}" [`)),
+      ).toHaveLength(1);
+    expect(dot).toContain('"a" -> "b"');
+    expect(dot).toContain('"project" -> "a"');
+  });
+});
+
+it("nests hierarchy clusters within locations even when siblings span locations", async () => {
+  const data = graph();
+  for (const node of data.nodes)
+    node.locations = [node.id === "b" ? "Garden" : "Workshop"];
+  const dot = graphToDot(prepareGraph(data, defaults), true, true);
+  const viz = await instance();
+  const result = viz.render(dot, { format: "json" });
+  expect(result.status).toBe("success");
+  expect(result.errors.filter((error) => error.level === "error")).toEqual([]);
+  expect(dot.match(/class="dependency-graph-group"/g)).toHaveLength(4);
+  for (const node of data.nodes) {
+    expect(
+      dot.split("\n").filter((line) => line.startsWith(`"${node.id}" [`)),
+    ).toHaveLength(1);
+  }
+  expect(dot).toContain('"a" -> "b"');
+  expect(dot).toContain('"project" -> "b"');
+});
+
+it("packs unconnected location records into a compact overview", async () => {
+  const nodes = Array.from({ length: 74 }, (_, i) => ({
+    id: `p${i}`,
+    name: `Project ${i}`,
+    metadata: [],
+    locations: ["Workshop"],
+    href: `/projects/p${i}`,
+  }));
+  const viz = await instance();
+  const plain = viz.renderString(
+    graphToDot(prepareGraph({ nodes, edges: [] }, defaults), true, true),
+    { format: "plain" },
+  );
+  const [, , width, height] = plain.split("\n")[0]!.split(" ").map(Number);
+  expect(height! / width!).toBeLessThan(3);
+  expect(width! / height!).toBeLessThan(3);
+});
+
+it("scopes by location without dangling edges and counts omitted records", () => {
+  const data = graph();
+  data.nodes[1]!.locations = ["Workshop", "Garden"];
+  data.nodes[2]!.locations = ["Workshop"];
+  const scoped = prepareGraph(data, { ...defaults, location: "Workshop" });
+  expect(scoped.nodes.map((node) => node.id)).toEqual(["a", "b"]);
+  expect(scoped.edges).toEqual([
+    { source: "a", target: "b", kind: "dependency" },
+  ]);
+  expect(scoped.hiddenNodeCount).toBe(2);
+  expect(
+    prepareGraph(data, { ...defaults, location: "" }).nodes.map(
+      (node) => node.id,
+    ),
+  ).toEqual(["project", "c"]);
+});
+
+it("keeps a thousand sibling tasks from becoming a hundred-thousand-pixel column", async () => {
+  const root = {
+    id: "root",
+    name: "Annual project",
+    metadata: [],
+    href: "/projects/root",
+  };
+  const nodes = [
+    root,
+    ...Array.from({ length: 1200 }, (_, i) => ({
+      id: `task${i}`,
+      name: `Maintenance task ${i}`,
+      parentId: "root",
+      metadata: [],
+      href: `/tasks/task${i}`,
+    })),
+  ];
+  const edges = nodes.slice(1).map((node) => ({
+    source: "root",
+    target: node.id,
+    kind: "hierarchy" as const,
+  }));
+  const viz = await instance();
+  const prepared = prepareGraph({ nodes, edges }, defaults);
+  for (const grouped of [false, true]) {
+    const layout = layoutGraph(prepared, grouped);
+    expect(layout.hierarchyEdges.length).toBeGreaterThan(1000);
+    expect(
+      layout.hierarchyEdges.length +
+        (layout.dot.match(/style=dotted/g)?.length ?? 0),
+    ).toBe(1200);
+    const plain = viz.renderString(layout.dot, {
+      format: "plain",
+    });
+    const [, , width, height] = plain.split("\n")[0]!.split(" ").map(Number);
+    expect(height! / width!).toBeLessThan(3);
+    expect(width! / height!).toBeLessThan(3);
+    expect(height! * 72).toBeLessThan(15000);
+  }
+}, 20000);

@@ -51,6 +51,7 @@ export function WorkDependencyGraph({
               ...(due ? [`Due ${due}`] : []),
             ],
             parentId: node.parentId,
+            locations: node.locations,
             completed: node.status === "done",
             overdue: node.status !== "done" && due !== null && due < today,
             external: node.external,
