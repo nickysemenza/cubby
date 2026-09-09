@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
@@ -18,6 +18,18 @@ const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
 }).trim();
 const sourceCommit = process.env.CUBBY_SOURCE_COMMIT?.slice(0, 7) || gitCommit;
+// Source time keeps identical checkouts byte-stable across repeated builds.
+const sourceDate = execFileSync(
+  "git",
+  [
+    "show",
+    "-s",
+    "--format=%cI",
+    process.env.CUBBY_SOURCE_COMMIT || "HEAD",
+    "--",
+  ],
+  { encoding: "utf-8" },
+).trim();
 const sourceBranch =
   process.env.CUBBY_SOURCE_BRANCH ||
   execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
@@ -216,12 +228,14 @@ export default defineConfig(async () => {
         },
       },
     },
+    // Compression reports are opt-in; build-sw still enforces download budgets.
+    build: { reportCompressedSize: process.env.CUBBY_BUNDLE_REPORT === "1" },
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {
       __GIT_COMMIT__: JSON.stringify(gitCommit),
       __SOURCE_COMMIT__: JSON.stringify(sourceCommit),
       __SOURCE_BRANCH__: JSON.stringify(sourceBranch),
-      __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+      __BUILD_DATE__: JSON.stringify(sourceDate),
       __R2_PUBLIC_URL__: JSON.stringify(r2PublicUrl),
       __CF_WORKERS__: isCloudflare ? "true" : "false",
     },
