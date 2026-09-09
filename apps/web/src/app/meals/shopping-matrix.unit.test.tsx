@@ -27,6 +27,7 @@ const contribution = (
     recipeName: "Pancakes",
     scale: 1,
     needValue: 100,
+    amount: { value: 100, unit: "g" },
     lineIndex: 0,
     via: [],
     ...overrides,
@@ -41,6 +42,11 @@ const item = (overrides: Partial<ShoppingListItem> = {}): ShoppingListItem =>
     haveValue: 500,
     shortfall: 0,
     estimatedCost: null,
+    usuallyOnHand: false,
+    covered: true,
+    availabilitySource: "inventory",
+    quantityIssues: [],
+    membership: "buy",
     status: "ok",
     perMeal: [contribution()],
     ...overrides,
@@ -77,7 +83,7 @@ function renderMatrix(
   const { columns, groups } = buildShoppingColumns(data, excluded);
   return render(
     <ShoppingMatrix
-      rows={buildShoppingRows(items, excluded, NONE)}
+      rows={buildShoppingRows(items, NONE)}
       columns={columns}
       groups={groups}
       unexpanded={unexpanded}
@@ -103,6 +109,7 @@ describe("ShoppingMatrix", () => {
     item({
       ingredientId: flourIngredientId,
       name: "flour",
+      needValue: 300,
       perMeal: [
         contribution({
           lineIndex: 0,
@@ -115,6 +122,11 @@ describe("ShoppingMatrix", () => {
     item({
       ingredientId: saltIngredientId,
       name: "salt",
+      needValue: 46,
+      shortfall: 46,
+      status: "missing",
+      covered: false,
+      availabilitySource: null,
       haveValue: 0,
       perMeal: [
         contribution({
@@ -155,7 +167,7 @@ describe("ShoppingMatrix", () => {
     ]);
   });
 
-  it("sums a split ingredient across its lines", () => {
+  it("shows the server total alongside each split contribution", () => {
     renderMatrix(twoLines);
 
     const cells = rowCells("salt");
@@ -174,7 +186,21 @@ describe("ShoppingMatrix", () => {
   });
 
   it("scales shading to the visible lines when a meal is excluded", () => {
-    const { container } = renderMatrix(twoLines, [], new Set([dinnerMealId]));
+    const { container } = renderMatrix(
+      twoLines.map((row) => {
+        const selected = {
+          ...row,
+          perMeal: row.perMeal.filter((c) => c.mealId !== dinnerMealId),
+        };
+        if (row.name === "salt") {
+          selected.needValue = 40;
+          selected.shortfall = 40;
+        }
+        return selected;
+      }),
+      [],
+      new Set([dinnerMealId]),
+    );
 
     expect(
       [...container.querySelectorAll("tbody td")].filter((td) =>
@@ -279,5 +305,38 @@ describe("ShoppingMatrix", () => {
     if (!cell) throw new Error("Missing first shopping matrix cell");
     expect(cell.textContent).toBe("↳ 120 g");
     expect(cell.getAttribute("title")).toBe("via Dough");
+  });
+});
+
+describe("pantry staple matrix", () => {
+  it("shows required quantities without a shopping checkbox", () => {
+    renderMatrix([
+      item({
+        membership: "usuallyOnHand",
+        usuallyOnHand: true,
+        availabilitySource: "assumed",
+        haveValue: 0,
+        shortfall: 100,
+        status: "missing",
+      }),
+    ]);
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.getByText("Assumed")).toBeTruthy();
+    expect(screen.getAllByText("100 g").length).toBeGreaterThan(0);
+  });
+  it("keeps an unresolved requirement visible", () => {
+    renderMatrix([
+      item({
+        membership: "usuallyOnHand",
+        usuallyOnHand: true,
+        needValue: null,
+        quantityIssues: ["missingAmount"],
+        perMeal: [contribution({ needValue: null, amount: null })],
+      }),
+    ]);
+    expect(screen.getAllByText(/Quantity unresolved/).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByRole("checkbox")).toBeNull();
   });
 });

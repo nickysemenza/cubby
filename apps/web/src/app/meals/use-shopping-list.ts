@@ -1,3 +1,4 @@
+import { mealShortcode } from "@cubby/schemas/identifiers";
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -69,13 +70,19 @@ export function useShoppingList(
 
   const query = useQuery(
     // Date-only "YYYY-MM-DD" bounds — no timezone conversion.
-    meal.getShoppingList.queryOptions({ from: fromStr, to: toStr }),
+    meal.getShoppingList.queryOptions({
+      from: fromStr,
+      to: toStr,
+      excludedMealIds: (excluded ?? NO_EXCLUDED).map((id) =>
+        mealShortcode.parse(id),
+      ),
+    }),
   );
   const { data } = query;
 
   const rows = useMemo(
-    () => (data ? buildShoppingRows(data.items, excludedKeys, checked) : []),
-    [data, excludedKeys, checked],
+    () => (data ? buildShoppingRows(data.items, checked) : []),
+    [data, checked],
   );
 
   const { columns, groups } = useMemo(
@@ -109,7 +116,8 @@ export function useShoppingList(
     checked,
     toggleChecked,
     clearChecked,
-    remaining: rows.filter((r) => !r.isChecked).length,
+    remaining: rows.filter((r) => r.item.membership === "buy" && !r.isChecked)
+      .length,
     range: { from: fromStr, to: toStr },
   };
 }

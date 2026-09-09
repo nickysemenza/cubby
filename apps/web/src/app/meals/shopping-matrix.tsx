@@ -100,19 +100,24 @@ export function ShoppingMatrix({
     const byRow = new Map<
       string,
       {
-        values: Map<string, number>;
+        values: Map<string, number | null>;
         /** Sub-recipe chains the cell's value came through, if any. */
         via: Map<string, string[]>;
         max: number;
       }
     >();
     for (const row of rows) {
-      const values = new Map<string, number>();
+      const values = new Map<string, number | null>();
       const via = new Map<string, string[]>();
       let max = 0;
       for (const c of visibleContributions(row.item, excluded)) {
         const key = String(c.lineIndex);
-        values.set(key, (values.get(key) ?? 0) + c.needValue);
+        values.set(
+          key,
+          c.needValue == null || (values.has(key) && values.get(key) == null)
+            ? null
+            : (values.get(key) ?? 0) + c.needValue,
+        );
         if (c.via.length > 0) {
           const chain = c.via.map((v) => v.name).join(" → ");
           const seen = via.get(key);
@@ -121,7 +126,7 @@ export function ShoppingMatrix({
           } else via.set(key, [chain]);
         }
       }
-      for (const v of values.values()) if (v > max) max = v;
+      for (const v of values.values()) if (v != null && v > max) max = v;
       byRow.set(row.key, { values, via, max });
     }
     return byRow;
@@ -145,7 +150,7 @@ export function ShoppingMatrix({
   const shortCount = rows.filter((r) => (r.shortfall ?? 0) > 0).length;
 
   return (
-    <div className="hidden overflow-hidden border border-[var(--border)] sm:block">
+    <div className="hidden overflow-hidden border border-[var(--border)] sm:block print:block">
       <CrossTabTable<ShoppingRow, ShoppingLineColumn>
         cornerLabel="Ingredient"
         surface="background"
@@ -212,11 +217,14 @@ export function ShoppingMatrix({
         }}
         renderRowHeader={({ data: row }) => (
           <Row align="center" gap="snug">
-            <Checkbox
-              checked={row.isChecked}
-              onCheckedChange={() => onToggleCheck(row.key)}
-              className="shrink-0"
-            />
+            {row.item.membership === "buy" && (
+              <Checkbox
+                checked={row.isChecked}
+                onCheckedChange={() => onToggleCheck(row.key)}
+                className="shrink-0"
+                aria-label={`Check ${row.item.name}`}
+              />
+            )}
             {row.item.ingredientId ? (
               <Link
                 {...entityDetailLink("ingredient", row.item.ingredientId)}
@@ -237,7 +245,12 @@ export function ShoppingMatrix({
               </span>
             )}
             <span
-              className={cn("shrink-0 text-2xs", statusClass(row.status))}
+              className={cn(
+                "shrink-0 text-2xs",
+                row.item.membership === "usuallyOnHand"
+                  ? "text-muted-foreground"
+                  : statusClass(row.status),
+              )}
               aria-hidden
             >
               ●
@@ -266,7 +279,8 @@ export function ShoppingMatrix({
         renderCell={({ key, data: row }, column) => {
           const cell = cells.get(key);
           const value = cell?.values.get(column.key);
-          if (value == null) return null;
+          if (value == null)
+            return cell?.values.has(column.key) ? "Quantity unresolved" : null;
           // Same WASM formatter the Need column uses, so a cell and its row
           // total can never render by different rules. Deliberately NOT the
           // shopper ladder: that is scoped to the shortfall, so these stay in

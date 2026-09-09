@@ -25,6 +25,7 @@ export {
   getIngredientByID,
   resolveOrCreateIngredients,
   updateIngredient,
+  updateIngredientsUsuallyOnHand,
 } from "./crud";
 export { deleteIngredients } from "./deletion";
 export { findFuzzyMergeCandidates, mergeIngredients } from "./merge";

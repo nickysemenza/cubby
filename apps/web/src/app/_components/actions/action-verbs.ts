@@ -91,6 +91,7 @@ export const actionVerbs = {
   setDueDate: { label: "Set due date...", icon: CalendarClock },
   setCostType: { label: "Set cost type...", icon: Tag },
   setStockTracking: { label: "Set stock tracking...", icon: PackageCheck },
+  setUsuallyOnHand: { label: "Set usually on hand...", icon: PackageCheck },
   createProjectFrom: {
     label: "Create project from selected...",
     icon: Sparkles,

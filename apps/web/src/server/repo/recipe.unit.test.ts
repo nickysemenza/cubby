@@ -71,6 +71,7 @@ const baseIngredient = {
   name: "Flour",
   aliases: ["all-purpose flour"],
   naKinds: [],
+  usuallyOnHand: false,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,

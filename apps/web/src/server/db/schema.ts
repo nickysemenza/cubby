@@ -436,6 +436,9 @@ export const ingredient = pgTable(
       .notNull()
       .$type<BaseKind[]>()
       .default(sql`'{}'::text[]`),
+    // Planning metadata only. This never represents recorded inventory or
+    // authorizes inventory adjustments.
+    usuallyOnHand: boolean("usuallyOnHand").notNull().default(false),
     ...baseTimestamps(),
     ...softDeletedAt(),
     recipeId: uuid("recipeId")

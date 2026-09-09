@@ -80,7 +80,17 @@ export function MealSuggestionsPage({
 }
 
 function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
-  const ready = recipe.coverage >= 1;
+  const assumedNames = [
+    ...new Set(
+      recipe.ingredients
+        .filter((row) => row.availabilitySource === "assumed")
+        .map((row) => row.name),
+    ),
+  ];
+  const hasIncompleteInformation =
+    recipe.unexpandedSubRecipes > 0 ||
+    recipe.ingredients.some((row) => row.quantityIssues.length > 0);
+  const ready = recipe.coverage >= 1 && !hasIncompleteInformation;
   const pct = Math.round(recipe.coverage * 100);
 
   // The card body is the recipe link; the footer holds "Add to meal" as a
@@ -97,7 +107,11 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
         <Row align="start" justify="between" gap="sm">
           <span className="font-medium">{recipe.recipeName}</span>
           <Badge variant={ready ? "default" : "secondary"}>
-            {ready ? "Ready" : `Missing ${recipe.missing.length}`}
+            {ready
+              ? "Ready"
+              : recipe.missing.length > 0
+                ? `Missing ${recipe.missing.length}`
+                : "Review recipe"}
           </Badge>
         </Row>
         <Description as="span" size="xs">
@@ -107,6 +121,16 @@ function RecipeCoverageCard({ recipe }: { recipe: RecipeAvailability }) {
         {recipe.missing.length > 0 && (
           <Description as="span" size="xs">
             Need: {recipe.missing.join(", ")}
+          </Description>
+        )}
+        {assumedNames.length > 0 && (
+          <Description as="span" size="xs">
+            Staples assumed: {assumedNames.join(", ")}
+          </Description>
+        )}
+        {hasIncompleteInformation && (
+          <Description as="span" size="xs" className="text-warning-ink">
+            Recipe information needs review.
           </Description>
         )}
       </Link>

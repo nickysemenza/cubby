@@ -7,7 +7,7 @@ import type {
   GetMealPreparationsInput,
   SaveMealRecipePreparationInput,
   mealAddRecipeInput,
-  mealDateRange,
+  shoppingListInput,
   mealRecipeIdInput,
   mealUpdateRecipeInput,
   ShoppingListContribution,
@@ -115,14 +115,14 @@ export const removeMealRecipeWorkflow = async (
 
 export const getShoppingListWorkflow = async (
   db: Database,
-  input: typeof mealDateRange._output,
+  input: typeof shoppingListInput._output,
   availability: Pick<AvailabilityService, "getAggregatedNeeds">,
 ) => {
   const meals = await getMealsByDateRange(db, input.from, input.to);
   const publicLines: PlannedLine[] = [];
   const lineMeta: Omit<
     ShoppingListContribution,
-    "needValue" | "lineIndex" | "via"
+    "needValue" | "lineIndex" | "via" | "amount"
   >[] = [];
   const cookedMeals = meals.filter((m) =>
     contributesToShoppingList(m.mealKind),
@@ -135,7 +135,8 @@ export const getShoppingListWorkflow = async (
       date: m.date,
       mealKind: m.mealKind,
     }));
-  for (const m of cookedMeals)
+  const excluded = new Set(input.excludedMealIds ?? []);
+  for (const m of cookedMeals.filter((meal) => !excluded.has(meal.id)))
     for (const mr of m.recipes) {
       publicLines.push({ recipeId: mr.recipeId, scale: mr.scale });
       lineMeta.push({
@@ -158,7 +159,16 @@ export const getShoppingListWorkflow = async (
       haveValue: n.haveValue,
       shortfall: n.shortfall,
       status: n.status,
-      estimatedCost: n.estimatedCost,
+      usuallyOnHand: n.usuallyOnHand,
+      covered: n.covered,
+      availabilitySource: n.availabilitySource,
+      quantityIssues: n.quantityIssues,
+      membership: n.usuallyOnHand
+        ? ("usuallyOnHand" as const)
+        : n.covered && n.quantityIssues.length === 0
+          ? ("covered" as const)
+          : ("buy" as const),
+      estimatedCost: n.usuallyOnHand ? null : n.estimatedCost,
       perMeal: n.sources.flatMap((s) => {
         const meta = lineMeta[s.lineIndex];
         return meta
@@ -166,6 +176,7 @@ export const getShoppingListWorkflow = async (
               {
                 ...meta,
                 needValue: s.needValue,
+                amount: s.amount,
                 lineIndex: s.lineIndex,
                 via: s.via,
               },
@@ -183,8 +194,12 @@ export const getShoppingListWorkflow = async (
     meals: cookedMeals.map((m) => ({ id: m.id, name: m.name, date: m.date })),
     omittedMeals,
     items,
-    estimatedTotal: sumBy(items, (i) => i.estimatedCost ?? 0),
-    pricedItems: items.filter((i) => i.estimatedCost != null).length,
+    estimatedTotal: sumBy(items, (i) =>
+      i.membership === "buy" ? (i.estimatedCost ?? 0) : 0,
+    ),
+    pricedItems: items.filter(
+      (i) => i.membership === "buy" && i.estimatedCost != null,
+    ).length,
     unexpanded: unexpanded.flatMap((b: BlockedSubRecipe) => {
       const meta = lineMeta[b.lineIndex];
       return meta

@@ -100,7 +100,12 @@ const productBase = rippleTags([
   ["problems"],
 ]);
 
-const ingredientAll = rippleTags([["ingredient"], ["dashboard"]]);
+const ingredientAll = rippleTags([
+  ["ingredient"],
+  ["dashboard"],
+  ["suggestions"],
+  ["meal", "getShoppingList"],
+]);
 
 /**
  * The surfaces that re-read whenever inventory quantity or its bin moves.

@@ -19,6 +19,7 @@ import {
 } from "~/app/_components/products/product-food-summaries";
 import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { NoneValue } from "~/components/ui/none-value";
 import {
@@ -220,6 +221,18 @@ export function IngredientList() {
                 )}
               />
             ),
+          }),
+        );
+        add(
+          columnHelper.accessor("usuallyOnHand", {
+            header: "Usually on hand",
+            meta: { className: "w-36", mobile: { slot: "meta", priority: 25 } },
+            cell: (info) =>
+              info.getValue() ? (
+                <Badge variant="secondary">Usually on hand</Badge>
+              ) : (
+                <NoneValue />
+              ),
           }),
         );
         add(

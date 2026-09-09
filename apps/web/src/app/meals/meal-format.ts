@@ -97,7 +97,9 @@ export const statusClass = (status: IngredientAvailabilityStatus): string => {
 // slightly different rules.
 
 export const needText = (row: ShoppingRow): string =>
-  formatAmount(row.need, row.item.basisUnit);
+  row.need == null || row.item.quantityIssues.length > 0
+    ? `Quantity unresolved${row.item.perMeal.some((c) => c.amount != null) ? ": " + row.item.perMeal.map((c) => (c.amount == null ? "unspecified" : formatAmount(c.amount.value, c.amount.unit))).join(" + ") : ""}`
+    : formatAmount(row.need, row.item.basisUnit);
 
 export const haveText = (row: ShoppingRow): string =>
   row.item.haveValue == null
@@ -106,6 +108,8 @@ export const haveText = (row: ShoppingRow): string =>
 
 /** "?" when on-hand is unknown — distinct from a real, covered zero ("✓"). */
 export const shortText = (row: ShoppingRow): string => {
+  if (row.item.membership === "usuallyOnHand") return "Assumed";
+  if (row.item.quantityIssues.length > 0) return "Quantity unresolved";
   if (row.shortfall == null) return "?";
   return row.shortfall > 0
     ? formatShopperAmount(row.shortfall, row.item.basisUnit)
@@ -113,9 +117,11 @@ export const shortText = (row: ShoppingRow): string => {
 };
 
 export const shortClass = (row: ShoppingRow): string =>
-  row.shortfall == null || row.shortfall > 0
-    ? statusClass(row.status)
-    : "text-muted-foreground";
+  row.item.membership === "usuallyOnHand"
+    ? "text-muted-foreground"
+    : row.shortfall == null || row.shortfall > 0
+      ? statusClass(row.status)
+      : "text-muted-foreground";
 
 export const statusLabel = (status: IngredientAvailabilityStatus): string => {
   switch (status) {

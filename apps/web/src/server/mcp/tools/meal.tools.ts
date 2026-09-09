@@ -1,6 +1,5 @@
 import {
   mealAddRecipeInput,
-  mealDate,
   getMealPreparationsInput,
   getMealPreparationsOut,
   mealMcpOut,
@@ -8,6 +7,7 @@ import {
   mealScale,
   mealUpdateRecipeInput,
   shoppingListOut,
+  shoppingListInput,
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
@@ -39,11 +39,8 @@ export function registerMealTools(server: McpServer) {
   registerMcpTool(server, {
     name: "get_shopping_list",
     description:
-      "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with on-hand inventory and returns the result as structured data and readable text. Do not invoke it to add arbitrary manual household shopping items.",
-    inputSchema: z.object({
-      from: mealDate.describe("Start day (inclusive)"),
-      to: mealDate.describe("End day (inclusive)"),
-    }),
+      "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with recorded inventory. Usually-on-hand ingredients are assumed available, listed separately, and excluded from shopping estimates; assumptions never represent recorded stock. Quantity issues and blocked sub-recipes disclose incomplete information. Do not invoke it to add arbitrary manual household shopping items.",
+    inputSchema: shoppingListInput,
     outputSchema: shoppingListOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
@@ -51,6 +48,7 @@ export function registerMealTools(server: McpServer) {
       return await caller.meal.getShoppingList({
         from: params.from,
         to: params.to,
+        excludedMealIds: params.excludedMealIds,
       });
     },
   });

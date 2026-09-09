@@ -44,6 +44,7 @@ export function ShoppingListPage({
   const {
     data,
     isLoading: listLoading,
+    isFetching,
     isError,
     error,
     refetch,
@@ -64,6 +65,7 @@ export function ShoppingListPage({
   // client's first render already has the streamed one. See useHydratedLoading.
   const isLoading = useHydratedLoading(listLoading);
 
+  const buyRows = rows.filter((row) => row.item.membership === "buy");
   const fromId = useId();
   const toId = useId();
 
@@ -103,9 +105,17 @@ export function ShoppingListPage({
             type="button"
             variant="outline"
             size="sm"
-            disabled={rows.length === 0}
+            disabled={
+              isFetching || (rows.length === 0 && unexpanded.length === 0)
+            }
             onClick={() => {
-              void copyText(shoppingRowsToText(rows, range));
+              void copyText(
+                shoppingRowsToText(
+                  rows,
+                  range,
+                  unexpanded.map((gap) => `${gap.name}: ${gap.reason}`),
+                ),
+              );
               toast.success("Shopping list copied");
             }}
           >
@@ -116,7 +126,7 @@ export function ShoppingListPage({
             type="button"
             variant="outline"
             size="sm"
-            disabled={remaining === rows.length}
+            disabled={remaining === buyRows.length}
             onClick={clearChecked}
           >
             <RotateCcw />
@@ -125,7 +135,7 @@ export function ShoppingListPage({
         </Row>
       </Row>
 
-      {isLoading ? (
+      {isLoading || isFetching ? (
         <SimpleLoading text="Adding up what you need..." />
       ) : isError ? (
         // Distinct from the empty state — a network failure must never read as
@@ -186,64 +196,92 @@ export function ShoppingListPage({
             omittedMeals={omittedMeals}
           />
 
-          {rows.length === 0 ? (
+          {buyRows.length === 0 && (
             <Description>Nothing to buy for the selected meals.</Description>
-          ) : (
-            <Stack gap="sm">
-              <Row align="baseline" gap="sm" wrap>
-                <Description as="div" size="xs">
-                  {remaining} of {rows.length} left
-                </Description>
-                {data.pricedItems > 0 && (
-                  <Description as="div" size="xs" className="tabular-nums">
-                    {/* The count is not decoration: a total covering 4 of 11
-                        rows must not read as the price of the trip. */}
-                    ~{formatCurrency(data.estimatedTotal)} for{" "}
-                    {data.pricedItems} of {data.items.length} priced
-                  </Description>
-                )}
-              </Row>
-
-              {/* Mobile: stacked check-off cards, usable one-handed in a
-                  store. A 15-column cross-tab is not, so `?view=matrix` still
-                  gets the cards here — but says so, rather than letting a
-                  shared link quietly show something else. */}
-              <Stack gap="sm" className="sm:hidden">
-                {view === "matrix" && (
-                  <Description as="div" size="xs">
-                    Matrix view needs a wider screen — showing the list.
-                  </Description>
-                )}
-                {rows.map((r) => (
-                  <ShoppingCard
-                    key={r.key}
-                    row={r}
-                    onToggleCheck={() => toggleChecked(r.key)}
-                  />
-                ))}
-              </Stack>
-
-              {match(view)
-                .with("matrix", () => (
-                  <ShoppingMatrix
-                    rows={rows}
-                    columns={columns}
-                    groups={groups}
-                    unexpanded={unexpanded}
-                    excluded={excluded}
-                    onToggleCheck={toggleChecked}
-                  />
-                ))
-                .with("list", () => (
-                  <ShoppingTable
-                    rows={rows}
-                    excluded={excluded}
-                    onToggleCheck={toggleChecked}
-                  />
-                ))
-                .exhaustive()}
-            </Stack>
           )}
+          {(
+            [
+              ["buy", "To buy"],
+              ["usuallyOnHand", "Usually on hand"],
+              ["covered", "Recorded stock covers"],
+            ] as const
+          ).map(([membership, heading]) => {
+            const sectionRows = rows.filter(
+              (row) => row.item.membership === membership,
+            );
+            if (sectionRows.length === 0 && membership !== "usuallyOnHand")
+              return null;
+            return (
+              <Stack
+                key={membership}
+                gap="sm"
+                as="section"
+                aria-label={heading}
+              >
+                <Row align="baseline" gap="sm" wrap>
+                  <h2 className="text-sm font-semibold">{heading}</h2>
+                  {membership === "buy" && (
+                    <Description as="div" size="xs">
+                      {remaining} of {buyRows.length} left
+                    </Description>
+                  )}
+                  {membership === "buy" && data.pricedItems > 0 && (
+                    <Description as="div" size="xs" className="tabular-nums">
+                      ~{formatCurrency(data.estimatedTotal)} for{" "}
+                      {data.pricedItems} of {buyRows.length} priced
+                    </Description>
+                  )}
+                </Row>
+                {membership === "usuallyOnHand" && (
+                  <Description>
+                    Assumed available. Required quantities are shown for review;
+                    recorded inventory is unchanged.
+                  </Description>
+                )}
+                {sectionRows.length === 0 ? (
+                  <Description>
+                    No usually-on-hand ingredients needed.
+                  </Description>
+                ) : (
+                  <>
+                    <Stack gap="sm" className="sm:hidden print:hidden">
+                      {view === "matrix" && (
+                        <Description as="div" size="xs">
+                          Matrix view needs a wider screen — showing the list.
+                        </Description>
+                      )}
+                      {sectionRows.map((r) => (
+                        <ShoppingCard
+                          key={r.key}
+                          row={r}
+                          onToggleCheck={() => toggleChecked(r.key)}
+                        />
+                      ))}
+                    </Stack>
+                    {match(view)
+                      .with("matrix", () => (
+                        <ShoppingMatrix
+                          rows={sectionRows}
+                          columns={columns}
+                          groups={groups}
+                          unexpanded={unexpanded}
+                          excluded={excluded}
+                          onToggleCheck={toggleChecked}
+                        />
+                      ))
+                      .with("list", () => (
+                        <ShoppingTable
+                          rows={sectionRows}
+                          excluded={excluded}
+                          onToggleCheck={toggleChecked}
+                        />
+                      ))
+                      .exhaustive()}
+                  </>
+                )}
+              </Stack>
+            );
+          })}
         </>
       )}
     </Stack>

@@ -14,7 +14,6 @@ import type {
   WRecipeCosting,
   WRowResult,
 } from "@cubby/recipebridge";
-import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
@@ -144,21 +143,6 @@ export const evaluateAvailability = (
  */
 export const expandRecipeNeeds = (input: WNeedsInput): WNeedsResult =>
   wasm.expand_recipe_needs(input);
-
-/**
- * Re-score one item against a need the client reduced (a shopping-list meal
- * toggled off), without re-sending inventory. `prior` stands when on-hand is
- * unknown — only the original evaluation knows whether that meant "none" or
- * "units don't reconcile".
- */
-export const availabilityStatusFor = (
-  needValue: number,
-  haveValue: number | null,
-  prior: IngredientAvailabilityStatus,
-): IngredientAvailabilityStatus =>
-  prior === "subrecipe"
-    ? prior
-    : wasm.availability_status_for(needValue, haveValue, prior);
 
 /** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
 type IngredientPriceInfo = {

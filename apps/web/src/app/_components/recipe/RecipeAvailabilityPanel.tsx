@@ -16,6 +16,36 @@ import { cn } from "~/lib/utils";
 
 const SHELL = "border border-[var(--border)] px-4 py-2 print:hidden";
 
+/** Planning coverage can include a household staple assumption. Keep that
+ * separate from the inventory verdict so callers never present an assumption
+ * as a recorded count. */
+export function recipeAvailabilityPresentation(
+  rows: readonly IngredientAvailability[],
+  unexpandedSubRecipes: number,
+) {
+  const assumedNames = [
+    ...new Set(
+      rows
+        .filter((row) => row.availabilitySource === "assumed")
+        .map((row) => row.name),
+    ),
+  ];
+  const hasQuantityIssues = rows.some((row) => row.quantityIssues.length > 0);
+  const shortfalls = rows.filter(
+    (row) => row.status !== "subrecipe" && !row.covered,
+  );
+
+  return {
+    assumedNames,
+    hasQuantityIssues,
+    shortfalls,
+    ready:
+      shortfalls.length === 0 &&
+      !hasQuantityIssues &&
+      unexpandedSubRecipes === 0,
+  };
+}
+
 /** Name + status colour; links through to the ingredient when the row resolved
  * to one (sub-recipe rows carry no ingredient id). */
 function IngredientStatusLink({ row }: { row: IngredientAvailability }) {
@@ -80,10 +110,8 @@ export function RecipeAvailabilityPanel({
   // are unknown — excluded from coverage (you can't score what you can't see)
   // and from the "need to buy" line. An expandable sub-recipe leaves no row
   // here at all; its ingredients are counted like any other.
-  const shortfalls = data.ingredients.filter(
-    (row) => row.status !== "ok" && row.status !== "subrecipe",
-  );
-  const ready = shortfalls.length === 0;
+  const { assumedNames, hasQuantityIssues, shortfalls, ready } =
+    recipeAvailabilityPresentation(data.ingredients, data.unexpandedSubRecipes);
 
   return (
     <Stack gap="snug" className={SHELL}>
@@ -109,33 +137,58 @@ export function RecipeAvailabilityPanel({
               ready ? "text-positive" : "text-warning-ink",
             )}
           >
-            {data.availableIngredients} of {data.totalIngredients} on hand
+            {data.availableIngredients} of {data.totalIngredients} covered
           </span>
         </Row>
       </Row>
 
+      {assumedNames.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer hover:text-foreground">
+            Staples assumed ({assumedNames.length})
+          </summary>
+          <span className="mt-1 block">{assumedNames.join(", ")}</span>
+        </details>
+      )}
+
       {ready ? (
         <span className="text-xs text-muted-foreground">
-          Everything this recipe needs is in inventory.
+          {assumedNames.length > 0
+            ? "All required ingredients are covered. Staples are assumed on hand; recorded inventory stays separate."
+            : "Everything this recipe needs is in recorded inventory."}
         </span>
       ) : (
-        <Row wrap align="center" gap="xs" className="text-xs">
-          <span className="text-muted-foreground">Need</span>
-          {shortfalls.map((row, i) => (
-            <Row
-              // oxlint-disable-next-line react/no-array-index-key -- Recipes may repeat an ingredient across sections; this server-ordered list is positional and never reordered.
-              key={i}
-              as="span"
-              align="center"
-              gap="xs"
-            >
-              <IngredientStatusLink row={row} />
-              {i < shortfalls.length - 1 && (
-                <span className="text-muted-foreground">·</span>
-              )}
+        <Stack gap="tight">
+          {shortfalls.length > 0 && (
+            <Row wrap align="center" gap="xs" className="text-xs">
+              <span className="text-muted-foreground">Need</span>
+              {shortfalls.map((row, i) => (
+                <Row
+                  // oxlint-disable-next-line react/no-array-index-key -- Recipes may repeat an ingredient across sections; this server-ordered list is positional and never reordered.
+                  key={i}
+                  as="span"
+                  align="center"
+                  gap="xs"
+                >
+                  <IngredientStatusLink row={row} />
+                  {i < shortfalls.length - 1 && (
+                    <span className="text-muted-foreground">·</span>
+                  )}
+                </Row>
+              ))}
             </Row>
-          ))}
-        </Row>
+          )}
+          {hasQuantityIssues && (
+            <span className="text-xs text-warning-ink">
+              Some required quantities need review.
+            </span>
+          )}
+          {data.unexpandedSubRecipes > 0 && (
+            <span className="text-xs text-warning-ink">
+              Some sub-recipes could not be expanded.
+            </span>
+          )}
+        </Stack>
       )}
 
       <details>
@@ -156,13 +209,18 @@ export function RecipeAvailabilityPanel({
               <Row align="center" gap="xs" className="shrink-0">
                 <span className="text-muted-foreground tabular-nums">
                   {row.needValue == null
-                    ? "—"
-                    : formatAmount(row.needValue, row.basisUnit)}
+                    ? "Quantity unresolved"
+                    : `Required ${formatAmount(row.needValue, row.basisUnit)}`}
                   {row.haveValue != null &&
-                    ` · have ${formatAmount(row.haveValue, row.basisUnit)}`}
+                    ` · Recorded ${formatAmount(row.haveValue, row.basisUnit)}`}
                 </span>
+                {row.availabilitySource === "assumed" && (
+                  <span className="text-positive">Assumed on hand</span>
+                )}
                 <span className={statusClass(row.status)}>
-                  {statusLabel(row.status)}
+                  {row.availabilitySource === "assumed"
+                    ? `Recorded: ${statusLabel(row.status)}`
+                    : statusLabel(row.status)}
                 </span>
               </Row>
             </Row>
