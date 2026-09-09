@@ -1080,9 +1080,9 @@ const DECLARED_SECTIONS = [
     icon: Scale,
     title: "Sizes stated in the title but not recorded",
     description:
-      "The product name already says how big it is, but nothing records it — so no comparable unit price can be shown. Check each one describes ONE unit before accepting: titles carrying a pack count are excluded, because they read 6-12x too small.",
+      "A food or ingredient product name states a size, but nothing records it — so no comparable unit price can be shown. Check each one describes ONE unit before accepting: titles carrying a pack count are excluded, because they read 6-12x too small.",
     emptyMessage:
-      "Every product that states a size in its name has it recorded.",
+      "Every food or ingredient product that states a size in its name has it recorded.",
     renderItem: renderUnitCoverageItem,
   }),
   section({
@@ -1540,24 +1540,6 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
-    id: "empty-cooked-meals",
-    label: "Empty meals",
-    select: (p) => p.emptyCookedMeals,
-    problemKeys: ["emptyCookedMeals"],
-    totalKey: "emptyCookedMeals",
-    entity: "meal",
-    renderItem: (meal) => ({
-      title: meal.name ?? mealDay(meal),
-      // An unnamed meal's day IS its title, so don't repeat it — say what is
-      // actually wrong instead. The subtitle used to vanish entirely on those
-      // rows, leaving a card that was one bare date.
-      subtitle: meal.name
-        ? `${mealDay(meal)} · cooked, no recipes recorded`
-        : "Cooked, no recipes recorded",
-      route: entityDetailLink("meal", meal.id),
-    }),
-  }),
-  section({
     id: "understated-cost-meals",
     label: "Understated cost",
     select: (p) => p.understatedCostMeals,
@@ -1585,25 +1567,6 @@ const DECLARED_SECTIONS = [
         route: entityDetailLink("meal", meal.id),
       };
     },
-  }),
-  section({
-    id: "recipes-without-instructions",
-    label: "No instructions",
-    select: (p) => p.recipesWithoutInstructions,
-    problemKeys: ["recipesWithoutInstructions"],
-    totalKey: "recipesWithoutInstructions",
-    entity: "recipe",
-    renderItem: (recipe) => ({
-      title: recipe.name,
-      subtitle:
-        recipe.sectionCount === 0
-          ? "No sections"
-          : `${recipe.sectionCount} section${
-              recipe.sectionCount === 1 ? "" : "s"
-            }, none with instructions`,
-      route: entityDetailLink("recipe", recipe.id),
-      editLabel: "Open recipe",
-    }),
   }),
   section({
     id: "referential-liveness",

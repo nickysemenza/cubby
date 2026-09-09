@@ -790,7 +790,7 @@ export const viewManifest = defineViewManifest({
     {
       id: "no-instructions",
       label: "No instructions",
-      description: "Nothing written down to cook from",
+      description: "Recipes with no written instructions",
       // The source exclusion is spelled as a POSITIVE list plus the `(none)`
       // sentinel, not as a negation: `SourceType` is nullable, a NULL is a
       // legacy hand-entered recipe that must stay visible, and `!= 'Book'`
@@ -805,13 +805,6 @@ export const viewManifest = defineViewManifest({
         { id: "sourceType", value: ["Website", "Other", FILTER_NONE] },
       ],
       sort: [{ id: "name", desc: false }],
-      problem: {
-        key: "recipesWithoutInstructions",
-        title: "Recipes with no instructions",
-        description:
-          "No section carries any written steps, so there is nothing to cook from. Book and Notion recipes are excluded — their text lives outside Cubby on purpose.",
-        emptyMessage: "Every recipe has instructions.",
-      },
       layout: {
         ...DEFAULT_CURATED_LAYOUT,
         columnVisibility: { sourceType: true },
@@ -821,21 +814,13 @@ export const viewManifest = defineViewManifest({
   meal: [
     {
       id: "empty-cooked",
-      label: "Nothing cooked",
+      label: "No linked recipes",
       description: "Cooked meals with no recipe recorded",
       filters: [
         { id: "mealKind", value: ["cooked"] },
         { id: "related:meal.recipes", value: "none" },
       ],
-      // Soonest first: an empty meal three days out is the one worth fixing.
       sort: [{ id: "date", desc: false }],
-      problem: {
-        key: "emptyCookedMeals",
-        title: "Cooked meals with no recipes",
-        description:
-          "A meal marked cooked but carrying no recipe — either the plan was never filled in, or its recipe was deleted.",
-        emptyMessage: "Every cooked meal names at least one recipe.",
-      },
       // The Recipes column is defaultVisible:false, so reveal the signal this
       // view selects on.
       layout: {

@@ -66,16 +66,21 @@ export const productCoverageProblemQueries = [
     freshness: { kind: "live" },
     title: "Sizes stated in the title but not recorded",
     description:
-      "Products whose own name states a pack size they have no conversion for, so no comparable unit price can be shown. Titles carrying a pack count are excluded — they read 6-12x too small.",
+      "Food or ingredient products whose own name states a size they have no conversion for, so no comparable unit price can be shown. Titles carrying a pack count are excluded — they read 6-12x too small.",
     emptyMessage:
-      "Every product that states a size in its name has it recorded.",
+      "Every food or ingredient product that states a size in its name has it recorded.",
     source: {
       kind: "derived",
       diagnostic: "title-derivable-unit-size",
       grain: "proposal",
       inputs: [{ entity: "product", filters: [] }],
       operations: [
-        { label: "Shortlist mapping-less products whose name mentions a size" },
+        {
+          label:
+            "Shortlist food or ingredient products without mappings whose name mentions a size",
+          detail:
+            "Includes products categorized as food, linked to an ingredient, or carrying a positive USDA food ID.",
+        },
         {
           label: "Parse the size with the ingredient grammar",
           detail:

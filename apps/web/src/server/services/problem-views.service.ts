@@ -2,7 +2,6 @@ import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { imageListFiltersSchema } from "@cubby/schemas/image";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
-  EmptyCookedMeal,
   EmptyLocation,
   IngredientWithoutProduct,
   LocationWithoutAiDescription,
@@ -12,13 +11,11 @@ import type {
   ProblemsViewsOut,
   ProductMissingPrice,
   ProductWithoutMappings,
-  RecipeWithoutInstructions,
   SectionTotals,
   StaleLocation,
   UnusedIngredient,
 } from "@cubby/schemas/problems";
 import {
-  emptyCookedMealSchema,
   emptyLocationSchema,
   ingredientWithoutProductSchema,
   locationWithoutAiDescriptionSchema,
@@ -26,7 +23,6 @@ import {
   neverVerifiedInventorySchema,
   productMissingPriceSchema,
   productWithoutMappingsSchema,
-  recipeWithoutInstructionsSchema,
   staleLocationSchema,
   unusedIngredientSchema,
 } from "@cubby/schemas/problems";
@@ -381,8 +377,6 @@ const presentProblemRows = (
       return rows.map(toEmptyLocation);
     case "negativeExpectedQuantity":
       return rows.map(toNegativeExpectedQuantity);
-    case "emptyCookedMeals":
-      return rows.map(toEmptyCookedMeal);
     case "productsMissingPrice":
     case "unvaluedBucketProducts":
       return rows.map(toProductMissingPrice);
@@ -390,8 +384,6 @@ const presentProblemRows = (
       return rows.map(toProductWithoutMappings);
     case "staleLocations":
       return rows.map(toStaleLocation);
-    case "recipesWithoutInstructions":
-      return rows.map(toRecipeWithoutInstructions);
     case "ingredientsWithoutProduct":
       return rows.map(toIngredientWithoutProduct);
     default:
@@ -591,11 +583,6 @@ const toNegativeExpectedQuantity = (row: ListRow): NegativeExpectedQuantity => {
   };
 };
 
-const toEmptyCookedMeal = (row: ListRow): EmptyCookedMeal => {
-  const r = emptyCookedMealSchema.parse(row);
-  return { id: r.id, name: r.name, date: r.date };
-};
-
 const toProductMissingPrice = (row: ListRow): ProductMissingPrice => {
   const r = productMissingPriceSchema
     .omit({ inventoryQuantity: true, locations: true })
@@ -665,13 +652,6 @@ const toStaleLocation = (row: ListRow): StaleLocation => {
     // the same population `directItemCountMin` measured.
     itemCount: r.inventoryEntries.length,
   };
-};
-
-const toRecipeWithoutInstructions = (
-  row: ListRow,
-): RecipeWithoutInstructions => {
-  const r = recipeWithoutInstructionsSchema.parse(row);
-  return { id: r.id, name: r.name, sectionCount: r.sectionCount };
 };
 
 const toIngredientWithoutProduct = (row: ListRow): IngredientWithoutProduct => {
@@ -776,11 +756,6 @@ export const findViewProblems = async (
       "negativeExpectedQuantity",
       toNegativeExpectedQuantity,
     ),
-    emptyCookedMeals: projectViewProblemRows(
-      results,
-      "emptyCookedMeals",
-      toEmptyCookedMeal,
-    ),
     productsMissingPrice: projectViewProblemRows(
       results,
       "productsMissingPrice",
@@ -800,11 +775,6 @@ export const findViewProblems = async (
       results,
       "staleLocations",
       toStaleLocation,
-    ),
-    recipesWithoutInstructions: projectViewProblemRows(
-      results,
-      "recipesWithoutInstructions",
-      toRecipeWithoutInstructions,
     ),
     ingredientsWithoutProduct: projectViewProblemRows(
       results,

@@ -1,4 +1,5 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { recipeSourceValues } from "@cubby/schemas/recipe";
 import { describe, expect, it } from "vitest";
 
@@ -548,4 +549,26 @@ describe("recipe/no-instructions names the source complement", () => {
       new Set(recipeSourceValues.filter((v) => v !== "Book" && v !== "Notion")),
     );
   });
+});
+
+describe("optional scratch views", () => {
+  it.each([
+    {
+      entity: "recipe",
+      id: "no-instructions",
+      key: "recipesWithoutInstructions",
+    },
+    { entity: "meal", id: "empty-cooked", key: "emptyCookedMeals" },
+  ] as const)(
+    "keeps $entity/$id without a Problem or count",
+    ({ entity, id, key }) => {
+      const view = viewsForEntity(entity).find(
+        (candidate) => candidate.id === id,
+      );
+      expect(view).toBeDefined();
+      expect(view?.filters.length).toBeGreaterThan(0);
+      expect(view?.problem).toBeUndefined();
+      expect(Object.hasOwn(PROBLEM_CLASS, key)).toBe(false);
+    },
+  );
 });
