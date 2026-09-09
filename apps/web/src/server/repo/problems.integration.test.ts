@@ -16,10 +16,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   financialTransaction,
+  product,
   productComponent,
   recipe,
 } from "~/server/db/schema";
 
+import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findFastProblems } from "../services/problems.service";
 import { setDataException } from "./data-quality";
 import { getDb } from "./database-helpers";
@@ -788,5 +790,89 @@ describe("problems — weight-sold products", () => {
     // The mapping IS the fix, so keeping the row would make the section
     // permanently red for a product that no longer has the problem.
     expect(ids).not.toContain(mapped.id);
+  });
+});
+
+describe("title-size suggestions — food eligibility", () => {
+  const ctx = withTestDb();
+
+  it("includes food and explicit food links while excluding unrelated sizes from samples and counts", async () => {
+    const linkedIngredient = await createIngredientFixture(
+      ctx.db,
+      { name: "Example flour", aliases: [] },
+      ctx.actor,
+    );
+    // Raw inserts preserve legacy categories instead of createProduct's automatic
+    // food classification, so each independent eligibility signal is exercised.
+    const eligible = [];
+    for (const data of [
+      { name: "Example oats 500 g", category: "food" },
+      { name: "Example flour 1 kg", ingredientId: linkedIngredient.entityId },
+      { name: "Example rice 2 lb", fdc_id: 12345 },
+    ] as const) {
+      eligible.push(
+        await insertWithShortcode(ctx.db, "product", {
+          manufacturer: "Example",
+          ...data,
+        }),
+      );
+    }
+    for (const data of [
+      { name: "Example line 10 lb", category: "tools" },
+      { name: "Example pot 1 gal", category: "household" },
+      { name: "Example unclassified 500 g", fdc_id: 0 },
+      { name: "Example invalid food link 500 g", fdc_id: -1 },
+      { name: "Example unknown 500 g" },
+      { name: "Example multipack 6 x 500 g", category: "food" },
+    ] as const) {
+      await insertWithShortcode(ctx.db, "product", {
+        manufacturer: "Example",
+        ...data,
+      });
+    }
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Example mapped oats 500 g",
+        category: "food",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "each" },
+            b: { value: 500, unit: "g" },
+            source: "test",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const deleted = await insertWithShortcode(ctx.db, "product", {
+      manufacturer: "Example",
+      name: "Example deleted food 500 g",
+      category: "food",
+    });
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, deleted.id));
+
+    const sample = await runDiagnostic(
+      ctx.db,
+      "title-derivable-unit-size",
+      {},
+      { kind: "sample", limit: 100 },
+    );
+    const count = await runDiagnostic(
+      ctx.db,
+      "title-derivable-unit-size",
+      {},
+      { kind: "count" },
+    );
+    expect(sample.items).toHaveLength(eligible.length);
+    expect(sample.items).toEqual(
+      expect.arrayContaining(
+        eligible.map((row) => expect.objectContaining({ id: row.shortcode })),
+      ),
+    );
+    expect(count.count).toBe(eligible.length);
   });
 });

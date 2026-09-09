@@ -505,20 +505,6 @@ export const staleParentRecipeSchema = z.object({
   name: z.string(),
 });
 
-// A meal planned to be COOKED but carrying no live planned recipe — the
-// half-finished state: you put it on the calendar and never chose what to make.
-// Deliberately scoped to `cooked`: a recipe-less `eating_out`/`takeout` meal is
-// a complete record, not a gap, and flagging one would make the detector argue
-// with the meal's own stated intent. Counts a recipe as gone when either the
-// link or the recipe itself is soft-deleted, matching what `dbMealToAPI`
-// renders — a meal whose only recipe was deleted looks empty on the page, so
-// the detector has to agree or it reports a population the UI can't show.
-export const emptyCookedMealSchema = z.object({
-  id: mealShortcode,
-  name: z.string().nullable(),
-  date: plainDate,
-});
-
 // A planned meal whose cost rollup is knowingly incomplete: at least one of
 // its live recipes was costed and came back with fewer priced ingredients than
 // it has (`costCovered < ingredientCount`).
@@ -541,20 +527,6 @@ export const understatedCostMealSchema = z.object({
       ingredientCount: z.number().int().nonnegative(),
     }),
   ),
-});
-
-// A live recipe with no instruction text anywhere — every live section's
-// `instructions` array is empty.
-//
-// Book- and Notion-sourced recipes are excluded, not flagged: a cookbook import
-// legitimately carries no instructions because the instructions are in the book
-// on the shelf. Including them would bury the recipes that are actually
-// half-entered under the ones that are working as designed — the same reason
-// the trigram index at schema.ts excludes those two sources.
-export const recipeWithoutInstructionsSchema = z.object({
-  id: recipeShortcode,
-  name: z.string(),
-  sectionCount: z.number().int(),
 });
 
 export const staleIngredientParseSchema = z.object({
@@ -866,12 +838,10 @@ export const problemsUpcSchema = z.object({
 
 const problemsViewsFields = {
   ingredientsWithoutProduct: z.array(ingredientWithoutProductSchema),
-  recipesWithoutInstructions: z.array(recipeWithoutInstructionsSchema),
   staleLocations: z.array(staleLocationSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   productsMissingPrice: z.array(productMissingPriceSchema),
   unvaluedBucketProducts: z.array(productMissingPriceSchema),
-  emptyCookedMeals: z.array(emptyCookedMealSchema),
   neverVerifiedInventory: z.array(neverVerifiedInventorySchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
   emptyLocations: z.array(emptyLocationSchema),
@@ -1078,7 +1048,6 @@ export const PROBLEM_CLASS = {
   // `coverage` — there is no denominator and no backlog being worked through,
   // just a row that is either finished or mislabelled. No auto-fix: only the
   // cook knows which of the two resolutions is true.
-  emptyCookedMeals: "defect",
   // The number on the meal is wrong, not merely unfinished, and it stays wrong
   // until someone gives an ingredient a price path. Converges to zero; no
   // auto-fix, because the fix is a pricing decision.
@@ -1086,7 +1055,6 @@ export const PROBLEM_CLASS = {
   // A recipe you can't cook from. Converges to zero once typed in, and the
   // book/Notion sources that legitimately have none are excluded rather than
   // tolerated, so a row here is always real work.
-  recipesWithoutInstructions: "defect",
   unknownParkedItems: "defect",
   // Priced product, unpriceable unit. Converges to zero (add the conversion
   // edge) and production sits at zero today, so a row is a regression in some
@@ -1372,11 +1340,7 @@ export type LocationWithoutAiDescription = z.infer<
 >;
 export type StaleIngredientParse = z.infer<typeof staleIngredientParseSchema>;
 export type StaleParentRecipe = z.infer<typeof staleParentRecipeSchema>;
-export type EmptyCookedMeal = z.infer<typeof emptyCookedMealSchema>;
 export type UnderstatedCostMeal = z.infer<typeof understatedCostMealSchema>;
-export type RecipeWithoutInstructions = z.infer<
-  typeof recipeWithoutInstructionsSchema
->;
 export type ProductWithBetterUpcData = z.infer<
   typeof productWithBetterUpcDataSchema
 >;

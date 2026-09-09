@@ -397,9 +397,8 @@ const SIZE_ALIAS_CANDIDATES: &[&str] = &[
     "cup", "c", "quart", "q", "gallon", "gal", "tsp", "teaspoon", "tbsp", "tablespoon",
     // Spellings Cubby product titles actually contain that upstream may or may
     // not know. Listed so their status is DECIDED HERE rather than asserted in a
-    // downstream comment: at the pinned rev every one of these exits, because
-    // `UNIT_MAPPINGS` has no entry and `from_str` falls through to `Other`. If
-    // upstream learns one, it starts reaching callers with no change here.
+    // downstream comment. If upstream learns one, it starts reaching callers
+    // with no change here.
     "qt", "pt", "pint", "litre", "millilitre",
 ];
 
@@ -419,10 +418,9 @@ const SIZE_ALIAS_CANDIDATES: &[&str] = &[
 /// Two properties callers rely on:
 ///
 /// - **Filtered, not asserted.** An alias survives only if `Unit::from_str`
-///   resolves it to a unit whose `kind()` is Weight or Volume. `qt`, `pt`,
-///   `pint`, `litre` and `millilitre` all exit here, so no caller needs a
-///   hand-kept exclusion list explaining that the grammar reads "1 qt" as
-///   `1 whole`.
+///   resolves it to a unit whose `kind()` is Weight or Volume. Unsupported
+///   spellings exit here, so callers need no hand-kept exclusion list when
+///   upstream adds support for another spelling.
 /// - **Plurals derived, not guessed.** Upstream's `strip_plural` runs before
 ///   lookup, so each alias's `+"s"` form is emitted only when it round-trips to
 ///   the same unit — never by appending `s?` downstream and hoping.
@@ -554,19 +552,35 @@ mod tests {
         }
     }
 
-    /// The filter is what lets callers drop their hand-kept exclusion lists, so
-    /// it is pinned in both directions. The absent five are the ones Cubby
-    /// product titles really contain: at the pinned rev the grammar reads
-    /// "1 qt" as `1 whole`, and a caller that located it anyway would propose
-    /// "1 each = 1 whole" for a quart of sealer.
+    /// The exported shortlist must agree with the amount parser consumers call.
+    /// Grammar upgrades can add spellings such as "litre", but a spelling still
+    /// parsed as "whole" must never become a weight/volume proposal.
     #[test]
-    fn size_unit_aliases_drop_spellings_the_grammar_lacks() {
+    fn size_unit_aliases_agree_with_amount_parser() {
         let aliases = size_unit_aliases();
-        for absent in ["qt", "pt", "pint", "litre", "millilitre"] {
-            assert!(
-                !aliases.contains(&absent.to_string()),
-                "{absent} is not a known weight/volume unit but was exported"
+        for spelling in SIZE_ALIAS_CANDIDATES
+            .iter()
+            .copied()
+            .chain(aliases.iter().map(String::as_str))
+        {
+            let parsed = crate::parse::parse_amount(&format!("1 {spelling}"));
+            let is_size = parsed.as_ref().is_ok_and(|amount| {
+                Unit::from_str(&amount.unit).is_ok_and(|unit| {
+                    matches!(unit.kind(), MeasureKind::Weight | MeasureKind::Volume)
+                })
+            });
+            assert_eq!(
+                aliases.iter().any(|alias| alias == spelling),
+                is_size,
+                "exported vocabulary disagrees with amount parser for {spelling}"
             );
+            if is_size {
+                assert_eq!(
+                    parsed.expect("parsed size").value,
+                    1.0,
+                    "amount for {spelling}"
+                );
+            }
         }
         // Plurals are derived from `strip_plural`, not appended by the caller.
         for present in [

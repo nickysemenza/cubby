@@ -21,11 +21,12 @@ import type {
   ToolUsedOutsideOwnership,
   WeightSoldProduct,
 } from "@cubby/schemas/problems";
-import { isMiscProduct } from "@cubby/shared";
+import { FOOD_CATEGORY, isMiscProduct } from "@cubby/shared";
 import {
   and,
   eq,
   exists,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -800,6 +801,11 @@ export const findProductsWithoutUnitMappings = async (
     .where(
       and(
         notDeleted(product),
+        or(
+          eq(product.category, FOOD_CATEGORY),
+          isNotNull(product.ingredientId),
+          gt(product.fdc_id, 0),
+        ),
         // Derive unit spellings from the WASM grammar; hand-maintained SQL aliases drifted from parser semantics.
         sql.raw(
           `"Product"."name" ~* '[0-9][[:space:]]*(${sizeUnitAlternation()})\\M'`,

@@ -38,7 +38,7 @@ describe("Problem Query registry", () => {
     expect(() => validateCompleteProblemRegistry(definitions)).not.toThrow();
     expect(
       definitions.filter(({ source }) => source.kind === "entity"),
-    ).toHaveLength(35);
+    ).toHaveLength(33);
     expect(
       definitions.filter(({ source }) => source.kind === "derived"),
     ).toHaveLength(20);
