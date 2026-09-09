@@ -4,7 +4,6 @@ import { type ReactNode, Suspense, useState } from "react";
 import { z } from "zod";
 
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
-import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { Button } from "~/components/ui/button";
 import { useHydrated } from "~/hooks/useHydrated";
@@ -42,6 +41,7 @@ const ShellAccount = AuthenticatedShellAccount;
 
 type AuthenticatedAppShellProps = {
   children: ReactNode;
+  footer: ReactNode;
   mainContentId: string;
   navigationProgress: ReactNode;
   onSearchClick: () => void;
@@ -54,6 +54,7 @@ type AuthenticatedAppShellProps = {
  */
 export function AuthenticatedAppShell({
   children,
+  footer,
   mainContentId,
   navigationProgress,
   onSearchClick,
@@ -111,11 +112,7 @@ export function AuthenticatedAppShell({
         >
           {children}
         </main>
-        {!viewportSurface && (
-          <div className="hidden md:block">
-            <AppFooter />
-          </div>
-        )}
+        {!viewportSurface && <div className="hidden md:block">{footer}</div>}
       </div>
     </div>
   );

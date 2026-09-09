@@ -28,6 +28,7 @@ import { Toaster } from "~/components/ui/sonner";
 import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
+import { buildMetadataQueryOptions } from "~/lib/build-metadata";
 import { useFlag } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 
@@ -84,6 +85,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     }
     return { isAuthed: getClientAuthed() };
   },
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(buildMetadataQueryOptions),
   head: () => ({
     meta: [
       {
@@ -227,6 +230,8 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 });
 
 function RootComponent() {
+  const buildMetadata = Route.useLoaderData();
+  const footer = <AppFooter metadata={buildMetadata} />;
   const { queryClient } = Route.useRouteContext();
   const mainContentId = React.useId();
   const authed = useNavAuthed();
@@ -280,6 +285,7 @@ function RootComponent() {
       </a>
       {authed && isWorkspaceRoute ? (
         <AuthenticatedAppShell
+          footer={footer}
           mainContentId={mainContentId}
           onSearchClick={openCommandMenu}
           navigationProgress={<NavigationProgress />}
@@ -301,7 +307,7 @@ function RootComponent() {
           >
             {routeContent}
           </main>
-          <AppFooter />
+          {footer}
         </div>
       )}
       <BottomNav />
