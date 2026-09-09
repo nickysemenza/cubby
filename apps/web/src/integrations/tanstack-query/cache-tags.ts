@@ -103,7 +103,8 @@ const productBase = rippleTags([
 const ingredientAll = rippleTags([
   ["ingredient"],
   ["dashboard"],
-  ["suggestions"],
+  ["recipe", "availability"],
+  ["recipe", "makeable"],
   ["meal", "getShoppingList"],
 ]);
 
