@@ -20,6 +20,14 @@ export type IngredientAvailabilityStatus = z.infer<
   typeof ingredientAvailabilityStatus
 >;
 
+/** Whether planning coverage comes from counted stock or a staple assumption. */
+export const availabilitySource = z.enum(["inventory", "assumed"]);
+export type AvailabilitySource = z.infer<typeof availabilitySource>;
+
+/** Incomplete authored recipe information that must remain visible. */
+export const quantityIssue = z.enum(["missingAmount", "incompatibleNeedUnits"]);
+export type QuantityIssue = z.infer<typeof quantityIssue>;
+
 /** Why a sub-recipe's ingredients are absent. Mirrors `WNeedsBlockReason`. */
 export const subRecipeBlockReason = z.enum([
   "cycle",
@@ -44,6 +52,10 @@ export const ingredientAvailabilityOut = z.object({
   needValue: z.number().nullable(),
   haveValue: z.number().nullable(),
   status: ingredientAvailabilityStatus,
+  usuallyOnHand: z.boolean(),
+  covered: z.boolean(),
+  availabilitySource: availabilitySource.nullable(),
+  quantityIssues: z.array(quantityIssue),
   via: z.array(needViaOut),
   /** Set only on `subrecipe` rows — why the expansion failed. */
   blockedReason: subRecipeBlockReason.nullable(),
@@ -54,9 +66,13 @@ export const aggregatedNeedOut = z.object({
   ingredientId: ingredientShortcode.nullable(),
   name: z.string(),
   basisUnit: z.string().nullable(),
-  needValue: z.number(),
+  needValue: z.number().nullable(),
   haveValue: z.number().nullable(),
   status: ingredientAvailabilityStatus,
+  usuallyOnHand: z.boolean(),
+  covered: z.boolean(),
+  availabilitySource: availabilitySource.nullable(),
+  quantityIssues: z.array(quantityIssue),
   shortfall: z.number().nullable(),
   /**
    * What the shortfall would cost, in dollars.
@@ -70,7 +86,10 @@ export const aggregatedNeedOut = z.object({
   sources: z.array(
     z.object({
       lineIndex: z.number().int(),
-      needValue: z.number(),
+      /** Null for amount-less or incompatible-unit recipe contributions. */
+      needValue: z.number().nullable(),
+      /** The authored quantity, retained even when it cannot be summed. */
+      amount: amount.nullable(),
       via: z.array(needViaOut),
     }),
   ),

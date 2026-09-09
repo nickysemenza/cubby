@@ -46,6 +46,10 @@ export const ingredientFilterFields = {
     .optional()
     .describe("Filter by ingredient name (substring)"),
   productPresenceFilter: presenceFilter,
+  usuallyOnHand: z
+    .boolean()
+    .optional()
+    .describe("Filter by ingredients usually kept on hand"),
   /**
    * `"none"` is the orphaned-ingredient worklist. The list already excludes
    * recipe-as-ingredient pointer rows (`ingredient.recipeId IS NULL`), so a
@@ -88,6 +92,8 @@ export const ingredientOutFields = {
   // ingredient (e.g. volume on a count-only item). The DB column is non-null
   // with an empty-array default, so public read contracts always carry it.
   naKinds: z.array(baseKind),
+  /** Planning assumption; recorded inventory remains a separate fact. */
+  usuallyOnHand: z.boolean(),
   ...timestampedFields,
 };
 
@@ -293,6 +299,7 @@ const ingredientCreateFields = {
     .meta({ mock: "food.ingredient" }),
   aliases: ingredientBaseFields.aliases.default([]),
   naKinds: z.array(baseKind).optional().default([]),
+  usuallyOnHand: z.boolean().optional().default(false),
 };
 export const ingredientCreateInput = z.object(ingredientCreateFields);
 export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
@@ -380,6 +387,7 @@ export const ingredientMcpOut = z.object({
   name: ingredientOutFields.name,
   aliases: ingredientOutFields.aliases,
   naKinds: ingredientOutFields.naKinds,
+  usuallyOnHand: ingredientOutFields.usuallyOnHand,
   products: z.array(z.object({ id: productShortcode, name: z.string() })),
   recipeCount: z.number().int().nonnegative(),
 });

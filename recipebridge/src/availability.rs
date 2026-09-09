@@ -57,6 +57,11 @@ pub struct WAvailabilityProduct {
 #[tsify(from_wasm_abi)]
 pub struct WAvailabilityGroup {
     pub key: String,
+    /// Household planning metadata. This never changes the inventory verdict:
+    /// it only marks the group covered for recipe planning when stock is not
+    /// known to cover it.
+    #[serde(default)]
+    pub usually_on_hand: bool,
     pub needs: Vec<WAvailabilityNeed>,
     pub products: Vec<WAvailabilityProduct>,
 }
@@ -89,7 +94,18 @@ pub enum WAvailabilityStatus {
 #[tsify(into_wasm_abi)]
 pub struct WAvailabilitySource {
     pub line_index: u32,
-    pub need_value: f64,
+    /// Null when the group needs cannot be expressed in one comparable unit.
+    #[serde(default)]
+    #[tsify(type = "number | null")]
+    pub need_value: Option<f64>,
+}
+
+#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "lowercase")]
+pub enum WAvailabilitySourceKind {
+    Inventory,
+    Assumed,
 }
 
 #[derive(Tsify, Serialize, Deserialize)]
@@ -97,11 +113,21 @@ pub struct WAvailabilitySource {
 pub struct WAvailabilityGroupResult {
     pub key: String,
     pub basis_unit: String,
-    pub need_value: f64,
+    /// Null when authored needs use incompatible units. This is deliberately
+    /// distinct from `have_value: null`, which means stock cannot be compared.
+    #[serde(default)]
+    #[tsify(type = "number | null")]
+    pub need_value: Option<f64>,
     #[serde(default)]
     #[tsify(type = "number | null")]
     pub have_value: Option<f64>,
     pub status: WAvailabilityStatus,
+    /// Planning coverage, which may be satisfied by `usually_on_hand` while
+    /// `status` still records missing or uncertain actual stock.
+    pub covered: bool,
+    #[serde(default)]
+    #[tsify(type = "WAvailabilitySourceKind | null")]
+    pub availability_source: Option<WAvailabilitySourceKind>,
     /// `need - have`, floored at zero. `None` when on-hand isn't known — see
     /// `shortfall_for`.
     #[serde(default)]
@@ -203,9 +229,11 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
         return WAvailabilityGroupResult {
             key: group.key.clone(),
             basis_unit: String::new(),
-            need_value: 0.0,
+            need_value: Some(0.0),
             have_value: None,
             status: WAvailabilityStatus::Ok,
+            covered: true,
+            availability_source: None,
             shortfall: None,
             sources: Vec::new(),
         };
@@ -286,11 +314,14 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
             };
             WAvailabilitySource {
                 line_index: n.line_index,
-                need_value,
+                need_value: Some(need_value),
             }
         })
         .collect();
-    let need_total: f64 = sources.iter().filter_map(|s| finite(s.need_value)).sum();
+    let need_total: f64 = sources
+        .iter()
+        .filter_map(|s| s.need_value.and_then(finite))
+        .sum();
 
     // On-hand total, counted ONCE per group (across all its products) — summing
     // per-line would multiply inventory by the number of needs.
@@ -320,11 +351,12 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
     let (status, basis_unit, need_value, have_value) = match &basis {
         // Mixed units with no weight basis: surface as unconvertible rather than
         // a confident-but-wrong total. `need_total` here is the meaningless
-        // mixed-unit sum (e.g. 2 + 300), so zero it out — both the total and the
-        // per-source values — so nothing downstream can render it as a quantity.
+        // mixed-unit sum (e.g. 2 + 300), so expose it as null — both the total
+        // and per-source values — so nothing downstream can render it as a
+        // quantity.
         Basis::Incoherent => {
             for s in &mut sources {
-                s.need_value = 0.0;
+                s.need_value = None;
             }
             (
                 WAvailabilityStatus::Unconvertible,
@@ -333,25 +365,35 @@ fn evaluate_group(group: &WAvailabilityGroup) -> WAvailabilityGroupResult {
                     .first()
                     .map(|n| n.amount.unit.clone())
                     .unwrap_or_default(),
-                0.0,
+                None,
                 None,
             )
         }
         Basis::Weight(unit) | Basis::Unit(unit) => (
             resolve_status(need_total, have_total, any_entries, any_convertible),
             unit.clone(),
-            need_total,
+            Some(need_total),
             any_convertible.then_some(have_total),
         ),
     };
 
+    let covered_by_inventory = status == WAvailabilityStatus::Ok;
+    let covered = covered_by_inventory || group.usually_on_hand;
     WAvailabilityGroupResult {
         key: group.key.clone(),
         basis_unit,
         need_value,
         have_value,
         status,
-        shortfall: shortfall_for(need_value, have_value, status),
+        covered,
+        availability_source: if covered_by_inventory {
+            Some(WAvailabilitySourceKind::Inventory)
+        } else if group.usually_on_hand {
+            Some(WAvailabilitySourceKind::Assumed)
+        } else {
+            None
+        },
+        shortfall: need_value.and_then(|need| shortfall_for(need, have_value, status)),
         sources,
     }
 }
@@ -467,6 +509,7 @@ mod tests {
         // need 100 g, have 1 cup = 120 g → ok.
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(100.0, "g", 0)],
             products: vec![product(
                 "p",
@@ -475,7 +518,7 @@ mod tests {
             )],
         });
         assert_eq!(g.basis_unit, "g");
-        assert_eq!(g.need_value, 100.0);
+        assert_eq!(g.need_value, Some(100.0));
         assert_eq!(g.have_value, Some(120.0));
         assert_eq!(g.status, WAvailabilityStatus::Ok);
     }
@@ -489,6 +532,7 @@ mod tests {
         // 1 cup = 120 g ⇒ 1 tsp = 2.5 g ⇒ 1 pinch (1/16 tsp) = 0.15625 g.
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(1.0, "pinch", 0)],
             products: vec![product(
                 "p",
@@ -497,7 +541,7 @@ mod tests {
             )],
         });
         assert_eq!(g.basis_unit, "g");
-        assert_eq!(g.need_value, 0.15625);
+        assert_eq!(g.need_value, Some(0.15625));
         // 0.05 g on hand against a 0.15625 g need is short, not satisfied.
         assert_eq!(g.status, WAvailabilityStatus::Short);
     }
@@ -506,6 +550,7 @@ mod tests {
     fn short_when_some_but_not_enough() {
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(200.0, "g", 0)],
             products: vec![product(
                 "p",
@@ -521,6 +566,7 @@ mod tests {
     fn missing_when_no_inventory() {
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(100.0, "g", 0)],
             products: vec![product("p", vec![mapping(1.0, "cup", 120.0, "g")], vec![])],
         });
@@ -529,10 +575,49 @@ mod tests {
     }
 
     #[test]
+    fn staple_assumption_covers_missing_stock_without_mutating_stock_verdict() {
+        let g = eval(WAvailabilityGroup {
+            key: "salt".into(),
+            usually_on_hand: true,
+            needs: vec![need(1.0, "tsp", 0)],
+            products: vec![product("p", vec![], vec![])],
+        });
+
+        assert_eq!(g.status, WAvailabilityStatus::Missing);
+        assert_eq!(g.have_value, None);
+        assert_eq!(g.shortfall, Some(1.0));
+        assert!(g.covered);
+        assert_eq!(
+            g.availability_source,
+            Some(WAvailabilitySourceKind::Assumed)
+        );
+    }
+
+    #[test]
+    fn staple_assumption_covers_unconvertible_stock_but_keeps_uncertainty() {
+        let g = eval(WAvailabilityGroup {
+            key: "salt".into(),
+            usually_on_hand: true,
+            needs: vec![need(100.0, "g", 0)],
+            products: vec![product("p", vec![], vec![amt(1.0, "cup")])],
+        });
+
+        assert_eq!(g.status, WAvailabilityStatus::Unconvertible);
+        assert_eq!(g.have_value, None);
+        assert_eq!(g.shortfall, None);
+        assert!(g.covered);
+        assert_eq!(
+            g.availability_source,
+            Some(WAvailabilitySourceKind::Assumed)
+        );
+    }
+
+    #[test]
     fn unconvertible_when_on_hand_unit_has_no_path() {
         // need grams, on hand in an unrelated unit with no weight path.
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(100.0, "g", 0)],
             products: vec![product("p", vec![], vec![amt(2.0, "clove")])],
         });
@@ -546,11 +631,12 @@ mod tests {
         // No mappings: need "2 clove", on hand "5 clove" → same-unit compare, ok.
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(2.0, "clove", 0)],
             products: vec![product("p", vec![], vec![amt(5.0, "clove")])],
         });
         assert_eq!(g.basis_unit, "clove");
-        assert_eq!(g.need_value, 2.0);
+        assert_eq!(g.need_value, Some(2.0));
         assert_eq!(g.have_value, Some(5.0));
         assert_eq!(g.status, WAvailabilityStatus::Ok);
     }
@@ -560,6 +646,7 @@ mod tests {
         // two lines, 50 g + 100 g, have 1 cup = 120 g → need 150 > 120 → short.
         let g = eval(WAvailabilityGroup {
             key: "ing".into(),
+            usually_on_hand: false,
             needs: vec![need(50.0, "g", 0), need(100.0, "g", 3)],
             products: vec![product(
                 "p",
@@ -567,14 +654,14 @@ mod tests {
                 vec![amt(1.0, "cup")],
             )],
         });
-        assert_eq!(g.need_value, 150.0);
+        assert_eq!(g.need_value, Some(150.0));
         assert_eq!(g.have_value, Some(120.0));
         assert_eq!(g.status, WAvailabilityStatus::Short);
         assert_eq!(g.sources.len(), 2);
         assert_eq!(g.sources[0].line_index, 0);
-        assert_eq!(g.sources[0].need_value, 50.0);
+        assert_eq!(g.sources[0].need_value, Some(50.0));
         assert_eq!(g.sources[1].line_index, 3);
-        assert_eq!(g.sources[1].need_value, 100.0);
+        assert_eq!(g.sources[1].need_value, Some(100.0));
     }
 
     #[test]
@@ -583,6 +670,7 @@ mod tests {
         // Summing inventory per-line would double it to 240 and wrongly pass big.
         let g = eval(WAvailabilityGroup {
             key: "ing".into(),
+            usually_on_hand: false,
             needs: vec![need(60.0, "g", 0), need(60.0, "g", 1)],
             products: vec![product(
                 "p",
@@ -590,7 +678,7 @@ mod tests {
                 vec![amt(1.0, "cup")],
             )],
         });
-        assert_eq!(g.need_value, 120.0);
+        assert_eq!(g.need_value, Some(120.0));
         assert_eq!(g.have_value, Some(120.0));
         assert_eq!(g.status, WAvailabilityStatus::Ok);
     }
@@ -599,17 +687,18 @@ mod tests {
     fn mixed_units_are_incoherent_not_a_bogus_total() {
         // "2 cup" + "300 g" with no shared weight basis: the old TS summed
         // 2 + 300 = 302 "cup". Now → unconvertible, inventory not trusted, and
-        // the meaningless sum is zeroed out (total AND per-source) so nothing
+        // the meaningless sum is represented as null (total AND per-source) so nothing
         // downstream can render "302" as a quantity.
         let g = eval(WAvailabilityGroup {
             key: "ing".into(),
+            usually_on_hand: false,
             needs: vec![need(2.0, "cup", 0), need(300.0, "g", 1)],
             products: vec![product("p", vec![], vec![amt(2.0, "cup")])],
         });
         assert_eq!(g.status, WAvailabilityStatus::Unconvertible);
         assert_eq!(g.have_value, None);
-        assert_eq!(g.need_value, 0.0); // not the bogus 302
-        assert!(g.sources.iter().all(|s| s.need_value == 0.0));
+        assert_eq!(g.need_value, None); // not the bogus 302
+        assert!(g.sources.iter().all(|s| s.need_value.is_none()));
         // line indices are preserved so the UI still knows which lines contributed.
         assert_eq!(g.sources.len(), 2);
         assert_eq!(g.sources[1].line_index, 1);
@@ -622,6 +711,7 @@ mod tests {
         // so both products carry the mapping here (mirrors the shared-graph need).
         let g = eval(WAvailabilityGroup {
             key: "ing".into(),
+            usually_on_hand: false,
             needs: vec![need(100.0, "g", 0)],
             products: vec![
                 product("a", vec![mapping(1.0, "cup", 120.0, "g")], vec![]),
@@ -656,6 +746,7 @@ mod tests {
             let have_g = need_g * (steps as f64) / 10.0;
             let g = eval(WAvailabilityGroup {
                 key: "k".into(),
+                usually_on_hand: false,
                 needs: vec![need(need_g, "g", 0)],
                 products: vec![product(
                     "p",
@@ -709,6 +800,7 @@ mod tests {
             groups: vec![
                 WAvailabilityGroup {
                     key: "a".into(),
+                    usually_on_hand: false,
                     needs: vec![need(100.0, "g", 0)],
                     products: vec![product(
                         "p",
@@ -720,6 +812,7 @@ mod tests {
                 // `Ok` (a zero requirement is satisfied) rather than panicking.
                 WAvailabilityGroup {
                     key: "empty".into(),
+                    usually_on_hand: false,
                     needs: vec![],
                     products: vec![],
                 },
@@ -729,7 +822,7 @@ mod tests {
         assert_eq!(result.groups[0].key, "a");
         assert_eq!(result.groups[0].status, WAvailabilityStatus::Ok);
         assert_eq!(result.groups[1].key, "empty");
-        assert_eq!(result.groups[1].need_value, 0.0);
+        assert_eq!(result.groups[1].need_value, Some(0.0));
         assert_eq!(result.groups[1].status, WAvailabilityStatus::Ok);
     }
 
@@ -741,6 +834,7 @@ mod tests {
         // going through the rational graph (which can't represent Inf).
         let g = eval(WAvailabilityGroup {
             key: "k".into(),
+            usually_on_hand: false,
             needs: vec![need(50.0, "clove", 0), need(f64::INFINITY, "clove", 1)],
             products: vec![product(
                 "p",
@@ -748,8 +842,8 @@ mod tests {
                 vec![amt(10.0, "clove"), amt(f64::INFINITY, "clove")],
             )],
         });
-        assert!(g.need_value.is_finite());
-        assert_eq!(g.need_value, 50.0); // infinite need contribution dropped
+        assert!(g.need_value.is_some_and(f64::is_finite));
+        assert_eq!(g.need_value, Some(50.0)); // infinite need contribution dropped
         assert_eq!(g.have_value, Some(10.0)); // infinite on-hand dropped
     }
 }

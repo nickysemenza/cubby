@@ -4,11 +4,8 @@ import type {
   ShoppingListItem,
   ShoppingListOut,
 } from "@cubby/schemas/meal";
-import { sumBy } from "es-toolkit";
 
-import { availabilityStatusFor } from "~/lib/recipe-costing";
-
-import { shortText } from "./meal-format";
+import { needText, shortText } from "./meal-format";
 
 // The shared model behind every shopping-list renderer (desktop table, mobile
 // cards, matrix). Membership, per-row need, status and order are decided here
@@ -24,7 +21,7 @@ export type ShoppingRow = {
   key: string;
   item: ShoppingListItem;
   /** Need after meal exclusions. */
-  need: number;
+  need: number | null;
   /** Null when on-hand is unknown — see `shoppingListItem.shortfall`. */
   shortfall: number | null;
   status: IngredientAvailabilityStatus;
@@ -38,44 +35,23 @@ export const visibleContributions = (
 ): ShoppingListContribution[] =>
   item.perMeal.filter((c) => !excluded.has(c.mealId));
 
-/**
- * Rows to shop for: need re-summed from the visible contributions so toggling a
- * meal off is instant (no refetch), checked rows sunk to the bottom, then
- * most-short-first.
- *
- * `have` is deliberately NOT re-summed — it's the ingredient's global on-hand,
- * counted once by the server. Re-deriving it per contribution is precisely the
- * double-count the aggregation exists to avoid.
- */
+/** Server-owned needs and membership; only check-off ordering is local. */
 export const buildShoppingRows = (
   items: readonly ShoppingListItem[],
-  excluded: ReadonlySet<string>,
   checked: ReadonlySet<string>,
 ): ShoppingRow[] =>
   items
     .map((item) => {
       const key = item.ingredientId ?? item.name;
-      const need = sumBy(
-        visibleContributions(item, excluded),
-        (c) => c.needValue,
-      );
       return {
         key,
         item,
-        need,
-        // Status comes from the engine, so a client-side exclusion is scored
-        // by the same rule (and the same epsilon) the server used. Shortfall
-        // mirrors the engine's rule: unknown ONLY when the units can't be
-        // reconciled — having none of something is knowledge, not ignorance.
-        shortfall:
-          item.status === "unconvertible"
-            ? null
-            : Math.max(0, need - (item.haveValue ?? 0)),
-        status: availabilityStatusFor(need, item.haveValue, item.status),
-        isChecked: checked.has(key),
+        need: item.needValue,
+        shortfall: item.shortfall,
+        status: item.status,
+        isChecked: item.membership === "buy" && checked.has(key),
       };
     })
-    .filter((r) => r.need > 0)
     .sort(
       (a, b) =>
         Number(a.isChecked) - Number(b.isChecked) ||
@@ -199,15 +175,28 @@ export const SHOPPING_CHECKED_STORAGE_KEY = "cubby:shopping-checked";
 export const shoppingRowsToText = (
   rows: readonly ShoppingRow[],
   range: { from: string; to: string },
+  warnings: readonly string[] = [],
 ): string => {
-  const lines = rows.map((row) => {
-    const box = row.isChecked ? "[x]" : "[ ]";
-    const short = shortText(row);
-    // "✓" means covered — a quantity would imply you still need to buy some.
-    const amount = short === "✓" ? "have enough" : short;
-    return `${box} ${row.item.name} — ${amount}`;
-  });
-  return [`Shopping list · ${range.from} to ${range.to}`, "", ...lines].join(
-    "\n",
-  );
+  const lines: string[] = [`Shopping list · ${range.from} to ${range.to}`];
+  for (const [membership, heading] of [
+    ["buy", "To buy"],
+    ["usuallyOnHand", "Usually on hand"],
+    ["covered", "Recorded stock covers"],
+  ] as const) {
+    const section = rows.filter((row) => row.item.membership === membership);
+    if (section.length === 0) continue;
+    lines.push("", heading);
+    for (const row of section) {
+      const box = membership === "buy" ? (row.isChecked ? "[x] " : "[ ] ") : "";
+      const quantity = membership === "buy" ? shortText(row) : needText(row);
+      lines.push(
+        `${box}${row.item.name} — ${quantity}${membership === "usuallyOnHand" ? " required (assumed available)" : ""}`,
+      );
+      if (row.item.quantityIssues.length > 0)
+        lines.push(`  Quantity unresolved: ${needText(row)}`);
+    }
+  }
+  if (warnings.length > 0)
+    lines.push("", "Incomplete recipe information", ...warnings);
+  return lines.join("\n");
 };

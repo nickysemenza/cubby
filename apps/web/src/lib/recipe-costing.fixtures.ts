@@ -121,6 +121,7 @@ export const ingredientWith = (
   appearsInRecipes: [],
   aliases: [],
   naKinds: [],
+  usuallyOnHand: false,
   ...dates,
   product,
 });

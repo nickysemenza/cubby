@@ -2,10 +2,13 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ingredient } from "~/app/ingredients/ingredient.functions";
+import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
+import { useActionMutation } from "../hooks/useActionMutation";
 import { EntityMergeDialog } from "../merge/entity-merge-dialog";
+import { SetFieldDialog } from "../tracker/set-field-dialog";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
@@ -79,7 +82,80 @@ function useMergeIngredientsEntityAction(): EntityActionHandles {
   };
 }
 
+type IngredientActionRow = Omit<EntityActionRow, "name"> & {
+  name: string;
+  usuallyOnHand?: boolean;
+};
+const ingredientBulkUpdate = entityMutationOptionsFactory(
+  "ingredient",
+  "bulkUpdate",
+);
+
+function useSetUsuallyOnHandEntityAction(): EntityActionHandles {
+  const [rows, setRows] = useState<IngredientActionRow[]>([]);
+  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
+    null,
+  );
+  const finish = useCallback((success: boolean) => {
+    setRows([]);
+    resolveRef.current?.({ success });
+    resolveRef.current = null;
+  }, []);
+  const mutation = useActionMutation({
+    mutationFn: ingredientBulkUpdate,
+    success: (data) =>
+      `Updated ${data.updated} ingredient${data.updated === 1 ? "" : "s"}`,
+  });
+  const run = useCallback((next: readonly EntityActionRow[]) => {
+    setRows(next.map((row) => ({ ...row, name: row.name ?? row.id })));
+    return new Promise<{ success: boolean }>((resolve) => {
+      resolveRef.current = resolve;
+    });
+  }, []);
+
+  return {
+    run,
+    rowMenuItem: () => null,
+    dialog: (
+      <SetFieldDialog<IngredientActionRow>
+        open={rows.length > 0}
+        onOpenChange={(open) => {
+          if (!open) finish(false);
+        }}
+        items={rows}
+        isPending={mutation.isPending}
+        options={[
+          { value: "true", label: "Usually on hand" },
+          { value: "false", label: "Not usually on hand" },
+        ]}
+        fieldLabel="Usually on hand"
+        itemNoun="Ingredient"
+        currentValue={(row) =>
+          row.usuallyOnHand === undefined ? null : String(row.usuallyOnHand)
+        }
+        onConfirm={async (value) => {
+          await mutation.mutateAsync({
+            ids: rows.map((row) => row.id),
+            data: { usuallyOnHand: value === "true" },
+          });
+          finish(true);
+        }}
+      />
+    ),
+  };
+}
+
 export const ingredientEntityActionDefinitions = [
+  defineEntityAction({
+    verb: "setUsuallyOnHand",
+    entities: ["ingredient"],
+    arity: "both",
+    surfaces: ["selection"],
+    group: "organize",
+    priority: 90,
+    preserveSelection: true,
+    use: useSetUsuallyOnHandEntityAction,
+  }),
   defineEntityAction({
     verb: "merge",
     entities: ["ingredient"],

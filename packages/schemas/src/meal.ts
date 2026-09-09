@@ -7,14 +7,13 @@ import {
 } from "./base-entity";
 import { mealRelatedFilterFields } from "./related-view";
 import {
-  ingredientAvailabilityStatus,
+  aggregatedNeedOut,
   needViaOut,
   subRecipeBlockReason,
 } from "./availability";
 import { amount } from "./codec";
-import { money, moneyNullable } from "./money";
+import { money } from "./money";
 import {
-  ingredientShortcode,
   ledgerPartyShortcode,
   mealRecipeId,
   mealShortcode,
@@ -436,7 +435,8 @@ export const shoppingListContribution = z.object({
   recipeId: recipeShortcode,
   recipeName: z.string(),
   scale: mealScale,
-  needValue: z.number(),
+  needValue: z.number().nullable(),
+  amount: amount.nullable(),
   lineIndex: z.number().int().nonnegative(),
   via: z.array(needViaOut),
 });
@@ -462,23 +462,18 @@ export const unexpandedSubRecipeOut = z.object({
 });
 export type UnexpandedSubRecipe = z.infer<typeof unexpandedSubRecipeOut>;
 
-export const shoppingListItem = z.object({
-  ingredientId: ingredientShortcode.nullable(),
-  name: z.string(),
-  basisUnit: z.string().nullable(),
-  /** Total need across all meals in range (sum of scaled needs). */
-  needValue: z.number(),
-  haveValue: z.number().nullable(),
-  /**
-   * What you still need to buy. **Null when on-hand is unknown** (units that
-   * don't reconcile): claiming a shortfall equal to the whole need asserts a
-   * quantity we don't have, and sorts an invented number to the top.
-   */
-  shortfall: z.number().nullable(),
-  status: ingredientAvailabilityStatus,
-  estimatedCost: moneyNullable,
-  perMeal: z.array(shoppingListContribution),
+export const shoppingListInput = z.object({
+  from: mealDate,
+  to: mealDate,
+  excludedMealIds: z.array(mealShortcode).optional(),
 });
+
+export const shoppingListItem = aggregatedNeedOut
+  .omit({ sources: true })
+  .extend({
+    membership: z.enum(["buy", "usuallyOnHand", "covered"]),
+    perMeal: z.array(shoppingListContribution),
+  });
 export type ShoppingListItem = z.infer<typeof shoppingListItem>;
 
 export const shoppingListOut = z.object({
@@ -493,8 +488,8 @@ export const shoppingListOut = z.object({
   ),
   items: z.array(shoppingListItem),
   /**
-   * Sum of the priced shortfalls. `pricedItems` vs `items.length` is what makes
-   * it honest — a total over half the list must not read as the trip's cost.
+   * Sum of priced buy rows only. `pricedItems` vs the buy-row count makes
+   * it honest — a partial estimate must not read as the whole trip's cost.
    */
   estimatedTotal: money,
   pricedItems: z.number().int(),

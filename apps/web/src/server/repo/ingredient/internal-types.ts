@@ -124,6 +124,7 @@ export const dbIngredientToTopLevel = (
   name: ingredientData.name,
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,
+  usuallyOnHand: ingredientData.usuallyOnHand,
   createdAt: ingredientData.createdAt,
   updatedAt: ingredientData.updatedAt,
 });

@@ -4,7 +4,11 @@ import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityEmbedding, ingredient } from "~/server/db/schema";
+import {
+  entityEmbedding,
+  ingredient,
+  inventoryEntry,
+} from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { deleteRecipes } from "~/server/repo/recipe";
 
@@ -16,7 +20,9 @@ import {
   findOrCreateIngredient,
   getIngredientByID,
   mergeIngredients,
+  ingredientList,
   updateIngredient,
+  updateIngredientsUsuallyOnHand,
 } from "./ingredient";
 import {
   createRecipeFixture as createRecipe,
@@ -27,6 +33,96 @@ import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("ingredient", () => {
   const ctx = withTestDb();
+
+  it("persists pantry assumptions separately from aliases, merges, and inventory", async () => {
+    const plain = await createIngredient(
+      ctx.db,
+      { name: "pantry plain", aliases: [] },
+      ctx.actor,
+    );
+    const staple = await createIngredient(
+      ctx.db,
+      {
+        name: "pantry staple",
+        aliases: ["pantry staple alias"],
+        usuallyOnHand: true,
+      },
+      ctx.actor,
+    );
+    const distinct = await createIngredient(
+      ctx.db,
+      { name: "pantry distinct", aliases: [] },
+      ctx.actor,
+    );
+    expect(plain.usuallyOnHand).toBe(false);
+    expect(staple.usuallyOnHand).toBe(true);
+    expect(distinct.usuallyOnHand).toBe(false);
+
+    const plainId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, plain.id, "ingredient"))!,
+    );
+    const stapleId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, staple.id, "ingredient"))!,
+    );
+    const distinctId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, distinct.id, "ingredient"))!,
+    );
+
+    // An update that omits the setting preserves it.
+    await updateIngredient(
+      ctx.db,
+      stapleId,
+      { name: "pantry staple renamed" },
+      ctx.actor,
+    );
+    expect((await getIngredientByID(ctx.db, stapleId)).usuallyOnHand).toBe(
+      true,
+    );
+
+    const beforeInventory = await getDb(ctx.db).select().from(inventoryEntry);
+    await updateIngredientsUsuallyOnHand(
+      ctx.db,
+      [plainId, distinctId],
+      { usuallyOnHand: true },
+      ctx.actor,
+    );
+    const afterInventory = await getDb(ctx.db).select().from(inventoryEntry);
+    expect(afterInventory).toEqual(beforeInventory);
+
+    const filtered = await ingredientList(ctx.db, { usuallyOnHand: true }, [], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+    expect(filtered.data.map((row) => row.id)).toEqual(
+      expect.arrayContaining([plain.id, staple.id, distinct.id]),
+    );
+
+    const keeper = await createIngredient(
+      ctx.db,
+      { name: "pantry keeper", aliases: [], usuallyOnHand: true },
+      ctx.actor,
+    );
+    const loser = await createIngredient(
+      ctx.db,
+      { name: "pantry loser", aliases: [], usuallyOnHand: false },
+      ctx.actor,
+    );
+    await mergeIngredients(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [loser.id] },
+      ctx.actor,
+    );
+    const keeperId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, keeper.id, "ingredient"))!,
+    );
+    expect((await getIngredientByID(ctx.db, keeperId)).usuallyOnHand).toBe(
+      true,
+    );
+  });
 
   it("concurrent findOrCreate of the same new ingredient yields one row, no 500", async () => {
     // Cross-request race, deterministically forced. Two separate transactions

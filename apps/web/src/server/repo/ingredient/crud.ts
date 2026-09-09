@@ -15,12 +15,16 @@ import type {
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient, product } from "~/server/db/schema";
-import { logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   notDeleted,
   relations,
@@ -62,7 +66,7 @@ const ingredientCrud = createEntityCrud({
   fetchById: fetchIngredientById,
   fromDB: (db, row: IngredientDeepDB) => dbIngredientToAPI(db, row),
   toUpdate: (data: z.infer<typeof ingredientUpdateData>) => data,
-  auditUpdateFields: ["name", "aliases", "naKinds"],
+  auditUpdateFields: ["name", "aliases", "naKinds", "usuallyOnHand"],
 });
 
 export const getIngredientByID = (
@@ -80,6 +84,7 @@ export const createIngredient = async (
     name: data.name,
     aliases: data.aliases || [],
     naKinds: data.naKinds ?? [],
+    usuallyOnHand: data.usuallyOnHand ?? false,
   });
 
   // Log audit entry
@@ -130,6 +135,62 @@ export const updateIngredient = async (
     }
     return updated;
   });
+
+/** Bulk pantry-planning setting update. Inventory rows are deliberately never
+ * selected or written here: this changes only an ingredient-level assumption. */
+export const updateIngredientsUsuallyOnHand = async (
+  db: Database,
+  ids: IngredientId[],
+  data: Pick<z.infer<typeof ingredientUpdateData>, "usuallyOnHand">,
+  actor: ActorContext,
+): Promise<IngredientId[]> => {
+  if (ids.length === 0 || data.usuallyOnHand === undefined) return [];
+  return await withTransactionOn(db, async (tx) => {
+    const before = await tx
+      .select({ id: ingredient.id, usuallyOnHand: ingredient.usuallyOnHand })
+      .from(ingredient)
+      .where(and(inArray(ingredient.id, ids), notDeleted(ingredient)));
+    const changed = before.filter(
+      (row) => row.usuallyOnHand !== data.usuallyOnHand,
+    );
+    if (changed.length > 0) {
+      await tx
+        .update(ingredient)
+        .set({ usuallyOnHand: data.usuallyOnHand })
+        .where(
+          and(
+            inArray(
+              ingredient.id,
+              changed.map((row) => row.id),
+            ),
+            notDeleted(ingredient),
+          ),
+        );
+    }
+    await logAuditEntries(
+      tx,
+      actor,
+      changed.flatMap((row) => {
+        const changes = computeChanges(
+          row,
+          { ...row, usuallyOnHand: data.usuallyOnHand },
+          ["usuallyOnHand"],
+        );
+        return changes
+          ? [
+              {
+                entityType: "ingredient" as const,
+                entityId: row.id,
+                action: "update" as const,
+                changes,
+              },
+            ]
+          : [];
+      }),
+    );
+    return changed.map((row) => row.id);
+  });
+};
 
 export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,

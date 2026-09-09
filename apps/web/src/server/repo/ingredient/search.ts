@@ -517,6 +517,10 @@ export const buildIngredientListWhere = async (
     }
   }
 
+  if (filters.usuallyOnHand !== undefined) {
+    conditions.push(eq(ingredient.usuallyOnHand, filters.usuallyOnHand));
+  }
+
   conditions.push(
     idSetPresence(
       ingredient.id,

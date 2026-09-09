@@ -248,3 +248,30 @@ export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
   );
   return result.output;
 }
+
+export async function seedStaplePlanningPrerequisite(page: Page, name: string) {
+  const ingredient = await createFixture(page, "ingredient", { name });
+  const recipe = await createFixture(page, "recipe", {
+    name: `${name} recipe`,
+    meta: null,
+    sections: [
+      {
+        ingredients: [
+          {
+            type: "ingredient",
+            ingredientId: ingredient.id,
+            recipeId: null,
+            amounts: [{ value: 10, unit: "g" }],
+          },
+        ],
+        instructions: [{ instruction: "Mix." }],
+      },
+    ],
+  });
+  await createFixture(page, "meal", {
+    date: "2026-09-09",
+    name: `${name} meal`,
+    recipes: [{ recipeId: recipe.id, scale: 1 }],
+  });
+  return { ingredient, recipe };
+}

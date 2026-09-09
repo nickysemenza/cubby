@@ -8,6 +8,7 @@ import type {
   BlockedSubRecipe,
   IngredientAvailability,
   NeedVia,
+  QuantityIssue,
   RecipeAvailability,
 } from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
@@ -98,11 +99,14 @@ type AmountedContribution = NeedContribution & { amount: Amount };
 type NeedGroup = {
   ingredientId: IngredientShortcode;
   name: string;
+  usuallyOnHand: boolean;
+  /** Every authored contribution, including amount-less "to taste" lines. */
+  contributions: NeedContribution[];
   /**
    * Contributions carrying an amount, in the order they were sent to WASM —
    * positionally 1:1 with `result.sources`.
    */
-  contributions: AmountedContribution[];
+  amountedContributions: AmountedContribution[];
   /** Absent when this ingredient was only ever mentioned without an amount. */
   result: WAvailabilityGroupResult | undefined;
 };
@@ -137,37 +141,66 @@ const estimateIngredientShortfallCost = (
   return priced.isOk() ? priced.value.value : null;
 };
 
-const aggregatedNeedSources = (group: NeedGroup): AggregatedNeed["sources"] =>
-  (group.result?.sources ?? []).flatMap((source, index) => {
-    const contribution = group.contributions[index];
-    return contribution
-      ? [
-          {
-            lineIndex: source.line_index,
-            needValue: source.need_value,
-            via: contribution.via,
-          },
-        ]
-      : [];
+const aggregatedNeedSources = (group: NeedGroup): AggregatedNeed["sources"] => {
+  let amountedIndex = 0;
+  return group.contributions.map((contribution) => {
+    const source = contribution.amount
+      ? group.result?.sources[amountedIndex++]
+      : undefined;
+    return {
+      lineIndex: contribution.lineIndex,
+      needValue: source?.need_value ?? null,
+      amount: contribution.amount,
+      via: contribution.via,
+    };
   });
+};
+
+const availabilityFieldsForGroup = (group: NeedGroup) => {
+  const quantityIssues: QuantityIssue[] = [
+    ...(group.contributions.some((c) => c.amount == null)
+      ? (["missingAmount"] as const)
+      : []),
+    ...(group.result?.need_value == null &&
+    group.amountedContributions.length > 0
+      ? (["incompatibleNeedUnits"] as const)
+      : []),
+  ];
+  return {
+    usuallyOnHand: group.usuallyOnHand,
+    covered: group.result?.covered ?? group.usuallyOnHand,
+    availabilitySource:
+      group.result?.availability_source ??
+      (group.usuallyOnHand ? ("assumed" as const) : null),
+    quantityIssues,
+  };
+};
 
 const aggregatedNeedForGroup = (
   group: NeedGroup,
   pricedMappings: ReadonlyMap<IngredientShortcode, UnitMapping[]>,
 ): AggregatedNeed[] => {
-  // An ingredient mentioned only without an amount contributes no need to a
-  // shopping list — there's nothing to buy a quantity of.
+  // Preserve an amount-less ingredient in the result: it cannot produce a
+  // numeric purchase quantity, but hiding it would falsely make the list look
+  // complete.
   if (group.contributions.length === 0) return [];
   const first = group.contributions[0];
-  const basisUnit = group.result?.basis_unit ?? first?.amount.unit ?? null;
+  const basisUnit = group.result?.basis_unit ?? first?.amount?.unit ?? null;
+  const availability = availabilityFieldsForGroup(group);
   return [
     {
       ingredientId: group.ingredientId,
       name: group.name,
       basisUnit,
-      needValue: group.result?.need_value ?? 0,
+      needValue: availability.quantityIssues.includes("missingAmount")
+        ? null
+        : (group.result?.need_value ?? null),
       haveValue: group.result?.have_value ?? null,
       status: group.result?.status ?? "missing",
+      ...availability,
+      // This remains the recorded-stock verdict for the known contributions;
+      // `quantityIssues` prevents callers from presenting it as a complete
+      // purchase requirement.
       shortfall: group.result?.shortfall ?? null,
       // No unit path from the basis unit to money is unknown, not zero;
       // zero would silently understate the trip total.
@@ -175,7 +208,9 @@ const aggregatedNeedForGroup = (
         pricedMappings,
         group.ingredientId,
         basisUnit,
-        group.result?.shortfall ?? null,
+        availability.quantityIssues.length > 0
+          ? null
+          : (group.result?.shortfall ?? null),
       ),
       // `evaluate_group` builds `sources` positionally 1:1 with the needs it
       // was handed (including under an incoherent basis, which zeroes the
@@ -185,6 +220,42 @@ const aggregatedNeedForGroup = (
       sources: aggregatedNeedSources(group),
     },
   ];
+};
+
+const recipeIngredientAvailabilityForGroup = (
+  group: NeedGroup,
+): IngredientAvailability => {
+  const first = group.contributions[0];
+  const availability = availabilityFieldsForGroup(group);
+  if (!first) {
+    return {
+      ingredientId: group.ingredientId,
+      name: group.name,
+      need: null,
+      basisUnit: null,
+      needValue: null,
+      haveValue: null,
+      status: "missing",
+      ...availability,
+      quantityIssues: ["missingAmount"],
+      via: [],
+      blockedReason: null,
+    };
+  }
+  return {
+    ingredientId: group.ingredientId,
+    name: group.name,
+    need: group.contributions.length === 1 ? first.amount : null,
+    basisUnit: group.result?.basis_unit ?? first.amount?.unit ?? null,
+    needValue: availability.quantityIssues.includes("missingAmount")
+      ? null
+      : (group.result?.need_value ?? null),
+    haveValue: group.result?.have_value ?? null,
+    status: group.result?.status ?? "missing",
+    ...availability,
+    via: first.via,
+    blockedReason: null,
+  };
 };
 
 const toWNeedsRecipe = (recipe: RecipeGraphOut): WNeedsRecipe => ({
@@ -383,6 +454,7 @@ export class AvailabilityService {
       .filter((g) => g.withAmount.length > 0)
       .map((g) => ({
         key: g.ingredientId,
+        usually_on_hand: ingMap.get(g.ingredientId)?.usuallyOnHand ?? false,
         needs: g.withAmount.map((c) => ({
           amount: toWAmount(c.amount),
           line_index: c.lineIndex,
@@ -404,7 +476,9 @@ export class AvailabilityService {
       groups: evaluable.map(({ ingredientId, all, withAmount }) => ({
         ingredientId,
         name: all[0]?.name ?? "",
-        contributions: withAmount,
+        usuallyOnHand: ingMap.get(ingredientId)?.usuallyOnHand ?? false,
+        contributions: all,
+        amountedContributions: withAmount,
         result: byKey.get(ingredientId),
       })),
       blocked,
@@ -430,37 +504,7 @@ export class AvailabilityService {
       );
     }
 
-    const ingredients: IngredientAvailability[] = groups.map((g) => {
-      const first = g.contributions[0];
-      if (!first) {
-        // Named with no amount anywhere ("to taste") — unscoreable, and
-        // reported as missing exactly as it was before expansion.
-        return {
-          ingredientId: g.ingredientId,
-          name: g.name,
-          need: null,
-          basisUnit: null,
-          needValue: null,
-          haveValue: null,
-          status: "missing",
-          via: [],
-          blockedReason: null,
-        };
-      }
-      return {
-        ingredientId: g.ingredientId,
-        name: g.name,
-        // A single contribution still has a meaningful written amount; several
-        // (the same ingredient reached by two routes) do not.
-        need: g.contributions.length === 1 ? first.amount : null,
-        basisUnit: g.result?.basis_unit ?? first.amount.unit,
-        needValue: g.result?.need_value ?? first.amount.value,
-        haveValue: g.result?.have_value ?? null,
-        status: g.result?.status ?? "missing",
-        via: first.via,
-        blockedReason: null,
-      };
-    });
+    const ingredients = groups.map(recipeIngredientAvailabilityForGroup);
 
     // A sub-recipe we couldn't expand becomes its own row, so the panel names
     // what's missing instead of quietly scoring the recipe as complete.
@@ -472,13 +516,17 @@ export class AvailabilityService {
       needValue: null,
       haveValue: null,
       status: "subrecipe",
+      usuallyOnHand: false,
+      covered: false,
+      availabilitySource: null,
+      quantityIssues: [],
       via: b.via,
       blockedReason: b.reason,
     }));
 
     const rows = [...ingredients, ...blockedRows];
     const resolvable = rows.filter((i) => i.status !== "subrecipe");
-    const available = resolvable.filter((i) => i.status === "ok");
+    const available = resolvable.filter((i) => i.covered);
 
     return {
       recipeId: recipe.id,
@@ -488,7 +536,7 @@ export class AvailabilityService {
       totalIngredients: resolvable.length,
       availableIngredients: available.length,
       ingredients: rows,
-      missing: resolvable.filter((i) => i.status !== "ok").map((i) => i.name),
+      missing: resolvable.filter((i) => !i.covered).map((i) => i.name),
       unexpandedSubRecipes: blockedRows.length,
     };
   }

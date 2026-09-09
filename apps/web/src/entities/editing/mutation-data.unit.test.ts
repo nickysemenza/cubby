@@ -25,6 +25,14 @@ describe("entity editing mutation data", () => {
     });
     expect(() =>
       parseEntityEditBulkUpdateInput("ingredient", { name: "Flour" }),
-    ).toThrow("ingredient does not support bulk update");
+    ).toThrow(/Unrecognized key/);
+    for (const usuallyOnHand of [true, false]) {
+      expect(
+        parseEntityEditBulkUpdateInput("ingredient", { usuallyOnHand }),
+      ).toEqual({ usuallyOnHand });
+    }
+    expect(() =>
+      parseEntityEditBulkUpdateInput("recipe", { name: "Soup" }),
+    ).toThrow("recipe does not support bulk update");
   });
 });

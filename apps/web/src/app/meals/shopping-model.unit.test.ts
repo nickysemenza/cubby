@@ -42,6 +42,7 @@ const contribution = (
     recipeName: "Pancakes",
     scale: 1,
     needValue: 100,
+    amount: { value: 100, unit: "g" },
     lineIndex: nextLine++,
     via: [],
     ...rest,
@@ -63,6 +64,11 @@ const item = (over: ItemOverrides = {}): ShoppingListItem => {
     shortfall: 0,
     status: "ok",
     estimatedCost: null,
+    usuallyOnHand: false,
+    covered: true,
+    availabilitySource: "inventory",
+    quantityIssues: [],
+    membership: "buy",
     perMeal: [contribution()],
     ...rest,
   };
@@ -74,140 +80,71 @@ const item = (over: ItemOverrides = {}): ShoppingListItem => {
 };
 
 describe("buildShoppingRows", () => {
-  it("sums need from the visible contributions only", () => {
-    const row = buildShoppingRows(
+  it("preserves server quantities and stock verdict instead of recomputing from display contributions", () => {
+    const [row] = buildShoppingRows(
       [
         item({
+          needValue: 160,
+          haveValue: 100,
+          shortfall: 60,
+          status: "short",
           perMeal: [
-            contribution({ mealId: "MEL-1", needValue: 100 }),
-            contribution({ mealId: "MEL-2", needValue: 60 }),
+            contribution({ needValue: 100 }),
+            contribution({ needValue: 60 }),
           ],
         }),
       ],
-      new Set([testShortcode("meal", "MEL-2")]),
-      NONE,
-    )[0];
-
-    expect(row?.need).toBe(100);
-  });
-
-  it("never re-sums `have` when a meal is excluded", () => {
-    // The load-bearing invariant: on-hand is the ingredient's global stock,
-    // counted once by the server. Deriving it per contribution is exactly the
-    // double-count the aggregation exists to prevent.
-    const [all, some] = [NONE, new Set([testShortcode("meal", "MEL-2")])].map(
-      (excluded) =>
-        buildShoppingRows(
-          [
-            item({
-              haveValue: 500,
-              perMeal: [
-                contribution({ mealId: "MEL-1", needValue: 100 }),
-                contribution({ mealId: "MEL-2", needValue: 60 }),
-              ],
-            }),
-          ],
-          excluded,
-          NONE,
-        )[0],
-    );
-
-    expect(all?.item.haveValue).toBe(500);
-    expect(some?.item.haveValue).toBe(500);
-  });
-
-  it("drops a row nothing visible needs", () => {
-    const rows = buildShoppingRows(
-      [item({ perMeal: [contribution({ needValue: 0 })] })],
-      NONE,
       NONE,
     );
-
-    expect(rows).toHaveLength(0);
+    expect(row).toMatchObject({
+      need: 160,
+      shortfall: 60,
+      status: "short",
+      item: { haveValue: 100 },
+    });
   });
-
-  it("reports an unconvertible row's shortfall as unknown", () => {
-    const row = buildShoppingRows(
-      [item({ haveValue: null, status: "unconvertible" })],
-      NONE,
-      NONE,
-    )[0];
-
-    expect(row?.shortfall).toBeNull();
-    expect(row?.status).toBe("unconvertible");
-  });
-
-  it("still reports the full need for something you simply don't have", () => {
-    const row = buildShoppingRows(
+  it("retains unresolved needs and recorded unknown shortfalls", () => {
+    const [row] = buildShoppingRows(
       [
         item({
-          haveValue: null,
-          status: "missing",
-          perMeal: [contribution({ needValue: 250 })],
+          needValue: null,
+          shortfall: null,
+          quantityIssues: ["missingAmount"],
+          status: "unconvertible",
         }),
       ],
       NONE,
-      NONE,
-    )[0];
-
-    expect(row?.shortfall).toBe(250);
+    );
+    expect(row).toMatchObject({
+      need: null,
+      shortfall: null,
+      status: "unconvertible",
+    });
   });
-
-  it("sorts checked last, then most-short-first, then by name", () => {
+  it("sorts checked buy rows last while secondary rows never acquire ticks", () => {
     const rows = buildShoppingRows(
       [
-        item({
-          ingredientId: "ING-A",
-          name: "apples",
-          haveValue: 0,
-          perMeal: [contribution({ needValue: 10 })],
-        }),
-        item({
-          ingredientId: "ING-B",
-          name: "butter",
-          haveValue: 0,
-          perMeal: [contribution({ needValue: 90 })],
-        }),
+        item({ ingredientId: "ING-A", shortfall: 10 }),
+        item({ ingredientId: "ING-B", shortfall: 90 }),
         item({
           ingredientId: "ING-C",
-          name: "cocoa",
-          haveValue: 0,
-          perMeal: [contribution({ needValue: 50 })],
+          shortfall: 50,
+          membership: "usuallyOnHand",
+          usuallyOnHand: true,
         }),
       ],
-      NONE,
-      new Set([testShortcode("ingredient", "ING-B")]),
+      new Set([
+        testShortcode("ingredient", "ING-B"),
+        testShortcode("ingredient", "ING-C"),
+      ]),
     );
-
     expect(rows.map((r) => r.key)).toEqual([
       testShortcode("ingredient", "ING-C"),
       testShortcode("ingredient", "ING-A"),
       testShortcode("ingredient", "ING-B"),
     ]);
-  });
-});
-
-describe("status after exclusion", () => {
-  const statusFor = (over: ItemOverrides, needValue: number) =>
-    buildShoppingRows(
-      [item({ ...over, perMeal: [contribution({ needValue })] })],
-      NONE,
-      NONE,
-    )[0]?.status;
-
-  it("keeps the server's verdict when haveValue is null", () => {
-    expect(statusFor({ haveValue: null, status: "missing" }, 5)).toBe(
-      "missing",
-    );
-    expect(statusFor({ haveValue: null, status: "unconvertible" }, 5)).toBe(
-      "unconvertible",
-    );
-  });
-
-  it("re-derives ok / short / missing from the adjusted need", () => {
-    expect(statusFor({ haveValue: 100 }, 100)).toBe("ok");
-    expect(statusFor({ haveValue: 100 }, 150)).toBe("short");
-    expect(statusFor({ haveValue: 0 }, 150)).toBe("missing");
+    expect(rows[0]?.isChecked).toBe(false);
+    expect(rows[2]?.isChecked).toBe(true);
   });
 });
 
@@ -362,7 +299,6 @@ describe("shoppingRowsToText", () => {
   it("keeps checked rows and marks them", () => {
     const rows = buildShoppingRows(
       [item({ name: "flour", haveValue: 0, perMeal: [contribution()] })],
-      NONE,
       new Set([testShortcode("ingredient", "ING-1")]),
     );
 
@@ -371,14 +307,25 @@ describe("shoppingRowsToText", () => {
     expect(text).toContain("[x] flour");
   });
 
-  it("says 'have enough' rather than printing a quantity to buy", () => {
+  it("copies staples and warnings without purchase checkboxes", () => {
     const rows = buildShoppingRows(
-      [item({ name: "flour", haveValue: 9999, perMeal: [contribution()] })],
-      NONE,
+      [
+        item({
+          name: "salt",
+          membership: "usuallyOnHand",
+          usuallyOnHand: true,
+          quantityIssues: ["missingAmount"],
+          needValue: null,
+        }),
+      ],
       NONE,
     );
-
-    expect(shoppingRowsToText(rows, rangeLabel)).toContain("have enough");
+    const text = shoppingRowsToText(rows, rangeLabel, ["Dough: missingYield"]);
+    expect(text).toContain("Usually on hand");
+    expect(text).toContain("salt");
+    expect(text).toContain("Quantity unresolved");
+    expect(text).toContain("Dough: missingYield");
+    expect(text).not.toContain("[ ] salt");
   });
 });
 

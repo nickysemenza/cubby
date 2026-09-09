@@ -24,7 +24,7 @@ export const meal = defineOperationDomain("meal", {
     tags: [["meal", "getPreparations"]],
   }),
   getShoppingList: query({
-    input: schemas.mealDateRange,
+    input: schemas.shoppingListInput,
     output: schemas.shoppingListOut,
     tags: [["meal", "getShoppingList"]],
   }),

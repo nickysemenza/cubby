@@ -23,6 +23,12 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
           ? ingredient.aliases.join(", ")
           : undefined,
     },
+    {
+      label: "Usually on hand",
+      value: ingredient.usuallyOnHand
+        ? "Yes — assumed covered for planning"
+        : "No",
+    },
   ];
 
   return (

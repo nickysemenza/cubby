@@ -51,7 +51,7 @@ export function ShoppingTable({
 
   return (
     <Table
-      containerClassName="hidden overflow-hidden border border-[var(--border)] sm:block"
+      containerClassName="hidden overflow-hidden border border-[var(--border)] sm:block print:block"
       className="table-auto"
     >
       <TableHeader>
@@ -101,7 +101,13 @@ function RowGroup({
         className={cn(isOpen && "border-b-0", isChecked && "opacity-60")}
       >
         <TableCell className="pr-0">
-          <Checkbox checked={isChecked} onCheckedChange={onToggleCheck} />
+          {item.membership === "buy" && (
+            <Checkbox
+              aria-label={`Check ${item.name}`}
+              checked={isChecked}
+              onCheckedChange={onToggleCheck}
+            />
+          )}
         </TableCell>
         <TableCell className="whitespace-normal">
           {/* Chevron toggles, name navigates — the same split `createNameColumn`
@@ -139,8 +145,13 @@ function RowGroup({
                 {item.name}
               </span>
             )}
-            <span className={`text-xs ${statusClass(status)}`}>
-              · {statusLabel(status)}
+            <span
+              className={`text-xs ${item.membership === "usuallyOnHand" ? "text-muted-foreground" : statusClass(status)}`}
+            >
+              ·{" "}
+              {item.membership === "usuallyOnHand"
+                ? "Assumed available"
+                : statusLabel(status)}
             </span>
           </Row>
         </TableCell>
@@ -202,7 +213,11 @@ function RowGroup({
               </span>
             </TableCell>
             <TableCell className="py-1 text-right tabular-nums">
-              {formatAmount(c.needValue, item.basisUnit)}
+              {c.needValue == null
+                ? c.amount == null
+                  ? "Unspecified"
+                  : formatAmount(c.amount.value, c.amount.unit)
+                : formatAmount(c.needValue, item.basisUnit)}
             </TableCell>
             <TableCell className="py-1" />
             <TableCell className="py-1" />

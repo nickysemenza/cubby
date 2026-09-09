@@ -58,6 +58,16 @@ export default literalEntity({
         ],
       },
       {
+        columnId: "usuallyOnHand",
+        field: "usuallyOnHand",
+        kind: "boolean",
+        placeholder: "Filter pantry staples...",
+        options: [
+          { value: "true", label: "Usually on hand" },
+          { value: "false", label: "Not usually on hand" },
+        ],
+      },
+      {
         columnId: "ownRecipes",
         field: "ownRecipePresenceFilter",
         kind: "presence",
@@ -101,10 +111,19 @@ export default literalEntity({
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
-    bulkUpdate: null,
+    bulkUpdate: { fields: ["usuallyOnHand"] },
     merge: true,
     operationOwners: { delete: "kernel", merge: "kernel" },
-    mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
+    mcp: [
+      "get",
+      "list",
+      "search",
+      "create",
+      "update",
+      "delete",
+      "merge",
+      "bulkUpdate",
+    ],
   },
   extensions: {
     countFilter: "recipeIdNull",

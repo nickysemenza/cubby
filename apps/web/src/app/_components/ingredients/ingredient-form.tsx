@@ -1,18 +1,19 @@
 import type {
   IngredientUpdateInput,
   IngredientWithRecipesAndProductOut,
-  ingredientBase,
+  ingredientCreateInput,
 } from "@cubby/schemas/ingredient";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
-import { type Control, useForm, useWatch } from "react-hook-form";
+import { Controller, type Control, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
 import { entityListFor } from "~/entities/entity-list.functions";
 
@@ -31,6 +32,7 @@ import {
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   aliases: z.array(z.string()),
+  usuallyOnHand: z.boolean(),
 });
 
 type IngredientFormValues = z.infer<typeof formSchema>;
@@ -96,7 +98,7 @@ function DuplicateNameHint({
 
 // Props for create mode
 interface CreateIngredientFormProps extends CreateModeProps<
-  z.infer<typeof ingredientBase>
+  z.infer<typeof ingredientCreateInput>
 > {
   ingredient?: never;
   initialName?: string;
@@ -124,6 +126,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
     defaultValues: {
       name: ingredient ? ingredient.name : (initialName ?? ""),
       aliases: ingredient ? ingredient.aliases : [],
+      usuallyOnHand: ingredient?.usuallyOnHand ?? false,
     },
   });
 
@@ -134,9 +137,11 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
     if (mode === "create") {
       // For creation, pass all fields
       // Get current date for timestamps (will be replaced by server)
-      const createData: z.infer<typeof ingredientBase> = {
+      const createData: z.infer<typeof ingredientCreateInput> = {
         name: values.name,
         aliases: filteredAliases,
+        usuallyOnHand: values.usuallyOnHand,
+        naKinds: [],
       };
       props.onCreate(createData);
     } else if (mode === "edit" && ingredient) {
@@ -149,6 +154,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       const updates = buildUpdateObject(ingredient, updatedValues, [
         "name",
         "aliases",
+        "usuallyOnHand",
       ]);
 
       submitOrCancel(
@@ -185,6 +191,37 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       </Card>
 
       <AliasesField<IngredientFormValues> form={form} />
+      <Card>
+        <CardContent className="px-4 py-3">
+          <Controller
+            control={form.control}
+            name="usuallyOnHand"
+            render={({ field }) => (
+              <Row gap="sm" align="start">
+                <Checkbox
+                  id="ingredient-usually-on-hand"
+                  checked={field.value}
+                  onCheckedChange={(checked) =>
+                    field.onChange(checked === true)
+                  }
+                />
+                <div className="space-y-1">
+                  <label
+                    htmlFor="ingredient-usually-on-hand"
+                    className="text-sm font-medium"
+                  >
+                    Usually on hand
+                  </label>
+                  <Description size="xs">
+                    Assume I have enough for recipe planning. Recorded inventory
+                    stays separate.
+                  </Description>
+                </div>
+              </Row>
+            )}
+          />
+        </CardContent>
+      </Card>
     </FormWrapper>
   );
 };

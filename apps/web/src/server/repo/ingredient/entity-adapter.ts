@@ -18,7 +18,12 @@ import {
 import { getIngredientByID as getIngredientDetail } from "~/server/services/ingredient.service";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 
-import { createIngredient, getIngredientByID, updateIngredient } from "./crud";
+import {
+  createIngredient,
+  getIngredientByID,
+  updateIngredient,
+  updateIngredientsUsuallyOnHand,
+} from "./crud";
 import { deleteIngredients, INGREDIENT_DELETE_EDGE_POLICY } from "./deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY, mergeIngredients } from "./merge";
 import { ingredientList } from "./search";
@@ -66,6 +71,31 @@ export const ingredientEntityAdapter = defineEntityAdapter({
           entity: { entityType: "ingredient", entityId },
         });
       return { output, entityId, backgroundBatches };
+    },
+    bulkUpdate: async (ctx, shortcodes, data) => {
+      const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
+      const updatedIds = await updateIngredientsUsuallyOnHand(
+        ctx.db,
+        ids,
+        data,
+        ctx.actorContext,
+      );
+      const backgroundBatches = await runMutationSideEffectsForEntities(
+        ctx.db,
+        updatedIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entity: "ingredient" as const, id: entityId },
+          source: "ingredient.bulkUpdate",
+        })),
+      );
+      const updatedSet = new Set(updatedIds);
+      return {
+        updatedReferences: entityMutationReferences(
+          "ingredient",
+          shortcodes.filter((_, index) => updatedSet.has(ids[index]!)),
+        ),
+        backgroundBatches,
+      };
     },
     delete: async (ctx, shortcodes) => {
       const ids = await ingredientShortcodes.all(ctx.db, shortcodes);

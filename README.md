@@ -59,7 +59,8 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - Plan recipes on shared month and focused week calendars (plus a table view), scaled per meal
 - Classify each meal by slot (breakfast → dessert, ordering the calendar day) and by kind — a `eating out` / `takeout` meal is a recipe-less placeholder on purpose, and only `cooked` meals feed the shopping list. Calendar chips carry the slot as their glyph; non-cooked meals read as dashed
 - Shopping list — aggregated need vs. on-hand inventory, with a per-meal breakdown, estimated trip cost, and shop-friendly units (display-only; see [Tenets](#tenets))
-- Suggestions — *"what can I make tonight?"* from what's on hand
+- Suggestions — *"what can I make tonight?"* from recorded stock plus explicitly marked **Usually on hand** ingredients. These ingredient-level staples mean “assume I have enough”; aliases share the setting, brands do not own it, and inventory is never fabricated or decremented.
+- Shopping shows staples and their required quantities in a separate **Usually on hand** section, including in copy/print, and excludes them from the buy list and estimated total. Missing quantities and blocked sub-recipes remain visible.
 
 **Planning calendar**
 - Month overview and Sunday–Saturday focus views for meals, due tasks, expenses, and multi-day project spans — a ruled day-by-day agenda on phones, where a seven-column grid can't be read

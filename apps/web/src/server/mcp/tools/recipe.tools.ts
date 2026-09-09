@@ -33,7 +33,7 @@ export function registerRecipeTools(server: McpServer) {
   registerRouterTool(server, {
     name: "find_cookable_recipes",
     description:
-      "Rank recipes by how well current inventory covers their ingredients.",
+      "Rank recipes by planning coverage. Coverage distinguishes recorded inventory from ingredients marked usually on hand; quantity and blocked-sub-recipe warnings remain visible.",
     inputSchema: z.object({
       minCoverage: z
         .number()
