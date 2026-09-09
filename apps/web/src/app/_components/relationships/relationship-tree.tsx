@@ -42,7 +42,7 @@ export interface RelationshipGroup {
   hasMore?: boolean;
 }
 
-export interface RelationshipPreset {
+interface RelationshipPreset {
   key: string;
   label: string;
   groups: readonly RelationshipGroup[];

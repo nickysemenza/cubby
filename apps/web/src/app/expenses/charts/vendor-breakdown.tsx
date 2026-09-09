@@ -1,7 +1,7 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
 import { Store } from "lucide-react";
 
-import { NetBarBreakdown } from "~/app/_components/charts/kit";
+import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 
 /**
  * Net spend by vendor — sourced from `expense.analytics`'s `byVendor`
@@ -18,7 +18,7 @@ export function VendorBreakdown({
   byVendor: ExpenseVendorAggregate[];
 }) {
   return (
-    <NetBarBreakdown
+    <RankedBarBreakdown
       data={byVendor}
       valueKey="net"
       labelKey="vendorName"

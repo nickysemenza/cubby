@@ -1,0 +1,180 @@
+# Visualization audit
+
+Audited September 8, 2026. This is an implementation inventory, not a claim
+that every surface has had a visual browser pass. It separates visual grammar
+that can be shared from domain calculations that must retain their own meaning.
+
+## Shared foundations
+
+| Foundation | Current consumers | Keep / change |
+| --- | --- | --- |
+| `app/_components/charts/kit.tsx` | Expense analytics, portfolio analytics, ingredient usage | Shared Nivo bar, donut, and spend-trend presentation. This audit moves ingredient usage onto `RankedBarBreakdown`; ranking, sizing, empty state, tooltip, keyboard-safe click support, and screen-reader summary now have one implementation. |
+| `lib/nivo-theme.ts` + `ChartTooltip` + `ChartEmpty` | All Nivo statistical charts | Shared Porcelain Transit chrome, currency ticks, no-motion policy, tooltip surface, and empty state. Keep `ChartTooltip` separate from absolute `VizTooltip`: Nivo owns tooltip placement and measurement. |
+| `visualizations/dependency-graph-*` | Recipe and work dependency views | Generalize for the new entity relationship explorer. Keep directed dependency semantics, worker layout, viewport controls, transitive reduction, and cycle checks specific to dependency adapters. |
+| `visualizations/viz-overlay.tsx` + `visualization-panel.tsx` | D3 hierarchy, force, and bespoke SVG views | Retain as the common overlay/frame for bespoke canvases. Do not force Nivo charts or Gantt into it. |
+| `project-chart-data.ts`, `expense-aggregate-sql.ts`, `repo/expense/analytics.ts` | Project and expense financial views | Keep money assembly server-owned: filtered SQL aggregates preserve `SUM(Expense.cost)`, credits, null-date treatment, and the distinction between principal spend and adjustments. |
+
+## Inventory
+
+| Surface and entry point | Data assembly and semantics | Renderer, interaction, accessibility, loading, tests | Disposition |
+| --- | --- | --- | --- |
+| Expense analytics: `routes/_authenticated/expenses.index.tsx` → `app/expenses/expense-analytics-view.tsx` | Browser operation `expense.analytics` enters `server/workflows/expense.server.ts`, then `server/repo/expense/analytics.ts`. It reuses `buildExpenseWhereClause` (`repo/expense/lookup.ts`) and the shared expressions in `repo/expense-aggregate-sql.ts` for summary, cost type, trade, trade × cost type, month, project, and vendor. Month buckets omit undated expenses only; cumulative is a running sum of monthly net. Vendor/project inner joins deliberately omit unattributed or deleted parents. | Nivo bar/donut/line plus matrix; slice/cell filtering and aggregate explorer; shared tooltip/empty states. Lazy route and lazy explorer. Existing expense aggregate UI/unit coverage. | **Shared chart kit and shared aggregate helpers.** Keep financial semantics and matrix as specialized adapters. |
+| Expense cost type, project, vendor, monthly, cumulative, trade charts | `expenseAnalytics` returns grouped server results; positive-only donut arcs have a true-net center, while signed monthly and ranked net bars retain refunds/credits. | `CategoryDonut`, `RankedBarBreakdown`, `SpendTrend`, one specialized stacked trade bar; Nivo SVG labels plus tooltip. | **Shared**, except stacked trade segments remain specialized. |
+| Project detail analytics: `app/projects/project-detail-analytics-view.tsx` | The project analytics read in `server/repo/project/analytics.ts` returns scoped expenses; `app/projects/charts/project-chart-data.ts` turns those rows into daily/stacked cumulative curves and calendar data. Estimate and project-subtree scope remain project-specific. | Nivo line/bar/calendar heatmap, Gantt; chart controls select total/category/trade lens; empty fallbacks. Project-chart-data and Gantt unit tests. Analytics panel is lazy. | **Shared presentation; specialized project scope and schedule calculation.** |
+| Portfolio analytics: `app/projects/project-portfolio-analytics-view.tsx` and `projects-dashboard.tsx` | `server/repo/project/portfolio-analytics.ts` computes filtered subtree cost-vs-estimate, monthly actual/committed, trade activity, project spend, and open task count in grouped/batched reads. | Shared ranked bars and trend; specialized comparison bars and task status board. Controls navigate to selected projects. Dashboard analytics lazy-loads. | **Shared ranked/trend presentation; specialized portfolio rollups.** |
+| Project task heatmap and `TasksTimelineView` | Dated task rows only; project scope or current task filters determine the input. | Nivo calendar heatmap with tooltip plus shared Cubby Gantt timeline. Screen-reader empty states; task timeline route lazy-loads. `project-chart-data` and Gantt tests cover the data/scheduling seams. | **Retain specialization.** Calendar density and Gantt time geometry are different information models. |
+| Gantt: `ProjectGantt`, `CubbyGantt`, `TasksTimelineView` | Project/task hierarchy, effective due ranges, dependencies, trade color, collapsed chains, and date windows come from dedicated Gantt model helpers. | Custom `reui` Gantt with pan, zoom, resize, keyboard/pointer drag contracts, dependency disclosures, and empty fallback. Lazy renderer. Strong model, date, window, chain, interaction, and browser coverage. | **Retained specialization.** Share no generic relationship semantics into date geometry. |
+| Dependency graphs: `/entities` recipe/work tabs; `recipe-dependency-graph.tsx`, `work-dependency-graph.tsx` | `recipe.getDependencyGraph` and `project.getDependencyGraph` browser operations enter their typed workflow/repository reads. They assemble recipe/project/task nodes and directed edges; the work adapter supplies project-subtree and external-blocker meaning. | Worker-backed layout, canvas/SVG viewport, focus/search/zoom/filter/reduction, accessible relationship list and DOT export. Tabs and graph modules lazy-load. Model, permutation, viewport, controls, and E2E tests exist. | **Shared graph engine; specialized dependency adapters.** This is the base for the relationship explorer, while ordinary relationship cycles remain valid. |
+| Entity reference graph: `EntityReferenceGraph.tsx` | Entity manifest/reference metadata, rather than household records. | D3 force graph with selection/inspection. | **Retain as schema overview.** It is a type diagram, not record traversal. |
+| Ingredient network: `app/_components/visualizations/ingredient-network.tsx` | Its recipe browser read derives ingredient co-occurrence from recipe membership; computed edges are not persisted relationships. | D3 force layout, hover/select overlays, loading/error/retry query states. | **Retain specialized assembly; reuse graph panel/overlay only.** |
+| Unit mapping graph: `app/_components/visualizations/unit-mapping-graph.tsx` | `UnitCoveragePanel` supplies draft and saved conversion mappings after unit-kind validation. | D3 force graph, conversion editor integration; lazy from `UnitCoveragePanel`. | **Retain specialization.** Conversion paths have arithmetic/validation semantics unlike entity relations. |
+| Location visuals: `/locations` tree, treemap, sunburst and `HierarchyDrilldown` | The location browser read supplies the hierarchy and inventory metrics; location hierarchy/resolver helpers normalize home/root and container semantics. | D3 hierarchy SVG for tree/treemap/sunburst; drilldown is an accessible list-first companion with links and bounded contribution bars. Location route selects view. Drilldown and location resolver tests. | **Retain specialized hierarchy views; share hierarchy resolver/overlay.** A tree is a directed containment view, not arbitrary relation traversal. |
+| Recipe cost treemap: `app/_components/visualizations/recipe-cost-treemap.tsx` | Recipe-detail costing helpers resolve ingredients/products and cost contributions; unknown/ranged values retain their domain labels. | D3 treemap with hover/pin overlay; lazy from recipe detail. | **Retain specialized computation and renderer.** It can link into the relationship explorer but must not substitute its cost rollup. |
+| Product category donut: `app/_components/product/product-category-donut.tsx` | Its product category aggregate browser read supplies selected-category drilldown counts. | Bespoke SVG donut, query loading/error/retry, click-through filter. | **Retain specialized.** Its count and drill-navigation semantics do not fit the money-oriented shared donut. |
+| Ingredient usage: `app/_components/ingredient/ingredient-usage-chart.tsx` | The ingredient usage browser read supplies ingredient recipe counts, ranked by count. | Now `RankedBarBreakdown` with count axis, top-N cap, same neutral series color, recipe-aware tooltip, and figure summary. | **Shared.** |
+| Nutrition bars: recipe detail | Whole-recipe nutrition engine totals with row-sum fallback while totals load; ranges display midpoint geometry and upper-bound text. | Purpose-built HTML/SVG-like stacked and proportional bars, legends, empty placeholder; recipe detail lazy-loads the module. | **Retain specialized.** Food/nutrition units and uncertain ranges are not a generic series. |
+| Home insights and product expense history | Server dashboard/monthly summaries and product-linked expense history; expense values remain Expense-derived. | Compact `MonthlySpend` and table/strip summaries; home insights lazy-load. | **Shared compact chart presentation; retain home/product query scope.** |
+| Developer MCP usage dashboard | MCP usage service aggregates time-windowed calls, token/cost/error metrics, and paged log rows. | Shared ranked count bars plus specialized stacked Nivo time bars; filtering/sorting, query loading/error states; has a unit test for filter/sort. | **Shared ranked presentation; retain stacked temporal and diagnostic views.** |
+| Calendar, task board, and project forest/tree | Calendar feed and task/project hierarchy reads. | Calendar grid, board, and tree are operational spatial layouts with edit/drag behavior, not statistical charts. | **Retain specialized.** They share entity links and accessibility primitives, not a chart renderer. |
+
+### Dependency adapter bridge assessment
+
+The existing dependency procedures are presentation reads, not yet generic
+relationship reads. `recipe.getDependencyGraph` resolves an optional cookbook
+scope and emits recipe-only `uses` edges. `project.getDependencyGraph` reads the
+complete live project/task/dependency sets, derives a selected project subtree,
+adds outside blockers and hierarchy context, and marks those context nodes as
+external. Both adapters then map their output into the viewer's older
+`GraphData` shape in the browser.
+
+The generic relationship read is the shared low-level record/edge fetch: root
+shortcode, declared relationship key, bounded page, entity-plus-shortcode node
+identity, labeled edge provenance, and continuation. Recipe/work adapters keep
+their domain meaning above it: cookbook scoping, project subtree inclusion,
+hierarchy context, dependency direction, due/status metadata, external
+blockers, cycle diagnosis, and transitive reduction. This keeps the present
+whole-household work fetch out of the cross-entity explorer while preserving its
+useful scope behavior.
+
+### Component ledger
+
+The grouped rows above describe the shared data contract. This ledger records a
+specific disposition for every statistical component so follow-up work does not
+mistake a similar-looking chart for an interchangeable one.
+
+| Components | Distinct semantic contract | Disposition |
+| --- | --- | --- |
+| `MonthlySpend`, `CumulativeSpend` | Filtered household monthly net and its cumulative net; refunds stay below zero and undated rows are excluded only from time buckets. | Use existing `SpendTrend`/Nivo chrome; leave monthly bar's current-month emphasis local. |
+| `CostTypeDonut`, `ProjectBreakdown`, `VendorBreakdown` | Expense analytics grouped SQL. Cost type ring has positive slices/true-net center; project/vendor rows intentionally omit unmatched joins. | Shared `CategoryDonut` / `RankedBarBreakdown`. |
+| `TradeBarsAggregate`, `TradeCostMatrixAggregate` | Grouped trade × cost-type net. Stacked bars cannot show negative nets; matrix preserves them and is the corrective detail. | Keep specialized stacked/matrix renderers and shared pivot helper. |
+| `ExpenseDonut`, `TradeBars`, `TradeCostMatrix`, `CategoryBreakdown` | Project-detail raw scoped expense lens, including principal-only slices and per-expense tooltip evidence. | Keep raw-scope assembly and tooltips; it uses existing chart-kit presentation where the semantics match. |
+| `SpendingOverTime`, `PlannedVsActual` | Project-detail total/category/trade cumulative lenses and principal actual-vs-planned comparison; adjustment copy prevents misleading totals. | Keep specialized selectors, markers, and explanatory copy. |
+| `CostVsEstimate`, `MonthlyTrend`, `PlannedVsActualByMonth`, `TradeActivity` | Portfolio grouped rollups: project estimate comparison, actual vs committed monthly series, and principal-trade activity. | Keep comparison/trade-specific transforms; they can consume chart-kit line/bar primitives after those accept non-default legends and markers without hiding contracts. |
+| `SpendingByProject`, `OpenTasksByProject` | Portfolio ranked project money/count rows with entity icons and click navigation. | Already shared `RankedBarBreakdown`; retain project tick/identity adapters. |
+| `TaskStatusBoard` | Task status is categorical progress by project, with statuses chosen from live data. | Retain bespoke accessible table/board; no chart-kit counterpart. |
+| `CalendarHeatmap`, `TaskHeatmap` | Per-day dated task counts and task evidence. | Retain calendar wrapper; shared Nivo theme/motion is sufficient. |
+| `ProjectGantt`, `CubbyGantt`, `TasksTimelineView` | Date ranges, hierarchy, dependencies, panning and semantic drag. | Retain specialized as above. |
+| `IngredientUsageChart` | Ranked recipe count by ingredient; no money formatting. | Migrated to `RankedBarBreakdown` with count formatter, 28px row density, top-N cap, and accessible summary. |
+| `ProductCategoryDonut` | Product counts with category filter navigation and query retry states. | Retain bespoke count donut. |
+| `McpUsageDashboard` bars | Developer counts/costs/errors over a selected time window, paired with diagnostic tables and infinite activity log. | `Most-used tools` and `Calls by client` now use `RankedBarBreakdown` with count formatting and a fixed dashboard height. Retain the stacked success/error time bars because they compare two series over a temporal axis. |
+| `NutritionBars` | Nutrition units, ranges, and whole-recipe engine totals. | Retain bespoke HTML bars. |
+| `LocationTreeGraph`, `LocationTreemap`, `LocationSunburst`, `HierarchyDrilldown` | Containment hierarchy, inventory metrics, root/home normalization, and drill navigation. | Retain D3/list representations; share resolver and overlay. |
+| `RecipeCostTreemap` | Costed recipe composition with ranges/unknowns. | Retain bespoke D3 treemap. |
+| `IngredientNetwork` | Computed ingredient co-occurrence and recipe-pair inspection. | Retain bespoke D3 force graph. |
+| `UnitMappingGraph` | Conversion capability graph and edit-time validation. | Retain bespoke D3 force graph. |
+| `EntityReferenceGraph` | Manifest/schema reference types, cardinality, and provenance. | Retain schema overview; do not route it through record explorer. |
+| `IsometricPantry` and `isometric-renderer` | Inventory/location data projected into a navigable physical-pantry scene; its geometry, canvas lifecycle, and pointer/touch hit testing are not aggregate chart semantics. | Retain as a specialized spatial renderer. Its geometry/layout unit tests are the correct regression seam. |
+
+## Consolidation rules
+
+1. Keep every money calculation behind `Expense` aggregates. A presentation migration must not replace grouped SQL with client reductions, discard negatives, turn a net into positive spend, or change date-bucket/filter scope.
+2. Move repeated Nivo chrome, ranked-series ordering, chart height, tooltip surface, empty state, and accessible summaries into the chart kit. Keep callers responsible for labels, domain colors, and data transformations that carry meaning.
+3. Treat relationship graphs as a separate family from statistical charts. The generic explorer owns record identity, declared edges, provenance, expansion, pagination, and navigation. Dependency, recipe, unit, schedule, and co-occurrence adapters own their additional semantics.
+4. Do not unify visual components merely by appearance. Nivo `ChartTooltip` is normal-flow content measured by Nivo; `VizTooltip` is an absolute overlay in bespoke D3/canvas surfaces.
+
+## Implemented boundary and measured evidence
+
+The shared chart kit owns ranked bars, including money and count measures,
+donuts for financial distribution, spend trends, Nivo chrome, empty states,
+tooltips, fixed/dynamic chart sizing, and accessible chart summaries. Ingredient
+usage and the MCP dashboard's two ranked count views now use it. Stacked time
+series, financial matrices, hierarchy/force/treemap views, Gantt, calendar,
+nutrition, conversion, co-occurrence, schema, and isometric spatial renderers
+remain specialized because their data model or interaction contract differs.
+
+The generic entity graph is now the record-relationship surface; legacy
+product-specific relationship-route presentation and transport are retired.
+The adapter assessment above records the remaining domain behavior that stays
+in the work and recipe dependency views.
+
+- `project-chart-data.unit.test.ts`: 4 passing assertions in 3.00s.
+- `expense.integration.test.ts`: 88 PostgreSQL assertions in 12.57s, including
+  credits, negative adjustments, monthly buckets, cumulative net, and grouped
+  project/vendor results.
+- `isometric-layout.unit.test.ts`: 2 passing assertions in 4.86s.
+- Generic graph cache coverage plus the remaining product kit test: 20 passing
+  assertions in 0.34s.
+- The owning PostgreSQL integration family: 46 tests passed in 9.34s. Its
+  25-product × 20-inventory-leaf representative read now issues three SQL statements (including one batched image read),
+  filled the 500-node and 1,000-edge output caps, and produced a 571,521-byte
+  JSON response. The test keeps the three-query batch contract, but intentionally
+  does not freeze a fixture-dependent byte cap.
+- The preserved product graph PostgreSQL query-budget guard allows the additional batched image lookup within eight
+  statements; the guard remains unchanged.
+- The graph-core layout fixture with 500 nodes and 499 edges measured 15.5ms
+  to prepare DOT, 248.6ms for Viz layout, and a 242,367-byte DOT payload.
+
+### Foundation verification (before exploration follow-ups)
+
+`pnpm check` passed across types, lint, formatting, generated entity/operation
+freshness, unused-code checks, and SQL/identifier guards. `pnpm test` passed
+(including 3,602 web tests); subsequent focused expansion, cap, and worker-failure
+checks also passed. A fresh `build:cf` and the focused
+`tests/e2e/entity-dependency-graph.spec.ts` browser suite passed, covering the
+existing work/recipe URLs and cross-entity expansion. Desktop List/Graph and
+phone Graph captures were inspected; the added entity tab now wraps without
+labels overlapping. These captures do not constitute a visual pass of every
+retained specialized chart in the inventory.
+
+### Exploration layout measurements
+
+Measured locally on an Apple M3 with 24 GiB RAM, macOS 26.6.2 / arm64, Node 26.7.0, with the existing Viz
+renderer. After one warm-up, five SVG renders per fixture produced:
+
+| Fixture | Nodes / edges | Warm render times (ms) | p95 | Node overlaps | SVG bytes |
+| --- | --- | --- | --- | --- | --- |
+| Selected neighborhood with mixed entity kinds and thumbnail slots | 61 / 60 | 79, 97, 75, 66, 64 | 97 ms | 0 | 79,504 |
+| Dense Flow: ten interconnected hubs, 490 records attached to two hubs each | 500 / 1,000 | 451, 434, 431, 487, 870 | 870 ms | 0 | 912,595 |
+
+The dense fixture initially reached 7,443 ms p95 when hidden relationship labels
+still participated in DOT layout. Relationship labels now attach to the rendered
+curves and appear on hover, keyboard focus, or selection. Dependency labels retain
+their domain layout behavior. Both fixtures meet the two-second warm-layout target.
+A canvas regression verifies that changing the selected connection preserves the
+worker result and zoom even when parent props are recreated.
+
+Path search uses the existing PostgreSQL traversal read with image hydration disabled for search frontiers and enabled only for returned path records. A synthetic direct path with parallel evidence measured 13 SQL statements (including transaction and timeout setup) and a 1,294-byte response. A 60-neighbor search required three adjacency pages, 21 SQL statements, and an 815-byte path response. The maximum ordinary graph fixture returned 500 nodes and 1,000 edges using three SQL statements and 571,521 response bytes. The retained integration family covers 48 cases, including graph traversal and bounded path search.
+
+
+### Exploration follow-up acceptance
+
+Implemented branch paging/collapse with separate cached and visible records, the
+60-neighbor limit, incident connection highlighting and evidence inspection,
+32-entry visited history and URL restoration, and bounded destination-path search.
+Neighborhood remains local; Flow retains visible accumulated branches or displays
+a chosen path. Preview and Relations reads share the same 12-record page key.
+
+Validation passed: `pnpm check`; all 1,149 UI tests (181 files, two workers);
+focused graph/state/search tests; and all 48 tests in the affected PostgreSQL
+family. A fresh Cloudflare build followed by the four-test entity graph browser
+suite passed, covering work/recipe compatibility, branch controls, history/reload,
+destination search, return to exploration, detail entry, and thumbnail placement.
+The broad UI suite initially timed out under concurrent build/test contention;
+a settled run passed without increasing test timeouts. Browser fixture selectors
+were corrected to open the picker before typing and distinguish the destination
+location from inventory search results at that location.
+
+Read-only local checks also verified 18 nodes with nine thumbnails in a small
+example and exactly 61 nodes with 40 thumbnails in a dense neighborhood. No local
+household data was added to fixtures or this report. No PR or merge verification
+was performed as part of this local implementation handoff.

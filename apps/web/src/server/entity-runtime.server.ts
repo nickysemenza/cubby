@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { entityDetail } from "~/entities/entity-detail.functions";
 import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { entityInspectorHealth } from "~/entities/entity-inspector-health.functions";
 import { entityIntegrity } from "~/entities/entity-integrity.functions";
 import { entityList } from "~/entities/entity-list.functions";
@@ -23,6 +24,8 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
+import { getEntityGraph } from "~/server/repo/entity-graph";
+import { getEntityGraphPaths } from "~/server/repo/entity-graph-paths";
 import { getFilterOptions } from "~/server/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
@@ -88,6 +91,11 @@ export const entityFilterOptionsHandlers = implementOperationDomain(
     filterOptions: (context, input) => getFilterOptions(context.readDb, input),
   },
 );
+
+export const entityGraphHandlers = implementOperationDomain(entityGraph, {
+  graph: (context, input) => getEntityGraph(context.readDb, input),
+  graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
+});
 
 export const entityMutationHandlers = implementOperationDomain(entityMutation, {
   mutate: {

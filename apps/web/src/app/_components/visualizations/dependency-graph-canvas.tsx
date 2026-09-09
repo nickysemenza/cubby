@@ -1,53 +1,66 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 
+import { appendGraphImages, type GraphImage } from "./dependency-graph-images";
+import { bindGraphInteractions } from "./dependency-graph-interactions";
+import type { GraphEdge } from "./dependency-graph-model";
 import { graphScrollTarget, overviewScale } from "./dependency-graph-viewport";
+
+const NO_IMAGES: readonly GraphImage[] = [];
+const NO_EDGES: readonly GraphEdge[] = [];
+
+const gestureSchema = z.object({ scale: z.number().positive() });
 
 function appendHierarchyLinks(
   svg: SVGSVGElement,
   edges: readonly { source: string; target: string }[],
 ) {
-  const graph = svg.querySelector<SVGGElement>(".graph");
-  if (!graph || edges.length === 0) return;
-  const bounds = new Map(
-    [...svg.querySelectorAll<SVGGElement>(".node")].map((node) => [
-      node.querySelector("title")?.textContent,
-      node.getBBox(),
-    ]),
-  );
-  const layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  layer.setAttribute("class", "dependency-graph-hierarchy-overlays");
-  layer.setAttribute("aria-hidden", "true");
-  for (const edge of edges) {
-    const source = bounds.get(edge.source);
-    const target = bounds.get(edge.target);
-    if (!source || !target) continue;
-    const x1 = source.x + source.width;
-    const y1 = source.y + source.height / 2;
-    const x2 = target.x;
-    const y2 = target.y + target.height / 2;
-    const middle = (x1 + x2) / 2;
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute(
-      "d",
-      `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`,
+  if (edges.length === 0) return;
+  for (const graph of svg.querySelectorAll<SVGGElement>(".graph")) {
+    const bounds = new Map(
+      [...graph.querySelectorAll<SVGGElement>(".node")].map((node) => [
+        node.querySelector("title")?.textContent,
+        node.getBBox(),
+      ]),
     );
-    path.setAttribute("fill", "none");
-    path.setAttribute("class", "dependency-graph-hierarchy-link");
-    const title = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "title",
-    );
-    title.textContent = `${edge.source} contains ${edge.target}`;
-    path.append(title);
-    layer.append(path);
+    const layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    layer.setAttribute("class", "dependency-graph-hierarchy-overlays");
+    layer.setAttribute("aria-hidden", "true");
+    for (const edge of edges) {
+      const source = bounds.get(edge.source);
+      const target = bounds.get(edge.target);
+      if (!source || !target) continue;
+      const x1 = source.x + source.width;
+      const y1 = source.y + source.height / 2;
+      const x2 = target.x;
+      const y2 = target.y + target.height / 2;
+      const middle = (x1 + x2) / 2;
+      const path = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path",
+      );
+      path.setAttribute(
+        "d",
+        `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`,
+      );
+      path.setAttribute("fill", "none");
+      path.setAttribute("class", "dependency-graph-hierarchy-link");
+      const title = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "title",
+      );
+      title.textContent = `${edge.source} contains ${edge.target}`;
+      path.append(title);
+      layer.append(path);
+    }
+    // Group backgrounds stay behind links; records and labels stay above them.
+    const firstRecord = graph.querySelector(":scope > .node, :scope > .edge");
+    graph.insertBefore(layer, firstRecord);
   }
-  // Group backgrounds stay behind links; records and labels stay above them.
-  const firstRecord = graph.querySelector(":scope > .node, :scope > .edge");
-  graph.insertBefore(layer, firstRecord);
 }
 
 function reveal(container: HTMLElement, element: Element) {
@@ -95,14 +108,44 @@ function startPosition(container: HTMLElement, focus?: string) {
 
 export function DependencyGraphCanvas({
   dot,
+  componentDots,
+  images = NO_IMAGES,
   focus,
   hierarchyEdges,
+  onSelectNode,
+  edges = NO_EDGES,
+  onSelectEdge,
+  selectedEdgeId,
 }: {
   dot: string;
+  componentDots?: string[];
+  images?: readonly GraphImage[];
   focus?: string;
   hierarchyEdges: readonly { source: string; target: string }[];
+  onSelectNode?: (id: string) => void;
+  edges?: readonly GraphEdge[];
+  onSelectEdge?: (id: string | undefined) => void;
+  selectedEdgeId?: string;
 }) {
   const host = useRef<HTMLElement>(null);
+  const selectNode = useRef(onSelectNode);
+  selectNode.current = onSelectNode;
+  const selectEdge = useRef(onSelectEdge);
+  selectEdge.current = onSelectEdge;
+  const selection = useRef(selectedEdgeId);
+  selection.current = selectedEdgeId;
+  const interactions = useRef<ReturnType<typeof bindGraphInteractions> | null>(
+    null,
+  );
+  const renderInput = useRef({
+    dot,
+    componentDots,
+    images,
+    hierarchyEdges,
+    edges,
+  });
+  renderInput.current = { dot, componentDots, images, hierarchyEdges, edges };
+  const renderKey = JSON.stringify(renderInput.current);
   const drag = useRef<{
     x: number;
     y: number;
@@ -113,9 +156,12 @@ export function DependencyGraphCanvas({
   const [state, setState] = useState("Loading graph layout…");
   const [attempt, setAttempt] = useState(0);
   const [scale, setScale] = useState(1);
+  const scaleRef = useRef(1);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [group, setGroup] = useState("");
   useEffect(() => {
+    const { dot, componentDots, images, hierarchyEdges, edges } =
+      renderInput.current;
     let disposed = false;
     const container = host.current;
     setState("Loading graph layout…");
@@ -143,6 +189,31 @@ export function DependencyGraphCanvas({
             link.setAttribute("aria-label", link.textContent ?? "Open record");
             link.addEventListener("focus", () => reveal(container, link));
           }
+          if (selectNode.current) {
+            for (const node of svg.querySelectorAll<SVGGElement>(".node")) {
+              const id = node.querySelector("title")?.textContent;
+              if (!id) continue;
+              for (const link of node.querySelectorAll("a")) {
+                link.setAttribute("tabindex", "-1");
+                link.setAttribute("aria-hidden", "true");
+              }
+              node.setAttribute("role", "button");
+              node.setAttribute("tabindex", "0");
+              node.setAttribute(
+                "aria-label",
+                `Inspect ${node.textContent ?? id}`,
+              );
+              const select = (event: Event) => {
+                event.preventDefault();
+                selectNode.current?.(id);
+              };
+              node.addEventListener("click", select);
+              node.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") select(event);
+              });
+              node.addEventListener("focus", () => reveal(container, node));
+            }
+          }
           const headings = [...svg.querySelectorAll(".cluster")].map(
             (cluster, index) => {
               const id = `graph-group-${index}`;
@@ -154,9 +225,15 @@ export function DependencyGraphCanvas({
             },
           );
           container.replaceChildren(svg);
+          appendGraphImages(svg, images);
           appendHierarchyLinks(svg, hierarchyEdges);
+          interactions.current = bindGraphInteractions(svg, edges, (id) =>
+            selectEdge.current?.(id),
+          );
+          interactions.current.selectEdge(selection.current);
           resize(container, 1);
           startPosition(container, focus);
+          scaleRef.current = 1;
           setScale(1);
           setGroups(headings);
           setState("");
@@ -174,26 +251,100 @@ export function DependencyGraphCanvas({
           "Graph layout could not load. Use the record and relationship list below or retry.",
         );
     });
-    worker.postMessage(dot, []);
+    worker.postMessage({ dot, componentDots }, []);
     return () => {
       disposed = true;
       worker.terminate();
+      interactions.current = null;
       container?.replaceChildren();
     };
-  }, [dot, focus, attempt, hierarchyEdges]);
+  }, [renderKey, focus, attempt]);
+  useEffect(() => {
+    interactions.current?.selectEdge(selectedEdgeId);
+  }, [selectedEdgeId]);
 
-  const changeScale = (next: number) => {
+  const changeScale = useCallback(
+    (next: number, point?: { x: number; y: number }) => {
+      const container = host.current;
+      if (!container) return;
+      const anchor = point ?? {
+        x: container.clientWidth / 2,
+        y: container.clientHeight / 2,
+      };
+      const x = (container.scrollLeft + anchor.x) / scaleRef.current;
+      const y = (container.scrollTop + anchor.y) / scaleRef.current;
+      resize(container, next);
+      container.scrollTo({
+        left: x * next - anchor.x,
+        top: y * next - anchor.y,
+      });
+      scaleRef.current = next;
+      setScale(next);
+    },
+    [],
+  );
+
+  useEffect(() => {
     const container = host.current;
-    if (!container) return;
-    const x = (container.scrollLeft + container.clientWidth / 2) / scale;
-    const y = (container.scrollTop + container.clientHeight / 2) / scale;
-    resize(container, next);
-    container.scrollTo({
-      left: x * next - container.clientWidth / 2,
-      top: y * next - container.clientHeight / 2,
+    if (!container || state) return;
+    let gestureScale: number | null = null;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      // Trackpad pinches arrive as Ctrl-wheel. A native non-passive listener
+      // cancels page zoom without intercepting ordinary two-finger scrolling.
+      event.preventDefault();
+      if (gestureScale !== null) return;
+      const bounds = container.getBoundingClientRect();
+      const unit =
+        event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? container.clientHeight
+            : 1;
+      const next = Math.min(
+        2,
+        Math.max(
+          0.05,
+          scaleRef.current * Math.exp(-event.deltaY * unit * 0.01),
+        ),
+      );
+      changeScale(next, {
+        x: event.clientX - bounds.left - container.clientLeft,
+        y: event.clientY - bounds.top - container.clientTop,
+      });
+    };
+    // WebKit exposes native pinch gestures separately from Ctrl-wheel.
+    const onGestureStart = (event: Event) => {
+      event.preventDefault();
+      gestureScale = scaleRef.current;
+    };
+    const onGestureChange = (event: Event) => {
+      const gesture = gestureSchema.safeParse(event);
+      if (gestureScale === null || !gesture.success) return;
+      event.preventDefault();
+      changeScale(
+        Math.min(2, Math.max(0.05, gestureScale * gesture.data.scale)),
+      );
+    };
+    const onGestureEnd = (event: Event) => {
+      event.preventDefault();
+      gestureScale = null;
+    };
+    container.addEventListener("wheel", onWheel, { passive: false });
+    container.addEventListener("gesturestart", onGestureStart, {
+      passive: false,
     });
-    setScale(next);
-  };
+    container.addEventListener("gesturechange", onGestureChange, {
+      passive: false,
+    });
+    container.addEventListener("gestureend", onGestureEnd, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", onWheel);
+      container.removeEventListener("gesturestart", onGestureStart);
+      container.removeEventListener("gesturechange", onGestureChange);
+      container.removeEventListener("gestureend", onGestureEnd);
+    };
+  }, [changeScale, state]);
   const ready = !state;
   return (
     <Stack gap="sm">
@@ -277,8 +428,8 @@ export function DependencyGraphCanvas({
         )}
       </Row>
       <p className="text-xs text-muted-foreground">
-        Scroll or drag to explore. Tab to records; arrow keys scroll the canvas.
-        Fit graph shows the overview.
+        Pinch to zoom; scroll or drag to explore. Tab to records; arrow keys
+        scroll the canvas. Fit graph shows the overview.
       </p>
       {state && (
         <output>

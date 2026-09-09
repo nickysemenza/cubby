@@ -12,6 +12,7 @@ import { AlertTriangle } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
+import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
@@ -192,10 +193,8 @@ function SchemaCard({
 function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
   const ranked = data.tools
     .filter((tool) => tool.periodCalls > 0)
-    .slice(0, 15)
-    .reverse()
     .map((tool) => ({ tool: tool.toolName, calls: tool.periodCalls }));
-  const callers = data.clients.slice(0, 12).reverse();
+  const callers = data.clients;
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -220,44 +219,32 @@ function UsageCharts({ data }: { data: McpUsageDashboardOut }) {
         )}
       </ChartCard>
       <ChartCard title="Most-used tools">
-        {ranked.length === 0 ? (
-          <Description>No tools used in this window.</Description>
-        ) : (
-          <ResponsiveBar
-            data={ranked}
-            keys={["calls"]}
-            indexBy="tool"
-            layout="horizontal"
-            colors={["var(--chart-2)"]}
-            margin={{ top: 10, right: 20, bottom: 40, left: 180 }}
-            padding={0.25}
-            {...nivoBarChrome}
-            theme={nivoChartTheme}
-            enableLabel={false}
-            axisBottom={{ tickValues: 5 }}
-            axisLeft={{ tickSize: 0, tickPadding: 8 }}
-          />
-        )}
+        <RankedBarBreakdown
+          data={ranked}
+          valueKey="calls"
+          labelKey="tool"
+          topN={15}
+          height={280}
+          margin={{ top: 10, right: 20, bottom: 40, left: 180 }}
+          color={() => "var(--chart-2)"}
+          formatValue={formatCount}
+          axisBottomFormat={formatCount}
+          emptyTitle="No tools used in this window."
+        />
       </ChartCard>
       <ChartCard title="Calls by client">
-        {callers.length === 0 ? (
-          <Description>No caller data in this window.</Description>
-        ) : (
-          <ResponsiveBar
-            data={callers}
-            keys={["count"]}
-            indexBy="label"
-            layout="horizontal"
-            colors={["var(--chart-3)"]}
-            margin={{ top: 10, right: 20, bottom: 40, left: 180 }}
-            padding={0.25}
-            {...nivoBarChrome}
-            theme={nivoChartTheme}
-            enableLabel={false}
-            axisBottom={{ tickValues: 5 }}
-            axisLeft={{ tickSize: 0, tickPadding: 8 }}
-          />
-        )}
+        <RankedBarBreakdown
+          data={callers}
+          valueKey="count"
+          labelKey="label"
+          topN={12}
+          height={280}
+          margin={{ top: 10, right: 20, bottom: 40, left: 180 }}
+          color={() => "var(--chart-3)"}
+          formatValue={formatCount}
+          axisBottomFormat={formatCount}
+          emptyTitle="No caller data in this window."
+        />
       </ChartCard>
       <Card>
         <CardHeader className="pb-2">

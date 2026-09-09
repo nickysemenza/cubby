@@ -18,11 +18,39 @@
   font-family: var(--font-sans);
 }
 .dependency-graph .edge path {
+  fill: none;
   stroke: var(--muted-foreground);
 }
 .dependency-graph .edge polygon {
   fill: var(--muted-foreground);
   stroke: var(--muted-foreground);
+}
+.dependency-graph .edge text {
+  visibility: hidden;
+}
+.dependency-graph .edge {
+  cursor: pointer;
+}
+.dependency-graph .edge path {
+  pointer-events: stroke;
+}
+.dependency-graph .graph-edge-active text {
+  visibility: visible;
+  paint-order: stroke;
+  stroke: var(--card);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.dependency-graph .graph-edge-active path {
+  stroke-width: 2.5px;
+}
+.dependency-graph .graph-edge-muted {
+  opacity: 0.3;
+}
+.dependency-graph .edge .graph-edge-hit {
+  stroke: transparent;
+  stroke-width: 12px;
+  pointer-events: stroke;
 }
 .dependency-graph .cluster polygon,
 .dependency-graph .cluster path {
@@ -49,6 +77,13 @@
 }
 .dependency-graph .dependency-graph-edge--hierarchy path {
   stroke: var(--border);
+}
+.dependency-graph .dependency-graph-edge--relationship path,
+.dependency-graph .dependency-graph-edge--relationship polygon {
+  stroke: var(--primary);
+}
+.dependency-graph .dependency-graph-edge--relationship polygon {
+  fill: var(--primary);
 }
 .dependency-graph .cluster polygon {
   fill: color-mix(in srgb, var(--muted) 45%, var(--card));

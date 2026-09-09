@@ -55,7 +55,7 @@ function accountItem(account: FinancialAccountOut): RelationshipEntity {
  * ledger relationships are rendered in the household contribution ledger
  * instead — see `ENTITIES_WITHOUT_RELATED_VIEWS`), so its relations are
  * fed to `RelationshipTree` by hand rather than through the generic
- * `RelationshipExplorer`/`relatedData` graph endpoints, which only resolve
+ * `relatedData` preview endpoints, which only resolve
  * curated relation keys.
  */
 export function LedgerPartyDetail({ party }: { party: LedgerPartyOut }) {

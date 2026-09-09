@@ -19,7 +19,6 @@ import {
   type productMovementTimelineInput,
   type productQuantitySummaryBatchInput,
   type productQuickCreatePayload,
-  type productRelationshipRouteInput,
   type productShortcodesInput,
   type productSummariesInput,
   productTopLevelOut,
@@ -54,7 +53,6 @@ import {
   getProductManufacturerOptions,
   getProductMovementTimeline,
   getProductPickerItemsByIds,
-  getProductRelationshipRoute,
   getProductsByShortcodes,
   getProductTagOptions,
   productSearch,
@@ -318,15 +316,6 @@ export async function listProductPurchasesWorkflow(
   input: z.output<typeof productPurchasesInput>,
 ) {
   return listProductPurchases(
-    context.readDb,
-    await productShortcodes.one(context.readDb, input.productId),
-  );
-}
-export async function getProductRelationshipRouteWorkflow(
-  context: ProductWorkflowContext,
-  input: z.output<typeof productRelationshipRouteInput>,
-) {
-  return getProductRelationshipRoute(
     context.readDb,
     await productShortcodes.one(context.readDb, input.productId),
   );

@@ -1,16 +1,12 @@
 import { imageWithEntitySchema } from "@cubby/schemas/image";
-import {
-  relatedPreviewOutput,
-  relatedViewsFor,
-} from "@cubby/schemas/related-view";
 import { testShortcode } from "@cubby/schemas/testing";
 import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { image } from "~/entities/image.functions";
-import { relatedData } from "~/lib/related-data.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
@@ -55,27 +51,31 @@ const imageRecord = imageWithEntitySchema.parse({
   associations: [],
 });
 
-const vendorViews = relatedViewsFor("vendor");
-const vendorRelationshipInput = {
-  source: "vendor" as const,
-  sourceIds: [VENDOR_ID],
-  relationKeys: vendorViews.map((view) => view.key),
+const vendorRoot = { entityType: "vendor" as const, entityId: VENDOR_ID };
+const purchaseRef = {
+  entityType: "purchase" as const,
+  entityId: testShortcode("purchase", "PUR-WORK"),
 };
-const vendorRelationships = relatedPreviewOutput.parse([
-  {
-    sourceId: VENDOR_ID,
-    relationKey: "vendor.purchases",
-    totalCount: 1,
-    items: [
-      {
-        entity: "purchase",
-        id: testShortcode("purchase", "PUR-WORK"),
-        label: "Fixture purchase",
-        displayImage: null,
-      },
-    ],
-  },
-]);
+const vendorRelationships = {
+  nodes: [
+    { ...vendorRoot, label: vendor.name, metadata: {} },
+    { ...purchaseRef, label: "Fixture purchase", metadata: {} },
+  ],
+  edges: [],
+  branches: [
+    {
+      root: vendorRoot,
+      relationshipKey: "purchases",
+      target: "purchase",
+      label: "Purchases",
+      totalCount: 1,
+      edgeIds: [],
+      nextOffset: null,
+      items: [purchaseRef],
+    },
+  ],
+  truncated: false,
+};
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -94,9 +94,10 @@ function seedVendorInspector() {
   });
   harness.queryClient.setQueryData(detailOptions.queryKey, vendor);
 
-  const relationshipOptions = relatedData.previews.queryOptions(
-    vendorRelationshipInput,
-  );
+  const relationshipOptions = entityGraph.graph.queryOptions({
+    roots: [vendorRoot],
+    limit: 12,
+  });
   harness.queryClient.setQueryDefaults(relationshipOptions.queryKey, {
     staleTime: Number.POSITIVE_INFINITY,
   });
@@ -112,6 +113,25 @@ function seedImageInspector() {
     staleTime: Number.POSITIVE_INFINITY,
   });
   harness.queryClient.setQueryData(detailOptions.queryKey, imageRecord);
+  harness.queryClient.setQueryData(
+    entityGraph.graph.queryOptions({
+      roots: [{ entityType: "image", entityId: IMAGE_ID }],
+      limit: 12,
+    }).queryKey,
+    {
+      nodes: [
+        {
+          entityType: "image",
+          entityId: IMAGE_ID,
+          label: "fixture.jpg",
+          metadata: {},
+        },
+      ],
+      edges: [],
+      branches: [],
+      truncated: false,
+    },
+  );
 }
 
 function renderInspector({
@@ -138,7 +158,11 @@ describe("EntityWorkbenchInspector", () => {
     expect(
       await screen.findByRole("heading", { name: "Fixture vendor" }),
     ).toBeVisible();
-    expect(screen.getByTestId("relationship-route-preview")).toBeVisible();
+    expect(
+      await screen.findByRole("navigation", {
+        name: "Fixture vendor relationships",
+      }),
+    ).toBeVisible();
     expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Activity" })).toBeVisible();
     expect(screen.getByLabelText("Open full vendor details")).toHaveAttribute(
@@ -165,7 +189,7 @@ describe("EntityWorkbenchInspector", () => {
     expect(
       await screen.findByRole("heading", { name: "fixture.jpg" }),
     ).toBeVisible();
-    expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
     expect(screen.getByLabelText("Open full image details")).toHaveAttribute(
       "href",
       `/images/${IMAGE_ID}`,

@@ -32,31 +32,35 @@ type HorizontalBarChartProps<D extends BarDatum> = Omit<
   ResponsiveBarSvgProps<D>,
   "layout"
 > &
-  Partial<Record<"minHeight" | "rowHeight" | "heightPadding", number>>;
+  Partial<
+    Record<"height" | "minHeight" | "rowHeight" | "heightPadding", number>
+  >;
 
 export function HorizontalBarChart<D extends BarDatum>({
   data,
+  height,
   minHeight = 220,
   rowHeight = 32,
   heightPadding = 60,
   ...props
 }: HorizontalBarChartProps<D>) {
-  const height = Math.max(minHeight, data.length * rowHeight + heightPadding);
+  const chartHeight =
+    height ?? Math.max(minHeight, data.length * rowHeight + heightPadding);
 
   return (
-    <div style={{ height }}>
+    <div style={{ height: chartHeight }}>
       <ResponsiveBar data={data} layout="horizontal" {...props} />
     </div>
   );
 }
 
-// ── NetBarBreakdown ──────────────────────────────────────────────────────────
+// ── RankedBarBreakdown ───────────────────────────────────────────────────────
 
 type AxisLeft<D extends BarDatum> = NonNullable<
   ResponsiveBarSvgProps<D>["axisLeft"]
 >;
 
-export interface NetBarBreakdownProps<T extends BarDatum> {
+export interface RankedBarBreakdownProps<T extends BarDatum> {
   data: T[];
   /** Numeric field driving sort order, default color, and the value shown. */
   valueKey: keyof T & string;
@@ -66,7 +70,12 @@ export interface NetBarBreakdownProps<T extends BarDatum> {
   idKey?: keyof T & string;
   /** Rows kept, ranked by `Math.abs(value)` desc, then reversed for nivo's bottom-up layout. */
   topN?: number;
+  /** Fixed chart height for dense dashboards; otherwise height grows per row. */
+  height?: number;
   minHeight?: number;
+  /** Per-row chart height; count-based charts are intentionally denser. */
+  rowHeight?: number;
+  heightPadding?: number;
   margin?: { top: number; right: number; bottom: number; left: number };
   /** Bar color per row; defaults to `value < 0 ? negative : chart-1`. */
   color?: (row: T) => string;
@@ -75,6 +84,8 @@ export interface NetBarBreakdownProps<T extends BarDatum> {
   labelSkipWidth?: number;
   /** Formats the value for the axis, inline label, and default tooltip. Defaults to whole-dollar currency. */
   formatValue?: (value: number) => string;
+  /** Inline bar-label formatter when its compact form differs from the tooltip. */
+  formatLabel?: (value: number) => string;
   /** `axisBottom.format` override; the axis otherwise uses `nivoCurrencyAxis`. */
   axisBottomFormat?: (value: number) => string;
   /** Custom `axisLeft` tick (e.g. an icon + name glyph in place of plain text). */
@@ -84,30 +95,37 @@ export interface NetBarBreakdownProps<T extends BarDatum> {
   /** Full tooltip override, for rows whose copy isn't "label — formatted value". */
   tooltip?: (row: T) => ReactNode;
   onClick?: (row: T) => void;
-  emptyIcon: LucideIcon;
+  /** Screen-reader summary for a chart whose SVG labels are not enough context. */
+  summary?: string;
+  emptyIcon?: LucideIcon;
   emptyTitle: string;
 }
 
-export function NetBarBreakdown<T extends BarDatum>({
+export function RankedBarBreakdown<T extends BarDatum>({
   data,
   valueKey,
   labelKey,
   idKey,
   topN = 12,
+  height,
   minHeight = 240,
+  rowHeight,
+  heightPadding,
   margin = { top: 10, right: 40, bottom: 40, left: 160 },
   color,
   showValueLabel = false,
   labelSkipWidth = 40,
   formatValue = (v) => formatCurrency(v, 0),
+  formatLabel,
   axisBottomFormat,
   renderTick,
   renderLabel,
   tooltip,
   onClick,
+  summary,
   emptyIcon,
   emptyTitle,
-}: NetBarBreakdownProps<T>) {
+}: RankedBarBreakdownProps<T>) {
   const rows = useMemo(
     () =>
       [...data]
@@ -130,10 +148,13 @@ export function NetBarBreakdown<T extends BarDatum>({
       Number(row[valueKey]) < 0 ? "var(--chart-negative)" : "var(--chart-1)");
   const indexBy = idKey ?? labelKey;
 
-  return (
+  const chart = (
     <HorizontalBarChart
       data={rows}
+      height={height}
       minHeight={minHeight}
+      rowHeight={rowHeight}
+      heightPadding={heightPadding}
       keys={[valueKey]}
       indexBy={indexBy}
       margin={margin}
@@ -152,7 +173,7 @@ export function NetBarBreakdown<T extends BarDatum>({
         showValueLabel
           ? (d) =>
               d.value != null && Number(d.value) > 0
-                ? formatValue(Number(d.value))
+                ? (formatLabel ?? formatValue)(Number(d.value))
                 : ""
           : undefined
       }
@@ -180,6 +201,15 @@ export function NetBarBreakdown<T extends BarDatum>({
       }}
       theme={nivoChartTheme}
     />
+  );
+
+  if (!summary) return chart;
+
+  return (
+    <figure aria-label={summary}>
+      <figcaption className="sr-only">{summary}.</figcaption>
+      {chart}
+    </figure>
   );
 }
 

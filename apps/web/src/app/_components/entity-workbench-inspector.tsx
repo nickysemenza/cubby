@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
-import { relatedViewsFor } from "@cubby/schemas/related-view";
 import { useCallback, useState } from "react";
 
 import {
@@ -20,8 +19,11 @@ import {
   type HoverPreviewEntity,
   hoverPreviewEntities,
 } from "./preview/preview-entities";
-import { RelationshipExplorer } from "./relationships/relationship-explorer";
-import { RelationshipRoutePreview } from "./relationships/relationship-route-preview";
+import {
+  EntityRelations,
+  supportsEntityGraph,
+} from "./relationships/entity-relations";
+import { EntityRelationshipPreview } from "./relationships/entity-relationship-preview";
 
 type EntityWorkbenchInspectorProps = {
   entity: Entity;
@@ -88,8 +90,7 @@ function EntityWorkbenchInspectorContent({
   >();
   // Product has a page-owned relationship contract and a specialist inspector.
   // Do not add the generic graph beside that richer route.
-  const hasRelations =
-    entity !== "product" && relatedViewsFor(entity).length > 0;
+  const hasRelations = entity !== "product" && supportsEntityGraph(entity);
   const hasActivity = isAuditableEntity(entity);
   const handleNameResolved = useCallback((name: string) => {
     setResolvedName((current) => (current === name ? current : name));
@@ -126,9 +127,10 @@ function EntityWorkbenchInspectorContent({
             <UnsupportedOverview entity={entity} id={id} />
           )}
           {hasRelations ? (
-            <RelationshipRoutePreview
+            <EntityRelationshipPreview
               entity={entity}
               sourceId={id}
+              name={resolvedName}
               onViewAll={() => setActiveTab("relations")}
             />
           ) : null}
@@ -146,7 +148,7 @@ function EntityWorkbenchInspectorContent({
       relations={
         hasRelations ? (
           <div className="px-3 py-3">
-            <RelationshipExplorer entity={entity} sourceId={id} />
+            <EntityRelations entity={entity} sourceId={id} />
           </div>
         ) : undefined
       }

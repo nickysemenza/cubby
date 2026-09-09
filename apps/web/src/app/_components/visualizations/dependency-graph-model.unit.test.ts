@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   graphToDot,
   layoutGraph,
+  neighborhoodGraph,
   prepareGraph,
   type GraphData,
 } from "./dependency-graph-model";
+import { packGraphSvgs } from "./dependency-graph-packing";
 
 const graph = (overrides: Partial<GraphData> = {}): GraphData => ({
   nodes: [
@@ -160,6 +162,41 @@ describe("prepareGraph", () => {
     expect(prepared.cycleIds).toEqual(["a", "b"]);
     expect(prepared.levels.a).toBe(prepared.levels.b);
     expect(prepared.levels.c).toBeGreaterThan(prepared.levels.b ?? -1);
+  });
+
+  it("keeps distinct ordinary relationships between the same records and never treats their cycles as dependency cycles", () => {
+    const data = graph({
+      edges: [
+        {
+          source: "a",
+          target: "b",
+          kind: "relationship",
+          relationshipKey: "purchases",
+          label: "Purchased through",
+        },
+        {
+          source: "a",
+          target: "b",
+          kind: "relationship",
+          relationshipKey: "expenses",
+          label: "Expense for",
+        },
+        {
+          source: "b",
+          target: "a",
+          kind: "relationship",
+          relationshipKey: "product",
+          label: "Product",
+        },
+      ],
+    });
+    const prepared = prepareGraph(data, { ...defaults, reduceEdges: true });
+    expect(prepared.edges).toHaveLength(3);
+    expect(prepared.removedEdgeCount).toBe(0);
+    expect(prepared.cycleIds).toEqual([]);
+    expect(graphToDot(prepared, false)).toContain(
+      "dependency-graph-edge--relationship",
+    );
   });
 });
 
@@ -450,3 +487,135 @@ it("keeps a thousand sibling tasks from becoming a hundred-thousand-pixel column
     expect(height! * 72).toBeLessThan(15000);
   }
 }, 20000);
+
+it("packs mixed-size disconnected groups without oversized grid cells", async () => {
+  const nodes = Array.from({ length: 42 }, (_, index) => ({
+    id: `mixed${index}`,
+    name: `Example record ${index}`,
+  }));
+  const edges = Array.from({ length: 11 }, (_, index) => ({
+    source: `mixed${index}`,
+    target: `mixed${index + 1}`,
+    kind: "dependency" as const,
+  }));
+  const layout = layoutGraph(prepareGraph({ nodes, edges }, defaults), true);
+  const viz = await instance();
+  const packed = packGraphSvgs(
+    layout.componentDots!.map((dot) =>
+      viz.renderString(dot, { format: "svg" }),
+    ),
+  );
+  const grid = viz.renderString(layout.dot, { format: "plain" });
+  const [, , oldWidth, oldHeight] = grid.split("\n")[0]!.split(" ").map(Number);
+  const [, , width, height] = packed
+    .match(/viewBox="([^"]+)"/)![1]!
+    .split(" ")
+    .map(Number);
+  expect(width! * height!).toBeLessThan(
+    oldWidth! * oldHeight! * 72 * 72 * 0.65,
+  );
+  expect(packed.match(/class="node /g)).toHaveLength(nodes.length);
+  const boxes = [
+    ...packed.matchAll(
+      /<svg x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)"/g,
+    ),
+  ].map((match) => ({
+    x: Number(match[1]),
+    y: Number(match[2]),
+    width: Number(match[3]),
+    height: Number(match[4]),
+  }));
+  expect(boxes).toHaveLength(31);
+  for (const [index, box] of boxes.entries()) {
+    for (const other of boxes.slice(index + 1)) {
+      expect(
+        box.x + box.width <= other.x ||
+          other.x + other.width <= box.x ||
+          box.y + box.height <= other.y ||
+          other.y + other.height <= box.y,
+      ).toBe(true);
+    }
+  }
+});
+
+it("lays out relationship neighborhoods around the root without losing directed edges", async () => {
+  const nodes = [
+    { id: "root", name: "Example product", kind: "product" },
+    ...Array.from({ length: 16 }, (_, index) => ({
+      id: `neighbor${index}`,
+      name: `Example record ${index}`,
+      kind: index < 8 ? "expense" : "project",
+    })),
+  ];
+  const edges: GraphData["edges"] = nodes.slice(1).map((node) => ({
+    source: "root",
+    target: node.id,
+    kind: "relationship",
+    label: node.kind,
+  }));
+  edges.push({
+    source: "neighbor0",
+    target: "root",
+    kind: "relationship",
+    label: "Returns to",
+  });
+  const prepared = prepareGraph({ nodes, edges }, defaults);
+  const viz = await instance();
+  const layout = layoutGraph(prepared, false, false, "root");
+  const plain = viz.renderString(layout.dot, { format: "plain" });
+  const boxes = plain
+    .split("\n")
+    .filter((line) => line.startsWith("node "))
+    .map((line) => {
+      const [, id, x, y, width, height] = line.split(" ");
+      return {
+        id,
+        x: Number(x),
+        y: Number(y),
+        width: Number(width),
+        height: Number(height),
+      };
+    });
+  const root = boxes.find((box) => box.id === "root")!;
+  expect(boxes).toHaveLength(nodes.length);
+  expect(boxes.some((box) => box.x < root.x)).toBe(true);
+  expect(boxes.some((box) => box.x > root.x)).toBe(true);
+  expect(boxes.some((box) => box.y < root.y)).toBe(true);
+  expect(boxes.some((box) => box.y > root.y)).toBe(true);
+  for (const [index, box] of boxes.entries()) {
+    for (const other of boxes.slice(index + 1)) {
+      expect(
+        Math.abs(box.x - other.x) >= (box.width + other.width) / 2 ||
+          Math.abs(box.y - other.y) >= (box.height + other.height) / 2,
+      ).toBe(true);
+    }
+  }
+  expect(
+    plain.split("\n").filter((line) => line.startsWith("edge ")),
+  ).toHaveLength(edges.length);
+  expect(prepared.cycleIds).toEqual([]);
+  expect(layoutGraph(prepared, false).dot).not.toContain("layout=twopi");
+});
+
+it("keeps a selected neighborhood local while preserving the explored graph", () => {
+  const prepared = prepareGraph(
+    {
+      nodes: [
+        { id: "a", name: "A" },
+        { id: "b", name: "B" },
+        { id: "c", name: "C" },
+      ],
+      edges: [
+        { source: "a", target: "b", kind: "relationship" },
+        { source: "b", target: "c", kind: "relationship" },
+      ],
+    },
+    defaults,
+  );
+  const local = neighborhoodGraph(prepared, "a");
+  expect(local.nodes.map((node) => node.id)).toEqual(["a", "b"]);
+  expect(local.edges).toHaveLength(1);
+  expect(neighborhoodGraph(prepared, "b").nodes).toHaveLength(3);
+  expect(prepared.nodes).toHaveLength(3);
+  expect(prepared.edges).toHaveLength(2);
+});

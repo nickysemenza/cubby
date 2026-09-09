@@ -152,6 +152,12 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "entity.filterOptions": async () =>
     (await import("~/server/entity-runtime.server")).entityFilterOptionsHandlers
       .operations.filterOptions,
+  "entity.graph": async () =>
+    (await import("~/server/entity-runtime.server")).entityGraphHandlers
+      .operations.graph,
+  "entity.graphPaths": async () =>
+    (await import("~/server/entity-runtime.server")).entityGraphHandlers
+      .operations.graphPaths,
   "entity.inspectorHealth": async () =>
     (await import("~/server/entity-runtime.server"))
       .entityInspectorHealthHandlers.operations.inspectorHealth,
@@ -464,9 +470,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "product.quickCreate": async () =>
     (await import("~/server/product-browser.server")).productHandlers.operations
       .quickCreate,
-  "product.relationshipRoute": async () =>
-    (await import("~/server/product-browser.server")).productHandlers.operations
-      .relationshipRoute,
   "product.search": async () =>
     (await import("~/server/product-browser.server")).productHandlers.operations
       .search,

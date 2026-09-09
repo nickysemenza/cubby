@@ -4,6 +4,7 @@ import type {
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
 import { isNonFoodCategory } from "@cubby/shared";
+import { useQuery } from "@tanstack/react-query";
 import {
   Apple,
   BookOpen,
@@ -35,6 +36,7 @@ import {
   taskCaptureRequest,
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -50,6 +52,7 @@ import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { RelatednessRail } from "../relatedness/relatedness-rail";
+import { EntityRelations } from "../relationships/entity-relations";
 import { RelationshipSummaryTable } from "../relationships/relationship-summary-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { ProductBasicInfo } from "./product-basic-info";
@@ -64,10 +67,6 @@ import {
   shouldShowProductProjectUses,
 } from "./product-project-uses";
 import { ProductPurchases } from "./product-purchases";
-import {
-  ProductRelationshipRouteContent,
-  useProductRelationshipRoute,
-} from "./product-relationship-route";
 import { ProductStockedAt } from "./product-stocked-at";
 import { ProductTaskHistory } from "./product-task-history";
 
@@ -118,7 +117,11 @@ function productExpectedStat(
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
-  const relationshipRouteQuery = useProductRelationshipRoute(product.id);
+  const relationshipRouteQuery = useQuery(
+    entityGraph.graph.queryOptions({
+      roots: [{ entityType: "product", entityId: product.id }],
+    }),
+  );
   const { commonSections, editMode, mappings } = useEntityDetail<
     "product",
     ProductWithFoodOut,
@@ -132,7 +135,9 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const isNonFood = isNonFoodCategory(product.category);
   const shouldShowProjectUses = shouldShowProductProjectUses(
     product.category,
-    relationshipRouteQuery.data?.direct.usedOnProjects.count ?? 0,
+    relationshipRouteQuery.data?.branches.find(
+      (branch) => branch.relationshipKey === "project-uses",
+    )?.totalCount ?? 0,
   );
 
   // PDF manuals share the images relation — hero/gallery get only real
@@ -174,12 +179,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Relationships",
       icon: Link2,
       placement: "primary" as const,
-      content: (
-        <ProductRelationshipRouteContent
-          product={product}
-          query={relationshipRouteQuery}
-        />
-      ),
+      content: <EntityRelations entity="product" sourceId={product.id} />,
     },
     // Custom section: Stocked At — where the product lives, the primary
     // content of the page (the hero's On hand / Locations stats are the

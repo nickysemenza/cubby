@@ -1,6 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
-import { relatedViewRegistry } from "@cubby/schemas/related-view";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Clock } from "lucide-react";
 import {
@@ -34,7 +33,10 @@ import {
 import { AuditLogList } from "../audit-log/audit-log-list";
 import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
-import { RelationshipExplorer } from "../relationships/relationship-explorer";
+import {
+  EntityRelations,
+  supportsEntityGraph,
+} from "../relationships/entity-relations";
 import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 
 /** Stable id every auto-appended Activity section uses — also the opt-out key: a
@@ -470,9 +472,7 @@ function resolveRelationshipDetail(
   const ownSection = sections.find(
     (section) => section.id === RELATIONS_SECTION_ID,
   );
-  const hasSourceViews = relatedViewRegistry.some(
-    (view) => view.source === pageDetail?.entity,
-  );
+  const hasSourceViews = pageDetail && supportsEntityGraph(pageDetail.entity);
   if (ownSection || !pageDetail || !sourceId || !hasSourceViews) {
     return { ownSection, section: ownSection };
   }
@@ -481,9 +481,7 @@ function resolveRelationshipDetail(
     title: "Relationships",
     icon: relationshipsSectionIcon,
     placement: "full",
-    content: (
-      <RelationshipExplorer entity={pageDetail.entity} sourceId={sourceId} />
-    ),
+    content: <EntityRelations entity={pageDetail.entity} sourceId={sourceId} />,
   };
   return {
     ownSection,

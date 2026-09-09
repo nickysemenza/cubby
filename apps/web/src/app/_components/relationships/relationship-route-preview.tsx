@@ -149,7 +149,7 @@ function titleForRelationshipSource(
  * ask for the same React Query key without issuing separate network reads;
  * deeper branch pages remain the explorer's explicit user action.
  */
-export function useRelationshipRoutePreview(
+function useRelationshipRoutePreview(
   entity: Entity,
   sourceId: string | undefined,
   source?: RelationshipRouteSource | null,

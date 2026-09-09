@@ -1,27 +1,43 @@
 /**
- * Presentation-only graph operations shared by entity dependency viewers.
- * Edges always point from the prerequisite/container to the dependent/member.
+ * Presentation-only graph operations shared by entity graph viewers.
+ * Dependency edges point from the prerequisite to the dependent; relationship
+ * edges retain the direction declared by the relationship manifest.
  */
-interface GraphNode {
+export interface GraphNode {
   id: string;
   name: string;
-  kind?: "project" | "task" | "recipe";
-  metadata: string[];
+  /** An entity kind, used for a stable node class and the graph legend. */
+  kind?: string;
+  /** Human-readable entity label when a kind is not sufficient presentation. */
+  kindLabel?: string;
+  metadata?: string[];
   parentId?: string | null;
   parentName?: string;
   locations?: string[];
   completed?: boolean;
   overdue?: boolean;
   external?: boolean;
-  href: string;
+  /** Detail navigation is optional for graph-only records. */
+  href?: string;
+  imageUrl?: string;
 }
 
-interface GraphEdge {
+export interface GraphEdge {
   source: string;
   target: string;
-  kind: "hierarchy" | "dependency";
+  kind: "hierarchy" | "dependency" | "relationship";
   /** Optional domain vocabulary, for example recipe dependency edges use "uses". */
   label?: string;
+  /**
+   * Stable identity for parallel edges. Relationship data should use the
+   * declared relationship key (or a source-qualified edge id) so distinct
+   * manifest relationships between the same records remain visible.
+   */
+  id?: string;
+  relationshipKey?: string;
+  key?: string;
+  sourceKey?: string;
+  provenance?: string[];
 }
 
 export interface GraphData {
@@ -51,7 +67,32 @@ export interface PreparedGraph extends GraphData {
 }
 
 const edgeKey = (edge: GraphEdge) =>
-  `${edge.kind}\u0000${edge.source}\u0000${edge.target}`;
+  `${edge.kind}\u0000${edge.source}\u0000${edge.target}\u0000${edge.id ?? edge.relationshipKey ?? edge.key ?? edge.label ?? ""}`;
+
+export const graphEdgeIdentity = (edge: GraphEdge) => edge.id ?? edgeKey(edge);
+export const graphEdgeClass = (edge: GraphEdge) =>
+  `graph-edge-${encodeURIComponent(graphEdgeIdentity(edge))}`;
+
+/** Keep exploration local without discarding the caller's accumulated graph. */
+export function neighborhoodGraph(
+  graph: PreparedGraph,
+  root: string,
+): PreparedGraph {
+  const edges = graph.edges.filter(
+    (edge) => edge.source === root || edge.target === root,
+  );
+  const ids = new Set([
+    root,
+    ...edges.flatMap((edge) => [edge.source, edge.target]),
+  ]);
+  const nodes = graph.nodes.filter((node) => ids.has(node.id));
+  return {
+    ...graph,
+    nodes,
+    edges,
+    hiddenNodeCount: graph.hiddenNodeCount + graph.nodes.length - nodes.length,
+  };
+}
 
 function graphEdges(data: GraphData, nodeIds: Set<string>): GraphEdge[] {
   const seen = new Set<string>();
@@ -428,7 +469,7 @@ function wrapText(value: string, width = 40): string {
 }
 
 function nodeAttributes(node: GraphNode, cycleIds: Set<string>) {
-  const classes = ["dependency-graph-node", `record-${node.kind ?? "task"}`];
+  const classes = ["dependency-graph-node", `record-${node.kind ?? "entity"}`];
   if (node.completed)
     classes.push("completed", "dependency-graph-node--completed");
   if (node.overdue) classes.push("overdue", "dependency-graph-node--overdue");
@@ -451,18 +492,20 @@ function nodeAttributes(node: GraphNode, cycleIds: Set<string>) {
     .split("\n")
     .map(escapeHtml)
     .join('<BR ALIGN="LEFT"/>');
-  const details = [node.id, ...node.metadata, ...indicators]
+  const details = [node.id, ...(node.metadata ?? []), ...indicators]
     .map((line) => wrapText(line, 38))
     .join("\n")
     .split("\n")
     .map(escapeHtml)
     .join('<BR ALIGN="LEFT"/>');
   return [
-    `label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2"><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="16"><B>${title}</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="13">${details}</FONT></TD></TR></TABLE>>`,
-    `URL=${quote(node.href)}`,
-    `tooltip=${quote([node.name, ...node.metadata].join(" — "))}`,
+    `label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2"><TR>${node.imageUrl ? '<TD ROWSPAN="2" WIDTH="72" HEIGHT="64" FIXEDSIZE="TRUE"> </TD>' : ""}<TD ALIGN="LEFT"><FONT POINT-SIZE="16"><B>${title}</B></FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="13">${details}</FONT></TD></TR></TABLE>>`,
+    node.href == null ? null : `URL=${quote(node.href)}`,
+    `tooltip=${quote([node.name, ...(node.metadata ?? [])].join(" — "))}`,
     `class=${quote(classes.join(" "))}`,
-  ].join(", ");
+  ]
+    .filter((attribute): attribute is string => attribute != null)
+    .join(", ");
 }
 
 function appendGroup(
@@ -505,7 +548,7 @@ function appendGroups(
       parentId,
       parent?.name ??
         children[0]?.parentName ??
-        children[0]?.metadata[0] ??
+        children[0]?.metadata?.[0] ??
         parentId,
       children,
       cycleIds,
@@ -608,10 +651,19 @@ function connectedComponents(
 
 function edgeAttributes(edge: GraphEdge): string {
   if (edge.kind === "hierarchy") {
-    return 'class="dependency-graph-edge dependency-graph-edge--hierarchy", style=dotted, arrowhead=none';
+    return `class="dependency-graph-edge dependency-graph-edge--hierarchy ${graphEdgeClass(edge)}", style=dotted, arrowhead=none`;
+  }
+  if (edge.kind === "relationship") {
+    return [
+      `class="dependency-graph-edge dependency-graph-edge--relationship ${graphEdgeClass(edge)}"`,
+      "style=solid",
+      edge.label == null ? null : `tooltip=${quote(edge.label)}`,
+    ]
+      .filter((attribute): attribute is string => attribute != null)
+      .join(", ");
   }
   return [
-    'class="dependency-graph-edge dependency-graph-edge--dependency"',
+    `class="dependency-graph-edge dependency-graph-edge--dependency ${graphEdgeClass(edge)}"`,
     "style=solid",
     edge.label == null ? null : `label=${quote(edge.label)}`,
   ]
@@ -623,7 +675,7 @@ function edgeAttributes(edge: GraphEdge): string {
 function leafSiblingGroups(graph: PreparedGraph, groupByLocation: boolean) {
   const constrained = new Set(
     graph.edges.flatMap((edge) =>
-      edge.kind === "dependency" ? [edge.source, edge.target] : [edge.source],
+      edge.kind === "hierarchy" ? [edge.source] : [edge.source, edge.target],
     ),
   );
   const siblings = new Map<string, GraphNode[]>();
@@ -662,6 +714,7 @@ export function graphToDot(
   grouped: boolean,
   groupByLocation = false,
   overlayTargets: ReadonlySet<string> = new Set(),
+  neighborhoodRoot?: string,
 ): string {
   const cycleIds = new Set(prepared.cycleIds);
   const components = groupByLocation
@@ -676,6 +729,11 @@ export function graphToDot(
     'node [shape=box, fontname="Arial", fontsize=12, margin="0.25,0.15"];',
     'edge [class="dependency-graph-edge", fontname="Arial", fontsize=12];',
   ];
+  if (neighborhoodRoot != null) {
+    lines.push(
+      `graph [layout=twopi, root=${quote(neighborhoodRoot)}, overlap=prism, sep="+24", ranksep=3, splines=true];`,
+    );
+  }
   for (const [index, component] of components.entries()) {
     lines.push(`subgraph "component${index}" {`);
     // Cluster IDs must be unique when a cookbook spans disconnected components.
@@ -711,7 +769,41 @@ export function layoutGraph(
   prepared: PreparedGraph,
   grouped: boolean,
   groupByLocation = false,
+  neighborhoodRoot?: string,
 ) {
+  if (neighborhoodRoot != null) {
+    const nodes = [...prepared.nodes].sort(
+      (a, b) =>
+        (a.kind ?? "").localeCompare(b.kind ?? "") ||
+        a.name.localeCompare(b.name) ||
+        a.id.localeCompare(b.id),
+    );
+    const order = new Map(nodes.map((node, index) => [node.id, index]));
+    const graph = {
+      ...prepared,
+      nodes,
+      edges: [...prepared.edges].sort(
+        (a, b) =>
+          (order.get(a.source) ?? 0) - (order.get(b.source) ?? 0) ||
+          (order.get(a.target) ?? 0) - (order.get(b.target) ?? 0),
+      ),
+    };
+    return {
+      dot: graphToDot(graph, false, false, new Set(), neighborhoodRoot),
+      componentDots: connectedComponents(graph, false).map((component) =>
+        graphToDot(
+          component,
+          false,
+          false,
+          new Set(),
+          component.nodes.some((node) => node.id === neighborhoodRoot)
+            ? neighborhoodRoot
+            : component.nodes[0]?.id,
+        ),
+      ),
+      hierarchyEdges: [],
+    };
+  }
   const targets = new Set<string>();
   for (const nodes of leafSiblingGroups(prepared, groupByLocation)) {
     if (nodes.length < 8) continue;
@@ -722,6 +814,11 @@ export function layoutGraph(
   }
   return {
     dot: graphToDot(prepared, grouped, groupByLocation, targets),
+    componentDots: groupByLocation
+      ? undefined
+      : connectedComponents(prepared, grouped).map((component) =>
+          graphToDot(component, grouped, false, targets),
+        ),
     hierarchyEdges: prepared.edges.filter(
       (edge) => edge.kind === "hierarchy" && targets.has(edge.target),
     ),

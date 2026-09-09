@@ -78,6 +78,8 @@ export const START_OPERATIONS = {
     ],
   },
   "entity.filterOptions": { kind: "query" },
+  "entity.graph": { kind: "query" },
+  "entity.graphPaths": { kind: "query" },
   "entity.inspectorHealth": { kind: "query" },
   "entity.list": {
     kind: "query",
@@ -230,7 +232,6 @@ export const START_OPERATIONS = {
   "product.purchases": { kind: "query" },
   "product.quantitySummaries": { kind: "query" },
   "product.quickCreate": { kind: "mutation" },
-  "product.relationshipRoute": { kind: "query" },
   "product.search": { kind: "query" },
   "product.setProjectUses": { kind: "mutation" },
   "product.summaries": { kind: "query" },

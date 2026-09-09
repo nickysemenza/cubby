@@ -25,8 +25,6 @@ import {
   productQuantitySummariesOut,
   productQuantitySummaryBatchInput,
   productQuickCreatePayload,
-  productRelationshipRouteInput,
-  productRelationshipRouteOut,
   productShortcodeListOut,
   productShortcodesInput,
   productSortableFields,
@@ -165,10 +163,6 @@ export const productWorkflowSchemas = {
     output: productProjectUsesOut,
   },
   purchases: { input: productPurchasesInput, output: productPurchasesOut },
-  relationshipRoute: {
-    input: productRelationshipRouteInput,
-    output: productRelationshipRouteOut,
-  },
   components: { input: productComponentsInput, output: productComponentsOut },
   kitComponentRows: {
     input: kitComponentRowsInput,

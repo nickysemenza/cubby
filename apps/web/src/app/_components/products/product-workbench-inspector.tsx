@@ -14,30 +14,28 @@ import {
   EntityInspectorFrame,
   type InspectorTab,
 } from "~/app/_components/inspector-frame";
-import { product as productOperations } from "~/app/products/product.functions";
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { entityDetail } from "~/entities/entity-detail.functions";
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { formatCurrency } from "~/lib/utils";
 
 import { tryFormatAmount } from "../inventory/format-amount";
+import { EntityRelations } from "../relationships/entity-relations";
+import { EntityRelationshipPreview } from "../relationships/entity-relationship-preview";
 import { CategoryLabel } from "./CategoryLabel";
 import { heroPresence } from "./product-hero-presence";
-import {
-  ProductRelationshipRouteContent,
-  type ProductRelationshipRouteOperations,
-  useProductRelationshipRoute,
-} from "./product-relationship-route";
 
 /** Remote reads that make the inspector useful after its local frame mounts. */
-export interface ProductWorkbenchInspectorOperations extends ProductRelationshipRouteOperations {
+export interface ProductWorkbenchInspectorOperations {
+  graph: typeof entityGraph.graph;
   productDetail: typeof entityDetail.detail;
 }
 
 const productionOperations: ProductWorkbenchInspectorOperations = {
   productDetail: entityDetail.detail.forEntity("product"),
-  relationshipRoute: productOperations.relationshipRoute,
+  graph: entityGraph.graph,
 };
 
 const Field: FC<{ label: string; children: ReactNode }> = ({
@@ -52,9 +50,9 @@ const Field: FC<{ label: string; children: ReactNode }> = ({
 
 const Overview: FC<{
   product: ProductWithFoodOut;
-  relationshipQuery: ReturnType<typeof useProductRelationshipRoute>;
+  operations: ProductWorkbenchInspectorOperations;
   onViewRelations: () => void;
-}> = ({ product, relationshipQuery, onViewRelations }) => {
+}> = ({ product, operations, onViewRelations }) => {
   const price = product.pricing.effectivePrice ?? product.price;
   const presence = heroPresence({
     entryCount: product.inventoryEntry.length,
@@ -103,10 +101,11 @@ const Overview: FC<{
         </Field>
       </dl>
 
-      <ProductRelationshipRouteContent
-        product={product}
-        query={relationshipQuery}
-        variant="strip"
+      <EntityRelationshipPreview
+        entity="product"
+        sourceId={product.id}
+        name={product.name}
+        operations={operations}
         onViewAll={onViewRelations}
       />
 
@@ -196,12 +195,13 @@ const Overview: FC<{
 
 const Relations: FC<{
   product: ProductWithFoodOut;
-  relationshipQuery: ReturnType<typeof useProductRelationshipRoute>;
-}> = ({ product, relationshipQuery }) => (
+  operations: ProductWorkbenchInspectorOperations;
+}> = ({ product, operations }) => (
   <div className="px-3 py-3">
-    <ProductRelationshipRouteContent
-      product={product}
-      query={relationshipQuery}
+    <EntityRelations
+      entity="product"
+      sourceId={product.id}
+      operations={operations}
     />
   </div>
 );
@@ -216,7 +216,6 @@ function ProductInspectorContent({
   operations: ProductWorkbenchInspectorOperations;
 }) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
-  const relationshipQuery = useProductRelationshipRoute(product.id, operations);
   const coverImage = product.images.find(isDisplayableImageFile);
 
   return (
@@ -247,13 +246,11 @@ function ProductInspectorContent({
       overview={
         <Overview
           product={product}
-          relationshipQuery={relationshipQuery}
+          operations={operations}
           onViewRelations={() => setActiveTab("relations")}
         />
       }
-      relations={
-        <Relations product={product} relationshipQuery={relationshipQuery} />
-      }
+      relations={<Relations product={product} operations={operations} />}
       activity={
         <div className="px-3 py-3">
           <AuditLogList

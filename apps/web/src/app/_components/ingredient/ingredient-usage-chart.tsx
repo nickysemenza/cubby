@@ -1,11 +1,7 @@
 import type { IngredientUsageRow } from "@cubby/schemas/ingredient-usage";
-import { ResponsiveBar } from "@nivo/bar";
 import { Carrot } from "lucide-react";
-import { useId, useMemo } from "react";
 
-import { ChartEmpty } from "~/app/projects/charts/chart-empty";
-import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
-import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
+import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 
 // Cap the bar count so the chart stays legible; the full list lives in the table.
 const MAX_BARS = 25;
@@ -17,67 +13,37 @@ export function IngredientUsageChart({
   rows: IngredientUsageRow[];
   maxBars?: number;
 }) {
-  // Nivo draws horizontal bars bottom-up, so reverse to put the most-used on top.
-  const data = rows
-    .slice(0, maxBars)
-    .map((r) => ({ ingredient: r.name, recipes: r.recipeCount }))
-    .reverse();
-
-  const summaryId = useId();
-  const chartSummary = useMemo(() => {
-    const top = rows
-      .slice(0, 3)
-      .map(
-        (row) =>
-          `${row.name} ${row.recipeCount} recipe${row.recipeCount === 1 ? "" : "s"}`,
-      )
-      .join("; ");
-    return `Ingredient usage: ${top}; ${rows.length} ingredients total`;
-  }, [rows]);
-
-  if (data.length === 0) {
-    return <ChartEmpty icon={Carrot} title="No ingredient usage yet." />;
-  }
-
-  const chartHeight = Math.max(300, data.length * 28 + 60);
+  const top = rows
+    .slice(0, 3)
+    .map(
+      (row) =>
+        `${row.name} ${row.recipeCount} recipe${row.recipeCount === 1 ? "" : "s"}`,
+    )
+    .join("; ");
+  const summary = `Ingredient usage: ${top}; ${rows.length} ingredients total`;
 
   return (
-    <figure
-      aria-label={chartSummary}
-      aria-describedby={summaryId}
-      style={{ height: chartHeight }}
-    >
-      <figcaption id={summaryId} className="sr-only">
-        {chartSummary}.
-      </figcaption>
-      <ResponsiveBar
-        data={data}
-        keys={["recipes"]}
-        indexBy="ingredient"
-        layout="horizontal"
-        margin={{ top: 10, right: 40, bottom: 32, left: 200 }}
-        padding={0.25}
-        // --chart-1 is Live Ultramarine, reserved for one live/interactive
-        // value (DESIGN.md "One Loud Thing" rule) — a bar chart with every
-        // series in the accent decorates the whole panel instead. --chart-2
-        // is the darkest neutral ink tone, matching open-tasks-by-project.tsx.
-        colors={() => "var(--chart-2)"}
-        {...nivoBarChrome}
-        axisBottom={{ tickSize: 0, tickPadding: 8 }}
-        axisLeft={{ tickSize: 0, tickPadding: 8 }}
-        label={(d) => (d.value ? String(d.value) : "")}
-        labelSkipWidth={24}
-        labelTextColor="var(--background)"
-        enableGridX
-        enableGridY={false}
-        tooltip={({ value, indexValue }) => (
-          <ChartTooltip>
-            <strong>{indexValue}</strong> — {value} recipe
-            {value === 1 ? "" : "s"}
-          </ChartTooltip>
-        )}
-        theme={nivoChartTheme}
-      />
-    </figure>
+    <RankedBarBreakdown
+      data={rows.map((row) => ({
+        ingredient: row.name,
+        recipes: row.recipeCount,
+      }))}
+      valueKey="recipes"
+      labelKey="ingredient"
+      topN={maxBars}
+      minHeight={300}
+      rowHeight={28}
+      heightPadding={60}
+      margin={{ top: 10, right: 40, bottom: 32, left: 200 }}
+      color={() => "var(--chart-2)"}
+      showValueLabel
+      labelSkipWidth={24}
+      formatValue={(value) => `${value} recipe${value === 1 ? "" : "s"}`}
+      formatLabel={(value) => `${value}`}
+      axisBottomFormat={(value) => `${value}`}
+      emptyIcon={Carrot}
+      emptyTitle="No ingredient usage yet."
+      summary={summary}
+    />
   );
 }

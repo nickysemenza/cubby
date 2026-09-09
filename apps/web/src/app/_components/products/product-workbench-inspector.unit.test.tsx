@@ -1,5 +1,4 @@
 import {
-  type ProductRelationshipRouteOut,
   type ProductWithFoodOut,
   productWithFoodOut,
 } from "@cubby/schemas/product";
@@ -13,16 +12,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { product as productOperations } from "~/app/products/product.functions";
 import { entityDetail } from "~/entities/entity-detail.functions";
+import { entityGraph } from "~/entities/entity-graph.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import {
-  type ProductRelationshipRouteOperations,
-  ProductRelationshipRoute,
-  ProductRelationshipRouteFrame,
-  type RouteBranch,
-} from "./product-relationship-route";
 import {
   type ProductWorkbenchInspectorOperations,
   ProductWorkbenchInspector,
@@ -118,89 +111,6 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   updatedAt: new Date("2026-01-01"),
 });
 
-const relationshipRoute: ProductRelationshipRouteOut = {
-  productId: product.id,
-  direct: {
-    inventory: {
-      count: 1,
-      stockCount: 1,
-      installedCount: 0,
-      preview: [
-        {
-          id: testShortcode("inventory", "INV-INSPECT"),
-          amount: { value: 1, unit: "each" },
-          placement: "stock",
-          location: {
-            id: testShortcode("location", "LOC-INSPECT"),
-            name: "Tool cabinet",
-          },
-        },
-      ],
-    },
-    identityLocations: {
-      count: 1,
-      preview: [
-        {
-          id: testShortcode("location", "LOC-IDENTITY"),
-          name: "Drill case",
-        },
-      ],
-    },
-    expenses: {
-      count: 1,
-      netCost: 99,
-      preview: [
-        {
-          id: testShortcode("expense", "EXP-INSPECT"),
-          name: "Tool expense",
-          cost: 99,
-          date: "2026-01-01",
-          project: null,
-        },
-      ],
-    },
-    purchases: {
-      count: 1,
-      preview: [
-        {
-          id: testShortcode("purchase", "PUR-INSPECT"),
-          displayLabel: "Workshop order",
-          orderId: "A-12",
-          date: "2026-01-01",
-          vendor: {
-            id: testShortcode("vendor", "VEN-INSPECT"),
-            name: "Tool supply",
-          },
-          source: "both",
-          linkAttachedAt: new Date("2026-01-01"),
-        },
-      ],
-    },
-    usedOnProjects: {
-      count: 1,
-      preview: [
-        {
-          id: testShortcode("project", "PRJ-INSPECT"),
-          name: "Garage refresh",
-          status: "in_progress",
-        },
-      ],
-    },
-    tasks: { count: 0, openCount: 0, preview: [] },
-  },
-  derived: {
-    purchasedForProjects: {
-      count: 0,
-      preview: [],
-      unassignedExpenseCount: 2,
-    },
-    vendors: {
-      count: 0,
-      preview: [],
-    },
-  },
-};
-
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
@@ -211,24 +121,70 @@ afterEach(() => {
   harness.dispose();
 });
 
-function relationshipOperations(
-  route: ProductRelationshipRouteOut = relationshipRoute,
-): ProductRelationshipRouteOperations {
-  return {
-    relationshipRoute: productOperations.relationshipRoute.withTransport(
-      async () => route,
-    ),
+function inspectorOperations(): ProductWorkbenchInspectorOperations {
+  const root = { entityType: "product" as const, entityId: product.id };
+  const graph: import("@cubby/schemas/entity-graph").EntityGraphOutput = {
+    nodes: [{ ...root, label: product.name, metadata: {} }],
+    edges: [],
+    branches: [
+      {
+        root,
+        relationshipKey: "inventory",
+        target: "inventory",
+        label: "Stock",
+        items: [],
+        totalCount: 1,
+        edgeIds: [],
+        nextOffset: null,
+      },
+      {
+        root,
+        relationshipKey: "locations",
+        target: "location",
+        label: "Also a location",
+        items: [],
+        totalCount: 1,
+        edgeIds: [],
+        nextOffset: null,
+      },
+      {
+        root,
+        relationshipKey: "expenses",
+        target: "expense",
+        label: "Expenses",
+        items: [],
+        totalCount: 1,
+        edgeIds: [],
+        nextOffset: null,
+      },
+      {
+        root,
+        relationshipKey: "purchases",
+        target: "purchase",
+        label: "Purchases",
+        items: [],
+        totalCount: 1,
+        edgeIds: [],
+        nextOffset: null,
+      },
+      {
+        root,
+        relationshipKey: "project-uses",
+        target: "project",
+        label: "Used on projects",
+        items: [],
+        totalCount: 1,
+        edgeIds: [],
+        nextOffset: null,
+      },
+    ],
+    truncated: false,
   };
-}
-
-function inspectorOperations(
-  route: ProductRelationshipRouteOut = relationshipRoute,
-): ProductWorkbenchInspectorOperations {
   return {
     productDetail: entityDetail.detail
       .forEntity("product")
       .withTransport(async () => product),
-    ...relationshipOperations(route),
+    graph: entityGraph.graph.withTransport(async () => graph),
   };
 }
 
@@ -244,24 +200,12 @@ function renderInspector(
   );
 }
 
-function renderRelationshipRoute(
-  route: ProductRelationshipRouteOut = relationshipRoute,
-) {
-  return render(
-    <ProductRelationshipRoute
-      product={product}
-      operations={relationshipOperations(route)}
-    />,
-    { wrapper: harness.wrapper },
-  );
-}
-
 describe("ProductWorkbenchInspector", () => {
   it("renders exactly three local inspector tabs without a page-level relationship route", async () => {
     renderInspector();
 
     await screen.findByRole("navigation", {
-      name: `${product.name} direct relationships`,
+      name: `${product.name} relationships`,
     });
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Overview",
@@ -270,7 +214,7 @@ describe("ProductWorkbenchInspector", () => {
     ]);
     expect(
       screen.getByRole("navigation", {
-        name: `${product.name} direct relationships`,
+        name: `${product.name} relationships`,
       }),
     ).toBeInTheDocument();
     expect(
@@ -278,7 +222,7 @@ describe("ProductWorkbenchInspector", () => {
     ).not.toBeInTheDocument();
     const truth = screen.getByTestId("product-inspector-truth");
     const relationshipStrip = screen.getByRole("navigation", {
-      name: `${product.name} direct relationships`,
+      name: `${product.name} relationships`,
     });
     expect(
       truth.compareDocumentPosition(relationshipStrip) &
@@ -290,18 +234,16 @@ describe("ProductWorkbenchInspector", () => {
     renderInspector();
 
     const strip = await screen.findByRole("navigation", {
-      name: `${product.name} direct relationships`,
+      name: `${product.name} relationships`,
     });
     expect(
-      within(strip).getByRole("link", { name: "Direct Stock: 1 records" }),
+      within(strip).getByRole("button", { name: "Stock 1" }),
     ).toBeInTheDocument();
     expect(
-      within(strip).getByRole("link", {
-        name: "Direct Also a location: 1 records",
-      }),
+      within(strip).getByRole("button", { name: "Also a location 1" }),
     ).toBeInTheDocument();
     expect(
-      within(strip).getByRole("link", { name: "Direct Expenses: 1 records" }),
+      within(strip).getByRole("button", { name: "Expenses 1" }),
     ).toBeInTheDocument();
     expect(within(strip).queryByText("Purchases")).not.toBeInTheDocument();
     expect(within(strip).getByText("+2 more")).toBeInTheDocument();
@@ -312,133 +254,41 @@ describe("ProductWorkbenchInspector", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("button", { name: /^Purchases/ })).toBeVisible();
-  });
-
-  it("links compact-strip overflow to the canonical Relationships section without a local tab", async () => {
-    const directDestinations = [
-      { id: "stock", label: "Stock", kind: "direct", count: 1 },
-      {
-        id: "identity-locations",
-        label: "Also a location",
-        kind: "direct",
-        count: 1,
-      },
-      {
-        id: "expenses",
-        label: "Expenses",
-        kind: "direct",
-        count: 1,
-      },
-      {
-        id: "purchases",
-        label: "Purchases",
-        kind: "direct",
-        count: 1,
-      },
-    ] satisfies ReadonlyArray<
-      Pick<RouteBranch, "id" | "label" | "kind" | "count">
-    >;
-    const direct: RouteBranch[] = directDestinations.map((branch) => ({
-      ...branch,
-      samples: [],
-      detailHash: "relationships",
-      emptyCopy: "None.",
-    }));
-
-    render(
-      <ProductRelationshipRouteFrame
-        product={product}
-        direct={direct}
-        derived={[]}
-        variant="strip"
-      />,
-      { wrapper: harness.wrapper },
-    );
-
     expect(
-      await screen.findByRole("link", {
-        name: "View all direct relationships",
-      }),
-    ).toHaveAttribute("href", `/products/${product.id}#relationships`);
-  });
-
-  it("renders direct relationship branches with provenance and derived branches separately", async () => {
-    renderRelationshipRoute();
-
-    await screen.findByRole("button", { name: /^Stock/ });
-    expect(screen.getByRole("button", { name: /^Stock/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^Also a location/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /^Purchases/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Expense + order link")).toBeInTheDocument();
-    expect(screen.getByText("Derived from those records")).toBeInTheDocument();
-    expect(screen.getByText("Vendors")).toBeInTheDocument();
-    const vendors = screen.getByRole("button", { name: /Vendors/ });
-    expect(vendors).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(vendors);
-    expect(
-      screen.getByText("No vendor rollups from product spend yet."),
-    ).toBeInTheDocument();
-    const purchasedForProjects = screen.getByRole("button", {
-      name: /Purchased for projects/,
-    });
-    expect(purchasedForProjects).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(purchasedForProjects);
-    expect(
-      screen.getByText("2 acquisition expenses not assigned to a project."),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", {
-        name: /acquisition expenses not assigned to a project/,
-      }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("Used on projects")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Direct Stock: Tool cabinet" }),
-    ).toHaveAttribute(
-      "href",
-      `/inventory/${relationshipRoute.direct.inventory.preview[0]?.id}`,
-    );
-  });
-
-  it("keeps embedded stock and location evidence available when the route request fails", async () => {
-    const failedOperations: ProductRelationshipRouteOperations = {
-      relationshipRoute: productOperations.relationshipRoute.withTransport(
-        async () => {
-          throw new Error("relationship route unavailable");
-        },
-      ),
-    };
-    render(
-      <ProductRelationshipRoute
-        product={product}
-        operations={failedOperations}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    expect(
-      await screen.findByText("Other relationships could not be loaded."),
+      await screen.findByRole("heading", { name: "Purchases" }),
     ).toBeVisible();
-    expect(screen.getByText("Tool cabinet")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  });
+
+  it("keeps loaded product truth available when graph loading fails", async () => {
+    const operations = inspectorOperations();
+    renderInspector({
+      ...operations,
+      graph: entityGraph.graph.withTransport(async () => {
+        throw new Error("unavailable");
+      }),
+    });
+    expect(await screen.findByTestId("product-inspector-truth")).toBeVisible();
+    expect(
+      await screen.findByRole("button", { name: "Retry connections" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Open full product details" }),
+    ).toHaveAttribute("href", `/products/${product.id}`);
   });
 
   it("keeps the shared relationship result ready while activity stays lazy", async () => {
     renderInspector();
 
     await screen.findByRole("navigation", {
-      name: `${product.name} direct relationships`,
+      name: `${product.name} relationships`,
     });
     expect(screen.queryByText("No activity yet")).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Relations" }));
-    expect(screen.getByText("Relationship route")).toBeInTheDocument();
-    expect(screen.getByText("Derived from those records")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "List view" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Graph view" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("tab", { name: "Activity" }));
     await waitFor(() => {

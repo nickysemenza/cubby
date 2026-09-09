@@ -5,6 +5,7 @@ import {
   taskShortcode,
   recipeShortcode,
 } from "@cubby/schemas/identifiers";
+import { parseShortcode } from "@cubby/shared";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo } from "react";
 import { z } from "zod";
@@ -12,6 +13,8 @@ import { z } from "zod";
 import { EntityIntegrityTab } from "~/app/_components/entities/EntityIntegrityTab";
 import { EntityManifestGrid } from "~/app/_components/entities/EntityManifestGrid";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
+import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
+import { EntityRelations } from "~/app/_components/relationships/entity-relations";
 import type { GraphFilters } from "~/app/_components/visualizations/dependency-graph-model";
 const RecipeDependencyGraph = lazy(() =>
   import("~/app/_components/visualizations/recipe-dependency-graph").then(
@@ -29,7 +32,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
 import { pageTitle } from "~/lib/page-title";
 
-const tabSchema = z.enum(["recipes", "work", "schema", "integrity"]);
+const tabSchema = z.enum(["recipes", "work", "schema", "integrity", "explore"]);
+const graphRefSearchSchema = z.string().refine((value) => {
+  const separator = value.indexOf(":");
+  if (separator < 1) return false;
+  const entity = entitySchema.safeParse(value.slice(0, separator));
+  const shortcode = parseShortcode(value.slice(separator + 1));
+  return entity.success && shortcode?.type === entity.data;
+});
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
   // it preserves the pre-merge /entities content (and its zero-query cost);
@@ -56,6 +66,16 @@ const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   reduce: z.boolean().optional().catch(undefined),
   entity: entitySchema.optional().catch(undefined),
+  root: z.string().optional().catch(undefined),
+  view: z.enum(["list", "graph"]).optional().catch(undefined),
+  layout: z.enum(["neighborhood", "flow"]).optional().catch(undefined),
+  graphEntity: entitySchema.optional().catch(undefined),
+  relationship: z.string().optional().catch(undefined),
+  selected: graphRefSearchSchema.optional().catch(undefined),
+  trail: z.array(graphRefSearchSchema).max(32).optional().catch(undefined),
+  cursor: z.number().int().nonnegative().optional().catch(undefined),
+  collapsed: z.array(z.string()).optional().catch(undefined),
+  destination: graphRefSearchSchema.optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/entities")({
@@ -83,12 +103,19 @@ function EntitiesRoute() {
   return (
     <Page variant="list" title="Entities" compact decoration="none">
       <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
-        <TabsList variant="line" className="h-auto flex-wrap gap-2">
+        <TabsList
+          variant="line"
+          className="h-auto max-w-full flex-wrap justify-start gap-2 [&>[data-slot=tabs-trigger]]:flex-none"
+        >
+          <TabsTrigger value="explore">Explore records</TabsTrigger>
           <TabsTrigger value="schema">Schema</TabsTrigger>
           <TabsTrigger value="integrity">Integrity</TabsTrigger>
           <TabsTrigger value="work">Projects &amp; tasks</TabsTrigger>
           <TabsTrigger value="recipes">Recipe graph</TabsTrigger>
         </TabsList>
+        <TabsContent value="explore">
+          <CrossEntityTab />
+        </TabsContent>
         <TabsContent value="schema">
           <EntityManifestGrid
             selected={entity ?? "product"}
@@ -235,6 +262,74 @@ function GraphTab({ recipes }: { recipes: boolean }) {
         filters={filters}
         onChange={onChange}
       />
+    </Stack>
+  );
+}
+
+function CrossEntityTab() {
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  return (
+    <Stack gap="md">
+      <p className="text-sm text-muted-foreground">
+        Follow connections across your household. Choose a starting record, then
+        reveal each relationship branch as you need it.
+      </p>
+      <EntityGraphPicker
+        onSelect={(root) =>
+          void navigate({
+            to: "/entities",
+            search: {
+              tab: "explore",
+              entity: root.entity,
+              root: root.id,
+              view: "graph",
+            },
+          })
+        }
+      />
+      {search.entity && search.root ? (
+        <EntityRelations
+          entity={search.entity}
+          sourceId={search.root}
+          state={{
+            view: search.view ?? "graph",
+            layout: search.layout,
+            query: search.q,
+            entityType: search.graphEntity,
+            relationship: search.relationship,
+            selected: search.selected,
+            trail: search.trail,
+            cursor: search.cursor,
+            collapsed: search.collapsed,
+            destination: search.destination,
+          }}
+          onStateChange={(state) =>
+            void navigate({
+              to: "/entities",
+              replace: true,
+              search: () => ({
+                ...search,
+                view: state.view,
+                layout: state.layout,
+                q: state.query,
+                graphEntity: state.entityType,
+                relationship: state.relationship,
+                selected: state.selected,
+                trail: state.trail,
+                cursor: state.cursor,
+                collapsed: state.collapsed,
+                destination: state.destination,
+              }),
+            })
+          }
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Start with a cookbook, recipe, product, project, or any searchable
+          record.
+        </p>
+      )}
     </Stack>
   );
 }

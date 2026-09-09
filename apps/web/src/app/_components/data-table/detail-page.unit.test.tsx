@@ -82,7 +82,7 @@ describe("DetailSections ledger", () => {
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "data-active",
     );
-    expect(screen.queryByRole("tab", { name: "Relations" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Relations" })).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Jump to section" }),
     ).toBeVisible();

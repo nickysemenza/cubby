@@ -118,8 +118,8 @@ describe("operation cache tags", () => {
    * reached the second.
    *
    * Cross-entity opt-in tags are NOT redundant and must survive:
-   * `product.relationshipRoute` names `["inventory"]`, `["location"]`,
-   * `["expense"]`, … precisely because a product query wants to re-read when
+   * `entity.graph` names `["inventory"]`, `["location"]`,
+   * `["expense"]`, … precisely because a graph query wants to re-read when
    * OTHER entities move. None of those is a prefix of a sibling.
    */
   it("has no tag that is a proper prefix of a sibling", () => {

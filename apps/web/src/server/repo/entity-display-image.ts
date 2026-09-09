@@ -3,8 +3,8 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { unwrapDb } from "~/server/repo/database-helpers";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -15,6 +15,7 @@ export interface EntityDisplayImageRef {
 }
 
 const DISPLAY_IMAGE_ENTITIES = new Set<Entity>([
+  "image",
   "product",
   "inventory",
   "expense",
@@ -42,7 +43,7 @@ const displayImageRowSchema = z.object({
  * and use a semantic entity mark when a ref is absent from the result.
  */
 export async function resolveEntityDisplayImages(
-  db: Database,
+  db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
 ): Promise<Map<string, ImageUrlSummary>> {
   const supported = [
@@ -61,11 +62,16 @@ export async function resolveEntityDisplayImages(
     sql`, `,
   );
   const displayable = displayableImageSql("i");
-  const result = await getDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(sql`
     WITH refs("entityType", "entityId") AS (VALUES ${values})
     SELECT refs."entityType", refs."entityId"::text AS "entityId", (
       SELECT candidates.key
       FROM (
+        SELECT i.key, 0 AS priority, 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
+        FROM "Image" i
+        WHERE refs."entityType" = 'image' AND i.id = refs."entityId"
+          AND i."deletedAt" IS NULL AND ${displayable}
+        UNION ALL
         SELECT i.key, 0 AS priority, pi."sortOrder", pi."createdAt", i.id AS "imageId"
         FROM "ProductImage" pi
         JOIN "Image" i ON i.id = pi."imageId"

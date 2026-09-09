@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 
-import { NetBarBreakdown } from "~/app/_components/charts/kit";
+import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 import { useProjectOptions } from "~/app/_components/hooks/useProjectOptions";
 import { entityDetailLink } from "~/entities/entities";
 
@@ -47,7 +47,7 @@ export function OpenTasksByProject({
   );
 
   return (
-    <NetBarBreakdown
+    <RankedBarBreakdown
       data={openRows}
       valueKey="openTaskCount"
       labelKey="projectName"
