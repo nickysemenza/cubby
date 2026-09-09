@@ -409,8 +409,10 @@ The dev server is plain Node via `vite dev`. Production = CF Workers.
 `pnpm --filter @cubby/web run deploy:cf` builds and deploys the Worker. For
 per-chunk gzip reporting, run `CUBBY_BUNDLE_REPORT=1 pnpm --filter @cubby/web run build:cf`;
 routine builds skip that reporting but still enforce the service-worker and WASM
-size budgets. Footer dates identify the source commit date, so rebuilding the
-same source does not invalidate assets just because the wall clock changed.
+size budgets. Footer metadata is loaded on the server and hydrated with the
+page, then retained in memory for that document's lifetime. Its source commit
+date, branch, and commit are data rather than browser-bundle constants, so
+changing them alone does not invalidate client assets or add navigation requests.
 SSR keeps Vite's unminified default: deployment trials reduced gzip size with
 minification but generally increased Worker startup time. Recheck both metrics
 before enabling it.
