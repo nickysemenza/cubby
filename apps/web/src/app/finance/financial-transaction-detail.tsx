@@ -2,7 +2,6 @@ import type { FinancialTransactionOut } from "@cubby/schemas/financial-transacti
 import { Info } from "lucide-react";
 import { useState } from "react";
 
-import { BasicInfo } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
@@ -10,11 +9,13 @@ import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { financialTransactionEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
 import { DetailSections } from "../_components/data-table/detail-page";
 import { TableLink } from "../_components/table/TableLink";
 import { PossibleVendor } from "./possible-vendor";
+
 export function FinancialTransactionDetail({
   transaction,
 }: {
@@ -46,141 +47,116 @@ export function FinancialTransactionDetail({
             icon: Info,
             placement: "primary",
             content: (
-              <BasicInfo
-                fields={[
-                  {
-                    label: "Merchant",
-                    value: transaction.merchant ? (
+              <EntityBasicInfo
+                entity="financialTransaction"
+                record={transaction}
+                overrides={{
+                  merchant: (r) => ({
+                    value: r.merchant ? (
                       <EntityFilterLink
                         to="/financial-transactions"
-                        search={{ merchant: transaction.merchant }}
-                        label={`Show all transactions matching ${transaction.merchant}`}
+                        search={{ merchant: r.merchant }}
+                        label={`Show all transactions matching ${r.merchant}`}
                         variant="value"
                       >
-                        {transaction.merchant}
+                        {r.merchant}
                       </EntityFilterLink>
                     ) : (
                       "—"
                     ),
-                  },
-                  ...(transaction.vendorInference?.status === "suggested" ||
-                  transaction.vendorInference?.status === "ambiguous"
-                    ? [
-                        {
-                          label: "Possible vendor",
-                          value: (
-                            <PossibleVendor
-                              inference={transaction.vendorInference}
-                            />
-                          ),
-                        },
-                      ]
-                    : []),
-                  {
-                    label: "Amount",
-                    value: formatCurrency(transaction.amount),
-                  },
-                  {
-                    label: "Kind",
-                    value: transaction.kind,
+                  }),
+                  vendorInference: (r) => ({
+                    value:
+                      r.vendorInference?.status === "suggested" ||
+                      r.vendorInference?.status === "ambiguous" ? (
+                        <PossibleVendor inference={r.vendorInference} />
+                      ) : undefined,
+                  }),
+                  amount: (r) => ({ value: formatCurrency(r.amount) }),
+                  kind: (r) => ({
+                    value: r.kind,
                     filterAction: (
                       <EntityFilterLink
                         to="/financial-transactions"
-                        search={{ kind: transaction.kind }}
-                        label={`Show all ${transaction.kind.replaceAll("_", " ")} transactions`}
+                        search={{ kind: r.kind }}
+                        label={`Show all ${r.kind.replaceAll("_", " ")} transactions`}
                       />
                     ),
-                  },
-                  {
-                    label: "Status",
-                    value: transaction.status,
+                  }),
+                  status: (r) => ({
+                    value: r.status,
                     filterAction: (
                       <EntityFilterLink
                         to="/financial-transactions"
-                        search={{ status: transaction.status }}
-                        label={`Show all ${transaction.status} transactions`}
+                        search={{ status: r.status }}
+                        label={`Show all ${r.status} transactions`}
                       />
                     ),
-                  },
-                  {
-                    label: "Account",
+                  }),
+                  accountId: (r) => ({
                     value: (
                       <TableLink
                         to={entities.financialAccount.routes.detail}
-                        params={entityDetailParams(transaction.accountId)}
+                        params={entityDetailParams(r.accountId)}
                       >
-                        {transaction.accountName ?? transaction.accountId}
+                        {r.accountName ?? r.accountId}
                       </TableLink>
                     ),
                     filterAction: (
                       <EntityFilterLink
                         to="/financial-transactions"
-                        search={{ accountId: transaction.accountId }}
-                        label={`Show all transactions for ${transaction.accountName ?? transaction.accountId}`}
+                        search={{ accountId: r.accountId }}
+                        label={`Show all transactions for ${r.accountName ?? r.accountId}`}
                       />
                     ),
-                  },
-                  {
-                    // One card line can settle several Purchases, so this shows
-                    // the allocation set rather than the single derived mirror —
-                    // which is NULL precisely when the answer is interesting.
-                    label:
-                      transaction.allocations.length > 1
-                        ? "Settles"
-                        : "Purchase",
+                  }),
+                  allocations: (r) => ({
+                    // One card line can settle several Purchases, so this shows the
+                    // allocation set rather than the single derived mirror — which is NULL
+                    // precisely when the answer is interesting.
+                    label: r.allocations.length > 1 ? "Settles" : "Purchase",
                     value:
-                      transaction.allocations.length === 0 ? (
+                      r.allocations.length === 0 ? (
                         "—"
                       ) : (
                         <Stack gap="tight">
-                          {transaction.allocations.map((allocation) => (
-                            <Row
-                              key={allocation.purchaseId}
-                              justify="between"
-                              gap="sm"
-                            >
+                          {r.allocations.map((a) => (
+                            <Row key={a.purchaseId} justify="between" gap="sm">
                               <Row align="center" gap="tight">
                                 <TableLink
                                   to={entities.purchase.routes.detail}
-                                  params={entityDetailParams(
-                                    allocation.purchaseId,
-                                  )}
+                                  params={entityDetailParams(a.purchaseId)}
                                   variant="mono"
                                 >
-                                  {allocation.purchaseId}
+                                  {a.purchaseId}
                                 </TableLink>
                                 <EntityFilterLink
                                   to="/financial-transactions"
-                                  search={{
-                                    purchaseId: allocation.purchaseId,
-                                  }}
-                                  label={`Show all transactions allocated to ${allocation.purchaseId}`}
+                                  search={{ purchaseId: a.purchaseId }}
+                                  label={`Show all transactions allocated to ${a.purchaseId}`}
                                 />
                               </Row>
-                              {transaction.allocations.length > 1 ? (
+                              {r.allocations.length > 1 ? (
                                 <span className="font-mono tabular-nums">
-                                  {formatCurrency(allocation.amount)}
+                                  {formatCurrency(a.amount)}
                                 </span>
                               ) : null}
                             </Row>
                           ))}
                         </Stack>
                       ),
-                  },
-                  { label: "Posted", value: transaction.postedDate ?? "—" },
-                  {
-                    label: "References",
+                  }),
+                  postedDate: (r) => ({ value: r.postedDate ?? "—" }),
+                  sourceRefs: (r) => ({
                     value:
-                      transaction.sourceRefs
-                        .map((r) => `${r.source}: ${r.externalId}`)
+                      r.sourceRefs
+                        .map((x) => `${x.source}: ${x.externalId}`)
                         .join(", ") || "—",
-                  },
-                ]}
+                  }),
+                }}
               />
             ),
           },
-          // History is appended automatically by `DetailSections` for every
-          // auditable entity — see `ACTIVITY_SECTION_ID` there.
         ]}
       />
       <EntityEditDialog

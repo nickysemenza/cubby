@@ -10,6 +10,7 @@ import {
   entityBulkUpdateResultSchema,
   ENTITY_KERNEL_ENTITIES,
   entityMcpCommandSchema,
+  entityMcpReadCommandSchema,
   entityDeleteResultSchema,
   entityRelationMutationResultSchema,
   entitySearchResultSchema,
@@ -23,14 +24,22 @@ import {
 } from "~/server/generated/entity-bindings.gen";
 
 import { getEntityKernelContext } from "../kernel-context";
-import { registerMcpTool, WRITE_DESTRUCTIVE_CLOSED } from "./_shared";
+import {
+  registerMcpTool,
+  READ_ONLY_CLOSED,
+  WRITE_DESTRUCTIVE_CLOSED,
+} from "./_shared";
 
 const entityToolInput = z.object({ command: entityMcpCommandSchema });
+const entityReadToolInput = z.object({ command: entityMcpReadCommandSchema });
 
-const entityToolOutput = z.union([
+const entityReadToolOutput = z.union([
   generatedMcpEntityGetResultSchema,
   generatedMcpEntityListResultSchema,
   entitySearchResultSchema,
+]);
+const entityToolOutput = z.union([
+  entityReadToolOutput,
   generatedMcpEntityMutationCreateResultSchema,
   generatedMcpEntityMutationUpdateResultSchema,
   generatedMcpEntityMergeResultSchema,
@@ -75,6 +84,20 @@ export function registerEntityTools(
       ],
     }),
   );
+
+  registerMcpTool(server, {
+    name: "get_entities",
+    description:
+      "Get, list, or search household entities through { command }. This read-only capability accepts only get, list, and search actions. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings.",
+    inputSchema: entityReadToolInput,
+    outputSchema: entityReadToolOutput,
+    annotations: READ_ONLY_CLOSED,
+    telemetryEntity: (params) => params.command.entity,
+    handler: async (params, extra) =>
+      entityReadToolOutput.parse(
+        await runEntity(getEntityKernelContext(extra), params.command),
+      ),
+  });
 
   registerMcpTool(server, {
     name: "entity",

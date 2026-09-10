@@ -4,7 +4,6 @@ import { Check, Heart, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -17,6 +16,7 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import {
   cancelQueriesByTags,
   restoreQueries,
@@ -112,9 +112,8 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       data: { acquired: !wish.acquiredAt },
     });
 
-  const fields: BasicInfoField[] = [
-    {
-      label: "Name",
+  const fieldOverrides = {
+    name: () => ({
       value: (
         <EditableCell
           value={wish.name}
@@ -127,9 +126,8 @@ export function WishDetail({ wish }: { wish: WishOut }) {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Notes",
+    }),
+    notes: () => ({
       value: (
         <EditableCell
           value={wish.notes}
@@ -140,8 +138,8 @@ export function WishDetail({ wish }: { wish: WishOut }) {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-  ];
+    }),
+  };
 
   const candidateProductIds = useMemo(
     () => wish.candidates.map((candidate) => candidate.id),
@@ -158,7 +156,13 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       title: "Overview",
       icon: Info,
       placement: "supporting",
-      content: <BasicInfo fields={fields} />,
+      content: (
+        <EntityBasicInfo
+          entity="wish"
+          record={wish}
+          overrides={fieldOverrides}
+        />
+      ),
     },
     {
       id: "tool-alternatives",

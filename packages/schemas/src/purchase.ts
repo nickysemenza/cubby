@@ -1,8 +1,10 @@
 import { z } from "zod";
 import {
+  generatedPurchaseFieldSchemas,
+  generatedPurchaseFilterFields,
+} from "./generated/entity-field-schemas.purchase.gen";
+import {
   auditDateFilterFields,
-  deriveUpdateData,
-  numericRangeFields,
   timestampedFields,
   uniqueBy,
 } from "./base-entity";
@@ -27,7 +29,7 @@ import {
   oneOrMany,
   presenceFilter,
 } from "./pagination";
-import { money, moneyNullable, wholeCentAmount } from "./money";
+import { money, moneyNullable } from "./money";
 import {
   costTypeSchema,
   expenseOut,
@@ -38,36 +40,8 @@ import {
 
 export const splitExpenseOut = z.array(expenseOut);
 
-const purchaseFields = {
-  vendorId: vendorShortcode,
-  orderId: z
-    .string()
-    .nullable()
-    .describe(
-      'The vendor\'s own order/receipt id — Amazon "111-1234567-1234567", Home Depot "WN63446464", Tool Nirvana "#11325". Free text: every retailer formats these differently and validating them would only reject real data. Unique per vendor when present; null for the ~40% of purchases that never got one.',
-    ),
-  displayLabel: z
-    .string()
-    .nullable()
-    .describe(
-      "Optional human-entered context preserved from the original ledger, rendered parenthetically after the purchase identity — for example 11100722797 (pocket hole jig + bits).",
-    ),
-  date: plainDate.describe("The vendor order or receipt date"),
-  statedTotal: wholeCentAmount
-    .nullable()
-    .describe(
-      "What the purchase paperwork says the total was, in dollars. NEVER summed into spend — spend is SUM(expense.cost). Purely a reconciliation cue against the expenses below it, and a mismatch is often correct (a partial refund reduces an expense without changing the stated paperwork total).",
-    ),
-  notes: z.string().nullable(),
-};
-
 const purchaseCreateFields = {
-  ...purchaseFields,
-  orderId: z.string().nullable().default(null),
-  displayLabel: z.string().nullable().optional(),
-  date: plainDate,
-  statedTotal: wholeCentAmount.nullable().default(null),
-  notes: z.string().nullable().default(null),
+  ...generatedPurchaseFieldSchemas.create,
   /**
    * Newly-uploaded document ids awaiting association. The
    * `PendingDocumentUpload` widget pushes the file to R2 first and hands back a
@@ -89,23 +63,22 @@ export type PurchaseCreateInput = z.infer<typeof purchaseCreateInput>;
  * purchase that doesn't exist yet — so they come in through `extend`, exactly as
  * `productUpdateData` does.
  */
-export const purchaseUpdateData = deriveUpdateData(purchaseCreateFields, {
-  extend: {
-    // Public `IMG-` codes — these name documents `get_purchase`/`getPurchaseByID`
-    // already handed back through `PurchaseOut.images[].id`, so a client passes
-    // one straight back. The repo resolves it to a uuid before it reaches the
-    // `PurchaseImage` join table.
-    removeImageIds: z
-      .array(imageShortcode)
-      .optional()
-      .describe(
-        "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-      ),
-    imageOrder: z
-      .array(imageShortcode)
-      .optional()
-      .describe("existing document ids in display order"),
-  },
+export const purchaseUpdateData = z.object({
+  ...generatedPurchaseFieldSchemas.update,
+  // Public `IMG-` codes — these name documents `get_purchase`/`getPurchaseByID`
+  // already handed back through `PurchaseOut.images[].id`, so a client passes
+  // one straight back. The repo resolves it to a uuid before it reaches the
+  // `PurchaseImage` join table.
+  removeImageIds: z
+    .array(imageShortcode)
+    .optional()
+    .describe(
+      "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
+    ),
+  imageOrder: z
+    .array(imageShortcode)
+    .optional()
+    .describe("existing document ids in display order"),
 });
 export type PurchaseUpdateData = z.infer<typeof purchaseUpdateData>;
 export const purchaseUpdateInput = z.object({
@@ -152,14 +125,11 @@ export const primaryPurchaseDocumentKinds = [
 
 export const purchaseFilterFields = {
   ...auditDateFilterFields,
+  ...generatedPurchaseFilterFields,
   search: z
     .string()
     .optional()
     .describe("Substring match on order id or human display label"),
-  displayLabelSearch: z
-    .string()
-    .optional()
-    .describe("Substring match on the human display label only"),
   vendorId: entityFilterList(vendorShortcode).optional(),
   ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),
@@ -178,7 +148,6 @@ export const purchaseFilterFields = {
    * Purchases with at least one priced Expense, so empty or unpriced-only Purchases do
    * not masquerade as zero-dollar credits.
    */
-  ...numericRangeFields("expenseTotal"),
   dateFrom: plainDate
     .optional()
     .describe("Inclusive lower bound on purchase date"),
@@ -205,8 +174,7 @@ export const purchaseSortableFields = [
 export type PurchaseSortField = (typeof purchaseSortableFields)[number];
 
 export const purchaseOut = z.object({
-  id: purchaseShortcode,
-  ...purchaseFields,
+  ...generatedPurchaseFieldSchemas.read,
   /** Resolved through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
   vendorLogo: imageUrlSummary.nullable(),

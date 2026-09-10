@@ -1,6 +1,6 @@
-/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
-
 import type { ActorContext } from "@cubby/schemas/context";
+/** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type {
   ImpactItem,
   OperationDisposition,
@@ -836,15 +836,6 @@ export const createPurchase = async (
   return { output: await getPurchaseByID(db, id), entityId: id };
 };
 
-const PURCHASE_AUDIT_FIELDS = [
-  "vendorId",
-  "orderId",
-  "displayLabel",
-  "date",
-  "statedTotal",
-  "notes",
-] as const;
-
 export const updatePurchase = async (
   db: Database,
   shortcode: PurchaseShortcode,
@@ -935,7 +926,9 @@ export const updatePurchase = async (
       id,
     );
 
-    const changes = computeChanges(before, after, [...PURCHASE_AUDIT_FIELDS]);
+    const changes = computeChanges(before, after, [
+      ...entityFieldModels.purchase.audit,
+    ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
         entityType: "purchase",

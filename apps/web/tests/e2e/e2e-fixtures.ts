@@ -3,6 +3,8 @@ import { upsertCookbook } from "~/server/repo/cookbook";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
+import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
+import { ledgerTransferCreateInput } from "@cubby/schemas/ledger-transfer";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
@@ -19,6 +21,8 @@ import {
   entityBrowserMutationCommandSchema,
 } from "~/server/entity-kernel/contracts";
 import { createUploadedImageRecord } from "~/server/repo/image";
+import { createLedgerParty } from "~/server/repo/ledger-party";
+import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -274,4 +278,104 @@ export async function seedStaplePlanningPrerequisite(page: Page, name: string) {
     recipes: [{ recipeId: recipe.id, scale: 1 }],
   });
   return { ingredient, recipe };
+}
+
+export const seedIngredientPrerequisite = (page: Page, name: string) =>
+  createFixture(page, "ingredient", { name });
+
+export async function seedLedgerDisplayPrerequisite(page: Page, name: string) {
+  const db = getFixtureDb();
+  const context = requireActor(
+    createTestRequestContext(db, {
+      auth: { userId: await fixtureUserId(page) },
+    }),
+  );
+  const from = await createLedgerParty(
+    db,
+    ledgerPartyCreateInput.parse({
+      name: `${name} sender`,
+      kind: "member",
+      notes: `${name} party notes`,
+    }),
+    context.actorContext,
+  );
+  const to = await createLedgerParty(
+    db,
+    ledgerPartyCreateInput.parse({ name: `${name} recipient`, kind: "guest" }),
+    context.actorContext,
+  );
+  const transfer = await createLedgerTransfer(
+    db,
+    ledgerTransferCreateInput.parse({
+      fromPartyId: from.output.id,
+      toPartyId: to.output.id,
+      amount: 12.34,
+      date: "2026-09-09",
+      notes: `${name} transfer notes`,
+    }),
+    context.actorContext,
+  );
+  const account = await createFixture(
+    page,
+    "financialAccount",
+    financialAccountCreateInput.parse({
+      name: `${name} cash`,
+      identity: { kind: "cash" },
+      ledgerPartyId: from.output.id,
+      notes: `${name} account notes`,
+    }),
+  );
+  return {
+    from: from.output,
+    to: to.output,
+    transfer: transfer.output,
+    account,
+  };
+}
+
+export const seedVendorDisplayPrerequisite = (page: Page, name: string) =>
+  createFixture(page, "vendor", {
+    name,
+    website: "https://example.com",
+    orderUrlTemplate: "https://example.com/orders/{orderId}",
+    notes: `${name} notes`,
+  });
+
+export async function seedRecordListDisplayPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const vendor = await seedVendorDisplayPrerequisite(page, `${name} vendor`);
+  const product = await seedProductPrerequisite(page, {
+    name: `${name} product`,
+  });
+  const location = await seedLocationPrerequisite(page, `${name} room`);
+  const child = await seedLocationPrerequisite(page, `${name} shelf`, {
+    parentId: location.id,
+  });
+  await createFixture(page, "inventory", {
+    productId: product.id,
+    locationId: location.id,
+    amount: { value: 2, unit: "each" },
+  });
+  const orderId = `${name} order`;
+  const purchase = await createFixture(page, "purchase", {
+    vendorId: vendor.id,
+    orderId,
+    date: "2026-09-09",
+    statedTotal: 12.34,
+    notes: `${name} purchase notes`,
+  });
+  const expense = await createFixture(page, "expense", {
+    name: `${name} expense`,
+    cost: 12.34,
+    date: "2026-09-09",
+    costType: "materials",
+    trade: "other",
+    productId: product.id,
+    productQuantity: 2,
+    purchaseId: purchase.id,
+    notes: `${name} expense notes`,
+  });
+  return { vendor, product, location, child, purchase, expense, orderId };
 }

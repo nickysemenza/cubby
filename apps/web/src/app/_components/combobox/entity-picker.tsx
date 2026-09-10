@@ -53,6 +53,7 @@ export function matchesPickerItem(
 }
 
 export interface EntityPickerProps<TId extends string> {
+  inputId?: string;
   entity?: PickerEntity;
   label: string;
   items: ComboboxItem<TId>[];
@@ -341,6 +342,7 @@ function EntityPickerPopup<TId extends string>({
 }
 
 function EntityPickerInput<TId extends string>({
+  inputId,
   anchorRef,
   inputRef,
   label,
@@ -350,6 +352,7 @@ function EntityPickerInput<TId extends string>({
   value,
   setQuery,
 }: {
+  inputId?: string;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   inputRef: React.RefObject<HTMLInputElement | null>;
   label: string;
@@ -372,6 +375,7 @@ function EntityPickerInput<TId extends string>({
         )}
       >
         <ComboboxPrimitive.Input
+          id={inputId}
           ref={inputRef}
           aria-label={label}
           placeholder={placeholder ?? `Select ${label}…`}
@@ -406,6 +410,7 @@ function EntityPickerInput<TId extends string>({
  * entity and may supply their own rich rows.
  */
 export function EntityPicker<TId extends string>({
+  inputId,
   entity,
   label,
   items,
@@ -542,6 +547,7 @@ export function EntityPicker<TId extends string>({
       disabled={disabled}
     >
       <EntityPickerInput
+        inputId={inputId}
         anchorRef={anchorRef}
         inputRef={inputRef}
         label={label}

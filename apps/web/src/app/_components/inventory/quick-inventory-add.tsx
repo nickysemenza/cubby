@@ -410,6 +410,7 @@ export function QuickInventoryAdd({
           >
             <div className="pt-4">
               <ProductFormFields
+                mode="create"
                 form={createForm}
                 paths={createProductFormFieldPaths}
                 imageHandlers={imageState}

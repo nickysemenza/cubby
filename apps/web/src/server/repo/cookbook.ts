@@ -421,11 +421,11 @@ export const deleteCookbook = async (
   });
 };
 
-/** Final summary of a reprocess pass (the generator's `return` value). */
-type ReprocessSummary = {
-  reprocessed: number;
-  importableExtras: string[];
-  recipeIds: RecipeId[];
+export type CookbookReprocessSelection = {
+  readonly recipes: readonly ImportRecipe[];
+  readonly cookbook: { readonly id: CookbookId; readonly name: string };
+  readonly importContext: CookbookImportContext;
+  readonly importableExtras: readonly string[];
 };
 
 /**
@@ -435,19 +435,13 @@ type ReprocessSummary = {
  * `rawJson` that were never imported are returned as `importableExtras` rather
  * than auto-created, preserving the user's original selection.
  *
- * Streamed: `yield`s `{ done, total }` after each upsert so the caller can drive a
- * progress bar, and `return`s the summary (incl. the upserted ids for one batched
- * recompute). `total` counts only the recipes actually reprocessed — the skipped
- * extras are near-free, so excluding them keeps the bar honest.
+ * Selection is separate from each reprocess write so a declarative stream can
+ * keep the same honest total without inventing an item for importable extras.
  */
-export async function* reprocessCookbookStream(
+export const prepareCookbookReprocessing = async (
   db: Database,
   id: CookbookId,
-  actor: ActorContext,
-): AsyncGenerator<
-  { done: number; total: number; recipeId?: RecipeId },
-  ReprocessSummary
-> {
+): Promise<CookbookReprocessSelection> => {
   const cb = await getCookbookById(db, id);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
@@ -456,7 +450,7 @@ export async function* reprocessCookbookStream(
   const existing = new Set(
     (await getCookbookRecipeTitles(db, id)).map((t) => t.trim().toLowerCase()),
   );
-  const cookbookRef = { id, name: cb.name };
+  const cookbook = { id, name: cb.name };
   const matched = (cr: ImportRecipe) =>
     existing.has(cr.meta.title.trim().toLowerCase());
 
@@ -466,7 +460,6 @@ export async function* reprocessCookbookStream(
     .filter((cr) => !matched(cr))
     .map((cr) => cr.meta.title);
 
-  const total = toReprocess.length;
   // Shared context for the loop: running title map (forward refs in-memory) +
   // ingredient id cache (resolve a repeated ingredient once). See the import
   // path in routers/recipe.ts.
@@ -474,20 +467,27 @@ export async function* reprocessCookbookStream(
     titleToId: await getCookbookRecipeIdsByTitle(db, id),
     ingredientIdByName: new Map(),
   };
-  // The upserted recipe ids, so the caller can recompute their totals eagerly.
-  const recipeIds: RecipeId[] = [];
-  let done = 0;
-  for (const cr of toReprocess) {
-    const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
-      cr,
-      cookbookRef,
+  return {
+    recipes: toReprocess,
+    cookbook,
+    importContext: importCtx,
+    importableExtras,
+  };
+};
+
+/** Reprocess one selected recipe against the shared title and ingredient maps. */
+export const reprocessCookbookRecipe = async (
+  db: Database,
+  selection: CookbookReprocessSelection,
+  recipe: ImportRecipe,
+  actor: ActorContext,
+): Promise<RecipeId> =>
+  (
+    await upsertCookbookRecipeFromCookbook(
+      recipe,
+      selection.cookbook,
       db,
       actor,
-      importCtx,
-    );
-    recipeIds.push(recipeId);
-    done++;
-    yield { done, total, recipeId };
-  }
-  return { reprocessed: total, importableExtras, recipeIds };
-}
+      selection.importContext,
+    )
+  ).id;

@@ -72,6 +72,35 @@ function TestForm({
 }
 
 describe("Financial Transaction Vendor suggestions", () => {
+  it("renders declared transaction fields once with accessible labels and cent precision", () => {
+    render(
+      <TestForm
+        loadVendorInference={async () => suggestion(OLD_VENDOR, "Old Supply")}
+      />,
+      {
+        wrapper: harness.wrapper,
+      },
+    );
+    expect(screen.getAllByRole("combobox", { name: /^kind$/i })).toHaveLength(
+      1,
+    );
+    expect(screen.getAllByRole("combobox", { name: /^status$/i })).toHaveLength(
+      1,
+    );
+    expect(screen.getByLabelText("Kind")).toBe(
+      screen.getByRole("combobox", { name: /^kind$/i }),
+    );
+    const amount = screen.getByRole("spinbutton", { name: "Amount" });
+    expect(amount).toHaveAttribute("step", "0.01");
+    for (const label of [
+      "Merchant",
+      "Statement description",
+      "Source category",
+      "Notes",
+    ])
+      expect(screen.getAllByRole("textbox", { name: label })).toHaveLength(1);
+  });
+
   it("debounces Merchant changes, scopes by the new Vendor, and preserves selection", async () => {
     const loadVendorInference = vi.fn(async (merchant: string) =>
       merchant === "New Processor"

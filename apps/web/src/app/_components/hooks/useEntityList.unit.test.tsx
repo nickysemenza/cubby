@@ -55,6 +55,33 @@ afterEach(() => {
 });
 
 describe("useEntityList", () => {
+  it("accepts typed dialog and pagination search alongside list filters", async () => {
+    harness.dispose();
+    harness = createBrowserTestHarness({
+      initialPath: "/?create=true&pageIndex=2&search=Pantry",
+    });
+    await act(async () => {
+      await harness.loadRouter();
+    });
+    const { result } = renderHook(
+      () =>
+        useEntityList<TestRow, Record<string, never>>({
+          entity: "product",
+          queryOptions: listQueryOptions,
+          buildFilters: () => ({}),
+          columns: NO_COLUMNS,
+        }),
+      { wrapper: harness.routerWrapper },
+    );
+
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(harness.router.state.location.search).toMatchObject({
+      create: true,
+      pageIndex: 2,
+      search: "Pantry",
+    });
+  });
+
   it("renders every accumulated server row while retaining the server total", async () => {
     const { result } = renderHook(
       () =>

@@ -1,9 +1,9 @@
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
 import type { FC } from "react";
 
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { EntityBasicInfo } from "~/entities/entity-display";
 
 interface IngredientBasicInfoProps {
   ingredient: IngredientWithFoodOut;
@@ -14,26 +14,20 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
   ingredient,
   onEdit,
 }) => {
-  const fields: BasicInfoField[] = [
-    { label: "Name", value: ingredient.name },
-    {
-      label: "Aliases",
-      value:
-        ingredient.aliases.length > 0
-          ? ingredient.aliases.join(", ")
-          : undefined,
-    },
-    {
-      label: "Usually on hand",
-      value: ingredient.usuallyOnHand
-        ? "Yes — assumed covered for planning"
-        : "No",
-    },
-  ];
-
   return (
-    <BasicInfo
-      fields={fields}
+    <EntityBasicInfo
+      entity="ingredient"
+      record={ingredient}
+      overrides={{
+        aliases: (record) => ({
+          value: record.aliases.length ? record.aliases.join(", ") : undefined,
+        }),
+        usuallyOnHand: (record) => ({
+          value: record.usuallyOnHand
+            ? "Yes — assumed covered for planning"
+            : "No",
+        }),
+      }}
       actions={
         <Row gap="sm">
           <Button onClick={onEdit} variant="outline" size="sm">

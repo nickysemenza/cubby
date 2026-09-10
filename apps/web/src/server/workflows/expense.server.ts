@@ -1,5 +1,6 @@
 import {
   type expenseShortcode,
+  type PurchaseId,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -8,21 +9,36 @@ import {
   expenseFacetCountsInput,
   expenseFacetCountsOut,
   expenseFiltersSchema,
-  expenseMatchInput,
 } from "@cubby/schemas/project";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
   expenseAnalytics,
-  expenseAnalyze,
-  expenseFacetCounts,
   expenseList,
   expenseMonthlySummary,
   expenseTradeAffinity,
   getExpenseByID,
   matchExpenses,
 } from "~/server/repo/expense";
+import {
+  buildExpenseAnalysisGrid,
+  expenseAnalysisWhere,
+  includeSelectedExpenseFacetZeroOptions,
+  isExpenseScalarFacet,
+  loadExpenseAnalysisCauses,
+  loadExpenseAnalysisPeriod,
+  loadExpenseEntityFacetOptions,
+  loadExpenseFacetWhere,
+  loadExpenseOrderIdFacetOptions,
+  loadExpensePresenceFacetOptions,
+  loadExpenseScalarFacetOptions,
+  previousExpenseFilters,
+  readyExpenseAnalysisOutput,
+  selectedExpenseFacetValues,
+  type ExpenseFacetId,
+} from "~/server/repo/expense/analyze";
+import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import {
   getPurchaseExpenses,
   getPurchaseLinkIdentityByID,
@@ -32,38 +48,48 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
+import {
+  bindWorkflow,
+  defineWorkflowOperation,
+  executeWorkflow,
+  workflow,
+} from "~/server/workflow-runtime";
 
 export {
   expenseAnalyzeInput,
   expenseAnalyzeOut,
   expenseFacetCountsInput,
   expenseFacetCountsOut,
-  expenseFiltersSchema,
-  expenseMatchInput,
 };
 
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
 
-export const expenseChartDataWorkflow = async (
-  db: Database,
-  input: z.output<typeof expenseFiltersSchema>,
-) =>
-  (
-    await expenseList(
-      db,
+type ExpenseFilters = z.output<typeof expenseFiltersSchema>;
+
+const expenseChartDataDefinition = workflow<Database, ExpenseFilters>(
+  "expense.chartData",
+)
+  .call("list", ({ context }, { input }) =>
+    expenseList(
+      context,
       input,
       [{ orderBy: "date", direction: "asc" }],
       FETCH_ALL,
-    )
-  ).data;
-export const expenseAnalyticsWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseFiltersSchema>,
-) => expenseAnalytics(db, input);
-export const expenseMonthlySummaryWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseFiltersSchema>,
-) => expenseMonthlySummary(db, input);
+    ),
+  )
+  .output(({ list }) => list.data);
+export const expenseChartDataWorkflow = bindWorkflow(
+  expenseChartDataDefinition,
+  (db: Database, input: ExpenseFilters) => ({ context: db, input }),
+);
+export const expenseAnalyticsWorkflow = defineWorkflowOperation(
+  "expense.analytics",
+  expenseAnalytics,
+);
+export const expenseMonthlySummaryWorkflow = defineWorkflowOperation(
+  "expense.monthlySummary",
+  expenseMonthlySummary,
+);
 
 type TraceAttributes = Record<string, string | number | boolean | undefined>;
 export const expenseAnalyzeTraceAttributes = (
@@ -112,51 +138,265 @@ export const expenseFacetTraceAttributes = (
   } satisfies TraceAttributes;
 };
 
-export const expenseAnalyzeWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseAnalyzeInput>,
-) =>
-  withTrace(TraceNames.service("expense", "analyze"), async (span) => {
-    span.setAttributes(expenseAnalyzeTraceAttributes(input));
-    const result = await expenseAnalyze(db, input);
-    span.setAttributes(expenseAnalyzeTraceAttributes(input, result));
-    return result;
-  });
-export const expenseFacetCountsWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseFacetCountsInput>,
-) =>
-  withTrace(TraceNames.service("expense", "facetCounts"), async (span) => {
-    span.setAttributes(expenseFacetTraceAttributes(input));
-    const result = await expenseFacetCounts(db, input);
-    span.setAttributes(expenseFacetTraceAttributes(input, result));
-    return result;
-  });
-export const expenseTradeAffinityWorkflow = (db: Database) =>
-  expenseTradeAffinity(db);
-export const expenseMatchWorkflow = (
-  db: Database,
-  input: z.output<typeof expenseMatchInput>,
-) => matchExpenses(db, input);
+type ExpenseAnalyzeInput = z.output<typeof expenseAnalyzeInput>;
+type ExpenseFacetCountsInput = z.output<typeof expenseFacetCountsInput>;
 
-export const expenseChargeContextWorkflow = async (
-  db: Database,
-  input: z.output<typeof expenseShortcode>,
-) => {
-  const id = await resolveOrThrow(db, "expense", input);
-  const self = await getExpenseByID(db, id);
-  if (!self.purchaseId) return null;
-  const purchaseId = await resolveLiveShortcode(
-    db,
-    self.purchaseId,
-    "purchase",
-  );
-  if (!purchaseId) return null;
-  const purchaseUuid = parseEntityId("purchase", purchaseId);
-  const [purchase, lines] = await Promise.all([
-    getPurchaseLinkIdentityByID(db, purchaseUuid),
-    getPurchaseExpenses(db, purchaseUuid),
-  ]);
-  if (!purchase) return null;
-  return { purchase, siblings: lines.filter((row) => row.id !== input) };
+const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
+  "expense.analyze",
+)
+  .call("currentWhere", ({ context }, { input }) =>
+    buildExpenseWhereClause(context, input.filters),
+  )
+  .call("comparison", async (_, { input }) =>
+    input.comparison === "previousPeriod"
+      ? previousExpenseFilters(input.filters)
+      : null,
+  )
+  .call("previousWhere", ({ context }, { comparison }) =>
+    comparison
+      ? buildExpenseWhereClause(context, comparison.filters)
+      : Promise.resolve(undefined),
+  )
+  .parallel("periods", 2, {
+    current: ({ context }, { input, currentWhere }) =>
+      loadExpenseAnalysisPeriod(
+        context,
+        expenseAnalysisWhere(currentWhere, input),
+        currentWhere,
+        input.rowDimension,
+        input.columnDimension,
+      ),
+    previous: ({ context }, { input, comparison, previousWhere }) =>
+      comparison
+        ? loadExpenseAnalysisPeriod(
+            context,
+            expenseAnalysisWhere(previousWhere, input),
+            previousWhere,
+            input.rowDimension,
+            input.columnDimension,
+          )
+        : Promise.resolve(null),
+  })
+  .call("grid", async (_, { input, comparison, periods }) =>
+    buildExpenseAnalysisGrid(
+      periods.current,
+      periods.previous,
+      comparison,
+      input.columnDimension,
+    ),
+  )
+  .branch("withinGridLimits", {
+    when: async (_, { grid }) => grid.limitResult === null,
+    whenTrue: (branch) =>
+      branch
+        .parallel("causes", 2, {
+          current: ({ context }, { input }) =>
+            loadExpenseAnalysisCauses(context, input.input, input.currentWhere),
+          previous: ({ context }, { input }) =>
+            input.comparison
+              ? loadExpenseAnalysisCauses(
+                  context,
+                  input.input,
+                  input.previousWhere,
+                )
+              : Promise.resolve(null),
+        })
+        .output(({ input, causes }) =>
+          readyExpenseAnalysisOutput(
+            input.input,
+            input.comparison,
+            input.periods.current,
+            input.periods.previous,
+            input.grid,
+            causes.current,
+            causes.previous,
+          ),
+        ),
+    whenFalse: (branch) =>
+      branch.output(({ input }) => {
+        if (!input.grid.limitResult)
+          throw new Error("Limited expense analysis has no limit result");
+        return input.grid.limitResult;
+      }),
+  })
+  .output(({ withinGridLimits }) => withinGridLimits);
+
+export const expenseAnalyzeWorkflow = Object.assign(
+  (db: Database, input: ExpenseAnalyzeInput) =>
+    withTrace(TraceNames.service("expense", "analyze"), async (span) => {
+      span.setAttributes(expenseAnalyzeTraceAttributes(input));
+      const result = await executeWorkflow(expenseAnalyzeDefinition, {
+        context: db,
+        input,
+      });
+      span.setAttributes(expenseAnalyzeTraceAttributes(input, result));
+      return result;
+    }),
+  { definition: expenseAnalyzeDefinition },
+);
+
+type ExpenseFacetItemInput = {
+  filters: ExpenseFilters;
+  id: ExpenseFacetId;
 };
+
+const requireExpenseEntityFacet = (
+  id: ExpenseFacetId,
+): "project" | "vendor" => {
+  if (id === "project" || id === "vendor") return id;
+  throw new Error(`Expected entity facet, received ${id}`);
+};
+
+const expenseFacetItemDefinition = workflow<Database, ExpenseFacetItemInput>(
+  "expense.facetCounts.facet",
+)
+  .call("where", ({ context }, { input }) =>
+    loadExpenseFacetWhere(context, input.filters, input.id),
+  )
+  .branch("facetKind", {
+    when: async (_, { input }) => isExpenseScalarFacet(input.id),
+    whenTrue: (branch) =>
+      branch
+        .call("options", ({ context }, { input }) => {
+          if (!isExpenseScalarFacet(input.input.id))
+            throw new Error("Scalar facet branch received a non-scalar facet");
+          return loadExpenseScalarFacetOptions(
+            context,
+            input.where,
+            input.input.id,
+          );
+        })
+        .output(({ input, options }) => ({ id: input.input.id, options })),
+    whenFalse: (branch) =>
+      branch
+        .branch("entityFacet", {
+          when: async (_, { input }) =>
+            input.input.id === "project" || input.input.id === "vendor",
+          whenTrue: (entityBranch) =>
+            entityBranch
+              .parallel("options", 2, {
+                rows: ({ context }, { input }) =>
+                  loadExpenseEntityFacetOptions(
+                    context,
+                    input.input.where,
+                    requireExpenseEntityFacet(input.input.input.id),
+                  ),
+                presence: ({ context }, { input }) =>
+                  loadExpensePresenceFacetOptions(
+                    context,
+                    input.input.where,
+                    requireExpenseEntityFacet(input.input.input.id),
+                  ),
+              })
+              .output(({ input, options }) => ({
+                id: input.input.input.id,
+                options: [...options.presence, ...options.rows],
+              })),
+          whenFalse: (orderBranch) =>
+            orderBranch
+              .call("options", ({ context }, { input }) =>
+                loadExpenseOrderIdFacetOptions(context, input.input.where),
+              )
+              .output(({ input, options }) => ({
+                id: input.input.input.id,
+                options,
+              })),
+        })
+        .output(({ entityFacet }) => entityFacet),
+  })
+  .output(({ facetKind }) => facetKind);
+
+const expenseFacetCountsDefinition = workflow<
+  Database,
+  ExpenseFacetCountsInput
+>("expense.facetCounts")
+  .mapWorkflow("facets", {
+    items: ({ input }) =>
+      input.facetIds.map((id) => ({ filters: input.filters, id })),
+    concurrency: 9,
+    workflow: expenseFacetItemDefinition,
+  })
+  .output(({ input, facets }) => ({
+    facets: facets.map((facet) => ({
+      ...facet,
+      options: includeSelectedExpenseFacetZeroOptions(
+        facet.options,
+        selectedExpenseFacetValues(input.filters, facet.id),
+      ),
+    })),
+  }));
+
+export const expenseFacetCountsWorkflow = Object.assign(
+  (db: Database, input: ExpenseFacetCountsInput) =>
+    withTrace(TraceNames.service("expense", "facetCounts"), async (span) => {
+      span.setAttributes(expenseFacetTraceAttributes(input));
+      const result = await executeWorkflow(expenseFacetCountsDefinition, {
+        context: db,
+        input,
+      });
+      span.setAttributes(expenseFacetTraceAttributes(input, result));
+      return result;
+    }),
+  { definition: expenseFacetCountsDefinition },
+);
+export const expenseTradeAffinityWorkflow = defineWorkflowOperation(
+  "expense.tradeAffinity",
+  expenseTradeAffinity,
+);
+export const expenseMatchWorkflow = defineWorkflowOperation(
+  "expense.match",
+  matchExpenses,
+);
+
+type ChargeContextInput = z.output<typeof expenseShortcode>;
+const requirePurchase = (id: PurchaseId | null): PurchaseId => {
+  if (id === null)
+    throw new Error("Charge-context purchase branch received null");
+  return id;
+};
+
+export const expenseChargeContextWorkflow = bindWorkflow(
+  workflow<Database, ChargeContextInput>("expense.chargeContext")
+    .call("resolveExpense", ({ context }, { input }) =>
+      resolveOrThrow(context, "expense", input),
+    )
+    .call("loadExpense", ({ context }, { resolveExpense }) =>
+      getExpenseByID(context, resolveExpense),
+    )
+    .call("resolvePurchase", async ({ context }, { loadExpense }) => {
+      if (!loadExpense.purchaseId) return null;
+      const id = await resolveLiveShortcode(
+        context,
+        loadExpense.purchaseId,
+        "purchase",
+      );
+      return id === null ? null : parseEntityId("purchase", id);
+    })
+    .branch("purchaseAvailable", {
+      when: async (_, { resolvePurchase }) => resolvePurchase !== null,
+      whenTrue: (branch) =>
+        branch
+          .parallel("chargeReads", 2, {
+            purchase: ({ context }, { input: { resolvePurchase } }) =>
+              getPurchaseLinkIdentityByID(
+                context,
+                requirePurchase(resolvePurchase),
+              ),
+            lines: ({ context }, { input: { resolvePurchase } }) =>
+              getPurchaseExpenses(context, requirePurchase(resolvePurchase)),
+          })
+          .output(({ input, chargeReads }) =>
+            chargeReads.purchase
+              ? {
+                  purchase: chargeReads.purchase,
+                  siblings: chargeReads.lines.filter(
+                    (row) => row.id !== input.input,
+                  ),
+                }
+              : null,
+          ),
+      whenFalse: (branch) => branch.output(() => null),
+    })
+    .output(({ purchaseAvailable }) => purchaseAvailable),
+  (db: Database, input: ChargeContextInput) => ({ context: db, input }),
+);

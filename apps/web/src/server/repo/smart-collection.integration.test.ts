@@ -9,6 +9,12 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { expense, inventoryEntry, location, product } from "~/server/db/schema";
+import {
+  createCollection,
+  listCollectionSummaries,
+  readCollectionDetail,
+  setCollectionMembership,
+} from "~/server/workflows/collection";
 
 import { getSmartCollectionDetail, listSmartCollections } from "./collection";
 import { getDb } from "./database-helpers";
@@ -276,5 +282,57 @@ describe("smart Collection live relationships", () => {
       .where(eq(expense.id, line.entityId));
     expect((await detail(rule)).totalCount).toBe(0);
     expect((await detail(combined)).totalCount).toBe(1);
+  });
+});
+
+describe("collection workflow persistence", () => {
+  const ctx = withTestDb();
+
+  it("creates, reads, unassigns, and reassigns a product collection", async () => {
+    const fixture = await createProductFixture(
+      ctx.db,
+      makeProductInput({ tags: ["example-tag"] }),
+      ctx.actor,
+    );
+    const workflowContext = { db: ctx.db, actorContext: ctx.actor };
+    const subject = { subject: "product" as const, id: fixture.id };
+    const recordedTags = async () =>
+      (
+        await getDb(ctx.db).query.product.findFirst({
+          where: eq(product.id, fixture.entityId),
+          columns: { tags: true },
+        })
+      )?.tags;
+    await createCollection(workflowContext, {
+      ...subject,
+      collection: "workflow-check",
+    });
+    const detail = await readCollectionDetail(workflowContext, {
+      collection: "workflow-check",
+      pagination: { pageIndex: 0, pageSize: 25 },
+    });
+    expect(detail.collection.slug).toBe("workflow-check");
+    expect(
+      (await listCollectionSummaries(workflowContext)).some(
+        (item) => item.slug === "workflow-check",
+      ),
+    ).toBe(true);
+    expect(await recordedTags()).toEqual(
+      expect.arrayContaining(["example-tag", "collection:workflow-check"]),
+    );
+    await setCollectionMembership(workflowContext, {
+      ...subject,
+      collection: "workflow-check",
+      assigned: false,
+    });
+    expect(await recordedTags()).toEqual(["example-tag"]);
+    await setCollectionMembership(workflowContext, {
+      ...subject,
+      collection: "workflow-check",
+      assigned: true,
+    });
+    expect(await recordedTags()).toEqual(
+      expect.arrayContaining(["example-tag", "collection:workflow-check"]),
+    );
   });
 });

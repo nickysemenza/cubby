@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { isSyntheticOrderId, purchaseOrderUrl } from "./vendor";
+import {
+  isSyntheticOrderId,
+  purchaseOrderUrl,
+  vendorFiltersSchema,
+} from "./vendor";
+
+it("keeps purchase-count filters nonnegative while allowing signed spend", () => {
+  expect(vendorFiltersSchema.safeParse({ purchaseCountMin: -1 }).success).toBe(
+    false,
+  );
+  expect(vendorFiltersSchema.safeParse({ purchaseCountMax: 1.5 }).success).toBe(
+    false,
+  );
+  expect(
+    vendorFiltersSchema.parse({ purchaseCountMin: 0, spendMin: -50 }),
+  ).toMatchObject({
+    purchaseCountMin: 0,
+    spendMin: -50,
+  });
+});
 
 const AMAZON =
   "https://www.amazon.com/gp/your-account/order-details?orderID={orderId}";

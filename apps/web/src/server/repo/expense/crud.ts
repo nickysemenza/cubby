@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type {
@@ -50,6 +51,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import { patchEntityRows } from "~/server/repo/entity-patch";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
 import {
   assertExplicitSourceClaimsForAmountChange,
@@ -212,9 +214,7 @@ export const updateExpensesInBulk = async (
     const auditEntries: AuditEntryInput[] = [];
     for (const row of before) {
       const changes = computeChanges(row, { ...row, ...values }, [
-        "projectId",
-        "trade",
-        "costType",
+        ...entityFieldModels.expense.bulk,
       ]);
       if (changes) {
         auditEntries.push({
@@ -267,22 +267,7 @@ const expenseCrud = createEntityCrud({
       productQuantity: data.productQuantity,
       purchaseId: data.purchaseId,
     }),
-  auditUpdateFields: [
-    "name",
-    "cost",
-    "date",
-    "lineKind",
-    "lineBasis",
-    "costType",
-    "trade",
-    "url",
-    "notes",
-    "future",
-    "projectId",
-    "productId",
-    "productQuantity",
-    "purchaseId",
-  ],
+  auditUpdateFields: [...entityFieldModels.expense.audit],
 });
 
 export const getExpenseByID = expenseCrud.getByID;
@@ -981,32 +966,22 @@ export const setExpensesTrade = async (
 
   const updatedIds = await withTransaction(db, async (tx) => {
     const ids = await resolveLiveExpenseIds(tx, input.ids);
-    const before = await tx.query.expense.findMany({
-      where: and(inArray(expense.id, ids), notDeleted(expense)),
-      columns: { id: true, trade: true },
-    });
-    if (before.length === 0) return [];
+    if (ids.length === 0) return [];
 
-    await tx
-      .update(expense)
-      .set({ trade })
-      .where(and(inArray(expense.id, ids), notDeleted(expense)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, trade }, ["trade"]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "expense",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
+    await patchEntityRows(
+      tx,
+      actor,
+      {
+        entity: "expense",
+        table: expense,
+        fields: entityFieldModels.expense.bulk,
+      },
+      ids,
+      { trade },
+    );
+    // Preserve the convenience setter's all-live-selection result even when
+    // patchEntityRows finds no changed rows.
+    return ids;
   });
 
   return getExpensesByIDs(db, updatedIds);
@@ -1021,34 +996,22 @@ export const setExpensesCostType = async (
 
   const updatedIds = await withTransaction(db, async (tx) => {
     const ids = await resolveLiveExpenseIds(tx, input.ids);
-    const before = await tx.query.expense.findMany({
-      where: and(inArray(expense.id, ids), notDeleted(expense)),
-      columns: { id: true, costType: true },
-    });
-    if (before.length === 0) return [];
+    if (ids.length === 0) return [];
 
-    await tx
-      .update(expense)
-      .set({ costType })
-      .where(and(inArray(expense.id, ids), notDeleted(expense)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, costType }, [
-        "costType",
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "expense",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
+    await patchEntityRows(
+      tx,
+      actor,
+      {
+        entity: "expense",
+        table: expense,
+        fields: entityFieldModels.expense.bulk,
+      },
+      ids,
+      { costType },
+    );
+    // Preserve the convenience setter's all-live-selection result even when
+    // patchEntityRows finds no changed rows.
+    return ids;
   });
 
   return getExpensesByIDs(db, updatedIds);

@@ -20,6 +20,11 @@ import {
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
+import {
+  bindWorkflow,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
 export type LocationWorkflowContext = {
   db: Database;
@@ -38,56 +43,85 @@ const rosterFilters = (filters: z.infer<typeof locationFiltersSchema>) => ({
   productPresenceFilter: filters.productPresenceFilter,
 });
 
-export const locationSearchWorkflow = async (
-  ctx: LocationWorkflowContext,
-  input: {
-    filters: z.input<typeof locationFiltersSchema>;
-    sort: { orderBy: string; direction: "asc" | "desc" };
-    pagination: { pageIndex: number; pageSize: number };
-  },
-) =>
-  await locationSearch(
-    ctx.db,
-    rosterFilters(locationFiltersSchema.parse(input.filters)),
-    [input.sort],
-    input.pagination,
-  );
+export const locationSearchWorkflow = defineWorkflowOperation(
+  "location.search",
+  async (
+    ctx: LocationWorkflowContext,
+    input: {
+      filters: z.input<typeof locationFiltersSchema>;
+      sort: { orderBy: string; direction: "asc" | "desc" };
+      pagination: { pageIndex: number; pageSize: number };
+    },
+  ) =>
+    locationSearch(
+      ctx.db,
+      rosterFilters(locationFiltersSchema.parse(input.filters)),
+      [input.sort],
+      input.pagination,
+    ),
+);
 
-export const makeTreeWorkflow = async (ctx: LocationWorkflowContext) =>
-  await buildLocationTree(ctx.db);
-export const valuationSummaryWorkflow = async (ctx: LocationWorkflowContext) =>
-  getLocationValuationSummary(ctx.db);
-export const subtreeWorkflow = async (
-  ctx: LocationWorkflowContext,
-  input: { shortcode: string },
-) =>
-  await buildLocationTree(
-    ctx.db,
-    await shortcodes.one(ctx.db, input.shortcode),
-  );
-export const inventoryBreakdownWorkflow = async (
-  ctx: LocationWorkflowContext,
-  input: { shortcode: string },
-) =>
-  getLocationInventoryBreakdown(
-    ctx.db,
-    await shortcodes.one(ctx.db, input.shortcode),
-  );
-export const parentOptionsWorkflow = async (ctx: LocationWorkflowContext) =>
-  locationParentOptions(ctx.db);
+export const makeTreeWorkflow = defineWorkflowOperation(
+  "location.makeTree",
+  async (ctx: LocationWorkflowContext) => buildLocationTree(ctx.db),
+);
+export const valuationSummaryWorkflow = defineWorkflowOperation(
+  "location.valuationSummary",
+  async (ctx: LocationWorkflowContext) => getLocationValuationSummary(ctx.db),
+);
+export const subtreeWorkflow = bindWorkflow(
+  workflow<LocationWorkflowContext, { shortcode: string }>("location.subtree")
+    .call("resolve", async ({ context }, { input }) =>
+      shortcodes.one(context.db, input.shortcode),
+    )
+    .call("read", async ({ context }, { resolve }) =>
+      buildLocationTree(context.db, resolve),
+    )
+    .output(({ read }) => read),
+  (context: LocationWorkflowContext, input: { shortcode: string }) => ({
+    context,
+    input,
+  }),
+);
+export const inventoryBreakdownWorkflow = bindWorkflow(
+  workflow<LocationWorkflowContext, { shortcode: string }>(
+    "location.inventoryBreakdown",
+  )
+    .call("resolve", async ({ context }, { input }) =>
+      shortcodes.one(context.db, input.shortcode),
+    )
+    .call("read", async ({ context }, { resolve }) =>
+      getLocationInventoryBreakdown(context.db, resolve),
+    )
+    .output(({ read }) => read),
+  (context: LocationWorkflowContext, input: { shortcode: string }) => ({
+    context,
+    input,
+  }),
+);
+export const parentOptionsWorkflow = defineWorkflowOperation(
+  "location.parentOptions",
+  async (ctx: LocationWorkflowContext) => locationParentOptions(ctx.db),
+);
 
-export const ensureGlobalUnknownWorkflow = async (
-  ctx: LocationWorkflowContext,
-) => {
-  const location = await ensureGlobalUnknownLocation(ctx.db, ctx.actorContext);
-  const entityId = await shortcodes.one(ctx.db, location.id);
-  await runMutationSideEffects(ctx.db, {
-    action: "updated",
-    entity: { entity: "location", id: entityId },
-    source: "location.ensureGlobalUnknown",
-  });
-  return location;
-};
+export const ensureGlobalUnknownWorkflow = bindWorkflow(
+  workflow<LocationWorkflowContext, undefined>("location.ensureGlobalUnknown")
+    .commit("location", async ({ context }) =>
+      ensureGlobalUnknownLocation(context.db, context.actorContext),
+    )
+    .effect("entityId", async ({ context }, { location }) =>
+      shortcodes.one(context.db, location.id),
+    )
+    .effect("effects", async ({ context }, { entityId }) =>
+      runMutationSideEffects(context.db, {
+        action: "updated",
+        entity: { entity: "location", id: entityId },
+        source: "location.ensureGlobalUnknown",
+      }),
+    )
+    .output(({ location }) => location),
+  (context: LocationWorkflowContext) => ({ context, input: undefined }),
+);
 
 /**
  * Kept alongside the kernel's `location.bulkUpdate`: the arrange surface, the
@@ -95,31 +129,48 @@ export const ensureGlobalUnknownWorkflow = async (
  * three share {@link reparentLocationsInBulk} with the kernel path. Its `ids`
  * bound is 3000, where the kernel's shared id schema caps at 500.
  */
-export const bulkUpdateParentWorkflow = async (
-  ctx: LocationWorkflowContext,
-  input: z.input<typeof locationBulkUpdateParentInput>,
-) => {
-  const values = locationBulkUpdateParentInput.parse(input);
-  const { updated } = await reparentLocationsInBulk(
-    ctx.db,
-    ctx.actorContext,
-    values.ids,
-    values.parentId ?? null,
-  );
-  return { updated };
-};
+export const bulkUpdateParentWorkflow = bindWorkflow(
+  workflow<
+    LocationWorkflowContext,
+    z.input<typeof locationBulkUpdateParentInput>
+  >("location.bulkUpdateParent")
+    .call("values", async (_, { input }) =>
+      locationBulkUpdateParentInput.parse(input),
+    )
+    .commit("reparent", async ({ context }, { values }) =>
+      reparentLocationsInBulk(
+        context.db,
+        context.actorContext,
+        values.ids,
+        values.parentId ?? null,
+      ),
+    )
+    .output(({ reparent }) => ({ updated: reparent.updated })),
+  (
+    context: LocationWorkflowContext,
+    input: z.input<typeof locationBulkUpdateParentInput>,
+  ) => ({ context, input }),
+);
 
-export const getByShortcodesWorkflow = async (
-  ctx: LocationWorkflowContext,
-  input: z.input<typeof locationShortcodesInput>,
-) =>
-  getLocationsByShortcodes(
-    ctx.db,
-    locationShortcodesInput.parse(input).shortcodes,
-  );
-export const recomputeValuationsWorkflow = async (
-  ctx: LocationWorkflowContext,
-) => ({ updated: await ctx.services.locationValuation.recompute() });
+export const getByShortcodesWorkflow = defineWorkflowOperation(
+  "location.getByShortcodes",
+  async (
+    ctx: LocationWorkflowContext,
+    input: z.input<typeof locationShortcodesInput>,
+  ) =>
+    getLocationsByShortcodes(
+      ctx.db,
+      locationShortcodesInput.parse(input).shortcodes,
+    ),
+);
+export const recomputeValuationsWorkflow = bindWorkflow(
+  workflow<LocationWorkflowContext, undefined>("location.recomputeValuations")
+    .commit("updated", async ({ context }) =>
+      context.services.locationValuation.recompute(),
+    )
+    .output(({ updated }) => ({ updated })),
+  (context: LocationWorkflowContext) => ({ context, input: undefined }),
+);
 
 export {
   locationBulkUpdateParentInput,

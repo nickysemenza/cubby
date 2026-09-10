@@ -9,7 +9,7 @@ import {
   timestampedFields,
 } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
-import { amount, positiveAmount } from "./codec";
+import { positiveAmount } from "./codec";
 import { externalIdOut, gtin } from "./external-id";
 import { moneyNullable } from "./money";
 import { imageOut } from "./image";
@@ -29,6 +29,8 @@ import {
   oneOrMany,
 } from "./pagination";
 import { unitMappingOut } from "./unitmapping";
+import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
+import { generatedInventoryItemFieldSchemas } from "./generated/entity-field-schemas.inventory.gen";
 
 export { positiveAmount } from "./codec";
 
@@ -49,7 +51,8 @@ export { positiveAmount } from "./codec";
  */
 export { inventoryPlacementValues } from "@cubby/shared";
 export type { InventoryPlacement } from "@cubby/shared";
-export const inventoryPlacement = z.enum(inventoryPlacementValues);
+export const inventoryPlacement = cycleSafeInventoryPlacement;
+export { inventoryValuation } from "./inventory-fields";
 
 /**
  * Tri-state, and explicitly NOT `inventoryPlacement.optional()`.
@@ -127,20 +130,7 @@ export const inventorySortableFields = [
 export type InventorySortField = (typeof inventorySortableFields)[number];
 
 export const inventoryEntryFields = {
-  id: inventoryShortcode,
-  // inventory entries do not have a name, just ID
-  amount: amount.describe("Quantity on hand"),
-  valuation: moneyNullable.describe(
-    "Precomputed value: amount × product price",
-  ),
-  verifiedAt: z
-    .date()
-    .nullable()
-    .describe("When last verified in an audit session (null = never)"),
-  placement: inventoryPlacement.describe(
-    "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
-  ),
-  ...timestampedFields,
+  ...generatedInventoryItemFieldSchemas.read,
 };
 
 export const inventoryEntryOut = z.object(inventoryEntryFields);
@@ -255,16 +245,9 @@ export const inventoryCountsByLocationOut = z.record(
   z.number().int().nonnegative(),
 );
 
-export const inventoryUpdatePayloadData = z.object({
-  amount: positiveAmount.optional(),
-  productId: productShortcode.optional(),
-  locationId: locationShortcode.optional(),
-  placement: inventoryPlacement
-    .optional()
-    .describe(
-      "Flip between movable stock and a fixed installation. Installing something does not move it — the row keeps its location, it just stops being counted.",
-    ),
-});
+export const inventoryUpdatePayloadData = z.object(
+  generatedInventoryItemFieldSchemas.update,
+);
 
 export const inventoryUpdateInput = z.object({
   id: inventoryShortcode,
@@ -273,14 +256,9 @@ export const inventoryUpdateInput = z.object({
 
 export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 
-export const inventoryCreatePayloadData = z.object({
-  productId: productShortcode,
-  locationId: locationShortcode,
-  amount: positiveAmount,
-  placement: inventoryPlacement
-    .optional()
-    .describe("Defaults to 'stock'; pass 'installed' for a fixed fixture."),
-});
+export const inventoryCreatePayloadData = z.object(
+  generatedInventoryItemFieldSchemas.create,
+);
 
 const inventoryBulkOperationItem = z.object({
   id: inventoryShortcode.optional(),

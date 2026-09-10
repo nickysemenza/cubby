@@ -1,20 +1,12 @@
 import { z } from "zod";
 import { inventoryPlacementValues, locationTypeValues } from "@cubby/shared";
 import { amount } from "./codec";
-import {
-  expenseLineBasisSchema,
-  expenseLineKindSchema,
-} from "./expense-line-kind";
 import { financialReconciliationSummary } from "./financial-reconciliation";
-import { imageUrlSummary } from "./image-summary";
-import { ledgerAttributions } from "./ledger-party";
-import { ledgerSourceClaimOut, ledgerSourceClaims } from "./ledger-transfer";
 import {
   money,
   moneyNullable,
   positiveMoney,
   positiveMoneyNullable,
-  wholeCentAmount,
 } from "./money";
 import {
   expenseRelatedFilterFields,
@@ -25,12 +17,26 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   auditDateFilterFields,
   dateRangeFields,
-  deriveUpdateData,
   numericRangeFields,
   plainDate,
   timestampedFields,
 } from "./base-entity";
 import { relationMutationOut } from "./common";
+import {
+  generatedTaskFieldSchemas,
+  generatedTaskFilterFields,
+} from "./generated/entity-field-schemas.task.gen";
+import {
+  generatedExpenseFieldSchemas,
+  generatedExpenseFilterFields,
+} from "./generated/entity-field-schemas.expense.gen";
+import {
+  generatedProjectFieldSchemas,
+  generatedProjectFilterFields,
+} from "./generated/entity-field-schemas.project.gen";
+import { projectKindSchema, projectStatusSchema } from "./project-fields";
+import { taskStatusSchema, tradeSchema } from "./task-fields";
+import type { Trade } from "./task-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 import {
   anyShortcodeSchema,
@@ -62,71 +68,9 @@ export {
 
 export { plainDate } from "./base-entity";
 
-/**
- * Parse a complete provider URL without canonicalizing it. URL is used only
- * for validation; the original trimmed string is what the schema returns, so
- * pasted sharing query params/fragments survive unchanged.
- */
-function isProviderUrl(value: string, matches: (url: URL) => boolean): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && matches(url);
-  } catch {
-    return false;
-  }
-}
-
-const googleDriveFolderUrl = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value))
-  .nullable()
-  .refine(
-    (value) =>
-      value === null ||
-      isProviderUrl(
-        value,
-        (url) =>
-          url.hostname === "drive.google.com" &&
-          /^\/drive\/(?:u\/\d+\/)?folders\/[^/]+\/?$/.test(url.pathname),
-      ),
-    "Enter a valid Google Drive folder URL",
-  )
-  .describe(
-    "Complete HTTPS drive.google.com folder URL; empty input clears the field",
-  );
-
-const notionPageUrl = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value))
-  .nullable()
-  .refine(
-    (value) =>
-      value === null ||
-      isProviderUrl(value, (url) => {
-        const notionHost =
-          url.hostname === "notion.so" ||
-          url.hostname.endsWith(".notion.so") ||
-          url.hostname === "notion.site" ||
-          url.hostname.endsWith(".notion.site") ||
-          url.hostname === "app.notion.com";
-        return notionHost && url.pathname.split("/").some(Boolean);
-      }),
-    "Enter a valid Notion page URL",
-  )
-  .describe(
-    "Complete HTTPS notion.so/notion.site page URL (including subdomains) or app.notion.com page URL; empty input clears the field",
-  );
-
-export const projectStatusValues = [
-  "planning",
-  "not_started",
-  "in_progress",
-  "done",
-] as const;
-export const projectStatusSchema = z.enum(projectStatusValues);
-export type ProjectStatus = z.infer<typeof projectStatusSchema>;
+export { projectStatusSchema, projectStatusValues } from "./project-fields";
+export type { ProjectStatus } from "./project-fields";
+import type { ProjectStatus } from "./project-fields";
 
 /**
  * The "live" (not-done) statuses — spelled out rather than derived from
@@ -144,58 +88,22 @@ export const LIVE_PROJECT_STATUSES = [
 export const isLiveProjectStatus = (status: ProjectStatus): boolean =>
   new Set<ProjectStatus>(LIVE_PROJECT_STATUSES).has(status);
 
-export const projectKindValues = [
-  "furniture",
-  "workshop",
-  "household",
-  "renovation",
-  "garden",
-  "trip",
-] as const;
-export const projectKindSchema = z.enum(projectKindValues);
-export type ProjectKind = z.infer<typeof projectKindSchema>;
+export { projectKindSchema, projectKindValues } from "./project-fields";
+export type { ProjectKind } from "./project-fields";
 
-export const taskStatusValues = [
-  "not_started",
-  "later",
-  "in_progress",
-  "blocked",
-  "done",
-] as const;
-export const taskStatusSchema = z.enum(taskStatusValues);
-export type TaskStatus = z.infer<typeof taskStatusSchema>;
+export { taskStatusSchema, taskStatusValues } from "./task-fields";
+export type { TaskStatus } from "./task-fields";
 
 export const taskCompletionValues = ["all", "open", "done"] as const;
 export const taskCompletionSchema = z.enum(taskCompletionValues);
 export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
 
-export const costTypeValues = ["materials", "tools", "services"] as const;
-export const costTypeSchema = z.enum(costTypeValues);
-export type CostType = z.infer<typeof costTypeSchema>;
+import { costTypeSchema } from "./expense-fields";
+export { costTypeValues, costTypeSchema } from "./expense-fields";
+export type { CostType } from "./expense-fields";
 
-export const tradeValues = [
-  "planning",
-  "demolition",
-  "building",
-  "drywall",
-  "electrical",
-  "plumbing",
-  "mechanical",
-  "cabinetry",
-  "countertop",
-  "flooring",
-  "millwork",
-  "finishes",
-  "appliances",
-  "landscaping",
-  "logistics",
-  "metalworking",
-  "crafts",
-  "auto",
-  "other",
-] as const;
-export const tradeSchema = z.enum(tradeValues);
-export type Trade = z.infer<typeof tradeSchema>;
+export { tradeSchema, tradeValues } from "./task-fields";
+export type { Trade } from "./task-fields";
 
 export const TRADE_LABELS = {
   planning: "Planning",
@@ -237,47 +145,7 @@ export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
  */
 export const MAX_PROJECT_TREE_DEPTH = 100;
 
-const projectFields = {
-  name: z.string().min(1),
-  status: projectStatusSchema,
-  kind: projectKindSchema.nullable(),
-  locations: z.array(z.string()).describe("House/site names, free-form"),
-  costEstimate: positiveMoneyNullable.describe("Budget estimate in dollars"),
-  // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
-  // is its budget envelope; expenses/tasks attribute to it via their
-  // existing `projectId`. Cycle/self-parent guards live in
-  // repo/project/crud.ts (depth is otherwise unrestricted).
-  parentProjectId: projectShortcode.nullable(),
-  // Manual OVERRIDES on the derived window, not the window itself. A project's
-  // dates are normally rolled up from its own tasks/expenses plus every live
-  // sub-project's effective window (see `projectDateWindow`); these two columns
-  // only take over when explicitly set — for a project with no content yet, or
-  // a deliberate plan wider than what's been recorded. Read
-  // `dates.effectiveStart` / `dates.effectiveEnd`, never these, when rendering.
-  startDate: plainDate
-    .nullable()
-    .describe("Manual start override; usually null"),
-  endDate: plainDate.nullable().describe("Manual end override; usually null"),
-  icon: z.string().nullable().describe("Emoji shown next to the name"),
-  notes: z.string().nullable().describe("Freeform markdown"),
-  googleDriveFolderUrl,
-  notionPageUrl,
-};
-
-const projectCreateFields = {
-  ...projectFields,
-  status: projectStatusSchema.default("planning"),
-  kind: projectKindSchema.nullable().default(null),
-  locations: z.array(z.string()).default([]),
-  costEstimate: positiveMoneyNullable.default(null),
-  parentProjectId: projectShortcode.nullable().default(null),
-  startDate: plainDate.nullable().default(null),
-  endDate: plainDate.nullable().default(null),
-  icon: z.string().nullable().default(null),
-  notes: z.string().nullable().default(null),
-  googleDriveFolderUrl: googleDriveFolderUrl.default(null),
-  notionPageUrl: notionPageUrl.default(null),
-};
+const projectCreateFields = generatedProjectFieldSchemas.create;
 
 export const projectCreateInput = z.object(projectCreateFields);
 export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
@@ -285,14 +153,7 @@ export type ProjectCreateInput = z.infer<typeof projectCreateInput>;
 // Every create field optional, with the create-time `.default(...)` stripped
 // (see deriveUpdateData — an omitted key must leave the row unchanged, not
 // reset to the default); `blockedByIds` is update-only.
-export const projectUpdateData = deriveUpdateData(projectCreateFields, {
-  extend: {
-    blockedByIds: z
-      .array(projectShortcode)
-      .optional()
-      .describe("Full replacement set of blocking-project ids"),
-  },
-});
+export const projectUpdateData = z.object(generatedProjectFieldSchemas.update);
 export type ProjectUpdateData = z.infer<typeof projectUpdateData>;
 export const projectUpdateInput = z.object({
   id: projectShortcode,
@@ -327,12 +188,7 @@ export type EmbeddedProjectScope = z.infer<typeof embeddedProjectScopeSchema>;
 export const projectFilterFields = {
   ...auditDateFilterFields,
   ...projectRelatedFilterFields,
-  status: oneOrMany(projectStatusSchema).optional(),
-  kind: oneOrMany(projectKindSchema).optional(),
-  location: oneOrMany(z.string())
-    .optional()
-    .describe("Any exact match against locations[]"),
-  search: z.string().optional(),
+  ...generatedProjectFilterFields,
   ...dateRangeFields("date"),
   completionYear,
   parentProjectPresenceFilter: presenceFilter,
@@ -411,15 +267,7 @@ export const projectRollup = z.object({
 export type ProjectRollup = z.infer<typeof projectRollup>;
 
 export const projectOut = z.object({
-  id: projectShortcode,
-  ...projectFields,
-  parentProjectName: z.string().nullable(),
-  childProjectIds: z.array(projectShortcode),
-  blockedByIds: z.array(projectShortcode),
-  blockingIds: z.array(projectShortcode),
-  ...timestampedFields,
-  rollup: projectRollup,
-  dates: projectDateWindow,
+  ...generatedProjectFieldSchemas.read,
 });
 export type ProjectOut = z.infer<typeof projectOut>;
 
@@ -432,48 +280,14 @@ export const projectTreeOut = createPaginatedResponseSchemaWithContext(
   "project",
 );
 
-const taskFields = {
-  name: z.string().min(1),
-  status: taskStatusSchema,
-  projectId: projectShortcode.nullable(),
-  subjectProductId: productShortcode.nullable(),
-  // One level of checklist subtasks — a subtask's own parentTaskId must be
-  // null (enforced in repo/task/crud.ts). Parent status stays fully manual;
-  // an all-done checklist never auto-completes it.
-  parentTaskId: taskShortcode.nullable(),
-  dueDate: plainDate.nullable(),
-  dueEndDate: plainDate.nullable().describe("End of a due-date range"),
-  trade: tradeSchema,
-  // Board-only manual priority within a cell (drag-to-prioritize). Null =
-  // unranked (derived dueDate/name order); ranked cards sort ahead by
-  // ascending sortOrder. Never a table sort field — see taskSortableFields.
-  sortOrder: z.number().nullable(),
-};
-
-const taskCreateFields = {
-  ...taskFields,
-  status: taskStatusSchema.default("not_started"),
-  projectId: projectShortcode.nullable().default(null),
-  subjectProductId: productShortcode.nullable().default(null),
-  parentTaskId: taskShortcode.nullable().default(null),
-  dueDate: plainDate.nullable().default(null),
-  dueEndDate: plainDate.nullable().default(null),
-  sortOrder: z.number().nullable().default(null),
-};
+const taskCreateFields = generatedTaskFieldSchemas.create;
 
 export const taskCreateInput = z.object(taskCreateFields);
 export type TaskCreateInput = z.infer<typeof taskCreateInput>;
 
 // Every create field optional, with the create-time `.default(...)` stripped
 // (see deriveUpdateData); `blockedByIds` is update-only.
-export const taskUpdateData = deriveUpdateData(taskCreateFields, {
-  extend: {
-    blockedByIds: z
-      .array(taskShortcode)
-      .optional()
-      .describe("Full replacement set of blocking-task ids"),
-  },
-});
+export const taskUpdateData = z.object(generatedTaskFieldSchemas.update);
 export type TaskUpdateData = z.infer<typeof taskUpdateData>;
 export const taskUpdateInput = z.object({
   id: taskShortcode,
@@ -533,11 +347,9 @@ export type TaskBulkReorderInput = z.infer<typeof taskBulkReorderInput>;
 export const taskFilterFields = {
   ...auditDateFilterFields,
   ...taskRelatedFilterFields,
-  status: oneOrMany(taskStatusSchema).optional(),
+  ...generatedTaskFilterFields,
   projectId: entityFilterList(projectShortcode).optional(),
   subjectProductId: entityFilterList(productShortcode).optional(),
-  trade: oneOrMany(tradeSchema).optional(),
-  search: z.string().optional(),
   topLevelOnly: z.boolean().optional(),
   /** Only these parents' live subtasks. */
   parentTaskId: entityFilterList(taskShortcode).optional(),
@@ -570,18 +382,7 @@ export const taskSortableFields = [
 export type TaskSortField = (typeof taskSortableFields)[number];
 
 export const taskOut = z.object({
-  id: taskShortcode,
-  ...taskFields,
-  projectName: z.string().nullable(),
-  /** Null when there is no subject product, or it is gone/soft-deleted. */
-  subjectProductName: z.string().nullable(),
-  /** Null when the task has no parent, or the parent is gone/soft-deleted. */
-  parentTaskName: z.string().nullable(),
-  blockedByIds: z.array(taskShortcode),
-  blockingIds: z.array(taskShortcode),
-  subtaskCount: z.number().int(),
-  doneSubtaskCount: z.number().int(),
-  ...timestampedFields,
+  ...generatedTaskFieldSchemas.read,
 });
 export type TaskOut = z.infer<typeof taskOut>;
 
@@ -631,12 +432,7 @@ export const blockedReasonSchema = z.object({
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 
 export const actionableTaskOut = z.object({
-  id: taskShortcode,
-  ...taskFields,
-  projectName: z.string().nullable(),
-  subjectProductName: z.string().nullable(),
-  blockedByIds: z.array(taskShortcode),
-  blockingIds: z.array(taskShortcode),
+  ...generatedTaskFieldSchemas.read,
   // Re-declares taskOut's shape rather than extending it (see taskOut) — kept
   // in sync by hand. Actionable/blocked rows are always top-level (subtask
   // rows are excluded — see repo/task/actionable.ts), so these count the
@@ -710,94 +506,12 @@ export const taskTimelineOut = z.object({
 });
 export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
 
-/**
- * The one place the signed-quantity rule is spelled out for callers. MCP
- * advertises this string verbatim, so an agent has no other way to learn that a
- * $0 line carries its direction in the sign — keep it explicit.
- */
-export const PRODUCT_QUANTITY_DESCRIPTION =
-  'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.';
+export { PRODUCT_QUANTITY_DESCRIPTION } from "./expense-fields";
 
-/**
- * Product units — signed, fractional, and zero only where the cost is negative.
- * Fractional because the unit is the shelf's unit and `InventoryEntry.amount`
- * has always been divisible; see `Expense.productQuantity` in schema.ts. See
- * `Expense.productQuantity` in schema.ts for the full ledger rule; the DB CHECK
- * enforces the same pairing. The cross-field half cannot live on this schema
- * (it has no view of `cost`), so `assertQuantitySignMatchesCost` owns it and is
- * what every write path actually calls — this only rejects the value that is
- * wrong regardless of cost.
- */
-const signedProductQuantity = z.number();
-
-const expenseFields = {
-  name: z.string().min(1),
-  cost: wholeCentAmount.nullable().describe("Dollars"),
-  date: plainDate,
-  lineKind: expenseLineKindSchema.describe(
-    "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
-  ),
-  lineBasis: expenseLineBasisSchema.describe(
-    "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
-  ),
-  costType: costTypeSchema,
-  trade: tradeSchema,
-  url: z.string().nullable(),
-  notes: z.string().nullable(),
-  future: z.boolean().describe("Planned/not-yet-made expense"),
-  projectId: projectShortcode.nullable(),
-  productId: productShortcode
-    .nullable()
-    .describe(
-      "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
-    ),
-  productQuantity: signedProductQuantity
-    .nullable()
-    .describe(PRODUCT_QUANTITY_DESCRIPTION),
-  vendor: z.string().nullable().describe("Where it was bought"),
-  orderId: z
-    .string()
-    .nullable()
-    .describe(
-      'The vendor\'s order/receipt id — e.g. Amazon "111-1234567-1234567", Home Depot "WN63446464". Free text; formats differ per retailer. Expenses sharing one orderId belong to the same Purchase rather than a two-column string match.',
-    ),
-};
-
-const expenseCreateFields = {
-  ...expenseFields,
-  lineKind: expenseLineKindSchema.optional(),
-  // Deliberately never inferred — see `expenseLineBasisValues`.
-  lineBasis: expenseLineBasisSchema.default("item_line"),
-  /**
-   * Attach directly to a known Purchase, bypassing the `{vendor, orderId}`
-   * name-resolution path. The precise form, for callers that already hold a
-   * Purchase id (the Purchase detail page's "add an Expense"); `vendor`/`orderId`
-   * stay the ergonomic form for importers and quick-add. When both are given,
-   * this wins — an explicit id is never a guess.
-   */
-  purchaseId: purchaseShortcode.nullable().default(null),
-  cost: wholeCentAmount.nullable().default(null),
-  date: plainDate,
-  url: z.string().nullable().default(null),
-  notes: z.string().nullable().default(null),
-  future: z.boolean().default(false),
-  projectId: projectShortcode.nullable().default(null),
-  productId: productShortcode.nullable().default(null),
-  productQuantity: signedProductQuantity
-    .nullable()
-    .default(null)
-    .describe(PRODUCT_QUANTITY_DESCRIPTION),
-  vendor: z.string().nullable().default(null),
-  orderId: z.string().nullable().default(null),
-  beneficiaries: ledgerAttributions.nullable().default([]),
-  funders: ledgerAttributions.nullable().default([]),
-  sourceClaims: ledgerSourceClaims.nullable().default([]),
-};
-
-export const expenseCreateInput = z.object(expenseCreateFields);
+export const expenseCreateInput = z.object(generatedExpenseFieldSchemas.create);
 export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
 
-export const expenseUpdateData = deriveUpdateData(expenseCreateFields);
+export const expenseUpdateData = z.object(generatedExpenseFieldSchemas.update);
 export type ExpenseUpdateData = z.infer<typeof expenseUpdateData>;
 export const expenseUpdateInput = z.object({
   id: expenseShortcode,
@@ -826,10 +540,7 @@ export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 export const expenseFilterFields = {
   ...auditDateFilterFields,
   ...expenseRelatedFilterFields,
-  costType: oneOrMany(costTypeSchema).optional(),
-  lineKind: oneOrMany(expenseLineKindSchema).optional(),
-  lineBasis: oneOrMany(expenseLineBasisSchema).optional(),
-  trade: oneOrMany(tradeSchema).optional(),
+  ...generatedExpenseFilterFields,
   projectId: entityFilterList(projectShortcode).optional(),
   // Only meaningful alongside `projectId`: expands the filter to the project
   // plus every live descendant (sub-project subtree).
@@ -844,7 +555,6 @@ export const expenseFilterFields = {
   productPresenceFilter: presenceFilter,
   vendorId: entityFilterList(vendorShortcode).optional(),
   vendorPresenceFilter: presenceFilter,
-  future: z.boolean().optional(),
   /** Expense-name terms are OR-matched case-insensitively; a bare string preserves existing behavior. */
   search: oneOrMany(z.string()).optional(),
   /**
@@ -960,35 +670,7 @@ export const expenseSortableFields = [
 ] as const;
 export type ExpenseSortField = (typeof expenseSortableFields)[number];
 
-export const expenseOut = z.object({
-  id: expenseShortcode,
-  ...expenseFields,
-  /**
-   * The purchase this expense belongs to. Null for rows with no vendor recorded —
-   * there's no transaction to attach them to, and inventing one would fabricate
-   * a purchase that was never recorded.
-   */
-  purchaseId: purchaseShortcode.nullable(),
-  purchaseDate: plainDate.nullable(),
-  purchaseDisplayLabel: z.string().nullable(),
-  vendorId: vendorShortcode.nullable(),
-  vendorLogo: imageUrlSummary.nullable(),
-  /**
-   * Link out to the vendor's own order page for this expense's purchase,
-   * derived from `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`).
-   * Read-only; null means the order simply isn't linkable.
-   */
-  orderUrl: z.url().nullable(),
-  projectName: z.string().nullable(),
-  // Null when unlinked *or* when the linked product has been soft-deleted —
-  // product deletion deliberately does not block on referencing expenses
-  // (unlike project deletion), so this null branch is routinely reachable.
-  productName: z.string().nullable(),
-  beneficiaries: ledgerAttributions,
-  funders: ledgerAttributions,
-  sourceClaims: z.array(ledgerSourceClaimOut),
-  ...timestampedFields,
-});
+export const expenseOut = z.object(generatedExpenseFieldSchemas.read);
 export type ExpenseOut = z.infer<typeof expenseOut>;
 
 export const expenseChargeContextOut = z

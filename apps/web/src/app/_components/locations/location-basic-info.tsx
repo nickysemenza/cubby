@@ -2,10 +2,10 @@ import type { InfLocation } from "@cubby/schemas/location";
 import type { FC } from "react";
 
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { EntityBasicInfo } from "~/entities/entity-display";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 import { LocationIconWithLabel } from "./location-icons";
@@ -20,80 +20,71 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
   location,
   onEdit,
 }) => {
-  const fields: BasicInfoField[] = [
-    // Shortcode (if assigned)
-    ...(location.id
-      ? [
-          {
-            label: "Shortcode",
-            value: (
-              <Badge variant="secondary" className="font-mono">
-                {location.id}
-              </Badge>
+  return (
+    <EntityBasicInfo
+      entity="location"
+      record={location}
+      overrides={{
+        id: (record) => ({
+          value: record.id ? (
+            <Badge variant="secondary" className="font-mono">
+              {record.id}
+            </Badge>
+          ) : undefined,
+        }),
+        type: (record) => ({
+          value: record.product ? undefined : (
+            <LocationTypeLabel type={record.type} product={null} />
+          ),
+          filterAction:
+            record.product || !record.type ? undefined : (
+              <EntityFilterLink
+                to="/locations"
+                search={{ view: "table", type: record.type }}
+                label={`Show all ${record.type} locations`}
+              />
             ),
-          },
-        ]
-      : []),
-    // A location that IS a Product has no type of its own — the SKU is its form
-    // factor. Showing an empty "Type" row was the tell that this page still
-    // only knew how to render the productless half.
-    location.product
-      ? {
-          label: "Is a",
-          value: (
+        }),
+        productId: (record) => ({
+          value: record.product ? (
             <EntityInlineLink
               displayImage={undefined}
               entity="product"
-              data={location.product}
-            />
-          ),
-          filterAction: (
-            <EntityFilterLink
-              to="/locations"
-              search={{ view: "table", product: location.product.id }}
-              label={`Show all locations that are ${location.product.name}`}
-            />
-          ),
-        }
-      : {
-          label: "Type",
-          value: <LocationTypeLabel type={location.type} product={null} />,
-          filterAction: location.type ? (
-            <EntityFilterLink
-              to="/locations"
-              search={{ view: "table", type: location.type }}
-              label={`Show all ${location.type} locations`}
+              data={record.product}
             />
           ) : undefined,
-        },
-    {
-      label: "Parent Location",
-      value: location.parent ? (
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="location"
-          data={location.parent}
-        />
-      ) : undefined,
-      filterAction: location.parent ? (
-        <EntityFilterLink
-          to="/locations"
-          search={{ view: "table", parent: location.parent.id }}
-          label={`Show all locations inside ${location.parent.name}`}
-        />
-      ) : undefined,
-    },
-    {
-      // Tenet 1: inventory truth here is only as good as the last deliberate
-      // recount. The hint tints warning once that's gone stale (>30d).
-      label: "Last recount",
-      value: <AuditedHint at={location.lastBulkInventory} label="recounted" />,
-    },
-  ];
-
-  return (
-    <BasicInfo
-      fields={fields}
+          filterAction: record.product ? (
+            <EntityFilterLink
+              to="/locations"
+              search={{ view: "table", product: record.product.id }}
+              label={`Show all locations that are ${record.product.name}`}
+            />
+          ) : undefined,
+        }),
+        parentId: (record) => ({
+          value: record.parent ? (
+            <EntityInlineLink
+              displayImage={undefined}
+              entity="location"
+              data={record.parent}
+            />
+          ) : undefined,
+          filterAction: record.parent ? (
+            <EntityFilterLink
+              to="/locations"
+              search={{ view: "table", parent: record.parent.id }}
+              label={`Show all locations inside ${record.parent.name}`}
+            />
+          ) : undefined,
+        }),
+        lastBulkInventory: (record) => ({
+          // Tenet 1: inventory truth here is only as good as the last deliberate
+          // recount. The hint tints warning once that's gone stale (>30d).
+          value: (
+            <AuditedHint at={record.lastBulkInventory} label="recounted" />
+          ),
+        }),
+      }}
       header={
         <div className="flex items-center gap-2">
           <LocationIconWithLabel

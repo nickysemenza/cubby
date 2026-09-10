@@ -11,6 +11,7 @@ import {
 import { Row, Stack } from "~/components/layout";
 import { InkStamp } from "~/components/ui/ink-stamp";
 import { Input } from "~/components/ui/input";
+import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 
 import { NullableNumericField, SideBySideFields } from "../../form-utils";
 import { FormFieldGroup } from "../../forms/form-field-group";
@@ -19,7 +20,8 @@ import type { RecipeFormValues } from "./types";
 // Yield and Servings fields with smart hide behavior
 export const YieldServingsFields: FC<{
   form: ReturnType<typeof useForm<RecipeFormValues>>;
-}> = ({ form }) => {
+  mode: "create" | "edit";
+}> = ({ form, mode }) => {
   const yieldUnitId = useId();
   const yieldUnit = useWatch({ control: form.control, name: "yield.unit" });
 
@@ -52,11 +54,11 @@ export const YieldServingsFields: FC<{
       </SideBySideFields>
 
       {showServings && (
-        <NullableNumericField
-          form={form}
-          name="servings"
-          label="Servings"
-          placeholder="How many portions?"
+        <EntityPrimitiveFields
+          entity="recipe"
+          mode={mode}
+          section="servings"
+          options={{ servings: { placeholder: "How many portions?" } }}
         />
       )}
     </Stack>

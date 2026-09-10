@@ -18,6 +18,7 @@ import {
   findRelatedSearchHits,
   findSearchHits,
 } from "~/server/services/search.service";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 import type { EntityKernelContext } from "./adapter";
 import {
@@ -49,41 +50,54 @@ const executeSearch = async (
   return { action: command.action, entity, lexical, semantic } as const;
 };
 
-const executeMerge = async (
-  ctx: EntityKernelContext,
-  command: Extract<EntityMutationCommand, { action: "merge" }>,
-) => {
-  const binding = ENTITY_KERNEL_BINDINGS[command.entity];
-  const mergeOperation = binding.mergeOperation;
-  if (!mergeOperation || !binding.lifecycle.merge) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `${ENTITY_LABEL[binding.entity]} does not support merge`,
-    );
-  }
-  const result = await mergeOperation.execute(ctx, command.data);
-  await deleteStoredObjects(result.detachedImageKeys);
-  const entityRef = result.entityId
-    ? parseEntityRef<ShortcodeEntity>(binding.entity, result.entityId)
-    : null;
-  const backgroundBatches = [
-    ...(result.backgroundBatches ?? []),
-    ...(entityRef && binding.sideEffects && isMutationSideEffectRef(entityRef)
-      ? await runMutationSideEffects(ctx.db, {
-          action: "updated",
-          entity: entityRef,
-          source: `${binding.entity}.merge`,
-        })
-      : []),
-  ];
-  return entityMutationResultSchema.parse({
-    action: command.action,
-    entity: command.entity,
-    item: result.item,
-    mergeSummary: result.mergeSummary,
-    sideEffects: { backgroundBatches },
-  });
-};
+type MergeCommand = Extract<EntityMutationCommand, { action: "merge" }>;
+const executeMerge = bindWorkflow(
+  workflow<EntityKernelContext, MergeCommand>("entity.merge")
+    .call("owner", async (_, { input }) => {
+      const binding = ENTITY_KERNEL_BINDINGS[input.entity];
+      const operation = binding.mergeOperation;
+      if (!operation || !binding.lifecycle.merge) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${ENTITY_LABEL[binding.entity]} does not support merge`,
+        );
+      }
+      return { binding, operation };
+    })
+    .commit("merged", async ({ context }, { input, owner }) =>
+      owner.operation.execute(context, input.data),
+    )
+    .effect("storage", async (_, { merged }) =>
+      deleteStoredObjects(merged.detachedImageKeys),
+    )
+    .effect("backgroundBatches", async ({ context }, { owner, merged }) => {
+      const entityRef = merged.entityId
+        ? parseEntityRef<ShortcodeEntity>(owner.binding.entity, merged.entityId)
+        : null;
+      return [
+        ...(merged.backgroundBatches ?? []),
+        ...(entityRef &&
+        owner.binding.sideEffects &&
+        isMutationSideEffectRef(entityRef)
+          ? await runMutationSideEffects(context.db, {
+              action: "updated",
+              entity: entityRef,
+              source: `${owner.binding.entity}.merge`,
+            })
+          : []),
+      ];
+    })
+    .output(({ input, merged, backgroundBatches }) =>
+      entityMutationResultSchema.parse({
+        action: input.action,
+        entity: input.entity,
+        item: merged.item,
+        mergeSummary: merged.mergeSummary,
+        sideEffects: { backgroundBatches },
+      }),
+    ),
+  (context: EntityKernelContext, input: MergeCommand) => ({ context, input }),
+);
 
 const executeRelationMutation = async (
   ctx: EntityKernelContext,

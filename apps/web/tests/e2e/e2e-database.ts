@@ -1,3 +1,4 @@
+import { schemaTemplateInputs } from "../../tooling/schema-template-inputs";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -89,8 +90,7 @@ async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
 
   console.log("[E2E Setup] Getting fresh database from IntegreSQL...");
   const hash = await integreSQL.hashFiles([
-    "./src/server/db/schema.ts",
-    "./src/server/db/auth.schema.ts",
+    ...schemaTemplateInputs,
     // Browser acceptance and Vitest run concurrently in `test:all`. A distinct
     // template prevents either process's template initialization/reset cycle
     // from invalidating the other's checked-out databases mid-run.

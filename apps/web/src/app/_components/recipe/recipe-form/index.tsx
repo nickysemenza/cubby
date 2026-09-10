@@ -28,7 +28,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Textarea } from "~/components/ui/textarea";
+import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import { useImageState } from "~/hooks/useImageState";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
@@ -64,7 +64,6 @@ import {
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
   const tagsId = useId();
-  const notesId = useId();
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
@@ -433,14 +432,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           {/* Spec plate: the recipe's vitals in one chunky placard */}
           <Card>
             <CardContent className="space-y-2 px-4 py-1">
-              <UnifiedTextField
-                form={form}
-                name="name"
-                label="Name"
-                placeholder="Enter recipe name"
-                nullable={false}
+              <EntityPrimitiveFields
+                entity="recipe"
+                mode={mode}
+                section="identity"
+                options={{ name: { placeholder: "Enter recipe name" } }}
               />
-              <YieldServingsFields form={form} />
+              <YieldServingsFields form={form} mode={mode} />
               <Controller
                 control={form.control}
                 name="tags"
@@ -454,23 +452,17 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   </FormFieldGroup>
                 )}
               />
-              <Controller
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormFieldGroup
-                    htmlFor={notesId}
-                    label="Notes (Optional, Markdown)"
-                  >
-                    <Textarea
-                      id={notesId}
-                      placeholder="Headnote, do-ahead tips, serving suggestions…"
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value || null)}
-                      rows={4}
-                    />
-                  </FormFieldGroup>
-                )}
+              <EntityPrimitiveFields
+                entity="recipe"
+                mode={mode}
+                section="main"
+                options={{
+                  notes: {
+                    placeholder:
+                      "Headnote, do-ahead tips, serving suggestions…",
+                    rows: 4,
+                  },
+                }}
               />
             </CardContent>
           </Card>

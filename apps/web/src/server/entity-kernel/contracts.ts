@@ -131,7 +131,7 @@ export const entityCommandSchema = z.union([
   entityMutationCommandSchema,
 ]);
 
-const mcpQueryCommandSchema = z.discriminatedUnion("action", [
+export const entityMcpReadCommandSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("get"),
     entity: z.enum(generatedMcpEntityActionEntities.get),
@@ -164,7 +164,7 @@ const mcpMergeCommandSchema = z.object({
 
 /** MCP ingress is generated from executable actions each literal exposes. */
 export const entityMcpCommandSchema = z.union([
-  mcpQueryCommandSchema,
+  entityMcpReadCommandSchema,
   generatedMcpEntityCreateCommandSchema,
   generatedMcpEntityUpdateCommandSchema,
   mcpDeleteCommandSchema,

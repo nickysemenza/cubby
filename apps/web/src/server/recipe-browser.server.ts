@@ -72,11 +72,17 @@ export const suggestionsHandlers = implementOperationDomain(suggestions, {
 });
 
 export const recipeStreamHandlers = implementSubscriptionDomain(recipeStreams, {
-  recomputeAllDurable: (context) =>
-    recipe.recomputeAllDurableWorkflow(context.services.recipeCosting),
-  recomputeStaleDurable: (context) =>
-    recipe.recomputeStaleDurableWorkflow(context.services.recipeCosting),
-  importCookbookStream: imports.importCookbookWorkflow,
-  importNotionSyncStream: imports.importNotionSyncWorkflow,
-  reprocessCookbook: imports.reprocessCookbookWorkflow,
+  recomputeAllDurable: (context, _input, signal) =>
+    recipe.recomputeAllDurableWorkflow(context.services.recipeCosting, signal),
+  recomputeStaleDurable: (context, _input, signal) =>
+    recipe.recomputeStaleDurableWorkflow(
+      context.services.recipeCosting,
+      signal,
+    ),
+  importCookbookStream: (context, input, signal) =>
+    imports.importCookbookWorkflow(context, input, signal),
+  importNotionSyncStream: (context, input, signal) =>
+    imports.importNotionSyncWorkflow(context, input, signal),
+  reprocessCookbook: (context, input, signal) =>
+    imports.reprocessCookbookWorkflow(context, input, signal),
 });

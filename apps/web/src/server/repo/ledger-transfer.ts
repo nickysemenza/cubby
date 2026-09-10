@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionId,
@@ -75,6 +76,8 @@ const columns = {
   shortcode: ledgerTransfer.shortcode,
   fromPartyId: ledgerTransfer.fromPartyId,
   toPartyId: ledgerTransfer.toPartyId,
+  fromPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId" AND "deletedAt" IS NULL)`,
+  toPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId" AND "deletedAt" IS NULL)`,
   fromPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
   toPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
   fromPartyKind: sql<
@@ -120,6 +123,8 @@ type LedgerTransferRow = {
   shortcode: string;
   fromPartyId: LedgerPartyId;
   toPartyId: LedgerPartyId;
+  fromPartyName: string;
+  toPartyName: string;
   fromPartyShortcode: string;
   toPartyShortcode: string;
   fromPartyKind: "member" | "guest" | "household";
@@ -147,6 +152,8 @@ const toOut = (row: LedgerTransferRow): LedgerTransferOut =>
     id: parseShortcodeFor("ledgerTransfer", row.shortcode),
     fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode),
     toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode),
+    fromPartyName: row.fromPartyName,
+    toPartyName: row.toPartyName,
     amount: row.amount,
     date: row.date,
     notes: row.notes,
@@ -445,13 +452,7 @@ export async function updateLedgerTransfer(
         `Ledger transfer not found after update: ${shortcode}`,
       );
     const changes = computeChanges(before, after, [
-      "fromPartyId",
-      "toPartyId",
-      "amount",
-      "date",
-      "notes",
-      "sourceClaims",
-      "evidenceTransactionIds",
+      ...entityFieldModels.ledgerTransfer.audit,
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {

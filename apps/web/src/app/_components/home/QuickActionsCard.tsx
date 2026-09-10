@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Zap } from "lucide-react";
 import { useId } from "react";
 
-import { Grid } from "~/components/layout";
+import { Grid, Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { EntityIcon, entities } from "~/entities/entities";
 
@@ -61,6 +61,24 @@ export function DailyPasses() {
           </Button>
         ))}
       </Grid>
+      <Row gap="sm" wrap className="mt-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/activities" />}
+        >
+          Browse activities
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          nativeButton={false}
+          render={<Link to="/records" />}
+        >
+          All records
+        </Button>
+      </Row>
     </section>
   );
 }

@@ -1,38 +1,33 @@
 import { z } from "zod";
+import { auditDateFilterFields } from "./base-entity";
 import {
-  auditDateFilterFields,
-  deriveUpdateData,
-  timestampedFields,
-  uniqueBy,
-} from "./base-entity";
-import { requiredName } from "./common";
+  generatedLedgerPartyFieldSchemas,
+  generatedLedgerPartyFilterFields,
+} from "./generated/entity-field-schemas.ledgerParty.gen";
 import { ledgerPartyShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
-
-export const ledgerPartyKindValues = ["member", "guest", "household"] as const;
-export const ledgerPartyKind = z.enum(ledgerPartyKindValues);
-export type LedgerPartyKind = z.infer<typeof ledgerPartyKind>;
+import { createPaginatedResponseSchema } from "./pagination";
+export {
+  ledgerAttributionInput,
+  ledgerAttributions,
+  ledgerPartyKind,
+  ledgerPartyKindValues,
+  type LedgerAttributionInput,
+  type LedgerPartyKind,
+} from "./ledger-party-fields";
+import { ledgerPartyKind } from "./ledger-party-fields";
 
 export const contributionRoleValues = ["beneficiary", "funder"] as const;
 export const contributionRole = z.enum(contributionRoleValues);
 export type ContributionRole = z.infer<typeof contributionRole>;
 
-const ledgerPartyFields = {
-  name: z.string(),
-  kind: ledgerPartyKind,
-  notes: z.string().nullable(),
-};
-
-const ledgerPartyCreateFields = {
-  name: requiredName("Ledger party name"),
-  kind: ledgerPartyKind,
-  notes: z.string().nullable().default(null),
-};
+const ledgerPartyCreateFields = generatedLedgerPartyFieldSchemas.create;
 
 export const ledgerPartyCreateInput = z.object(ledgerPartyCreateFields);
 export type LedgerPartyCreateInput = z.infer<typeof ledgerPartyCreateInput>;
 
-export const ledgerPartyUpdateData = deriveUpdateData(ledgerPartyCreateFields);
+export const ledgerPartyUpdateData = z.object(
+  generatedLedgerPartyFieldSchemas.update,
+);
 export type LedgerPartyUpdateData = z.infer<typeof ledgerPartyUpdateData>;
 
 export const ledgerPartyUpdateInput = z.object({
@@ -43,8 +38,7 @@ export type LedgerPartyUpdateInput = z.infer<typeof ledgerPartyUpdateInput>;
 
 export const ledgerPartyFilterFields = {
   ...auditDateFilterFields,
-  search: z.string().optional(),
-  kind: oneOrMany(ledgerPartyKind).optional(),
+  ...generatedLedgerPartyFilterFields,
 };
 export const ledgerPartyFiltersSchema = z.object(ledgerPartyFilterFields);
 export type LedgerPartyFilters = z.infer<typeof ledgerPartyFiltersSchema>;
@@ -58,9 +52,7 @@ export const ledgerPartySortableFields = [
 export type LedgerPartySortField = (typeof ledgerPartySortableFields)[number];
 
 export const ledgerPartyOut = z.object({
-  id: ledgerPartyShortcode,
-  ...ledgerPartyFields,
-  ...timestampedFields,
+  ...generatedLedgerPartyFieldSchemas.read,
 });
 export type LedgerPartyOut = z.infer<typeof ledgerPartyOut>;
 
@@ -76,19 +68,3 @@ export const ledgerPartyOptionsOut = z.array(
   }),
 );
 export type LedgerPartyOptionsOut = z.infer<typeof ledgerPartyOptionsOut>;
-
-export const ledgerAttributionInput = z.strictObject({
-  partyId: ledgerPartyShortcode.nullable(),
-  weight: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-});
-export type LedgerAttributionInput = z.infer<typeof ledgerAttributionInput>;
-
-export const ledgerAttributions = z
-  .array(ledgerAttributionInput)
-  .refine(
-    ...uniqueBy(
-      (attribution: LedgerAttributionInput) =>
-        attribution.partyId ?? "__unattributed__",
-      "attributions must not contain duplicate ledger parties",
-    ),
-  );

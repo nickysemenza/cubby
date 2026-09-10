@@ -6,25 +6,19 @@ import {
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { type UseFormReturn, useWatch } from "react-hook-form";
+import { FormProvider, type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import {
-  NullableTextareaField,
-  PlainDateField,
-} from "~/app/_components/form-utils";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import type { EditMode } from "~/entities/editing/entity-field-presentation";
+import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import { entities, entityDetailParams } from "~/entities/entities";
 
 import { TableLink } from "../_components/table/TableLink";
 import { financialTransaction } from "./finance.functions";
-import {
-  SelectField,
-  SourceRefsField,
-  TextField,
-} from "./financial-form-fields";
+import { SourceRefsField } from "./financial-form-fields";
 import {
   WithFinancialAccountSearch,
   WithPurchaseSearch,
@@ -43,13 +37,13 @@ export const financialTransactionFormSchema = z
       .refine((amount) => amount !== 0, "Amount must be non-zero"),
     transactionDate: z.string().nullable(),
     postedDate: z.string().nullable(),
-    merchant: z.string(),
-    rawDescription: z.string(),
-    sourceCategory: z.string(),
+    merchant: z.string().nullable(),
+    rawDescription: z.string().nullable(),
+    sourceCategory: z.string().nullable(),
     sourceRefs: z.array(
       z.object({ source: z.string(), externalId: z.string() }),
     ),
-    notes: z.string(),
+    notes: z.string().nullable(),
   })
   .refine(
     (transaction) =>
@@ -86,10 +80,10 @@ export const normalizeFinancialTransactionForm = (
   purchaseId: values.purchaseId.trim() || null,
   transactionDate: values.transactionDate || null,
   postedDate: values.postedDate || null,
-  merchant: values.merchant.trim() || null,
-  rawDescription: values.rawDescription.trim() || null,
-  sourceCategory: values.sourceCategory.trim() || null,
-  notes: values.notes.trim() || null,
+  merchant: values.merchant?.trim() || null,
+  rawDescription: values.rawDescription?.trim() || null,
+  sourceCategory: values.sourceCategory?.trim() || null,
+  notes: values.notes?.trim() || null,
   sourceRefs: values.sourceRefs
     .map((reference) => ({
       source: reference.source.trim(),
@@ -98,17 +92,16 @@ export const normalizeFinancialTransactionForm = (
     .filter((reference) => reference.source && reference.externalId),
 });
 
-const transactionKinds = financialTransactionKind.options;
-const transactionStatuses = financialTransactionStatus.options;
-
 export function FinancialTransactionFormFields({
   form,
   loadVendorInference,
+  mode = "create",
 }: {
   form: UseFormReturn<FinancialTransactionFormValues>;
+  mode?: EditMode;
   loadVendorInference?: (merchant: string) => Promise<MerchantVendorInference>;
 }) {
-  const merchant = useWatch({ control: form.control, name: "merchant" });
+  const merchant = useWatch({ control: form.control, name: "merchant" }) ?? "";
   const [debouncedMerchant] = useDebouncedValue(merchant, { wait: 350 });
   const [allPurchasesVendorId, setAllPurchasesVendorId] = useState<
     string | null
@@ -133,7 +126,7 @@ export function FinancialTransactionFormFields({
       : null;
 
   return (
-    <>
+    <FormProvider {...form}>
       <EntityValueField
         form={form}
         name="accountId"
@@ -142,7 +135,11 @@ export function FinancialTransactionFormFields({
         placeholder="Select account"
         SearchProvider={WithFinancialAccountSearch}
       />
-      <TextField form={form} name="merchant" label="Merchant" />
+      <EntityPrimitiveFields
+        entity="financialTransaction"
+        mode={mode}
+        section="identity"
+      />
       <PurchaseVendorScope vendorId={scopedVendorId}>
         <Stack gap="tight">
           {scopedVendorId && suggested ? (
@@ -177,38 +174,29 @@ export function FinancialTransactionFormFields({
           />
         </Stack>
       </PurchaseVendorScope>
-      <SelectField
-        form={form}
-        name="kind"
-        label="Kind"
-        values={transactionKinds}
+      <EntityPrimitiveFields
+        entity="financialTransaction"
+        mode={mode}
+        section="main"
+        options={{ amount: { step: "0.01" } }}
       />
-      <SelectField
-        form={form}
-        name="status"
-        label="Status"
-        values={transactionStatuses}
+      <EntityPrimitiveFields
+        entity="financialTransaction"
+        mode={mode}
+        section="schedule"
       />
-      <TextField form={form} name="amount" label="Amount" type="number" />
-      <PlainDateField
-        form={form}
-        name="transactionDate"
-        label="Transaction date"
+      <EntityPrimitiveFields
+        entity="financialTransaction"
+        mode={mode}
+        section="details"
       />
-      <PlainDateField form={form} name="postedDate" label="Posted date" />
-      <TextField
-        form={form}
-        name="rawDescription"
-        label="Statement description"
-      />
-      <TextField form={form} name="sourceCategory" label="Source category" />
       <SourceRefsField form={form} />
-      <NullableTextareaField
-        form={form}
-        name="notes"
-        label="Notes"
-        placeholder="Optional evidence"
+      <EntityPrimitiveFields
+        entity="financialTransaction"
+        mode={mode}
+        section="notes"
+        options={{ notes: { placeholder: "Optional evidence" } }}
       />
-    </>
+    </FormProvider>
   );
 }

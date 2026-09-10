@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type PublicImpactItem,
@@ -412,12 +413,7 @@ export async function updateFinancialAccount(
       );
     const after = { ...before, ...values };
     const changes = computeChanges(before, after, [
-      "name",
-      "identity",
-      "provisional",
-      "sourceAliases",
-      "notes",
-      "ledgerPartyId",
+      ...entityFieldModels.financialAccount.audit,
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {

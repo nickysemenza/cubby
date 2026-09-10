@@ -5,14 +5,17 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
-import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
+import {
+  ENTITY_KERNEL_ENTITIES,
+  entityMcpReadCommandSchema,
+} from "~/server/entity-kernel/contracts";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
 import { type ExecuteEntity, registerEntityTools } from "./tools/entity.tools";
 
 describe("MCP protocol smoke", () => {
-  it("replaces kernel CRUD names with one entity tool and a discoverable catalog", async () => {
+  it("publishes command and read-only entity capabilities with a discoverable catalog", async () => {
     const [{ tools }, { resources }] = await Promise.all([
       listMcpToolCatalog(),
       listMcpResourceCatalog(),
@@ -25,6 +28,11 @@ describe("MCP protocol smoke", () => {
       .parse(tools.find((tool) => tool.name === "entity")?.inputSchema);
 
     expect(names).toContain("entity");
+    expect(names).toContain("get_entities");
+    expect(
+      tools.find((tool) => tool.name === "get_entities")?.annotations
+        ?.readOnlyHint,
+    ).toBe(true);
     expect(resources.map((resource) => resource.uri)).toContain(
       "entities://catalog",
     );
@@ -39,6 +47,26 @@ describe("MCP protocol smoke", () => {
     expect(names).not.toContain("attach_entity");
     expect(names).not.toContain("detach_entity");
     expect(names).not.toContain("merge_entity");
+  });
+
+  it.each([
+    "create",
+    "update",
+    "delete",
+    "merge",
+    "bulkUpdate",
+    "attach",
+    "detach",
+  ])("rejects %s at the read-only command boundary", (action) => {
+    expect(
+      entityMcpReadCommandSchema.safeParse({
+        action,
+        entity: "ingredient",
+        id: "ING-2ABC",
+        data: {},
+        ids: ["ING-2ABC"],
+      }).success,
+    ).toBe(false);
   });
 
   it("dispatches entity commands through the explicit kernel capability", async () => {

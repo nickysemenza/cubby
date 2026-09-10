@@ -50,6 +50,56 @@ afterEach(() => {
 });
 
 describe("ExpenseDetail filter links", () => {
+  it("shows product facts only for principal lines and keeps the declared overview order", () => {
+    const linkedExpense = {
+      ...expense,
+      productId: testShortcode("product", "PRD-4K7M"),
+      productName: "Copper fitting",
+      productQuantity: 2,
+    };
+    const { container, rerender } = render(
+      <ExpenseDetail expense={linkedExpense} />,
+      { wrapper: harness.wrapper },
+    );
+    const labels = () =>
+      Array.from(
+        container.querySelectorAll(".basic-info-ledger .eyebrow"),
+        (element) => element.textContent,
+      );
+    expect(labels()).toEqual([
+      "Name",
+      "Cost",
+      "Date",
+      "Line kind",
+      "Cost Type",
+      "Trade",
+      "Planned",
+      "URL",
+      "Notes",
+      "Vendor",
+      "Order #",
+      "Project",
+      "Product",
+      "Itemization",
+      "Product quantity",
+    ]);
+    expect(
+      screen.getByRole("link", {
+        name: "Show all expenses for Copper fitting",
+      }),
+    ).toHaveAttribute("href", "/expenses?productId=PRD-4K7M");
+
+    rerender(<ExpenseDetail expense={{ ...linkedExpense, lineKind: "tax" }} />);
+    expect(labels()).not.toContain("Product");
+    expect(labels()).not.toContain("Itemization");
+    expect(labels()).not.toContain("Product quantity");
+    expect(
+      screen.queryByRole("link", {
+        name: "Show all expenses for Copper fitting",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the editable value primary and exposes a separate cohort action", async () => {
     render(<ExpenseDetail expense={expense} />, { wrapper: harness.wrapper });
 

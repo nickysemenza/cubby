@@ -23,6 +23,54 @@ afterEach(async () => {
 });
 
 describe("literal entity generator", () => {
+  it("validates standard display renderers against their declared field", () => {
+    const parseDisplay = (display: string) =>
+      parseEntityLiterals(`
+      export const ENTITY_LITERALS = [{
+        key: "alpha", descriptor: { auditable: false, searchable: false }, contract: null,
+        fieldModel: {
+          fields: [{
+            key: "name", kind: "text", nullable: false, label: "Name",
+            description: null, readKey: "name", reference: null, control: null,
+            display: ${display}, validation: {},
+          }],
+          storage: [], create: ["name"], update: ["name"], bulk: [], audit: [], output: ["name"],
+        },
+      }];
+    `);
+    expect(
+      parseDisplay('{ list: true, detail: true, standard: "name" }')[0]
+        ?.fieldModel.fields[0]?.display.standard,
+    ).toBe("name");
+    expect(() =>
+      parseDisplay('{ list: true, detail: true, standard: "image" }'),
+    ).toThrow("incompatible standard display column");
+    expect(() =>
+      parseDisplay('{ list: false, detail: true, standard: "name" }'),
+    ).toThrow("incompatible standard display column");
+    expect(() =>
+      parseDisplay('{ list: true, detail: true, standard: "unknown" }'),
+    ).toThrow("standard must be name or image");
+    expect(
+      parseDisplay("{ list: true, detail: true, detailOrder: 0 }")[0]
+        ?.fieldModel.fields[0]?.display.detailOrder,
+    ).toBe(0);
+    expect(() =>
+      parseDisplay("{ list: true, detail: true, detailOrder: -1 }"),
+    ).toThrow("found UnaryExpression");
+    expect(() =>
+      parseDisplay("{ list: true, detail: true, detailOrder: 0.5 }"),
+    ).toThrow("detailOrder must be a nonnegative integer");
+    expect(
+      parseDisplay(
+        '{ list: false, detail: true, detailSection: "resources" }',
+      )[0]?.fieldModel.fields[0]?.display.detailSection,
+    ).toBe("resources");
+    expect(() =>
+      parseDisplay('{ list: false, detail: true, detailSection: " " }'),
+    ).toThrow("detailSection must not be blank");
+  });
+
   it("compiles the catalog and CRUD contract cases from literal data", () => {
     const entities = parseEntityLiterals(`
       export const ENTITY_LITERALS = [
@@ -185,6 +233,22 @@ describe("literal entity generator", () => {
     expect(() =>
       parse(`${entity("alpha", "ALP-", "B-")},${entity("beta", "BET-", "A-")}`),
     ).not.toThrow();
+  });
+
+  it("rejects generic contracts without shortcode identity", () => {
+    expect(() =>
+      parseEntityLiterals(`
+        export const ENTITY_LITERALS = [{
+          key: "external",
+          descriptor: { auditable: false, searchable: false },
+          contract: {
+            create: null,
+            update: null,
+            output: { module: "@cubby/schemas/external", export: "externalOut" },
+          },
+        }];
+      `),
+    ).toThrow("cannot declare a contract without a shortcode");
   });
 
   it("requires cardinality and local-view inverses and rejects deletion policy", () => {
@@ -358,5 +422,122 @@ describe("literal entity generator", () => {
           "apps/web/src/entities/generated/entity-details.gen.ts",
       )?.source,
     ).toContain('"product": productWithFoodOut');
+  });
+
+  it("emits authoritative field schemas and rejects self-import cycles", async () => {
+    const entities = await parseEntityLiteralFiles();
+    const artifacts = renderEntityArtifacts(entities);
+
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-field-schemas.ingredient.gen.ts"),
+      )?.source,
+    ).toContain("generatedIngredientFieldSchemas");
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-field-schemas.ingredient.gen.ts"),
+      )?.source,
+    ).toContain(
+      'generatedIngredientFilterFields = {"nameFilter":z.string().optional().describe("Filter by ingredient name (substring)"),"usuallyOnHand":z.boolean().optional().describe("Filter by ingredients usually kept on hand")}',
+    );
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-field-schemas.image.gen.ts"),
+      )?.source,
+    ).toContain('generatedImageStatusValues = ["PENDING","UPLOADED","FAILED"]');
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-field-model.gen.ts"),
+      )?.source,
+    ).toContain(
+      'control:{kind:"text",renderer:null,options:null,section:"main"}',
+    );
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-field-schemas.cookbook.gen.ts"),
+      )?.source,
+    ).toContain('read:{"id":cookbookShortcode,"book":z.string()');
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-field-schemas.usda-food.gen.ts"),
+      )?.source,
+    ).toContain("generatedUSDAFoodFieldSchemas");
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-bindings.gen.ts"),
+      )?.source,
+    ).toContain('"cookbook": entitySchema');
+    expect(
+      artifacts.find(({ relativePath }) =>
+        relativePath.endsWith("entity-kernel-bindings.gen.ts"),
+      )?.source,
+    ).not.toContain('"cookbook"');
+
+    const cyclic = parseEntityLiterals(`
+      export const ENTITY_LITERALS = [{
+        key: "alpha",
+        descriptor: {
+          shortcodePrefix: "ALP-", auditable: false, searchable: false,
+          lifecycle: { delete: null, merge: false },
+        },
+        contract: {
+          create: { module: "@cubby/schemas/alpha", export: "alphaCreate" },
+          update: { module: "@cubby/schemas/alpha", export: "alphaUpdate" },
+          output: { module: "@cubby/schemas/alpha", export: "alphaOut" },
+        },
+        ports: {
+          repository: { module: "~/server/alpha", export: "alphaRepository" },
+          references: { label: null, resolver: null }, filters: null,
+          search: { projection: null, semanticText: null, dependentRefresh: null },
+        },
+        fieldModel: {
+          fields: [{
+            key: "name", kind: "text", nullable: false, label: "Name",
+            description: null, readKey: "name", reference: null,
+            control: { kind: "text", renderer: null, options: null, section: "identity" },
+            display: { list: true, detail: true },
+            validation: {
+              read: { kind: "source", source: { module: "@cubby/schemas/alpha", export: "alphaName" } },
+              create: { kind: "source", source: { module: "@cubby/schemas/alpha", export: "alphaName" } },
+              update: { kind: "source", source: { module: "@cubby/schemas/alpha", export: "alphaName" } },
+            },
+          }],
+          storage: [], create: ["name"], update: ["name"], bulk: [], audit: [],
+          output: ["name"],
+        },
+      }];
+    `);
+
+    expect(cyclic[0]?.fieldModel.fields[0]?.control?.section).toBe("identity");
+    expect(() =>
+      parseEntityLiterals(`
+        export const ENTITY_LITERALS = [{
+          key: "alpha", descriptor: { auditable: false, searchable: false }, contract: null,
+          fieldModel: {
+            fields: [{
+              key: "name", kind: "text", nullable: false, label: "Name",
+              description: null, readKey: "name", reference: null,
+              control: { kind: "text", renderer: null, options: null, section: "   " },
+              display: { list: true, detail: true }, validation: {},
+            }],
+            storage: [], create: [], update: [], bulk: [], audit: [], output: [],
+          },
+        }];
+      `),
+    ).toThrow("control.section must be nonempty");
+
+    expect(() => renderEntityArtifacts(cyclic)).toThrow(
+      "creates a cycle with its generated contract",
+    );
+
+    const mismatched = structuredClone(entities);
+    const productPresence = mismatched
+      .find(({ key }) => key === "ingredient")
+      ?.filterDescriptors.find(({ columnId }) => columnId === "product");
+    if (productPresence === undefined) throw new Error("Missing test fixture");
+    Object.assign(productPresence, { deriveSchema: true });
+    expect(() => renderEntityArtifacts(mismatched)).toThrow(
+      "cannot derive a schema without a matching model field",
+    );
   });
 });

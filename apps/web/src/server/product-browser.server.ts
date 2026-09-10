@@ -61,9 +61,11 @@ export const productHandlers = implementOperationDomain(product, {
 export const productStreamHandlers = implementSubscriptionDomain(
   productStreams,
   {
-    createMany: (context, input) => createManyProductsWorkflow(context, input),
-    markUsdaUnavailableMany: (context, input) =>
-      markProductsUsdaUnavailableWorkflow(context, input),
-    backfillUPCImages: (context) => backfillProductUpcImagesWorkflow(context),
+    createMany: (context, input, signal) =>
+      createManyProductsWorkflow(context, input, signal),
+    markUsdaUnavailableMany: (context, input, signal) =>
+      markProductsUsdaUnavailableWorkflow(context, input, signal),
+    backfillUPCImages: (context, _input, signal) =>
+      backfillProductUpcImagesWorkflow(context, signal),
   },
 );

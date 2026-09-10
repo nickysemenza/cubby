@@ -35,25 +35,29 @@ function createLedgerTransferPartyColumn(
   header: string,
   className: string,
 ) {
-  return helper.accessor(accessor, {
-    header,
-    meta: {
-      className,
-      mobile:
-        accessor === "fromPartyId"
-          ? { slot: "title", priority: 0 }
-          : { slot: "subtitle", priority: 10 },
+  return helper.accessor(
+    (row) => (accessor === "fromPartyId" ? row.fromPartyName : row.toPartyName),
+    {
+      id: accessor,
+      header,
+      meta: {
+        className,
+        mobile:
+          accessor === "fromPartyId"
+            ? { slot: "title", priority: 0 }
+            : { slot: "subtitle", priority: 10 },
+      },
+      cell: (info) => (
+        <TableLink
+          to={entities.ledgerParty.routes.detail}
+          params={entityDetailParams(info.row.original[accessor])}
+          className="block truncate"
+        >
+          {info.getValue()}
+        </TableLink>
+      ),
     },
-    cell: (info) => (
-      <TableLink
-        to={entities.ledgerParty.routes.detail}
-        params={entityDetailParams(info.getValue())}
-        className="block truncate"
-      >
-        {info.getValue()}
-      </TableLink>
-    ),
-  });
+  );
 }
 
 export function createLedgerTransferFromPartyColumn(

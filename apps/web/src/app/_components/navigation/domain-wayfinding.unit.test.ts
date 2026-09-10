@@ -23,6 +23,8 @@ describe("Porcelain Transit domain wayfinding", () => {
     ["/ingredients/workbench", "cook"],
     ["/products/PROD-42", "pantry"],
     ["/inventory/session", "pantry"],
+    ["/scan", "pantry"],
+    ["/labels", "pantry"],
     ["/meals/shopping-list", "plan"],
     ["/projects/tools", "house"],
     ["/tools", "house"],

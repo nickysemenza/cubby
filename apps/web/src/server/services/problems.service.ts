@@ -3,8 +3,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type IngredientId,
-  type ProductId,
   parseEntityId,
+  type ProductId,
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
@@ -323,30 +323,13 @@ export const rebuildProductConversionCoverageProjection = async (
 // UI shows, so it fixes precisely the listed rows. Name drift re-points the ingredient
 // FK via find-or-create; amounts/modifier are column writes. Idempotent — a second run
 // finds nothing stale. Returns the affected recipe ids so the caller recomputes them.
-export async function* reparseStaleIngredientParses(
-  db: Database,
-): AsyncGenerator<
-  { done: number; total: number },
-  { updated: number; recipesAffected: RecipeId[] }
-> {
-  const stale = await findStaleIngredientParses(db);
-  if (stale.length === 0) {
-    yield { done: 0, total: 0 };
-    return { updated: 0, recipesAffected: [] };
-  }
-  // The row updates run in ONE transaction (kept atomic — partial reparse is
-  // harmless but the single tx is cheap), so progress is coarse: 0 → all. We
-  // yield only AROUND the tx, never inside it, so the tx isn't held open across
-  // the stream.
-  yield { done: 0, total: stale.length };
+export const selectStaleIngredientParses = findStaleIngredientParses;
 
-  // Resolve every drifted name up front, in parallel on the pool and deduped to
-  // one find-or-create per distinct name. This pulls the ingredient lookups out
-  // of the write transaction's serial critical path (Postgres runs one
-  // statement at a time per connection, so the old interleaved
-  // find-or-create + update was ~2N sequential round-trips). find-or-create is
-  // race-safe and idempotent, so an ingredient resolved here but rolled back by
-  // a failing tx below is harmless — a retry re-finds it.
+/** Apply the selected stale-parse set in one transaction. */
+export const reparseStaleIngredientParsesBatch = async (
+  db: Database,
+  stale: Awaited<ReturnType<typeof findStaleIngredientParses>>,
+): Promise<{ updated: number; recipesAffected: RecipeId[] }> => {
   const driftNames = uniq(
     stale.filter((s) => s.nameDrift).map((s) => s.parsedName),
   );
@@ -361,24 +344,20 @@ export async function* reparseStaleIngredientParses(
       ),
     ),
   );
-
   const writes: ReparsedStaleLineWrite[] = stale.map((row) => {
     const values: ReparsedStaleLineWrite["values"] = {};
     if (row.amountDrift) values.amounts = row.parsedAmounts;
     if (row.modifierDrift) values.modifier = row.parsedModifier;
-    if (row.nameDrift) {
-      const id = idByName.get(row.parsedName.toLowerCase());
-      if (id) values.ingredientId = id;
-    }
+    if (row.nameDrift)
+      values.ingredientId = idByName.get(row.parsedName.toLowerCase());
     return { recipeSectionIngredientId: row.recipeSectionIngredientId, values };
   });
-
   await applyReparsedStaleLines(db, writes);
-
-  const recipesAffected = uniq(stale.map((s) => s.recipeEntityId));
-  yield { done: stale.length, total: stale.length };
-  return { updated: stale.length, recipesAffected };
-}
+  return {
+    updated: stale.length,
+    recipesAffected: uniq(stale.map((s) => s.recipeEntityId)),
+  };
+};
 
 // Delete unused ingredients (per-card or bulk). When `alsoDeleteProducts`, each
 // ingredient's non-deleted products are deleted FIRST so deleteIngredients'
@@ -462,39 +441,36 @@ export const dryRunPruneAliases = async (
 };
 
 // Fix-all for unused aliases: detect every ingredient's unused aliases and strip
-// them in one pass. Streams coarse progress like reparseStaleIngredientParses
-// (the WASM sweep is the slow part; the prune itself is a single transaction).
-export async function* pruneAllUnusedAliases(
+// them in one pass. The WASM sweep is the slow part; the prune itself is a
+// single transaction.
+export const selectIngredientsWithUnusedAliases =
+  findIngredientsWithUnusedAliases;
+
+/** Prune the selected alias set in one transaction. */
+export const pruneUnusedIngredientAliasesBatch = async (
   db: Database,
-): AsyncGenerator<{ done: number; total: number }, { pruned: number }> {
-  const rows = await findIngredientsWithUnusedAliases(db);
-  if (rows.length === 0) {
-    yield { done: 0, total: 0 };
-    return { pruned: 0 };
-  }
-  yield { done: 0, total: rows.length };
+  items: Awaited<ReturnType<typeof findIngredientsWithUnusedAliases>>,
+): Promise<{ pruned: number }> => {
   const resolved = await resolveLiveShortcodes(
     db,
-    rows.map((row) => row.id),
+    items.map((item) => item.id),
     "ingredient",
   );
-  const { pruned } = await pruneUnusedAliases(
+  return pruneUnusedAliases(
     db,
-    rows.flatMap((row) => {
-      const entityId = resolved.get(row.id);
+    items.flatMap((item) => {
+      const entityId = resolved.get(item.id);
       return entityId
         ? [
             {
               ingredientId: parseEntityId("ingredient", entityId),
-              remove: row.unusedAliases,
+              remove: item.unusedAliases,
             },
           ]
         : [];
     }),
   );
-  yield { done: rows.length, total: rows.length };
-  return { pruned };
-}
+};
 
 type ExactProblemPage = Awaited<ReturnType<typeof executeProblem>>;
 

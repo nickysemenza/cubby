@@ -1,18 +1,13 @@
 import { z } from "zod";
-import { imageOut } from "./image";
-import { money } from "./money";
 import { imageUrlSummary } from "./image-summary";
 import { vendorRelatedFilterFields } from "./related-view";
+import { auditDateFilterFields } from "./base-entity";
 import {
-  auditDateFilterFields,
-  dateRangeFields,
-  deriveUpdateData,
-  numericRangeFields,
-  timestampedFields,
-} from "./base-entity";
+  generatedVendorFieldSchemas,
+  generatedVendorFilterFields,
+} from "./generated/entity-field-schemas.vendor.gen";
 import { vendorShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
-import { plainDate } from "./project";
 import { presenceFilter } from "./pagination";
 
 /**
@@ -27,29 +22,12 @@ import { presenceFilter } from "./pagination";
  * free-text column repeated on every ledger row.
  */
 
-const vendorFields = {
-  name: z.string().min(1),
-  website: z.string().nullable(),
-  orderUrlTemplate: z
-    .string()
-    .nullable()
-    .describe(
-      "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
-    ),
-  notes: z.string().nullable(),
-};
-
-const vendorCreateFields = {
-  ...vendorFields,
-  website: z.string().nullable().default(null),
-  orderUrlTemplate: z.string().nullable().default(null),
-  notes: z.string().nullable().default(null),
-};
+const vendorCreateFields = generatedVendorFieldSchemas.create;
 
 export const vendorCreateInput = z.object(vendorCreateFields);
 export type VendorCreateInput = z.infer<typeof vendorCreateInput>;
 
-export const vendorUpdateData = deriveUpdateData(vendorCreateFields);
+export const vendorUpdateData = z.object(generatedVendorFieldSchemas.update);
 export type VendorUpdateData = z.infer<typeof vendorUpdateData>;
 export const vendorUpdateInput = z.object({
   id: vendorShortcode,
@@ -63,11 +41,8 @@ export type FetchVendorLogoInput = z.infer<typeof fetchVendorLogoInput>;
 export const vendorFilterFields = {
   ...auditDateFilterFields,
   ...vendorRelatedFilterFields,
-  search: z.string().optional(),
-  ...numericRangeFields("purchaseCount", { int: true, nonnegative: true }),
-  ...numericRangeFields("spend"),
+  ...generatedVendorFilterFields,
   latestPurchaseDatePresenceFilter: presenceFilter,
-  ...dateRangeFields("latestPurchaseDate"),
   logoPresenceFilter: presenceFilter,
 };
 export const vendorFiltersSchema = z.object(vendorFilterFields);
@@ -86,19 +61,7 @@ export const vendorSortableFields = [
 export type VendorSortField = (typeof vendorSortableFields)[number];
 
 export const vendorOut = z.object({
-  id: vendorShortcode,
-  ...vendorFields,
-  purchaseCount: z.number().int(),
-  /**
-   * `SUM(cost)` over the live expenses of this vendor's live purchases — the
-   * blended net, same convention as `projectRollups.spent`. Never derived from
-   * `purchase.statedTotal`, which is not spend.
-   */
-  spend: money,
-  latestPurchaseDate: plainDate.nullable(),
-  /** A displayable vendor brand mark, or null when the monogram is intentional. */
-  logo: imageOut.nullable(),
-  ...timestampedFields,
+  ...generatedVendorFieldSchemas.read,
 });
 export type VendorOut = z.infer<typeof vendorOut>;
 

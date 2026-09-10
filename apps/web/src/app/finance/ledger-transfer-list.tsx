@@ -9,6 +9,7 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import {
@@ -32,13 +33,17 @@ export function LedgerTransferList() {
   );
   const columns = useMemo(
     () =>
-      createCubbyColumnCollection<LedgerTransferOut>((add) => {
-        add(createLedgerTransferFromPartyColumn(helper));
-        add(createLedgerTransferToPartyColumn(helper));
-        add(createLedgerTransferAmountColumn(helper));
-        add(createLedgerTransferDateColumn(helper));
-        add(createLedgerTransferEvidenceCountColumn(helper));
-      }),
+      createEntityDisplayColumns(
+        "ledgerTransfer",
+        helper,
+        createCubbyColumnCollection<LedgerTransferOut>((add) => {
+          add(createLedgerTransferFromPartyColumn(helper));
+          add(createLedgerTransferToPartyColumn(helper));
+          add(createLedgerTransferAmountColumn(helper));
+          add(createLedgerTransferDateColumn(helper));
+          add(createLedgerTransferEvidenceCountColumn(helper));
+        }),
+      ),
     [helper],
   );
   return (

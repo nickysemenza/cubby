@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   InventoryId,
@@ -550,13 +551,7 @@ export const updateInventoryEntry = async (
 
   if (before) {
     const changes = computeChanges(before, updated, [
-      "amount",
-      "productId",
-      "locationId",
-      // A placement flip changes what every count, audit and browse surface
-      // reports about this row, so it belongs in the audit trail even though
-      // nothing about the physical object moved.
-      "placement",
+      ...entityFieldModels.inventory.audit,
     ]);
     if (changes) {
       await logAuditEntry(db, actor, {

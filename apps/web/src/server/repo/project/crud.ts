@@ -8,6 +8,7 @@
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   ImageShortcode,
@@ -207,21 +208,6 @@ export const createProject = async (
   return { output: await getProjectByID(db, id), entityId: id };
 };
 
-const AUDIT_FIELDS = [
-  "name",
-  "status",
-  "kind",
-  "locations",
-  "costEstimate",
-  "parentProjectId",
-  "startDate",
-  "endDate",
-  "icon",
-  "notes",
-  "googleDriveFolderUrl",
-  "notionPageUrl",
-] as const;
-
 export const updateProject = async (
   db: Database,
   shortcode: ProjectShortcode,
@@ -313,7 +299,7 @@ export const updateProject = async (
     }
 
     const changes: AuditChangeMap = {
-      ...computeChanges(before, updated, [...AUDIT_FIELDS]),
+      ...computeChanges(before, updated, [...entityFieldModels.project.audit]),
     };
     if (resolvedBlockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(

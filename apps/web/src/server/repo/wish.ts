@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ProductId,
@@ -496,7 +497,7 @@ export const updateWish = async (
     const changes = computeChanges(
       { ...before, candidateProductIds: beforeCandidates },
       { ...updated, candidateProductIds: afterCandidates },
-      ["name", "notes", "acquiredAt", "candidateProductIds"],
+      [...entityFieldModels.wish.audit],
     );
     if (changes)
       await logAuditEntry(tx, actor, {

@@ -36,6 +36,8 @@ export const DOMAIN_WAYFINDING = {
       "/products",
       "/inventory",
       "/locations",
+      "/scan",
+      "/labels",
       "/collections",
       "/pantry-view",
     ],

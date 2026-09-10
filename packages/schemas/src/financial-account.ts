@@ -1,104 +1,33 @@
 import { z } from "zod";
 import { financialAccountRelatedFilterFields } from "./related-view";
-import {
-  auditDateFilterFields,
-  deriveUpdateData,
-  timestampedFields,
-} from "./base-entity";
-import { financialAccountShortcode, ledgerPartyShortcode } from "./identifiers";
+import { auditDateFilterFields } from "./base-entity";
+import { financialAccountShortcode } from "./identifiers";
 import {
   createPaginatedResponseSchema,
   oneOrMany,
   presenceFilter,
 } from "./pagination";
+import {
+  financialAccountIdentityKind,
+  financialAccountLast4 as last4,
+} from "./financial-account-fields";
+import {
+  generatedFinancialAccountFieldSchemas,
+  generatedFinancialAccountFilterFields,
+} from "./generated/entity-field-schemas.financialAccount.gen";
 
-const last4 = z.string().regex(/^\d{4}$/, "expected four digits");
+export {
+  financialAccountIdentity,
+  financialAccountIdentityKind,
+  financialAccountSourceAlias,
+  financialAccountSourceAliases,
+  type FinancialAccountIdentity,
+  type FinancialAccountIdentityKind,
+  type FinancialAccountSourceAlias,
+} from "./financial-account-fields";
 
-export const financialAccountIdentityKind = z.enum([
-  "credit_card",
-  "bank_account",
-  "stored_value",
-  "cash",
-  "other",
-]);
-export type FinancialAccountIdentityKind = z.infer<
-  typeof financialAccountIdentityKind
->;
-
-const nullableLast4 = last4.nullable();
-
-export const financialAccountIdentity = z.discriminatedUnion("kind", [
-  z.strictObject({
-    kind: z.literal("credit_card"),
-    issuer: z.string().nullable(),
-    network: z
-      .enum(["visa", "mastercard", "amex", "discover", "other"])
-      .nullable(),
-    last4: nullableLast4,
-  }),
-  z.strictObject({
-    kind: z.literal("bank_account"),
-    institution: z.string().nullable(),
-    accountType: z.enum(["checking", "savings", "money_market", "other"]),
-    last4: nullableLast4,
-  }),
-  z.strictObject({
-    kind: z.literal("stored_value"),
-    provider: z.string().min(1),
-    last4: nullableLast4,
-  }),
-  z.strictObject({ kind: z.literal("cash") }),
-  z.strictObject({
-    kind: z.literal("other"),
-    institution: z.string().nullable(),
-    last4: nullableLast4,
-  }),
-]);
-export type FinancialAccountIdentity = z.infer<typeof financialAccountIdentity>;
-
-export const financialAccountSourceAlias = z.strictObject({
-  source: z.string().min(1),
-  alias: z.string().min(1),
-  externalAccountId: z.string().min(1).nullable(),
-});
-export type FinancialAccountSourceAlias = z.infer<
-  typeof financialAccountSourceAlias
->;
-
-export const financialAccountSourceAliases = z
-  .array(financialAccountSourceAlias)
-  .refine((aliases) => {
-    const seen = new Set<string>();
-    for (const alias of aliases) {
-      // Provider ids are account identity, so two labels for one provider id
-      // are still duplicate aliases. Without an id, the display alias is only
-      // advisory evidence, but repeating that same evidence adds no value.
-      const key =
-        alias.externalAccountId === null
-          ? `alias\u0000${alias.source}\u0000${alias.alias}`
-          : `id\u0000${alias.source}\u0000${alias.externalAccountId}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-    }
-    return true;
-  }, "sourceAliases must not contain duplicate entries");
-
-const financialAccountFields = {
-  name: z.string().min(1),
-  identity: financialAccountIdentity,
-  provisional: z.boolean(),
-  sourceAliases: financialAccountSourceAliases,
-  ledgerPartyId: ledgerPartyShortcode.nullable(),
-  notes: z.string().nullable(),
-};
-
-const financialAccountCreateFields = {
-  ...financialAccountFields,
-  provisional: z.boolean().default(false),
-  sourceAliases: financialAccountSourceAliases.default([]),
-  ledgerPartyId: ledgerPartyShortcode.nullable().default(null),
-  notes: z.string().nullable().default(null),
-};
+const financialAccountCreateFields =
+  generatedFinancialAccountFieldSchemas.create;
 
 export const financialAccountCreateInput = z.object(
   financialAccountCreateFields,
@@ -107,8 +36,8 @@ export type FinancialAccountCreateInput = z.infer<
   typeof financialAccountCreateInput
 >;
 
-export const financialAccountUpdateData = deriveUpdateData(
-  financialAccountCreateFields,
+export const financialAccountUpdateData = z.object(
+  generatedFinancialAccountFieldSchemas.update,
 );
 export type FinancialAccountUpdateData = z.infer<
   typeof financialAccountUpdateData
@@ -124,9 +53,8 @@ export type FinancialAccountUpdateInput = z.infer<
 export const financialAccountFilterFields = {
   ...auditDateFilterFields,
   ...financialAccountRelatedFilterFields,
-  search: z.string().optional(),
+  ...generatedFinancialAccountFilterFields,
   identityKind: oneOrMany(financialAccountIdentityKind).optional(),
-  provisional: z.boolean().optional(),
   last4: last4.optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalAccountId: oneOrMany(z.string().min(1)).optional(),
@@ -149,18 +77,9 @@ export const financialAccountSortableFields = [
 export type FinancialAccountSortField =
   (typeof financialAccountSortableFields)[number];
 
-export const financialAccountOut = z.object({
-  id: financialAccountShortcode,
-  ...financialAccountFields,
-  /**
-   * Display name for `ledgerPartyId`, resolved server-side — same read-only
-   * companion pattern as `financialTransactionOut.accountName`. Never an input:
-   * ownership is written through `ledgerPartyId` alone.
-   */
-  ledgerPartyName: z.string().nullable(),
-  transactionCount: z.number().int().nonnegative(),
-  ...timestampedFields,
-});
+export const financialAccountOut = z.object(
+  generatedFinancialAccountFieldSchemas.read,
+);
 export type FinancialAccountOut = z.infer<typeof financialAccountOut>;
 
 /**

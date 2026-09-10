@@ -1,3 +1,7 @@
+import {
+  cookbookDiffInput,
+  upsertCookbookInput,
+} from "@cubby/schemas/import-recipe";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -8,9 +12,17 @@ import {
   recipe,
   recipeSection,
 } from "~/server/db/schema";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import {
+  deleteCookbookWorkflow,
+  getCookbookDiffWorkflow,
+  importCookbookWorkflow,
+  reprocessCookbookWorkflow,
+  upsertCookbookWorkflow,
+} from "~/server/workflows/recipe-import.server";
 
 import {
-  deleteCookbook,
   getCookbookByName,
   getCookbookRecipePhotoSource,
   listCookbooks,
@@ -31,6 +43,10 @@ import {
 // EPUB importer suite — actor audits as an epub import, not the UI.
 describe("cookbook repository", () => {
   const ctx = withTestDb("epub_import");
+  const workflowContext = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
 
   it("upsertCookbook creates then updates by name (no duplicate)", async () => {
     const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
@@ -39,24 +55,139 @@ describe("cookbook repository", () => {
       { name: "Book A", rawJson: raw, author: ["Ada"], sourceLabel: "a.epub" },
       ctx.actor,
     );
-    const second = await upsertCookbook(
-      ctx.db,
-      {
+    const second = await upsertCookbookWorkflow(
+      workflowContext(),
+      upsertCookbookInput.parse({
         name: "Book A",
         rawJson: raw,
         author: ["Ada", "Bob"],
         subjects: ["Baking"],
         sourceLabel: "a.epub",
-      },
-      ctx.actor,
+      }),
     );
 
-    expect(second.entityId).toBe(first.entityId);
-    expect(second.output.id).toBe(first.output.id);
+    expect(second.id).toBe(first.output.id);
     const cb = await getCookbookByName(ctx.db, "Book A");
+    expect(cb?.id).toBe(first.entityId);
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
     expect(cb?.rawJson).toHaveLength(1);
+  });
+
+  it("returns no diff for a missing book and recipes for an existing book", async () => {
+    await expect(
+      getCookbookDiffWorkflow(
+        workflowContext(),
+        cookbookDiffInput.parse({ book: "Missing diff book" }),
+      ),
+    ).resolves.toEqual([]);
+
+    const book = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Diff Book",
+        rawJson: [cookbookRecipe("Diff Pancakes", ["1 cup flour"])],
+        sourceLabel: "diff.epub",
+      },
+      ctx.actor,
+    );
+    for await (const _event of importCookbookWorkflow(workflowContext(), {
+      cookbookId: book.output.id,
+      indices: [0],
+    })) {
+      // Drain the stream so the recipe commit and finalization complete.
+    }
+
+    await expect(
+      getCookbookDiffWorkflow(
+        workflowContext(),
+        cookbookDiffInput.parse({ book: "Diff Book" }),
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({ title: "Diff Pancakes", hasImage: false }),
+    ]);
+  });
+
+  it("streams cookbook row failures without discarding earlier committed recipes", async () => {
+    const raw = [cookbookRecipe("Streamed Pancakes", ["2 cups flour"])];
+    const book = await upsertCookbook(
+      ctx.db,
+      { name: "Streamed Book", rawJson: raw, sourceLabel: "streamed.epub" },
+      ctx.actor,
+    );
+    const events = [];
+    for await (const event of importCookbookWorkflow(workflowContext(), {
+      cookbookId: book.output.id,
+      indices: [0, 7],
+    }))
+      events.push(event);
+
+    expect(events).toMatchObject([
+      { type: "progress", done: 0, total: 2 },
+      {
+        type: "progress",
+        done: 1,
+        total: 2,
+        item: { index: 0, ok: true },
+      },
+      {
+        type: "progress",
+        done: 2,
+        total: 2,
+        item: { index: 7, ok: false },
+      },
+      { type: "done", result: { succeeded: 1, failed: 1 } },
+    ]);
+    const persisted = await getDb(ctx.db).query.recipe.findMany({
+      where: eq(recipe.cookbookId, book.entityId),
+      columns: { name: true },
+    });
+    expect(persisted).toEqual([{ name: "Streamed Pancakes" }]);
+  });
+
+  it("reprocesses no recipes without inventing a progress item and returns extras", async () => {
+    const raw = [cookbookRecipe("Deferred Recipe", ["1 pinch salt"])];
+    const book = await upsertCookbook(
+      ctx.db,
+      { name: "Deferred Book", rawJson: raw, sourceLabel: "deferred.epub" },
+      ctx.actor,
+    );
+    const events = [];
+    for await (const event of reprocessCookbookWorkflow(workflowContext(), {
+      cookbookId: book.output.id,
+    }))
+      events.push(event);
+    expect(events).toEqual([
+      {
+        type: "done",
+        result: { reprocessed: 0, importableExtras: ["Deferred Recipe"] },
+      },
+    ]);
+  });
+
+  it("finalizes the first committed cookbook import on close without starting the next row", async () => {
+    const raw = [
+      cookbookRecipe("Close First", ["1 cup flour"]),
+      cookbookRecipe("Close Second", ["1 cup water"]),
+    ];
+    const book = await upsertCookbook(
+      ctx.db,
+      { name: "Closing Book", rawJson: raw, sourceLabel: "closing.epub" },
+      ctx.actor,
+    );
+    const stream = importCookbookWorkflow(workflowContext(), {
+      cookbookId: book.output.id,
+      indices: [0, 1],
+    });
+    await stream.next();
+    await stream.next();
+    await stream.return();
+
+    const persisted = await getDb(ctx.db).query.recipe.findMany({
+      where: eq(recipe.cookbookId, book.entityId),
+      columns: { name: true },
+    });
+    expect(persisted).toEqual([{ name: "Close First" }]);
   });
 
   it("preserves an existing cover and leaves a redundant re-import cover pending", async () => {
@@ -162,7 +293,7 @@ describe("cookbook repository", () => {
   // recipe cascade underneath it too).
   it("deleteCookbook soft-deletes the book, its recipes, sections, ingredients, and leaves no embedding orphans", async () => {
     const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
-    const { entityId: cookbookId } = await upsertCookbook(
+    const { entityId: cookbookId, output: book } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
       ctx.actor,
@@ -209,12 +340,10 @@ describe("cookbook repository", () => {
     await seedEmbedding("cookbook", cookbookId);
     await seedEmbedding("recipe", recipeId);
 
-    const { deletedRecipeIds } = await deleteCookbook(
-      ctx.db,
-      cookbookId,
-      ctx.actor,
-    );
-    expect(deletedRecipeIds).toEqual([recipeId]);
+    const deleted = await deleteCookbookWorkflow(workflowContext(), {
+      cookbookId: book.id,
+    });
+    expect(deleted.deletedRecipes).toBe(1);
 
     const cookbookRow = await getDb(ctx.db).query.cookbook.findFirst({
       where: eq(cookbook.id, cookbookId),

@@ -78,7 +78,7 @@ export function LocationChildrenTable({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<LocationTreeRow>((add) => {
-        // `location` declares `standardColumns: []` (entities.tsx), so image and
+        // Location has no standard display fields, so image and
         // name are the table's own — which is also why the expand chevron is set
         // here rather than via the tree config's `expandable`.
         add(

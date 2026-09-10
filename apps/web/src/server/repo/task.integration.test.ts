@@ -1,17 +1,77 @@
 import { taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { taskDependency } from "~/server/db/schema";
+import { auditLog, taskDependency } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
-import { createTask, getTaskByShortcode, updateTask } from "~/server/repo/task";
+import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import {
+  createTask,
+  getTaskByShortcode,
+  setTasksStatus,
+  updateTask,
+} from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { taskBulkReorderWorkflow } from "~/server/workflows/task.server";
+
+describe("task reorder workflow", () => {
+  const ctx = withTestDb();
+
+  it("returns persisted ranks and dispatches effects after a successful reorder", async () => {
+    const first = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "First ranked task" }),
+      ctx.actor,
+    );
+    const second = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "Second ranked task" }),
+      ctx.actor,
+    );
+    const result = await taskBulkReorderWorkflow(
+      ctx.db,
+      {
+        ranks: [
+          { id: first.output.id, sortOrder: 20 },
+          { id: second.output.id, sortOrder: 10 },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: first.output.id, sortOrder: 20 }),
+        expect.objectContaining({ id: second.output.id, sortOrder: 10 }),
+      ]),
+    );
+    expect(result.sideEffects.backgroundBatches.length).toBeGreaterThan(0);
+    expect((await getTaskByShortcode(ctx.db, first.output.id))?.sortOrder).toBe(
+      20,
+    );
+    await expect(
+      taskBulkReorderWorkflow(
+        ctx.db,
+        {
+          ranks: [
+            { id: first.output.id, sortOrder: 99 },
+            { id: testShortcode("task", "missing-ranked-task"), sortOrder: 1 },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(testShortcode("task", "missing-ranked-task"));
+    expect((await getTaskByShortcode(ctx.db, first.output.id))?.sortOrder).toBe(
+      20,
+    );
+  });
+});
 
 describe("task repository — listActionableTasks", () => {
   const ctx = withTestDb();
@@ -268,5 +328,76 @@ describe("task kernel — bulkUpdate", () => {
         })
       ).updatedReferences,
     ).toEqual([{ entity: "task", id: t.id }]);
+  });
+});
+
+describe("setTasksStatus", () => {
+  const ctx = withTestDb();
+
+  it("returns mixed selections, audits only changes, and skips missing IDs", async () => {
+    const changed = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ trade: "other", name: "Bulk status pending" }),
+      ctx.actor,
+    );
+    const unchanged = await createTask(
+      ctx.db,
+      taskCreateInput.parse({
+        trade: "other",
+        name: "Bulk status already done",
+        status: "done",
+      }),
+      ctx.actor,
+    );
+    const ids = [changed.output.id, unchanged.output.id];
+
+    expect(
+      (await setTasksStatus(ctx.db, { ids, status: "done" }, ctx.actor)).map(
+        (task) => task.id,
+      ),
+    ).toEqual(expect.arrayContaining(ids));
+    expect(
+      (await setTasksStatus(ctx.db, { ids, status: "done" }, ctx.actor)).map(
+        (task) => task.id,
+      ),
+    ).toEqual(expect.arrayContaining(ids));
+
+    const changedId = await resolveLiveShortcode(
+      ctx.db,
+      changed.output.id,
+      "task",
+    );
+    const unchangedId = await resolveLiveShortcode(
+      ctx.db,
+      unchanged.output.id,
+      "task",
+    );
+    if (!changedId || !unchangedId) throw new Error("task fixture missing");
+    const audits = await getDb(ctx.db)
+      .select({ entityId: auditLog.entityId })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, "task"),
+          eq(auditLog.action, "update"),
+          inArray(auditLog.entityId, [changedId, unchangedId]),
+        ),
+      );
+    expect(audits.filter((audit) => audit.entityId === changedId)).toHaveLength(
+      1,
+    );
+    expect(
+      audits.filter((audit) => audit.entityId === unchangedId),
+    ).toHaveLength(0);
+
+    const partial = await setTasksStatus(
+      ctx.db,
+      {
+        ids: [changed.output.id, testShortcode("task", "TSK-MISSING")],
+        status: "done",
+      },
+      ctx.actor,
+    );
+    expect(partial.map((task) => task.id)).toEqual([changed.output.id]);
   });
 });

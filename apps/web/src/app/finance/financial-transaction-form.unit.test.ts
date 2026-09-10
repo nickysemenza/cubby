@@ -72,4 +72,21 @@ describe("financial transaction form", () => {
       sourceRefs: [{ source: "statement", externalId: "tx-1" }],
     });
   });
+  it("accepts cleared canonical text controls and normalizes them without throwing", () => {
+    const values = financialTransactionFormSchema.parse({
+      ...emptyFinancialTransactionForm,
+      accountId: "FAC-2222",
+      amount: 12.34,
+      merchant: null,
+      rawDescription: null,
+      sourceCategory: null,
+      notes: null,
+    });
+    expect(normalizeFinancialTransactionForm(values)).toMatchObject({
+      merchant: null,
+      rawDescription: null,
+      sourceCategory: null,
+      notes: null,
+    });
+  });
 });

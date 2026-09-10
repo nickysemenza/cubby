@@ -15,8 +15,13 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
+import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { getShoppingListWorkflow } from "~/server/workflows/meal.server";
+import {
+  getMakeableWorkflow,
+  duplicateWorkflow,
+} from "~/server/workflows/recipe.server";
 
 describe("AvailabilityService.getRecipeAvailability", () => {
   const tdb = withTestDb();
@@ -100,6 +105,26 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     expect(row.covered).toBe(true);
     expect(row.availabilitySource).toBe("assumed");
     expect(row.quantityIssues).toEqual([]);
+    const discovered = await getMakeableWorkflow(
+      tdb.db,
+      { minCoverage: 1 },
+      ctx().services.availability,
+    );
+    expect(discovered.recipes.map(({ recipeId }) => recipeId)).toContain(
+      recipe.id,
+    );
+    const duplicate = await duplicateWorkflow(requireActor(ctx()), {
+      id: recipe.id,
+    });
+    expect(duplicate.id).not.toBe(recipe.id);
+    const copiedAvailability =
+      await ctx().services.availability.getRecipeAvailability(duplicate.id);
+    expect(copiedAvailability.ingredients[0]).toMatchObject({
+      covered: true,
+      availabilitySource: "assumed",
+      haveValue: 0,
+    });
+    expect(copiedAvailability.ingredients[0]?.needValue).toBe(row.needValue);
   });
 
   it("aggregates selected meals once while keeping staples out of the buy total", async () => {

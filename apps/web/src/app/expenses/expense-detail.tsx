@@ -12,7 +12,6 @@ import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
 import { tradeOptions } from "~/app/projects/shared";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { VendorCell } from "~/components/entity/vendor-cell";
 import { Row } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -22,6 +21,7 @@ import { Button } from "~/components/ui/button";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 
@@ -134,113 +134,111 @@ function ExpenseDetailDialogs({
   );
 }
 
-function expenseProductFields(
+function expenseProductRenderers(
   expense: ExpenseOut,
   updateExpense: (input: ExpenseUpdateInput) => Promise<void>,
-): BasicInfoField[] {
-  if (expense.lineKind !== "principal") return [];
+) {
   const linkedProduct =
     expense.productId && expense.productName
       ? { id: expense.productId, name: expense.productName }
       : null;
-  const fields: BasicInfoField[] = [
-    {
-      label: "Product",
-      value: (
-        <EditableEntityCell
-          value={linkedProduct}
-          label="product"
-          clearable
-          trigger="pencil"
-          onSave={async (productId) => {
-            await updateExpense({
-              id: expense.id,
-              data: { productId },
-            });
-          }}
-          clipboard={entityCellClipboard(
-            "product",
-            linkedProduct,
-            async (productId) => {
+  return {
+    productId: () => ({
+      value:
+        expense.lineKind === "principal" ? (
+          <EditableEntityCell
+            value={linkedProduct}
+            label="product"
+            clearable
+            trigger="pencil"
+            onSave={async (productId) => {
               await updateExpense({
                 id: expense.id,
                 data: { productId },
               });
-            },
-          )}
-          SearchProvider={WithProductSearch}
-          renderValue={(value) =>
-            value && expense.productId && value.id === expense.productId ? (
-              <EntityInlineLink
-                displayImage={undefined}
-                entity="product"
-                data={{ id: expense.productId, name: value.name }}
-              />
-            ) : value ? (
-              <span>{value.name}</span>
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-      filterAction: expense.productId ? (
-        <EntityFilterLink
-          to="/expenses"
-          search={{ productId: expense.productId }}
-          label={`Show all expenses for ${expense.productName ?? "this product"}`}
-        />
-      ) : undefined,
-    },
-    {
-      label: "Itemization",
-      value: (
-        <EditableCell
-          value={expense.lineBasis}
-          config={{ type: "select", options: expenseLineBasisOptions }}
-          onSave={async (lineBasis) => {
-            if (!lineBasis) return;
-            await updateExpense({ id: expense.id, data: { lineBasis } });
-          }}
-          renderValue={(lineBasis) =>
-            lineBasis ? (
-              <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
-                {expenseLineBasisLabels[lineBasis]}
-              </Badge>
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
-      ),
-      filterAction: (
-        <EntityFilterLink
-          to="/expenses"
-          search={{ lineBasis: expense.lineBasis }}
-          label={`Show all ${expenseLineBasisLabels[expense.lineBasis].toLowerCase()} expenses`}
-        />
-      ),
-    },
-  ];
-  if (expense.productId) {
-    fields.push({
-      label: "Product quantity",
-      value: (
-        <EditableCell
-          value={expense.productQuantity}
-          config={{ type: "number", step: "any", placeholder: "Unknown" }}
-          onSave={async (productQuantity) => {
-            await updateExpense({
-              id: expense.id,
-              data: { productQuantity },
-            });
-          }}
-          renderValue={(value) => value ?? <NoneValue />}
-        />
-      ),
-    });
-  }
-  return fields;
+            }}
+            clipboard={entityCellClipboard(
+              "product",
+              linkedProduct,
+              async (productId) => {
+                await updateExpense({
+                  id: expense.id,
+                  data: { productId },
+                });
+              },
+            )}
+            SearchProvider={WithProductSearch}
+            renderValue={(value) =>
+              value && expense.productId && value.id === expense.productId ? (
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="product"
+                  data={{ id: expense.productId, name: value.name }}
+                />
+              ) : value ? (
+                <span>{value.name}</span>
+              ) : (
+                <NoneValue />
+              )
+            }
+          />
+        ) : undefined,
+      filterAction:
+        expense.lineKind === "principal" && expense.productId ? (
+          <EntityFilterLink
+            to="/expenses"
+            search={{ productId: expense.productId }}
+            label={`Show all expenses for ${expense.productName ?? "this product"}`}
+          />
+        ) : undefined,
+    }),
+    lineBasis: () => ({
+      value:
+        expense.lineKind === "principal" ? (
+          <EditableCell
+            value={expense.lineBasis}
+            config={{ type: "select", options: expenseLineBasisOptions }}
+            onSave={async (lineBasis) => {
+              if (!lineBasis) return;
+              await updateExpense({ id: expense.id, data: { lineBasis } });
+            }}
+            renderValue={(lineBasis) =>
+              lineBasis ? (
+                <Badge variant={expenseLineBasisBadgeVariant[lineBasis]}>
+                  {expenseLineBasisLabels[lineBasis]}
+                </Badge>
+              ) : (
+                <NoneValue />
+              )
+            }
+          />
+        ) : undefined,
+      filterAction:
+        expense.lineKind === "principal" ? (
+          <EntityFilterLink
+            to="/expenses"
+            search={{ lineBasis: expense.lineBasis }}
+            label={`Show all ${expenseLineBasisLabels[expense.lineBasis].toLowerCase()} expenses`}
+          />
+        ) : undefined,
+    }),
+    productQuantity: () => ({
+      value:
+        expense.lineKind === "principal" && expense.productId ? (
+          <EditableCell
+            value={expense.productQuantity}
+            config={{ type: "number", step: "any", placeholder: "Unknown" }}
+            onSave={async (productQuantity) => {
+              await updateExpense({
+                id: expense.id,
+                data: { productQuantity },
+              });
+            }}
+            renderValue={(value) => value ?? <NoneValue />}
+          />
+        ) : undefined,
+    }),
+  };
 }
 
 export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
@@ -259,9 +257,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     data: expense,
   });
 
-  const fields: BasicInfoField[] = [
-    {
-      label: "Name",
+  const overrides = {
+    name: () => ({
       value: (
         <EditableCell
           value={expense.name}
@@ -276,9 +273,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Cost",
+    }),
+    cost: () => ({
       value: (
         <EditableCell
           value={expense.cost}
@@ -294,9 +290,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
-    },
-    {
-      label: "Date",
+    }),
+    date: () => ({
       value: (
         <EditableCell
           value={expense.date}
@@ -311,9 +306,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Line kind",
+    }),
+    lineKind: () => ({
       value: (
         <EditableCell
           value={expense.lineKind}
@@ -343,9 +337,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           label={`Show all ${expenseLineKindLabels[expense.lineKind].toLowerCase()} expenses`}
         />
       ),
-    },
-    {
-      label: "Cost Type",
+    }),
+    costType: () => ({
       value: (
         <EditableCell
           value={expense.costType}
@@ -376,9 +369,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           label={`Show all ${costTypeLabels[expense.costType].toLowerCase()} expenses`}
         />
       ),
-    },
-    {
-      label: "Trade",
+    }),
+    trade: () => ({
       value: (
         <EditableCell
           value={expense.trade}
@@ -401,9 +393,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           label={`Show all expenses for trade ${expense.trade}`}
         />
       ),
-    },
-    {
-      label: "Planned",
+    }),
+    future: () => ({
       value: (
         <EditableCell
           value={String(expense.future)}
@@ -434,9 +425,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
-    },
-    {
-      label: "URL",
+    }),
+    url: () => ({
       value: (
         <EditableCell
           value={expense.url}
@@ -452,9 +442,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
-    },
-    {
-      label: "Notes",
+    }),
+    notes: () => ({
       value: (
         <EditableCell
           value={expense.notes}
@@ -468,9 +457,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Vendor",
+    }),
+    vendor: () => ({
       value: (
         // A roster picker, not a text box. Free text here minted a duplicate
         // `Vendor` row on any typo — `findOrCreateVendor` matches names EXACTLY
@@ -514,9 +502,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           label={`Show all expenses from ${expense.vendor ?? "this vendor"}`}
         />
       ) : undefined,
-    },
-    {
-      label: "Order #",
+    }),
+    orderId: () => ({
       value: (
         <EditableCell
           value={expense.orderId}
@@ -545,9 +532,8 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           }
         />
       ),
-    },
-    {
-      label: "Project",
+    }),
+    projectId: () => ({
       value: (
         <EditableEntityCell
           value={
@@ -603,11 +589,11 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           label={`Show all expenses for ${expense.projectName ?? "this project"}`}
         />
       ) : undefined,
-    },
-    ...expenseProductFields(expense, async (input) => {
+    }),
+    ...expenseProductRenderers(expense, async (input) => {
       await updateMutation.mutateAsync(input);
     }),
-  ];
+  };
 
   const sections: DetailSection[] = [
     {
@@ -616,8 +602,10 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
       icon: Info,
       placement: "primary",
       content: (
-        <BasicInfo
-          fields={fields}
+        <EntityBasicInfo
+          entity="expense"
+          record={expense}
+          overrides={overrides}
           // In the footer, not beside the Project row: InfoRow's value span is
           // right-aligned and capped at 65%, which would crush the chips.
           footer={

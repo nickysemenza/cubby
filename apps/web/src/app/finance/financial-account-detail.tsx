@@ -2,13 +2,15 @@ import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import { Info, ReceiptText } from "lucide-react";
 import { useState } from "react";
 
-import { BasicInfo } from "~/components/common/basic-info";
+import { TableLink } from "~/app/_components/table/TableLink";
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { financialAccountEditRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+import { entities, entityDetailParams } from "~/entities/entities";
+import { EntityBasicInfo } from "~/entities/entity-display";
 
 import { renderOptionCell } from "../_components/data-table/columnHelpers";
 import { DetailSections } from "../_components/data-table/detail-page";
@@ -42,14 +44,21 @@ export function FinancialAccountDetail({
             icon: Info,
             placement: "primary",
             content: (
-              <BasicInfo
-                fields={[
-                  { label: "Name", value: account.name },
-                  {
-                    // Which party's money this account is. Read-only here; the
-                    // accounts table has the inline editor.
-                    label: "Owner",
-                    value: account.ledgerPartyName ?? <NoneValue />,
+              <EntityBasicInfo
+                entity="financialAccount"
+                record={account}
+                overrides={{
+                  ledgerPartyId: () => ({
+                    value: account.ledgerPartyId ? (
+                      <TableLink
+                        to={entities.ledgerParty.routes.detail}
+                        params={entityDetailParams(account.ledgerPartyId)}
+                      >
+                        {account.ledgerPartyName ?? account.ledgerPartyId}
+                      </TableLink>
+                    ) : (
+                      <NoneValue />
+                    ),
                     filterAction: account.ledgerPartyId ? (
                       <EntityFilterLink
                         to="/ledger-parties"
@@ -57,9 +66,8 @@ export function FinancialAccountDetail({
                         label="Show this party"
                       />
                     ) : undefined,
-                  },
-                  {
-                    label: "Identity",
+                  }),
+                  identity: () => ({
                     value: renderOptionCell(
                       account.identity.kind,
                       accountIdentityKindOptions,
@@ -71,9 +79,8 @@ export function FinancialAccountDetail({
                         label={`Show all ${account.identity.kind.replaceAll("_", " ")} accounts`}
                       />
                     ),
-                  },
-                  {
-                    label: "Provisional",
+                  }),
+                  provisional: () => ({
                     value: renderOptionCell(
                       account.provisional ? "true" : "false",
                       provisionalOptions,
@@ -89,16 +96,14 @@ export function FinancialAccountDetail({
                         }
                       />
                     ),
-                  },
-                  {
-                    label: "Aliases",
+                  }),
+                  sourceAliases: () => ({
                     value:
                       account.sourceAliases
                         .map((a) => `${a.source}: ${a.alias}`)
                         .join(", ") || "—",
-                  },
-                  { label: "Notes", value: account.notes ?? "—" },
-                ]}
+                  }),
+                }}
               />
             ),
           },

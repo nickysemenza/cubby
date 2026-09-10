@@ -47,6 +47,9 @@ type FilterDescriptor = Readonly<{
   optionsRef: SourceRef | null;
   optionsKey: string | null;
   label: string | null;
+  schemaDescription: string | null;
+  deriveSchema: boolean;
+  schemaFromRead: boolean;
   brandRef: IdentifierRef | null;
   expandRef: SourceRef | null;
   urlOnly: boolean;
@@ -72,6 +75,103 @@ type RelationMutation = Readonly<{
   audiences: readonly ("browser" | "mcp")[];
 }>;
 type OperationOwner = "kernel" | "workflow" | null;
+type EntityFieldKind =
+  | "text"
+  | "text-array"
+  | "number"
+  | "boolean"
+  | "date"
+  | "timestamp"
+  | "enum"
+  | "json"
+  | "identifier";
+type EntityFieldControl = Readonly<{
+  kind:
+    | "text"
+    | "textarea"
+    | "checkbox"
+    | "select"
+    | "date"
+    | "number"
+    | "specialized";
+  renderer: string | null;
+  options: readonly Readonly<{ value: string; label: string }>[] | null;
+  section: string;
+}>;
+type EntityFieldValidationSpec = Readonly<{
+  kind:
+    | "string"
+    | "url"
+    | "number"
+    | "boolean"
+    | "timestamp"
+    | "array"
+    | "enum"
+    | "source";
+  source: SourceRef | null;
+  lazy: boolean;
+  values: readonly string[] | null;
+  item: Readonly<{
+    kind: "string" | "source";
+    source: SourceRef | null;
+  }> | null;
+  optional: boolean;
+  nullable: boolean;
+  trim: boolean;
+  integer: boolean;
+  finite: boolean;
+  positive: boolean;
+  nonnegative: boolean;
+  min: number | null;
+  max: number | null;
+  minMessage: string | null;
+  defaultValue: LiteralValue | undefined;
+  description: string | null;
+  descriptionAfter: boolean;
+  mock: string | null;
+}>;
+type EntityField = Readonly<{
+  key: string;
+  kind: EntityFieldKind;
+  nullable: boolean;
+  label: string;
+  description: string | null;
+  readKey: string | null;
+  reference: Readonly<{ entity: string; multiple: boolean }> | null;
+  control: EntityFieldControl | null;
+  display: Readonly<{
+    list: boolean;
+    detail: boolean;
+    columnId: string | null;
+    standard: "name" | "image" | null;
+    detailOrder: number | null;
+    detailSection: string;
+  }>;
+  validation: Readonly<{
+    read: EntityFieldValidationSpec | null;
+    create: EntityFieldValidationSpec | null;
+    update: EntityFieldValidationSpec | null;
+  }>;
+}>;
+type EntityStorageField = Readonly<{
+  key: string;
+  column: string;
+  kind: EntityFieldKind;
+  nullable: boolean;
+  default: "none" | "generated" | "now" | "literal";
+  defaultValue: LiteralValue;
+  reference: string | null;
+  specialized: string | null;
+}>;
+type EntityFieldModel = Readonly<{
+  fields: readonly EntityField[];
+  storage: readonly EntityStorageField[];
+  create: readonly string[];
+  update: readonly string[];
+  bulk: readonly string[];
+  audit: readonly string[];
+  output: readonly string[];
+}>;
 export type EntityLiteral = Readonly<{
   key: string;
   shortcode: string | null;
@@ -105,6 +205,7 @@ export type EntityLiteral = Readonly<{
     delete: OperationOwner;
     merge: OperationOwner;
   }>;
+  fieldModel: EntityFieldModel;
 }>;
 
 export type EntityArtifacts = Readonly<{
@@ -314,6 +415,585 @@ const optionalString = (
     ? null
     : stringValue(object[key], `${context}.${key}`);
 
+const detailOrder = (object: LiteralObject, context: string): number | null => {
+  const value = object.detailOrder;
+  if (value === undefined || value === null) return null;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- AST literal input must be numeric before enforcing the nonnegative integer contract.
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new LiteralSpecError(
+      `${context}.detailOrder must be a nonnegative integer.`,
+    );
+  }
+  return value;
+};
+
+const stringArray = (value: LiteralValue, context: string): string[] => {
+  if (!Array.isArray(value)) {
+    throw new LiteralSpecError(`${context} must be an array.`);
+  }
+  const values = value.map((item, index) =>
+    stringValue(item, `${context}[${index}]`),
+  );
+  if (new Set(values).size !== values.length) {
+    throw new LiteralSpecError(`${context} contains duplicates.`);
+  }
+  return values;
+};
+
+const fieldKinds = [
+  "text",
+  "text-array",
+  "number",
+  "boolean",
+  "date",
+  "timestamp",
+  "enum",
+  "json",
+  "identifier",
+] as const;
+
+const fieldControlKinds = [
+  "text",
+  "textarea",
+  "checkbox",
+  "select",
+  "date",
+  "number",
+  "specialized",
+] as const;
+
+const fieldValidationKinds = [
+  "string",
+  "url",
+  "number",
+  "boolean",
+  "timestamp",
+  "array",
+  "enum",
+  "source",
+] as const;
+
+const storageDefaultKinds = ["none", "generated", "now", "literal"] as const;
+
+const parsedFieldKind = (
+  value: LiteralValue,
+  context: string,
+): EntityFieldKind => {
+  const kind = stringValue(value, context);
+  const match = fieldKinds.find((candidate) => candidate === kind);
+  if (match === undefined)
+    throw new LiteralSpecError(`${context} is unsupported.`);
+  return match;
+};
+
+const fieldValidationSpec = (
+  value: LiteralValue,
+  context: string,
+): EntityFieldValidationSpec => {
+  const spec = objectValue(value, context);
+  exactKeys(
+    spec,
+    [
+      "kind",
+      "source",
+      "lazy",
+      "values",
+      "item",
+      "optional",
+      "nullable",
+      "trim",
+      "integer",
+      "finite",
+      "positive",
+      "nonnegative",
+      "min",
+      "max",
+      "minMessage",
+      "defaultValue",
+      "description",
+      "descriptionAfter",
+      "mock",
+    ],
+    context,
+  );
+  const kind = stringValue(required(spec, "kind", context), `${context}.kind`);
+  const matchedKind = fieldValidationKinds.find(
+    (candidate) => candidate === kind,
+  );
+  if (matchedKind === undefined)
+    throw new LiteralSpecError(`${context}.kind is unsupported.`);
+  const numeric = (key: "min" | "max"): number | null => {
+    const candidate = spec[key];
+    if (candidate === undefined || candidate === null) return null;
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- AST literal values need a numeric boundary check before Number.isFinite.
+    if (typeof candidate !== "number" || !Number.isFinite(candidate))
+      throw new LiteralSpecError(`${context}.${key} must be a finite number.`);
+    return candidate;
+  };
+  const flag = (
+    key:
+      | "optional"
+      | "nullable"
+      | "trim"
+      | "integer"
+      | "finite"
+      | "positive"
+      | "nonnegative"
+      | "lazy"
+      | "descriptionAfter",
+  ) =>
+    spec[key] === undefined
+      ? false
+      : booleanValue(spec[key], `${context}.${key}`);
+  const source =
+    spec.source === undefined || spec.source === null
+      ? null
+      : sourceRef(spec.source, `${context}.source`);
+  if ((kind === "source") !== (source !== null))
+    throw new LiteralSpecError(
+      `${context}.source is required only when kind is source.`,
+    );
+  const values =
+    spec.values === undefined || spec.values === null
+      ? null
+      : stringArray(spec.values, `${context}.values`);
+  if ((kind === "enum") !== (values !== null))
+    throw new LiteralSpecError(
+      `${context}.values is required only when kind is enum.`,
+    );
+  const item =
+    spec.item === undefined || spec.item === null
+      ? null
+      : (() => {
+          const itemSpec = objectValue(spec.item, `${context}.item`);
+          exactKeys(itemSpec, ["kind", "source"], `${context}.item`);
+          const itemKind = stringValue(
+            required(itemSpec, "kind", `${context}.item`),
+            `${context}.item.kind`,
+          );
+          const matchedItemKind = (["string", "source"] as const).find(
+            (candidate) => candidate === itemKind,
+          );
+          if (matchedItemKind === undefined)
+            throw new LiteralSpecError(`${context}.item.kind is unsupported.`);
+          const itemSource =
+            itemSpec.source === undefined || itemSpec.source === null
+              ? null
+              : sourceRef(itemSpec.source, `${context}.item.source`);
+          if ((itemKind === "source") !== (itemSource !== null))
+            throw new LiteralSpecError(
+              `${context}.item.source is required only when kind is source.`,
+            );
+          return {
+            kind: matchedItemKind,
+            source: itemSource,
+          };
+        })();
+  if ((kind === "array") !== (item !== null))
+    throw new LiteralSpecError(
+      `${context}.item is required only when kind is array.`,
+    );
+  return {
+    kind: matchedKind,
+    source,
+    lazy: flag("lazy"),
+    values,
+    item,
+    optional: flag("optional"),
+    nullable: flag("nullable"),
+    trim: flag("trim"),
+    integer: flag("integer"),
+    finite: flag("finite"),
+    positive: flag("positive"),
+    nonnegative: flag("nonnegative"),
+    min: numeric("min"),
+    max: numeric("max"),
+    minMessage: optionalString(spec, "minMessage", context),
+    defaultValue: spec.defaultValue,
+    description: optionalString(spec, "description", context),
+    descriptionAfter: flag("descriptionAfter"),
+    mock: optionalString(spec, "mock", context),
+  };
+};
+
+const fieldValidation = (
+  value: LiteralValue | undefined,
+  context: string,
+): EntityField["validation"] => {
+  if (value === undefined || value === null)
+    return { read: null, create: null, update: null };
+  const validation = objectValue(value, context);
+  exactKeys(validation, ["read", "create", "update"], context);
+  const mode = (key: "read" | "create" | "update") =>
+    validation[key] === undefined || validation[key] === null
+      ? null
+      : fieldValidationSpec(validation[key], `${context}.${key}`);
+  return {
+    read: mode("read"),
+    create: mode("create"),
+    update: mode("update"),
+  };
+};
+
+const compileFieldModel = (
+  value: LiteralValue | undefined,
+  context: string,
+): EntityFieldModel => {
+  if (value === undefined) {
+    return {
+      fields: [],
+      storage: [],
+      create: [],
+      update: [],
+      bulk: [],
+      audit: [],
+      output: [],
+    };
+  }
+  const model = objectValue(value, context);
+  exactKeys(
+    model,
+    ["fields", "storage", "create", "update", "bulk", "audit", "output"],
+    context,
+  );
+  const rawFields = literalObjectArray(
+    required(model, "fields", context),
+    `${context}.fields`,
+  );
+  const fields = rawFields.map((field, index): EntityField => {
+    const fieldContext = `${context}.fields[${index}]`;
+    exactKeys(
+      field,
+      [
+        "key",
+        "kind",
+        "nullable",
+        "label",
+        "description",
+        "readKey",
+        "reference",
+        "control",
+        "display",
+        "validation",
+      ],
+      fieldContext,
+    );
+    const referenceValue = field.reference;
+    const reference =
+      referenceValue === undefined || referenceValue === null
+        ? null
+        : (() => {
+            const ref = objectValue(
+              referenceValue,
+              `${fieldContext}.reference`,
+            );
+            exactKeys(ref, ["entity", "multiple"], `${fieldContext}.reference`);
+            return {
+              entity: stringValue(
+                required(ref, "entity", `${fieldContext}.reference`),
+                `${fieldContext}.reference.entity`,
+              ),
+              multiple: booleanValue(
+                required(ref, "multiple", `${fieldContext}.reference`),
+                `${fieldContext}.reference.multiple`,
+              ),
+            };
+          })();
+    const controlValue = field.control;
+    const control =
+      controlValue === undefined || controlValue === null
+        ? null
+        : (() => {
+            const controlObject = objectValue(
+              controlValue,
+              `${fieldContext}.control`,
+            );
+            exactKeys(
+              controlObject,
+              ["kind", "renderer", "options", "section"],
+              `${fieldContext}.control`,
+            );
+            const kind = stringValue(
+              required(controlObject, "kind", `${fieldContext}.control`),
+              `${fieldContext}.control.kind`,
+            );
+            const matchedKind = fieldControlKinds.find(
+              (candidate) => candidate === kind,
+            );
+            if (matchedKind === undefined)
+              throw new LiteralSpecError(
+                `${fieldContext}.control.kind is unsupported.`,
+              );
+            const section =
+              controlObject.section === undefined
+                ? "main"
+                : stringValue(
+                    controlObject.section,
+                    `${fieldContext}.control.section`,
+                  );
+            if (section.trim().length === 0)
+              throw new LiteralSpecError(
+                `${fieldContext}.control.section must be nonempty.`,
+              );
+            const optionsValue = controlObject.options;
+            const options =
+              optionsValue === undefined || optionsValue === null
+                ? null
+                : literalObjectArray(
+                    optionsValue,
+                    `${fieldContext}.control.options`,
+                  ).map((option, optionIndex) => {
+                    const optionContext = `${fieldContext}.control.options[${optionIndex}]`;
+                    exactKeys(option, ["value", "label"], optionContext);
+                    return {
+                      value: stringValue(
+                        required(option, "value", optionContext),
+                        `${optionContext}.value`,
+                      ),
+                      label: stringValue(
+                        required(option, "label", optionContext),
+                        `${optionContext}.label`,
+                      ),
+                    };
+                  });
+            return {
+              kind: matchedKind,
+              renderer: optionalString(
+                controlObject,
+                "renderer",
+                `${fieldContext}.control`,
+              ),
+              options,
+              section,
+            };
+          })();
+    const displayValue = field.display;
+    const display =
+      displayValue === undefined
+        ? {
+            list: false,
+            detail: false,
+            columnId: null,
+            standard: null,
+            detailOrder: null,
+            detailSection: "overview",
+          }
+        : ((): EntityField["display"] => {
+            const displayObject = objectValue(
+              displayValue,
+              `${fieldContext}.display`,
+            );
+            exactKeys(
+              displayObject,
+              [
+                "list",
+                "detail",
+                "columnId",
+                "standard",
+                "detailOrder",
+                "detailSection",
+              ],
+              `${fieldContext}.display`,
+            );
+            const columnId = optionalString(
+              displayObject,
+              "columnId",
+              `${fieldContext}.display`,
+            );
+            if (columnId !== null && !columnId.trim()) {
+              throw new LiteralSpecError(
+                `${fieldContext}.display.columnId must not be blank.`,
+              );
+            }
+            const standard = optionalString(
+              displayObject,
+              "standard",
+              `${fieldContext}.display`,
+            );
+            if (
+              standard !== null &&
+              standard !== "name" &&
+              standard !== "image"
+            ) {
+              throw new LiteralSpecError(
+                `${fieldContext}.display.standard must be name or image.`,
+              );
+            }
+            const detailSection =
+              optionalString(
+                displayObject,
+                "detailSection",
+                `${fieldContext}.display`,
+              ) ?? "overview";
+            if (!detailSection.trim()) {
+              throw new LiteralSpecError(
+                `${fieldContext}.display.detailSection must not be blank.`,
+              );
+            }
+            return {
+              columnId,
+              standard,
+              detailSection,
+              detailOrder: detailOrder(
+                displayObject,
+                `${fieldContext}.display`,
+              ),
+              list: booleanValue(
+                required(displayObject, "list", `${fieldContext}.display`),
+                `${fieldContext}.display.list`,
+              ),
+              detail: booleanValue(
+                required(displayObject, "detail", `${fieldContext}.display`),
+                `${fieldContext}.display.detail`,
+              ),
+            };
+          })();
+    return {
+      key: stringValue(
+        required(field, "key", fieldContext),
+        `${fieldContext}.key`,
+      ),
+      kind: parsedFieldKind(
+        required(field, "kind", fieldContext),
+        `${fieldContext}.kind`,
+      ),
+      nullable: booleanValue(
+        required(field, "nullable", fieldContext),
+        `${fieldContext}.nullable`,
+      ),
+      label: stringValue(
+        required(field, "label", fieldContext),
+        `${fieldContext}.label`,
+      ),
+      description: optionalString(field, "description", fieldContext),
+      readKey: optionalString(field, "readKey", fieldContext),
+      reference,
+      control,
+      display,
+      validation: fieldValidation(
+        field.validation,
+        `${fieldContext}.validation`,
+      ),
+    };
+  });
+  const displayedColumnIds = new Set<string>();
+  for (const field of fields) {
+    const standard = field.display.standard;
+    if (
+      standard !== null &&
+      (!field.display.list ||
+        field.kind !== (standard === "name" ? "text" : "json") ||
+        field.readKey !== (standard === "name" ? "name" : "images") ||
+        (field.display.columnId ?? field.key) !== standard)
+    ) {
+      throw new LiteralSpecError(
+        `${context}.${field.key} has an incompatible standard display column.`,
+      );
+    }
+    if (!field.display.list) continue;
+    const columnId = field.display.columnId ?? field.key;
+    if (displayedColumnIds.has(columnId)) {
+      throw new LiteralSpecError(
+        `${context} declares duplicate display column ${columnId}.`,
+      );
+    }
+    displayedColumnIds.add(columnId);
+  }
+  const rawStorage = literalObjectArray(
+    required(model, "storage", context),
+    `${context}.storage`,
+  );
+  const storage = rawStorage.map((field, index): EntityStorageField => {
+    const fieldContext = `${context}.storage[${index}]`;
+    exactKeys(
+      field,
+      [
+        "key",
+        "column",
+        "kind",
+        "nullable",
+        "default",
+        "defaultValue",
+        "reference",
+        "specialized",
+      ],
+      fieldContext,
+    );
+    const defaultKind = stringValue(
+      required(field, "default", fieldContext),
+      `${fieldContext}.default`,
+    );
+    const matchedDefaultKind = storageDefaultKinds.find(
+      (candidate) => candidate === defaultKind,
+    );
+    if (matchedDefaultKind === undefined)
+      throw new LiteralSpecError(`${fieldContext}.default is unsupported.`);
+    const defaultValue = field.defaultValue ?? null;
+    if (defaultKind === "literal" && field.defaultValue === undefined)
+      throw new LiteralSpecError(
+        `${fieldContext}.defaultValue is required for a literal default.`,
+      );
+    return {
+      key: stringValue(
+        required(field, "key", fieldContext),
+        `${fieldContext}.key`,
+      ),
+      column: stringValue(
+        required(field, "column", fieldContext),
+        `${fieldContext}.column`,
+      ),
+      kind: parsedFieldKind(
+        required(field, "kind", fieldContext),
+        `${fieldContext}.kind`,
+      ),
+      nullable: booleanValue(
+        required(field, "nullable", fieldContext),
+        `${fieldContext}.nullable`,
+      ),
+      default: matchedDefaultKind,
+      defaultValue,
+      reference: optionalString(field, "reference", fieldContext),
+      specialized: optionalString(field, "specialized", fieldContext),
+    };
+  });
+  const fieldKeys = fields.map(({ key }) => key);
+  const storageKeys = storage.map(({ key }) => key);
+  if (new Set(fieldKeys).size !== fieldKeys.length)
+    throw new LiteralSpecError(`${context}.fields contains duplicate keys.`);
+  if (new Set(storageKeys).size !== storageKeys.length)
+    throw new LiteralSpecError(`${context}.storage contains duplicate keys.`);
+  const policy = (key: "create" | "update" | "bulk" | "audit" | "output") => {
+    const values = stringArray(
+      required(model, key, context),
+      `${context}.${key}`,
+    );
+    for (const field of values) {
+      if (!fieldKeys.includes(field))
+        throw new LiteralSpecError(
+          `${context}.${key} references undeclared field ${field}.`,
+        );
+    }
+    return values;
+  };
+  const compiled = {
+    fields,
+    storage,
+    create: policy("create"),
+    update: policy("update"),
+    bulk: policy("bulk"),
+    audit: policy("audit"),
+    output: policy("output"),
+  };
+  for (const field of compiled.bulk) {
+    if (!compiled.update.includes(field))
+      throw new LiteralSpecError(
+        `${context}.bulk field ${field} must also be updateable.`,
+      );
+  }
+  return compiled;
+};
+
+// oxlint-disable-next-line eslint/complexity -- The parser validates every optional descriptor property at the literal boundary.
 const filterDescriptor = (
   value: LiteralValue,
   context: string,
@@ -331,6 +1011,9 @@ const filterDescriptor = (
       "optionsRef",
       "optionsKey",
       "label",
+      "schemaDescription",
+      "deriveSchema",
+      "schemaFromRead",
       "brandRef",
       "expandRef",
       "urlOnly",
@@ -406,6 +1089,23 @@ const filterDescriptor = (
             ),
           };
         })();
+  const deriveSchema =
+    object.deriveSchema === undefined
+      ? false
+      : booleanValue(object.deriveSchema, `${context}.deriveSchema`);
+  const schemaFromRead =
+    object.schemaFromRead === undefined
+      ? false
+      : booleanValue(object.schemaFromRead, `${context}.schemaFromRead`);
+  const schemaDescription = optionalString(
+    object,
+    "schemaDescription",
+    context,
+  );
+  if (!deriveSchema && (schemaFromRead || schemaDescription !== null))
+    throw new LiteralSpecError(
+      `${context} schemaFromRead/schemaDescription require deriveSchema.`,
+    );
   return {
     columnId,
     field: optionalString(object, "field", context),
@@ -419,6 +1119,9 @@ const filterDescriptor = (
     optionsRef,
     optionsKey: optionalString(object, "optionsKey", context),
     label: optionalString(object, "label", context),
+    schemaDescription,
+    deriveSchema,
+    schemaFromRead,
     brandRef:
       object.brandRef === undefined || object.brandRef === null
         ? null
@@ -483,6 +1186,7 @@ const normalizedEntitySource = (
       "identifiers",
       "presentation",
       "fields",
+      "model",
       "filters",
       "relations",
       "search",
@@ -983,6 +1687,9 @@ const normalizedLegacyEntity = (
       `${context}.capabilities`,
     ),
   };
+  if (raw.model !== undefined) {
+    normalized.fieldModel = raw.model;
+  }
   if (extensions.ports !== undefined) {
     normalized.ports = extensions.ports;
   }
@@ -1073,6 +1780,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
       "bulkUpdate",
       "operationOwners",
       "ports",
+      "fieldModel",
     ],
     context,
   );
@@ -1088,6 +1796,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     required(object, "descriptor", context),
     `${context}.descriptor`,
   );
+  const fieldModel = compileFieldModel(object.fieldModel, `${context}.model`);
   descriptor.relationships ??= [];
   const operationOwnersObject = objectValue(
     required(object, "operationOwners", context),
@@ -1180,6 +1889,9 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
           optionsRef: null,
           optionsKey: null,
           label: null,
+          schemaDescription: null,
+          deriveSchema: false,
+          schemaFromRead: false,
           brandRef: null,
           expandRef: {
             module: "~/entities/filter-behavior",
@@ -1203,6 +1915,9 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
           optionsRef: null,
           optionsKey: null,
           label: null,
+          schemaDescription: null,
+          deriveSchema: false,
+          schemaFromRead: false,
           brandRef: null,
           expandRef: {
             module: "~/entities/filter-behavior",
@@ -1452,6 +2167,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     ports,
     relationMutations,
     operationOwners,
+    fieldModel,
   };
 };
 
@@ -1713,6 +2429,271 @@ const compactLiteral = <T>(value: T) =>
     /"([A-Za-z_$][\w$]*)":/g,
     (_, key: string) => `${key}:`,
   );
+
+const entityColumnFunctionName = (entity: string) =>
+  `generated${entity[0]?.toUpperCase() ?? ""}${entity.slice(1).replaceAll("-", "")}Columns`;
+
+const identifierTypeNames = {
+  cookbook: "CookbookId",
+  expense: "ExpenseId",
+  financialAccount: "FinancialAccountId",
+  financialTransaction: "FinancialTransactionId",
+  ingredient: "IngredientId",
+  inventory: "InventoryId",
+  ledgerParty: "LedgerPartyId",
+  ledgerTransfer: "LedgerTransferId",
+  location: "LocationId",
+  meal: "MealId",
+  product: "ProductId",
+  project: "ProjectId",
+  purchase: "PurchaseId",
+  recipe: "RecipeId",
+  task: "TaskId",
+  vendor: "VendorId",
+  wish: "WishId",
+} as const satisfies Readonly<Record<string, string>>;
+
+const storageJsonTypes = {
+  "cookbook.rawJson": "ImportRecipe[]",
+  "financialAccount.identity": "FinancialAccountIdentity",
+  "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
+  "financialTransaction.sourceRefs": "FinancialTransactionSourceRef[]",
+  "ingredient.naKinds": "BaseKind[]",
+  "inventory.amount": "Amount",
+  "location.valuation": "LocationValuation | null",
+  "product.dataExceptions": "DataException[]",
+  "purchase.dataExceptions": "DataException[]",
+  "recipe.meta": "RecipeStoredMeta | null",
+  "recipe.totals": "RecipeTotals | null",
+  "recipe.yield": "RecipeYield",
+} as const satisfies Readonly<Record<string, string>>;
+
+const lookupGeneratedType = (
+  values: Readonly<Record<string, string>>,
+  key: string,
+): string | undefined => values[key];
+
+const enumColumnExpression = (
+  entity: string,
+  field: EntityStorageField,
+): string | null => {
+  const column = JSON.stringify(field.column);
+  const key = `${entity}.${field.key}`;
+  const expressions = {
+    "expense.costType": `text(${column},{enum:costTypeValues})`,
+    "expense.lineBasis": `text(${column},{enum:expenseLineBasisValues})`,
+    "expense.lineKind": `text(${column},{enum:expenseLineKindValues})`,
+    "expense.trade": `text(${column},{enum:tradeValues})`,
+    "image.renderStatus": `imageRenderStatusEnum(${column})`,
+    "image.status": `imageStatusEnum(${column})`,
+    "image.storageStatus": `imageStorageStatusEnum(${column})`,
+    "inventory.placement": `inventoryPlacementEnum(${column})`,
+    "meal.mealKind": `text(${column},{enum:mealKindValues})`,
+    "meal.mealType": `text(${column},{enum:mealTypeValues})`,
+    "product.category": `text(${column},{enum:productCategoryValues})`,
+    "project.kind": `text(${column},{enum:projectKindValues})`,
+    "project.status": `text(${column},{enum:projectStatusValues})`,
+    "recipe.SourceType": `recipeSourceEnum(${column})`,
+    "task.status": `text(${column},{enum:taskStatusValues})`,
+    "task.trade": `text(${column},{enum:tradeValues})`,
+  } as const satisfies Readonly<Record<string, string>>;
+  return lookupGeneratedType(expressions, key) ?? null;
+};
+
+const literalDefaultExpression = (value: LiteralValue): string => {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- String storage defaults have SQL-specific serialization.
+  if (typeof value === "string") {
+    if (value === "'{}'::text[]") return "sql`'{}'::text[]`";
+    if (value === "'[]'::jsonb") return "[]";
+    if (value.startsWith("'") && value.endsWith("'"))
+      return JSON.stringify(value.slice(1, -1));
+  }
+  return compactLiteral(value);
+};
+
+// oxlint-disable-next-line eslint/complexity -- Ordered branches mirror the finite storage-column DSL.
+const renderStorageColumn = (
+  entity: EntityLiteral,
+  field: EntityStorageField,
+): string => {
+  const column = JSON.stringify(field.column);
+  const ownIdType = lookupGeneratedType(identifierTypeNames, entity.key);
+  const referenceIdType =
+    field.reference === null
+      ? null
+      : lookupGeneratedType(identifierTypeNames, field.reference);
+  let expression: string;
+  if (field.key === "id") {
+    expression =
+      ownIdType === undefined
+        ? `uuid(${column}).primaryKey().default(sql\`gen_random_uuid()\`)`
+        : `uuid(${column}).primaryKey().default(sql\`gen_random_uuid()\`).$type<${ownIdType}>()`;
+  } else if (field.key === "shortcode") {
+    expression = `text(${column}).notNull()`;
+  } else if (field.kind === "identifier") {
+    expression = `uuid(${column})`;
+    if (referenceIdType !== undefined && referenceIdType !== null)
+      expression += `.$type<${referenceIdType}>()`;
+  } else if (field.kind === "text-array") {
+    expression = `text(${column}).array()`;
+    if (entity.key === "ingredient" && field.key === "naKinds")
+      expression += ".$type<BaseKind[]>()";
+  } else if (field.kind === "text") {
+    expression = `text(${column})`;
+  } else if (field.kind === "number") {
+    expression =
+      field.specialized === "real"
+        ? `real(${column})`
+        : field.specialized === "double-precision"
+          ? `doublePrecision(${column})`
+          : `integer(${column})`;
+  } else if (field.kind === "boolean") {
+    expression = `boolean(${column})`;
+  } else if (field.kind === "date") {
+    expression = `date(${column},{mode:"string"})`;
+  } else if (field.kind === "timestamp") {
+    expression = `timestamp(${column},{mode:"date"})`;
+  } else if (field.kind === "json") {
+    expression = `jsonb(${column})`;
+    const jsonType = lookupGeneratedType(
+      storageJsonTypes,
+      `${entity.key}.${field.key}`,
+    );
+    if (jsonType !== undefined) expression += `.$type<${jsonType}>()`;
+  } else {
+    expression = enumColumnExpression(entity.key, field) ?? `text(${column})`;
+    if (entity.key === "ledgerParty" && field.key === "kind")
+      expression += ".$type<LedgerPartyKind>()";
+  }
+  if (
+    field.key !== "id" &&
+    field.key !== "shortcode" &&
+    field.nullable === false
+  )
+    expression += ".notNull()";
+  if (field.default === "now") expression += ".defaultNow()";
+  if (field.default === "literal")
+    expression += `.default(${literalDefaultExpression(field.defaultValue)})`;
+  if (field.specialized === "updated-at")
+    expression += ".$onUpdate(() => new Date())";
+  if (field.reference !== null)
+    expression += `.references(references[${JSON.stringify(field.reference)}])`;
+  return `${JSON.stringify(field.key)}:${expression}`;
+};
+
+const renderEntityColumnsArtifact = (
+  entities: readonly EntityLiteral[],
+): string => {
+  const columnModels = entities.filter(
+    (entity) => entity.fieldModel.storage.length > 0,
+  );
+  const functions = columnModels
+    .map((entity) => {
+      const references = [
+        ...new Set(
+          entity.fieldModel.storage.flatMap((field) =>
+            field.reference === null ? [] : [field.reference],
+          ),
+        ),
+      ].sort();
+      const parameter =
+        references.length === 0
+          ? ""
+          : `references: Readonly<{${references.map((reference) => `${JSON.stringify(reference)}: () => AnyPgColumn`).join(";")}}>`;
+      return `export const ${entityColumnFunctionName(entity.key)} = (${parameter}) => ({${entity.fieldModel.storage.map((field) => renderStorageColumn(entity, field)).join(",")}});`;
+    })
+    .join("\n\n");
+  return (
+    generatedHeader +
+    'import type { Amount } from "@cubby/schemas/codec";\n' +
+    'import type { DataException } from "@cubby/schemas/data-quality";\n' +
+    'import type { FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
+    'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
+    `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
+    'import { imageStatusValues } from "@cubby/schemas/image";\n' +
+    'import type { ImportRecipe } from "@cubby/schemas/import-recipe";\n' +
+    'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
+    'import type { LocationValuation } from "@cubby/schemas/location";\n' +
+    'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
+    'import type { BaseKind } from "@cubby/schemas/problems";\n' +
+    'import { productCategoryValues } from "@cubby/schemas/product";\n' +
+    'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
+    'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
+    'import type { RecipeStoredMeta, RecipeTotals, RecipeYield } from "@cubby/schemas/recipe-shared";\n' +
+    'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
+    'import { inventoryPlacementValues } from "@cubby/shared";\n' +
+    'import { sql } from "drizzle-orm";\n' +
+    'import { type AnyPgColumn, boolean, date, doublePrecision, integer, jsonb, pgEnum, real, text, timestamp, uuid } from "drizzle-orm/pg-core";\n\n' +
+    'export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);\n' +
+    'export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);\n' +
+    'export const inventoryPlacementEnum = pgEnum("InventoryPlacement", inventoryPlacementValues);\n' +
+    'export const imageRenderStatusEnum = pgEnum("ImageRenderStatus", ["unverified", "verified", "failed"]);\n' +
+    'export const imageStorageStatusEnum = pgEnum("ImageStorageStatus", ["unverified", "available", "missing", "metadata_mismatch"]);\n\n' +
+    functions +
+    "\n"
+  );
+};
+
+// oxlint-disable-next-line eslint/complexity -- Ordered modifiers mirror the finite validation DSL and preserve Zod call order.
+const renderValidationSchema = (
+  spec: EntityFieldValidationSpec,
+  enumValuesName?: string,
+  sourceNames: ReadonlyMap<string, string> = new Map(),
+): string => {
+  const sourceName = (ref: SourceRef): string =>
+    sourceNames.get(`${ref.module}#${ref.export}`) ?? ref.export;
+  let expression: string;
+  if (spec.kind === "source") {
+    if (spec.source === null)
+      throw new LiteralSpecError("Source validation is missing its source.");
+    expression = spec.lazy
+      ? `z.lazy(() => ${sourceName(spec.source!)})`
+      : sourceName(spec.source);
+  } else if (spec.kind === "string") {
+    expression = "z.string()";
+  } else if (spec.kind === "url") {
+    expression = "z.url()";
+  } else if (spec.kind === "number") {
+    expression = "z.number()";
+  } else if (spec.kind === "boolean") {
+    expression = "z.boolean()";
+  } else if (spec.kind === "timestamp") {
+    expression = "z.date()";
+  } else if (spec.kind === "enum") {
+    if (spec.values === null)
+      throw new LiteralSpecError("Enum validation is missing its values.");
+    expression = `z.enum(${enumValuesName ?? compactLiteral(spec.values)})`;
+  } else {
+    if (spec.item === null)
+      throw new LiteralSpecError("Array validation is missing its item.");
+    const item =
+      spec.item.kind === "string"
+        ? "z.string()"
+        : spec.item.source === null
+          ? "z.never()"
+          : sourceName(spec.item.source);
+    expression = `z.array(${item})`;
+  }
+  if (spec.trim) expression += ".trim()";
+  if (spec.integer) expression += ".int()";
+  if (spec.finite) expression += ".finite()";
+  if (spec.positive) expression += ".positive()";
+  if (spec.nonnegative) expression += ".nonnegative()";
+  if (spec.min !== null)
+    expression += `.min(${spec.min}${spec.minMessage === null ? "" : `,${JSON.stringify(spec.minMessage)}`})`;
+  if (spec.max !== null) expression += `.max(${spec.max})`;
+  if (spec.description !== null && !spec.descriptionAfter)
+    expression += `.describe(${JSON.stringify(spec.description)})`;
+  if (spec.mock !== null)
+    expression += `.meta({mock:${JSON.stringify(spec.mock)}})`;
+  if (spec.nullable) expression += ".nullable()";
+  if (spec.optional) expression += ".optional()";
+  if (spec.defaultValue !== undefined)
+    expression += `.default(${compactLiteral(spec.defaultValue)})`;
+  if (spec.description !== null && spec.descriptionAfter)
+    expression += `.describe(${JSON.stringify(spec.description)})`;
+  return expression;
+};
 
 /** PascalCase model name (as recorded in `descriptor.dbTable`) to its Drizzle export name. */
 const lowerCamelCase = (value: string): string =>
@@ -2269,7 +3250,8 @@ export const renderEntityArtifacts = (
     mcpBulkUpdateEntities,
   );
   const kernelEntities = entities.filter(
-    ({ contract, key }) => contract !== null || key === "image",
+    ({ contract, key, ports }) =>
+      (contract !== null && ports.repository !== null) || key === "image",
   );
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
   const runtimeAdapterImports = new Map<string, Set<string>>();
@@ -2483,6 +3465,271 @@ export const renderEntityArtifacts = (
       ];
     }),
   );
+  const fieldModels = Object.fromEntries(
+    entities.map(({ key, fieldModel }) => [key, fieldModel]),
+  );
+  const fieldByKey = (entity: EntityLiteral, key: string) => {
+    const field = entity.fieldModel.fields.find(
+      (candidate) => candidate.key === key,
+    );
+    if (field === undefined)
+      throw new LiteralSpecError(
+        `${entity.key}.model is missing field ${key}.`,
+      );
+    return field;
+  };
+  const validationComplete = (
+    entity: EntityLiteral,
+    mode: "create" | "update" | "read",
+    keys: readonly string[],
+  ) => keys.every((key) => fieldByKey(entity, key).validation[mode] !== null);
+  const renderedFieldSchemaMap = (
+    entity: EntityLiteral,
+    mode: "create" | "update" | "read",
+    keys: readonly string[],
+    enumValueNames: ReadonlyMap<string, string> = new Map(),
+    sourceNames: ReadonlyMap<string, string> = new Map(),
+  ): string =>
+    `{${keys
+      .map((key) => {
+        const field = fieldByKey(entity, key);
+        const validation = field.validation[mode];
+        if (validation !== null)
+          return `${JSON.stringify(mode === "read" ? (field.readKey ?? key) : key)}:${renderValidationSchema(validation, enumValueNames.get(key), sourceNames)}`;
+        throw new LiteralSpecError(
+          `${entity.key}.model.${mode} field ${key} has no validation.`,
+        );
+      })
+      .join(",")}}`;
+  const renderedScalarFilterFields = (
+    entity: EntityLiteral,
+    enumValueNames: ReadonlyMap<string, string>,
+    sourceNames: ReadonlyMap<string, string>,
+  ) => {
+    const helpers = new Set<string>();
+    // oxlint-disable-next-line eslint/complexity -- Each branch validates one declarative scalar-filter family.
+    const entries = entity.filterDescriptors.flatMap((descriptor) => {
+      if (!descriptor.deriveSchema) return [];
+      const field = entity.fieldModel.fields.find(
+        (candidate) => candidate.key === descriptor.columnId,
+      );
+      if (field === undefined)
+        throw new LiteralSpecError(
+          `${entity.key}.filters.${descriptor.columnId} cannot derive a schema without a matching model field.`,
+        );
+      const description =
+        descriptor.schemaDescription === null
+          ? ""
+          : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
+      if (descriptor.kind === "text" && field.kind === "text") {
+        const schemaKey = descriptor.field ?? descriptor.columnId;
+        const textSchema = descriptor.schemaFromRead
+          ? (() => {
+              if (field.validation.read === null)
+                throw new LiteralSpecError(
+                  `${entity.key}.filters.${descriptor.columnId} requests missing read validation.`,
+                );
+              return renderValidationSchema(
+                field.validation.read,
+                enumValueNames.get(field.key),
+                sourceNames,
+              );
+            })()
+          : "z.string()";
+        return [
+          `${JSON.stringify(schemaKey)}:${textSchema}.optional()${description}`,
+        ];
+      }
+      if (descriptor.kind === "boolean" && field.kind === "boolean") {
+        const schemaKey = descriptor.field ?? descriptor.columnId;
+        return [
+          `${JSON.stringify(schemaKey)}:z.boolean().optional()${description}`,
+        ];
+      }
+      if (descriptor.kind === "range" && field.kind === "number") {
+        helpers.add("numericRangeFields");
+        const read = field.validation.read;
+        const options =
+          read?.kind === "number"
+            ? [
+                ...(read.integer ? ["int:true"] : []),
+                ...(read.nonnegative || read.min === 0
+                  ? ["nonnegative:true"]
+                  : []),
+                ...(read.finite ? ["finite:true"] : []),
+              ]
+            : [];
+        return [
+          `...numericRangeFields(${JSON.stringify(descriptor.columnId)}${options.length === 0 ? "" : `,{${options.join(",")}}`})`,
+        ];
+      }
+      if (descriptor.kind === "range" && field.kind === "date") {
+        helpers.add("dateRangeFields");
+        return [`...dateRangeFields(${JSON.stringify(descriptor.columnId)})`];
+      }
+      if (
+        descriptor.kind === "multiselect" &&
+        (field.kind === "text" || field.kind === "text-array")
+      ) {
+        const schemaKey = descriptor.field ?? descriptor.columnId;
+        helpers.add("oneOrMany");
+        return [
+          `${JSON.stringify(schemaKey)}:oneOrMany(z.string()).optional()${description}`,
+        ];
+      }
+      if (
+        (descriptor.kind === "select" || descriptor.kind === "multiselect") &&
+        field.kind === "enum"
+      ) {
+        const schemaKey = descriptor.field ?? descriptor.columnId;
+        const read = field.validation.read;
+        if (read === null)
+          throw new LiteralSpecError(
+            `${entity.key}.filters.${descriptor.columnId} enum schema requires read validation.`,
+          );
+        const enumSchema =
+          read.kind === "source" && read.source !== null
+            ? (sourceNames.get(`${read.source.module}#${read.source.export}`) ??
+              read.source.export)
+            : read.kind === "enum"
+              ? `z.enum(${enumValueNames.get(field.key) ?? compactLiteral(read.values)})`
+              : null;
+        if (enumSchema === null)
+          throw new LiteralSpecError(
+            `${entity.key}.filters.${descriptor.columnId} enum field lacks enum validation.`,
+          );
+        helpers.add("oneOrMany");
+        return [
+          `${JSON.stringify(schemaKey)}:oneOrMany(${enumSchema}).optional()${description}`,
+        ];
+      }
+      throw new LiteralSpecError(
+        `${entity.key}.filters.${descriptor.columnId} is not an exactly derivable scalar filter.`,
+      );
+    });
+    return {
+      source: `{${entries.join(",")}}`,
+      helpers: [...helpers].sort(),
+      count: entries.length,
+    };
+  };
+  const completeFieldSchemaArtifacts: EntityArtifacts[] = entities.flatMap(
+    (entity) => {
+      const { fieldModel } = entity;
+      if (
+        fieldModel.create.length +
+          fieldModel.update.length +
+          fieldModel.output.length ===
+          0 ||
+        !validationComplete(entity, "create", fieldModel.create) ||
+        !validationComplete(entity, "update", fieldModel.update) ||
+        !validationComplete(entity, "read", fieldModel.output)
+      )
+        return [];
+      const refs = [
+        ...new Map(
+          entity.fieldModel.fields
+            .flatMap(({ validation }) =>
+              Object.values(validation).flatMap((spec) =>
+                spec === null
+                  ? []
+                  : [spec.source, spec.item?.source ?? null].filter(
+                      (ref): ref is SourceRef => ref !== null,
+                    ),
+              ),
+            )
+            .map((ref) => [`${ref.module}#${ref.export}`, ref] as const),
+        ).values(),
+      ].sort((left, right) =>
+        `${left.module}#${left.export}`.localeCompare(
+          `${right.module}#${right.export}`,
+        ),
+      );
+      const contractModules = new Set(
+        entity.contract === null
+          ? []
+          : [
+              entity.contract.create?.module,
+              entity.contract.update?.module,
+              entity.contract.output.module,
+            ].filter((module): module is string => module !== undefined),
+      );
+      const cyclicRef = refs.find(({ module }) => contractModules.has(module));
+      if (cyclicRef !== undefined)
+        throw new LiteralSpecError(
+          `${entity.key}.model validation source ${cyclicRef.module}#${cyclicRef.export} creates a cycle with its generated contract; move the field validator to a cycle-safe primitive module.`,
+        );
+      const enumValueNames = new Map<string, string>();
+      const enumDeclarations = entity.fieldModel.fields
+        .flatMap((field) => {
+          const enumSpecs = Object.values(field.validation).filter(
+            (spec): spec is EntityFieldValidationSpec =>
+              spec !== null && spec.kind === "enum",
+          );
+          if (enumSpecs.length === 0) return [];
+          const values = enumSpecs[0]?.values;
+          if (values === null || values === undefined)
+            throw new LiteralSpecError(
+              `${entity.key}.model.${field.key} enum is missing values.`,
+            );
+          if (
+            enumSpecs.some(
+              (spec) => compactLiteral(spec.values) !== compactLiteral(values),
+            )
+          )
+            throw new LiteralSpecError(
+              `${entity.key}.model.${field.key} enum values differ by mode.`,
+            );
+          const name = `generated${entity.inspector.singular.replaceAll(" ", "")}${field.key[0]?.toUpperCase() ?? ""}${field.key.slice(1)}Values`;
+          enumValueNames.set(field.key, name);
+          return [`export const ${name} = ${compactLiteral(values)} as const;`];
+        })
+        .join("\n");
+      const sourceNames = new Map(
+        refs.map((ref) => [`${ref.module}#${ref.export}`, ref.export]),
+      );
+      const imports = [
+        ...new Map(refs.map((ref) => [ref.module, new Set<string>()])).keys(),
+      ]
+        .map((module) => {
+          const exports = refs
+            .filter((ref) => ref.module === module)
+            .map((ref) => ref.export);
+          return `import { ${exports.join(", ")} } from ${JSON.stringify(module)};`;
+        })
+        .join("\n");
+      const scalarFilters = renderedScalarFilterFields(
+        entity,
+        enumValueNames,
+        sourceNames,
+      );
+      const baseFilterHelpers = scalarFilters.helpers.filter(
+        (helper) => helper !== "oneOrMany",
+      );
+      const filterHelperImport =
+        (baseFilterHelpers.length === 0
+          ? ""
+          : `import { ${baseFilterHelpers.join(", ")} } from "@cubby/schemas/base-entity";\n`) +
+        (scalarFilters.helpers.includes("oneOrMany")
+          ? 'import { oneOrMany } from "@cubby/schemas/pagination";\n'
+          : "");
+      return [
+        {
+          relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
+          source:
+            generatedHeader +
+            `${imports}\n` +
+            filterHelperImport +
+            'import { z } from "zod";\n\n' +
+            `${enumDeclarations}${enumDeclarations.length === 0 ? "" : "\n\n"}` +
+            `export const generated${entity.inspector.singular.replaceAll(" ", "")}FieldSchemas = {create:${renderedFieldSchemaMap(entity, "create", fieldModel.create, enumValueNames, sourceNames)},update:${renderedFieldSchemaMap(entity, "update", fieldModel.update, enumValueNames, sourceNames)},read:${renderedFieldSchemaMap(entity, "read", fieldModel.output, enumValueNames, sourceNames)}} as const;\n` +
+            (scalarFilters.count === 0
+              ? ""
+              : `export const generated${entity.inspector.singular.replaceAll(" ", "")}FilterFields = ${scalarFilters.source} as const;\n`),
+        },
+      ];
+    },
+  );
   const portExportChecks = [
     ...new Map(
       entities.flatMap((entity) => {
@@ -2611,6 +3858,32 @@ export const renderEntityArtifacts = (
         )} as const satisfies Record<Entity, EntityNames>;\n`,
     },
     {
+      relativePath: "packages/schemas/src/generated/entity-field-model.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity-core";\n\n' +
+        `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
+        `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
+        "type GeneratedEntityFieldValidationSource = { module: string; export: string };\n" +
+        'type GeneratedEntityFieldValidationSpec = { kind: "string" | "url" | "number" | "boolean" | "timestamp" | "array" | "enum" | "source"; source: GeneratedEntityFieldValidationSource | null; lazy: boolean; values: readonly string[] | null; item: { kind: "string" | "source"; source: GeneratedEntityFieldValidationSource | null } | null; optional: boolean; nullable: boolean; trim: boolean; integer: boolean; finite: boolean; positive: boolean; nonnegative: boolean; min: number | null; max: number | null; minMessage: string | null; defaultValue?: unknown; description: string | null; descriptionAfter: boolean; mock: string | null };\n\n' +
+        "export type GeneratedEntityFieldModel = {\n" +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; detailSection: string }; validation: { read: GeneratedEntityFieldValidationSpec | null; create: GeneratedEntityFieldValidationSpec | null; update: GeneratedEntityFieldValidationSpec | null } }[];\n' +
+        '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
+        "  create: readonly string[];\n" +
+        "  update: readonly string[];\n" +
+        "  bulk: readonly string[];\n" +
+        "  audit: readonly string[];\n" +
+        "  output: readonly string[];\n" +
+        "};\n\n" +
+        "// One authoritative field model per compiled entity.\n// oxfmt-ignore\n" +
+        `export const generatedEntityFieldModels = ${compactLiteral(fieldModels)} as const satisfies Record<Entity, GeneratedEntityFieldModel>;\n`,
+    },
+    {
+      relativePath: "apps/web/src/server/db/generated/entity-columns.gen.ts",
+      source: renderEntityColumnsArtifact(entities),
+    },
+    ...completeFieldSchemaArtifacts,
+    {
       relativePath: "packages/schemas/src/generated/entity-inspector.gen.ts",
       source:
         generatedHeader +
@@ -2643,7 +3916,7 @@ export const renderEntityArtifacts = (
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +
@@ -3217,7 +4490,7 @@ const sealArtifact = (
 };
 
 const generatedName =
-  /^(?:entity-literal-.+|entity-manifest-data|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$/;
+  /^(?:entity-literal-.+|entity-manifest-data|entity-field-model|entity-field-schemas(?:\.[^.]+)?|entity-columns|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$/;
 
 const findExtraArtifacts = async (
   root: string,

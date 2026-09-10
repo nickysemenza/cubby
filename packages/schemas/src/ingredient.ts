@@ -1,10 +1,9 @@
 import { z } from "zod";
+import { auditDateFilterFields } from "./base-entity";
 import {
-  auditDateFilterFields,
-  deriveUpdateData,
-  timestampedFields,
-} from "./base-entity";
-import { requiredName } from "./common";
+  generatedIngredientFieldSchemas,
+  generatedIngredientFilterFields,
+} from "./generated/entity-field-schemas.ingredient.gen";
 import {
   ingredientShortcode,
   productShortcode,
@@ -28,28 +27,16 @@ import {
 import { mutationSideEffectsSchema } from "./background-jobs";
 
 export const ingredientBaseFields = {
-  // `mock` is a faker dot-path consumed by the test mock generator
-  // (apps/web .../test/mock-schema.ts); it is plain metadata, faker-free here.
-  name: z
-    .string()
-    .meta({ mock: "food.ingredient" })
-    .describe("Ingredient name"),
-  aliases: z.array(z.string()).describe("Alternate names for this ingredient"),
+  name: generatedIngredientFieldSchemas.read.name,
+  aliases: generatedIngredientFieldSchemas.read.aliases,
 };
 
 export const ingredientBase = z.object(ingredientBaseFields);
 
 export const ingredientFilterFields = {
   ...auditDateFilterFields,
-  nameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by ingredient name (substring)"),
+  ...generatedIngredientFilterFields,
   productPresenceFilter: presenceFilter,
-  usuallyOnHand: z
-    .boolean()
-    .optional()
-    .describe("Filter by ingredients usually kept on hand"),
   /**
    * `"none"` is the orphaned-ingredient worklist. The list already excludes
    * recipe-as-ingredient pointer rows (`ingredient.recipeId IS NULL`), so a
@@ -86,15 +73,7 @@ export const ingredientSortableFields = [
 export type IngredientSortField = (typeof ingredientSortableFields)[number];
 
 export const ingredientOutFields = {
-  id: ingredientShortcode,
-  ...ingredientBaseFields,
-  // Base measurement kinds the user has marked "not applicable" for this
-  // ingredient (e.g. volume on a count-only item). The DB column is non-null
-  // with an empty-array default, so public read contracts always carry it.
-  naKinds: z.array(baseKind),
-  /** Planning assumption; recorded inventory remains a separate fact. */
-  usuallyOnHand: z.boolean(),
-  ...timestampedFields,
+  ...generatedIngredientFieldSchemas.read,
 };
 
 export const ingredientOut = z.object(ingredientOutFields);
@@ -293,29 +272,13 @@ export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
  * Input schema for creating ingredients. Overrides the base `name` (lax for
  * reads) with a non-empty constraint; keep the mock hint for test fixtures.
  */
-const ingredientCreateFields = {
-  name: requiredName("Ingredient name")
-    .describe("Ingredient name")
-    .meta({ mock: "food.ingredient" }),
-  aliases: ingredientBaseFields.aliases.default([]),
-  naKinds: z.array(baseKind).optional().default([]),
-  usuallyOnHand: z.boolean().optional().default(false),
-};
+const ingredientCreateFields = generatedIngredientFieldSchemas.create;
 export const ingredientCreateInput = z.object(ingredientCreateFields);
 export type IngredientCreateInput = z.infer<typeof ingredientCreateInput>;
 
-export const ingredientUpdateData = deriveUpdateData(ingredientCreateFields, {
-  omit: ["name", "aliases"],
-  extend: {
-    name: requiredName("Ingredient name")
-      .describe("New name")
-      .meta({ mock: "food.ingredient" })
-      .optional(),
-    aliases: ingredientBaseFields.aliases
-      .optional()
-      .describe("New aliases (replaces existing list)"),
-  },
-});
+export const ingredientUpdateData = z.object(
+  generatedIngredientFieldSchemas.update,
+);
 
 export const ingredientUpdateInput = z.object({
   id: ingredientShortcode,
@@ -368,10 +331,6 @@ export const ingredientResolvableNamesInput = z.object({
   names: z.array(z.string().min(1)).max(1000),
 });
 
-export const mcpIngredientCreateInput = z.object({
-  name: ingredientCreateFields.name,
-  aliases: ingredientCreateFields.aliases,
-});
 /**
  * Slim MCP projection of an ingredient list/detail row.
  *

@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
@@ -718,17 +719,7 @@ export async function updateFinancialTransaction(
         and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
       );
     const changes = computeChanges(before, { ...before, ...values }, [
-      "accountId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
+      ...entityFieldModels.financialTransaction.audit,
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {

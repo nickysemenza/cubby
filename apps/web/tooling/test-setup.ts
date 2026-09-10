@@ -1,3 +1,4 @@
+import { schemaTemplateInputs } from "./schema-template-inputs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type ActorContext,
@@ -130,22 +131,8 @@ export const TEST_ACTOR: ActorContext = {
   source: "ui",
 };
 
-/**
- * Generate a hash for IntegreSQL template identification.
- *
- * Both schema files must be hashed. schema.ts is what `pushSchema` is pointed
- * at, but it re-exports every better-auth table from auth.schema.ts, so those
- * tables are in the template too. Hashing schema.ts alone meant an auth.schema.ts
- * edit reused a **stale template**: the column existed in TS and not in the test
- * database, and every test failed with a confusing `column ... does not exist`
- * from the seed step rather than from the code under test. (CI hides this — a
- * fresh container has no cached template to go stale.)
- */
 async function getTemplateHash(): Promise<string> {
-  return integreSQL.hashFiles([
-    "./src/server/db/schema.ts",
-    "./src/server/db/auth.schema.ts",
-  ]);
+  return integreSQL.hashFiles(schemaTemplateInputs);
 }
 
 export async function setup() {

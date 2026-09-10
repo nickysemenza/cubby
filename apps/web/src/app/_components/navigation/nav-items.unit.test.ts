@@ -37,11 +37,9 @@ describe("workspace navigation contract", () => {
       "Plan",
       "House",
       "Finance",
+      "Records",
     ]);
-    expect(utilityNavGroups.map((group) => group.label)).toEqual([
-      "Data",
-      "More",
-    ]);
+    expect(utilityNavGroups.map((group) => group.label)).toEqual(["More"]);
     expect(developerNavGroups.map((group) => group.label)).toEqual(["Dev"]);
     expect(primaryNavGroups.map((group) => group.domain)).toEqual([
       "cook",
@@ -49,11 +47,13 @@ describe("workspace navigation contract", () => {
       "plan",
       "house",
       "finance",
+      undefined,
     ]);
   });
 
   it("keeps every primary destination in its route-level domain", () => {
     for (const group of primaryNavGroups) {
+      if (group.domain === undefined) continue;
       for (const item of group.children) {
         // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
         expect(domainForRoute(String(item.to)), item.label).toBe(group.domain);
@@ -63,16 +63,18 @@ describe("workspace navigation contract", () => {
 
   it("pins the task-first persistent and phone household choices", () => {
     expect(todayNavItems.map((item) => item.label)).toEqual([
-      "Recount",
-      "Shopping list",
+      "Recount inventory",
+      "Build a shopping list",
       "Projects",
       "Problems",
     ]);
     expect(mobileHouseholdItems.map((item) => item.label)).toEqual([
       "Home",
-      "Recount",
+      "Activities",
+      "Records",
+      "Recount inventory",
       "Locations",
-      "Calendar",
+      "Household calendar",
       "Meals",
       "Projects",
       "Expenses",
@@ -112,7 +114,7 @@ describe("workspace navigation contract", () => {
 
     expect(more.children).toContain(settingsNavItem);
     expect(more.children.map((item) => item.label)).toEqual(
-      expect.arrayContaining(["Scan", "Recount"]),
+      expect.arrayContaining(["Scan", "Labels", "Problems"]),
     );
     expect(getSidebarGroupItems(more)).not.toContain(settingsNavItem);
   });
@@ -145,8 +147,10 @@ describe("getEntityNavGroup", () => {
           isNavGroup(node) &&
           node.children.some((child) => child.to === listRoute),
       );
-      expect(matchingGroups).toHaveLength(1);
-      expect(getEntityNavGroup(entity)).toBe(matchingGroups[0]);
+      expect(matchingGroups.length).toBeGreaterThanOrEqual(1);
+      expect(getEntityNavGroup(entity)).toBe(
+        matchingGroups.find((group) => group.label === "Records"),
+      );
     },
   );
 
@@ -155,25 +159,25 @@ describe("getEntityNavGroup", () => {
   // change rather than a silent breadcrumb drift.
   it("derives the expected group label for every entity", () => {
     const expected = {
-      recipe: "Cook",
-      cookbook: "Cook",
-      ingredient: "Cook",
-      product: "Data",
-      "usda-food": "Data",
-      image: "Data",
-      inventory: "Pantry",
-      location: "Pantry",
-      meal: "Plan",
-      wish: "Plan",
-      project: "House",
-      task: "House",
-      expense: "Finance",
-      vendor: "Finance",
-      purchase: "Finance",
-      financialAccount: "Finance",
-      financialTransaction: "Finance",
-      ledgerParty: "Finance",
-      ledgerTransfer: "Finance",
+      recipe: "Records",
+      cookbook: "Records",
+      ingredient: "Records",
+      product: "Records",
+      "usda-food": "Records",
+      image: "Records",
+      inventory: "Records",
+      location: "Records",
+      meal: "Records",
+      wish: "Records",
+      project: "Records",
+      task: "Records",
+      expense: "Records",
+      vendor: "Records",
+      purchase: "Records",
+      financialAccount: "Records",
+      financialTransaction: "Records",
+      ledgerParty: "Records",
+      ledgerTransfer: "Records",
     } satisfies Record<BrowserRoutedEntity, string>;
 
     for (const entity of entityKeys) {
@@ -188,7 +192,7 @@ describe("expanded rail labels", () => {
     const byRoute = new Map(desktopLeaves.map((leaf) => [leaf.to, leaf.label]));
 
     expect(byRoute.get("/background-jobs")).toBe("Background jobs");
-    expect(byRoute.get("/statement-rows")).toBe("Statement Rows");
+    expect(byRoute.get("/statement-rows")).toBe("Reconcile statements");
     expect(byRoute.get("/household-contribution")).toBe("Contribution ledger");
     expect(byRoute.get("/meals/suggestions")).toBe("What can I make?");
   });

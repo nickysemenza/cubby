@@ -12,6 +12,7 @@ import {
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import {
@@ -43,94 +44,101 @@ export function FinancialAccountList() {
   });
   const columns = useMemo(
     () =>
-      createCubbyColumnCollection<FinancialAccountOut>((add) => {
-        add(
-          helper.accessor("name", {
-            header: "Account",
-            meta: { className: "w-64", mobile: { slot: "title", priority: 0 } },
-            cell: (i) => (
-              <TableLink
-                to={entities.financialAccount.routes.detail}
-                params={entityDetailParams(i.row.original.id)}
-                className="block truncate"
-              >
-                {i.getValue()}
-              </TableLink>
-            ),
-          }),
-        );
-        add(
-          // Load-bearing, not decorative: an Expense's funder is DERIVED from
-          // the paying account's owner, so an account left unowned is spend the
-          // contribution report cannot attribute to anyone.
-          helper.accessor("ledgerPartyName", {
-            header: "Owner",
-            meta: { className: "w-36" },
-            cell: (i) => {
-              const account = i.row.original;
-              const partyId = account.ledgerPartyId;
-              return (
-                <EditableEntityCell<LedgerPartyShortcode>
-                  value={
-                    partyId
-                      ? {
-                          id: partyId,
-                          shortcode: partyId,
-                          name: i.getValue() ?? partyId,
-                        }
-                      : null
-                  }
-                  label="ledgerParty"
-                  SearchProvider={WithLedgerPartySearch}
-                  clearable
-                  onSave={async (ledgerPartyId) => {
-                    await updateAccountMutation.mutateAsync({
-                      id: account.id,
-                      data: { ledgerPartyId },
-                    });
-                  }}
-                  renderValue={(party) =>
-                    party ? <span>{party.name}</span> : <NoneValue />
-                  }
-                />
-              );
-            },
-          }),
-        );
-        add(
-          helper.accessor("identity", {
-            header: "Identity",
-            meta: { className: "w-40" },
-            cell: (i) =>
-              renderOptionCell(i.getValue().kind, accountIdentityKindOptions),
-          }),
-        );
-        add(
-          createBooleanColumn(helper, "provisional", {
-            header: "Status",
-            className: "w-28",
-            // The same roster the detail page renders from, so the two cannot drift.
-            trueFalseOptions: provisionalOptions,
-            editable: {
-              // `NOT NULL DEFAULT false`, so there is no undecided state to clear to
-              // and `next` is only ever a boolean.
-              onSave: async (provisional, account) => {
-                await updateAccountMutation.mutateAsync({
-                  id: account.id,
-                  data: { provisional: provisional ?? false },
-                });
+      createEntityDisplayColumns(
+        "financialAccount",
+        helper,
+        createCubbyColumnCollection<FinancialAccountOut>((add) => {
+          add(
+            helper.accessor("name", {
+              header: "Account",
+              meta: {
+                className: "w-64",
+                mobile: { slot: "title", priority: 0 },
               },
-            },
-          }),
-        );
-        add(
-          helper.accessor((r) => r.sourceAliases.length, {
-            id: "aliases",
-            header: "Aliases",
-            meta: { numeric: true, className: "w-24" },
-          }),
-        );
-      }),
+              cell: (i) => (
+                <TableLink
+                  to={entities.financialAccount.routes.detail}
+                  params={entityDetailParams(i.row.original.id)}
+                  className="block truncate"
+                >
+                  {i.getValue()}
+                </TableLink>
+              ),
+            }),
+          );
+          add(
+            // Load-bearing, not decorative: an Expense's funder is DERIVED from
+            // the paying account's owner, so an account left unowned is spend the
+            // contribution report cannot attribute to anyone.
+            helper.accessor("ledgerPartyName", {
+              header: "Owner",
+              meta: { className: "w-36" },
+              cell: (i) => {
+                const account = i.row.original;
+                const partyId = account.ledgerPartyId;
+                return (
+                  <EditableEntityCell<LedgerPartyShortcode>
+                    value={
+                      partyId
+                        ? {
+                            id: partyId,
+                            shortcode: partyId,
+                            name: i.getValue() ?? partyId,
+                          }
+                        : null
+                    }
+                    label="ledgerParty"
+                    SearchProvider={WithLedgerPartySearch}
+                    clearable
+                    onSave={async (ledgerPartyId) => {
+                      await updateAccountMutation.mutateAsync({
+                        id: account.id,
+                        data: { ledgerPartyId },
+                      });
+                    }}
+                    renderValue={(party) =>
+                      party ? <span>{party.name}</span> : <NoneValue />
+                    }
+                  />
+                );
+              },
+            }),
+          );
+          add(
+            helper.accessor("identity", {
+              header: "Identity",
+              meta: { className: "w-40" },
+              cell: (i) =>
+                renderOptionCell(i.getValue().kind, accountIdentityKindOptions),
+            }),
+          );
+          add(
+            createBooleanColumn(helper, "provisional", {
+              header: "Status",
+              className: "w-28",
+              // The same roster the detail page renders from, so the two cannot drift.
+              trueFalseOptions: provisionalOptions,
+              editable: {
+                // `NOT NULL DEFAULT false`, so there is no undecided state to clear to
+                // and `next` is only ever a boolean.
+                onSave: async (provisional, account) => {
+                  await updateAccountMutation.mutateAsync({
+                    id: account.id,
+                    data: { provisional: provisional ?? false },
+                  });
+                },
+              },
+            }),
+          );
+          add(
+            helper.accessor((r) => r.sourceAliases.length, {
+              id: "aliases",
+              header: "Aliases",
+              meta: { numeric: true, className: "w-24" },
+            }),
+          );
+        }),
+      ),
     // oxlint-disable-next-line react/exhaustive-deps -- mutations change every render but are functionally stable
     [helper],
   );

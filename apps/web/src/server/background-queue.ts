@@ -3,9 +3,12 @@ import {
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
 import { backgroundQueueMessageSchema } from "@cubby/schemas/queue-messages";
-import { match } from "ts-pattern";
 
 import { getErrorMessage } from "~/lib/error-utils";
+import {
+  executeBackgroundJobDelivery,
+  type BackgroundJobDeliveryDefinition,
+} from "~/server/background-job-delivery";
 import {
   advanceWorkflowIfReady,
   isBackgroundWorkflowKind,
@@ -38,6 +41,11 @@ import {
 import { embeddingTextHash } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
 import { TraceNames, withTrace } from "~/server/tracing";
+import {
+  workflow,
+  bindWorkflow,
+  type WorkflowDefinition,
+} from "~/server/workflow-runtime";
 
 import type { BackgroundQueueDeliveredMessage } from "./background-queue-types";
 
@@ -59,6 +67,514 @@ const productionBackgroundQueueEmbeddingPort: BackgroundQueueEmbeddingPort = {
   configured: semanticEmbeddingsConfigured,
   embed: embedTexts,
   config: getSemanticEmbeddingConfig,
+};
+
+type DeliveryContext = {
+  readonly db: Database;
+  readonly jobId: string;
+  readonly batchId: string;
+  readonly batchKind?: BackgroundJobKind;
+  readonly embeddingPort: BackgroundQueueEmbeddingPort;
+};
+
+type ParsedBackgroundJob = ReturnType<typeof backgroundJobPayloadSchema.parse>;
+type DeliveryStatus = "succeeded" | "skipped";
+
+type EntityEmbeddingPayload = Extract<
+  ParsedBackgroundJob,
+  { readonly kind: "entity-embedding.refresh" }
+>;
+
+type EmbeddingRevision = {
+  text: NonNullable<Awaited<ReturnType<typeof getSearchDocumentEmbeddingText>>>;
+  config: ReturnType<typeof getSemanticEmbeddingConfig>;
+  currentHash: string;
+  expectedHash: string | undefined;
+};
+
+const persistEmbeddingWorkflow = workflow<
+  DeliveryContext,
+  EmbeddingRevision & { embedding: number[] }
+>("background-job.embedding.persist")
+  .commit("upsert", ({ context }, { input }) =>
+    upsertEntityEmbedding(context.db, {
+      ...input.text,
+      config: input.config,
+      embedding: input.embedding,
+    }),
+  )
+  .output(() => "succeeded" as const);
+
+const requestEmbeddingWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EmbeddingRevision,
+  DeliveryStatus
+> = workflow<DeliveryContext, EmbeddingRevision>(
+  "background-job.embedding.request",
+)
+  .call("embedding", async ({ context }, { input }) => {
+    const [embedding] = await context.embeddingPort.embed(
+      [input.text.embeddingText],
+      {
+        operation: "entityEmbeddingRefresh",
+        db: context.db,
+        feature: "entity-embedding",
+        entity: {
+          entityType: input.text.entityType,
+          entityId: input.text.entityId,
+        },
+        batchId: context.batchId,
+      },
+    );
+    return embedding;
+  })
+  .mapWorkflow("persist", {
+    items: ({ input, embedding }) =>
+      embedding ? [{ ...input, embedding }] : [],
+    concurrency: 1,
+    workflow: persistEmbeddingWorkflow,
+  })
+  .output(({ persist }) => persist[0] ?? "skipped");
+
+const currentEmbeddingRevisionWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EmbeddingRevision,
+  DeliveryStatus
+> = workflow<DeliveryContext, EmbeddingRevision>(
+  "background-job.embedding.currentRevision",
+)
+  .call("storedHash", ({ context }, { input }) =>
+    getStoredEmbeddingHash(context.db, {
+      entityType: input.text.entityType,
+      entityId: input.text.entityId,
+      config: input.config,
+    }),
+  )
+  .call("configured", async ({ context }) => context.embeddingPort.configured())
+  .mapWorkflow("request", {
+    // The common mutation fan-out path reprojects unchanged text. Compare its
+    // hash before requesting a vector, not merely before storing the result.
+    items: ({ input, storedHash, configured }) =>
+      configured && storedHash !== input.currentHash ? [input] : [],
+    concurrency: 1,
+    workflow: requestEmbeddingWorkflow,
+  })
+  .output(({ request }) => request[0] ?? "skipped");
+
+const replaceEmbeddingRevisionWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EmbeddingRevision,
+  DeliveryStatus
+> = workflow<DeliveryContext, EmbeddingRevision>(
+  "background-job.embedding.replaceRevision",
+)
+  .commit("replacementJobs", ({ context }, { input }) => {
+    const { text, currentHash } = input;
+    // Keep replacements in the inspected batch, deduplicated by their current
+    // hash, so stale work converges without paying for an obsolete document.
+    return addBackgroundJobsToBatch(context.db, context.batchId, [
+      {
+        kind: "entity-embedding.refresh",
+        dedupeKey: `entity-embedding.refresh:${text.entityType}:${text.entityId}:${currentHash}`,
+        payload: {
+          entityType: text.entityType,
+          entityId: text.entityId,
+          expectedEmbeddingHash: currentHash,
+        },
+      },
+    ]);
+  })
+  .effect("dispatchReplacement", async ({ context }, { replacementJobs }) => {
+    if (replacementJobs.length === 0) return;
+    const { dispatchQueuedBackgroundJobs } =
+      await import("./background-dispatch");
+    await dispatchQueuedBackgroundJobs(context.db, {
+      batchId: context.batchId,
+      jobIds: replacementJobs,
+      batchKind: "entity-embedding.backfill.coordinator",
+    });
+  })
+  .output(() => "skipped" as const);
+
+type EmbeddingDocument = {
+  text: EmbeddingRevision["text"];
+  expectedHash: string | undefined;
+};
+const embeddingRevisionWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EmbeddingDocument,
+  DeliveryStatus
+> = workflow<DeliveryContext, EmbeddingDocument>(
+  "background-job.embedding.revision",
+)
+  .call(
+    "revision",
+    async ({ context }, { input }): Promise<EmbeddingRevision> => {
+      const config = context.embeddingPort.config();
+      const currentHash = await embeddingTextHash({
+        entityType: input.text.entityType,
+        provider: config.provider,
+        model: config.model,
+        dimensions: config.dimensions,
+        text: normalizeSearchText(input.text.embeddingText),
+      });
+      return { ...input, config, currentHash };
+    },
+  )
+  .branch("obsoleteRevision", {
+    when: async (_, { revision }) =>
+      !!revision.expectedHash && revision.expectedHash !== revision.currentHash,
+    whenTrue: (branch) =>
+      branch
+        .mapWorkflow("replacement", {
+          items: ({ input }) => [input.revision],
+          concurrency: 1,
+          workflow: replaceEmbeddingRevisionWorkflow,
+        })
+        .output(({ replacement }) => replacement[0] ?? "skipped"),
+    whenFalse: (branch) =>
+      branch
+        .mapWorkflow("current", {
+          items: ({ input }) => [input.revision],
+          concurrency: 1,
+          workflow: currentEmbeddingRevisionWorkflow,
+        })
+        .output(({ current }) => current[0] ?? "skipped"),
+  })
+  .output(({ obsoleteRevision }) => obsoleteRevision);
+
+const embeddingDocumentWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EntityEmbeddingPayload,
+  DeliveryStatus
+> = workflow<DeliveryContext, EntityEmbeddingPayload>(
+  "background-job.embedding.document",
+)
+  .call("text", ({ context }, { input }) =>
+    getSearchDocumentEmbeddingText(
+      context.db,
+      input.payload.ref.entity,
+      input.payload.ref.id,
+    ),
+  )
+  .mapWorkflow("revision", {
+    items: ({ input, text }) =>
+      text ? [{ text, expectedHash: input.payload.expectedEmbeddingHash }] : [],
+    concurrency: 1,
+    workflow: embeddingRevisionWorkflow,
+  })
+  .output(({ revision }) => revision[0] ?? "skipped");
+
+// Child definitions keep the complete payload inspectable while placing a
+// finite type boundary around each provider, revision, and persistence stage.
+const entityEmbeddingPayloadWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EntityEmbeddingPayload,
+  DeliveryStatus
+> = workflow<DeliveryContext, EntityEmbeddingPayload>(
+  "background-job.payload.entityEmbeddingRefresh",
+)
+  .commit("refreshDocument", ({ context }, { input }) =>
+    refreshSearchDocument(
+      context.db,
+      input.payload.ref.entity,
+      input.payload.ref.id,
+    ),
+  )
+  .mapWorkflow("document", {
+    items: ({ input, refreshDocument }) =>
+      refreshDocument.status === "upserted" ? [input] : [],
+    concurrency: 1,
+    workflow: embeddingDocumentWorkflow,
+  })
+  .output(({ document }) => document[0] ?? "skipped");
+
+const recipe_totals_recomputeWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "recipe-totals.recompute" }>
+>("background-job.payload.recipe-totals.recompute")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db, batchId } = context;
+
+    const { recomputeRecipeIds } = await import("./queue-recompute");
+    await recomputeRecipeIds({
+      database: db,
+      recipeIds: p.payload.recipeIds,
+      batchId,
+    });
+    return "succeeded" as const;
+  })
+  .output(({ execute }) => execute);
+
+const entity_embedding_backfill_coordinatorWorkflow = workflow<
+  DeliveryContext,
+  Extract<
+    ParsedBackgroundJob,
+    { kind: "entity-embedding.backfill.coordinator" }
+  >
+>("background-job.payload.entity-embedding.backfill.coordinator")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db, batchId } = context;
+
+    const { continueEntityEmbeddingBackfillWorkflow } =
+      await import("./services/semantic-search.service");
+    return await continueEntityEmbeddingBackfillWorkflow(
+      db,
+      batchId,
+      p.payload,
+    );
+  })
+  .output(({ execute }) => execute);
+
+const search_document_repair_coordinatorWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "search-document.repair.coordinator" }>
+>("background-job.payload.search-document.repair.coordinator")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db, batchId } = context;
+
+    const { continueSearchDocumentRepairWorkflow } =
+      await import("./services/search.service");
+    return await continueSearchDocumentRepairWorkflow(db, batchId, p.payload);
+  })
+  .output(({ execute }) => execute);
+
+const location_ai_description_refreshWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "location-ai.description.refresh" }>
+>("background-job.payload.location-ai.description.refresh")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db, batchId } = context;
+
+    // Location vision reaches browser-facing feature flags. Keep it out of
+    // the common worker module so maintenance can drain embedding-only work
+    // in a plain Node runtime.
+    const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
+      await import("./services/ai-enrichment/location-vision");
+    try {
+      await describeLocation(db, p.payload.locationId, {
+        batchId,
+      });
+    } catch (error) {
+      if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped" as const;
+      throw error;
+    }
+    return "succeeded" as const;
+  })
+  .output(({ execute }) => execute);
+
+const location_ai_inventory_refreshWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "location-ai.inventory.refresh" }>
+>("background-job.payload.location-ai.inventory.refresh")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db, batchId } = context;
+
+    const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
+      await import("./services/ai-enrichment/location-vision");
+    try {
+      await detectInventoryItems(db, p.payload.locationId, {
+        batchId,
+      });
+    } catch (error) {
+      if (isLocationHasNoImagesToAnalyzeError(error)) return "skipped" as const;
+      throw error;
+    }
+    return "succeeded" as const;
+  })
+  .output(({ execute }) => execute);
+
+const location_valuation_recomputeWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "location-valuation.recompute" }>
+>("background-job.payload.location-valuation.recompute")
+  .commit("execute", async ({ context }) => {
+    const { db } = context;
+
+    const { LocationValuationService } =
+      await import("./services/location-valuation.service");
+    await new LocationValuationService(db).recompute();
+    return "succeeded" as const;
+  })
+  .output(({ execute }) => execute);
+
+const problems_counts_refreshWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "problems.counts.refresh" }>
+>("background-job.payload.problems.counts.refresh")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db } = context;
+
+    const { createUpcLookupClient } =
+      await import("~/server/clients/upc-lookup");
+    const { refreshCachedProblemCounts } =
+      await import("./services/problem-counts-cache");
+    const cache = getProblemCountsCache();
+    if (!cache) return "skipped" as const;
+    return await refreshCachedProblemCounts(
+      db,
+      createUpcLookupClient(),
+      cache,
+      p.payload.requestedAt,
+    );
+  })
+  .output(({ execute }) => execute);
+
+const usda_match_retryWorkflow = workflow<
+  DeliveryContext,
+  Extract<ParsedBackgroundJob, { kind: "usda-match.retry" }>
+>("background-job.payload.usda-match.retry")
+  .commit("execute", async ({ context }, { input: p }) => {
+    const { db } = context;
+
+    const { retryUsdaMatch } =
+      await import("./services/ai-enrichment/usda-match");
+    // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
+    // what turns those into the queue's own attempts/backoff.
+    await retryUsdaMatch(db, p.payload.ingredientId);
+    return "succeeded" as const;
+  })
+  .output(({ execute }) => execute);
+
+const payloadDeliveryWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  unknown,
+  DeliveryStatus
+> = workflow<DeliveryContext, unknown>("background-job.delivery.payload")
+  .call("parsed", async (_, { input }) =>
+    backgroundJobPayloadSchema.parse(input),
+  )
+  .mapWorkflow("recipe_totals_recompute", {
+    items: ({ parsed }) =>
+      parsed.kind === "recipe-totals.recompute" ? [parsed] : [],
+    concurrency: 1,
+    workflow: recipe_totals_recomputeWorkflow,
+  })
+  .mapWorkflow("entityEmbedding", {
+    items: ({ parsed }) =>
+      parsed.kind === "entity-embedding.refresh" ? [parsed] : [],
+    concurrency: 1,
+    workflow: entityEmbeddingPayloadWorkflow,
+  })
+  .mapWorkflow("entity_embedding_backfill_coordinator", {
+    items: ({ parsed }) =>
+      parsed.kind === "entity-embedding.backfill.coordinator" ? [parsed] : [],
+    concurrency: 1,
+    workflow: entity_embedding_backfill_coordinatorWorkflow,
+  })
+  .mapWorkflow("search_document_repair_coordinator", {
+    items: ({ parsed }) =>
+      parsed.kind === "search-document.repair.coordinator" ? [parsed] : [],
+    concurrency: 1,
+    workflow: search_document_repair_coordinatorWorkflow,
+  })
+  .mapWorkflow("location_ai_description_refresh", {
+    items: ({ parsed }) =>
+      parsed.kind === "location-ai.description.refresh" ? [parsed] : [],
+    concurrency: 1,
+    workflow: location_ai_description_refreshWorkflow,
+  })
+  .mapWorkflow("location_ai_inventory_refresh", {
+    items: ({ parsed }) =>
+      parsed.kind === "location-ai.inventory.refresh" ? [parsed] : [],
+    concurrency: 1,
+    workflow: location_ai_inventory_refreshWorkflow,
+  })
+  .mapWorkflow("location_valuation_recompute", {
+    items: ({ parsed }) =>
+      parsed.kind === "location-valuation.recompute" ? [parsed] : [],
+    concurrency: 1,
+    workflow: location_valuation_recomputeWorkflow,
+  })
+  .mapWorkflow("problems_counts_refresh", {
+    items: ({ parsed }) =>
+      parsed.kind === "problems.counts.refresh" ? [parsed] : [],
+    concurrency: 1,
+    workflow: problems_counts_refreshWorkflow,
+  })
+  .mapWorkflow("usda_match_retry", {
+    items: ({ parsed }) => (parsed.kind === "usda-match.retry" ? [parsed] : []),
+    concurrency: 1,
+    workflow: usda_match_retryWorkflow,
+  })
+  .output(
+    ({
+      recipe_totals_recompute,
+      entityEmbedding,
+      entity_embedding_backfill_coordinator,
+      search_document_repair_coordinator,
+      location_ai_description_refresh,
+      location_ai_inventory_refresh,
+      location_valuation_recompute,
+      problems_counts_refresh,
+      usda_match_retry,
+    }) => {
+      const status = [
+        ...recipe_totals_recompute,
+        ...entityEmbedding,
+        ...entity_embedding_backfill_coordinator,
+        ...search_document_repair_coordinator,
+        ...location_ai_description_refresh,
+        ...location_ai_inventory_refresh,
+        ...location_valuation_recompute,
+        ...problems_counts_refresh,
+        ...usda_match_retry,
+      ][0];
+      if (!status) throw new Error("No declared background payload handler");
+      return status;
+    },
+  );
+
+const finishDeliveryWorkflow = workflow<
+  DeliveryContext,
+  { readonly status: DeliveryStatus }
+>("background-job.delivery.finish")
+  .commit("finishJob", async ({ context }, { input }) => {
+    await finishBackgroundJob(context.db, context.jobId, input.status);
+  })
+  .output(() => undefined);
+
+const advanceDeliveryWorkflow = workflow<DeliveryContext, undefined>(
+  "background-job.delivery.advance",
+)
+  .call("advanceWorkflow", async ({ context }) => {
+    if (isBackgroundWorkflowKind(context.batchKind))
+      await advanceWorkflowIfReady(context.db, context.batchId);
+  })
+  .output(() => undefined);
+
+const failOrRetryDeliveryWorkflow = workflow<
+  DeliveryContext,
+  { readonly error: unknown }
+>("background-job.delivery.failOrRetry")
+  .commit(
+    "settleFailure",
+    async ({ context }, { input }) =>
+      await failOrRetryBackgroundJob(context.db, context.jobId, input.error),
+  )
+  .output(({ settleFailure }) => settleFailure);
+
+const failedAdvanceDeliveryWorkflow = workflow<DeliveryContext, undefined>(
+  "background-job.delivery.failedAdvance",
+)
+  .call("advanceWorkflow", async ({ context }) => {
+    if (isBackgroundWorkflowKind(context.batchKind))
+      await advanceWorkflowIfReady(context.db, context.batchId);
+  })
+  .output(() => undefined);
+
+const backgroundJobDeliveryDefinition: BackgroundJobDeliveryDefinition<
+  DeliveryContext,
+  unknown,
+  DeliveryStatus,
+  BackgroundJobOutcome
+> = {
+  name: "background-job.delivery",
+  payload: payloadDeliveryWorkflow,
+  finish: finishDeliveryWorkflow,
+  advance: advanceDeliveryWorkflow,
+  failOrRetry: failOrRetryDeliveryWorkflow,
+  failedAdvance: failedAdvanceDeliveryWorkflow,
 };
 
 export async function processBackgroundQueueMessage(
@@ -112,26 +628,49 @@ export async function processBackgroundQueueMessage(
   return outcome;
 }
 
-export async function drainQueuedBackgroundJobs(
-  db: Database,
-  limit: number,
-): Promise<{ processed: number }> {
-  const jobs = await findQueuedBackgroundJobs(db, limit);
-  const batchKinds = new Map<string, BackgroundJobKind | undefined>();
-  let processed = 0;
-  for (const job of jobs) {
-    let batchKind = batchKinds.get(job.batchId);
-    if (batchKind === undefined && !batchKinds.has(job.batchId)) {
-      batchKind = (await getBackgroundBatchSummary(db, job.batchId))?.kind;
-      batchKinds.set(job.batchId, batchKind);
+type QueuedDelivery = {
+  job: Awaited<ReturnType<typeof findQueuedBackgroundJobs>>[number];
+  batchKinds: Map<string, BackgroundJobKind | undefined>;
+};
+const queuedDeliveryWorkflow = workflow<Database, QueuedDelivery>(
+  "background-job.drain.item",
+)
+  .call("batchKind", async ({ context }, { input }) => {
+    const { job, batchKinds } = input;
+    if (!batchKinds.has(job.batchId)) {
+      batchKinds.set(
+        job.batchId,
+        (await getBackgroundBatchSummary(context, job.batchId))?.kind,
+      );
     }
-    await processBackgroundJob(db, job.id, batchKind);
-    processed++;
-  }
-  return { processed };
-}
+    return batchKinds.get(job.batchId);
+  })
+  .commit("deliver", ({ context }, { input, batchKind }) =>
+    processBackgroundJob(context, input.job.id, batchKind),
+  )
+  .output(({ deliver }) => deliver);
 
-export async function processBackgroundJob(
+export const drainQueuedBackgroundJobs = bindWorkflow(
+  workflow<Database, { limit: number }>("background-job.drain")
+    .call("queuedJobs", ({ context }, { input }) =>
+      findQueuedBackgroundJobs(context, input.limit),
+    )
+    .call(
+      "batchKinds",
+      async () => new Map<string, BackgroundJobKind | undefined>(),
+    )
+    .mapWorkflow("deliveries", {
+      items: ({ queuedJobs, batchKinds }) =>
+        queuedJobs.map((job) => ({ job, batchKinds })),
+      concurrency: 1,
+      workflow: queuedDeliveryWorkflow,
+    })
+    // Every selected delivery counts, including skipped, failed, or leased jobs.
+    .output(({ deliveries }) => ({ processed: deliveries.length })),
+  (context: Database, limit: number) => ({ context, input: { limit } }),
+);
+
+async function processBackgroundJobImplementation(
   db: Database,
   jobId: string,
   batchKind?: BackgroundJobKind,
@@ -172,39 +711,27 @@ export async function processBackgroundJob(
       const running = await markBackgroundJobRunning(db, jobId);
       if (!running) return withOutcome("skipped");
 
-      try {
-        const parsed = backgroundJobPayloadSchema.parse({
-          kind: running.kind,
-          payload: running.payload,
-        });
-        const status = await runBackgroundJobPayload(
-          db,
-          running.batchId,
-          parsed,
-          embeddingPort,
-        );
-        await finishBackgroundJob(db, jobId, status);
-        if (isBackgroundWorkflowKind(batchKind)) {
-          await advanceWorkflowIfReady(db, running.batchId);
-        }
-        return withOutcome(status);
-      } catch (error) {
-        console.error(
-          `[background-queue] job failed batch=${running.batchId} job=${jobId} kind=${running.kind}`,
-          error,
-        );
-        // failOrRetryBackgroundJob handles the failure and this path returns
-        // normally (no rethrow), so withTrace's auto-error-on-throw never
-        // fires here — mark the span explicitly or the failure is invisible
-        // in traces.
-        span.setError(getErrorMessage(error));
-        span.recordException(error);
-        const outcome = await failOrRetryBackgroundJob(db, jobId, error);
-        if (outcome === "failed" && isBackgroundWorkflowKind(batchKind)) {
-          await advanceWorkflowIfReady(db, running.batchId);
-        }
-        return withOutcome(outcome);
-      }
+      const payload = { kind: running.kind, payload: running.payload };
+      return withOutcome(
+        await executeBackgroundJobDelivery(backgroundJobDeliveryDefinition, {
+          context: {
+            db,
+            jobId,
+            batchId: running.batchId,
+            batchKind,
+            embeddingPort,
+          },
+          payload,
+          onError: (error) => {
+            console.error(
+              `[background-queue] job failed batch=${running.batchId} job=${jobId} kind=${running.kind}`,
+              error,
+            );
+            span.setError(getErrorMessage(error));
+            span.recordException(error);
+          },
+        }),
+      );
     },
     {
       "cubby.job.id": jobId,
@@ -216,169 +743,7 @@ export async function processBackgroundJob(
   );
 }
 
-async function runBackgroundJobPayload(
-  db: Database,
-  batchId: string,
-  parsed: ReturnType<typeof backgroundJobPayloadSchema.parse>,
-  embeddingPort: BackgroundQueueEmbeddingPort,
-): Promise<"succeeded" | "skipped"> {
-  return match(parsed)
-    .with({ kind: "recipe-totals.recompute" }, async (p) => {
-      const { recomputeRecipeIds } = await import("./queue-recompute");
-      await recomputeRecipeIds({
-        database: db,
-        recipeIds: p.payload.recipeIds,
-        batchId,
-      });
-      return "succeeded" as const;
-    })
-    .with({ kind: "entity-embedding.refresh" }, async (p) => {
-      const { ref } = p.payload;
-      const refreshed = await refreshSearchDocument(db, ref.entity, ref.id);
-      if (refreshed.status !== "upserted") return "skipped" as const;
-      const text = await getSearchDocumentEmbeddingText(db, ref.entity, ref.id);
-      if (!text) return "skipped" as const;
-      // Computed unconditionally now: a sha256 over already-loaded text is
-      // nothing next to the HTTP embedding call it can avoid below.
-      const config = embeddingPort.config();
-      const currentHash = await embeddingTextHash({
-        entityType: text.entityType,
-        provider: config.provider,
-        model: config.model,
-        dimensions: config.dimensions,
-        text: normalizeSearchText(text.embeddingText),
-      });
-      if (p.payload.expectedEmbeddingHash) {
-        // The workflow inspected a different document revision. Refresh is
-        // already complete above; persist a replacement child keyed by the
-        // current hash so this same workflow still converges without paying a
-        // provider call for the obsolete input.
-        if (currentHash !== p.payload.expectedEmbeddingHash) {
-          const jobIds = await addBackgroundJobsToBatch(db, batchId, [
-            {
-              kind: "entity-embedding.refresh",
-              dedupeKey: `entity-embedding.refresh:${text.entityType}:${text.entityId}:${currentHash}`,
-              payload: {
-                entityType: text.entityType,
-                entityId: text.entityId,
-                expectedEmbeddingHash: currentHash,
-              },
-            },
-          ]);
-          if (jobIds.length > 0) {
-            const { dispatchQueuedBackgroundJobs } =
-              await import("./background-dispatch");
-            await dispatchQueuedBackgroundJobs(db, {
-              batchId,
-              jobIds,
-              batchKind: "entity-embedding.backfill.coordinator",
-            });
-          }
-          return "skipped" as const;
-        }
-      }
-      // Nothing about the embedded text changed, so the vector we would get
-      // back is the one already stored. Mutation-sourced refreshes fan out on
-      // every edit and carry no expected hash, so this is the common case, not
-      // the exception — skipping here is what keeps a re-projection free.
-      const storedHash = await getStoredEmbeddingHash(db, {
-        entityType: text.entityType,
-        entityId: text.entityId,
-        config,
-      });
-      if (storedHash === currentHash) return "skipped" as const;
-
-      if (!embeddingPort.configured()) return "skipped" as const;
-      const [embedding] = await embeddingPort.embed([text.embeddingText], {
-        operation: "entityEmbeddingRefresh",
-        db,
-        feature: "entity-embedding",
-        entity: {
-          entityType: ref.entity,
-          entityId: ref.id,
-        },
-        batchId,
-      });
-      if (!embedding) return "skipped" as const;
-      await upsertEntityEmbedding(db, {
-        ...text,
-        config,
-        embedding,
-      });
-      return "succeeded" as const;
-    })
-    .with({ kind: "entity-embedding.backfill.coordinator" }, async (p) => {
-      const { continueEntityEmbeddingBackfillWorkflow } =
-        await import("./services/semantic-search.service");
-      return await continueEntityEmbeddingBackfillWorkflow(
-        db,
-        batchId,
-        p.payload,
-      );
-    })
-    .with({ kind: "search-document.repair.coordinator" }, async (p) => {
-      const { continueSearchDocumentRepairWorkflow } =
-        await import("./services/search.service");
-      return await continueSearchDocumentRepairWorkflow(db, batchId, p.payload);
-    })
-    .with({ kind: "location-ai.description.refresh" }, async (p) => {
-      // Location vision reaches browser-facing feature flags. Keep it out of
-      // the common worker module so maintenance can drain embedding-only work
-      // in a plain Node runtime.
-      const { describeLocation, isLocationHasNoImagesToAnalyzeError } =
-        await import("./services/ai-enrichment/location-vision");
-      try {
-        await describeLocation(db, p.payload.locationId, {
-          batchId,
-        });
-      } catch (error) {
-        if (isLocationHasNoImagesToAnalyzeError(error))
-          return "skipped" as const;
-        throw error;
-      }
-      return "succeeded" as const;
-    })
-    .with({ kind: "location-ai.inventory.refresh" }, async (p) => {
-      const { detectInventoryItems, isLocationHasNoImagesToAnalyzeError } =
-        await import("./services/ai-enrichment/location-vision");
-      try {
-        await detectInventoryItems(db, p.payload.locationId, {
-          batchId,
-        });
-      } catch (error) {
-        if (isLocationHasNoImagesToAnalyzeError(error))
-          return "skipped" as const;
-        throw error;
-      }
-      return "succeeded" as const;
-    })
-    .with({ kind: "location-valuation.recompute" }, async () => {
-      const { LocationValuationService } =
-        await import("./services/location-valuation.service");
-      await new LocationValuationService(db).recompute();
-      return "succeeded" as const;
-    })
-    .with({ kind: "problems.counts.refresh" }, async (p) => {
-      const { createUpcLookupClient } =
-        await import("~/server/clients/upc-lookup");
-      const { refreshCachedProblemCounts } =
-        await import("./services/problem-counts-cache");
-      const cache = getProblemCountsCache();
-      if (!cache) return "skipped" as const;
-      return await refreshCachedProblemCounts(
-        db,
-        createUpcLookupClient(),
-        cache,
-        p.payload.requestedAt,
-      );
-    })
-    .with({ kind: "usda-match.retry" }, async (p) => {
-      const { retryUsdaMatch } =
-        await import("./services/ai-enrichment/usda-match");
-      // Real failures propagate (no catch here) — failOrRetryBackgroundJob is
-      // what turns those into the queue's own attempts/backoff.
-      await retryUsdaMatch(db, p.payload.ingredientId);
-      return "succeeded" as const;
-    })
-    .exhaustive();
-}
+export const processBackgroundJob = Object.assign(
+  processBackgroundJobImplementation,
+  { definition: backgroundJobDeliveryDefinition },
+);

@@ -4,11 +4,11 @@ import type { FC } from "react";
 
 import { EntityHero } from "~/app/_components/EntityHero";
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
 import {
@@ -48,9 +48,8 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
     data: vendor,
   });
 
-  const fields: BasicInfoField[] = [
-    {
-      label: "Name",
+  const fieldOverrides = {
+    name: () => ({
       value: (
         <EditableCell
           value={vendor.name}
@@ -66,9 +65,8 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Website",
+    }),
+    website: () => ({
       value: (
         <EditableCell
           value={vendor.website}
@@ -84,9 +82,8 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           }
         />
       ),
-    },
-    {
-      label: "Order URL",
+    }),
+    orderUrlTemplate: () => ({
       value: (
         <EditableCell
           value={vendor.orderUrlTemplate}
@@ -108,9 +105,8 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           }
         />
       ),
-    },
-    {
-      label: "Notes",
+    }),
+    notes: () => ({
       value: (
         <EditableCell
           value={vendor.notes}
@@ -124,25 +120,23 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
+    }),
     // Read-only rollups, spelled out here as well as in the hero so the fact
     // sheet is complete. `spend` is SUM(expense.cost) over this vendor's
     // purchases' lines — never a column, and never `purchase.statedTotal`.
-    {
-      label: "Purchases",
+    purchaseCount: () => ({
       value: (
         <span className="font-mono tabular-nums">{vendor.purchaseCount}</span>
       ),
-    },
-    {
-      label: "Spend",
+    }),
+    spend: () => ({
       value: (
         <span className="font-mono tabular-nums">
           {formatCurrency(vendor.spend)}
         </span>
       ),
-    },
-  ];
+    }),
+  };
 
   const sections: DetailSection[] = [
     {
@@ -150,7 +144,13 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
       title: "Overview",
       icon: Info,
       placement: "supporting",
-      content: <BasicInfo fields={fields} />,
+      content: (
+        <EntityBasicInfo
+          entity="vendor"
+          record={vendor}
+          overrides={fieldOverrides}
+        />
+      ),
     },
     {
       id: "purchases",

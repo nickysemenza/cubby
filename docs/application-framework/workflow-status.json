@@ -1,0 +1,1239 @@
+{
+  "baselineCommit": "a65b1f68f982876a98de33470df1ea9f31f40aaf",
+  "operationIdCount": 249,
+  "workflowExportCount": 244,
+  "counts": {
+    "registered executable": 235,
+    "supporting helper": 2,
+    "infrastructure": 7,
+    "total": 244
+  },
+  "entries": [
+    {
+      "export": "askAgentWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/agent.server.ts"
+    },
+    {
+      "export": "askAgentStreamWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/agent.server.ts"
+    },
+    {
+      "export": "suggestCategoryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "suggestLocationTypeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "suggestLocationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "describeLocationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "detectInventoryItemsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "approveDetectedInventoryItemWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "identifyProductWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "suggestUsdaFoodWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "suggestUsdaFoodBatchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "suggestIngredientMergeBatchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "precomputeEnrichmentProposalsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "backfillLocationDescriptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "parseSearchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "auditCategoriesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "listAiUsageRecentWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "summarizeAiUsageWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ai.server.ts"
+    },
+    {
+      "export": "listAuditLog",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/audit-log.ts"
+    },
+    {
+      "export": "listBackgroundBatchesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "getBackgroundBatchSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "listBackgroundBatchJobsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "retryBackgroundBatchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "retryBackgroundJobWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "cancelBackgroundBatchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "drainBackgroundJobsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "countStrandedBackgroundJobsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "clearStrandedBackgroundJobsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/background-jobs.server.ts"
+    },
+    {
+      "export": "getCalendarRangeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "getCalendarFeedWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "inspectCalendarFeedWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "rotateCalendarFeedWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "getCalendarCredentialWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "rotateCalendarCredentialWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "revokeCalendarCredentialWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "clearCalendarUncertainWriteWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/calendar.server.ts"
+    },
+    {
+      "export": "listCollectionSummaries",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/collection.ts"
+    },
+    {
+      "export": "readCollectionDetail",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/collection.ts"
+    },
+    {
+      "export": "readCollectionMatrix",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/collection.ts"
+    },
+    {
+      "export": "setCollectionMembership",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/collection.ts"
+    },
+    {
+      "export": "createCollection",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/collection.ts"
+    },
+    {
+      "export": "getDashboardCounts",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/dashboard.ts"
+    },
+    {
+      "export": "previewOperation",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/entity-integrity-preview.server.ts"
+    },
+    {
+      "export": "expenseChartDataWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseAnalyticsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseMonthlySummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseAnalyzeTraceAttributes",
+      "status": "supporting helper",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseFacetTraceAttributes",
+      "status": "supporting helper",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseAnalyzeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseFacetCountsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseTradeAffinityWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseMatchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "expenseChargeContextWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/expense.server.ts"
+    },
+    {
+      "export": "financialAccountOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/finance.server.ts"
+    },
+    {
+      "export": "ledgerPartyOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/finance.server.ts"
+    },
+    {
+      "export": "financialTransactionSourceOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/finance.server.ts"
+    },
+    {
+      "export": "merchantVendorInferenceWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/finance.server.ts"
+    },
+    {
+      "export": "householdContributionLedgerWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/household-contribution.server.ts"
+    },
+    {
+      "export": "projectContributionWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/household-contribution.server.ts"
+    },
+    {
+      "export": "suggestFinancialTransferPairsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/household-contribution.server.ts"
+    },
+    {
+      "export": "markImageUploadedWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "initiateImageUploadWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "initiateDocumentUploadWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "importImageFromUrlWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "attachFileWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "createFileUploadWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "cullPendingImagesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "cleanupUnreferencedImagesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/image.server.ts"
+    },
+    {
+      "export": "getByNameWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "matchNamesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "getManyByIDsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "recipeUsagesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "enrichmentWorkbenchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "resolveOrCreateWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "mergeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/ingredient.server.ts"
+    },
+    {
+      "export": "bulkProcessInventoryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "bulkAddInventoryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "bulkDiscardInventoryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "bulkMoveInventoryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "moveInventoryEntriesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "reconcileInventorySessionWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "findInventoryDuplicatesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "getInventoryByLocationIdsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "scanInventoryAtLocationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "resolveInventoryScanStraysWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/inventory.server.ts"
+    },
+    {
+      "export": "locationSearchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "makeTreeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "valuationSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "subtreeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "inventoryBreakdownWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "parentOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "ensureGlobalUnknownWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "bulkUpdateParentWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "getByShortcodesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "recomputeValuationsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/location.server.ts"
+    },
+    {
+      "export": "listMcpCatalogWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/mcp-browser.server.ts"
+    },
+    {
+      "export": "getMcpUsageDashboardWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/mcp-browser.server.ts"
+    },
+    {
+      "export": "listMcpUsageActivityWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/mcp-browser.server.ts"
+    },
+    {
+      "export": "getMealsByDateRangeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "getUpcomingMealSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "getMealPreparationsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "saveMealRecipePreparationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "addRecipeToMealWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "updateMealRecipeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "removeMealRecipeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "getShoppingListWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/meal.server.ts"
+    },
+    {
+      "export": "listConnectedAppsWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/oauth.server.ts"
+    },
+    {
+      "export": "revokeConnectedAppWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/oauth.server.ts"
+    },
+    {
+      "export": "countOrphanedOAuthClientsWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/oauth.server.ts"
+    },
+    {
+      "export": "pruneOrphanedOAuthClientsWorkflow",
+      "status": "infrastructure",
+      "ownerFile": "apps/web/src/server/workflows/oauth.server.ts"
+    },
+    {
+      "export": "findFastProblemsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findProblemCountsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findProblemByTypeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findViewProblemsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findCoverageProblemsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findUpcProblemsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findTrackerProblemsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findCoverageTotalsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "findMaintenanceCountsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "dryRunReparseWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "dryRunPruneAliasesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "recipeUsageByProductWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "cleanupOrphanedEmbeddingsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "deleteUnusedIngredientsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "reparseStaleWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "pruneAllUnusedAliasesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/problems.server.ts"
+    },
+    {
+      "export": "searchProductsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "applyProductUpcDataWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductSummariesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductQuantitySummariesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductInventoryEntriesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "quickCreateProductWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "findOrCreateProductByUpcWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "findOrCreateProductByCodeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductTagOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductCategoryDistributionWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductManufacturerOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductExternalIdSourceOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductMovementTimelineWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "getProductsByShortcodesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "mergeProductsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "listProductProjectUsesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "listProductPurchasesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "listProductComponentsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "listKitComponentRowsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "listKitMembershipWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "attachProductComponentsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "detachProductComponentsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "setProductProjectUsesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "discardProductWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "createManyProductsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "markProductsUsdaUnavailableWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "backfillProductUpcImagesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/product.server.ts"
+    },
+    {
+      "export": "projectDependencyGraphWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectTreeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectDashboardSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectPortfolioAnalyticsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectCreateFromTasksWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectResourcesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectToolSuggestionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectAttachResourcesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectDetachResourcesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectRepointUsesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectToolMatrixWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectToolGalleryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "projectSetToolUsageWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/project.server.ts"
+    },
+    {
+      "export": "linkExpensesToPurchaseWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/purchase.server.ts"
+    },
+    {
+      "export": "splitExpenseWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/purchase.server.ts"
+    },
+    {
+      "export": "mergePurchasesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/purchase.server.ts"
+    },
+    {
+      "export": "purchaseProductsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/purchase.server.ts"
+    },
+    {
+      "export": "attachPurchaseProductsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/purchase.server.ts"
+    },
+    {
+      "export": "detachPurchaseProductsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/purchase.server.ts"
+    },
+    {
+      "export": "scrapeWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "parseHtmlWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "insertImportWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "upsertCookbookWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "getCookbookSourceWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "attachCookbookRecipePhotoWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "importCookbookWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "getCookbookDiffWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "previewNotionSyncWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "importNotionSyncWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "setCookbookProductWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "deleteCookbookWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "reprocessCookbookWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "extractCookbookChunkWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe-import.server.ts"
+    },
+    {
+      "export": "getManyByIDsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getAllTagsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "duplicateWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getIngredientCooccurrenceWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getDependencyGraphWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getIngredientUsageWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "recomputeOneWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "recomputeAllDurableWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "recomputeStaleDurableWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "dryRunRecomputeTotalsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "explainCostingWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getFlowWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "generateFlowWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "harvestEquivalencesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getRecipeAvailabilityWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getMakeableWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recipe.server.ts"
+    },
+    {
+      "export": "getProductRelatednessWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "getPlacementRecommendationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "getProductRecommendationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "getDuplicateProductRecommendationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "dismissDuplicateProductRecommendationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "getTagPropagationRecommendationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "dismissTagPropagationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "dismissProductRecommendationWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/recommendations.server.ts"
+    },
+    {
+      "export": "loadRelatedPreviewsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/related-data.server.ts"
+    },
+    {
+      "export": "loadRelatedBranchWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/related-data.server.ts"
+    },
+    {
+      "export": "loadRelatedOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/related-data.server.ts"
+    },
+    {
+      "export": "loadRelatedSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/related-data.server.ts"
+    },
+    {
+      "export": "findSearchHitsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "findGroupedSearchHitsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "inspectSearchDocumentHealthWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "repairSearchDocumentsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "findRelatedSearchHitsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "findRelatedSearchGroupsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "findSimilarEntitiesWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "inspectSearchDebugWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "enqueueEmbeddingBackfillWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "requestEmbeddingRefreshWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/search.server.ts"
+    },
+    {
+      "export": "listStatementRowsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "getStatementRowSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "listStatementImportsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "findStatementRowDriftWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "recordStatementRowsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "updateStatementRowsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "deleteStatementRowsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/statement-row.server.ts"
+    },
+    {
+      "export": "taskListActionableWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "taskChartDataWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "taskSummaryWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "taskTodayBriefingWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "taskBoardWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "taskTimelineWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "taskBulkReorderWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/task.server.ts"
+    },
+    {
+      "export": "lookupUpcWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/upc.server.ts"
+    },
+    {
+      "export": "findUsdaFoodWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/usda.server.ts"
+    },
+    {
+      "export": "vendorOptionsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/vendor.server.ts"
+    },
+    {
+      "export": "mergeVendorsWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/vendor.server.ts"
+    },
+    {
+      "export": "fetchVendorLogoWorkflow",
+      "status": "registered executable",
+      "ownerFile": "apps/web/src/server/workflows/vendor.server.ts"
+    }
+  ],
+  "notes": [
+    "This is a point-in-time snapshot; regenerate after future workflow changes.",
+    "Static declaration inventory only; registration does not establish semantic parity.",
+    "Infrastructure entries are classified separately and are not included in legacy application counts.",
+    "Baseline operation IDs (249) and workflow exports (244) are distinct inventories."
+  ]
+}

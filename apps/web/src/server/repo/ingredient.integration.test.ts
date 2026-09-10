@@ -1,19 +1,44 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { testEntityId } from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityEmbedding,
+  auditLog,
   ingredient,
   inventoryEntry,
 } from "~/server/db/schema";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { deleteRecipes } from "~/server/repo/recipe";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import {
+  callStep,
+  committedCallStep,
+  committedEffectStep,
+  afterCommitStep,
+  transactionStep,
+  defineWorkflow,
+  defineWorkflowFunction,
+  workflowInput,
+  executeWorkflow,
+  databaseWorkflowTransaction,
+  WorkflowEffectError,
+  type WorkflowFunctionContext,
+} from "~/server/workflow-runtime";
+import { precomputeEnrichmentProposalsWorkflow } from "~/server/workflows/ai.server";
+import {
+  mergeWorkflow,
+  resolveOrCreateWorkflow,
+} from "~/server/workflows/ingredient.server";
 
 import { getDb, withTransaction } from "./database-helpers";
 import { findOrphanedEntityEmbeddings } from "./entity-embedding";
+import { patchEntityRows } from "./entity-patch";
 import {
   createIngredient,
   deleteIngredients,
@@ -33,6 +58,286 @@ import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("ingredient", () => {
   const ctx = withTestDb();
+
+  it("streams declared enrichment windows with public ids and skips unresolved subjects", async () => {
+    const items = [];
+    for (let index = 0; index < 7; index++) {
+      const created = await createIngredient(
+        ctx.db,
+        { name: `Enrichment fixture ${index}` },
+        ctx.actor,
+      );
+      items.push({
+        id: created.id,
+        name: `Enrichment fixture ${index}`,
+        wantUsda: false,
+        wantMerge: false,
+      });
+    }
+    const context = requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const events = [];
+    for await (const event of precomputeEnrichmentProposalsWorkflow(context, {
+      items: [
+        ...items,
+        {
+          id: testShortcode("ingredient", "ING-ZZZZ"),
+          name: "Missing enrichment subject",
+          wantUsda: false,
+          wantMerge: false,
+        },
+      ],
+    }))
+      events.push(event);
+    expect(events[0]).toEqual({ type: "progress", done: 0, total: 7 });
+    expect(events.slice(1, -1)).toEqual(
+      items.map((item, index) => ({
+        type: "progress",
+        done: index + 1,
+        total: 7,
+        item: {
+          id: item.id,
+          usda: { food: null, confidence: "low", reasoning: "" },
+          merge: null,
+        },
+      })),
+    );
+    expect(events.at(-1)).toEqual({ type: "done", result: { processed: 7 } });
+  });
+
+  it("resolves aliases through the workflow and keeps automatic creations off the staple list", async () => {
+    const existing = await createIngredient(
+      ctx.db,
+      {
+        name: "Workflow salt",
+        aliases: ["Workflow seasoning"],
+        usuallyOnHand: true,
+      },
+      ctx.actor,
+    );
+    const rows = await resolveOrCreateWorkflow(ctx.db, {
+      names: ["Workflow seasoning", "Workflow pepper", " workflow pepper "],
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({ id: existing.id, created: false });
+    expect(rows[1]).toMatchObject({ created: true });
+    expect(rows[2]?.id).toBe(rows[1]?.id);
+    const id = rows[1]?.entityId;
+    expect(id).toBeDefined();
+    if (!id) throw new Error("Expected newly resolved ingredient");
+    expect(
+      (await getIngredientByID(ctx.db, parseEntityId("ingredient", id)))
+        .usuallyOnHand,
+    ).toBe(false);
+  });
+
+  it("rolls back a shared scalar patch with its audit and preserves omitted values", async () => {
+    const row = await findOrCreateIngredient(ctx.db, "scalar patch fixture");
+    const definition = {
+      entity: "ingredient",
+      table: ingredient,
+      fields: ["usuallyOnHand"],
+    } as const;
+    const audits = () =>
+      getDb(ctx.db)
+        .select()
+        .from(auditLog)
+        .where(eq(auditLog.entityId, row.id));
+    const before = await audits();
+    await expect(
+      withTransaction(ctx.db, async (tx) => {
+        await patchEntityRows(tx, ctx.actor, definition, [row.id], {
+          usuallyOnHand: true,
+        });
+        throw new Error("abort outer operation");
+      }),
+    ).rejects.toThrow("abort outer operation");
+    expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(false);
+    expect(await audits()).toEqual(before);
+
+    expect(
+      await patchEntityRows(ctx.db, ctx.actor, definition, [row.id], {
+        usuallyOnHand: undefined,
+      }),
+    ).toEqual([]);
+    expect(
+      await patchEntityRows(ctx.db, ctx.actor, definition, [row.id], {
+        usuallyOnHand: false,
+      }),
+    ).toEqual([]);
+    expect(await audits()).toEqual(before);
+    await expect(
+      patchEntityRows(ctx.db, ctx.actor, definition, [row.id], {
+        name: "not permitted",
+      }),
+    ).rejects.toThrow("Undeclared ingredient patch field");
+    expect((await getIngredientByID(ctx.db, row.id)).name).toBe(
+      "scalar patch fixture",
+    );
+  });
+
+  it("finishes required effects after a repository-owned commit before reporting cancellation", async () => {
+    const row = await findOrCreateIngredient(ctx.db, "committed call fixture");
+    const controller = new AbortController();
+    const observed: boolean[] = [];
+    const write = committedCallStep({
+      name: "mark",
+      input: workflowInput<typeof row.id>(),
+      fn: defineWorkflowFunction(
+        "ingredient.markOwnedTransaction",
+        async (
+          { context }: WorkflowFunctionContext<Database>,
+          id: typeof row.id,
+        ) => {
+          const result = await updateIngredientsUsuallyOnHand(
+            context,
+            [id],
+            { usuallyOnHand: true },
+            ctx.actor,
+          );
+          controller.abort();
+          return result;
+        },
+      ),
+    });
+    const observe = committedEffectStep({
+      name: "observe",
+      input: workflowInput<typeof row.id>(),
+      fn: defineWorkflowFunction(
+        "ingredient.observeOwnedCommit",
+        async (
+          { context, signal, scope }: WorkflowFunctionContext<Database>,
+          id: typeof row.id,
+        ) => {
+          expect(signal.aborted).toBe(false);
+          expect(scope).toBe("afterCommit");
+          observed.push((await getIngredientByID(context, id)).usuallyOnHand);
+        },
+      ),
+    });
+    const definition = defineWorkflow({
+      name: "ownedTransaction",
+      steps: [write, observe],
+      output: write.output,
+    });
+    await expect(
+      executeWorkflow(definition, {
+        context: ctx.db,
+        input: row.id,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({
+      name: "WorkflowCancelledError",
+      committed: true,
+      effectsPending: false,
+    });
+    expect(observed).toEqual([true]);
+    expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(true);
+  });
+
+  it("runs workflow effects after durable commit and reports effect failure without rolling back", async () => {
+    const ingredientRow = await findOrCreateIngredient(
+      ctx.db,
+      "workflow commit fixture",
+    );
+    type Context = { db: Database | DrizzleTransaction };
+    const input = workflowInput<typeof ingredientRow.id>();
+    const write = callStep({
+      name: "write",
+      input,
+      fn: defineWorkflowFunction(
+        "ingredient.mark",
+        async (
+          { context }: WorkflowFunctionContext<Context>,
+          id: typeof ingredientRow.id,
+        ) =>
+          patchEntityRows(
+            context.db,
+            ctx.actor,
+            {
+              entity: "ingredient",
+              table: ingredient,
+              fields: ["usuallyOnHand"],
+            },
+            [id],
+            { usuallyOnHand: true },
+          ),
+      ),
+    });
+    const observed: boolean[] = [];
+    const verify = afterCommitStep({
+      name: "verifyCommit",
+      input,
+      fn: defineWorkflowFunction(
+        "ingredient.verifyCommit",
+        async (
+          _execution: WorkflowFunctionContext<Context>,
+          id: typeof ingredientRow.id,
+        ) => {
+          observed.push((await getIngredientByID(ctx.db, id)).usuallyOnHand);
+        },
+      ),
+    });
+    const fail = afterCommitStep({
+      name: "failedEffect",
+      input,
+      fn: defineWorkflowFunction(
+        "ingredient.failedEffect",
+        async (
+          _execution: WorkflowFunctionContext<Context>,
+          _id: typeof ingredientRow.id,
+        ) => {
+          throw new Error("external failure");
+        },
+      ),
+    });
+    const definition = defineWorkflow({
+      name: "commitEffects",
+      steps: [
+        transactionStep({ name: "transaction", steps: [write, verify, fail] }),
+      ],
+      output: write.output,
+    });
+    const transaction = databaseWorkflowTransaction<Context>({
+      database: () => ctx.db,
+      within: (_context, db) => ({ db }),
+    });
+    const effectEvents: { step: string; state: string; committed: boolean }[] =
+      [];
+    const result = executeWorkflow(definition, {
+      context: { db: ctx.db },
+      input: ingredientRow.id,
+      transaction,
+      observer: (event) => {
+        if (event.type === "afterCommit") {
+          effectEvents.push({
+            step: event.step,
+            state: event.state,
+            committed: event.committed,
+          });
+        }
+      },
+    });
+    await expect(result).rejects.toBeInstanceOf(WorkflowEffectError);
+    await expect(result).rejects.toMatchObject({
+      committed: true,
+      effect: "failedEffect",
+      pendingEffects: ["failedEffect"],
+    });
+    expect(observed).toEqual([true]);
+    expect(effectEvents).toEqual([
+      { step: "verifyCommit", state: "queued", committed: false },
+      { step: "failedEffect", state: "queued", committed: false },
+      { step: "verifyCommit", state: "started", committed: true },
+      { step: "verifyCommit", state: "succeeded", committed: true },
+      { step: "failedEffect", state: "started", committed: true },
+      { step: "failedEffect", state: "failed", committed: true },
+    ]);
+    expect(
+      (await getIngredientByID(ctx.db, ingredientRow.id)).usuallyOnHand,
+    ).toBe(true);
+  });
 
   it("persists pantry assumptions separately from aliases, merges, and inventory", async () => {
     const plain = await createIngredient(
@@ -110,10 +415,9 @@ describe("ingredient", () => {
       { name: "pantry loser", aliases: [], usuallyOnHand: false },
       ctx.actor,
     );
-    await mergeIngredients(
-      ctx.db,
+    await mergeWorkflow(
+      entityKernelContextSchema.parse(createTestRequestContext(ctx.db)),
       { keepId: keeper.id, mergeIds: [loser.id] },
-      ctx.actor,
     );
     const keeperId = parseEntityId(
       "ingredient",

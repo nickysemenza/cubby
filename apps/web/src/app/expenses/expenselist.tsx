@@ -25,6 +25,7 @@ import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -191,179 +192,191 @@ export function ExpenseList() {
     () =>
       createCubbyColumnCollection<ExpenseOut>((add) => {
         add(createExpenseProductImageColumn(columnHelper));
-        add(
-          expenseCostColumn(
-            columnHelper,
-            async (cost, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { cost },
-              });
-            },
-            {
-              mobile: { slot: "trailing", priority: 10, interactive: true },
-              signedTone: true,
-            },
-          ),
-        );
-        add(
-          expenseDateColumn(
-            columnHelper,
-            async (date, expense) => {
-              if (date === null) return;
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { date },
-              });
-            },
-            {
-              mobile: { slot: "subtitle", priority: 15 },
-            },
-          ),
-        );
-        add(
-          expenseLineKindColumn(
-            columnHelper,
-            async (lineKind, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { lineKind },
-              });
-            },
-            { mobile: { slot: "meta", priority: 18 } },
-          ),
-        );
-        add(
-          expenseLineBasisColumn(columnHelper, async (lineBasis, expense) => {
-            await updateExpenseMutation.mutateAsync({
-              id: expense.id,
-              data: { lineBasis },
-            });
+        createEntityDisplayColumns(
+          "expense",
+          columnHelper,
+          createCubbyColumnCollection<ExpenseOut>((add) => {
+            add(
+              expenseCostColumn(
+                columnHelper,
+                async (cost, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { cost },
+                  });
+                },
+                {
+                  mobile: { slot: "trailing", priority: 10, interactive: true },
+                  signedTone: true,
+                },
+              ),
+            );
+            add(
+              expenseDateColumn(
+                columnHelper,
+                async (date, expense) => {
+                  if (date === null) return;
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { date },
+                  });
+                },
+                {
+                  mobile: { slot: "subtitle", priority: 15 },
+                },
+              ),
+            );
+            add(
+              expenseLineKindColumn(
+                columnHelper,
+                async (lineKind, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { lineKind },
+                  });
+                },
+                { mobile: { slot: "meta", priority: 18 } },
+              ),
+            );
+            add(
+              expenseLineBasisColumn(
+                columnHelper,
+                async (lineBasis, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { lineBasis },
+                  });
+                },
+              ),
+            );
+            add(
+              expenseCostTypeColumn(
+                columnHelper,
+                async (costType, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { costType },
+                  });
+                },
+                { mobile: { slot: "meta", priority: 20 } },
+              ),
+            );
+            add(
+              expenseTradeColumn(
+                columnHelper,
+                async (trade, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { trade },
+                  });
+                },
+                { mobile: { slot: "meta", priority: 60 } },
+              ),
+            );
+            add(
+              createProjectLinkColumn(columnHelper, {
+                className: "w-40",
+                mobile: { slot: "meta", priority: 40, interactive: true },
+                editable: {
+                  onSave: async (newProjectId, expense) => {
+                    await updateExpenseMutation.mutateAsync({
+                      id: expense.id,
+                      data: { projectId: newProjectId },
+                    });
+                  },
+                },
+              }),
+            );
+            add(
+              createProductLinkColumn(columnHelper, {
+                className: "w-40",
+                mobile: { slot: "meta", priority: 45, interactive: true },
+                editable: {
+                  onSave: async (newProductId, expense) => {
+                    await updateExpenseMutation.mutateAsync({
+                      id: expense.id,
+                      data: { productId: newProductId },
+                    });
+                  },
+                },
+              }),
+            );
+            add(
+              expenseProductQuantityColumn(
+                columnHelper,
+                async (productQuantity, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { productQuantity },
+                  });
+                },
+                {
+                  mobile: { slot: "meta", priority: 47, interactive: true },
+                  filterConfig: manifestFilterConfig(
+                    "expense",
+                    "productQuantity",
+                  ),
+                },
+              ),
+            );
+            add(
+              expenseFutureColumn(
+                columnHelper,
+                async (future, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { future },
+                  });
+                },
+                {
+                  mobile: { slot: "meta", priority: 50 },
+                },
+              ),
+            );
+            // The column keeps the historical `vendor` id and editor/filter wiring,
+            // but presents the linked Purchase as the primary accounting relationship.
+            add(
+              expenseVendorColumn(
+                columnHelper,
+                async (vendor, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { vendor },
+                  });
+                },
+                {
+                  asPurchase: true,
+                  mobile: { slot: "meta", priority: 70, interactive: true },
+                },
+              ),
+            );
+            add(
+              expenseOrderIdColumn(
+                columnHelper,
+                async (orderId, expense) => {
+                  await updateExpenseMutation.mutateAsync({
+                    id: expense.id,
+                    data: { orderId },
+                  });
+                },
+                { mobile: { slot: "meta", priority: 80 } },
+              ),
+            );
+            add(
+              columnHelper.accessor((row) => row.url, {
+                id: "url",
+                header: "",
+                enableSorting: false,
+                meta: { className: "w-10" },
+                cell: (info) => {
+                  const url = info.getValue();
+                  if (!url) return null;
+                  return <ExternalLinkIcon href={url} label="Open link" />;
+                },
+              }),
+            );
           }),
-        );
-        add(
-          expenseCostTypeColumn(
-            columnHelper,
-            async (costType, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { costType },
-              });
-            },
-            { mobile: { slot: "meta", priority: 20 } },
-          ),
-        );
-        add(
-          expenseTradeColumn(
-            columnHelper,
-            async (trade, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { trade },
-              });
-            },
-            { mobile: { slot: "meta", priority: 60 } },
-          ),
-        );
-        add(
-          createProjectLinkColumn(columnHelper, {
-            className: "w-40",
-            mobile: { slot: "meta", priority: 40, interactive: true },
-            editable: {
-              onSave: async (newProjectId, expense) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: expense.id,
-                  data: { projectId: newProjectId },
-                });
-              },
-            },
-          }),
-        );
-        add(
-          createProductLinkColumn(columnHelper, {
-            className: "w-40",
-            mobile: { slot: "meta", priority: 45, interactive: true },
-            editable: {
-              onSave: async (newProductId, expense) => {
-                await updateExpenseMutation.mutateAsync({
-                  id: expense.id,
-                  data: { productId: newProductId },
-                });
-              },
-            },
-          }),
-        );
-        add(
-          expenseProductQuantityColumn(
-            columnHelper,
-            async (productQuantity, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { productQuantity },
-              });
-            },
-            {
-              mobile: { slot: "meta", priority: 47, interactive: true },
-              filterConfig: manifestFilterConfig("expense", "productQuantity"),
-            },
-          ),
-        );
-        add(
-          expenseFutureColumn(
-            columnHelper,
-            async (future, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { future },
-              });
-            },
-            {
-              mobile: { slot: "meta", priority: 50 },
-            },
-          ),
-        );
-        // The column keeps the historical `vendor` id and editor/filter wiring,
-        // but presents the linked Purchase as the primary accounting relationship.
-        add(
-          expenseVendorColumn(
-            columnHelper,
-            async (vendor, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { vendor },
-              });
-            },
-            {
-              asPurchase: true,
-              mobile: { slot: "meta", priority: 70, interactive: true },
-            },
-          ),
-        );
-        add(
-          expenseOrderIdColumn(
-            columnHelper,
-            async (orderId, expense) => {
-              await updateExpenseMutation.mutateAsync({
-                id: expense.id,
-                data: { orderId },
-              });
-            },
-            { mobile: { slot: "meta", priority: 80 } },
-          ),
-        );
-        add(
-          columnHelper.accessor((row) => row.url, {
-            id: "url",
-            header: "",
-            enableSorting: false,
-            meta: { className: "w-10" },
-            cell: (info) => {
-              const url = info.getValue();
-              if (!url) return null;
-              return <ExternalLinkIcon href={url} label="Open link" />;
-            },
-          }),
-        );
+        ).visit(add);
       }),
     // oxlint-disable-next-line react/exhaustive-deps -- updateExpenseMutation changes every render but is functionally stable
     [columnHelper],

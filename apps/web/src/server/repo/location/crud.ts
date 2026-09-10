@@ -1,9 +1,9 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Location CRUD operations.
  * Core create, read, update, delete, list operations for locations.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ImageShortcode,
@@ -476,11 +476,7 @@ export const updateLocation = async (
 
     if (before) {
       const changes = computeChanges(before, updated, [
-        "name",
-        "aliases",
-        "tags",
-        "type",
-        "parentId",
+        ...entityFieldModels.location.audit,
       ]);
       if (changes) {
         await logAuditEntry(tx, actor, {

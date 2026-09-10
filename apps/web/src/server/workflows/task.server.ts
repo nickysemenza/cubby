@@ -17,38 +17,51 @@ import {
   taskList,
 } from "~/server/repo/task";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  bindWorkflow,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
-export { taskBulkReorderInput, taskFiltersSchema };
+export { taskFiltersSchema };
 
 const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
 
-export const taskListActionableWorkflow = (
-  db: Database,
-  input: z.output<typeof taskFiltersSchema> | undefined,
-) => listActionableTasks(db, input ?? {});
-export const taskChartDataWorkflow = async (
-  db: Database,
-  input: z.output<typeof taskFiltersSchema>,
-) =>
-  (
-    await taskList(
-      db,
-      input,
-      [{ orderBy: "createdAt", direction: "desc" }],
-      FETCH_ALL,
+export const taskListActionableWorkflow = defineWorkflowOperation(
+  "task.listActionable",
+  (db: Database, input: z.output<typeof taskFiltersSchema> | undefined) =>
+    listActionableTasks(db, input ?? {}),
+);
+type TaskFilters = z.output<typeof taskFiltersSchema>;
+export const taskChartDataWorkflow = bindWorkflow(
+  workflow<Database, TaskFilters>("task.chartData")
+    .call("read", async ({ context }, { input }) =>
+      taskList(
+        context,
+        input,
+        [{ orderBy: "createdAt", direction: "desc" }],
+        FETCH_ALL,
+      ),
     )
-  ).data;
-export const taskSummaryWorkflow = (db: Database) => getTaskSummary(db);
-export const taskTodayBriefingWorkflow = (db: Database) =>
-  getTaskTodayBriefing(db);
-export const taskBoardWorkflow = (
-  db: Database,
-  input: z.output<typeof taskFiltersSchema>,
-) => getTaskBoard(db, input);
-export const taskTimelineWorkflow = (
-  db: Database,
-  input: z.output<typeof taskFiltersSchema>,
-) => getTaskTimeline(db, input);
+    .output(({ read }) => read.data),
+  (db: Database, input: TaskFilters) => ({ context: db, input }),
+);
+export const taskSummaryWorkflow = defineWorkflowOperation(
+  "task.summary",
+  (db: Database) => getTaskSummary(db),
+);
+export const taskTodayBriefingWorkflow = defineWorkflowOperation(
+  "task.todayBriefing",
+  getTaskTodayBriefing,
+);
+export const taskBoardWorkflow = defineWorkflowOperation(
+  "task.board",
+  getTaskBoard,
+);
+export const taskTimelineWorkflow = defineWorkflowOperation(
+  "task.timeline",
+  getTaskTimeline,
+);
 
 /**
  * `task.bulkReorder` stays bespoke — it is positional, not a field patch, so
@@ -56,28 +69,40 @@ export const taskTimelineWorkflow = (
  * every task bulk write used to share lives with the kernel's
  * `task.bulkUpdate` now; this is the one caller left needing it here.
  */
-export const taskBulkReorderWorkflow = async (
-  db: Database,
-  input: z.output<typeof taskBulkReorderInput>,
-  actorContext: ActorContext,
-) => {
-  const items = await reorderTasks(
-    db,
-    taskBulkReorderInput.parse(input),
-    actorContext,
-  );
-  const entityIds = await resolveAllPresent(
-    db,
-    "task",
-    items.map((item) => item.id),
-  );
-  const backgroundBatches = await runMutationSideEffectsForEntities(
-    db,
-    entityIds.map((entityId) => ({
-      action: "updated" as const,
-      entity: { entity: "task" as const, id: entityId },
-      source: "task.bulkReorder",
+type ReorderInput = z.output<typeof taskBulkReorderInput>;
+type ReorderContext = { db: Database; actorContext: ActorContext };
+export const taskBulkReorderWorkflow = bindWorkflow(
+  workflow<ReorderContext, ReorderInput>("task.bulkReorder")
+    .commit("items", async ({ context }, { input }) =>
+      reorderTasks(
+        context.db,
+        taskBulkReorderInput.parse(input),
+        context.actorContext,
+      ),
+    )
+    .effect("entityIds", async ({ context }, { items }) =>
+      resolveAllPresent(
+        context.db,
+        "task",
+        items.map((item) => item.id),
+      ),
+    )
+    .effect("backgroundBatches", async ({ context }, { entityIds }) =>
+      runMutationSideEffectsForEntities(
+        context.db,
+        entityIds.map((id) => ({
+          action: "updated",
+          entity: { entity: "task", id },
+          source: "task.bulkReorder",
+        })),
+      ),
+    )
+    .output(({ items, backgroundBatches }) => ({
+      items,
+      sideEffects: { backgroundBatches },
     })),
-  );
-  return { items, sideEffects: { backgroundBatches } };
-};
+  (db: Database, input: ReorderInput, actorContext: ActorContext) => ({
+    context: { db, actorContext },
+    input,
+  }),
+);

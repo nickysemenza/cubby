@@ -26,7 +26,6 @@ import {
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange, tradeOptions } from "~/app/projects/shared";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -40,6 +39,7 @@ import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
@@ -291,9 +291,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
   const blockedBy = resolveDeps(task.blockedByIds);
   const blocking = resolveDeps(task.blockingIds);
 
-  const fields: BasicInfoField[] = [
-    {
-      label: "Name",
+  const overrides = {
+    name: () => ({
       value: (
         <EditableCell
           value={task.name}
@@ -305,9 +304,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Status",
+    }),
+    status: () => ({
       value: (
         <EditableCell
           value={task.status}
@@ -339,9 +337,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           label={`Show all ${TASK_STATUS_LABELS[task.status].toLowerCase()} tasks`}
         />
       ),
-    },
-    {
-      label: "Trade",
+    }),
+    trade: () => ({
       value: (
         <EditableCell
           value={task.trade}
@@ -365,9 +362,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           label={`Show all tasks for trade ${task.trade}`}
         />
       ),
-    },
-    {
-      label: "Due date",
+    }),
+    dueDate: () => ({
       value: (
         <EditableCell
           value={task.dueDate}
@@ -381,9 +377,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Due end date",
+    }),
+    dueEndDate: () => ({
       value: (
         <EditableCell
           value={task.dueEndDate}
@@ -397,9 +392,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Project",
+    }),
+    projectId: () => ({
       value: (
         <EditableEntityCell<ProjectShortcode>
           value={
@@ -446,9 +440,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           label={`Show all tasks in ${task.projectName ?? "this project"}`}
         />
       ) : undefined,
-    },
-    {
-      label: "For",
+    }),
+    subjectProductId: () => ({
       value: (
         <EditableEntityCell<ProductShortcode>
           value={
@@ -496,8 +489,8 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           label={`Show all tasks for ${task.subjectProductName ?? "this product"}`}
         />
       ) : undefined,
-    },
-  ];
+    }),
+  };
 
   const sections: DetailSection[] = [
     {
@@ -505,7 +498,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       title: "Overview",
       icon: Info,
       placement: "primary",
-      content: <BasicInfo fields={fields} />,
+      content: (
+        <EntityBasicInfo entity="task" record={task} overrides={overrides} />
+      ),
     },
     {
       id: "dependencies",

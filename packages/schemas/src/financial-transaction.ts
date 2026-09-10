@@ -11,17 +11,12 @@ import { financialTransactionRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
   dateRangeFields,
-  deriveUpdateData,
   numericRangeFields,
-  timestampedFields,
-  uniqueBy,
 } from "./base-entity";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
-  ledgerTransferShortcode,
   purchaseShortcode,
-  vendorShortcode,
 } from "./identifiers";
 import {
   financialAccountIdentity,
@@ -34,20 +29,33 @@ import {
   presenceFilter,
 } from "./pagination";
 import { plainDate } from "./project";
-import { wholeCentAmount } from "./money";
 import { externalIdSource } from "./external-id";
+import {
+  generatedFinancialTransactionFieldSchemas,
+  generatedFinancialTransactionFilterFields,
+  generatedFinancialTransactionKindValues,
+  generatedFinancialTransactionStatusValues,
+} from "./generated/entity-field-schemas.financialTransaction.gen";
+import {
+  financialTransactionAllocation,
+  financialTransactionNonZeroAmount as nonZeroAmount,
+  financialTransactionSourceRef,
+  merchantVendorCandidate,
+  merchantVendorInference,
+} from "./financial-transaction-fields";
+import { uniqueBy } from "./base-entity";
 
-export const financialTransactionKind = z.enum([
-  "purchase",
-  "refund",
-  "account_transfer",
-  "credit_card_payment",
-  "fee",
-  "interest",
-  "income",
-  "adjustment",
-  "other",
-]);
+export {
+  financialTransactionSourceRef,
+  financialTransactionSourceRefs,
+  merchantVendorCandidate,
+  merchantVendorInference,
+  type FinancialTransactionSourceRef,
+} from "./financial-transaction-fields";
+
+export const financialTransactionKind = z.enum(
+  generatedFinancialTransactionKindValues,
+);
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
 
 /**
@@ -202,94 +210,22 @@ export const purchaseSettlementCheckExpression = (columns: {
     columns.kind,
   )} AND ${purchaseSettlementSignSatisfiedExpression(columns)})`;
 
-export const financialTransactionStatus = z.enum([
-  "expected",
-  "pending",
-  "posted",
-  "void",
-]);
+export const financialTransactionStatus = z.enum(
+  generatedFinancialTransactionStatusValues,
+);
 export type FinancialTransactionStatus = z.infer<
   typeof financialTransactionStatus
 >;
 
-export const financialTransactionSourceRef = z.strictObject({
-  source: z.string().min(1),
-  externalId: z.string().min(1),
-});
-export type FinancialTransactionSourceRef = z.infer<
-  typeof financialTransactionSourceRef
->;
-
-export const financialTransactionSourceRefs = z
-  .array(financialTransactionSourceRef)
-  .refine(
-    ...uniqueBy(
-      (ref: FinancialTransactionSourceRef) =>
-        `${ref.source}\u0000${ref.externalId}`,
-      "sourceRefs must not contain duplicate source/externalId pairs",
-    ),
-  );
-
-const nonZeroAmount = wholeCentAmount.refine(
-  (amount) => amount !== 0,
-  "amount must be non-zero",
-);
-
-const financialTransactionFields = {
-  accountId: financialAccountShortcode,
-  /**
-   * DERIVED — the sole Purchase this transaction settled, non-null only when
-   * there is exactly one allocation. NULL both for unlinked evidence and for a
-   * charge split across several Purchases, so read `allocations` for the general
-   * case. As input it is shorthand for one allocation of the full amount.
-   */
-  purchaseId: purchaseShortcode.nullable(),
-  kind: financialTransactionKind,
-  status: financialTransactionStatus,
-  amount: nonZeroAmount,
-  transactionDate: plainDate.nullable(),
-  postedDate: plainDate.nullable(),
-  merchant: z.string().nullable(),
-  rawDescription: z.string().nullable(),
-  sourceCategory: z.string().nullable(),
-  sourceRefs: financialTransactionSourceRefs,
-  notes: z.string().nullable(),
-};
-
-export const financialTransactionAllocationOut = z.object({
-  purchaseId: purchaseShortcode,
-  amount: wholeCentAmount,
-});
-
-export const financialTransactionAllocationInput = z.object({
-  purchaseId: purchaseShortcode,
-  amount: wholeCentAmount,
-});
+export const financialTransactionAllocationOut = financialTransactionAllocation;
+export const financialTransactionAllocationInput =
+  financialTransactionAllocation;
 export type FinancialTransactionAllocationInput = z.infer<
   typeof financialTransactionAllocationInput
 >;
 
-const financialTransactionCreateFields = {
-  ...financialTransactionFields,
-  purchaseId: purchaseShortcode.nullable().default(null),
-  /**
-   * How this transaction's amount divides across the Purchases it settled, for
-   * the case one card line settles several orders. Must sum to `amount` and
-   * share its sign.
-   *
-   * `purchaseId` is the single-Purchase sugar for exactly one allocation of the
-   * full amount — the overwhelmingly common case, and why it stays. Supplying
-   * both is rejected unless they agree, rather than silently picking a winner.
-   */
-  allocations: z.array(financialTransactionAllocationInput).default([]),
-  transactionDate: plainDate.nullable().default(null),
-  postedDate: plainDate.nullable().default(null),
-  merchant: z.string().nullable().default(null),
-  rawDescription: z.string().nullable().default(null),
-  sourceCategory: z.string().nullable().default(null),
-  sourceRefs: financialTransactionSourceRefs.default([]),
-  notes: z.string().nullable().default(null),
-};
+const financialTransactionCreateFields =
+  generatedFinancialTransactionFieldSchemas.create;
 
 const postedDateStatusSchema = z.object({
   status: financialTransactionStatus,
@@ -382,9 +318,9 @@ export type FinancialTransactionCreateInput = z.infer<
 
 // A partial update can modify only one half of the posted/status pair. The
 // repository validates the resulting persisted state after applying the patch.
-export const financialTransactionUpdateData = deriveUpdateData(
-  financialTransactionCreateFields,
-).strict();
+export const financialTransactionUpdateData = z
+  .object(generatedFinancialTransactionFieldSchemas.update)
+  .strict();
 export type FinancialTransactionUpdateData = z.infer<
   typeof financialTransactionUpdateData
 >;
@@ -399,19 +335,16 @@ export type FinancialTransactionUpdateInput = z.infer<
 export const financialTransactionFilterFields = {
   ...auditDateFilterFields,
   ...financialTransactionRelatedFilterFields,
+  ...generatedFinancialTransactionFilterFields,
   search: z.string().optional(),
   accountId: entityFilterList(financialAccountShortcode).optional(),
   purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,
   allocationIntegrity: z.enum(["defect"]).optional(),
-  kind: oneOrMany(financialTransactionKind).optional(),
-  status: oneOrMany(financialTransactionStatus).optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalId: oneOrMany(z.string().min(1)).optional(),
-  merchant: z.string().optional(),
   ...numericRangeFields("amount", { finite: true }),
   ...dateRangeFields("transactionDate"),
-  ...dateRangeFields("postedDate"),
 };
 export const financialTransactionFiltersSchema = z.object(
   financialTransactionFilterFields,
@@ -427,46 +360,7 @@ export type FinancialTransactionFilters = z.infer<
   typeof financialTransactionFiltersSchema
 >;
 
-export const merchantVendorCandidate = z.object({
-  vendorId: vendorShortcode,
-  vendorName: z.string().min(1),
-  supportingTransactionCount: z.number().int().positive(),
-  lastSeenDate: plainDate.nullable(),
-});
 export type MerchantVendorCandidate = z.infer<typeof merchantVendorCandidate>;
-
-const noMerchantVendorCandidates = z.object({
-  status: z.literal("none"),
-  candidates: z.tuple([]),
-});
-
-const insufficientMerchantVendorCandidate = merchantVendorCandidate.extend({
-  supportingTransactionCount: z.literal(1),
-});
-const suggestedMerchantVendorCandidate = merchantVendorCandidate.extend({
-  supportingTransactionCount: z.number().int().min(2),
-});
-
-/**
- * Advisory Vendor evidence derived from confirmed Purchase allocations for the
- * same conservatively normalized merchant label. It never creates or confirms
- * a relationship: the allocation remains the only source of truth.
- */
-export const merchantVendorInference = z.discriminatedUnion("status", [
-  noMerchantVendorCandidates,
-  z.object({
-    status: z.literal("insufficient_history"),
-    candidates: z.tuple([insufficientMerchantVendorCandidate]),
-  }),
-  z.object({
-    status: z.literal("suggested"),
-    candidates: z.tuple([suggestedMerchantVendorCandidate]),
-  }),
-  z.object({
-    status: z.literal("ambiguous"),
-    candidates: z.array(merchantVendorCandidate).min(2),
-  }),
-]);
 export type MerchantVendorInference = z.infer<typeof merchantVendorInference>;
 
 export const merchantVendorInferenceInput = z.object({
@@ -490,26 +384,7 @@ export type FinancialTransactionSortField =
   (typeof financialTransactionSortableFields)[number];
 
 export const financialTransactionOut = postedRequiresDate(
-  z.object({
-    id: financialTransactionShortcode,
-    ...financialTransactionFields,
-    /**
-     * Every Purchase this transaction settled and how much of it each got.
-     * Empty for unlinked evidence; otherwise sums to `amount` exactly and shares
-     * its sign. Ordered by purchase shortcode so the field is stable across
-     * reads.
-     */
-    allocations: z.array(financialTransactionAllocationOut),
-    ledgerTransferId: ledgerTransferShortcode.nullable(),
-    accountName: z.string().nullable(),
-    vendorInference: merchantVendorInference
-      .nullable()
-      .default(null)
-      .describe(
-        "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship.",
-      ),
-    ...timestampedFields,
-  }),
+  z.object(generatedFinancialTransactionFieldSchemas.read),
 );
 export type FinancialTransactionOut = z.infer<typeof financialTransactionOut>;
 

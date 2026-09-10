@@ -1,8 +1,41 @@
+import type { AgentStreamEvent } from "@cubby/schemas/agent";
 import { describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
 
 import { isReadOnlyTool } from "./mcp-bridge";
-import { extractSources } from "./runtime";
+import { collectAgentAnswer, extractSources } from "./runtime";
+
+describe("collectAgentAnswer", () => {
+  it("discards narration before every tool and retains final citations", async () => {
+    const events: AgentStreamEvent[] = [
+      { type: "delta", text: "Searching first" },
+      { type: "tool", tool: "search_products" },
+      { type: "delta", text: "Searching again" },
+      { type: "tool", tool: "list_inventory" },
+      { type: "delta", text: "  The item " },
+      { type: "delta", text: "is in the pantry.  " },
+      {
+        type: "done",
+        sources: [{ entityType: "product", id: "PRD-2ABC", name: "Item" }],
+        toolCalls: [
+          { tool: "list_inventory", args: {}, durationMs: 1, ok: true },
+        ],
+      },
+    ];
+    const result = await collectAgentAnswer(
+      (async function* () {
+        yield* events;
+      })(),
+    );
+    expect(result).toEqual({
+      answer: "The item is in the pantry.",
+      sources: [{ entityType: "product", id: "PRD-2ABC", name: "Item" }],
+      toolCalls: [
+        { tool: "list_inventory", args: {}, durationMs: 1, ok: true },
+      ],
+    });
+  });
+});
 
 describe("extractSources", () => {
   const record = (tool: string, result: JSONType) => ({
@@ -11,6 +44,40 @@ describe("extractSources", () => {
     durationMs: 1,
     ok: true,
     result,
+  });
+
+  it("cites generic get, list and both search result sets without exposing internal ids", () => {
+    const item = { id: "ING-2ABC", name: "Cumin", entityId: "private-row-id" };
+    const results: JSONType[] = [
+      { item },
+      { items: [item] },
+      { lexical: [item], semantic: { results: [item] } },
+    ];
+    for (const result of results) {
+      expect(
+        extractSources([
+          {
+            ...record("get_entities", result),
+            args: { command: { entity: "ingredient" } },
+          },
+        ]),
+      ).toEqual([
+        {
+          entityType: "ingredient",
+          id: "ING-2ABC",
+          name: "Cumin",
+          detail: null,
+        },
+      ]);
+    }
+  });
+
+  it("retains standalone specialized get results", () => {
+    expect(
+      extractSources([record("get_product", { id: "PRD-2ABC", name: "Item" })]),
+    ).toEqual([
+      { entityType: "product", id: "PRD-2ABC", name: "Item", detail: null },
+    ]);
   });
 
   it("maps inventory list items, naming from the nested product + location", () => {
@@ -91,6 +158,7 @@ describe("isReadOnlyTool", () => {
       "create_inventory_entry",
       "update_product",
       "delete_inventory_entry",
+      "entity",
     ]) {
       expect(isReadOnlyTool(name)).toBe(false);
     }

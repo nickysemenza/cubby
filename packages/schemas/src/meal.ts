@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  auditDateFilterFields,
-  deriveUpdateData,
-  timestampedFields,
-  uniqueBy,
-} from "./base-entity";
+import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import { mealRelatedFilterFields } from "./related-view";
 import {
   aggregatedNeedOut,
@@ -22,16 +17,23 @@ import {
 import { ledgerPartyKind } from "./ledger-party";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
+import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import { mealRecipeOut, mealTotals } from "./meal-fields";
 import {
-  createPaginatedResponseSchema,
-  oneOrMany,
-  presenceFilter,
-} from "./pagination";
-import {
-  costCalorieTotals,
-  recipeTotals,
-  recipeYieldSchema,
-} from "./recipe-shared";
+  generatedMealFieldSchemas,
+  generatedMealFilterFields,
+} from "./generated/entity-field-schemas.meal.gen";
+export {
+  mealRecipeInput,
+  type MealRecipeInput,
+  scaledTotals,
+  type ScaledTotals,
+  mealRecipeSummary,
+  mealRecipeOut,
+  type MealRecipeOut,
+  mealTotals,
+  type MealTotals,
+} from "./meal-fields";
 
 export {
   MEAL_KIND_LABELS,
@@ -69,41 +71,10 @@ export const mealSortableFields = [
 
 export type MealSortField = (typeof mealSortableFields)[number];
 
-export const mealRecipeInput = z.object({
-  recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
-  scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
-  sortOrder: z
-    .number()
-    .int()
-    .nullable()
-    .optional()
-    .describe("Sort order within the meal"),
-});
-export type MealRecipeInput = z.infer<typeof mealRecipeInput>;
-
-const mealCreateFields = {
-  date: mealDate,
-  name: z.string().nullable().optional(),
-  sortOrder: z.number().int().nullable().optional(),
-  mealType: mealTypeSchema
-    .nullable()
-    .optional()
-    .describe(
-      "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
-    ),
-  mealKind: mealKindSchema
-    .optional()
-    .describe(
-      "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
-    ),
-  recipes: z.array(mealRecipeInput).optional(),
-};
-export const mealCreateInput = z.object(mealCreateFields);
+export const mealCreateInput = z.object(generatedMealFieldSchemas.create);
 export type MealCreateInput = z.infer<typeof mealCreateInput>;
 
-export const mealUpdateData = deriveUpdateData(mealCreateFields, {
-  omit: ["recipes"],
-});
+export const mealUpdateData = z.object(generatedMealFieldSchemas.update);
 export const mealUpdateInput = z.object({
   id: mealShortcode,
   data: mealUpdateData,
@@ -134,14 +105,13 @@ export const mealRecipeIdInput = z.object({
 
 export const mealFilterFields = {
   ...auditDateFilterFields,
-  mealType: oneOrMany(mealTypeSchema).optional(),
+  ...generatedMealFilterFields,
   /**
    * `meal.mealType` is nullable, so `"none"` is the unslotted worklist. OR-ed
    * with `mealType` rather than narrowing it (see
    * `taskFilterFields.projectPresenceFilter`).
    */
   mealTypePresenceFilter: presenceFilter,
-  mealKind: oneOrMany(mealKindSchema).optional(),
   recipeCostCoverage: z
     .enum(["understated"])
     .optional()
@@ -155,33 +125,6 @@ export const mealFilterFields = {
 
 export const mealFiltersSchema = z.object(mealFilterFields);
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
-
-export const scaledTotals = costCalorieTotals;
-export type ScaledTotals = z.infer<typeof scaledTotals>;
-
-/** A recipe as summarized inside a meal (no ingredient graph). */
-export const mealRecipeSummary = z.object({
-  id: recipeShortcode,
-  name: z.string(),
-  servings: z.number().nullish(),
-  yield: recipeYieldSchema.nullish(),
-  totals: recipeTotals.nullish(),
-});
-
-export const mealRecipeOut = z.object({
-  id: mealRecipeId,
-  mealId: mealShortcode,
-  recipeId: recipeShortcode,
-  recipe: mealRecipeSummary,
-  scale: mealScale,
-  sortOrder: z.number().int().nullable(),
-  estimatedYieldGrams: mealYieldGrams.nullable(),
-  actualYieldGrams: mealYieldGrams.nullable(),
-  /** recipe.totals x scale, or null when totals are absent/stale. */
-  scaledTotals: scaledTotals.nullable(),
-  ...timestampedFields,
-});
-export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
 /**
  * A per-batch or per-portion estimate.  The state describes how much of a
@@ -364,26 +307,7 @@ export type SaveMealRecipePreparationOut = z.infer<
   typeof saveMealRecipePreparationOut
 >;
 
-export const mealTotals = z.object({
-  costTotal: money,
-  costTotalUpper: money.optional(),
-  caloriesTotal: z.number(),
-  caloriesTotalUpper: z.number().optional(),
-  pending: z.boolean(),
-});
-export type MealTotals = z.infer<typeof mealTotals>;
-
-const mealOutFields = {
-  id: mealShortcode,
-  date: mealDate,
-  name: z.string().nullable(),
-  sortOrder: z.number().int().nullable(),
-  mealType: mealTypeSchema.nullable(),
-  mealKind: mealKindSchema,
-  recipes: z.array(mealRecipeOut),
-  totals: mealTotals,
-  ...timestampedFields,
-};
+const mealOutFields = generatedMealFieldSchemas.read;
 
 export const mealOut = z.object(mealOutFields);
 export type MealOut = z.infer<typeof mealOut>;

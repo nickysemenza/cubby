@@ -6,6 +6,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { projectToolUsage } from "~/server/db/schema";
+import {
+  projectAttachResourcesWorkflow,
+  projectDetachResourcesWorkflow,
+  projectRepointUsesWorkflow,
+  projectSetToolUsageWorkflow,
+} from "~/server/workflows/project.server";
 
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts } from "./product";
@@ -18,6 +24,77 @@ import {
 
 describe("project reusable resources", () => {
   const ctx = withTestDb();
+
+  it("resolves workflow shortcodes and preserves usage idempotence through repoint and detach", async () => {
+    const project = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Workflow resource project" }),
+      ctx.actor,
+    );
+    const source = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Source drill", category: "tools" }),
+      ctx.actor,
+    );
+    const target = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Replacement drill", category: "tools" }),
+      ctx.actor,
+    );
+    const projectId = project.output.id;
+    await expect(
+      projectAttachResourcesWorkflow(
+        ctx.db,
+        { projectId, productIds: [source.id] },
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ changed: 1 });
+    await expect(
+      projectSetToolUsageWorkflow(
+        ctx.db,
+        { projectId, productId: source.id, used: true },
+        ctx.actor,
+      ),
+    ).resolves.toEqual({
+      projectId,
+      productId: source.id,
+      used: true,
+      changed: false,
+    });
+    await expect(
+      projectRepointUsesWorkflow(
+        ctx.db,
+        {
+          fromProductId: source.id,
+          toProductId: target.id,
+          projectIds: [projectId],
+        },
+        ctx.actor,
+      ),
+    ).resolves.toEqual({ repointed: 1, alreadyPresent: 0 });
+    const live = await getDb(ctx.db).query.projectToolUsage.findMany({
+      where: and(
+        eq(projectToolUsage.projectId, project.entityId),
+        notDeleted(projectToolUsage),
+      ),
+      columns: { productId: true },
+    });
+    expect(live).toEqual([{ productId: target.entityId }]);
+    await expect(
+      projectDetachResourcesWorkflow(
+        ctx.db,
+        { projectId, productIds: [target.id] },
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ changed: 1 });
+    await expect(
+      projectSetToolUsageWorkflow(
+        ctx.db,
+        { projectId, productId: target.id, used: false },
+        ctx.actor,
+      ),
+    ).resolves.toMatchObject({ changed: false });
+  });
 
   it("preserves use history on product delete and cascades it on project delete", async () => {
     const { output: project, entityId: projectId } = await createProject(

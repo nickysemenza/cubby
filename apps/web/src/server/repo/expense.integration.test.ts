@@ -44,8 +44,10 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import {
   expenseAnalyticsWorkflow,
+  expenseAnalyzeWorkflow,
   expenseChargeContextWorkflow,
   expenseChartDataWorkflow,
+  expenseFacetCountsWorkflow,
   expenseTradeAffinityWorkflow,
 } from "~/server/workflows/expense.server";
 
@@ -93,6 +95,75 @@ const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {
   return expense.purchaseId;
 };
 
+describe("expense workflows — analyzer orchestration", () => {
+  const ctx = withTestDb();
+
+  it("returns analysis periods and mixed facet kinds through declared workflows", async () => {
+    const { output: project } = await createProject(
+      ctx.db,
+      projectCreateInput.parse({ name: "Workflow analysis project" }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2026-05-10",
+        name: "Workflow analysis material",
+        trade: "plumbing",
+        costType: "materials",
+        cost: 40,
+        projectId: project.id,
+      }),
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        date: "2026-05-11",
+        name: "Workflow analysis service",
+        trade: "plumbing",
+        costType: "services",
+        cost: 60,
+      }),
+      ctx.actor,
+    );
+
+    const filters = { dateFrom: "2026-05-01", dateTo: "2026-05-31" };
+    const analysis = await expenseAnalyzeWorkflow(ctx.db, {
+      filters,
+      rowDimension: "trade",
+      comparison: "previousPeriod",
+    });
+    expect(analysis).toMatchObject({
+      status: "ready",
+      comparison: {
+        mode: "previousPeriod",
+        previousRange: { dateFrom: "2026-03-31", dateTo: "2026-04-30" },
+      },
+    });
+
+    const facets = await expenseFacetCountsWorkflow(ctx.db, {
+      filters,
+      facetIds: ["trade", "project", "orderIdPresence"],
+    });
+    expect(facets.facets.map((facet) => facet.id)).toEqual([
+      "trade",
+      "project",
+      "orderIdPresence",
+    ]);
+    expect(facets.facets[0]?.options).toContainEqual({
+      value: "plumbing",
+      label: null,
+      count: 2,
+    });
+    expect(facets.facets[1]?.options).toContainEqual({
+      value: project.id,
+      label: project.name,
+      count: 1,
+    });
+  });
+});
+
 /** Folded purchases are tombstoned but must remain resolvable for assertions. */
 const purchaseUuid = async (
   db: Database,
@@ -105,6 +176,40 @@ const purchaseUuid = async (
 
 describe("expense repository — CRUD", () => {
   const ctx = withTestDb();
+
+  it("returns charge siblings through the workflow and returns null for an unlinked expense", async () => {
+    const { output: unlinked } = await createExpense(
+      ctx.db,
+      makeExpenseInput({ name: "Unlinked expense" }),
+      ctx.actor,
+    );
+    expect(await expenseChargeContextWorkflow(ctx.db, unlinked.id)).toBeNull();
+    const { output: first } = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "First charge line",
+        vendor: "Charge context supplies",
+        orderId: "CHARGE-CONTEXT",
+        cost: 12,
+      }),
+      ctx.actor,
+    );
+    const { output: second } = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Second charge line",
+        purchaseId: purchaseIdOf(first),
+        cost: 7,
+      }),
+      ctx.actor,
+    );
+    const result = await expenseChargeContextWorkflow(ctx.db, first.id);
+    expect(result?.purchase.id).toBe(first.purchaseId);
+    expect(
+      result?.siblings.map((row) => ({ id: row.id, cost: row.cost })),
+    ).toEqual([{ id: second.id, cost: 7 }]);
+    expect(await expenseChargeContextWorkflow(ctx.db, unlinked.id)).toBeNull();
+  });
 
   it("creates, reads (with projectName join), updates (incl. clearing date/projectId), and deletes", async () => {
     const { output: project } = await createProject(

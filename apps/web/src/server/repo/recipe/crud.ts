@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
@@ -1003,7 +1004,9 @@ export const updateRecipe = async (
     }
 
     const afterState = { name: fullRecipe.name };
-    const changes = computeChanges(beforeState, afterState, ["name"]);
+    const changes = computeChanges(beforeState, afterState, [
+      ...entityFieldModels.recipe.audit,
+    ]);
     if (changes) {
       await logAuditEntry(tx, actor, {
         entityType: "recipe",

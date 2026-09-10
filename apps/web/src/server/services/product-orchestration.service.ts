@@ -535,105 +535,91 @@ export function findOrCreateByCode(
       );
 }
 
-interface BackfillResult {
-  productId: string;
-  productName: string;
-  upc: string;
-  status: "imported" | "failed" | "skipped";
-  error?: string;
+export interface UpcImageBackfillCandidate {
+  readonly productId: ProductId;
+  readonly productName: string;
+  readonly upc: string;
 }
 
-interface BackfillSummary {
-  found: number;
-  imported: number;
-  failed: number;
-  skipped: number;
-  details: BackfillResult[];
+export interface UpcImageBackfillResult extends UpcImageBackfillCandidate {
+  status: "imported" | "failed" | "skipped";
+  readonly error?: string;
+}
+
+export interface UpcImageBackfillSummary {
+  readonly found: number;
+  readonly imported: number;
+  readonly failed: number;
+  readonly skipped: number;
+  readonly details: readonly UpcImageBackfillResult[];
 }
 
 /**
- * Batch import UPC images for products that have a UPC but no images.
- * Processes in parallel batches of 10. Streamed: `yield`s `{done,total}` after
- * each batch (each batch's per-product writes commit independently — safe to
- * yield between them) and `return`s the summary.
+ * Select products that can be looked up by the UPC image provider. The
+ * workflow processes this immutable selection with bounded concurrency.
  */
-export async function* backfillUPCImages(
+export const selectUpcImageBackfill = async (
   db: Database,
-  upcLookupClient: UpcLookupPort,
-): AsyncGenerator<{ done: number; total: number }, BackfillSummary> {
+): Promise<UpcImageBackfillCandidate[]> => {
   const allNoImages = await findProductsWithNoImages(db);
   // The provider is keyed by barcode, so a product without one has nothing to
   // look up. `displayGtin` because the provider indexes the printed encoding,
   // not the canonical GTIN-14 the identifier row stores.
-  const productsWithUPC = allNoImages.flatMap((p) =>
-    p.primaryGtin == null ? [] : [{ ...p, upc: displayGtin(p.primaryGtin) }],
+  return allNoImages.flatMap((product) =>
+    product.primaryGtin == null
+      ? []
+      : [
+          {
+            productId: product.id,
+            productName: product.name,
+            upc: displayGtin(product.primaryGtin),
+          },
+        ],
   );
+};
 
-  const details: BackfillResult[] = [];
+/** A candidate owns an independent import transaction. Lookup failures are
+ * returned as data so one dead image URL never stops the backfill. */
+export const importUpcImageBackfillCandidate = async (
+  db: Database,
+  upcLookupClient: UpcLookupPort,
+  candidate: UpcImageBackfillCandidate,
+): Promise<UpcImageBackfillResult> => {
+  try {
+    const imported = await importImageFromUPC(
+      db,
+      upcLookupClient,
+      candidate.upc,
+      candidate.productId,
+    );
+    return imported
+      ? { ...candidate, status: "imported" }
+      : {
+          ...candidate,
+          status: "skipped",
+          error: "No image found in UPC lookup",
+        };
+  } catch (error) {
+    return { ...candidate, status: "failed", error: getErrorMessage(error) };
+  }
+};
+
+export const summarizeUpcImageBackfill = (
+  results: readonly UpcImageBackfillResult[],
+): UpcImageBackfillSummary => {
   let imported = 0;
   let failed = 0;
   let skipped = 0;
-
-  const total = productsWithUPC.length;
-  let done = 0;
-  const BATCH_SIZE = 10;
-  yield { done, total };
-  for (let i = 0; i < productsWithUPC.length; i += BATCH_SIZE) {
-    const batch = productsWithUPC.slice(i, i + BATCH_SIZE);
-
-    const batchResults = await Promise.all(
-      batch.map(async (p) => {
-        try {
-          const result = await importImageFromUPC(
-            db,
-            upcLookupClient,
-            p.upc,
-            p.id,
-          );
-
-          if (result) {
-            return {
-              productId: p.id,
-              productName: p.name,
-              upc: p.upc,
-              status: "imported" as const,
-            };
-          } else {
-            return {
-              productId: p.id,
-              productName: p.name,
-              upc: p.upc,
-              status: "skipped" as const,
-              error: "No image found in UPC lookup",
-            };
-          }
-        } catch (error) {
-          return {
-            productId: p.id,
-            productName: p.name,
-            upc: p.upc,
-            status: "failed" as const,
-            error: getErrorMessage(error),
-          };
-        }
-      }),
-    );
-
-    for (const result of batchResults) {
-      details.push(result);
-      if (result.status === "imported") imported++;
-      else if (result.status === "skipped") skipped++;
-      else failed++;
-    }
-    done += batch.length;
-    yield { done, total };
+  for (const result of results) {
+    if (result.status === "imported") imported++;
+    else if (result.status === "skipped") skipped++;
+    else failed++;
   }
-
   return {
-    found: productsWithUPC.length,
+    found: results.length,
     imported,
     failed,
     skipped,
-    details,
+    details: [...results],
   };
-}
+};

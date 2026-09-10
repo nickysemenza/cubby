@@ -9,8 +9,8 @@ import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import type { RelationshipEntity } from "~/app/_components/relationships/relationship-tree";
 import { RelationshipTree } from "~/app/_components/relationships/relationship-tree";
-import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { formatCurrency } from "~/lib/utils";
 
@@ -119,15 +119,17 @@ export function LedgerPartyDetail({ party }: { party: LedgerPartyOut }) {
             icon: Info,
             placement: "primary",
             content: (
-              <BasicInfo
-                fields={[
-                  { label: "Name", value: party.name },
-                  {
-                    label: "Kind",
-                    value: renderOptionCell(party.kind, ledgerPartyKindOptions),
-                  },
-                  { label: "Notes", value: party.notes ?? "—" },
-                ]}
+              <EntityBasicInfo
+                entity="ledgerParty"
+                record={party}
+                overrides={{
+                  kind: (record) => ({
+                    value: renderOptionCell(
+                      record.kind,
+                      ledgerPartyKindOptions,
+                    ),
+                  }),
+                }}
               />
             ),
           },

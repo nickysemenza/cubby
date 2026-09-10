@@ -29,9 +29,7 @@ type DialogContentSize = NonNullable<
  * scrollable region so its footer (submit/cancel) stays reachable above the
  * iOS keyboard instead of hiding behind it.
  *
- * Desktop output matches the pre-existing `Dialog` + `DialogContent size="sm"`
- * + `DialogHeader`/`DialogTitle`/`DialogDescription` composition exactly — this
- * is a lossless extraction, not a redesign of the desktop path.
+ * Both shells keep the title and optional actions outside the scroll region.
  */
 export function ResponsiveDialog({
   open,
@@ -50,7 +48,7 @@ export function ResponsiveDialog({
   size?: DialogContentSize;
   /** Form body — the scrollable area between the header and footer. */
   children: ReactNode;
-  /** Optional actions kept outside the mobile scroll region. */
+  /** Optional actions kept outside the scroll region. */
   footer?: ReactNode;
 }) {
   const isMobile = useIsMobile();
@@ -87,13 +85,17 @@ export function ResponsiveDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size={size}>
-        <DialogHeader>
+      <DialogContent size={size} className="flex flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b p-4 pr-12">
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        {children}
-        {footer}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          {children}
+        </div>
+        {footer && (
+          <div className="shrink-0 border-t bg-popover p-4">{footer}</div>
+        )}
       </DialogContent>
     </Dialog>
   );

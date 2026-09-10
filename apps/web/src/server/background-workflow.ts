@@ -6,7 +6,6 @@
  * terminal outcome promotes and dispatches the following coordinator.
  */
 import type {
-  BackgroundBatchRef,
   BackgroundBatchSource,
   BackgroundJobKind,
 } from "@cubby/schemas/background-jobs";
@@ -22,33 +21,41 @@ import {
   promotePendingBackgroundWorkflowContinuation,
   startOrReuseBackgroundWorkflow,
 } from "~/server/repo/background-jobs";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
-export async function startOrReuseWorkflow(
-  db: Database,
-  input: {
-    kind: BackgroundJobKind;
-    source: BackgroundBatchSource;
-    dedupeKey: string;
-    metadata: unknown;
-    initialJobs: CreateBackgroundJobInput[];
-  },
-): Promise<{ batch: BackgroundBatchRef; reused: boolean }> {
-  const started = await startOrReuseBackgroundWorkflow(db, {
-    kind: input.kind,
-    source: input.source,
-    dedupeKey: input.dedupeKey,
-    metadata: input.metadata,
-    initialJobs: input.initialJobs,
-  });
-  if (started.jobIds.length > 0) {
-    await dispatchQueuedBackgroundJobs(db, {
-      batchId: started.batch.id,
-      jobIds: started.jobIds,
+type StartWorkflowInput = {
+  kind: BackgroundJobKind;
+  source: BackgroundBatchSource;
+  dedupeKey: string;
+  metadata: unknown;
+  initialJobs: CreateBackgroundJobInput[];
+};
+
+const startOrReuseWorkflowDefinition = workflow<Database, StartWorkflowInput>(
+  "background-workflow.startOrReuse",
+)
+  .commit(
+    "startOrReuse",
+    async ({ context }, { input }) =>
+      await startOrReuseBackgroundWorkflow(context, input),
+  )
+  .effect("dispatchInitial", async ({ context }, { startOrReuse, input }) => {
+    if (startOrReuse.jobIds.length === 0) return;
+    await dispatchQueuedBackgroundJobs(context, {
+      batchId: startOrReuse.batch.id,
+      jobIds: startOrReuse.jobIds,
       batchKind: input.kind,
     });
-  }
-  return { batch: started.batch, reused: started.reused };
-}
+  })
+  .output(({ startOrReuse }) => ({
+    batch: startOrReuse.batch,
+    reused: startOrReuse.reused,
+  }));
+
+export const startOrReuseWorkflow = bindWorkflow(
+  startOrReuseWorkflowDefinition,
+  (db: Database, input: StartWorkflowInput) => ({ context: db, input }),
+);
 
 const backgroundWorkflowKinds = new Set<BackgroundJobKind>([
   "entity-embedding.backfill.coordinator",
@@ -65,51 +72,62 @@ export const isBackgroundWorkflowKind = (
  * summary in the same transaction; retry state remains owned by the opaque
  * coordinator payload.
  */
-export async function continueWorkflow(
-  db: Database,
-  input: {
-    batchId: string;
-    batchKind: BackgroundJobKind;
-    metadata: unknown;
-    children: CreateBackgroundJobInput[];
-    continuation?: CreateBackgroundJobInput | null;
-  },
-): Promise<void> {
-  const { childJobIds } = await appendBackgroundJobsToWorkflow(db, {
-    batchId: input.batchId,
-    children: input.children,
-    continuation: input.continuation,
-    metadata: input.metadata,
-  });
-  // `appendBackgroundJobsToWorkflow` returns only queued child ids; its pending
-  // continuation is deliberately invisible to delivery until the barrier opens.
-  if (childJobIds.length > 0) {
-    await dispatchQueuedBackgroundJobs(db, {
+type ContinueWorkflowInput = {
+  batchId: string;
+  batchKind: BackgroundJobKind;
+  metadata: unknown;
+  children: CreateBackgroundJobInput[];
+  continuation?: CreateBackgroundJobInput | null;
+};
+
+const continueWorkflowDefinition = workflow<Database, ContinueWorkflowInput>(
+  "background-workflow.continue",
+)
+  .commit(
+    "append",
+    async ({ context }, { input }) =>
+      await appendBackgroundJobsToWorkflow(context, input),
+  )
+  .effect("dispatchChildren", async ({ context }, { append, input }) => {
+    // Pending continuation IDs stay behind the active-child barrier.
+    if (append.childJobIds.length === 0) return;
+    await dispatchQueuedBackgroundJobs(context, {
       batchId: input.batchId,
-      jobIds: childJobIds,
+      jobIds: append.childJobIds,
       batchKind: input.batchKind,
     });
-  }
-}
+  })
+  .output(() => undefined);
+
+export const continueWorkflow = bindWorkflow(
+  continueWorkflowDefinition,
+  (db: Database, input: ContinueWorkflowInput) => ({ context: db, input }),
+);
 
 /**
  * Called after every terminal job outcome. The repo primitive performs the
  * active-sibling check and promotion atomically; redispatch sees only the one
  * newly-queued continuation.
  */
-export async function advanceWorkflowIfReady(
-  db: Database,
-  batchId: string,
-): Promise<void> {
-  const promoted = await promotePendingBackgroundWorkflowContinuation(
-    db,
-    batchId,
-  );
-  if (promoted) {
-    await dispatchQueuedBackgroundJob(db, {
-      batchId,
-      jobId: promoted.jobId,
-      batchKind: promoted.kind,
+const advanceWorkflowDefinition = workflow<Database, string>(
+  "background-workflow.advanceIfReady",
+)
+  .commit(
+    "promote",
+    async ({ context }, { input }) =>
+      await promotePendingBackgroundWorkflowContinuation(context, input),
+  )
+  .effect("dispatchPromoted", async ({ context }, { promote, input }) => {
+    if (!promote) return;
+    await dispatchQueuedBackgroundJob(context, {
+      batchId: input,
+      jobId: promote.jobId,
+      batchKind: promote.kind,
     });
-  }
-}
+  })
+  .output(() => undefined);
+
+export const advanceWorkflowIfReady = bindWorkflow(
+  advanceWorkflowDefinition,
+  (db: Database, batchId: string) => ({ context: db, input: batchId }),
+);

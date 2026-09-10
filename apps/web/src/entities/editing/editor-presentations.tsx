@@ -23,7 +23,6 @@ import {
 import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
 import {
   NullableNumericField,
-  NullableTextareaField,
   PlainDateField,
   SelectField,
   UnifiedTextField,
@@ -57,6 +56,7 @@ import { Switch } from "~/components/ui/switch";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { purchaseLabel } from "~/lib/purchase-label";
 
+import { EntityPrimitiveFields } from "./entity-primitive-fields";
 import type { EntityEditResultFor } from "./intent-types";
 import type {
   EntityEditContext,
@@ -102,28 +102,20 @@ function MealCaptureFields({ form }: EntityEditorFieldsProps) {
   return (
     <>
       <PlainDateField form={form} name="date" label="Date" />
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="Meal name (optional)"
-        focusOnMount
-        nullable
-      />
-      <SelectField
-        form={form}
-        name="mealType"
-        label="Meal type"
-        options={mealTypeOptions}
-        placeholder="Which meal of the day?"
-        nullable
-      />
-      <SelectField
-        form={form}
-        name="mealKind"
-        label="Kind"
-        options={mealKindOptions}
-        description="Eating out or ordering in? Leave the recipes empty — that's a complete record, not an unfinished one."
+      <EntityPrimitiveFields
+        entity="meal"
+        mode="create"
+        section="main"
+        options={{
+          name: { placeholder: "Meal name (optional)", focusOnMount: true },
+          mealType: {
+            placeholder: "Which meal of the day?",
+            options: mealTypeOptions,
+          },
+          mealKind: {
+            options: mealKindOptions,
+          },
+        }}
       />
     </>
   );
@@ -132,26 +124,17 @@ function MealCaptureFields({ form }: EntityEditorFieldsProps) {
 function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
   return (
     <>
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="What needs doing?"
-        focusOnMount
+      <EntityPrimitiveFields
+        entity="task"
+        mode="create"
+        section="main"
+        options={{
+          name: { placeholder: "What needs doing?", focusOnMount: true },
+          status: { options: taskStatusOptions },
+          trade: { options: tradeOptions },
+        }}
       />
-      <SelectField
-        form={form}
-        name="status"
-        label="Status"
-        options={taskStatusOptions}
-      />
-      <SelectField
-        form={form}
-        name="trade"
-        label="Trade"
-        options={tradeOptions}
-        nullable
-      />
+      <PlainDateField form={form} name="dueDate" label="Due date" />
       <EntityValueField<FieldValues, "project">
         form={form}
         name="projectId"
@@ -168,7 +151,6 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         SearchProvider={WithProductSearch}
         clearable
       />
-      <PlainDateField form={form} name="dueDate" label="Due date" />
     </>
   );
 }
@@ -180,12 +162,13 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
   const disposition = context.disposition === true;
   return (
     <>
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="What did you buy?"
-        focusOnMount
+      <EntityPrimitiveFields
+        entity="expense"
+        mode="create"
+        section="main"
+        options={{
+          name: { placeholder: "What did you buy?", focusOnMount: true },
+        }}
       />
       {!hasProduct ? (
         <SelectField
@@ -278,63 +261,33 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
 function ProjectCaptureFields({ form }: EntityEditorFieldsProps) {
   return (
     <>
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="What are you working on?"
-        focusOnMount
-      />
-      <SelectField
-        form={form}
-        name="status"
-        label="Status"
-        options={PROJECT_STATUS_OPTIONS}
-      />
-      <SelectField
-        form={form}
-        name="kind"
-        label="Kind"
-        options={projectKindOptions}
-        nullable
-      />
-      <NullableNumericField
-        form={form}
-        name="costEstimate"
-        label="Cost estimate"
-        placeholder="e.g. 500"
-        step="0.01"
-        prefix="$"
+      <EntityPrimitiveFields
+        entity="project"
+        mode="create"
+        section="main"
+        options={{
+          name: { placeholder: "What are you working on?", focusOnMount: true },
+          status: { options: PROJECT_STATUS_OPTIONS },
+          kind: { options: projectKindOptions },
+          costEstimate: { placeholder: "e.g. 500", step: "0.01", prefix: "$" },
+        }}
       />
       <PlainDateField form={form} name="startDate" label="Start date" />
     </>
   );
 }
 
-function VendorCaptureFields({ form }: EntityEditorFieldsProps) {
+function VendorCaptureFields() {
   return (
-    <>
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="Who are you paying?"
-        focusOnMount
-      />
-      <UnifiedTextField
-        form={form}
-        name="website"
-        label="Website"
-        placeholder="https://…"
-        nullable
-      />
-      <NullableTextareaField
-        form={form}
-        name="notes"
-        label="Notes"
-        placeholder="Account number, rep, delivery quirks…"
-      />
-    </>
+    <EntityPrimitiveFields
+      entity="vendor"
+      mode="create"
+      section="main"
+      options={{
+        name: { placeholder: "Who are you paying?", focusOnMount: true },
+        website: { placeholder: "https://…" },
+      }}
+    />
   );
 }
 
@@ -349,32 +302,28 @@ function PurchaseCaptureFields({ form }: EntityEditorFieldsProps) {
         placeholder="Who was paid?"
         SearchProvider={WithVendorShortcodeSearch}
       />
-      <UnifiedTextField
-        form={form}
-        name="orderId"
-        label="Order #"
-        placeholder="Vendor order / receipt #"
-      />
-      <UnifiedTextField
-        form={form}
-        name="displayLabel"
-        label="Display label"
-        placeholder="e.g. pocket hole jig + bits"
+      <EntityPrimitiveFields
+        entity="purchase"
+        mode="create"
+        section="identity"
+        options={{
+          orderId: { placeholder: "Vendor order / receipt #" },
+          displayLabel: { placeholder: "e.g. pocket hole jig + bits" },
+        }}
       />
       <PlainDateField form={form} name="date" label="Purchase date" />
-      <NullableNumericField
-        form={form}
-        name="statedTotal"
-        label="Stated total"
-        placeholder="What the receipt says"
-        step="0.01"
-        prefix="$"
-      />
-      <UnifiedTextField
-        form={form}
-        name="notes"
-        label="Notes"
-        placeholder="Anything worth remembering"
+      <EntityPrimitiveFields
+        entity="purchase"
+        mode="create"
+        section="main"
+        options={{
+          statedTotal: {
+            placeholder: "What the receipt says",
+            step: "0.01",
+            prefix: "$",
+          },
+          notes: { placeholder: "Anything worth remembering" },
+        }}
       />
     </>
   );
@@ -385,7 +334,15 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
   const creating = !record;
   return (
     <>
-      <TextField form={form} name="name" label="Name" />
+      <EntityPrimitiveFields
+        entity="financialAccount"
+        mode={creating ? "create" : "edit"}
+        section="main"
+        options={{
+          name: { focusOnMount: true },
+          notes: { placeholder: "Optional evidence" },
+        }}
+      />
       {creating ? (
         <>
           <FinanceSelectField
@@ -434,21 +391,20 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
         </>
       ) : null}
       <SourceAliasesField form={form} />
-      <NullableTextareaField
-        form={form}
-        name="notes"
-        label="Notes"
-        placeholder="Optional evidence"
-      />
     </>
   );
 }
 
-function FinancialTransactionFields({ form }: EntityEditorFieldsProps) {
+function FinancialTransactionFields({ form, record }: EntityEditorFieldsProps) {
   const transactionForm = z
     .custom<UseFormReturn<FinancialTransactionFormValues>>()
     .parse(form);
-  return <FinancialTransactionFormFields form={transactionForm} />;
+  return (
+    <FinancialTransactionFormFields
+      form={transactionForm}
+      mode={record ? "edit" : "create"}
+    />
+  );
 }
 
 type CandidateOption = {
@@ -519,18 +475,20 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
 
   return (
     <>
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="What do you want?"
-        placeholder="e.g. Metal milling machine"
-        focusOnMount
-      />
-      <NullableTextareaField
-        form={form}
-        name="notes"
-        label="Notes"
-        placeholder="Why it would be useful or fun, constraints, future project ideas…"
+      <EntityPrimitiveFields
+        entity="wish"
+        mode={record ? "edit" : "create"}
+        section="main"
+        options={{
+          name: {
+            placeholder: "e.g. Metal milling machine",
+            focusOnMount: true,
+          },
+          notes: {
+            placeholder:
+              "Why it would be useful or fun, constraints, future project ideas…",
+          },
+        }}
       />
       <div className="grid gap-2">
         <Label htmlFor={`${idPrefix}-product-search`}>Tool alternatives</Label>

@@ -11,8 +11,6 @@ import {
   problemsCountSchema,
   problemsCoverageSchema,
   problemsFastSchema,
-  problemsPruneAliasesEventSchema,
-  problemsReparseEventSchema,
   problemsTrackerSchema,
   problemsUpcSchema,
   problemsViewsSchema,
@@ -43,10 +41,19 @@ import {
   findProblemByType,
   findTrackerProblems,
   findUpcProblems,
-  pruneAllUnusedAliases,
-  reparseStaleIngredientParses,
+  selectIngredientsWithUnusedAliases,
+  selectStaleIngredientParses,
+  pruneUnusedIngredientAliasesBatch,
+  reparseStaleIngredientParsesBatch,
 } from "~/server/services/problems.service";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
+import {
+  bindWorkflow,
+  bindCoordinatorStream,
+  defineCoordinatorStream,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
 export type ProblemsWorkflowContext = Pick<
   AuthenticatedStartOperationContext,
@@ -92,109 +99,203 @@ const problemsWorkflowSchemas = {
   },
 };
 
-export const findFastProblemsWorkflow = (c: ProblemsWorkflowContext) =>
-  findFastProblems(c.db);
-export const findProblemCountsWorkflow = (c: ProblemsWorkflowContext) =>
-  getCachedProblemCounts(c.db, c.upcLookupClient, getProblemCountsCache());
-export const findProblemByTypeWorkflow = (
-  c: ProblemsWorkflowContext,
-  input: z.output<typeof problemsWorkflowSchemas.getByType.input>,
-) => findProblemByType(c.db, input.key, c.upcLookupClient, c.usdaClient);
-export const findViewProblemsWorkflow = (c: ProblemsWorkflowContext) =>
-  findViewProblems(c.db);
-export const findCoverageProblemsWorkflow = (c: ProblemsWorkflowContext) =>
-  findCoverageProblems(c.db, c.usdaClient);
-export const findUpcProblemsWorkflow = (c: ProblemsWorkflowContext) =>
-  findUpcProblems(c.db, c.upcLookupClient);
-export const findTrackerProblemsWorkflow = (c: ProblemsWorkflowContext) =>
-  findTrackerProblems(c.db);
-export const findCoverageTotalsWorkflow = (c: ProblemsWorkflowContext) =>
-  findCoverageTotals(c.db);
-export const findMaintenanceCountsWorkflow = (c: ProblemsWorkflowContext) =>
-  findMaintenanceCounts(c.db);
-export const dryRunReparseWorkflow = (c: ProblemsWorkflowContext) =>
-  dryRunReparse(c.db);
-export const dryRunPruneAliasesWorkflow = (c: ProblemsWorkflowContext) =>
-  dryRunPruneAliases(c.db);
-export const recipeUsageByProductWorkflow = (
-  c: ProblemsWorkflowContext,
-  input: z.output<typeof recipeUsageByProductInput>,
-) => recipeUsageCountsByProduct(c.db, input.productShortcodes);
-export const cleanupOrphanedEmbeddingsWorkflow = (
-  c: ProblemsWorkflowContext,
-  input: z.output<typeof cleanupOrphanedEntityEmbeddingsInput>,
-) => cleanupOrphanedEntityEmbeddings(c.db, input?.ids);
-export const deleteUnusedIngredientsWorkflow = async (
-  c: ProblemsWorkflowContext,
-  input: z.output<typeof deleteUnusedIngredientsInput>,
-) => {
-  const shortcodes = input.ingredientIds
-    ? input.ingredientIds.map((id) => parseShortcodeFor("ingredient", id))
-    : input.allFromProblem
-      ? (await findAllViewProblemIds(c.db, input.allFromProblem)).map((id) =>
-          parseShortcodeFor("ingredient", id),
-        )
-      : [];
-  const entityIds = await resolveAllOrThrow(c.db, "ingredient", shortcodes);
-  const result = await deleteUnusedIngredients(
-    c.db,
-    entityIds,
-    input.alsoDeleteProducts,
-    c.actorContext,
-  );
-  const shortcodeByEntityId = new Map(
-    shortcodes.map((shortcode, index) => [entityIds[index], shortcode]),
-  );
-  return {
-    deleted: result.deleted,
-    failed: result.failed.map(({ id, reason }) => {
-      const shortcode = shortcodeByEntityId.get(id);
-      if (!shortcode) {
-        throw new Error(`Deleted ingredient result returned unknown id ${id}.`);
-      }
-      return { id: shortcode, reason };
-    }),
-  };
-};
-export const reparseStaleWorkflow = async function* (
-  c: ProblemsWorkflowContext,
-) {
-  const generator = reparseStaleIngredientParses(c.db);
-  let next = await generator.next();
-  while (!next.done) {
-    yield {
-      type: "progress",
-      done: next.value.done,
-      total: next.value.total,
-    } satisfies z.output<typeof problemsReparseEventSchema>;
-    next = await generator.next();
-  }
-  await c.services.recipeCosting.dispatchRecompute(next.value.recipesAffected, {
-    source: "problems.reparseStale",
-  });
-  yield {
-    type: "done",
-    result: {
-      updated: next.value.updated,
-      recipesAffected: next.value.recipesAffected.length,
-    },
-  } satisfies z.output<typeof problemsReparseEventSchema>;
-};
-export const pruneAllUnusedAliasesWorkflow = async function* (
-  c: ProblemsWorkflowContext,
-) {
-  const generator = pruneAllUnusedAliases(c.db);
-  let next = await generator.next();
-  while (!next.done) {
-    yield {
-      type: "progress",
-      done: next.value.done,
-      total: next.value.total,
-    } satisfies z.output<typeof problemsPruneAliasesEventSchema>;
-    next = await generator.next();
-  }
-  yield {
-    type: "done",
-    result: next.value,
-  } satisfies z.output<typeof problemsPruneAliasesEventSchema>;
-};
+export const findFastProblemsWorkflow = defineWorkflowOperation(
+  "problems.getFast",
+  (c: ProblemsWorkflowContext) => findFastProblems(c.db),
+);
+export const findProblemCountsWorkflow = defineWorkflowOperation(
+  "problems.getCounts",
+  (c: ProblemsWorkflowContext) =>
+    getCachedProblemCounts(c.db, c.upcLookupClient, getProblemCountsCache()),
+);
+export const findProblemByTypeWorkflow = defineWorkflowOperation(
+  "problems.getByType",
+  (
+    c: ProblemsWorkflowContext,
+    input: z.output<typeof problemsWorkflowSchemas.getByType.input>,
+  ) => findProblemByType(c.db, input.key, c.upcLookupClient, c.usdaClient),
+);
+export const findViewProblemsWorkflow = defineWorkflowOperation(
+  "problems.getViews",
+  (c: ProblemsWorkflowContext) => findViewProblems(c.db),
+);
+export const findCoverageProblemsWorkflow = defineWorkflowOperation(
+  "problems.getCoverage",
+  (c: ProblemsWorkflowContext) => findCoverageProblems(c.db, c.usdaClient),
+);
+export const findUpcProblemsWorkflow = defineWorkflowOperation(
+  "problems.getUpc",
+  (c: ProblemsWorkflowContext) => findUpcProblems(c.db, c.upcLookupClient),
+);
+export const findTrackerProblemsWorkflow = defineWorkflowOperation(
+  "problems.getTracker",
+  (c: ProblemsWorkflowContext) => findTrackerProblems(c.db),
+);
+export const findCoverageTotalsWorkflow = defineWorkflowOperation(
+  "problems.getCoverageTotals",
+  (c: ProblemsWorkflowContext) => findCoverageTotals(c.db),
+);
+export const findMaintenanceCountsWorkflow = defineWorkflowOperation(
+  "problems.getMaintenanceCounts",
+  (c: ProblemsWorkflowContext) => findMaintenanceCounts(c.db),
+);
+export const dryRunReparseWorkflow = defineWorkflowOperation(
+  "problems.dryRunReparse",
+  (c: ProblemsWorkflowContext) => dryRunReparse(c.db),
+);
+export const dryRunPruneAliasesWorkflow = defineWorkflowOperation(
+  "problems.dryRunPruneAliases",
+  (c: ProblemsWorkflowContext) => dryRunPruneAliases(c.db),
+);
+export const recipeUsageByProductWorkflow = defineWorkflowOperation(
+  "problems.recipeUsageByProduct",
+  (
+    c: ProblemsWorkflowContext,
+    input: z.output<typeof recipeUsageByProductInput>,
+  ) => recipeUsageCountsByProduct(c.db, input.productShortcodes),
+);
+export const cleanupOrphanedEmbeddingsWorkflow = bindWorkflow(
+  workflow<
+    ProblemsWorkflowContext,
+    z.output<typeof cleanupOrphanedEntityEmbeddingsInput>
+  >("problems.cleanupOrphanedEmbeddings")
+    .commit("cleaned", async ({ context }, { input }) =>
+      cleanupOrphanedEntityEmbeddings(context.db, input?.ids),
+    )
+    .output(({ cleaned }) => cleaned),
+  (
+    context: ProblemsWorkflowContext,
+    input: z.output<typeof cleanupOrphanedEntityEmbeddingsInput>,
+  ) => ({ context, input }),
+);
+
+type DeleteUnusedIngredientsInput = z.output<
+  typeof deleteUnusedIngredientsInput
+>;
+export const deleteUnusedIngredientsWorkflow = bindWorkflow(
+  workflow<ProblemsWorkflowContext, DeleteUnusedIngredientsInput>(
+    "problems.deleteUnused",
+  )
+    .call("shortcodes", async ({ context }, { input }) =>
+      input.ingredientIds
+        ? input.ingredientIds.map((id) => parseShortcodeFor("ingredient", id))
+        : input.allFromProblem
+          ? (await findAllViewProblemIds(context.db, input.allFromProblem)).map(
+              (id) => parseShortcodeFor("ingredient", id),
+            )
+          : [],
+    )
+    .call("entityIds", async ({ context }, { shortcodes }) =>
+      resolveAllOrThrow(context.db, "ingredient", shortcodes),
+    )
+    .commit("deleted", async ({ context }, { input, entityIds }) =>
+      deleteUnusedIngredients(
+        context.db,
+        entityIds,
+        input.alsoDeleteProducts,
+        context.actorContext,
+      ),
+    )
+    .call("presented", async (_, { shortcodes, entityIds, deleted }) => {
+      const shortcodeByEntityId = new Map(
+        shortcodes.map((shortcode, index) => [entityIds[index], shortcode]),
+      );
+      return {
+        deleted: deleted.deleted,
+        failed: deleted.failed.map(({ id, reason }) => {
+          const shortcode = shortcodeByEntityId.get(id);
+          if (!shortcode) {
+            throw new Error(
+              `Deleted ingredient result returned unknown id ${id}.`,
+            );
+          }
+          return { id: shortcode, reason };
+        }),
+      };
+    })
+    .output(({ presented }) => presented),
+  (context: ProblemsWorkflowContext, input: DeleteUnusedIngredientsInput) => ({
+    context,
+    input,
+  }),
+);
+
+const reparseStaleDefinition = defineCoordinatorStream({
+  name: "problems.reparseStale",
+  select: workflow<ProblemsWorkflowContext, undefined>(
+    "problems.reparseStale.items",
+  )
+    .call("selected", async ({ context }) =>
+      selectStaleIngredientParses(context.db),
+    )
+    .output(({ selected }) => selected),
+  commit: workflow<
+    ProblemsWorkflowContext,
+    {
+      input: undefined;
+      selection: Awaited<ReturnType<typeof selectStaleIngredientParses>>;
+    }
+  >("problems.reparseStale.commit")
+    .commit("updated", async ({ context }, { input: { selection } }) =>
+      reparseStaleIngredientParsesBatch(context.db, selection),
+    )
+    .effect("recipes", async ({ context }, { updated }) => {
+      await context.services.recipeCosting.dispatchRecompute(
+        updated.recipesAffected,
+        { source: "problems.reparseStale" },
+      );
+      return updated;
+    })
+    .output(({ recipes }) => ({
+      updated: recipes.updated,
+      recipesAffected: recipes.recipesAffected.length,
+    })),
+  total: (selection) => selection.length,
+});
+export const reparseStaleWorkflow = bindCoordinatorStream(
+  reparseStaleDefinition,
+  (
+    context: ProblemsWorkflowContext,
+    _input: undefined = undefined,
+    signal: AbortSignal = new AbortController().signal,
+  ) => ({
+    context,
+    input: undefined,
+    signal,
+  }),
+);
+
+const pruneAllUnusedAliasesDefinition = defineCoordinatorStream({
+  name: "problems.pruneAllUnusedAliases",
+  select: workflow<ProblemsWorkflowContext, undefined>(
+    "problems.pruneAllUnusedAliases.items",
+  )
+    .call("selected", async ({ context }) =>
+      selectIngredientsWithUnusedAliases(context.db),
+    )
+    .output(({ selected }) => selected),
+  commit: workflow<
+    ProblemsWorkflowContext,
+    {
+      input: undefined;
+      selection: Awaited<ReturnType<typeof selectIngredientsWithUnusedAliases>>;
+    }
+  >("problems.pruneAllUnusedAliases.commit")
+    .commit("pruned", async ({ context }, { input: { selection } }) =>
+      pruneUnusedIngredientAliasesBatch(context.db, selection),
+    )
+    .output(({ pruned }) => pruned),
+  total: (selection) => selection.length,
+});
+export const pruneAllUnusedAliasesWorkflow = bindCoordinatorStream(
+  pruneAllUnusedAliasesDefinition,
+  (
+    context: ProblemsWorkflowContext,
+    _input: undefined = undefined,
+    signal: AbortSignal = new AbortController().signal,
+  ) => ({
+    context,
+    input: undefined,
+    signal,
+  }),
+);

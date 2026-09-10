@@ -602,35 +602,34 @@ export async function approveDetectedInventoryItem(
   };
 }
 
-/**
- * Backfill AI descriptions for all locations that have images but no description.
- * Processes in batches of 10 for throughput while limiting concurrency. Streamed:
- * `yield`s `{done,total}` after each batch (per-location writes commit
- * independently — safe to yield between them) and `return`s the summary.
- */
-export async function* backfillLocationDescriptions(
+/** Select the immutable batch that the durable description refresh will
+ * enqueue. This keeps progress and the job set tied to one snapshot. */
+export const selectLocationDescriptionBackfill = async (
   db: Database,
-): AsyncGenerator<
-  { done: number; total: number },
-  { enqueued: number; total: number; batchId: string }
-> {
+): Promise<LocationId[]> => {
   const locations = await findLocationsNeedingAiDescription(db);
-  const total = locations.length;
-  yield { done: 0, total };
+  return locations.map((location) => location.id);
+};
+
+/** Enqueue the already-selected locations as a single durable batch. */
+export const enqueueLocationDescriptionBackfill = async (
+  db: Database,
+  locationIds: readonly LocationId[],
+): Promise<{ enqueued: number; total: number; batchId: string }> => {
+  const total = locationIds.length;
   const dispatched = await dispatchBackgroundJobs(db, {
     kind: "location-ai.description.refresh",
     source: "backfill",
     metadata: { source: "location-ai.description.backfill", total },
-    jobs: locations.map((loc) => ({
+    jobs: locationIds.map((locationId) => ({
       kind: "location-ai.description.refresh" as const,
-      dedupeKey: `location-ai.description.refresh:${loc.id}`,
-      payload: { locationId: loc.id },
+      dedupeKey: `location-ai.description.refresh:${locationId}`,
+      payload: { locationId },
     })),
   });
-  yield { done: dispatched.jobIds.length, total };
   return {
     enqueued: dispatched.jobIds.length,
     total,
     batchId: dispatched.batchId,
   };
-}
+};

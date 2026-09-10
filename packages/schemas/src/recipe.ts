@@ -2,20 +2,21 @@ import { z } from "zod";
 import { recipeRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
-  deriveUpdateData,
   deriveUpdateFields,
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
 import { mutationSideEffectsSchema } from "./background-jobs";
-import { amount, positiveAmount } from "./codec";
+import { generatedCookbookFieldSchemas } from "./generated/entity-field-schemas.cookbook.gen";
+import {
+  generatedRecipeFieldSchemas,
+  generatedRecipeFilterFields,
+} from "./generated/entity-field-schemas.recipe.gen";
+import { amount } from "./codec";
 import { requiredName } from "./common";
 import {
   cookbookShortcode,
-  id,
-  imageShortcode,
   ingredientShortcode,
-  productShortcode,
   recipeShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
@@ -37,6 +38,17 @@ import {
   recipeTotals,
   recipeYieldSchema,
 } from "./recipe-shared";
+import {
+  recipeIngredientInput,
+  recipeSectionInput,
+  recipeSectionsOut,
+} from "./recipe-fields";
+export {
+  recipeIngredientInput,
+  recipeInstructionInput,
+  recipeSectionInput,
+  recipeSectionsInput,
+} from "./recipe-fields";
 
 export * from "./recipe-shared";
 
@@ -174,10 +186,8 @@ export const recipeGraphOut = z.object({
 export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
 export const recipeOutFields = {
-  ...recipeTopLevelFields,
-  sections: z.array(recipeSectionOut),
-  totals: recipeTotals.nullish(),
-  images: z.array(imageOut),
+  ...generatedRecipeFieldSchemas.read,
+  sections: recipeSectionsOut,
 };
 
 export const recipeOut = z.object(recipeOutFields);
@@ -235,26 +245,7 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
   total: z.number().int().nonnegative(),
 });
 
-export const cookbookSummary = z.object({
-  id: cookbookShortcode,
-  book: z.string(),
-  author: z.array(z.string()),
-  subjects: z.array(z.string()),
-  recipeCount: z.number().int().nonnegative(),
-  coverUrl: z.string().nullable(),
-  sourceRecipeCount: z.number().int().nonnegative(),
-  // The physical copy on the shelf, when one is linked. Deliberately thin —
-  // this summary feeds the browse gallery, the cookbook picker, the hover
-  // preview and MCP, so the detail page fetches the full Product separately
-  // rather than making every one of those carry price and inventory joins.
-  product: z
-    .object({
-      id: productShortcode,
-      name: z.string(),
-      coverUrl: z.string().nullable(),
-    })
-    .nullable(),
-});
+export const cookbookSummary = z.object(generatedCookbookFieldSchemas.read);
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 
 /**
@@ -278,51 +269,12 @@ export type SectionIngredientType = z.infer<
   typeof sectionIngredientOut
 >["type"];
 
-// Schema for recipe mutations
-// Raw, unparsed source line + the parser-derived modifier (e.g. "finely
-// chopped"). Optional provenance carried through from import so it can be
-// persisted on RecipeSectionIngredient; absent on manual/UI edits.
-const ingredientProvenance = {
-  rawLine: z.string().nullish(),
-  modifier: z.string().nullish(),
-};
-
-export const recipeIngredientInput = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("ingredient"),
-    ingredientId: ingredientShortcode,
-    recipeId: z.null(),
-    amounts: z.array(positiveAmount),
-    id: id.optional(),
-    ...ingredientProvenance,
-  }),
-  z.object({
-    type: z.literal("recipe"),
-    recipeId: recipeShortcode,
-    ingredientId: z.null(),
-    amounts: z.array(positiveAmount),
-    id: id.optional(),
-    ...ingredientProvenance,
-  }),
-]);
 export type RecipeIngredientInput = z.infer<typeof recipeIngredientInput>;
-
-export const recipeInstructionInput = z.object({
-  instruction: z.string(),
-  id: id.optional(),
-});
-
-export const recipeSectionInput = z.object({
-  name: z.string().min(2).nullable().optional(),
-  ingredients: z.array(recipeIngredientInput).min(1).optional(),
-  instructions: z.array(recipeInstructionInput).min(1).optional(),
-  id: id.optional(),
-});
 
 export const recipeFilterFields = {
   ...auditDateFilterFields,
   ...recipeRelatedFilterFields,
-  nameFilter: z.string().optional(),
+  ...generatedRecipeFilterFields,
   tagFilters: z.array(z.string()).optional(),
   cookbookId: entityFilterList(cookbookShortcode).optional(),
   cookbookPresenceFilter: presenceFilter,
@@ -364,7 +316,6 @@ export const recipeFilterFields = {
   // Total elapsed time in minutes — a real column, so this is a plain SQL
   // range. A recipe whose source printed no total time (or printed prose no
   // parser would commit to) has NULL here and matches neither bound.
-  ...numericRangeFields("totalMinutes", { int: true, nonnegative: true }),
 };
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);
@@ -399,33 +350,11 @@ const recipeWritableFields = {
     ),
 };
 
-const recipeCreateFields = {
-  ...recipeWritableFields,
-  // Public `IMG-` shortcode, like `removeImageIds`/`imageOrder` below —
-  // `Image` mints a shortcode at insert time, so the repo layer resolves this
-  // to a uuid before the join-table write rather than taking a raw uuid.
-  pendingImageIds: z.array(imageShortcode).optional(),
-};
-export const recipeCreateInput = z.object(recipeCreateFields);
+export const recipeCreateInput = z.object(generatedRecipeFieldSchemas.create);
 
-export const recipeUpdateData = deriveUpdateData(recipeCreateFields, {
-  extend: {
-    // Public `IMG-` codes, as returned by `RecipeOut.images[].id` — resolved to
-    // uuids in the repo before they reach the `RecipeImage` join table. MCP has
-    // no recipe image surface (`mcpRecipeUpdateInput` below doesn't extend
-    // these in), so this pair is browser-transport-only.
-    removeImageIds: z
-      .array(imageShortcode)
-      .optional()
-      .describe(
-        "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-      ),
-    imageOrder: z
-      .array(imageShortcode)
-      .optional()
-      .describe("existing image ids in display order; first = cover"),
-  },
-});
+export const recipeUpdateData = z
+  .object(generatedRecipeFieldSchemas.update)
+  .partial();
 
 export const recipeUpdateInput = z.object({
   id: recipeShortcode,
