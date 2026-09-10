@@ -101,7 +101,13 @@ export const VendorDetail: FC<VendorDetailProps> = ({ vendor }) => {
           // mono text rather than a link. `{orderId}` is substituted per
           // purchase to produce the Order # links on this vendor's charges.
           renderValue={(v) =>
-            v ? <span className="font-mono text-xs">{v}</span> : <NoneValue />
+            v ? (
+              <span className="font-mono text-xs break-all whitespace-normal">
+                {v}
+              </span>
+            ) : (
+              <NoneValue />
+            )
           }
         />
       ),

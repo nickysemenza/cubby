@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -169,6 +170,59 @@ describe("useEntityPreview intent prefetch", () => {
     expect(browserOperations.cancellations).toEqual([
       entityPreviewQueryOptions("product", "PRD-4K7M").queryKey,
     ]);
+  });
+
+  it("does not cancel a shared detail query during route loading", async () => {
+    const id = "PRD-4K7M";
+    const detailOptions = entityDetailFor("product").queryOptions(id);
+    type Detail = Awaited<
+      ReturnType<NonNullable<typeof detailOptions.queryFn>>
+    >;
+    let resolveDetail!: (detail: Detail) => void;
+    const detail = new Promise<Detail>((resolve) => {
+      resolveDetail = resolve;
+    });
+    harness.dispose();
+    let routeConsumesDetail = false;
+    harness = createBrowserTestHarness({
+      loader: async () => {
+        if (routeConsumesDetail)
+          await harness.queryClient.ensureQueryData(detailOptions);
+      },
+    });
+    await harness.loadRouter();
+    const inFlight = harness.queryClient.fetchQuery({
+      ...detailOptions,
+      queryFn: () => detail,
+    });
+    const { result } = renderHook(
+      () =>
+        useEntityPreview("product", {
+          renderInspector: renderTestInspector,
+          presentationPort,
+        }),
+      { wrapper: harness.wrapper },
+    );
+
+    act(() => result.current.onRowHover(row(id)));
+    act(() => vi.advanceTimersByTime(200));
+    expect(
+      harness.queryClient.getQueryState(detailOptions.queryKey)?.status,
+    ).toBe("pending");
+
+    routeConsumesDetail = true;
+    const navigation = harness.loadRouter();
+    await Promise.resolve();
+    expect(harness.router.state.status).toBe("pending");
+
+    act(() => result.current.onRowHoverEnd(row(id)));
+    expect(
+      harness.queryClient.getQueryState(detailOptions.queryKey)?.status,
+    ).toBe("pending");
+
+    resolveDetail(null);
+    await expect(inFlight).resolves.toBeDefined();
+    await expect(navigation).resolves.toBeUndefined();
   });
 
   it("commits a pending intent on click without starting a second prefetch", () => {

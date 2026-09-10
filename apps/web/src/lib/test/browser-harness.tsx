@@ -74,6 +74,8 @@ interface BrowserTestRoute {
 
 interface BrowserTestHarnessOptions {
   readonly initialPath?: string;
+  /** Exercise route-loader ownership of shared queries before observers mount. */
+  readonly loader?: () => void | Promise<void>;
   readonly route?: BrowserTestRoute;
   /** Pin timer-driven UI behavior without leaking fake timers into later tests. */
   readonly clock?: { now: number | Date };
@@ -184,7 +186,10 @@ export function createBrowserTestHarness(options?: BrowserTestHarnessOptions) {
     const content = useContext(testContent);
     return options?.route ? <Outlet /> : content;
   }
-  const rootRoute = createRootRoute({ component: TestRouteContent });
+  const rootRoute = createRootRoute({
+    component: TestRouteContent,
+    loader: options?.loader,
+  });
   const route = options?.route
     ? createRoute({
         getParentRoute: () => rootRoute,

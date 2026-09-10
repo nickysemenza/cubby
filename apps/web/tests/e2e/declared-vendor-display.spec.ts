@@ -29,6 +29,10 @@ for (const viewport of [
       ).toHaveCount(1);
     }
     await identity.click();
+    await expect(page).toHaveURL(new RegExp(`/vendors/${vendor.id}$`, "u"));
+    await expect(
+      page.getByRole("heading", { level: 1, name, exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByText(`${name} notes`, { exact: true }),
     ).toBeVisible();
