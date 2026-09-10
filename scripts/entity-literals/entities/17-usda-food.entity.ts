@@ -12,12 +12,7 @@ export default literalEntity({
       {
         key: "fdc_id",
         kind: "identifier",
-        nullable: false,
         label: "FDC ID",
-        description: null,
-        readKey: "fdc_id",
-        reference: null,
-        control: null,
         display: { list: true, detail: true },
         validation: {
           read: {
@@ -31,11 +26,7 @@ export default literalEntity({
         kind: "json",
         nullable: true,
         label: "Branded food information",
-        description: null,
-        readKey: "brandedFoodInfo",
-        reference: null,
-        control: null,
-        display: { list: false, detail: true },
+        display: { detail: true },
         validation: {
           read: {
             kind: "source",
@@ -50,12 +41,7 @@ export default literalEntity({
       {
         key: "foodInfo",
         kind: "json",
-        nullable: false,
         label: "Food information",
-        description: null,
-        readKey: "foodInfo",
-        reference: null,
-        control: null,
         display: { list: true, detail: true },
         validation: {
           read: {
@@ -69,18 +55,11 @@ export default literalEntity({
         kind: "json",
         nullable: true,
         label: "Legacy food information",
-        description: null,
-        readKey: "legacyFoodInfo",
-        reference: null,
-        control: null,
-        display: { list: false, detail: true },
+        display: { detail: true },
         validation: {
           read: {
             kind: "source",
-            source: {
-              module: "@cubby/usda-schemas",
-              export: "legacyFoodInfo",
-            },
+            source: { module: "@cubby/usda-schemas", export: "legacyFoodInfo" },
             nullable: true,
           },
         },
@@ -88,42 +67,26 @@ export default literalEntity({
       {
         key: "nutritionInfo",
         kind: "json",
-        nullable: false,
         label: "Nutrition",
-        description: null,
-        readKey: "nutritionInfo",
-        reference: null,
-        control: null,
-        display: { list: false, detail: true },
+        display: { detail: true },
         validation: {
           read: {
             kind: "source",
-            source: {
-              module: "@cubby/usda-schemas",
-              export: "nutritionInfo",
-            },
+            source: { module: "@cubby/usda-schemas", export: "nutritionInfo" },
           },
         },
       },
       {
         key: "portionInfoRaw",
         kind: "json",
-        nullable: false,
         label: "Portions",
-        description: null,
-        readKey: "portionInfoRaw",
-        reference: null,
-        control: null,
-        display: { list: false, detail: true },
+        display: { detail: true },
         validation: {
           read: {
             kind: "array",
             item: {
               kind: "source",
-              source: {
-                module: "@cubby/usda-schemas",
-                export: "foodPortion",
-              },
+              source: { module: "@cubby/usda-schemas", export: "foodPortion" },
             },
           },
         },
@@ -131,13 +94,8 @@ export default literalEntity({
       {
         key: "inferredUnitMappings",
         kind: "json",
-        nullable: false,
         label: "Inferred unit mappings",
-        description: null,
-        readKey: "inferredUnitMappings",
-        reference: null,
-        control: null,
-        display: { list: false, detail: true },
+        display: { detail: true },
         validation: {
           read: {
             kind: "array",
@@ -154,12 +112,8 @@ export default literalEntity({
       {
         key: "linkedProducts",
         kind: "json",
-        nullable: false,
         label: "Linked products",
-        description: null,
-        readKey: "linkedProducts",
         reference: { entity: "product", multiple: true },
-        control: null,
         display: { list: true, detail: true },
         validation: {
           read: {

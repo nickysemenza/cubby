@@ -47,9 +47,7 @@ cross-field validation; their audit rosters derive from declarations. Other
 repository transactions retain their alias, tree, relationship, import, or domain
 invariants and consume declared audit/validation policy.
 
-The baseline workflow export census is recorded separately in
-[workflow-status.json](./workflow-status.json). Deeper background-job ownership
-now includes named payload graphs, ordered draining with one batch-kind lookup
+Background-job ownership includes named payload graphs, ordered draining with one batch-kind lookup
 per batch, and explicit start/continue/advance commit/effect definitions. Delivery
 has its own durable-row retry boundary; generic workflow recovery still rejects
 new or ambiguous writes. Cookbook comparison and Notion preview expose their

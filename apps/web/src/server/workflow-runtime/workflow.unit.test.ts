@@ -61,6 +61,10 @@ describe("declarative workflows", () => {
     }));
     expect(inspectWorkflow(bound.definition).name).toBe("arithmetic");
     expect(await bound(4)).toBe(8);
+
+    const passthrough = bindWorkflow(flow);
+    expect(inspectWorkflow(passthrough.definition).name).toBe("arithmetic");
+    expect(await passthrough(undefined, 4)).toBe(8);
   });
 
   it("translates application failures while preserving runtime cancellation", async () => {

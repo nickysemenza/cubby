@@ -38,13 +38,4 @@ describe("search maintenance workflow graphs", () => {
       ),
     ).toEqual(["committedCall"]);
   });
-
-  it("preserves the public operation identities", () => {
-    expect(inspectWorkflow(repairSearchDocumentsWorkflow.definition).name).toBe(
-      "search.repairDocuments",
-    );
-    expect(
-      inspectWorkflow(enqueueEmbeddingBackfillWorkflow.definition).name,
-    ).toBe("search.enqueueEmbeddingBackfill");
-  });
 });

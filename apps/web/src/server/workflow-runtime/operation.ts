@@ -33,6 +33,11 @@ export function defineWorkflowOperation<
 /** Bind transport-independent arguments without hiding the executable graph.
  * The argument adapter only supplies context/input/options; application
  * decisions belong to the definition's registered steps. */
+export function bindWorkflow<Context, Input, Output>(
+  definition: WorkflowDefinition<Context, Input, Output>,
+): ((context: Context, input: Input) => Promise<Output>) & {
+  readonly definition: WorkflowDefinition<Context, Input, Output>;
+};
 export function bindWorkflow<
   Context,
   Input,
@@ -41,9 +46,26 @@ export function bindWorkflow<
 >(
   definition: WorkflowDefinition<Context, Input, Output>,
   prepare: (...args: Args) => WorkflowExecutionOptions<Context, Input>,
+): ((...args: Args) => Promise<Output>) & {
+  readonly definition: WorkflowDefinition<Context, Input, Output>;
+};
+export function bindWorkflow<
+  Context,
+  Input,
+  Output,
+  Args extends readonly unknown[] = readonly [Context, Input],
+>(
+  definition: WorkflowDefinition<Context, Input, Output>,
+  prepare?: (...args: Args) => WorkflowExecutionOptions<Context, Input>,
 ) {
+  if (prepare)
+    return Object.assign(
+      (...args: Args) => executeWorkflow(definition, prepare(...args)),
+      { definition },
+    );
   return Object.assign(
-    (...args: Args) => executeWorkflow(definition, prepare(...args)),
+    (context: Context, input: Input) =>
+      executeWorkflow(definition, { context, input }),
     { definition },
   );
 }

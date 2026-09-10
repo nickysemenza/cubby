@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { inspectWorkflow } from "~/server/workflow-runtime/definition";
 
 import {
-  getCalendarRangeWorkflow,
   clearCalendarUncertainWriteWorkflow,
   rotateCalendarFeedWorkflow,
   rotateCalendarCredentialWorkflow,
@@ -14,14 +13,6 @@ import {
 } from "./calendar.server";
 
 describe("calendar workflow graphs", () => {
-  it("registers calendar operations", () => {
-    expect(inspectWorkflow(getCalendarRangeWorkflow.definition).name).toBe(
-      "calendar.range",
-    );
-    expect(
-      inspectWorkflow(clearCalendarUncertainWriteWorkflow.definition).name,
-    ).toBe("calendar.uncertainWrite.clear");
-  });
   it("resolves clients before reads and marks completed remote writes", () => {
     for (const descriptor of [
       inspectWorkflow(getCalendarFeedWorkflow.definition),

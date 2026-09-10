@@ -8,19 +8,11 @@ import {
   projectNotionImportEvent,
 } from "./recipe-import-projection";
 import {
-  attachCookbookRecipePhotoWorkflow,
   deleteCookbookWorkflow,
-  extractCookbookChunkWorkflow,
-  getCookbookDiffWorkflow,
-  getCookbookSourceWorkflow,
   importCookbookWorkflow,
   importNotionSyncWorkflow,
   insertImportWorkflow,
-  parseHtmlWorkflow,
-  previewNotionSyncWorkflow,
   reprocessCookbookWorkflow,
-  scrapeWorkflow,
-  setCookbookProductWorkflow,
   upsertCookbookWorkflow,
 } from "./recipe-import.server";
 
@@ -29,24 +21,6 @@ describe("recipe import workflow graphs", () => {
     id: testEntityId("recipe", "recipe-import-receipt"),
     shortcode: testShortcode("recipe", "RCP-RECEIPT"),
   };
-
-  it("registers remaining non-streaming operation identities", () => {
-    for (const [workflow, name] of [
-      [scrapeWorkflow, "recipe.scrape"],
-      [parseHtmlWorkflow, "recipe.parseHtml"],
-      [insertImportWorkflow, "recipe.insertImport"],
-      [upsertCookbookWorkflow, "recipe.upsertCookbook"],
-      [getCookbookSourceWorkflow, "recipe.getCookbookSource"],
-      [attachCookbookRecipePhotoWorkflow, "recipe.attachCookbookRecipePhoto"],
-      [getCookbookDiffWorkflow, "recipe.getCookbookDiff"],
-      [previewNotionSyncWorkflow, "recipe.previewNotionSync"],
-      [setCookbookProductWorkflow, "recipe.setCookbookProduct"],
-      [deleteCookbookWorkflow, "recipe.deleteCookbook"],
-      [extractCookbookChunkWorkflow, "recipe.extractCookbookChunk"],
-    ] as const) {
-      expect(workflow.definition.name).toBe(name);
-    }
-  });
 
   it("drains required import effects after domain commits", () => {
     expect(

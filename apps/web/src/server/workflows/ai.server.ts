@@ -163,13 +163,6 @@ export const suggestUsdaFoodWorkflow = bindWorkflow(
       suggestUsdaFood(context.usdaService, context.db, input.ingredientName),
     )
     .output(({ suggestion }) => suggestion),
-  (
-    context: AuthenticatedStartOperationContext,
-    input: UsdaSuggestionInput,
-  ) => ({
-    context,
-    input,
-  }),
 );
 
 type UsdaBatchInput = z.output<typeof usdaFoodSuggestionBatchInput>;
@@ -195,10 +188,6 @@ export const suggestUsdaFoodBatchWorkflow = bindWorkflow(
       ),
     )
     .output(({ suggestions }) => suggestions),
-  (context: AuthenticatedStartOperationContext, input: UsdaBatchInput) => ({
-    context,
-    input,
-  }),
 );
 
 type IngredientMergeBatchInput = z.output<

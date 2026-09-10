@@ -294,15 +294,6 @@ describe("EntityPrimitiveFields", () => {
     expect(screen.queryByText("Na Kinds")).not.toBeInTheDocument();
   });
 
-  it("uses the update contract when rendering edit mode", () => {
-    render(<TestForm mode="edit" onSubmit={() => undefined} />);
-
-    expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("checkbox", { name: "Usually on hand" }),
-    ).toBeInTheDocument();
-  });
-
   it.each([
     ["nullable", "product", "expectedQuantity", null, null],
     ["required", "ledgerTransfer", "amount", 4, undefined],

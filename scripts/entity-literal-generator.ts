@@ -257,6 +257,12 @@ const required = (object: LiteralObject, key: string, context: string) => {
   return value;
 };
 
+const defaulted = (
+  object: LiteralObject,
+  key: string,
+  fallback: LiteralValue,
+): LiteralValue => (object[key] === undefined ? fallback : object[key]);
+
 const stringValue = (value: LiteralValue, context: string): string => {
   if (!isNonEmptyString(value)) {
     throw new LiteralSpecError(`${context} must be a non-empty string.`);
@@ -475,6 +481,28 @@ const fieldValidationKinds = [
 
 const storageDefaultKinds = ["none", "generated", "now", "literal"] as const;
 
+const fieldValidationKeys = [
+  "kind",
+  "source",
+  "lazy",
+  "values",
+  "item",
+  "optional",
+  "nullable",
+  "trim",
+  "integer",
+  "finite",
+  "positive",
+  "nonnegative",
+  "min",
+  "max",
+  "minMessage",
+  "defaultValue",
+  "description",
+  "descriptionAfter",
+  "mock",
+] as const;
+
 const parsedFieldKind = (
   value: LiteralValue,
   context: string,
@@ -491,31 +519,7 @@ const fieldValidationSpec = (
   context: string,
 ): EntityFieldValidationSpec => {
   const spec = objectValue(value, context);
-  exactKeys(
-    spec,
-    [
-      "kind",
-      "source",
-      "lazy",
-      "values",
-      "item",
-      "optional",
-      "nullable",
-      "trim",
-      "integer",
-      "finite",
-      "positive",
-      "nonnegative",
-      "min",
-      "max",
-      "minMessage",
-      "defaultValue",
-      "description",
-      "descriptionAfter",
-      "mock",
-    ],
-    context,
-  );
+  exactKeys(spec, fieldValidationKeys, context);
   const kind = stringValue(required(spec, "kind", context), `${context}.kind`);
   const matchedKind = fieldValidationKinds.find(
     (candidate) => candidate === kind,
@@ -623,11 +627,30 @@ const fieldValidation = (
   if (value === undefined || value === null)
     return { read: null, create: null, update: null };
   const validation = objectValue(value, context);
-  exactKeys(validation, ["read", "create", "update"], context);
-  const mode = (key: "read" | "create" | "update") =>
-    validation[key] === undefined || validation[key] === null
-      ? null
-      : fieldValidationSpec(validation[key], `${context}.${key}`);
+  exactKeys(
+    validation,
+    [...fieldValidationKeys, "write", "read", "create", "update"],
+    context,
+  );
+  const {
+    read: _read,
+    create: _create,
+    update: _update,
+    write,
+    ...shared
+  } = validation;
+  const writeRules =
+    write === undefined ? {} : objectValue(write, `${context}.write`);
+  exactKeys(writeRules, fieldValidationKeys, `${context}.write`);
+  const mode = (key: "read" | "create" | "update") => {
+    const override = validation[key];
+    if (override === undefined || override === null) return null;
+    const rules = { optional: key === "update", ...shared };
+    if (key !== "read") Object.assign(rules, writeRules);
+    if (override !== true)
+      Object.assign(rules, objectValue(override, `${context}.${key}`));
+    return fieldValidationSpec(rules, `${context}.${key}`);
+  };
   return {
     read: mode("read"),
     create: mode("create"),
@@ -694,7 +717,7 @@ const compileFieldModel = (
                 `${fieldContext}.reference.entity`,
               ),
               multiple: booleanValue(
-                required(ref, "multiple", `${fieldContext}.reference`),
+                defaulted(ref, "multiple", false),
                 `${fieldContext}.reference.multiple`,
               ),
             };
@@ -771,12 +794,12 @@ const compileFieldModel = (
     const display =
       displayValue === undefined
         ? {
-            list: false,
-            detail: false,
             columnId: null,
             standard: null,
-            detailOrder: null,
             detailSection: "overview",
+            detailOrder: null,
+            list: false,
+            detail: false,
           }
         : ((): EntityField["display"] => {
             const displayObject = objectValue(
@@ -839,34 +862,44 @@ const compileFieldModel = (
                 `${fieldContext}.display`,
               ),
               list: booleanValue(
-                required(displayObject, "list", `${fieldContext}.display`),
+                defaulted(displayObject, "list", false),
                 `${fieldContext}.display.list`,
               ),
               detail: booleanValue(
-                required(displayObject, "detail", `${fieldContext}.display`),
+                defaulted(displayObject, "detail", false),
                 `${fieldContext}.display.detail`,
               ),
             };
           })();
+    const key = stringValue(
+      required(field, "key", fieldContext),
+      `${fieldContext}.key`,
+    );
     return {
-      key: stringValue(
-        required(field, "key", fieldContext),
-        `${fieldContext}.key`,
-      ),
+      key,
       kind: parsedFieldKind(
         required(field, "kind", fieldContext),
         `${fieldContext}.kind`,
       ),
       nullable: booleanValue(
-        required(field, "nullable", fieldContext),
+        defaulted(field, "nullable", false),
         `${fieldContext}.nullable`,
       ),
       label: stringValue(
-        required(field, "label", fieldContext),
+        defaulted(
+          field,
+          "label",
+          key
+            .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+            .replace(/^./, (letter) => letter.toUpperCase()),
+        ),
         `${fieldContext}.label`,
       ),
       description: optionalString(field, "description", fieldContext),
-      readKey: optionalString(field, "readKey", fieldContext),
+      readKey:
+        field.readKey === undefined
+          ? key
+          : optionalString(field, "readKey", fieldContext),
       reference,
       control,
       display,
@@ -899,12 +932,23 @@ const compileFieldModel = (
     }
     displayedColumnIds.add(columnId);
   }
-  const rawStorage = literalObjectArray(
-    required(model, "storage", context),
-    `${context}.storage`,
-  );
-  const storage = rawStorage.map((field, index): EntityStorageField => {
+  const rawStorage = required(model, "storage", context);
+  if (!Array.isArray(rawStorage))
+    throw new LiteralSpecError(`${context}.storage must be an array.`);
+  const storage = rawStorage.map((entry, index): EntityStorageField => {
     const fieldContext = `${context}.storage[${index}]`;
+    const field = isNonEmptyString(entry)
+      ? { key: entry }
+      : objectValue(entry, fieldContext);
+    const key = stringValue(
+      required(field, "key", fieldContext),
+      `${fieldContext}.key`,
+    );
+    const declared = fields.find((candidate) => candidate.key === key);
+    if (!declared)
+      throw new LiteralSpecError(
+        `${fieldContext} references undeclared field ${key}.`,
+      );
     exactKeys(
       field,
       [
@@ -920,7 +964,7 @@ const compileFieldModel = (
       fieldContext,
     );
     const defaultKind = stringValue(
-      required(field, "default", fieldContext),
+      defaulted(field, "default", "none"),
       `${fieldContext}.default`,
     );
     const matchedDefaultKind = storageDefaultKinds.find(
@@ -934,20 +978,17 @@ const compileFieldModel = (
         `${fieldContext}.defaultValue is required for a literal default.`,
       );
     return {
-      key: stringValue(
-        required(field, "key", fieldContext),
-        `${fieldContext}.key`,
-      ),
+      key,
       column: stringValue(
-        required(field, "column", fieldContext),
+        defaulted(field, "column", key),
         `${fieldContext}.column`,
       ),
       kind: parsedFieldKind(
-        required(field, "kind", fieldContext),
+        defaulted(field, "kind", declared.kind),
         `${fieldContext}.kind`,
       ),
       nullable: booleanValue(
-        required(field, "nullable", fieldContext),
+        defaulted(field, "nullable", declared.nullable),
         `${fieldContext}.nullable`,
       ),
       default: matchedDefaultKind,

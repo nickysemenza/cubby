@@ -19,6 +19,6 @@ it("preserves the physical application schema across model compilation", async (
       ),
     );
   // Snapshot identity is random; every table, constraint, index and enum stays
-  // in this comparison. JSON formatting is owned by Oxfmt, not the DB contract.
+  // in this comparison. Generated catalog records are kept compact for review.
   expect({ ...snapshot, id: "baseline", prevId: "baseline" }).toEqual(baseline);
 });

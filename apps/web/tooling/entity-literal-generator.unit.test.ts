@@ -23,6 +23,91 @@ afterEach(async () => {
 });
 
 describe("literal entity generator", () => {
+  const parseField = (field: string, storage = '["name"]') =>
+    parseEntityLiterals(`export const ENTITY_LITERALS = [{
+      key: "alpha", descriptor: { auditable: false, searchable: false, lifecycle: {delete: null, merge: false} }, contract: null,
+      fieldModel: {
+        fields: [${field}], storage: ${storage},
+        create: ["name"], update: ["name"], output: ["name"], bulk: [], audit: [],
+      },
+    }];`);
+
+  it("compiles shared rules and defaults identically to explicit field contracts", () => {
+    const compact = parseField(`{
+      key: "name", kind: "text", control: {kind: "text"}, display: {list: true},
+      validation: {
+        kind: "string", description: "Name", write: {trim: true, min: 1},
+        read: true, create: {defaultValue: "Example"}, update: true,
+      },
+    }`);
+    const explicit = parseField(
+      `{
+      key: "name", kind: "text", label: "Name", nullable: false, readKey: "name",
+      description: null, reference: null,
+      control: {kind: "text", renderer: null, options: null, section: "main"},
+      display: {list: true, detail: false},
+      validation: {
+        read: {kind: "string", description: "Name"},
+        create: {kind: "string", description: "Name", trim: true, min: 1, defaultValue: "Example"},
+        update: {kind: "string", description: "Name", trim: true, min: 1, optional: true},
+      },
+    }`,
+      `[{key: "name", kind: "text", column: "name", nullable: false,
+      default: "none", defaultValue: null, reference: null, specialized: null}]`,
+    );
+    expect(compact).toEqual(explicit);
+    expect(renderEntityArtifacts(compact)).toEqual(
+      renderEntityArtifacts(explicit),
+    );
+
+    const exception = parseField(
+      `{
+      key: "name", kind: "text", nullable: true, label: "Display name", readKey: null,
+      validation: {kind: "string", nullable: true, update: {optional: false}},
+    }`,
+      `[{key: "name", column: "title", nullable: false, default: "literal", defaultValue: "Example"}]`,
+    )[0]?.fieldModel;
+    expect(exception?.fields[0]).toMatchObject({
+      label: "Display name",
+      readKey: null,
+      nullable: true,
+      validation: {
+        read: null,
+        create: null,
+        update: { optional: false, nullable: true },
+      },
+    });
+    expect(exception?.storage[0]).toMatchObject({
+      column: "title",
+      nullable: false,
+      defaultValue: "Example",
+    });
+  });
+
+  it.each([
+    ["nullable: null", "nullable must be a boolean"],
+    ["label: null", "label must be a non-empty string"],
+    ["display: {list: null}", "display.list must be a boolean"],
+    [
+      'validation: {kind: "string", read: true, write: {typo: true}}',
+      "write.typo is not allowed",
+    ],
+    ["validation: {read: true}", "read.kind is required"],
+  ])(
+    "rejects invalid explicit values instead of replacing them with defaults: %s",
+    (override, error) => {
+      expect(() =>
+        parseField(`{key: "name", kind: "text", ${override}}`),
+      ).toThrow(error);
+    },
+  );
+
+  it("rejects storage shorthand for undeclared fields", () => {
+    expect(() =>
+      parseField('{key: "name", kind: "text"}', '["missing"]'),
+    ).toThrow("references undeclared field missing");
+  });
+
   it("validates standard display renderers against their declared field", () => {
     const parseDisplay = (display: string) =>
       parseEntityLiterals(`

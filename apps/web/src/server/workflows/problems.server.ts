@@ -214,10 +214,6 @@ export const deleteUnusedIngredientsWorkflow = bindWorkflow(
       };
     })
     .output(({ presented }) => presented),
-  (context: ProblemsWorkflowContext, input: DeleteUnusedIngredientsInput) => ({
-    context,
-    input,
-  }),
 );
 
 const reparseStaleDefinition = defineCoordinatorStream({

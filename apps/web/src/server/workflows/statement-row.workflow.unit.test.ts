@@ -1,30 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
-
 import {
   deleteStatementRowsWorkflow,
   findStatementRowDriftWorkflow,
-  getStatementRowSummaryWorkflow,
-  listStatementImportsWorkflow,
-  listStatementRowsWorkflow,
   recordStatementRowsWorkflow,
   updateStatementRowsWorkflow,
 } from "./statement-row.server";
 
 describe("statement-row workflow ownership", () => {
-  it("registers browser reads under their public operation identities", () => {
-    for (const operation of [
-      listStatementRowsWorkflow,
-      getStatementRowSummaryWorkflow,
-      listStatementImportsWorkflow,
-    ]) {
-      expect(
-        startOperationDefinitionFor(operation.definition.name),
-      ).toBeDefined();
-    }
-  });
-
   it("keeps the MCP-only drift read on its stable workflow identity", () => {
     expect(findStatementRowDriftWorkflow.definition.name).toBe(
       "statementRow.drift",

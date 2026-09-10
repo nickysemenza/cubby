@@ -116,6 +116,49 @@ Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
 canonical outputs; specialized tool digests retain their own projections.
 
+Declare shared rules once and write only the exceptions:
+
+```ts
+model: {
+  fields: [{
+    key: "name",
+    kind: "text",
+    control: { kind: "text" },
+    display: { list: true, detail: true },
+    validation: {
+      kind: "string",
+      write: { trim: true, min: 1 },
+      read: true,
+      create: true,
+      update: true,
+    },
+  }],
+  storage: ["name"],
+  create: ["name"], update: ["name"], output: ["name"],
+  bulk: [], audit: ["name"],
+}
+```
+
+Field defaults are non-nullable, a label derived from the camel-case key, and a
+read key equal to that key. Use `readKey: null` for fields without a scalar read
+projection. Missing controls and display flags expose no UI. A control defaults
+to the `main` section; a reference defaults to one entity. Explicit labels,
+nullability, read keys, sections, and renderers override these defaults.
+
+Validation properties apply to every enabled mode; `write` properties apply
+only to create/update. Set a mode to `true` to use those shared rules, or give it
+an object of overrides. An omitted mode has no schema. Updates are optional by
+default; `optional: false` preserves an intentionally required update field.
+Create defaults stay in the create override so they cannot leak into reads or
+partial updates. Mode overrides replace individual properties; nested source,
+array-item, and enum definitions are whole values, not recursive patches.
+
+A storage string uses the declared field's kind and nullability, the key as its
+column name, and no database default. An object such as
+`{ key: "name", column: "title" }` overrides only the differing storage facts.
+Stored-field order and create/update/output/bulk/audit rosters remain explicit:
+presentation defaults never grant mutation capabilities or introduce columns.
+
 The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
 `createEntityDisplayColumns` reads `display.list`. Specialized overrides supply

@@ -210,13 +210,6 @@ export const upsertCookbookWorkflow = bindWorkflow(
       }
     })
     .output(({ upserted }) => upserted.output),
-  (
-    context: AuthenticatedStartOperationContext,
-    input: UpsertCookbookInput,
-  ) => ({
-    context,
-    input,
-  }),
 );
 
 type CookbookIdInput = z.output<typeof cookbookIdInput>;
@@ -234,10 +227,6 @@ export const getCookbookSourceWorkflow = bindWorkflow(
       })),
     )
     .output(({ source }) => source),
-  (context: AuthenticatedStartOperationContext, input: CookbookIdInput) => ({
-    context,
-    input,
-  }),
 );
 
 type CookbookRecipePhotoInput = z.output<typeof attachCookbookRecipePhotoInput>;
@@ -474,10 +463,6 @@ export const getCookbookDiffWorkflow = bindWorkflow(
       whenFalse: (branch) => branch.output(() => []),
     })
     .output(({ recipes }) => recipes),
-  (context: AuthenticatedStartOperationContext, input: CookbookDiffInput) => ({
-    context,
-    input,
-  }),
 );
 
 const normalizeNotionId = (id: string) => id.replace(/-/g, "");
@@ -755,13 +740,6 @@ export const deleteCookbookWorkflow = bindWorkflow(
     .output(({ deleted }) => ({
       deletedRecipes: deleted.deletedRecipeIds.length,
     })),
-  (
-    context: AuthenticatedStartOperationContext,
-    input: DeleteCookbookInput,
-  ) => ({
-    context,
-    input,
-  }),
 );
 
 type ReprocessPreparedContext = {

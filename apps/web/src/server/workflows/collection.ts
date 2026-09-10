@@ -106,13 +106,6 @@ export const setCollectionMembership = bindWorkflow(
       collection: input.collection,
       assigned: input.assigned,
     })),
-  (
-    context: CollectionWorkflowContext,
-    input: z.output<typeof collectionTagSetInput>,
-  ) => ({
-    context,
-    input,
-  }),
 );
 
 export const createCollection = bindWorkflow(
@@ -134,11 +127,4 @@ export const createCollection = bindWorkflow(
       if (!summary) throw new Error("Created Collection did not resolve");
       return summary;
     }),
-  (
-    context: CollectionWorkflowContext,
-    input: z.output<typeof collectionCreateInput>,
-  ) => ({
-    context,
-    input,
-  }),
 );

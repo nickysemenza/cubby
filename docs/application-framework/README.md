@@ -62,17 +62,13 @@ Notion preview, cookbook comparison, semantic similarity, recommendations, and
 placement declare their read and decision sequences while retaining domain
 computation and provider ports.
 
-## Compatibility inventory
+## Compatibility
 
-[`baseline.json`](./baseline.json) captures commit
-`a65b1f68f982876a98de33470df1ea9f31f40aaf`: 19 entities, 249 operation IDs,
-32 workflow modules, and 111 route modules. All baseline operation IDs and kinds
-are retained, as are the baseline routes.
-
-[`workflow-status.json`](./workflow-status.json) accounts for the 244 exported
-workflow symbols separately: 235 registered application exports, two supporting
-helpers, and seven infrastructure exports. Counts establish coverage, not
-behavioral parity. Contracts and browser validation provide that evidence.
+The migration preserves the 19 entities, 249 operation IDs and kinds, and 111
+routes present at `a65b1f68f982876a98de33470df1ea9f31f40aaf`. Git retains the
+baseline; generated registries and their exhaustive contract checks own the
+current catalog. Separate migration inventories would duplicate that information
+without validating behavior.
 
 Cookbook and USDA food retain their existing workflow-only/read-only contracts.
 The physical schema snapshot guards column compatibility. Any future physical
@@ -96,3 +92,10 @@ while editing, then the full relevant gates:
 
 Hosted verification is manual. A local passing run does not imply hosted CI ran,
 and registration or an earlier working-tree result is not final-commit validation.
+
+Test shared compilers and runtime behavior with representative contracts, then
+retain domain-specific exceptions and real database/browser integration coverage.
+Do not repeat generated operation-name rosters or primitive form-field enumeration
+in each entity's test file. Generated files are marked in `.gitattributes` for
+GitHub review; handwritten declarations remain visible, and freshness/type checks
+still validate generated outputs.

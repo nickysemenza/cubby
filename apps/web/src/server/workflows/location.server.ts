@@ -78,10 +78,6 @@ export const subtreeWorkflow = bindWorkflow(
       buildLocationTree(context.db, resolve),
     )
     .output(({ read }) => read),
-  (context: LocationWorkflowContext, input: { shortcode: string }) => ({
-    context,
-    input,
-  }),
 );
 export const inventoryBreakdownWorkflow = bindWorkflow(
   workflow<LocationWorkflowContext, { shortcode: string }>(
@@ -94,10 +90,6 @@ export const inventoryBreakdownWorkflow = bindWorkflow(
       getLocationInventoryBreakdown(context.db, resolve),
     )
     .output(({ read }) => read),
-  (context: LocationWorkflowContext, input: { shortcode: string }) => ({
-    context,
-    input,
-  }),
 );
 export const parentOptionsWorkflow = defineWorkflowOperation(
   "location.parentOptions",
