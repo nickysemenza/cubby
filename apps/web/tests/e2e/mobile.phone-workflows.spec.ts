@@ -80,6 +80,12 @@ test("form validation and picker entry remain reachable", async ({ page }) => {
   await picker.fill("Phone parent");
   await page.getByRole("option", { name: /Phone parent pantry/ }).click();
   await expect(picker).toHaveValue("Phone parent pantry — room");
+  const clear = page
+    .getByRole("main")
+    .getByRole("button", { name: /^Clear parent location/i });
+  const target = await clear.boundingBox();
+  expect(target?.width).toBeGreaterThanOrEqual(44);
+  expect(target?.height).toBeGreaterThanOrEqual(44);
   await expectViewportBounded(page);
 });
 

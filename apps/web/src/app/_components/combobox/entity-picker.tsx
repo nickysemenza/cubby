@@ -391,7 +391,7 @@ function EntityPickerInput<TId extends string>({
         {clearable && value ? (
           <ComboboxPrimitive.Clear
             aria-label={`Clear ${label}`}
-            className="flex h-full shrink-0 items-center px-2 text-muted-foreground transition-colors hover:text-foreground"
+            className="flex h-full shrink-0 items-center justify-center px-2 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => {
               event.stopPropagation();
