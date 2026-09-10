@@ -6,10 +6,20 @@ real Zod schemas for read, create, and update modes. The generator imports these
 modules and emits references to the declared schemas; it never serializes Zod
 internals or reconstructs refinements.
 
+`definition.ts` owns the strict metadata schemas and their inferred declaration
+types. `defineEntity` preserves literals without parsing at runtime; the compiler
+parses metadata and applies defaults before typed compilation. Cross-entity
+references, capability compatibility, field rosters, and physical storage remain
+semantic compiler checks. Field-validation Zod instances pass through unchanged.
+
 Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
 Browser metadata is generated separately and contains no executable schemas.
+
+Generated detail and list type maps derive from their schema maps, preserving
+the entity key's input/output correlation. These schema-contract artifacts remain
+separate from browser metadata and executable server bindings.
 A transitive import guard protects this boundary; shared identifier and field
 primitives compose domain projections without importing generated schema maps.
 
