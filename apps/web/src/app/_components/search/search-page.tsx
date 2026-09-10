@@ -11,7 +11,14 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import { ChevronRight, MapPin, Search } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { z } from "zod";
 
 import { MobileCard } from "~/components/entity/mobile-card";
@@ -21,7 +28,6 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { EntityIcon, entities } from "~/entities/entities";
-import { focusOnMount } from "~/hooks/focus-on-mount";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useIsMobile } from "~/hooks/useMobile";
 import { search } from "~/lib/search.functions";
@@ -67,6 +73,12 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     useEntityPreview();
   const [draft, setDraft] = useState(query);
   const relatedHeadingId = useId();
+  const initialQuery = useRef(query);
+  const inputRef = useCallback((node: HTMLInputElement | null) => {
+    // Focus a fresh search surface for immediate typing, but preserve the
+    // keyboard state when returning to an existing query or clearing it.
+    if (node && initialQuery.current.trim().length === 0) node.focus();
+  }, []);
   const [debouncedDraft] = useDebouncedValue(draft, { wait: 150 });
   const [relatedDraft] = useDebouncedValue(draft, { wait: 450 });
   const entityTypes = type === "all" ? undefined : [type];
@@ -154,7 +166,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
                 );
             }}
             className="min-h-11 pl-6 md:min-h-0"
-            ref={focusOnMount}
+            ref={inputRef}
           />
         </div>
         <SearchFilter

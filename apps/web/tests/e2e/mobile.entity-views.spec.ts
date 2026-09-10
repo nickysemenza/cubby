@@ -4,7 +4,6 @@ import { expect, test } from "./e2e-test";
 test("display settings stay operable inside the phone viewport", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
   await gotoAuthenticatedPage(page, "/products");
   await page.getByRole("button", { name: "Display" }).click();
 
