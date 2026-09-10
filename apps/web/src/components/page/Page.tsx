@@ -259,7 +259,7 @@ function DetailPageShell(props: PageDetailProps) {
     : "Loading records…";
   return (
     <PageWrapper layout={props.layout}>
-      <div className="space-y-2">
+      <div className="space-y-4 md:space-y-2">
         <PageHeader {...props} variant="detail" count={undefined} />
         <PageIdentityContext.Provider value={null}>
           <PageDetailContext.Provider

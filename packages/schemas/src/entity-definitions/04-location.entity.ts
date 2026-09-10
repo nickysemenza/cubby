@@ -218,7 +218,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, detail: true, columnId: "image" },
+        display: { list: true, detail: false, columnId: "image" },
         validation: {
           read: z.array(imageOut),
           create: null,
@@ -229,7 +229,7 @@ export default defineEntity({
         key: "valuation",
         kind: "json",
         nullable: true,
-        display: { list: true, detail: true, columnId: "valuation" },
+        display: { list: true, detail: false, columnId: "valuation" },
         validation: {
           read: locationValuation.nullable(),
           create: null,

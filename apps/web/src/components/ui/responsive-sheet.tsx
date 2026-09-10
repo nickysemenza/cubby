@@ -38,7 +38,7 @@ export function ResponsiveSheet({
           className,
         )}
       >
-        <SheetHeader className="border-border border-b p-4">
+        <SheetHeader className="shrink-0 border-border border-b p-4 pr-16">
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>

@@ -112,7 +112,7 @@ function EntityPickerItem<TId extends string>({
           .filter(Boolean)
           .join(" ")}
         className={cn(
-          "relative flex cursor-default items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none select-none",
+          "relative flex min-h-9 cursor-default items-center gap-2 rounded-none px-2 py-2 text-left text-sm outline-none select-none max-sm:min-h-11",
           "data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[selected]:bg-accent/50",
           "data-disabled:cursor-not-allowed data-disabled:bg-muted/20 data-disabled:text-muted-foreground",
           renderItem && "items-start whitespace-normal",
@@ -167,10 +167,12 @@ function EntityPickerItemContent<TId extends string>({
     return <span className="min-w-0 flex-1">{renderItem(item)}</span>;
   return (
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="flex min-w-0 items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+      <span className="flex min-w-0 items-baseline gap-2 max-sm:flex-wrap max-sm:gap-x-2">
+        <span className="min-w-0 flex-1 truncate max-sm:basis-full">
+          {item.name}
+        </span>
         {item.secondary ? (
-          <span className="max-w-40 truncate text-xs text-muted-foreground">
+          <span className="max-w-40 truncate text-xs text-muted-foreground max-sm:max-w-full">
             {item.secondary}
           </span>
         ) : null}
@@ -275,7 +277,7 @@ function EntityPickerPopup<TId extends string>({
       >
         <ComboboxPrimitive.Popup
           className={cn(
-            "max-w-(--available-width) origin-(--transform-origin) rounded-none border border-[var(--border)] bg-popover text-popover-foreground",
+            "flex max-h-[min(var(--available-height),calc(var(--app-viewport-height,100dvh)_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1rem),34rem)] max-w-(--available-width) origin-(--transform-origin) flex-col overflow-hidden rounded-none border border-[var(--border)] bg-popover text-popover-foreground",
             "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             wide
               ? "w-[min(44rem,calc(100vw-16px))]"
@@ -287,7 +289,7 @@ function EntityPickerPopup<TId extends string>({
             <button
               type="button"
               aria-label={`Clear ${label}`}
-              className="flex w-full items-center gap-2 border-b border-[var(--border)] px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="flex min-h-9 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -300,7 +302,7 @@ function EntityPickerPopup<TId extends string>({
               Clear {label}
             </button>
           ) : null}
-          <ComboboxPrimitive.List className="max-h-[min(var(--available-height),28rem)] overflow-y-auto overscroll-contain p-1 outline-none">
+          <ComboboxPrimitive.List className="max-h-112 min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none">
             {orderedItems.map((item, index) => (
               <EntityPickerItem
                 key={item.id}
@@ -311,7 +313,7 @@ function EntityPickerPopup<TId extends string>({
             ))}
           </ComboboxPrimitive.List>
           {showStatus ? (
-            <div className="border-t border-[var(--border)] px-2 py-4 text-sm">
+            <div className="shrink-0 border-t border-[var(--border)] px-2 py-4 text-sm">
               {isLoading ? (
                 <span className="flex items-center gap-2 text-muted-foreground">
                   <Spinner /> Searching…
@@ -327,7 +329,7 @@ function EntityPickerPopup<TId extends string>({
             <button
               type="button"
               disabled={isCreating}
-              className="flex w-full items-center border-t border-[var(--border)] px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
+              className="flex min-h-9 w-full shrink-0 items-center border-t border-[var(--border)] px-2 py-2 text-left text-sm hover:bg-accent disabled:opacity-50 max-sm:min-h-11"
               onClick={handleCreate}
             >
               {isCreating
@@ -371,7 +373,7 @@ function EntityPickerInput<TId extends string>({
         className={cn(
           "flex min-w-0 flex-1 items-center border border-border bg-input/20 transition-colors focus-within:border-ring focus-within:ring-[2px] focus-within:ring-ring/30 hover:bg-input/30",
           "rounded-sm",
-          compact ? "h-7" : "h-9 max-sm:h-10",
+          compact ? "h-7 max-sm:h-11" : "h-9 max-sm:h-11",
         )}
       >
         <ComboboxPrimitive.Input
@@ -381,7 +383,9 @@ function EntityPickerInput<TId extends string>({
           placeholder={placeholder ?? `Select ${label}…`}
           className={cn(
             "min-w-0 flex-1 bg-transparent px-2 outline-none placeholder:text-muted-foreground",
-            compact ? "text-xs/relaxed" : "text-sm",
+            compact
+              ? "text-xs/relaxed max-sm:text-base"
+              : "text-sm max-sm:text-base",
           )}
         />
         {clearable && value ? (

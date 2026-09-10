@@ -129,7 +129,7 @@ export function RecipeScaleControl({
   const activeChip = QUICK_FACTORS.find((f) => f === factor);
 
   return (
-    <Row align="center" gap="sm">
+    <Row align="center" wrap gap="sm" className="max-sm:w-full">
       <span className="eyebrow">Scale</span>
 
       {/* Quick ×-chips */}
@@ -148,6 +148,7 @@ export function RecipeScaleControl({
             key={f}
             value={String(f)}
             aria-label={`Scale ${factorLabel(f)}`}
+            className="max-sm:min-h-11"
           >
             {factorLabel(f)}
           </ToggleGroupItem>
@@ -158,13 +159,13 @@ export function RecipeScaleControl({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="max-sm:min-h-11">
               <Scaling className="mr-1 size-3" />
               {scaled ? `${Number(factor.toFixed(2))}×` : "Custom"}
             </Button>
           }
         />
-        <PopoverContent className="w-72 space-y-4">
+        <PopoverContent className="w-[min(18rem,calc(100vw-2rem))] space-y-4">
           <Stack gap="sm">
             <Label className="eyebrow">Scale by</Label>
             <ToggleGroup
@@ -247,7 +248,7 @@ export function RecipeScaleControl({
                 disabled={mode === "ingredient" && !selectedRow}
               />
             </Stack>
-            <Button type="submit" size="sm">
+            <Button type="submit" size="sm" className="max-sm:min-h-11">
               Apply
             </Button>
           </Row>

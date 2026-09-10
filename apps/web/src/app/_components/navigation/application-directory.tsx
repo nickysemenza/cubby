@@ -49,9 +49,8 @@ export function ApplicationDirectory({
     <Page
       variant="list"
       title={mode === "activities" ? "Activities" : "Records"}
-      mobileTitleVisible
     >
-      <Stack gap="lg">
+      <Stack gap="md">
         <Row gap="sm" wrap className="border-b border-border pb-3">
           <Button
             variant={mode === "activities" ? "secondary" : "ghost"}
@@ -185,7 +184,7 @@ function DirectoryLink({
         aria-labelledby={labelId}
         aria-describedby={descriptionId}
         preload="intent"
-        className="group flex min-h-11 items-start gap-3 rounded-md px-2 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="group flex min-h-11 items-start gap-3 rounded-md px-2 py-3 hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-muted"
       >
         <destination.icon
           className="mt-0.5 size-4 shrink-0 text-muted-foreground"
@@ -194,7 +193,7 @@ function DirectoryLink({
         <span className="min-w-0 flex-1">
           <span
             id={labelId}
-            className="block text-sm font-medium group-hover:text-primary"
+            className="block text-sm font-medium break-words group-hover:text-primary"
           >
             {destination.label}
           </span>

@@ -71,7 +71,7 @@ export function ShoppingListPage({
 
   return (
     <Stack>
-      <Row align="end" wrap gap="md" className="print:hidden">
+      <Row align="end" wrap gap="md" className="w-full print:hidden">
         <Stack gap="xs">
           <label htmlFor={fromId} className="text-xs text-muted-foreground">
             From
@@ -80,7 +80,7 @@ export function ShoppingListPage({
             id={fromId}
             value={range.from || null}
             clearable
-            className="w-44"
+            className="w-full sm:w-44"
             onChange={(value) =>
               onRangeChange({ from: value ?? undefined, to })
             }
@@ -94,17 +94,22 @@ export function ShoppingListPage({
             id={toId}
             value={range.to || null}
             clearable
-            className="w-44"
+            className="w-full sm:w-44"
             onChange={(value) =>
               onRangeChange({ from, to: value ?? undefined })
             }
           />
         </Stack>
-        <Row gap="sm" align="center" className="ml-auto print:hidden">
+        <Row
+          gap="sm"
+          align="center"
+          className="ml-auto w-full justify-end sm:w-auto print:hidden"
+        >
           <Button
             type="button"
             variant="outline"
             size="sm"
+            className="min-h-11"
             disabled={
               isFetching || (rows.length === 0 && unexpanded.length === 0)
             }
@@ -126,6 +131,7 @@ export function ShoppingListPage({
             type="button"
             variant="outline"
             size="sm"
+            className="min-h-11"
             disabled={remaining === buyRows.length}
             onClick={clearChecked}
           >
