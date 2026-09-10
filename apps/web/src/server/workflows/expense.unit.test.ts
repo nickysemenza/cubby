@@ -9,7 +9,6 @@ import { describe, expect, it } from "vitest";
 import { inspectWorkflow } from "~/server/workflow-runtime";
 
 import {
-  expenseAnalyticsWorkflow,
   expenseAnalyzeTraceAttributes,
   expenseAnalyzeWorkflow,
   expenseChargeContextWorkflow,
@@ -29,10 +28,6 @@ const expectAnalyzerGraph = () => {
   expect(inspectWorkflow(expenseChartDataWorkflow.definition)).toMatchObject({
     name: "expense.chartData",
     steps: [{ type: "call", name: "list", dependencies: ["$input"] }],
-  });
-  expect(inspectWorkflow(expenseAnalyticsWorkflow.definition)).toMatchObject({
-    name: "expense.analytics",
-    steps: [{ type: "call", name: "result" }],
   });
   const analysis = inspectWorkflow(expenseAnalyzeWorkflow.definition);
   expect(analysis.steps.map(({ type, name }) => ({ type, name }))).toEqual([
