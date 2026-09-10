@@ -10,6 +10,7 @@ import {
   auditLog,
   ingredient,
   inventoryEntry,
+  product,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getAuditLog } from "~/server/repo/audit-log";
@@ -28,6 +29,8 @@ import { findOrphanedEntityEmbeddings } from "./entity-embedding";
 import { patchEntityRows } from "./entity-patch";
 import {
   createIngredient,
+  enrichmentWorkbenchIngredients,
+  getIngredientsByIDsLean,
   deleteIngredients,
   findOrCreateIngredient,
   getIngredientByID,
@@ -38,13 +41,71 @@ import {
 } from "./ingredient";
 import {
   createRecipeFixture as createRecipe,
+  createProductFixture,
   ingredientRef,
   makeRecipeInput,
+  makeProductInput,
 } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("ingredient", () => {
   const ctx = withTestDb();
+
+  it("loads workbench gaps without enriching soft-deleted linked products", async () => {
+    const item = await createIngredient(
+      ctx.db,
+      { name: "Workbench fixture" },
+      ctx.actor,
+    );
+    await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Workbench recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [],
+            ingredients: [ingredientRef(item.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const live = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Live fixture", ingredientId: item.id }),
+      ctx.actor,
+    );
+    const removed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Removed fixture", ingredientId: item.id }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, removed.entityId));
+    const rows = await enrichmentWorkbenchIngredients(ctx.db);
+    expect(
+      rows
+        .find((row) => row.id === item.id)
+        ?.product.map((linked) => linked.id),
+    ).toEqual([live.id]);
+    const id = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, item.id, "ingredient"))!,
+    );
+    const detail = await getIngredientByID(ctx.db, id);
+    expect(detail?.product.map((linked) => linked.id)).toEqual([live.id]);
+    const lean = await getIngredientsByIDsLean(ctx.db, [id]);
+    expect(lean[0]?.product.map((linked) => linked.id)).toEqual([live.id]);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, live.entityId));
+    const gaps = await enrichmentWorkbenchIngredients(ctx.db);
+    expect(gaps.find((row) => row.id === item.id)?.product).toEqual([]);
+  });
 
   it("streams declared enrichment windows with public ids and skips unresolved subjects", async () => {
     const items = [];
@@ -399,30 +460,6 @@ describe("ingredient", () => {
     expect(keeper).toBeDefined();
     expect(keeper!.aliases).toHaveLength(0);
   });
-
-  // `dryRun` is gone: `previewMergeIngredients` (preview_entity_operation) is
-  // the preview, and it reads the same edge policy the mutation writes against.
-  // What replaced the dry run's exactness on this path is `merged` — the rows
-  // the DELETE actually removed, not the count the caller asked for.
-
-  // Regression: the lean workbench fetch uses a relational query with raw-SQL
-  // `extras` (recipeCount/cookbookOnly correlated subqueries) — exercise it end to
-  // end so a Drizzle codegen break can't slip past typecheck. Replaced the 24 MB
-  // full-relation fetch that made the workbench ~40s.
-
-  // Regression: the ingredient list is lean — `appearsInRecipes` is {id,name}
-  // refs (count + first pill), NOT the full recipe bodies / recipeUsages the old
-  // `relations.ingredient.full` shipped (the over-fetch).
-
-  // Regression: `productPresenceFilter` replaced the old boolean
-  // `missingProductsOnly` param — "has" and "none" must partition ingredients
-  // by whether they have at least one linked product, and the count returned
-  // alongside the page must match (a plain leftJoin+count() over-counts "has"
-  // once an ingredient has more than one product; the fix groups by ingredient
-  // id before counting).
-
-  // Regression: the presence join must carry notDeleted(product) — an
-  // ingredient whose only product is soft-deleted counts as "none", not "has".
 });
 
 describe("deleteIngredients", () => {

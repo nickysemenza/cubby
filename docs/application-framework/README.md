@@ -14,6 +14,8 @@ identifies the migrated surfaces and their remaining domain ports.
 
 - Typed declarations co-locate real Zod schemas and declare field validation, stored columns, create/update/output
   policies, bulk and audit rosters, references, filters, and presentation.
+  Shared field, control, and storage vocabularies also constrain the compiler;
+  there is one supported authored declaration shape.
 - Generated schema maps reference declared Zod objects; column factories retain
   the physical storage policy. Canonical schemas compose those maps with relationship projections and domain
   refinements. Changing source ownership does not apply a database migration.
@@ -50,6 +52,8 @@ exposes the same executable definition used by the inspector.
 Argument adapters supply context and input; application decisions belong to named
 steps. A single repository transaction, provider operation, or pure computation
 uses an ordinary registered function when it needs no graph sequencing.
+These functions execute directly with tracing and expose their operation identity
+to inspection; they do not allocate a one-step workflow graph.
 Repositories exclusively own transactions; the workflow runtime has no transaction
 adapters, transaction nodes, or after-commit queues.
 

@@ -4,6 +4,16 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  entityFieldControlKinds as fieldControlKinds,
+  entityFieldKinds as fieldKinds,
+  entityStorageDefaultKinds as storageDefaultKinds,
+} from "../packages/schemas/src/entity-definitions/definition.ts";
+import type {
+  EntityFieldControlKind,
+  EntityFieldKind,
+  EntityStorageDefaultKind,
+} from "../packages/schemas/src/entity-definitions/definition.ts";
 import { z } from "zod";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,25 +83,8 @@ type RelationMutation = Readonly<{
   audiences: readonly ("browser" | "mcp")[];
 }>;
 type OperationOwner = "kernel" | "workflow" | null;
-type EntityFieldKind =
-  | "text"
-  | "text-array"
-  | "number"
-  | "boolean"
-  | "date"
-  | "timestamp"
-  | "enum"
-  | "json"
-  | "identifier";
 type EntityFieldControl = Readonly<{
-  kind:
-    | "text"
-    | "textarea"
-    | "checkbox"
-    | "select"
-    | "date"
-    | "number"
-    | "specialized";
+  kind: EntityFieldControlKind;
   renderer: string | null;
   options: readonly Readonly<{ value: string; label: string }>[] | null;
   section: string;
@@ -124,7 +117,7 @@ type EntityStorageField = Readonly<{
   column: string;
   kind: EntityFieldKind;
   nullable: boolean;
-  default: "none" | "generated" | "now" | "literal";
+  default: EntityStorageDefaultKind;
   defaultValue: DeclarationValue;
   reference: string | null;
   specialized: string | null;
@@ -415,30 +408,6 @@ const stringArray = (value: DeclarationValue, context: string): string[] => {
   }
   return values;
 };
-
-const fieldKinds = [
-  "text",
-  "text-array",
-  "number",
-  "boolean",
-  "date",
-  "timestamp",
-  "enum",
-  "json",
-  "identifier",
-] as const;
-
-const fieldControlKinds = [
-  "text",
-  "textarea",
-  "checkbox",
-  "select",
-  "date",
-  "number",
-  "specialized",
-] as const;
-
-const storageDefaultKinds = ["none", "generated", "now", "literal"] as const;
 
 const parsedFieldKind = (
   value: DeclarationValue,
@@ -1002,40 +971,6 @@ const normalizedEntitySource = (
   raw: DeclarationObject,
   context: string,
 ): DeclarationObject => {
-  if (raw.descriptor !== undefined) {
-    const rawDescriptor = objectValue(raw.descriptor, `${context}.descriptor`);
-    const lifecycle =
-      rawDescriptor.lifecycle === undefined
-        ? null
-        : objectValue(
-            rawDescriptor.lifecycle,
-            `${context}.descriptor.lifecycle`,
-          );
-    const hasRepository = raw.ports !== undefined;
-    return {
-      filters: { audit: false, descriptors: [] },
-      inspector: {
-        singular: required(raw, "key", context),
-        plural: null,
-        titleField: "name",
-      },
-      operationOwners: raw.operationOwners ?? {
-        delete:
-          lifecycle === null || lifecycle.delete === null
-            ? null
-            : hasRepository
-              ? "kernel"
-              : "workflow",
-        merge:
-          lifecycle?.merge === true
-            ? hasRepository
-              ? "kernel"
-              : "workflow"
-            : null,
-      },
-      ...raw,
-    };
-  }
   exactKeys(
     raw,
     [
@@ -1107,10 +1042,10 @@ const normalizedEntitySource = (
     ["countFilter", "relatednessSignals", "mcpNames", "ports"],
     `${context}.extensions`,
   );
-  validateLegacyCapabilities(raw, capabilities, context);
-  const relations = normalizedLegacyRelations(raw, context);
-  const route = normalizedLegacyRoute(raw, context);
-  const descriptor = legacyDescriptor(
+  validateDeclarationCapabilities(raw, capabilities, context);
+  const relations = normalizedDeclarationRelations(raw, context);
+  const route = normalizedDeclarationRoute(raw, context);
+  const descriptor = declarationDescriptor(
     raw,
     identifiers,
     capabilities,
@@ -1120,7 +1055,7 @@ const normalizedEntitySource = (
     extensions,
     context,
   );
-  return normalizedLegacyEntity(
+  return normalizedDeclarationEntity(
     raw,
     names,
     presentation,
@@ -1132,7 +1067,7 @@ const normalizedEntitySource = (
   );
 };
 
-const validateLegacyCapabilities = (
+const validateDeclarationCapabilities = (
   raw: DeclarationObject,
   capabilities: DeclarationObject,
   context: string,
@@ -1273,7 +1208,7 @@ const validateLegacyCapabilities = (
 // Keep relation normalization in one diagnostic context: every rejected field
 // must identify the same literal relation path, including nested sources.
 // oxlint-disable-next-line eslint/complexity
-const normalizedLegacyRelations = (
+const normalizedDeclarationRelations = (
   raw: DeclarationObject,
   context: string,
 ): DeclarationValue[] => {
@@ -1438,7 +1373,7 @@ const normalizedLegacyRelations = (
   return relations;
 };
 
-const normalizedLegacyRoute = (
+const normalizedDeclarationRoute = (
   raw: DeclarationObject,
   context: string,
 ): DeclarationValue => {
@@ -1453,7 +1388,7 @@ const normalizedLegacyRoute = (
   return route;
 };
 
-const legacyDescriptor = (
+const declarationDescriptor = (
   raw: DeclarationObject,
   identifiers: DeclarationObject,
   capabilities: DeclarationObject,
@@ -1517,7 +1452,7 @@ const legacyDescriptor = (
   return descriptor;
 };
 
-const normalizedLegacyEntity = (
+const normalizedDeclarationEntity = (
   raw: DeclarationObject,
   names: DeclarationObject,
   presentation: DeclarationObject,

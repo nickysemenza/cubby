@@ -289,44 +289,6 @@ const buildDefinition = <E extends EditableEntity>(
   };
 };
 
-type EntityEditBuilders = {
-  readonly [E in EditableEntity]: (
-    f: EntityEditBuilder<E>,
-  ) => EntityEditBody<E>;
-};
-
-/**
- * Completeness and per-entity correlation are declaration-site errors: the
- * mapped parameter demands every editable entity and hands each builder an `f`
- * bound to its own key, so a definition cannot name a different entity.
- */
-const defineEntityEdits = (
-  builders: EntityEditBuilders,
-): EntityEditRegistry => ({
-  product: buildDefinition("product", builders.product),
-  ingredient: buildDefinition("ingredient", builders.ingredient),
-  inventory: buildDefinition("inventory", builders.inventory),
-  location: buildDefinition("location", builders.location),
-  recipe: buildDefinition("recipe", builders.recipe),
-  meal: buildDefinition("meal", builders.meal),
-  project: buildDefinition("project", builders.project),
-  task: buildDefinition("task", builders.task),
-  expense: buildDefinition("expense", builders.expense),
-  vendor: buildDefinition("vendor", builders.vendor),
-  purchase: buildDefinition("purchase", builders.purchase),
-  financialAccount: buildDefinition(
-    "financialAccount",
-    builders.financialAccount,
-  ),
-  financialTransaction: buildDefinition(
-    "financialTransaction",
-    builders.financialTransaction,
-  ),
-  wish: buildDefinition("wish", builders.wish),
-  ledgerParty: buildDefinition("ledgerParty", builders.ledgerParty),
-  ledgerTransfer: buildDefinition("ledgerTransfer", builders.ledgerTransfer),
-});
-
 const requiredDate =
   (
     fieldId: "date" | "dueDate",
@@ -440,6 +402,32 @@ const normalizeFinancialTransaction = (
   }
   return normalized;
 };
+
+const purchaseFields = [
+  "vendorId",
+  "date",
+  "orderId",
+  "displayLabel",
+  "statedTotal",
+  "notes",
+] as const;
+
+const financialTransactionFields = [
+  "accountId",
+  "purchaseId",
+  "kind",
+  "status",
+  "amount",
+  "transactionDate",
+  "postedDate",
+  "merchant",
+  "rawDescription",
+  "sourceCategory",
+  "sourceRefs",
+  "notes",
+] as const;
+
+const vendorCreateDefaults = { name: "", website: null, notes: null } as const;
 
 /**
  * Semantic capabilities, rather than presentation surfaces, choose editable
@@ -593,22 +581,8 @@ const semanticFields = {
     identity: ["name"],
   },
   purchase: {
-    capture: [
-      "vendorId",
-      "date",
-      "orderId",
-      "displayLabel",
-      "statedTotal",
-      "notes",
-    ],
-    full: [
-      "vendorId",
-      "date",
-      "orderId",
-      "displayLabel",
-      "statedTotal",
-      "notes",
-    ],
+    capture: purchaseFields,
+    full: purchaseFields,
     vendor: ["vendorId"],
     identity: ["date", "orderId", "notes"],
   },
@@ -630,34 +604,8 @@ const semanticFields = {
     identity: ["name", "provisional", "sourceAliases", "notes"],
   },
   financialTransaction: {
-    capture: [
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
-    ],
-    full: [
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
-    ],
+    capture: financialTransactionFields,
+    full: financialTransactionFields,
     settlement: [
       "accountId",
       "purchaseId",
@@ -694,8 +642,8 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  * These are field fragments and commands, not form components: desktop pages,
  * dialogs, calendar sheets, and cells stay adapters at their own seams.
  */
-export const entityEditRegistry = defineEntityEdits({
-  product: (f) => ({
+export const entityEditRegistry: EntityEditRegistry = {
+  product: buildDefinition("product", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       manufacturer: { required: true },
@@ -703,31 +651,31 @@ export const entityEditRegistry = defineEntityEdits({
     }),
     create: ["capture", "full"],
     update: ["full", "identity", "price", "stock"],
-  }),
-  ingredient: (f) => ({
+  })),
+  ingredient: buildDefinition("ingredient", (f) => ({
     fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
     create: ["capture", "full"],
     update: ["full", "identity"],
-  }),
-  inventory: (f) => ({
+  })),
+  inventory: buildDefinition("inventory", (f) => ({
     fields: f.fieldsFrom(["full"]),
     create: ["capture", "full"],
     update: ["full", "amount", "product", "location", "placement"],
-  }),
-  location: (f) => ({
+  })),
+  location: buildDefinition("location", (f) => ({
     fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
     create: ["capture", "full"],
     update: ["full", "identity", "parent"],
-  }),
-  recipe: (f) => ({
+  })),
+  recipe: buildDefinition("recipe", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       notes: "nullableText",
     }),
     create: ["capture", "full"],
     update: ["full", "identity"],
-  }),
-  meal: (f) => ({
+  })),
+  meal: buildDefinition("meal", (f) => ({
     fields: f.fieldsFrom(["full"], {
       date: { required: true },
       name: "nullableText",
@@ -752,8 +700,8 @@ export const entityEditRegistry = defineEntityEdits({
       },
     },
     update: ["full", "calendar"],
-  }),
-  project: (f) => ({
+  })),
+  project: buildDefinition("project", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       icon: "nullableText",
@@ -775,8 +723,8 @@ export const entityEditRegistry = defineEntityEdits({
       full: { defaults: { status: "planning", kind: null } },
     },
     update: ["full", "status", "kind", "dates", "parent"],
-  }),
-  task: (f) => ({
+  })),
+  task: buildDefinition("task", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       dueEndDate: {
@@ -827,8 +775,8 @@ export const entityEditRegistry = defineEntityEdits({
       subject: {},
       schedule: { validate: requiredDate("dueDate") },
     },
-  }),
-  expense: (f) => ({
+  })),
+  expense: buildDefinition("expense", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       url: "nullableText",
@@ -886,8 +834,8 @@ export const entityEditRegistry = defineEntityEdits({
         validate: requiredDate("date"),
       },
     },
-  }),
-  vendor: (f) => ({
+  })),
+  vendor: buildDefinition("vendor", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       website: "nullableText",
@@ -895,12 +843,12 @@ export const entityEditRegistry = defineEntityEdits({
       notes: "nullableText",
     }),
     create: {
-      capture: { defaults: { name: "", website: null, notes: null } },
-      full: { defaults: { name: "", website: null, notes: null } },
+      capture: { defaults: vendorCreateDefaults },
+      full: { defaults: vendorCreateDefaults },
     },
     update: ["full", "identity"],
-  }),
-  purchase: (f) => ({
+  })),
+  purchase: buildDefinition("purchase", (f) => ({
     fields: f.fieldsFrom(["full"], {
       vendorId: { required: true },
       date: { required: true },
@@ -926,8 +874,8 @@ export const entityEditRegistry = defineEntityEdits({
       full: { defaults: { statedTotal: null } },
     },
     update: ["full", "vendor", "identity"],
-  }),
-  financialAccount: (f) => ({
+  })),
+  financialAccount: buildDefinition("financialAccount", (f) => ({
     fields: f.fieldsFrom(["capture", "full"], {
       name: "trimmedName",
       notes: "nullableText",
@@ -969,8 +917,8 @@ export const entityEditRegistry = defineEntityEdits({
       },
       identity: {},
     },
-  }),
-  financialTransaction: (f) => ({
+  })),
+  financialTransaction: buildDefinition("financialTransaction", (f) => ({
     fields: f.fieldsFrom(["capture", "full"], {
       accountId: { required: true },
       amount: {
@@ -1031,8 +979,8 @@ export const entityEditRegistry = defineEntityEdits({
       full: { acceptsSeed: true, buildData: normalizeFinancialTransaction },
       settlement: {},
     },
-  }),
-  wish: (f) => ({
+  })),
+  wish: buildDefinition("wish", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       notes: "nullableText",
@@ -1050,10 +998,10 @@ export const entityEditRegistry = defineEntityEdits({
       identity: {},
       acquisition: {},
     },
-  }),
+  })),
   // No editor is rendered for these yet — create/update stay on MCP — but the
   // builders must exist for the registry to be exhaustive over EditableEntity.
-  ledgerParty: (f) => ({
+  ledgerParty: buildDefinition("ledgerParty", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",
       notes: "nullableText",
@@ -1062,8 +1010,8 @@ export const entityEditRegistry = defineEntityEdits({
       full: { defaults: { name: "", kind: "member", notes: null } },
     },
     update: { full: { acceptsSeed: true } },
-  }),
-  ledgerTransfer: (f) => ({
+  })),
+  ledgerTransfer: buildDefinition("ledgerTransfer", (f) => ({
     fields: f.fieldsFrom(["full"], {
       fromPartyId: { required: true },
       toPartyId: { required: true },
@@ -1083,5 +1031,5 @@ export const entityEditRegistry = defineEntityEdits({
       },
     },
     update: { full: { acceptsSeed: true } },
-  }),
-});
+  })),
+};

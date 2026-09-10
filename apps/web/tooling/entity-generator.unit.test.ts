@@ -24,12 +24,37 @@ afterEach(async () => {
 });
 const base = {
   key: "alpha",
-  descriptor: {
+  names: { singular: "Alpha", plural: "Alphas" },
+  route: null,
+  table: null,
+  identifiers: { brand: null, shortcode: null, legacy: null },
+  presentation: { titleField: "name" },
+  fields: null,
+  filters: { descriptors: [] },
+  relations: [],
+  search: { enabled: false },
+  capabilities: {
     auditable: false,
-    searchable: false,
-    lifecycle: { delete: null, merge: false },
+    images: false,
+    countable: false,
+    softDelete: false,
+    delete: null,
+    bulkUpdate: null,
+    merge: false,
+    operationOwners: { delete: null, merge: null },
+    mcp: [],
   },
-  contract: null,
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: null,
+      references: { label: null, resolver: null },
+      filters: null,
+      search: { projection: null, semanticText: null, dependentRefresh: null },
+    },
+  },
 };
 const model = {
   fields: [
@@ -164,9 +189,7 @@ describe("typed entity compiler", () => {
   });
 
   it("retains actual schemas and explicit policies while defaulting presentation and storage", () => {
-    const entity = compileEntityDeclarations([
-      { ...base, fieldModel: model },
-    ])[0]!;
+    const entity = compileEntityDeclarations([{ ...base, model }])[0]!;
     const field = entity.fieldModel.fields[0]!;
     expect(field).toMatchObject({
       key: "name",
@@ -203,7 +226,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          fieldModel: {
+          model: {
             ...model,
             fields: [{ key: "name", kind: "text", ...patch }],
           },
@@ -216,7 +239,7 @@ describe("typed entity compiler", () => {
     const entity = compileEntityDeclarations([
       {
         ...base,
-        fieldModel: {
+        model: {
           ...model,
           fields: [
             {
@@ -251,7 +274,7 @@ describe("typed entity compiler", () => {
     });
     expect(() =>
       compileEntityDeclarations([
-        { ...base, fieldModel: { ...model, storage: ["missing"] } },
+        { ...base, model: { ...model, storage: ["missing"] } },
       ]),
     ).toThrow("references undeclared field missing");
   });
@@ -264,7 +287,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          fieldModel: { ...model, fields: [{ key: "name", kind, display }] },
+          model: { ...model, fields: [{ key: "name", kind, display }] },
         },
       ]);
     expect(() => compile({ standard: "unknown" })).toThrow(/./u);
@@ -285,10 +308,10 @@ describe("typed entity compiler", () => {
     const named = (key: string, shortcode: string, legacy = "A-") => ({
       ...base,
       key,
-      descriptor: {
-        ...base.descriptor,
-        shortcodePrefix: shortcode,
-        legacyShortcodePrefix: legacy,
+      identifiers: {
+        ...base.identifiers,
+        shortcode,
+        legacy,
       },
     });
     expect(() =>
@@ -310,16 +333,12 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          ports: {
-            repository: null,
-            references: { label: null, resolver: null },
-            filters: null,
-            search: {
-              projection: null,
-              semanticText: null,
-              dependentRefresh: null,
+          extensions: {
+            ...base.extensions,
+            ports: {
+              ...base.extensions.ports,
+              lifecycle: {},
             },
-            lifecycle: {},
           },
         },
       ]),
@@ -328,7 +347,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          contract: {
+          fields: {
             create: null,
             update: null,
             output: { module: "@cubby/schemas/example", export: "output" },
@@ -407,7 +426,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          descriptor: { ...base.descriptor, auditable: true },
+          capabilities: { ...base.capabilities, auditable: true },
           filters: { audit: true, descriptors: [] },
         },
       ])[0]?.filterUrlKeys,

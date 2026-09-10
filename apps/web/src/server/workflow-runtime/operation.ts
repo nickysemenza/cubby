@@ -1,33 +1,33 @@
-import {
-  callStep,
-  defineWorkflow,
-  defineWorkflowFunction,
-  workflowInput,
-  type WorkflowDefinition,
+import { withTrace } from "~/server/tracing";
+
+import type {
+  WorkflowDefinition,
+  WorkflowOperationDefinition,
 } from "./definition";
 import { executeWorkflow, type WorkflowExecutionOptions } from "./execute";
 
-/** A one-function operation needs no handwritten orchestration wrapper. Its
- * definition remains available to the same inspector as multi-step workflows.
+/** A one-function operation executes directly. Its identity remains available
+ * to the workflow inspector without lowering the function into a graph node.
  * Args are server-only execution arguments, never a transport schema. */
 export function defineWorkflowOperation<
   Args extends readonly unknown[],
   Output,
 >(name: string, implementation: (...args: Args) => Promise<Output>) {
-  const fn = defineWorkflowFunction<undefined, Args, Output>(
-    name,
-    async (_, args) => await implementation(...args),
+  const definition: WorkflowOperationDefinition = { name };
+  return Object.assign(
+    (...args: Args) =>
+      withTrace(
+        `workflow.${name}`,
+        () =>
+          withTrace(`workflow.${name}.result`, () => implementation(...args), {
+            "cubby.workflow": name,
+            "cubby.workflow.step": "result",
+            "cubby.workflow.step_type": "call",
+          }),
+        { "cubby.workflow": name },
+      ),
+    { definition },
   );
-  const step = callStep({ name: "result", fn, input: workflowInput<Args>() });
-  const definition = defineWorkflow({
-    name,
-    steps: [step],
-    output: step.output,
-  });
-  return bindWorkflow(definition, (...args: Args) => ({
-    context: undefined,
-    input: args,
-  }));
 }
 
 /** Bind transport-independent arguments without hiding the executable graph.

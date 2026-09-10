@@ -1,32 +1,51 @@
 import type { z } from "zod";
 
-type FieldKind =
-  | "text"
-  | "text-array"
-  | "number"
-  | "boolean"
-  | "date"
-  | "timestamp"
-  | "enum"
-  | "json"
-  | "identifier";
-type FieldDeclaration = {
+/** The scalar shapes the entity compiler can persist and project. */
+export const entityFieldKinds = [
+  "text",
+  "text-array",
+  "number",
+  "boolean",
+  "date",
+  "timestamp",
+  "enum",
+  "json",
+  "identifier",
+] as const;
+export type EntityFieldKind = (typeof entityFieldKinds)[number];
+
+/** Controls that a declaration may expose to generic entity editing. */
+export const entityFieldControlKinds = [
+  "text",
+  "textarea",
+  "checkbox",
+  "select",
+  "date",
+  "number",
+  "specialized",
+] as const;
+export type EntityFieldControlKind = (typeof entityFieldControlKinds)[number];
+
+/** Database-default strategies supported by declared storage columns. */
+export const entityStorageDefaultKinds = [
+  "none",
+  "generated",
+  "now",
+  "literal",
+] as const;
+export type EntityStorageDefaultKind =
+  (typeof entityStorageDefaultKinds)[number];
+
+type EntityFieldDeclaration = {
   key: string;
-  kind: FieldKind;
+  kind: EntityFieldKind;
   nullable?: boolean;
   label?: string;
   description?: string | null;
   readKey?: string | null;
   reference?: { entity: string; multiple?: boolean } | null;
   control?: {
-    kind:
-      | "text"
-      | "textarea"
-      | "checkbox"
-      | "select"
-      | "date"
-      | "number"
-      | "specialized";
+    kind: EntityFieldControlKind;
     renderer?: string | null;
     options?: readonly { value: string; label: string }[] | null;
     section?: string;
@@ -41,30 +60,31 @@ type FieldDeclaration = {
   };
   validation?: Partial<Record<"read" | "create" | "update", z.ZodType | null>>;
 };
+type EntityStorageDeclaration =
+  | string
+  | {
+      key: string;
+      column?: string;
+      kind?: EntityFieldKind;
+      nullable?: boolean;
+      default?: EntityStorageDefaultKind;
+      defaultValue?: unknown;
+      reference?: string | null;
+      specialized?: string | null;
+    };
+type EntityFieldModelDeclaration = {
+  fields: readonly EntityFieldDeclaration[];
+  storage: readonly EntityStorageDeclaration[];
+  create: readonly string[];
+  update: readonly string[];
+  output: readonly string[];
+  bulk: readonly string[];
+  audit: readonly string[];
+};
 export type EntityDeclaration = {
   key: string;
   names: { singular: string; plural: string | null };
-  model?: {
-    fields: readonly FieldDeclaration[];
-    storage: readonly (
-      | string
-      | {
-          key: string;
-          column?: string;
-          kind?: FieldKind;
-          nullable?: boolean;
-          default?: "none" | "generated" | "now" | "literal";
-          defaultValue?: unknown;
-          reference?: string | null;
-          specialized?: string | null;
-        }
-    )[];
-    create: readonly string[];
-    update: readonly string[];
-    output: readonly string[];
-    bulk: readonly string[];
-    audit: readonly string[];
-  };
+  model?: EntityFieldModelDeclaration;
   filterSchemas?: Readonly<Record<string, z.ZodType>>;
 };
 

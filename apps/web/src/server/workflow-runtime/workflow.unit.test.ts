@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bindWorkflow,
+  defineWorkflowOperation,
   executeWorkflow,
   inspectWorkflow,
   workflow,
@@ -14,7 +15,21 @@ const flow = workflow<undefined, number>("arithmetic")
   .output(({ doubled }) => doubled);
 
 describe("workflow execution", () => {
-  it("keeps bound operation inspection separate from execution", async () => {
+  it("keeps operation inspection separate from execution", async () => {
+    const direct = defineWorkflowOperation("direct", async (value: number) => {
+      if (value < 0) {
+        throw new Error("source failure");
+      }
+      return value * 2;
+    });
+    expect(inspectWorkflow(direct.definition)).toEqual({
+      name: "direct",
+      outputDependencies: [],
+      steps: [],
+    });
+    expect(await direct(4)).toBe(8);
+    await expect(direct(-1)).rejects.toThrow("source failure");
+
     const bound = bindWorkflow(flow, (value: number) => ({
       context: undefined,
       input: value,
