@@ -23,8 +23,8 @@ export function ShoppingCard({
       align="center"
       gap="sm"
       className={cn(
-        "w-full border border-[var(--border)] p-4 text-left",
-        isChecked && "opacity-60",
+        "w-full border border-[var(--border)] p-3 text-left sm:p-4",
+        isChecked && "bg-muted/30",
       )}
     >
       {item.membership === "buy" && (
@@ -36,11 +36,16 @@ export function ShoppingCard({
         />
       )}
       <Stack gap="tight" className="min-w-0 flex-1">
-        <span className={cn("font-medium", isChecked && "line-through")}>
+        <span
+          className={cn(
+            "min-w-0 leading-snug font-medium break-words",
+            isChecked && "text-muted-foreground line-through",
+          )}
+        >
           {item.ingredientId ? (
             <Link
               {...entityDetailLink("ingredient", item.ingredientId)}
-              className="hover:underline"
+              className="flex min-h-11 items-center hover:underline"
             >
               {item.name}
             </Link>
@@ -57,8 +62,9 @@ export function ShoppingCard({
       </Stack>
       <span
         className={cn(
-          "shrink-0 text-right text-sm font-medium tabular-nums",
+          "max-w-[30%] shrink-0 text-right text-sm leading-snug font-medium whitespace-normal tabular-nums",
           shortClass(row),
+          isChecked && "text-muted-foreground",
         )}
       >
         {shortText(row)}

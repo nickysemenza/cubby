@@ -89,7 +89,7 @@ function NavigatorLink({
       aria-current={active ? "page" : undefined}
     >
       <Icon className="size-3.5 shrink-0" aria-hidden />
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <span className="min-w-0 flex-1 break-words">{item.label}</span>
       {section && (
         <span className="shrink-0 font-mono text-2xs text-slate uppercase">
           {section}

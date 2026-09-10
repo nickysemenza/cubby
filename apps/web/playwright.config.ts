@@ -83,6 +83,9 @@ export default defineConfig({
       testMatch: /mobile\..*\.spec\.ts/,
       use: {
         ...devices["iPhone 13"],
+        viewport: { width: 402, height: 874 },
+        contextOptions: { screen: { width: 402, height: 874 } },
+        deviceScaleFactor: 3,
         storageState: "playwright/.auth/user-webkit.json",
       },
     },

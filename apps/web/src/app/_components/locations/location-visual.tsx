@@ -268,7 +268,14 @@ export function LocationVisual({
       )}
       aria-label={`Visual overview of ${location.name}`}
     >
-      <div className="aspect-video md:aspect-[4/3]">{media}</div>
+      <div
+        className={cn(
+          "aspect-video md:aspect-[4/3]",
+          visual.primarySource === "none" && "max-md:aspect-auto max-md:h-14",
+        )}
+      >
+        {media}
+      </div>
       <figcaption className="grid grid-cols-2 border-t border-border bg-card">
         <span className="min-w-0 px-2 py-1 font-mono text-2xs text-muted-foreground uppercase sm:py-2">
           {visual.primarySource === "product"

@@ -60,7 +60,7 @@ export function ResponsiveDialog({
           side="bottom"
           className="flex flex-col p-0 data-[side=bottom]:overflow-hidden data-[side=bottom]:pb-0"
         >
-          <SheetHeader className="shrink-0 border-b p-4">
+          <SheetHeader className="shrink-0 border-b p-4 pr-16">
             <SheetTitle>{title}</SheetTitle>
             {description && <SheetDescription>{description}</SheetDescription>}
           </SheetHeader>

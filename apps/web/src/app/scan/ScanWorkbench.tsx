@@ -64,7 +64,7 @@ export function ScanWorkbench({
     <Stack gap="sm" className="w-full md:mx-auto md:max-w-2xl">
       <div className="flex min-h-11 items-center justify-between border-b border-border px-2 md:border">
         <Description size="xs">
-          Camera ready for Cubby and product codes
+          Scan a Cubby or product code with the camera
         </Description>
         <Button
           type="button"
@@ -86,7 +86,7 @@ export function ScanWorkbench({
 
       {resolving ? (
         <div
-          className="flex h-[calc(100dvh-var(--app-chrome-top)-var(--app-chrome-bottom)-3rem)] w-full items-center justify-center border border-border bg-black text-white md:aspect-[4/3] md:h-auto"
+          className="flex aspect-[4/3] max-h-[min(60dvh,28rem)] w-full items-center justify-center border border-border bg-black text-white md:aspect-[4/3] md:h-auto md:max-h-none"
           aria-live="polite"
         >
           <div className="flex items-center gap-2 text-sm">

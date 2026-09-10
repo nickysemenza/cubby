@@ -71,7 +71,7 @@ function PrimaryTitle({
         />
       )}
       <span
-        className="block min-w-0 flex-1 truncate text-sm leading-snug font-medium"
+        className="line-clamp-2 min-w-0 flex-1 text-sm leading-snug font-medium break-words"
         title={title}
       >
         {title}
@@ -286,7 +286,10 @@ function CompactMobileRow({
           <dl className={MOBILE_SPEC_GRID_CLASS}>
             {specValues.map((item) => (
               <Fragment key={item.id}>
-                <Eyebrow as="dt" className="break-words">
+                <Eyebrow
+                  as="dt"
+                  className="font-sans text-xs tracking-normal break-words normal-case"
+                >
                   {item.label}
                 </Eyebrow>
                 <dd

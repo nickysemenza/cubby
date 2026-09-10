@@ -1,6 +1,12 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Search, Wrench } from "lucide-react";
-import { type ReactNode, Suspense, useState } from "react";
+import {
+  type ReactNode,
+  Suspense,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { z } from "zod";
 
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
@@ -8,7 +14,10 @@ import { MainNav } from "~/app/_components/MainNav";
 import { Button } from "~/components/ui/button";
 import { useHydrated } from "~/hooks/useHydrated";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
-import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
+import {
+  useAppViewportBounds,
+  useVirtualKeyboard,
+} from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
 
 import {
@@ -16,6 +25,7 @@ import {
   AuthenticatedShellControls,
 } from "./authenticated-shell-controls";
 import { domainWayfinding } from "./domain-wayfinding";
+import { createInAppHistory } from "./in-app-history";
 import { resolveMobileRoute } from "./mobile-route-descriptor";
 import {
   homeNavItem,
@@ -59,6 +69,7 @@ export function AuthenticatedAppShell({
   navigationProgress,
   onSearchClick,
 }: AuthenticatedAppShellProps) {
+  useAppViewportBounds();
   const [collapsed, setCollapsed] = useLocalStorage(
     "app-shell:sidebar-collapsed",
     collapsedPreferenceSchema,
@@ -125,6 +136,13 @@ function MobileRouteBar({
   pathname: string;
   onSearchClick: () => void;
 }) {
+  const router = useRouter();
+  const history = useMemo(() => createInAppHistory(router.history), [router]);
+  const canGoBack = useSyncExternalStore(
+    history.subscribe,
+    history.getSnapshot,
+    () => false,
+  );
   const descriptor = resolveMobileRoute(pathname);
   if (descriptor.tab === "today") {
     return (
@@ -137,12 +155,11 @@ function MobileRouteBar({
   return (
     <div className="grid h-12 w-full grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center px-1">
       <Button
-        render={
-          <Link
-            to={descriptor.parentTo ?? "/"}
-            aria-label={`Back to ${descriptor.parentTo === "/" ? "Today" : descriptor.label}`}
-          />
-        }
+        aria-label="Back"
+        onClick={() => {
+          if (canGoBack) router.history.back();
+          else void router.navigate({ to: descriptor.parentTo ?? "/" });
+        }}
         variant="ghost"
         size="icon"
         className="size-11"

@@ -1,7 +1,7 @@
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { provisionalOptions } from "~/app/finance/financial-account-options";
 import { booleanCellOptions } from "~/lib/select-options";
@@ -13,6 +13,7 @@ import {
   createActionsColumn,
   createBooleanColumn,
   createCurrencyColumn,
+  createEntityInlineLinkColumn,
   createFilterableSelectColumn,
   createImageColumn,
   createNameColumn,
@@ -211,6 +212,96 @@ describe("createSingleEntityInlineLinkColumn", () => {
 
     expect(location.header).toBe("Location");
     expect(renamed.header).toBe("Stored at");
+  });
+
+  type ProductRelationRow = {
+    product: { id: string; name: string; manufacturer: string } | null;
+  };
+
+  const productColumn = (editable?: {
+    onSave: (id: string | null) => Promise<void>;
+  }) =>
+    createSingleEntityInlineLinkColumn(
+      createCubbyColumnHelper<ProductRelationRow>(),
+      "product",
+      "product",
+      editable
+        ? { editable: { onSave: (id) => editable.onSave(id) } }
+        : undefined,
+    );
+
+  const productRow: ProductRelationRow = {
+    product: {
+      id: "PRD-2ABC",
+      name: "Workbench light",
+      manufacturer: "Makita",
+    },
+  };
+
+  it("uses one adapter for the visible link and ID-only clipboard payload", async () => {
+    const onSave = vi.fn(async (_id: string | null) => {});
+    const column = productColumn({ onSave });
+    const cellData = column.meta?.cellData;
+    if (!cellData?.applyPaste) throw new Error("expected a pasteable relation");
+
+    renderColumn(column, productRow, undefined, { browser: true });
+    expect(
+      await screen.findByRole("link", { name: /Workbench light/ }),
+    ).toHaveAttribute("href", "/products/PRD-2ABC");
+    expect(cellData.getCopyPayload(productRow)).toEqual({
+      text: "Workbench light",
+      json: { id: "PRD-2ABC", name: "Workbench light" },
+    });
+
+    await cellData.applyPaste(productRow, {
+      json: { id: "PRD-3ABC", name: "Replacement light" },
+    });
+    expect(onSave).toHaveBeenCalledWith("PRD-3ABC");
+  });
+
+  it("renders the explicit empty marker for a malformed singular projection", () => {
+    const malformed: ProductRelationRow = {
+      product: {
+        id: "PRD-2ABC",
+        name: "Workbench light",
+        manufacturer: "Makita",
+      },
+    };
+    // External projections are runtime data. Break the required product field
+    // after construction to cover the same malformed response a Zod boundary
+    // can deliver without weakening the static fixture type.
+    if (!malformed.product) throw new Error("expected a product projection");
+    Object.assign(malformed.product, { manufacturer: null });
+
+    renderColumn(productColumn(), malformed);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("createEntityInlineLinkColumn", () => {
+  type ProductCollectionRow = {
+    products: Array<{ id: string; name: string; manufacturer: string }>;
+  };
+
+  const productCollectionColumn = () =>
+    createEntityInlineLinkColumn(
+      createCubbyColumnHelper<ProductCollectionRow>(),
+      "products",
+      "product",
+      { dedupe: true },
+    );
+
+  it("keeps malformed collection projections strict", () => {
+    const malformed: ProductCollectionRow = {
+      products: [
+        { id: "PRD-2ABC", name: "Workbench light", manufacturer: "Makita" },
+      ],
+    };
+    Object.assign(malformed.products[0]!, { manufacturer: null });
+
+    expect(() => renderColumn(productCollectionColumn(), malformed)).toThrow(
+      "Invalid input",
+    );
   });
 });
 

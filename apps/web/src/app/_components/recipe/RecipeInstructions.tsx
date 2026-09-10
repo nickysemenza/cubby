@@ -54,7 +54,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
             variant="title"
           />
 
-          <Stack as="ol" gap="md" className="my-0 ml-0 list-none">
+          <Stack as="ol" gap="sm" className="my-0 ml-0 list-none md:space-y-4">
             {section.instructions.map((instruction, stepIndex) => {
               const stepKey = `${section.id}-${stepIndex}`;
               const isDone = doneSteps.has(stepKey);
@@ -65,11 +65,11 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                   <Row
                     as="button"
                     type="button"
-                    gap="md"
+                    gap="sm"
                     align="start"
                     onClick={() => toggleStep(stepKey)}
                     aria-pressed={isDone}
-                    className="w-full cursor-pointer text-left"
+                    className="min-h-11 w-full cursor-pointer text-left md:gap-4"
                   >
                     {/* Step number - big italic serif numeral, cookbook style */}
                     <div

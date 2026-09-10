@@ -48,8 +48,8 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     <Row
       align="center"
       wrap
-      gap="md"
-      className="font-mono text-2xs text-muted-foreground"
+      gap="sm"
+      className="font-mono text-2xs text-muted-foreground md:gap-4"
     >
       <Row align="center" gap="sm">
         <Users size={12} />
@@ -136,7 +136,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   // it — render a slim meta band instead of an empty hero block.
   if (!hasImage) {
     return (
-      <div className="page-header-accent border border-[var(--border)] bg-muted/60 px-6 py-4">
+      <div className="page-header-accent border border-[var(--border)] bg-muted/60 px-3 py-3 sm:px-6 sm:py-4">
         {metaInfo}
       </div>
     );
@@ -151,7 +151,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         src={heroImage.url}
         alt={recipe.name}
         displayWidth={800}
-        className="h-64 w-full object-cover sm:h-80 md:h-96"
+        className="h-52 w-full object-cover sm:h-80 md:h-96"
       />
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1 pt-2">
         <span className="eyebrow">Fig. 01 — {recipe.name}</span>

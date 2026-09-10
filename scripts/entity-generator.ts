@@ -7,11 +7,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   entityFieldControlKinds as fieldControlKinds,
   entityFieldKinds as fieldKinds,
-  entityStorageDefaultKinds as storageDefaultKinds,
+  parseEntityDeclarationMetadata,
 } from "../packages/schemas/src/entity-definitions/definition.ts";
 import type {
+  EntityDeclarationMetadata,
+  EntityFieldModelMetadata,
   EntityFieldControlKind,
   EntityFieldKind,
+  EntityStorageMetadata,
   EntityStorageDefaultKind,
 } from "../packages/schemas/src/entity-definitions/definition.ts";
 import { z } from "zod";
@@ -51,7 +54,14 @@ type FilterDescriptor = Readonly<{
     | "idMulti"
     | "range";
   placeholder: string;
-  options: readonly DeclarationObject[] | null;
+  options:
+    | readonly Readonly<{
+        value: string;
+        label: string;
+        meta?: boolean;
+        color?: string;
+      }>[]
+    | null;
   optionsRef: SourceRef | null;
   optionsKey: string | null;
   label: string | null;
@@ -159,7 +169,14 @@ export type CompiledEntity = Readonly<{
   /** Fields a `bulkUpdate` command may patch; null means the capability is undeclared. */
   bulkUpdateFields: readonly string[] | null;
   ports: EntityPorts;
+  relations: EntityDeclarationMetadata["relations"];
   relationMutations: readonly RelationMutation[];
+  lifecycle: Readonly<{
+    softDelete: boolean;
+    delete: DeclarationValue | null;
+    merge: boolean;
+  }>;
+  mcpActions: readonly string[];
   operationOwners: Readonly<{
     delete: OperationOwner;
     merge: OperationOwner;
@@ -171,6 +188,46 @@ export type EntityArtifacts = Readonly<{
   relativePath: string;
   source: string;
 }>;
+
+type ContractEntity = CompiledEntity & {
+  contract: NonNullable<CompiledEntity["contract"]>;
+};
+
+type EntityProjectionMaps = Readonly<{
+  schema: readonly ContractEntity[];
+  detail: readonly ContractEntity[];
+  list: readonly ContractEntity[];
+  filters: readonly CompiledEntity[];
+  routes: readonly CompiledEntity[];
+}>;
+
+/**
+ * Detail, list, and filter artifacts consume the same compiled schema map.
+ * Keep the surface selection here so generated projections cannot quietly
+ * drift into independently-maintained entity rosters.
+ */
+const entityProjectionMaps = (
+  entities: readonly CompiledEntity[],
+): EntityProjectionMaps => {
+  const schema = entities.filter(
+    (entity): entity is ContractEntity => entity.contract !== null,
+  );
+  const detail = schema.filter(
+    ({ contract }) => contract.create !== null && contract.update !== null,
+  );
+  const list = detail.filter(
+    ({ descriptor }) => descriptor.browserRoutes !== false,
+  );
+  return {
+    schema,
+    detail,
+    list,
+    filters: entities,
+    routes: entities.filter(
+      ({ descriptor }) => descriptor.browserRoutes !== false,
+    ),
+  };
+};
 
 class EntityDeclarationError extends Error {
   constructor(message: string) {
@@ -212,12 +269,6 @@ const required = (object: DeclarationObject, key: string, context: string) => {
   return value;
 };
 
-const defaulted = (
-  object: DeclarationObject,
-  key: string,
-  fallback: DeclarationValue,
-): DeclarationValue => (object[key] === undefined ? fallback : object[key]);
-
 const stringValue = (value: DeclarationValue, context: string): string => {
   if (!isNonEmptyString(value)) {
     throw new EntityDeclarationError(`${context} must be a non-empty string.`);
@@ -232,132 +283,20 @@ const booleanValue = (value: DeclarationValue, context: string): boolean => {
   return value;
 };
 
-const exactKeys = (
-  object: DeclarationObject,
-  allowed: readonly string[],
-  context: string,
-) => {
-  for (const key of Object.keys(object)) {
-    if (!allowed.includes(key)) {
-      throw new EntityDeclarationError(`${context}.${key} is not allowed.`);
-    }
-  }
-};
-
-const literalObjectArray = (
-  value: DeclarationValue,
-  context: string,
-): DeclarationObject[] => {
-  if (!Array.isArray(value)) {
-    throw new EntityDeclarationError(`${context} must be an array.`);
-  }
-  return value.map((item, index) => objectValue(item, `${context}[${index}]`));
-};
-
-const sourceRef = (value: DeclarationValue, context: string): SourceRef => {
-  const object = objectValue(value, context);
-  exactKeys(object, ["module", "export"], context);
-  return {
-    module: stringValue(
-      required(object, "module", context),
-      `${context}.module`,
-    ),
-    export: stringValue(
-      required(object, "export", context),
-      `${context}.export`,
-    ),
-  };
-};
-
-const identifierRef = (
-  value: DeclarationValue,
-  context: string,
-): IdentifierRef => {
-  const object = objectValue(value, context);
-  exactKeys(object, ["entity", "kind"], context);
-  const kind = stringValue(
-    required(object, "kind", context),
-    `${context}.kind`,
-  );
-  if (kind !== "id" && kind !== "shortcode") {
-    throw new EntityDeclarationError(
-      `${context}.kind must be id or shortcode.`,
-    );
-  }
-  return {
-    entity: stringValue(
-      required(object, "entity", context),
-      `${context}.entity`,
-    ),
-    kind,
-  };
-};
-
-const nullableSourceRef = (
-  value: DeclarationValue,
-  context: string,
-): SourceRef | null => (value === null ? null : sourceRef(value, context));
-
 const entityPorts = (
-  value: DeclarationValue | undefined,
-  context: string,
+  ports: EntityDeclarationMetadata["extensions"]["ports"],
 ): EntityPorts => {
-  if (value === undefined) {
-    return {
-      repository: null,
-      references: { label: null, resolver: null },
-      filters: null,
-      search: { projection: null, semanticText: null, dependentRefresh: null },
-    };
-  }
-  const ports = objectValue(value, context);
-  exactKeys(ports, ["repository", "references", "filters", "search"], context);
-  const references = objectValue(
-    required(ports, "references", context),
-    `${context}.references`,
-  );
-  exactKeys(references, ["label", "resolver"], `${context}.references`);
-  const search = objectValue(
-    required(ports, "search", context),
-    `${context}.search`,
-  );
-  exactKeys(
-    search,
-    ["projection", "semanticText", "dependentRefresh"],
-    `${context}.search`,
-  );
   return {
-    repository: nullableSourceRef(
-      required(ports, "repository", context),
-      `${context}.repository`,
-    ),
+    repository: ports.repository,
     references: {
-      label: nullableSourceRef(
-        required(references, "label", `${context}.references`),
-        `${context}.references.label`,
-      ),
-      resolver: nullableSourceRef(
-        required(references, "resolver", `${context}.references`),
-        `${context}.references.resolver`,
-      ),
+      label: ports.references.label,
+      resolver: ports.references.resolver,
     },
-    filters: nullableSourceRef(
-      required(ports, "filters", context),
-      `${context}.filters`,
-    ),
+    filters: ports.filters,
     search: {
-      projection: nullableSourceRef(
-        required(search, "projection", `${context}.search`),
-        `${context}.search.projection`,
-      ),
-      semanticText: nullableSourceRef(
-        required(search, "semanticText", `${context}.search`),
-        `${context}.search.semanticText`,
-      ),
-      dependentRefresh: nullableSourceRef(
-        required(search, "dependentRefresh", `${context}.search`),
-        `${context}.search.dependentRefresh`,
-      ),
+      projection: ports.search.projection,
+      semanticText: ports.search.semanticText,
+      dependentRefresh: ports.search.dependentRefresh,
     },
   };
 };
@@ -372,76 +311,8 @@ const filterKinds = [
   "range",
 ] as const;
 
-const optionalString = (
-  object: DeclarationObject,
-  key: string,
-  context: string,
-): string | null =>
-  object[key] === undefined || object[key] === null
-    ? null
-    : stringValue(object[key], `${context}.${key}`);
-
-const detailOrder = (
-  object: DeclarationObject,
-  context: string,
-): number | null => {
-  const value = object.detailOrder;
-  if (value === undefined || value === null) return null;
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- AST literal input must be numeric before enforcing the nonnegative integer contract.
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new EntityDeclarationError(
-      `${context}.detailOrder must be a nonnegative integer.`,
-    );
-  }
-  return value;
-};
-
-const stringArray = (value: DeclarationValue, context: string): string[] => {
-  if (!Array.isArray(value)) {
-    throw new EntityDeclarationError(`${context} must be an array.`);
-  }
-  const values = value.map((item, index) =>
-    stringValue(item, `${context}[${index}]`),
-  );
-  if (new Set(values).size !== values.length) {
-    throw new EntityDeclarationError(`${context} contains duplicates.`);
-  }
-  return values;
-};
-
-const parsedFieldKind = (
-  value: DeclarationValue,
-  context: string,
-): EntityFieldKind => {
-  const kind = stringValue(value, context);
-  const match = fieldKinds.find((candidate) => candidate === kind);
-  if (match === undefined)
-    throw new EntityDeclarationError(`${context} is unsupported.`);
-  return match;
-};
-
-const fieldValidation = (
-  value: DeclarationValue | undefined,
-  context: string,
-): EntityField["validation"] => {
-  if (value === undefined || value === null)
-    return { read: null, create: null, update: null };
-  const modes = objectValue(value, context);
-  exactKeys(modes, ["read", "create", "update"], context);
-  const mode = (key: "read" | "create" | "update") => {
-    const schema = modes[key];
-    if (schema === undefined || schema === null) return null;
-    if (!(schema instanceof z.ZodType))
-      throw new EntityDeclarationError(
-        `${context}.${key} must be a Zod schema.`,
-      );
-    return schema;
-  };
-  return { read: mode("read"), create: mode("create"), update: mode("update") };
-};
-
 const compileFieldModel = (
-  value: DeclarationValue | undefined,
+  value: EntityFieldModelMetadata | undefined,
   context: string,
 ): EntityFieldModel => {
   if (value === undefined) {
@@ -455,240 +326,44 @@ const compileFieldModel = (
       output: [],
     };
   }
-  const model = objectValue(value, context);
-  exactKeys(
-    model,
-    ["fields", "storage", "create", "update", "bulk", "audit", "output"],
-    context,
-  );
-  const rawFields = literalObjectArray(
-    required(model, "fields", context),
-    `${context}.fields`,
-  );
-  const fields = rawFields.map((field, index): EntityField => {
+  const model = value;
+  const fields = model.fields.map((field, index): EntityField => {
     const fieldContext = `${context}.fields[${index}]`;
-    exactKeys(
-      field,
-      [
-        "key",
-        "kind",
-        "nullable",
-        "label",
-        "description",
-        "readKey",
-        "reference",
-        "control",
-        "display",
-        "validation",
-      ],
-      fieldContext,
-    );
-    const referenceValue = field.reference;
-    const reference =
-      referenceValue === undefined || referenceValue === null
-        ? null
-        : (() => {
-            const ref = objectValue(
-              referenceValue,
-              `${fieldContext}.reference`,
-            );
-            exactKeys(ref, ["entity", "multiple"], `${fieldContext}.reference`);
-            return {
-              entity: stringValue(
-                required(ref, "entity", `${fieldContext}.reference`),
-                `${fieldContext}.reference.entity`,
-              ),
-              multiple: booleanValue(
-                defaulted(ref, "multiple", false),
-                `${fieldContext}.reference.multiple`,
-              ),
-            };
-          })();
-    const controlValue = field.control;
-    const control =
-      controlValue === undefined || controlValue === null
-        ? null
-        : (() => {
-            const controlObject = objectValue(
-              controlValue,
-              `${fieldContext}.control`,
-            );
-            exactKeys(
-              controlObject,
-              ["kind", "renderer", "options", "section"],
-              `${fieldContext}.control`,
-            );
-            const kind = stringValue(
-              required(controlObject, "kind", `${fieldContext}.control`),
-              `${fieldContext}.control.kind`,
-            );
-            const matchedKind = fieldControlKinds.find(
-              (candidate) => candidate === kind,
-            );
-            if (matchedKind === undefined)
-              throw new EntityDeclarationError(
-                `${fieldContext}.control.kind is unsupported.`,
-              );
-            const section =
-              controlObject.section === undefined
-                ? "main"
-                : stringValue(
-                    controlObject.section,
-                    `${fieldContext}.control.section`,
-                  );
-            if (section.trim().length === 0)
-              throw new EntityDeclarationError(
-                `${fieldContext}.control.section must be nonempty.`,
-              );
-            const optionsValue = controlObject.options;
-            const options =
-              optionsValue === undefined || optionsValue === null
-                ? null
-                : literalObjectArray(
-                    optionsValue,
-                    `${fieldContext}.control.options`,
-                  ).map((option, optionIndex) => {
-                    const optionContext = `${fieldContext}.control.options[${optionIndex}]`;
-                    exactKeys(option, ["value", "label"], optionContext);
-                    return {
-                      value: stringValue(
-                        required(option, "value", optionContext),
-                        `${optionContext}.value`,
-                      ),
-                      label: stringValue(
-                        required(option, "label", optionContext),
-                        `${optionContext}.label`,
-                      ),
-                    };
-                  });
-            return {
-              kind: matchedKind,
-              renderer: optionalString(
-                controlObject,
-                "renderer",
-                `${fieldContext}.control`,
-              ),
-              options,
-              section,
-            };
-          })();
-    const displayValue = field.display;
-    const display =
-      displayValue === undefined
-        ? {
-            columnId: null,
-            standard: null,
-            detailSection: "overview",
-            detailOrder: null,
-            list: false,
-            detail: false,
-          }
-        : ((): EntityField["display"] => {
-            const displayObject = objectValue(
-              displayValue,
-              `${fieldContext}.display`,
-            );
-            exactKeys(
-              displayObject,
-              [
-                "list",
-                "detail",
-                "columnId",
-                "standard",
-                "detailOrder",
-                "detailSection",
-              ],
-              `${fieldContext}.display`,
-            );
-            const columnId = optionalString(
-              displayObject,
-              "columnId",
-              `${fieldContext}.display`,
-            );
-            if (columnId !== null && !columnId.trim()) {
-              throw new EntityDeclarationError(
-                `${fieldContext}.display.columnId must not be blank.`,
-              );
-            }
-            const standard = optionalString(
-              displayObject,
-              "standard",
-              `${fieldContext}.display`,
-            );
-            if (
-              standard !== null &&
-              standard !== "name" &&
-              standard !== "image"
-            ) {
-              throw new EntityDeclarationError(
-                `${fieldContext}.display.standard must be name or image.`,
-              );
-            }
-            const detailSection =
-              optionalString(
-                displayObject,
-                "detailSection",
-                `${fieldContext}.display`,
-              ) ?? "overview";
-            if (!detailSection.trim()) {
-              throw new EntityDeclarationError(
-                `${fieldContext}.display.detailSection must not be blank.`,
-              );
-            }
-            return {
-              columnId,
-              standard,
-              detailSection,
-              detailOrder: detailOrder(
-                displayObject,
-                `${fieldContext}.display`,
-              ),
-              list: booleanValue(
-                defaulted(displayObject, "list", false),
-                `${fieldContext}.display.list`,
-              ),
-              detail: booleanValue(
-                defaulted(displayObject, "detail", false),
-                `${fieldContext}.display.detail`,
-              ),
-            };
-          })();
-    const key = stringValue(
-      required(field, "key", fieldContext),
-      `${fieldContext}.key`,
-    );
+    const key = field.key;
+    if (field.control !== null && !field.control.section.trim())
+      throw new EntityDeclarationError(
+        `${fieldContext}.control.section must be nonempty.`,
+      );
+    if (field.display.columnId !== null && !field.display.columnId.trim())
+      throw new EntityDeclarationError(
+        `${fieldContext}.display.columnId must not be blank.`,
+      );
+    if (!field.display.detailSection.trim())
+      throw new EntityDeclarationError(
+        `${fieldContext}.display.detailSection must not be blank.`,
+      );
     return {
       key,
-      kind: parsedFieldKind(
-        required(field, "kind", fieldContext),
-        `${fieldContext}.kind`,
-      ),
-      nullable: booleanValue(
-        defaulted(field, "nullable", false),
-        `${fieldContext}.nullable`,
-      ),
-      label: stringValue(
-        defaulted(
-          field,
-          "label",
-          key
-            .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-            .replace(/^./, (letter) => letter.toUpperCase()),
-        ),
-        `${fieldContext}.label`,
-      ),
-      description: optionalString(field, "description", fieldContext),
-      readKey:
-        field.readKey === undefined
-          ? key
-          : optionalString(field, "readKey", fieldContext),
-      reference,
-      control,
-      display,
-      validation: fieldValidation(
-        field.validation,
-        `${fieldContext}.validation`,
-      ),
+      kind: field.kind,
+      nullable: field.nullable,
+      label:
+        field.label ??
+        key
+          .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+          .replace(/^./, (letter) => letter.toUpperCase()),
+      description: field.description,
+      readKey: field.readKey === undefined ? key : field.readKey,
+      reference: field.reference,
+      control: field.control,
+      display: {
+        columnId: field.display.columnId,
+        standard: field.display.standard,
+        detailSection: field.display.detailSection,
+        detailOrder: field.display.detailOrder,
+        list: field.display.list,
+        detail: field.display.detail,
+      },
+      validation: field.validation,
     };
   });
   const displayedColumnIds = new Set<string>();
@@ -714,71 +389,34 @@ const compileFieldModel = (
     }
     displayedColumnIds.add(columnId);
   }
-  const rawStorage = required(model, "storage", context);
-  if (!Array.isArray(rawStorage))
-    throw new EntityDeclarationError(`${context}.storage must be an array.`);
-  const storage = rawStorage.map((entry, index): EntityStorageField => {
+  const isStorageObject = (
+    entry: EntityStorageMetadata,
+  ): entry is Exclude<EntityStorageMetadata, string> =>
+    typeof entry !== "string";
+  const storage = model.storage.map((entry, index): EntityStorageField => {
     const fieldContext = `${context}.storage[${index}]`;
-    const field = isNonEmptyString(entry)
-      ? { key: entry }
-      : objectValue(entry, fieldContext);
-    const key = stringValue(
-      required(field, "key", fieldContext),
-      `${fieldContext}.key`,
-    );
+    const field = isStorageObject(entry) ? entry : { key: entry };
+    const key = field.key;
     const declared = fields.find((candidate) => candidate.key === key);
     if (!declared)
       throw new EntityDeclarationError(
         `${fieldContext} references undeclared field ${key}.`,
       );
-    exactKeys(
-      field,
-      [
-        "key",
-        "column",
-        "kind",
-        "nullable",
-        "default",
-        "defaultValue",
-        "reference",
-        "specialized",
-      ],
-      fieldContext,
-    );
-    const defaultKind = stringValue(
-      defaulted(field, "default", "none"),
-      `${fieldContext}.default`,
-    );
-    const matchedDefaultKind = storageDefaultKinds.find(
-      (candidate) => candidate === defaultKind,
-    );
-    if (matchedDefaultKind === undefined)
-      throw new EntityDeclarationError(
-        `${fieldContext}.default is unsupported.`,
-      );
+    const defaultKind = field.default ?? "none";
     const defaultValue = field.defaultValue ?? null;
-    if (defaultKind === "literal" && field.defaultValue === undefined)
+    if (defaultKind === "literal" && !("defaultValue" in field))
       throw new EntityDeclarationError(
         `${fieldContext}.defaultValue is required for a literal default.`,
       );
     return {
       key,
-      column: stringValue(
-        defaulted(field, "column", key),
-        `${fieldContext}.column`,
-      ),
-      kind: parsedFieldKind(
-        defaulted(field, "kind", declared.kind),
-        `${fieldContext}.kind`,
-      ),
-      nullable: booleanValue(
-        defaulted(field, "nullable", declared.nullable),
-        `${fieldContext}.nullable`,
-      ),
-      default: matchedDefaultKind,
+      column: field.column ?? key,
+      kind: field.kind ?? declared.kind,
+      nullable: field.nullable ?? declared.nullable,
+      default: defaultKind,
       defaultValue,
-      reference: optionalString(field, "reference", fieldContext),
-      specialized: optionalString(field, "specialized", fieldContext),
+      reference: field.reference ?? null,
+      specialized: field.specialized ?? null,
     };
   });
   const fieldKeys = fields.map(({ key }) => key);
@@ -792,10 +430,11 @@ const compileFieldModel = (
       `${context}.storage contains duplicate keys.`,
     );
   const policy = (key: "create" | "update" | "bulk" | "audit" | "output") => {
-    const values = stringArray(
-      required(model, key, context),
-      `${context}.${key}`,
-    );
+    const values = model[key];
+    if (new Set(values).size !== values.length)
+      throw new EntityDeclarationError(
+        `${context}.${key} contains duplicates.`,
+      );
     for (const field of values) {
       if (!fieldKeys.includes(field))
         throw new EntityDeclarationError(
@@ -822,370 +461,96 @@ const compileFieldModel = (
   return compiled;
 };
 
-// oxlint-disable-next-line eslint/complexity -- The parser validates every optional descriptor property at the literal boundary.
 const filterDescriptor = (
-  value: DeclarationValue,
+  value: EntityDeclarationMetadata["filters"]["descriptors"][number],
   context: string,
 ): FilterDescriptor => {
-  const object = objectValue(value, context);
-  exactKeys(
-    object,
-    [
-      "columnId",
-      "field",
-      "urlKey",
-      "kind",
-      "placeholder",
-      "options",
-      "optionsRef",
-      "optionsKey",
-      "label",
-      "schemaDescription",
-      "deriveSchema",
-      "schemaFromRead",
-      "brandRef",
-      "expandRef",
-      "urlOnly",
-      "nullable",
-    ],
-    context,
-  );
-  const columnId = stringValue(
-    required(object, "columnId", context),
-    `${context}.columnId`,
-  );
-  const kind = stringValue(
-    required(object, "kind", context),
-    `${context}.kind`,
-  );
-  const parsedKind = filterKinds.find((candidate) => candidate === kind);
+  const parsedKind = filterKinds.find((candidate) => candidate === value.kind);
   if (parsedKind === undefined) {
     throw new EntityDeclarationError(`${context}.kind is unsupported.`);
   }
-  const rawOptions = object.options;
-  if (
-    rawOptions !== undefined &&
-    rawOptions !== null &&
-    !Array.isArray(rawOptions)
-  ) {
-    throw new EntityDeclarationError(`${context}.options must be an array.`);
-  }
-  const options =
-    rawOptions === undefined || rawOptions === null
-      ? null
-      : rawOptions.map((option, index) => {
-          const optionContext = `${context}.options[${index}]`;
-          const parsed = objectValue(option, optionContext);
-          exactKeys(parsed, ["value", "label", "meta", "color"], optionContext);
-          stringValue(
-            required(parsed, "value", optionContext),
-            `${optionContext}.value`,
-          );
-          stringValue(
-            required(parsed, "label", optionContext),
-            `${optionContext}.label`,
-          );
-          if (parsed.meta !== undefined)
-            booleanValue(parsed.meta, `${optionContext}.meta`);
-          if (parsed.color !== undefined)
-            stringValue(parsed.color, `${optionContext}.color`);
-          return parsed;
-        });
-  const optionsRef =
-    object.optionsRef === undefined || object.optionsRef === null
-      ? null
-      : sourceRef(object.optionsRef, `${context}.optionsRef`);
+  const options = value.options ?? null;
+  const optionsRef = value.optionsRef ?? null;
   if (options !== null && optionsRef !== null) {
     throw new EntityDeclarationError(
       `${context} cannot declare both options and optionsRef.`,
     );
   }
-  const nullable =
-    object.nullable === undefined || object.nullable === null
-      ? null
-      : (() => {
-          const nullableContext = `${context}.nullable`;
-          const parsed = objectValue(object.nullable, nullableContext);
-          exactKeys(parsed, ["field", "label"], nullableContext);
-          return {
-            field: stringValue(
-              required(parsed, "field", nullableContext),
-              `${nullableContext}.field`,
-            ),
-            label: stringValue(
-              required(parsed, "label", nullableContext),
-              `${nullableContext}.label`,
-            ),
-          };
-        })();
-  const deriveSchema =
-    object.deriveSchema === undefined
-      ? false
-      : booleanValue(object.deriveSchema, `${context}.deriveSchema`);
-  const schemaFromRead =
-    object.schemaFromRead === undefined
-      ? false
-      : booleanValue(object.schemaFromRead, `${context}.schemaFromRead`);
-  const schemaDescription = optionalString(
-    object,
-    "schemaDescription",
-    context,
-  );
+  const nullable = value.nullable ?? null;
+  const deriveSchema = value.deriveSchema ?? false;
+  const schemaFromRead = value.schemaFromRead ?? false;
+  const schemaDescription = value.schemaDescription ?? null;
   if (!deriveSchema && (schemaFromRead || schemaDescription !== null))
     throw new EntityDeclarationError(
       `${context} schemaFromRead/schemaDescription require deriveSchema.`,
     );
   return {
-    columnId,
-    field: optionalString(object, "field", context),
-    urlKey: optionalString(object, "urlKey", context) ?? columnId,
+    columnId: value.columnId,
+    field: value.field ?? null,
+    urlKey: value.urlKey ?? value.columnId,
     kind: parsedKind,
-    placeholder: stringValue(
-      required(object, "placeholder", context),
-      `${context}.placeholder`,
-    ),
+    placeholder: value.placeholder,
     options,
     optionsRef,
-    optionsKey: optionalString(object, "optionsKey", context),
-    label: optionalString(object, "label", context),
+    optionsKey: value.optionsKey ?? null,
+    label: value.label ?? null,
     schemaDescription,
     deriveSchema,
     schemaFromRead,
-    brandRef:
-      object.brandRef === undefined || object.brandRef === null
-        ? null
-        : identifierRef(object.brandRef, `${context}.brandRef`),
-    expandRef:
-      object.expandRef === undefined || object.expandRef === null
-        ? null
-        : sourceRef(object.expandRef, `${context}.expandRef`),
-    urlOnly:
-      object.urlOnly === undefined
-        ? false
-        : booleanValue(object.urlOnly, `${context}.urlOnly`),
+    brandRef: value.brandRef ?? null,
+    expandRef: value.expandRef ?? null,
+    urlOnly: value.urlOnly ?? false,
     nullable,
   };
 };
 
-const normalizedEntitySource = (
-  raw: DeclarationObject,
-  context: string,
-): DeclarationObject => {
-  exactKeys(
-    raw,
-    [
-      "key",
-      "names",
-      "route",
-      "table",
-      "identifiers",
-      "presentation",
-      "fields",
-      "model",
-      "filters",
-      "relations",
-      "search",
-      "capabilities",
-      "extensions",
-    ],
-    context,
-  );
-  const names = objectValue(
-    required(raw, "names", context),
-    `${context}.names`,
-  );
-  exactKeys(names, ["singular", "plural"], `${context}.names`);
-  const identifiers = objectValue(
-    required(raw, "identifiers", context),
-    `${context}.identifiers`,
-  );
-  exactKeys(
-    identifiers,
-    ["brand", "shortcode", "legacy"],
-    `${context}.identifiers`,
-  );
-  const presentation = objectValue(
-    required(raw, "presentation", context),
-    `${context}.presentation`,
-  );
-  exactKeys(presentation, ["titleField"], `${context}.presentation`);
-  const search = objectValue(
-    required(raw, "search", context),
-    `${context}.search`,
-  );
-  exactKeys(search, ["enabled"], `${context}.search`);
-  const capabilities = objectValue(
-    required(raw, "capabilities", context),
-    `${context}.capabilities`,
-  );
-  exactKeys(
-    capabilities,
-    [
-      "auditable",
-      "images",
-      "countable",
-      "softDelete",
-      "delete",
-      "bulkUpdate",
-      "merge",
-      "operationOwners",
-      "mcp",
-    ],
-    `${context}.capabilities`,
-  );
-  const extensions = objectValue(
-    required(raw, "extensions", context),
-    `${context}.extensions`,
-  );
-  exactKeys(
-    extensions,
-    ["countFilter", "relatednessSignals", "mcpNames", "ports"],
-    `${context}.extensions`,
-  );
-  validateDeclarationCapabilities(raw, capabilities, context);
-  const relations = normalizedDeclarationRelations(raw, context);
-  const route = normalizedDeclarationRoute(raw, context);
-  const descriptor = declarationDescriptor(
-    raw,
-    identifiers,
-    capabilities,
-    search,
-    relations,
-    route,
-    extensions,
-    context,
-  );
-  return normalizedDeclarationEntity(
-    raw,
-    names,
-    presentation,
-    descriptor,
-    route,
-    capabilities,
-    extensions,
-    context,
-  );
-};
-
 const validateDeclarationCapabilities = (
-  raw: DeclarationObject,
-  capabilities: DeclarationObject,
+  declaration: EntityDeclarationMetadata,
   context: string,
 ): void => {
-  const owners = objectValue(
-    required(capabilities, "operationOwners", `${context}.capabilities`),
-    `${context}.capabilities.operationOwners`,
-  );
-  exactKeys(
-    owners,
-    ["delete", "merge"],
-    `${context}.capabilities.operationOwners`,
-  );
+  const capabilities = declaration.capabilities;
+  const owners = capabilities.operationOwners;
   const validateOwner = (operation: "delete" | "merge") => {
-    const owner = required(
-      owners,
-      operation,
-      `${context}.capabilities.operationOwners`,
-    );
-    if (owner !== null && owner !== "kernel" && owner !== "workflow") {
-      throw new EntityDeclarationError(
-        `${context}.capabilities.operationOwners.${operation} must be kernel, workflow, or null.`,
-      );
-    }
-    return owner;
+    return owners[operation];
   };
   const deleteOwner = validateOwner("delete");
   const mergeOwner = validateOwner("merge");
-  const deleteCapability = required(
-    capabilities,
-    "delete",
-    `${context}.capabilities`,
-  );
+  const deleteCapability = capabilities.delete;
   if (deleteCapability !== null) {
     if (deleteOwner === null) {
       throw new EntityDeclarationError(
         `${context}.capabilities.operationOwners.delete is required for delete.`,
       );
     }
-    const deletion = objectValue(
-      deleteCapability,
-      `${context}.capabilities.delete`,
-    );
-    exactKeys(deletion, ["mode", "bulk"], `${context}.capabilities.delete`);
-    const mode = stringValue(
-      required(deletion, "mode", `${context}.capabilities.delete`),
-      `${context}.capabilities.delete.mode`,
-    );
-    if (mode !== "soft" && mode !== "hard")
-      throw new EntityDeclarationError(
-        `${context}.capabilities.delete.mode is invalid.`,
-      );
-    booleanValue(
-      required(deletion, "bulk", `${context}.capabilities.delete`),
-      `${context}.capabilities.delete.bulk`,
-    );
   }
   if (deleteCapability === null && deleteOwner !== null) {
     throw new EntityDeclarationError(
       `${context}.capabilities.operationOwners.delete must be null without delete.`,
     );
   }
-  const mergeCapability = booleanValue(
-    required(capabilities, "merge", `${context}.capabilities`),
-    `${context}.capabilities.merge`,
-  );
+  const mergeCapability = capabilities.merge;
   if (mergeCapability !== (mergeOwner !== null)) {
     throw new EntityDeclarationError(
       `${context}.capabilities.operationOwners.merge must match merge capability.`,
     );
   }
-  const bulkUpdateCapability = required(
-    capabilities,
-    "bulkUpdate",
-    `${context}.capabilities`,
-  );
+  const bulkUpdateCapability = capabilities.bulkUpdate;
   if (bulkUpdateCapability !== null) {
-    const bulkUpdate = objectValue(
-      bulkUpdateCapability,
-      `${context}.capabilities.bulkUpdate`,
-    );
-    exactKeys(bulkUpdate, ["fields"], `${context}.capabilities.bulkUpdate`);
-    const fields = required(
-      bulkUpdate,
-      "fields",
-      `${context}.capabilities.bulkUpdate`,
-    );
-    if (!Array.isArray(fields) || fields.length === 0) {
-      throw new EntityDeclarationError(
-        `${context}.capabilities.bulkUpdate.fields must be a non-empty array.`,
-      );
-    }
-    // The generator never imports the update schema (it reads specs as AST), so
-    // field names are checked structurally here and by TYPE in the artifact: the
-    // emitted `.pick({...})` fails typecheck on a field the schema does not have.
-    const names = fields.map((field, index) =>
-      stringValue(field, `${context}.capabilities.bulkUpdate.fields[${index}]`),
-    );
+    // The emitted update-schema `.pick({...})` rejects a field absent from the
+    // source-referenced update schema at typecheck time.
+    const names = bulkUpdateCapability.fields;
     if (new Set(names).size !== names.length) {
       throw new EntityDeclarationError(
         `${context}.capabilities.bulkUpdate.fields contains duplicates.`,
       );
     }
-    if (required(raw, "fields", context) === null) {
+    if (declaration.fields === null) {
       throw new EntityDeclarationError(
         `${context}.capabilities.bulkUpdate requires an update schema.`,
       );
     }
   }
-  booleanValue(
-    required(capabilities, "merge", `${context}.capabilities`),
-    `${context}.capabilities.merge`,
-  );
-  const mcpActions = required(capabilities, "mcp", `${context}.capabilities`);
-  if (!Array.isArray(mcpActions))
-    throw new EntityDeclarationError(
-      `${context}.capabilities.mcp must be an array.`,
-    );
+  const mcpActions = capabilities.mcp;
   const supportedMcpActions = [
     "get",
     "list",
@@ -1196,8 +561,7 @@ const validateDeclarationCapabilities = (
     "bulkUpdate",
     "merge",
   ];
-  for (const [index, action] of mcpActions.entries()) {
-    const name = stringValue(action, `${context}.capabilities.mcp[${index}]`);
+  for (const [index, name] of mcpActions.entries()) {
     if (!supportedMcpActions.includes(name))
       throw new EntityDeclarationError(
         `${context}.capabilities.mcp[${index}] is unsupported.`,
@@ -1205,237 +569,154 @@ const validateDeclarationCapabilities = (
   }
 };
 
-// Keep relation normalization in one diagnostic context: every rejected field
-// must identify the same literal relation path, including nested sources.
-// oxlint-disable-next-line eslint/complexity
-const normalizedDeclarationRelations = (
-  raw: DeclarationObject,
+const opaqueRelationProvenance = (
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- relation graph provenance is intentionally compiler-semantic opaque data.
+  value: unknown,
   context: string,
-): DeclarationValue[] => {
-  const relations = required(raw, "relations", context);
-  if (!Array.isArray(relations))
-    throw new EntityDeclarationError(`${context}.relations must be an array.`);
-  for (const [index, value] of relations.entries()) {
-    const relation = objectValue(value, `${context}.relations[${index}]`);
-    exactKeys(
-      relation,
-      [
-        "key",
-        "label",
-        "target",
-        "cardinality",
-        "sourceKey",
-        "provenance",
-        "inverse",
-        "sources",
-        "mutation",
-      ],
-      `${context}.relations[${index}]`,
-    );
-    const relationKey = stringValue(
-      required(relation, "key", `${context}.relations[${index}]`),
-      `${context}.relations[${index}].key`,
-    );
-    const cardinality = stringValue(
-      required(relation, "cardinality", `${context}.relations[${index}]`),
-      `${context}.relations[${index}].cardinality`,
-    );
-    if (cardinality !== "one" && cardinality !== "many") {
+): DeclarationObject => objectValue(value, context);
+
+// Cross-relation checks use parsed metadata; only graph provenance remains
+// opaque because its path semantics are validated against the full catalog.
+const normalizedDeclarationRelations = (
+  relations: EntityDeclarationMetadata["relations"],
+  context: string,
+): void => {
+  const relationKeys = new Set<string>();
+  for (const [index, relation] of relations.entries()) {
+    const relationContext = `${context}.relations[${index}]`;
+    if (relationKeys.has(relation.key))
       throw new EntityDeclarationError(
-        `${context}.relations[${index}].cardinality must be one or many.`,
+        `${context}.relations contains duplicate keys.`,
       );
-    }
-    const sourceKey =
-      relation.sourceKey === undefined
-        ? relationKey
-        : stringValue(
-            relation.sourceKey,
-            `${context}.relations[${index}].sourceKey`,
-          );
-    relation.sourceKey = sourceKey;
-    const provenance = objectValue(
-      required(relation, "provenance", `${context}.relations[${index}]`),
-      `${context}.relations[${index}].provenance`,
+    relationKeys.add(relation.key);
+    const sourceKey = relation.sourceKey ?? relation.key;
+    const provenance = opaqueRelationProvenance(
+      relation.provenance,
+      `${relationContext}.provenance`,
     );
     if (provenance.kind === "local-path" && relation.inverse === undefined)
       throw new EntityDeclarationError(
-        `${context}.relations[${index}] local-path requires inverse.`,
+        `${relationContext} local-path requires inverse.`,
       );
-    const sources =
-      relation.sources === undefined
-        ? []
-        : literalObjectArray(
-            relation.sources,
-            `${context}.relations[${index}].sources`,
-          );
+    const sources = relation.sources ?? [];
     const sourceKeys = [sourceKey];
     for (const [sourceIndex, source] of sources.entries()) {
-      exactKeys(
-        source,
-        ["key", "label", "provenance", "inverse"],
-        `${context}.relations[${index}].sources[${sourceIndex}]`,
-      );
-      const key = stringValue(
-        required(
-          source,
-          "key",
-          `${context}.relations[${index}].sources[${sourceIndex}]`,
-        ),
-        `${context}.relations[${index}].sources[${sourceIndex}].key`,
-      );
-      sourceKeys.push(key);
-      const sourceProvenance = objectValue(
-        required(
-          source,
-          "provenance",
-          `${context}.relations[${index}].sources[${sourceIndex}]`,
-        ),
-        `${context}.relations[${index}].sources[${sourceIndex}].provenance`,
+      sourceKeys.push(source.key);
+      const sourceProvenance = opaqueRelationProvenance(
+        source.provenance,
+        `${relationContext}.sources[${sourceIndex}].provenance`,
       );
       if (
         sourceProvenance.kind === "local-path" &&
         source.inverse === undefined
       ) {
         throw new EntityDeclarationError(
-          `${context}.relations[${index}].sources[${sourceIndex}] local-path requires inverse.`,
+          `${relationContext}.sources[${sourceIndex}] local-path requires inverse.`,
         );
       }
     }
     if (new Set(sourceKeys).size !== sourceKeys.length) {
       throw new EntityDeclarationError(
-        `${context}.relations[${index}] contains duplicate source keys.`,
+        `${relationContext} contains duplicate source keys.`,
       );
     }
-    relation.sources = sources;
     if (relation.mutation !== undefined) {
-      const mutation = objectValue(
-        relation.mutation,
-        `${context}.relations[${index}].mutation`,
-      );
-      exactKeys(
-        mutation,
-        ["source", "itemSchema", "adapter", "audiences"],
-        `${context}.relations[${index}].mutation`,
-      );
-      const mutationSource = stringValue(
-        required(mutation, "source", `${context}.relations[${index}].mutation`),
-        `${context}.relations[${index}].mutation.source`,
-      );
-      if (!sourceKeys.includes(mutationSource)) {
+      if (!sourceKeys.includes(relation.mutation.source)) {
         throw new EntityDeclarationError(
-          `${context}.relations[${index}].mutation.source must name a declared source.`,
+          `${relationContext}.mutation.source must name a declared source.`,
         );
       }
-      mutation.itemSchema = sourceRef(
-        required(
-          mutation,
-          "itemSchema",
-          `${context}.relations[${index}].mutation`,
-        ),
-        `${context}.relations[${index}].mutation.itemSchema`,
-      );
-      mutation.adapter = sourceRef(
-        required(
-          mutation,
-          "adapter",
-          `${context}.relations[${index}].mutation`,
-        ),
-        `${context}.relations[${index}].mutation.adapter`,
-      );
-      const audiences = required(
-        mutation,
-        "audiences",
-        `${context}.relations[${index}].mutation`,
-      );
-      if (!Array.isArray(audiences) || audiences.length === 0) {
+      if (
+        new Set(relation.mutation.audiences).size !==
+        relation.mutation.audiences.length
+      ) {
         throw new EntityDeclarationError(
-          `${context}.relations[${index}].mutation.audiences must be a non-empty array.`,
-        );
-      }
-      for (const [audienceIndex, audience] of audiences.entries()) {
-        const name = stringValue(
-          audience,
-          `${context}.relations[${index}].mutation.audiences[${audienceIndex}]`,
-        );
-        if (name !== "browser" && name !== "mcp") {
-          throw new EntityDeclarationError(
-            `${context}.relations[${index}].mutation.audiences[${audienceIndex}] is unsupported.`,
-          );
-        }
-      }
-      if (new Set(audiences).size !== audiences.length) {
-        throw new EntityDeclarationError(
-          `${context}.relations[${index}].mutation.audiences contains duplicates.`,
+          `${relationContext}.mutation.audiences contains duplicates.`,
         );
       }
     }
   }
-  return relations;
 };
 
-const normalizedDeclarationRoute = (
-  raw: DeclarationObject,
+const serializedDeclarationRelations = (
+  relations: EntityDeclarationMetadata["relations"],
   context: string,
-): DeclarationValue => {
-  const route = required(raw, "route", context);
-  if (route !== null) {
-    exactKeys(
-      objectValue(route, `${context}.route`),
-      ["basePath", "detailParam"],
-      `${context}.route`,
-    );
-  }
-  return route;
-};
+): DeclarationObject[] =>
+  relations.map((relation, index) => {
+    const relationContext = `${context}.relations[${index}]`;
+    const serialized: DeclarationObject = {
+      key: relation.key,
+      label: relation.label,
+      target: relation.target,
+      cardinality: relation.cardinality,
+      sourceKey: relation.sourceKey ?? relation.key,
+      provenance: opaqueRelationProvenance(
+        relation.provenance,
+        `${relationContext}.provenance`,
+      ),
+      sources: (relation.sources ?? []).map((source, sourceIndex) => {
+        const serializedSource: DeclarationObject = {
+          key: source.key,
+          label: source.label,
+          provenance: opaqueRelationProvenance(
+            source.provenance,
+            `${relationContext}.sources[${sourceIndex}].provenance`,
+          ),
+        };
+        if (source.inverse !== undefined)
+          serializedSource.inverse = opaqueRelationProvenance(
+            source.inverse,
+            `${relationContext}.sources[${sourceIndex}].inverse`,
+          );
+        return serializedSource;
+      }),
+    };
+    if (relation.inverse !== undefined)
+      serialized.inverse = opaqueRelationProvenance(
+        relation.inverse,
+        `${relationContext}.inverse`,
+      );
+    if (relation.mutation !== undefined) {
+      serialized.mutation = {
+        source: relation.mutation.source,
+        itemSchema: { ...relation.mutation.itemSchema },
+        adapter: { ...relation.mutation.adapter },
+        audiences: [...relation.mutation.audiences],
+      };
+    }
+    return serialized;
+  });
 
 const declarationDescriptor = (
-  raw: DeclarationObject,
-  identifiers: DeclarationObject,
-  capabilities: DeclarationObject,
-  search: DeclarationObject,
-  relations: DeclarationValue[],
-  route: DeclarationValue,
-  extensions: DeclarationObject,
+  declaration: EntityDeclarationMetadata,
   context: string,
 ): DeclarationObject => {
+  const extensions = declaration.extensions;
   const descriptor: DeclarationObject = {
-    dbTable: required(raw, "table", context),
-    idBrand: required(identifiers, "brand", `${context}.identifiers`),
+    dbTable: declaration.table,
+    idBrand: declaration.identifiers.brand,
   };
-  if (identifiers.shortcode !== null && identifiers.shortcode !== undefined) {
-    descriptor.shortcodePrefix = identifiers.shortcode;
+  if (declaration.identifiers.shortcode !== null) {
+    descriptor.shortcodePrefix = declaration.identifiers.shortcode;
   }
-  if (identifiers.legacy !== null && identifiers.legacy !== undefined) {
-    descriptor.legacyShortcodePrefix = identifiers.legacy;
+  if (declaration.identifiers.legacy !== null) {
+    descriptor.legacyShortcodePrefix = declaration.identifiers.legacy;
   }
-  descriptor.softDelete = required(
-    capabilities,
-    "softDelete",
-    `${context}.capabilities`,
+  descriptor.softDelete = declaration.capabilities.softDelete;
+  if (declaration.route === null) descriptor.browserRoutes = false;
+  descriptor.auditable = declaration.capabilities.auditable;
+  descriptor.hasImages = declaration.capabilities.images;
+  descriptor.searchable = declaration.search.enabled;
+  descriptor.countable = declaration.capabilities.countable;
+  descriptor.relationships = serializedDeclarationRelations(
+    declaration.relations,
+    context,
   );
-  if (route === null) descriptor.browserRoutes = false;
-  descriptor.auditable = required(
-    capabilities,
-    "auditable",
-    `${context}.capabilities`,
-  );
-  descriptor.hasImages = required(
-    capabilities,
-    "images",
-    `${context}.capabilities`,
-  );
-  descriptor.searchable = required(search, "enabled", `${context}.search`);
-  descriptor.countable = required(
-    capabilities,
-    "countable",
-    `${context}.capabilities`,
-  );
-  descriptor.relationships = relations;
   descriptor.lifecycle = {
-    delete: required(capabilities, "delete", `${context}.capabilities`),
-    merge: required(capabilities, "merge", `${context}.capabilities`),
+    delete: declaration.capabilities.delete,
+    merge: declaration.capabilities.merge,
   };
-  descriptor.mcp = required(capabilities, "mcp", `${context}.capabilities`);
+  descriptor.mcp = declaration.capabilities.mcp;
   if (extensions.countFilter !== null && extensions.countFilter !== undefined) {
     descriptor.countFilter = extensions.countFilter;
   }
@@ -1450,96 +731,6 @@ const declarationDescriptor = (
   }
 
   return descriptor;
-};
-
-const normalizedDeclarationEntity = (
-  raw: DeclarationObject,
-  names: DeclarationObject,
-  presentation: DeclarationObject,
-  descriptor: DeclarationObject,
-  route: DeclarationValue,
-  capabilities: DeclarationObject,
-  extensions: DeclarationObject,
-  context: string,
-): DeclarationObject => {
-  const normalized: DeclarationObject = {
-    key: required(raw, "key", context),
-    route,
-    inspector: {
-      singular: required(names, "singular", `${context}.names`),
-      plural: names.plural ?? null,
-      titleField: required(
-        presentation,
-        "titleField",
-        `${context}.presentation`,
-      ),
-    },
-    descriptor,
-    contract: required(raw, "fields", context),
-    filters: required(raw, "filters", context),
-    bulkUpdate: required(capabilities, "bulkUpdate", `${context}.capabilities`),
-    operationOwners: required(
-      capabilities,
-      "operationOwners",
-      `${context}.capabilities`,
-    ),
-  };
-  if (raw.model !== undefined) {
-    normalized.fieldModel = raw.model;
-  }
-  if (extensions.ports !== undefined) {
-    normalized.ports = extensions.ports;
-  }
-  return normalized;
-};
-
-const compiledInspector = (object: DeclarationObject, context: string) => {
-  const inspectorObject = objectValue(
-    required(object, "inspector", context),
-    `${context}.inspector`,
-  );
-  exactKeys(
-    inspectorObject,
-    ["singular", "plural", "titleField"],
-    `${context}.inspector`,
-  );
-  return {
-    singular: stringValue(
-      required(inspectorObject, "singular", `${context}.inspector`),
-      `${context}.inspector.singular`,
-    ),
-    plural:
-      inspectorObject.plural === null
-        ? null
-        : stringValue(
-            required(inspectorObject, "plural", `${context}.inspector`),
-            `${context}.inspector.plural`,
-          ),
-    titleField: stringValue(
-      required(inspectorObject, "titleField", `${context}.inspector`),
-      `${context}.inspector.titleField`,
-    ),
-  };
-};
-
-const compiledRoute = (
-  value: DeclarationValue | undefined,
-  context: string,
-): ParsedEntityRoute | null => {
-  if (value === undefined || value === null) return null;
-  const route = objectValue(value, `${context}.route`);
-  const parsed: ParsedEntityRoute = {
-    basePath: stringValue(
-      required(route, "basePath", `${context}.route`),
-      `${context}.route.basePath`,
-    ),
-  };
-  if (route.detailParam !== undefined)
-    parsed.detailParam = stringValue(
-      route.detailParam,
-      `${context}.route.detailParam`,
-    );
-  return parsed;
 };
 
 const compiledShortcode = (
@@ -1561,95 +752,45 @@ const compiledShortcode = (
 
 // One compiler pass keeps cross-field capability errors attached to the exact
 // entity declaration rather than losing context across partial validators.
-// oxlint-disable-next-line eslint/complexity, anti-slop/no-unknown-parameters -- Imported declarations enter the metadata parser here.
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- imported declaration boundary
 const compileEntity = (value: unknown, index: number): CompiledEntity => {
   const context = `ENTITY_DECLARATIONS[${index}]`;
-  const { filterSchemas: _filterSchemas, ...metadata } = objectValue(
-    value,
-    context,
-  );
-  const object = normalizedEntitySource(metadata, context);
-  exactKeys(
-    object,
-    [
-      "key",
-      "contract",
-      "descriptor",
-      "route",
-      "filters",
-      "inspector",
-      "bulkUpdate",
-      "operationOwners",
-      "ports",
-      "fieldModel",
-    ],
-    context,
-  );
-
-  const key = stringValue(required(object, "key", context), `${context}.key`);
+  const raw = objectValue(value, context);
+  const { filterSchemas: _filterSchemas, ...declared } = raw;
+  let declaration;
+  try {
+    declaration = parseEntityDeclarationMetadata(declared, context);
+  } catch (error) {
+    if (error instanceof Error) throw new EntityDeclarationError(error.message);
+    throw error;
+  }
+  const key = declaration.key;
   if (!/^[a-z][a-zA-Z-]*$/.test(key)) {
     throw new EntityDeclarationError(
       `${context}.key must be lower-camel-case or kebab-case.`,
     );
   }
 
-  const descriptor = objectValue(
-    required(object, "descriptor", context),
-    `${context}.descriptor`,
-  );
-  const fieldModel = compileFieldModel(object.fieldModel, `${context}.model`);
-  descriptor.relationships ??= [];
-  const operationOwnersObject = objectValue(
-    required(object, "operationOwners", context),
-    `${context}.operationOwners`,
-  );
-  exactKeys(
-    operationOwnersObject,
-    ["delete", "merge"],
-    `${context}.operationOwners`,
-  );
-  const operationOwner = (operation: "delete" | "merge"): OperationOwner => {
-    const value = required(
-      operationOwnersObject,
-      operation,
-      `${context}.operationOwners`,
-    );
-    if (value === null || value === "kernel" || value === "workflow") {
-      return value;
-    }
-    throw new EntityDeclarationError(
-      `${context}.operationOwners.${operation} must be kernel, workflow, or null.`,
-    );
-  };
+  validateDeclarationCapabilities(declaration, context);
+  normalizedDeclarationRelations(declaration.relations, context);
+  const descriptor = declarationDescriptor(declaration, context);
+  const fieldModel = compileFieldModel(declaration.model, `${context}.model`);
   const operationOwners = {
-    delete: operationOwner("delete"),
-    merge: operationOwner("merge"),
+    delete: declaration.capabilities.operationOwners.delete,
+    merge: declaration.capabilities.operationOwners.merge,
   };
-  const inspector = compiledInspector(object, context);
-  const filters = objectValue(
-    required(object, "filters", context),
-    `${context}.filters`,
-  );
-  exactKeys(filters, ["audit", "schema", "descriptors"], `${context}.filters`);
-  const filterAudit =
-    filters.audit === undefined
-      ? false
-      : booleanValue(filters.audit, `${context}.filters.audit`);
+  const inspector = {
+    singular: declaration.names.singular,
+    plural: declaration.names.plural,
+    titleField: declaration.presentation.titleField,
+  };
+  const filters = declaration.filters;
+  const filterAudit = filters.audit === undefined ? false : filters.audit;
   const filterSchema =
     filters.schema === undefined || filters.schema === null
       ? null
-      : sourceRef(filters.schema, `${context}.filters.schema`);
-  const rawFilterDescriptors = required(
-    filters,
-    "descriptors",
-    `${context}.filters`,
-  );
-  if (!Array.isArray(rawFilterDescriptors)) {
-    throw new EntityDeclarationError(
-      `${context}.filters.descriptors must be an array.`,
-    );
-  }
-  const filterDescriptors = rawFilterDescriptors.map((value, index) =>
+      : { module: filters.schema.module, export: filters.schema.export };
+  const filterDescriptors = filters.descriptors.map((value, index) =>
     filterDescriptor(value, `${context}.filters.descriptors[${index}]`),
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
@@ -1742,7 +883,7 @@ const compileEntity = (value: unknown, index: number): CompiledEntity => {
       `${context}.filters.descriptors contains duplicate URL keys.`,
     );
   }
-  const route = compiledRoute(object.route, context);
+  const route = declaration.route;
   const shortcode = compiledShortcode(
     descriptor,
     "shortcodePrefix",
@@ -1771,79 +912,24 @@ const compileEntity = (value: unknown, index: number): CompiledEntity => {
     `${context}.descriptor.searchable`,
   );
 
-  const contractValue = required(object, "contract", context);
+  const contractValue = declaration.fields;
   const contract =
     contractValue === null
       ? null
       : (() => {
-          const contractObject = objectValue(
-            contractValue,
-            `${context}.contract`,
-          );
-          exactKeys(
-            contractObject,
-            [
-              "create",
-              "update",
-              "output",
-              "list",
-              "detail",
-              "mcpOutput",
-              "mcpList",
-              "mcpDetail",
-            ],
-            `${context}.contract`,
-          );
-          const output = sourceRef(
-            required(contractObject, "output", `${context}.contract`),
-            `${context}.contract.output`,
-          );
-          const list =
-            contractObject.list === undefined
-              ? output
-              : sourceRef(contractObject.list, `${context}.contract.list`);
-          const detail =
-            contractObject.detail === undefined
-              ? output
-              : sourceRef(contractObject.detail, `${context}.contract.detail`);
+          const output = contractValue.output;
+          const list = contractValue.list ?? output;
+          const detail = contractValue.detail ?? output;
           return {
-            create: nullableSourceRef(
-              required(contractObject, "create", `${context}.contract`),
-              `${context}.contract.create`,
-            ),
-            update: nullableSourceRef(
-              required(contractObject, "update", `${context}.contract`),
-              `${context}.contract.update`,
-            ),
+            create: contractValue.create,
+            update: contractValue.update,
             output,
             list,
             detail,
-            mcpOutput:
-              contractObject.mcpOutput === undefined
-                ? output
-                : sourceRef(
-                    contractObject.mcpOutput,
-                    `${context}.contract.mcpOutput`,
-                  ),
-            mcpList:
-              contractObject.mcpList === undefined
-                ? list
-                : sourceRef(
-                    contractObject.mcpList,
-                    `${context}.contract.mcpList`,
-                  ),
+            mcpOutput: contractValue.mcpOutput ?? output,
+            mcpList: contractValue.mcpList ?? list,
             mcpDetail:
-              contractObject.mcpDetail === undefined
-                ? contractObject.mcpOutput === undefined
-                  ? detail
-                  : sourceRef(
-                      contractObject.mcpOutput,
-                      `${context}.contract.mcpOutput`,
-                    )
-                : sourceRef(
-                    contractObject.mcpDetail,
-                    `${context}.contract.mcpDetail`,
-                  ),
+              contractValue.mcpDetail ?? contractValue.mcpOutput ?? detail,
           };
         })();
 
@@ -1852,106 +938,24 @@ const compileEntity = (value: unknown, index: number): CompiledEntity => {
       `${context} cannot declare a contract without a shortcode.`,
     );
   }
-  const ports = entityPorts(object.ports, `${context}.ports`);
-  const relationships = literalObjectArray(
-    required(descriptor, "relationships", `${context}.descriptor`),
-    `${context}.descriptor.relationships`,
+  const ports = entityPorts(declaration.extensions.ports);
+  const relationMutations = declaration.relations.flatMap(
+    (relation): RelationMutation[] =>
+      relation.mutation === undefined
+        ? []
+        : [
+            {
+              entity: key,
+              relation: relation.key,
+              target: relation.target,
+              source: relation.mutation.source,
+              itemSchema: relation.mutation.itemSchema,
+              adapter: relation.mutation.adapter,
+              audiences: relation.mutation.audiences,
+            },
+          ],
   );
-  const relationshipKeys = relationships.map((relationship, relationIndex) =>
-    stringValue(
-      required(
-        relationship,
-        "key",
-        `${context}.descriptor.relationships[${relationIndex}]`,
-      ),
-      `${context}.descriptor.relationships[${relationIndex}].key`,
-    ),
-  );
-  if (new Set(relationshipKeys).size !== relationshipKeys.length) {
-    throw new EntityDeclarationError(
-      `${context}.descriptor.relationships contains duplicate keys.`,
-    );
-  }
-  const relationMutations = relationships.flatMap(
-    (relationship, relationIndex): RelationMutation[] => {
-      if (relationship.mutation === undefined) return [];
-      const relationContext = `${context}.descriptor.relationships[${relationIndex}]`;
-      const mutation = objectValue(
-        relationship.mutation,
-        `${relationContext}.mutation`,
-      );
-      const audiences = required(
-        mutation,
-        "audiences",
-        `${relationContext}.mutation`,
-      );
-      if (!Array.isArray(audiences)) {
-        throw new EntityDeclarationError(
-          `${relationContext}.mutation.audiences must be an array.`,
-        );
-      }
-      return [
-        {
-          entity: key,
-          relation: stringValue(
-            required(relationship, "key", relationContext),
-            `${relationContext}.key`,
-          ),
-          target: stringValue(
-            required(relationship, "target", relationContext),
-            `${relationContext}.target`,
-          ),
-          source: stringValue(
-            required(mutation, "source", `${relationContext}.mutation`),
-            `${relationContext}.mutation.source`,
-          ),
-          itemSchema: sourceRef(
-            required(mutation, "itemSchema", `${relationContext}.mutation`),
-            `${relationContext}.mutation.itemSchema`,
-          ),
-          adapter: sourceRef(
-            required(mutation, "adapter", `${relationContext}.mutation`),
-            `${relationContext}.mutation.adapter`,
-          ),
-          audiences: audiences.map((audience, audienceIndex) => {
-            const value = stringValue(
-              audience,
-              `${relationContext}.mutation.audiences[${audienceIndex}]`,
-            );
-            if (value !== "browser" && value !== "mcp") {
-              throw new EntityDeclarationError(
-                `${relationContext}.mutation.audiences[${audienceIndex}] is unsupported.`,
-              );
-            }
-            return value;
-          }),
-        },
-      ];
-    },
-  );
-  const bulkUpdateValue = object.bulkUpdate;
-  const bulkUpdateFields =
-    bulkUpdateValue === undefined || bulkUpdateValue === null
-      ? null
-      : (() => {
-          const bulkUpdate = objectValue(
-            bulkUpdateValue,
-            `${context}.bulkUpdate`,
-          );
-          const fields = required(
-            bulkUpdate,
-            "fields",
-            `${context}.bulkUpdate`,
-          );
-          if (!Array.isArray(fields)) {
-            throw new EntityDeclarationError(
-              `${context}.bulkUpdate.fields must be an array.`,
-            );
-          }
-          return fields.map((field, index) =>
-            stringValue(field, `${context}.bulkUpdate.fields[${index}]`),
-          );
-        })();
+  const bulkUpdateFields = declaration.capabilities.bulkUpdate?.fields ?? null;
   return {
     key,
     shortcode,
@@ -1966,7 +970,14 @@ const compileEntity = (value: unknown, index: number): CompiledEntity => {
     filterDescriptors: filterDescriptorsWithAudit,
     bulkUpdateFields,
     ports,
+    relations: declaration.relations,
     relationMutations,
+    lifecycle: {
+      softDelete: declaration.capabilities.softDelete,
+      delete: declaration.capabilities.delete,
+      merge: declaration.capabilities.merge,
+    },
+    mcpActions: declaration.capabilities.mcp,
     operationOwners,
     fieldModel,
   };
@@ -2345,6 +1356,7 @@ export const missingBrowserRouteFiles = (
 export const renderEntityArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
+  const projections = entityProjectionMaps(entities);
   const relationMutations = entities.flatMap(
     (entity) => entity.relationMutations,
   );
@@ -2500,13 +1512,7 @@ export const renderEntityArtifacts = (
         `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     )
     .join("\n");
-  const schemaEntitySpecs = entities.filter(
-    (
-      entity,
-    ): entity is CompiledEntity & {
-      contract: NonNullable<CompiledEntity["contract"]>;
-    } => entity.contract !== null,
-  );
+  const schemaEntitySpecs = projections.schema;
   const schemaBindings = schemaEntitySpecs
     .map((entity) => {
       const { contract, filterSchema } = entity;
@@ -2540,16 +1546,7 @@ export const renderEntityArtifacts = (
       return `  ${JSON.stringify(entity.key)}: {crud:ENTITY_SCHEMA_BINDINGS[${JSON.stringify(entity.key)}]},`;
     })
     .join("\n");
-  const detailEntities = entities.filter(
-    (
-      entity,
-    ): entity is CompiledEntity & {
-      contract: NonNullable<CompiledEntity["contract"]>;
-    } =>
-      entity.contract !== null &&
-      entity.contract.create !== null &&
-      entity.contract.update !== null,
-  );
+  const detailEntities = projections.detail;
   const detailSchemas = detailEntities
     .map(
       ({ key, contract }) =>
@@ -2563,9 +1560,6 @@ export const renderEntityArtifacts = (
     exports.add(contract.detail.export);
     detailTypeImports.set(contract.detail.module, exports);
   }
-  const detailSchemaImports = detailEntities
-    .map(({ key }) => `${key}Shortcode`)
-    .sort();
   const detailRuntimeImportSource = [
     ...[...detailTypeImports.entries()].map(([module, exports]) => ({
       module,
@@ -2575,32 +1569,10 @@ export const renderEntityArtifacts = (
       module: "@cubby/schemas/identifiers",
       source: 'import { shortcodeSchema } from "@cubby/schemas/identifiers";',
     },
-    {
-      module: "@cubby/shared",
-      source: `import type { ${detailSchemaImports.join(", ")} } from "@cubby/shared";`,
-    },
     { module: "zod", source: 'import { z } from "zod";' },
   ]
     .sort((left, right) => left.module.localeCompare(right.module))
     .map(({ source }) => source)
-    .join("\n");
-  const detailOutputTypes = detailEntities
-    .map(
-      ({ key, contract }) =>
-        `  ${JSON.stringify(key)}: z.output<typeof ${contract.detail.export}>;`,
-    )
-    .join("\n");
-  const detailInputTypes = detailEntities
-    .map(
-      ({ key }) =>
-        `  ${JSON.stringify(key)}: { entity: ${JSON.stringify(key)}; shortcode: z.input<typeof ${key}Shortcode> };`,
-    )
-    .join("\n");
-  const detailParsedInputTypes = detailEntities
-    .map(
-      ({ key }) =>
-        `  ${JSON.stringify(key)}: { entity: ${JSON.stringify(key)}; shortcode: z.output<typeof ${key}Shortcode> };`,
-    )
     .join("\n");
   const detailInputVariants = detailEntities
     .map(
@@ -2609,19 +1581,7 @@ export const renderEntityArtifacts = (
     )
     .join(",\n  ");
 
-  const browserEntities = entities.filter(
-    ({ descriptor }) => descriptor.browserRoutes !== false,
-  );
-  const browserCrudEntitySpecs = browserEntities.filter(
-    (
-      entity,
-    ): entity is CompiledEntity & {
-      contract: NonNullable<CompiledEntity["contract"]>;
-    } =>
-      entity.contract !== null &&
-      entity.contract.create !== null &&
-      entity.contract.update !== null,
-  );
+  const browserCrudEntitySpecs = projections.list;
   const browserCrudEntities = browserCrudEntitySpecs.map(({ key }) => key);
   const listRuntimeOutputImports = browserCrudEntitySpecs
     .map(
@@ -2645,22 +1605,14 @@ export const renderEntityArtifacts = (
     )
     .join(",\n  ");
   const listFilterSchemas = browserCrudEntitySpecs
-    .map(
-      ({ key }) =>
-        `const ${key}ListFiltersSchema = z.object(${key}ListFilterFields);`,
+    .map(({ key, filterSchema }) =>
+      filterSchema === null
+        ? `const ${key}ListFiltersSchema = z.record(z.string(), z.unknown());`
+        : `const ${key}ListFiltersSchema = z.object(${key}ListFilterFields);`,
     )
     .join("\n");
-  const listInputFilterTypes = browserCrudEntitySpecs
-    .map(
-      ({ key }) =>
-        `  ${JSON.stringify(key)}: z.input<typeof ${key}ListFiltersSchema>;`,
-    )
-    .join("\n");
-  const listParsedFilterTypes = browserCrudEntitySpecs
-    .map(
-      ({ key }) =>
-        `  ${JSON.stringify(key)}: z.output<typeof ${key}ListFiltersSchema>;`,
-    )
+  const listFilterSchemaBindings = browserCrudEntitySpecs
+    .map(({ key }) => `  ${JSON.stringify(key)}: ${key}ListFiltersSchema,`)
     .join("\n");
   const listOutputSchemas = browserCrudEntitySpecs
     .map(
@@ -2896,11 +1848,7 @@ export const renderEntityArtifacts = (
         : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
     )
     .join("\n");
-  const lifecycleFor = (entity: CompiledEntity) =>
-    objectValue(
-      required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
-      `${entity.key}.descriptor.lifecycle`,
-    );
+  const lifecycleFor = (entity: CompiledEntity) => entity.lifecycle;
   const kernelActionsFor = (entity: CompiledEntity) => {
     const lifecycle = lifecycleFor(entity);
     return [
@@ -2929,10 +1877,9 @@ export const renderEntityArtifacts = (
     Object.entries(kernelContractCases)
       .filter(([, contractCase]) => contractCase.actions.includes(action))
       .map(([key]) => key);
-  const mcpActionsFor = (entity: CompiledEntity): string[] =>
-    Array.isArray(entity.descriptor.mcp)
-      ? entity.descriptor.mcp.map((action) => String(action))
-      : [];
+  const mcpActionsFor = (entity: CompiledEntity): string[] => [
+    ...entity.mcpActions,
+  ];
   const mcpKernelContractCases = Object.fromEntries(
     kernelEntities.map((entity) => {
       const declared = mcpActionsFor(entity);
@@ -3043,15 +1990,7 @@ export const renderEntityArtifacts = (
           sourceRefs,
           ports: entity.ports,
           references: [
-            ...new Set(
-              (entity.descriptor.relationships === undefined
-                ? []
-                : literalObjectArray(
-                    entity.descriptor.relationships,
-                    `${entity.key}.descriptor.relationships`,
-                  )
-              ).map((relationship) => relationship.target),
-            ),
+            ...new Set(entity.relations.map(({ target }) => target)),
           ],
         },
       ];
@@ -3339,23 +2278,19 @@ export const renderEntityArtifacts = (
         `${detailRuntimeImportSource}\n\n` +
         `export const detailEntities = ${compactLiteral(detailEntities.map(({ key }) => key))} as const;\n` +
         "export type DetailEntity = (typeof detailEntities)[number];\n\n" +
-        "export type EntityDetailByEntity = {\n" +
-        `${detailOutputTypes}\n` +
-        "};\n\n" +
-        "export type EntityDetailInputByEntity = {\n" +
-        `${detailInputTypes}\n` +
-        "};\n\n" +
-        "export type ParsedEntityDetailInputByEntity = {\n" +
-        `${detailParsedInputTypes}\n` +
-        "};\n\n" +
-        'export function entityDetailInputFor<E extends DetailEntity>(entity: E, shortcode: EntityDetailInputByEntity[E]["shortcode"]): EntityDetailInputByEntity[E];\n' +
-        'export function entityDetailInputFor(entity: DetailEntity, shortcode: EntityDetailInputByEntity[DetailEntity]["shortcode"]) {\n' +
-        "  return { entity, shortcode };\n" +
-        "}\n\n" +
         "// One generated detail schema per entity.\n// oxfmt-ignore\n" +
         `const ENTITY_DETAIL_OUTPUT_SCHEMAS = {\n${detailSchemas}\n} as const;\n\n` +
         "// One generated detail input variant per entity.\n// oxfmt-ignore\n" +
         `export const entityDetailInputSchema = z.discriminatedUnion("entity", [\n  ${detailInputVariants}\n]);\n\n` +
+        "type EntityDetailInput = z.input<typeof entityDetailInputSchema>;\n" +
+        "type ParsedEntityDetailInput = z.output<typeof entityDetailInputSchema>;\n" +
+        "export type EntityDetailByEntity = { [E in DetailEntity]: z.output<(typeof ENTITY_DETAIL_OUTPUT_SCHEMAS)[E]> };\n" +
+        "export type EntityDetailInputByEntity = { [E in DetailEntity]: Extract<EntityDetailInput, { entity: E }> };\n" +
+        "export type ParsedEntityDetailInputByEntity = { [E in DetailEntity]: Extract<ParsedEntityDetailInput, { entity: E }> };\n\n" +
+        'export function entityDetailInputFor<E extends DetailEntity>(entity: E, shortcode: EntityDetailInputByEntity[E]["shortcode"]): EntityDetailInputByEntity[E];\n' +
+        'export function entityDetailInputFor(entity: DetailEntity, shortcode: EntityDetailInputByEntity[DetailEntity]["shortcode"]) {\n' +
+        "  return { entity, shortcode };\n" +
+        "}\n\n" +
         "export function parseEntityDetailInput<E extends DetailEntity>(entity: E, value: EntityDetailInputByEntity[E]): ParsedEntityDetailInputByEntity[E];\n" +
         "export function parseEntityDetailInput(entity: DetailEntity, value: EntityDetailInputByEntity[DetailEntity]) {\n" +
         "  const parsed = entityDetailInputSchema.parse(value);\n" +
@@ -3383,16 +2318,14 @@ export const renderEntityArtifacts = (
         "const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n" +
         "const entityListMetaSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE), totalCount: z.number().int().min(0), sums: z.record(z.string(), z.number()).optional() });\n\n" +
         `${listFilterSchemas}\n\n` +
+        "// One generated filter schema per list entity.\n// oxfmt-ignore\n" +
+        `const ENTITY_LIST_FILTER_SCHEMAS = {\n${listFilterSchemaBindings}\n} as const;\n\n` +
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         "const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
         `${listOutputSchemas}\n` +
         "} as const;\n\n" +
-        "type EntityListInputFiltersByEntity = {\n" +
-        `${listInputFilterTypes}\n` +
-        "};\n" +
-        "type EntityListParsedFiltersByEntity = {\n" +
-        `${listParsedFilterTypes}\n` +
-        "};\n" +
+        "type EntityListInputFiltersByEntity = { [E in ListEntity]: z.input<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
+        "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
         "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort | EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string };\n" +
@@ -3549,7 +2482,7 @@ export const renderEntityArtifacts = (
         "// Generated routes stay one entity per line.\n// oxfmt-ignore\n" +
         `export const generatedBrowserRoutes = ${compactLiteral(
           Object.fromEntries(
-            browserEntities.map((entity) => [
+            projections.routes.map((entity) => [
               entity.key,
               browserRoutes(entity),
             ]),
@@ -3686,12 +2619,13 @@ export const renderEntityArtifacts = (
 export const renderFilterArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
+  const { filters: filterEntities } = entityProjectionMaps(entities);
   const roster = Object.fromEntries(
-    entities.map(({ key, filterUrlKeys }) => [key, filterUrlKeys]),
+    filterEntities.map(({ key, filterUrlKeys }) => [key, filterUrlKeys]),
   );
   const filterRefs = [
     ...new Map(
-      entities.flatMap(({ filterDescriptors }) =>
+      filterEntities.flatMap(({ filterDescriptors }) =>
         filterDescriptors.flatMap((descriptor) =>
           [descriptor.optionsRef, descriptor.expandRef]
             .filter((ref): ref is SourceRef => ref !== null)
@@ -3772,46 +2706,48 @@ export const renderFilterArtifacts = (
     ];
     return `{${properties.join(",")}}`;
   };
-  const runtimeRoster = entities
+  const runtimeRoster = filterEntities
     .map(
       ({ key, filterDescriptors }) =>
         `${JSON.stringify(key)}:[${filterDescriptors.map(runtimeDescriptor).join(",")}],`,
     )
     .join("\n");
   const filterContractCases = Object.fromEntries(
-    entities.map(({ key, filterAudit, filterSchema, filterDescriptors }) => [
-      key,
-      {
-        descriptorColumns: filterDescriptors.map(({ columnId }) => columnId),
-        urlKeys: filterDescriptors.map(({ urlKey }) => urlKey),
-        schema:
-          filterSchema === null
-            ? null
-            : `${filterSchema.module}#${filterSchema.export}`,
-        optionSources: [
-          ...new Set(
-            filterDescriptors.flatMap((descriptor) => [
-              ...(descriptor.optionsKey === null
-                ? []
-                : [descriptor.optionsKey]),
-              ...(descriptor.optionsRef === null
-                ? []
-                : [
-                    `${descriptor.optionsRef.module}#${descriptor.optionsRef.export}`,
-                  ]),
-            ]),
+    filterEntities.map(
+      ({ key, filterAudit, filterSchema, filterDescriptors }) => [
+        key,
+        {
+          descriptorColumns: filterDescriptors.map(({ columnId }) => columnId),
+          urlKeys: filterDescriptors.map(({ urlKey }) => urlKey),
+          schema:
+            filterSchema === null
+              ? null
+              : `${filterSchema.module}#${filterSchema.export}`,
+          optionSources: [
+            ...new Set(
+              filterDescriptors.flatMap((descriptor) => [
+                ...(descriptor.optionsKey === null
+                  ? []
+                  : [descriptor.optionsKey]),
+                ...(descriptor.optionsRef === null
+                  ? []
+                  : [
+                      `${descriptor.optionsRef.module}#${descriptor.optionsRef.export}`,
+                    ]),
+              ]),
+            ),
+          ],
+          audit: filterAudit,
+          rangeExpanders: filterDescriptors.flatMap((descriptor) =>
+            descriptor.kind === "range" && descriptor.expandRef !== null
+              ? [
+                  `${descriptor.columnId}:${descriptor.expandRef.module}#${descriptor.expandRef.export}`,
+                ]
+              : [],
           ),
-        ],
-        audit: filterAudit,
-        rangeExpanders: filterDescriptors.flatMap((descriptor) =>
-          descriptor.kind === "range" && descriptor.expandRef !== null
-            ? [
-                `${descriptor.columnId}:${descriptor.expandRef.module}#${descriptor.expandRef.export}`,
-              ]
-            : [],
-        ),
-      },
-    ]),
+        },
+      ],
+    ),
   );
   return [
     {

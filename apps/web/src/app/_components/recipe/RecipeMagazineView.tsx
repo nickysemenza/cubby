@@ -357,12 +357,12 @@ export function RecipeMagazineView({
           </div>
         </aside>
 
-        <main>
+        <section aria-label="Method">
           <SpreadHeading>Method</SpreadHeading>
           <div className="mt-4">
             <RecipeInstructions recipe={recipe} />
           </div>
-        </main>
+        </section>
       </div>
     </Stack>
   );

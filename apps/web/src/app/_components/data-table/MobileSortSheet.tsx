@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "~/components/ui/sheet";
+import { useVirtualKeyboard } from "~/hooks/useVirtualKeyboard";
 import { cn } from "~/lib/utils";
 
 import type {
@@ -94,6 +95,7 @@ export function MobileSortSheet<TItem extends RowData>({
   // on a table instance whose identity never changes — so a dependency array
   // here would be a lie.
   const columns = sortableColumns(table);
+  const keyboardOpen = useVirtualKeyboard();
 
   const [activeSort] = table.state.sorting;
   const activeDesc = activeSort?.desc ?? false;
@@ -108,7 +110,7 @@ export function MobileSortSheet<TItem extends RowData>({
 
   return (
     <>
-      {onScreen && !disabled && (
+      {onScreen && !disabled && !keyboardOpen && (
         <div
           data-mobile-sort-trigger
           // Clears the fixed bottom nav (a 3.5rem bar plus its safe-area pad)

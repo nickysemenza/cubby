@@ -25,7 +25,8 @@
       "purpose": "maskable"
     }
   ],
-  "start_url": "/inventory/session",
+  "id": "/inventory/session",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

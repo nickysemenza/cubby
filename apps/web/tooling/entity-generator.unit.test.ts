@@ -1,9 +1,23 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { pathToFileURL } from "node:url";
+import { afterEach, describe, expect, expectTypeOf, it } from "vitest";
 import { parseSync } from "oxc-parser";
 import { z } from "zod";
+import {
+  defineEntity,
+  parseEntityFieldModelMetadata,
+  readFieldSchemas,
+} from "../../../packages/schemas/src/entity-definitions/definition";
+import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
 import {
   checkEntityArtifacts,
   compileEntityDeclarations,
@@ -13,6 +27,7 @@ import {
   renderEntityArtifacts,
   renderFilterArtifacts,
 } from "../../../scripts/entity-generator";
+import type { CompiledEntity } from "../../../scripts/entity-generator";
 
 const temporaryRoots: string[] = [];
 afterEach(async () => {
@@ -22,6 +37,37 @@ afterEach(async () => {
       .map((root) => rm(root, { force: true, recursive: true })),
   );
 });
+
+const expectDeclaredEntityParity = (
+  compiled: CompiledEntity,
+  definition: EntityDeclaration,
+) => {
+  expect(compiled.inspector).toMatchObject({
+    singular: definition.names.singular,
+    plural: definition.names.plural,
+    titleField: definition.presentation.titleField,
+  });
+  expect(compiled.fieldModel.create).toEqual(definition.model?.create ?? []);
+  expect(compiled.fieldModel.update).toEqual(definition.model?.update ?? []);
+  expect(compiled.fieldModel.output).toEqual(definition.model?.output ?? []);
+  expect(compiled.descriptor.relationships).toEqual(
+    definition.relations.map((relation) => ({
+      ...relation,
+      sourceKey: relation.sourceKey ?? relation.key,
+      sources: relation.sources ?? [],
+    })),
+  );
+  for (const declared of definition.model?.fields ?? []) {
+    const field = compiled.fieldModel.fields.find(
+      ({ key }) => key === declared.key,
+    );
+    expect(field).toBeDefined();
+    expect(field?.validation.read).toBe(declared.validation?.read ?? null);
+    expect(field?.validation.create).toBe(declared.validation?.create ?? null);
+    expect(field?.validation.update).toBe(declared.validation?.update ?? null);
+  }
+};
+
 const base = {
   key: "alpha",
   names: { singular: "Alpha", plural: "Alphas" },
@@ -184,6 +230,63 @@ const declarationDependencyViolations = async () => {
 };
 
 describe("typed entity compiler", () => {
+  it("preserves literal model keys through the inferred declaration contract", () => {
+    const definition = defineEntity({
+      ...base,
+      model: {
+        fields: [
+          {
+            key: "displayName",
+            kind: "text",
+            validation: { read: z.string() },
+          },
+        ],
+        storage: ["displayName"],
+        create: ["displayName"],
+        update: ["displayName"],
+        output: ["displayName"],
+        bulk: [],
+        audit: [],
+      },
+    });
+    type FieldKey = (typeof definition.model.fields)[number]["key"];
+    const outputFields = ["displayName"] as const satisfies readonly FieldKey[];
+    // @ts-expect-error A declaration policy cannot name a field it does not declare.
+    const invalidOutputFields: readonly FieldKey[] = ["missing"];
+    void invalidOutputFields;
+    expectTypeOf(outputFields).toEqualTypeOf<readonly ["displayName"]>();
+    expectTypeOf(readFieldSchemas(definition)).toEqualTypeOf<{
+      displayName: z.ZodString;
+    }>();
+  });
+
+  it("parses field metadata once while retaining declared Zod instances", () => {
+    const read = z.string().brand<"ReadValue">();
+    const parsed = parseEntityFieldModelMetadata(
+      {
+        fields: [{ key: "displayName", kind: "text", validation: { read } }],
+        storage: ["displayName"],
+        create: [],
+        update: [],
+        output: ["displayName"],
+        bulk: [],
+        audit: [],
+      },
+      "example.model",
+    );
+    expect(parsed?.fields[0]).toMatchObject({
+      nullable: false,
+      control: null,
+      display: {
+        list: false,
+        detail: false,
+        detailSection: "overview",
+      },
+      validation: { create: null, read, update: null },
+    });
+    expect(parsed?.fields[0]?.validation.read).toBe(read);
+  });
+
   it("keeps executable declarations in the dependency-safe schema layer", async () => {
     expect(await declarationDependencyViolations()).toEqual([]);
   });
@@ -213,6 +316,30 @@ describe("typed entity compiler", () => {
       default: "none",
     });
     expect(entity.fieldModel.bulk).toEqual([]);
+  });
+
+  it("preserves every declared field schema and policy across the catalog", async () => {
+    const entities = await loadEntityDeclarations();
+    const compiledByKey = new Map(
+      entities.map((entity) => [entity.key, entity]),
+    );
+    const definitionDirectory = resolve(
+      repositoryRoot,
+      "packages/schemas/src/entity-definitions",
+    );
+    const entries = (await readdir(definitionDirectory))
+      .filter((entry) => entry.endsWith(".entity.ts"))
+      .sort();
+
+    for (const entry of entries) {
+      const definition = (
+        await import(pathToFileURL(join(definitionDirectory, entry)).href)
+      ).default;
+      const compiled = compiledByKey.get(definition.key);
+      expect(compiled).toBeDefined();
+      if (compiled !== undefined)
+        expectDeclaredEntityParity(compiled, definition);
+    }
   });
 
   it.each([
@@ -503,6 +630,15 @@ describe("typed entity compiler", () => {
     );
     expect(artifact("entity-details.gen.ts")).toContain(
       '"product": productWithFoodOut',
+    );
+    expect(artifact("entity-details.gen.ts")).toContain(
+      "z.output<(typeof ENTITY_DETAIL_OUTPUT_SCHEMAS)[E]>",
+    );
+    expect(artifact("entity-lists.gen.ts")).toContain(
+      "z.input<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]>",
+    );
+    expect(artifact("entity-lists.gen.ts")).toContain(
+      "ENTITY_LIST_FILTER_SCHEMAS",
     );
   });
 });

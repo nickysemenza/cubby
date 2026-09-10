@@ -498,7 +498,7 @@ function DetailPlate({
           <div
             className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-1" /* tight */
           >
-            <div className="min-w-0">
+            <div className="col-span-2 min-w-0 sm:col-span-1">
               <DetailBreadcrumb entity={entity} heroNo={heroNo} />
               <h1 className="font-heading text-xl leading-6 font-bold tracking-tight break-words sm:text-3xl sm:leading-9">
                 {name}
@@ -549,7 +549,7 @@ function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
   if (!actions?.primary && !actions?.secondary) return null;
 
   return (
-    <div className="flex items-center gap-2 print:hidden">
+    <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 print:hidden">
       {actions.primary}
       {actions.secondary && (
         <>

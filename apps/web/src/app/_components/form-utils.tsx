@@ -212,12 +212,13 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           // Pass an invalid handler so failed validation isn't swallowed silently
           // (react-hook-form otherwise no-ops the submit). Custom inputs don't all
           // receive RHF's auto-focus, so scroll the first invalid field into view.
+          const formElement = e.currentTarget;
           form.handleSubmit(onSubmit, () => {
             toast.error("Some fields need attention before you can save.");
             requestAnimationFrame(() => {
-              document
+              formElement
                 .querySelector('[aria-invalid="true"]')
-                ?.scrollIntoView({ block: "center", behavior: "smooth" });
+                ?.scrollIntoView({ block: "center", behavior: "auto" });
             });
           })(e);
         }}
