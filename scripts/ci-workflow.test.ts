@@ -178,7 +178,7 @@ test("local checks retain every required gate and keep stateful verification liv
   ];
   const extra = ["bindings", "openapi", "script-tests", "security"];
   const commands = {
-    entity: "node scripts/entity-literal-generator.ts --check",
+    entity: "tsx scripts/entity-generator.ts --check",
     "start-ops": "node scripts/start-operation-registry-generator.ts --check",
     types: "pnpm typecheck",
     lint: "oxlint .",

@@ -4,7 +4,7 @@ import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   entityEmbedding,
   auditLog,
@@ -16,20 +16,7 @@ import { getAuditLog } from "~/server/repo/audit-log";
 import { deleteRecipes } from "~/server/repo/recipe";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import {
-  callStep,
-  committedCallStep,
-  committedEffectStep,
-  afterCommitStep,
-  transactionStep,
-  defineWorkflow,
-  defineWorkflowFunction,
-  workflowInput,
-  executeWorkflow,
-  databaseWorkflowTransaction,
-  WorkflowEffectError,
-  type WorkflowFunctionContext,
-} from "~/server/workflow-runtime";
+import { executeWorkflow, workflow } from "~/server/workflow-runtime";
 import { precomputeEnrichmentProposalsWorkflow } from "~/server/workflows/ai.server";
 import {
   mergeWorkflow,
@@ -181,46 +168,23 @@ describe("ingredient", () => {
     const row = await findOrCreateIngredient(ctx.db, "committed call fixture");
     const controller = new AbortController();
     const observed: boolean[] = [];
-    const write = committedCallStep({
-      name: "mark",
-      input: workflowInput<typeof row.id>(),
-      fn: defineWorkflowFunction(
-        "ingredient.markOwnedTransaction",
-        async (
-          { context }: WorkflowFunctionContext<Database>,
-          id: typeof row.id,
-        ) => {
-          const result = await updateIngredientsUsuallyOnHand(
-            context,
-            [id],
-            { usuallyOnHand: true },
-            ctx.actor,
-          );
-          controller.abort();
-          return result;
-        },
-      ),
-    });
-    const observe = committedEffectStep({
-      name: "observe",
-      input: workflowInput<typeof row.id>(),
-      fn: defineWorkflowFunction(
-        "ingredient.observeOwnedCommit",
-        async (
-          { context, signal, scope }: WorkflowFunctionContext<Database>,
-          id: typeof row.id,
-        ) => {
-          expect(signal.aborted).toBe(false);
-          expect(scope).toBe("afterCommit");
-          observed.push((await getIngredientByID(context, id)).usuallyOnHand);
-        },
-      ),
-    });
-    const definition = defineWorkflow({
-      name: "ownedTransaction",
-      steps: [write, observe],
-      output: write.output,
-    });
+    const definition = workflow<Database, typeof row.id>("ownedTransaction")
+      .commit("mark", async ({ context }, { input }) => {
+        const result = await updateIngredientsUsuallyOnHand(
+          context,
+          [input],
+          { usuallyOnHand: true },
+          ctx.actor,
+        );
+        controller.abort();
+        return result;
+      })
+      .effect("observe", async ({ context, signal, scope }, { input }) => {
+        expect(signal.aborted).toBe(false);
+        expect(scope).toBe("afterCommit");
+        observed.push((await getIngredientByID(context, input)).usuallyOnHand);
+      })
+      .output(({ mark }) => mark);
     await expect(
       executeWorkflow(definition, {
         context: ctx.db,
@@ -234,109 +198,6 @@ describe("ingredient", () => {
     });
     expect(observed).toEqual([true]);
     expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(true);
-  });
-
-  it("runs workflow effects after durable commit and reports effect failure without rolling back", async () => {
-    const ingredientRow = await findOrCreateIngredient(
-      ctx.db,
-      "workflow commit fixture",
-    );
-    type Context = { db: Database | DrizzleTransaction };
-    const input = workflowInput<typeof ingredientRow.id>();
-    const write = callStep({
-      name: "write",
-      input,
-      fn: defineWorkflowFunction(
-        "ingredient.mark",
-        async (
-          { context }: WorkflowFunctionContext<Context>,
-          id: typeof ingredientRow.id,
-        ) =>
-          patchEntityRows(
-            context.db,
-            ctx.actor,
-            {
-              entity: "ingredient",
-              table: ingredient,
-              fields: ["usuallyOnHand"],
-            },
-            [id],
-            { usuallyOnHand: true },
-          ),
-      ),
-    });
-    const observed: boolean[] = [];
-    const verify = afterCommitStep({
-      name: "verifyCommit",
-      input,
-      fn: defineWorkflowFunction(
-        "ingredient.verifyCommit",
-        async (
-          _execution: WorkflowFunctionContext<Context>,
-          id: typeof ingredientRow.id,
-        ) => {
-          observed.push((await getIngredientByID(ctx.db, id)).usuallyOnHand);
-        },
-      ),
-    });
-    const fail = afterCommitStep({
-      name: "failedEffect",
-      input,
-      fn: defineWorkflowFunction(
-        "ingredient.failedEffect",
-        async (
-          _execution: WorkflowFunctionContext<Context>,
-          _id: typeof ingredientRow.id,
-        ) => {
-          throw new Error("external failure");
-        },
-      ),
-    });
-    const definition = defineWorkflow({
-      name: "commitEffects",
-      steps: [
-        transactionStep({ name: "transaction", steps: [write, verify, fail] }),
-      ],
-      output: write.output,
-    });
-    const transaction = databaseWorkflowTransaction<Context>({
-      database: () => ctx.db,
-      within: (_context, db) => ({ db }),
-    });
-    const effectEvents: { step: string; state: string; committed: boolean }[] =
-      [];
-    const result = executeWorkflow(definition, {
-      context: { db: ctx.db },
-      input: ingredientRow.id,
-      transaction,
-      observer: (event) => {
-        if (event.type === "afterCommit") {
-          effectEvents.push({
-            step: event.step,
-            state: event.state,
-            committed: event.committed,
-          });
-        }
-      },
-    });
-    await expect(result).rejects.toBeInstanceOf(WorkflowEffectError);
-    await expect(result).rejects.toMatchObject({
-      committed: true,
-      effect: "failedEffect",
-      pendingEffects: ["failedEffect"],
-    });
-    expect(observed).toEqual([true]);
-    expect(effectEvents).toEqual([
-      { step: "verifyCommit", state: "queued", committed: false },
-      { step: "failedEffect", state: "queued", committed: false },
-      { step: "verifyCommit", state: "started", committed: true },
-      { step: "verifyCommit", state: "succeeded", committed: true },
-      { step: "failedEffect", state: "started", committed: true },
-      { step: "failedEffect", state: "failed", committed: true },
-    ]);
-    expect(
-      (await getIngredientByID(ctx.db, ingredientRow.id)).usuallyOnHand,
-    ).toBe(true);
   });
 
   it("persists pantry assumptions separately from aliases, merges, and inventory", async () => {

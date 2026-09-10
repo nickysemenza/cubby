@@ -1,18 +1,20 @@
+import type { AgentStreamEvent } from "@cubby/schemas/agent";
 import { testUserId } from "@cubby/schemas/testing";
 import { wishCreateInput, wishOut } from "@cubby/schemas/wish";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { EventType } from "@tanstack/ai";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
+import { createAgentToolset } from "~/server/agent/mcp-bridge";
 import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { executeWorkflow } from "~/server/workflow-runtime";
 import { askAgentStreamWorkflow } from "~/server/workflows/agent.server";
 
 import { callMcpTool } from "./mcp-test-utils";
@@ -24,37 +26,37 @@ const wishResultSchema = z.object({ item: wishOut });
 describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
 
-  it("acquires the authenticated read-only assistant tools through its declared lifecycle", async () => {
+  it("keeps the authenticated agent toolset read-only", async () => {
     const context = requireActor(
-      createTestRequestContext(ctx.db, {
-        auth: { userId: ctx.actor.userId },
-      }),
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-    const input = { query: "Find ingredients" };
-    const definition = askAgentStreamWorkflow.definition;
-    const resource = await executeWorkflow(definition.acquire, {
+    const events: AgentStreamEvent[] = [];
+    for await (const event of askAgentStreamWorkflow(
       context,
-      input,
-    });
-    try {
-      const names = resource.tools.map((tool) => tool.name);
-      expect(names).toContain("get_entities");
-      expect(names).not.toContain("entity");
-      expect(
-        names.every((name) => /^(list_|get_|search_|find_)/.test(name)),
-      ).toBe(true);
-      expect(
-        await executeWorkflow(definition.complete, {
-          context,
-          input: { input, resource },
-        }),
-      ).toEqual([{ type: "done", sources: [], toolCalls: [] }]);
-    } finally {
-      await executeWorkflow(definition.release, {
-        context,
-        input: { input, resource },
-      });
-    }
+      { query: "read the pantry" },
+      undefined,
+      {
+        acquire: createAgentToolset,
+        stream: async function* (_db, _query, resource) {
+          const names = resource.tools.map((tool) => tool.name);
+          expect(names).toContain("get_entities");
+          expect(names).not.toContain("entity");
+          expect(
+            names.every((name) => /^(list_|get_|search_|find_)/.test(name)),
+          ).toBe(true);
+          yield {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "message-1",
+            delta: "ready",
+          };
+        },
+      },
+    ))
+      events.push(event);
+    expect(events).toEqual([
+      { type: "delta", text: "ready" },
+      { type: "done", sources: [], toolCalls: [] },
+    ]);
   });
 
   it("executes generated create, partial update, bulk marking, and delete definitions", async () => {

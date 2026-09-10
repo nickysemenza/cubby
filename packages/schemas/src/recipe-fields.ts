@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { id, ingredientShortcode, recipeShortcode } from "./identifiers";
+import { id, ingredientShortcode, recipeShortcode } from "./identifier-fields";
 import { amount, positiveAmount } from "./codec";
 import { timestampedFields } from "./base-entity";
-import { recipeTopLevel } from "./recipe";
+import { recipeTopLevel } from "./recipe-shared";
 
 const ingredientProvenance = {
   rawLine: z.string().nullish(),

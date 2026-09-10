@@ -1,6 +1,16 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
+import {
+  brandedFoodInfo,
+  fdcId,
+  foodInfo,
+  foodPortion,
+  legacyFoodInfo,
+  nutritionInfo,
+} from "@cubby/usda-schemas";
+import { z } from "zod";
+import { productTopLevelOut } from "../product-output-fields.js";
+export default defineEntity({
   key: "usda-food",
   names: { singular: "USDA Food", plural: "USDA Foods" },
   route: { basePath: "usda", detailParam: "id" },
@@ -15,10 +25,9 @@ export default literalEntity({
         label: "FDC ID",
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/usda-schemas", export: "fdcId" },
-          },
+          read: fdcId,
+          create: null,
+          update: null,
         },
       },
       {
@@ -28,14 +37,9 @@ export default literalEntity({
         label: "Branded food information",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/usda-schemas",
-              export: "brandedFoodInfo",
-            },
-            nullable: true,
-          },
+          read: brandedFoodInfo.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -44,10 +48,9 @@ export default literalEntity({
         label: "Food information",
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/usda-schemas", export: "foodInfo" },
-          },
+          read: foodInfo,
+          create: null,
+          update: null,
         },
       },
       {
@@ -57,11 +60,9 @@ export default literalEntity({
         label: "Legacy food information",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/usda-schemas", export: "legacyFoodInfo" },
-            nullable: true,
-          },
+          read: legacyFoodInfo.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -70,10 +71,9 @@ export default literalEntity({
         label: "Nutrition",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/usda-schemas", export: "nutritionInfo" },
-          },
+          read: nutritionInfo,
+          create: null,
+          update: null,
         },
       },
       {
@@ -82,13 +82,9 @@ export default literalEntity({
         label: "Portions",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: { module: "@cubby/usda-schemas", export: "foodPortion" },
-            },
-          },
+          read: z.array(foodPortion),
+          create: null,
+          update: null,
         },
       },
       {
@@ -97,16 +93,9 @@ export default literalEntity({
         label: "Inferred unit mappings",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/unitmapping",
-                export: "unitMappingWithMetadata",
-              },
-            },
-          },
+          read: z.array(unitMappingWithMetadata),
+          create: null,
+          update: null,
         },
       },
       {
@@ -116,16 +105,9 @@ export default literalEntity({
         reference: { entity: "product", multiple: true },
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/product",
-                export: "productTopLevelOut",
-              },
-            },
-          },
+          read: z.array(productTopLevelOut),
+          create: null,
+          update: null,
         },
       },
     ],

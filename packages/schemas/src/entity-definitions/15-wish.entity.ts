@@ -1,6 +1,12 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { productShortcode, wishShortcode } from "../identifier-fields.js";
+import { wishCandidateOut } from "@cubby/schemas/wish-fields";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().trim().min(1).max(200).optional(),
+  acquired: z.boolean().optional(),
+};
+export default defineEntity({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
   route: { basePath: "wishes" },
@@ -15,13 +21,9 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
-          kind: "string",
-          trim: true,
-          min: 1,
-          max: 200,
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().trim().min(1).max(200),
+          create: z.string().trim().min(1).max(200),
+          update: z.string().trim().min(1).max(200).optional(),
         },
       },
       {
@@ -31,11 +33,9 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -46,16 +46,9 @@ export default literalEntity({
         reference: { entity: "product", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "productShortcode",
-            },
-          },
-          create: { defaultValue: [] },
-          update: true,
+          read: null,
+          create: z.array(productShortcode).default([]),
+          update: z.array(productShortcode).optional(),
         },
       },
       {
@@ -63,19 +56,19 @@ export default literalEntity({
         kind: "boolean",
         readKey: null,
         control: { kind: "checkbox", section: "details" },
-        validation: { update: { kind: "boolean" } },
+        validation: {
+          read: null,
+          create: null,
+          update: z.boolean().optional(),
+        },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "wishShortcode",
-            },
-          },
+          read: wishShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -83,35 +76,40 @@ export default literalEntity({
         kind: "timestamp",
         nullable: true,
         display: { list: true, detail: true },
-        validation: { read: { kind: "timestamp", nullable: true } },
+        validation: {
+          read: z.date().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "candidates",
         kind: "json",
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/wish-fields",
-                export: "wishCandidateOut",
-              },
-            },
-          },
+          read: z.array(wishCandidateOut),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

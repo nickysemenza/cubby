@@ -82,22 +82,19 @@ describe("recipe import workflow graphs", () => {
     );
   });
 
-  it("prepares cookbook reprocessing before its no-initial-tick bulk graph", () => {
+  it("keeps cookbook reprocessing as a no-initial-tick bulk graph", () => {
     const definition = reprocessCookbookWorkflow.definition;
     expect(definition).toMatchObject({
-      kind: "preparedBulk",
+      kind: "bulk",
       name: "recipe.reprocessCookbook",
     });
-    expect(
-      inspectWorkflow(definition.prepare).steps.map((step) => step.name),
-    ).toEqual(["cookbookId", "selection", "prepared"]);
-    expect(definition.bulk).toMatchObject({
+    expect(definition).toMatchObject({
       kind: "bulk",
       name: "recipe.reprocessCookbook",
       initialProgress: false,
       onItemError: "stop",
     });
-    expect(inspectWorkflow(definition.bulk.item).steps).toMatchObject([
+    expect(inspectWorkflow(definition.item).steps).toMatchObject([
       { type: "committedCall", name: "reprocessed" },
     ]);
   });

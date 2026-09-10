@@ -2,7 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { WishList } from "~/app/wishes/wish-list";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import { wishSearchDefaults, wishSearchSchema } from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
 
@@ -19,13 +19,7 @@ export const Route = createFileRoute("/_authenticated/wishes/")({
   validateSearch: wishSearchSchema,
   search: { middlewares: [stripSearchParams(wishSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "wish",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("wish"),
   head: () => ({ meta: [{ title: pageTitle("Wishlist") }] }),
   component: WishesPage,
 });

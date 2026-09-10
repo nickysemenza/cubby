@@ -288,12 +288,23 @@ class WorkflowBuilder<Context, Input, Outputs extends object> {
     );
   }
 
-  output<Output>(select: (values: Values<Input, Outputs>) => Output) {
-    return defineWorkflow({
+  output<Output>(
+    select: (values: Values<Input, Outputs>) => Output,
+    failure?: StepFunction<Context, { input: Input; error: unknown }, never>,
+  ) {
+    const definition = {
       name: this.name,
       steps: this.steps,
       output: mapWorkflowValue(this.values(), select),
-    });
+    };
+    return defineWorkflow(
+      failure
+        ? {
+            ...definition,
+            failure: defineWorkflowFunction(`${this.name}.failure`, failure),
+          }
+        : definition,
+    );
   }
 }
 

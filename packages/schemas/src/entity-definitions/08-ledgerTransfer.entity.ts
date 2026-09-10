@@ -1,6 +1,20 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import {
+  financialTransactionShortcode,
+  ledgerPartyShortcode,
+  ledgerTransferShortcode,
+} from "../identifier-fields.js";
+import {
+  ledgerSourceClaims,
+  ledgerSourceClaimsOut,
+  ledgerTransferAmount,
+  ledgerTransferClassification,
+  ledgerTransferEvidenceTransactionIds,
+} from "@cubby/schemas/ledger-transfer-fields";
+import { wholeCentAmount } from "@cubby/schemas/money";
+import { z } from "zod";
+export default defineEntity({
   key: "ledgerTransfer",
   names: { singular: "Ledger Transfer", plural: "Transfers" },
   route: { basePath: "ledger-transfers" },
@@ -17,14 +31,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "ledgerPartyShortcode",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: ledgerPartyShortcode,
+          create: ledgerPartyShortcode,
+          update: ledgerPartyShortcode.optional(),
         },
       },
       {
@@ -35,25 +44,28 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "ledgerPartyShortcode",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: ledgerPartyShortcode,
+          create: ledgerPartyShortcode,
+          update: ledgerPartyShortcode.optional(),
         },
       },
       {
         key: "fromPartyName",
         kind: "text",
-        validation: { read: { kind: "string" }, create: null, update: null },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "toPartyName",
         kind: "text",
-        validation: { read: { kind: "string" }, create: null, update: null },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "amount",
@@ -61,21 +73,9 @@ export default literalEntity({
         control: { kind: "number", renderer: "money" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          write: {
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerTransferAmount",
-            },
-          },
-          read: {
-            source: {
-              module: "@cubby/schemas/money",
-              export: "wholeCentAmount",
-            },
-          },
-          create: true,
-          update: true,
+          read: wholeCentAmount,
+          create: ledgerTransferAmount,
+          update: ledgerTransferAmount.optional(),
         },
       },
       {
@@ -84,11 +84,9 @@ export default literalEntity({
         control: { kind: "date" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          read: true,
-          create: true,
-          update: true,
+          read: plainDate,
+          create: plainDate,
+          update: plainDate.optional(),
         },
       },
       {
@@ -98,11 +96,9 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -110,22 +106,9 @@ export default literalEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         validation: {
-          kind: "source",
-          write: {
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerSourceClaims",
-            },
-            nullable: true,
-          },
-          read: {
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerSourceClaimsOut",
-            },
-          },
-          create: { defaultValue: [] },
-          update: true,
+          read: ledgerSourceClaimsOut,
+          create: ledgerSourceClaims.nullable().default([]),
+          update: ledgerSourceClaims.nullable().optional(),
         },
       },
       {
@@ -136,39 +119,18 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: { list: true, columnId: "evidenceCount" },
         validation: {
-          write: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerTransferEvidenceTransactionIds",
-            },
-            nullable: true,
-          },
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "financialTransactionShortcode",
-              },
-            },
-          },
-          create: { defaultValue: [] },
-          update: true,
+          read: z.array(financialTransactionShortcode),
+          create: ledgerTransferEvidenceTransactionIds.nullable().default([]),
+          update: ledgerTransferEvidenceTransactionIds.nullable().optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "ledgerTransferShortcode",
-            },
-          },
+          read: ledgerTransferShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -176,26 +138,30 @@ export default literalEntity({
         kind: "json",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerTransferClassification",
-            },
-          },
+          read: ledgerTransferClassification,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

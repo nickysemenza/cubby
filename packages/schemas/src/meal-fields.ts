@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { timestampedFields } from "./base-entity";
 import { money } from "./money";
-import { mealRecipeId, mealShortcode, recipeShortcode } from "./identifiers";
+import {
+  mealRecipeId,
+  mealShortcode,
+  recipeShortcode,
+} from "./identifier-fields";
 import { mealScale, mealYieldGrams } from "./meal-shared";
 import {
   costCalorieTotals,

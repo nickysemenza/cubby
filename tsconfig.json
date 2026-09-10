@@ -4,7 +4,8 @@
   // and were therefore checked by nothing before they became TypeScript.
   //
   // These scripts run under `node scripts/foo.ts` with Node 24's native type
-  // stripping — no tsx, no build step — which is why `erasableSyntaxOnly` is on:
+  // stripping, except the entity generator uses tsx to load schema modules.
+  // `erasableSyntaxOnly` remains on:
   // it fails the build on enums, namespaces, and parameter properties, the
   // constructs stripping cannot handle. `allowImportingTsExtensions` supports
   // explicit TypeScript specifiers when script modules import one another.

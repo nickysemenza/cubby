@@ -12,10 +12,10 @@ identifies the migrated surfaces and their remaining domain ports.
 
 ## Entity ownership
 
-- Literal specs declare field validation, stored columns, create/update/output
+- Typed declarations co-locate real Zod schemas and declare field validation, stored columns, create/update/output
   policies, bulk and audit rosters, references, filters, and presentation.
-- Generated factories build scalar schemas and physical columns. Canonical
-  schemas compose those factories with relationship projections and domain
+- Generated schema maps reference declared Zod objects; column factories retain
+  the physical storage policy. Canonical schemas compose those maps with relationship projections and domain
   refinements. Changing source ownership does not apply a database migration.
 - Partial updates preserve omitted fields. Scalar patching rejects undeclared
   keys, skips unchanged rows, and audits changes in the same transaction.
@@ -30,17 +30,31 @@ identifies the migrated surfaces and their remaining domain ports.
 - Generic MCP inputs reuse canonical mutation schemas. MCP response contracts
   explicitly choose audience-specific projections; specialized tool digests
   remain separate. The assistant's `get_entities` capability is read-only.
-- Activities and Records navigation use the application-view catalog. Authored
-  routes retain their loaders, domain sections, and utility destinations.
+- Semantic editing intents select fields once; shared field construction uses
+  those selections. Context-sensitive defaults, access rules, command transforms,
+  and editor-specific blank handling remain explicit. Canonical schemas validate
+  the resulting mutation payloads.
+- The existing entity-list module owns query plans and declared columns. List
+  consumers retain typed plan bindings and specialized filters/renderers; standard
+  eager loaders share one binder while route option objects and page components
+  remain independently splittable. Scalar display and column helpers share one
+  formatter while retaining their surface-specific empty states.
+- Domain wayfinding owns labels and entity membership; the application-view
+  catalog derives ordinary destinations and directory projections from it and
+  the entity registry. Authored specialty destinations retain their order.
 
 ## Workflow ownership
 
-A bound workflow exposes the same executable definition used by the inspector.
+The fluent builder is the public graph-authoring interface. A bound workflow
+exposes the same executable definition used by the inspector.
 Argument adapters supply context and input; application decisions belong to named
 steps. A single repository transaction, provider operation, or pure computation
-can remain one leaf.
+uses an ordinary registered function when it needs no graph sequencing.
+Repositories exclusively own transactions; the workflow runtime has no transaction
+adapters, transaction nodes, or after-commit queues.
 
-The runtime distinguishes reads, commits, and required effects. Required effects
+The runtime distinguishes reads, commits, and required effects. Workflow-level
+failure translation preserves cancellation and effect-failure evidence. Required effects
 follow their commit, including when cancellation arrives after the write. Ordinary
 recovery refuses new or ambiguously acknowledged writes. Durable background jobs
 have an explicit exception: their row-owned retry contract settles payload,
@@ -54,7 +68,10 @@ windows are not prefetched. Finalization receives every completed item even when
 its progress tick was not consumed. Empty operations preserve their original
 completion metadata without inventing an item.
 
-Resource streams acquire and release read-only tools and forward cancellation.
+The agent stream is a direct async generator: it acquires and unconditionally
+releases read-only tools, preserves event order, and forwards cancellation.
+Cookbook-specific preparation feeds the shared bounded bulk executor; there is
+no generic preparation framework.
 Import settlement retains committed recipe receipts for final costing and indexing.
 Background payload graphs expose revision checks, replacement dispatch, provider
 calls, and persistence; queue draining caches each batch-kind lookup once.

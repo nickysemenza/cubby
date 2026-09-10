@@ -1,3 +1,4 @@
+import { imageOut } from "./entity-definitions/field-primitives";
 import { z } from "zod";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -378,7 +379,7 @@ export const cullPendingImagesSchema = z.object({
   olderThanHours: z.int().positive().default(CULL_PENDING_IMAGES_DEFAULT_HOURS),
 });
 
-export const imageOut = z.object(generatedImageFieldSchemas.read);
+export { imageOut } from "./entity-definitions/field-primitives";
 
 export type ImageOut = z.infer<typeof imageOut>;
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { uniqueBy } from "./base-entity";
-import { purchaseShortcode, vendorShortcode } from "./identifiers";
+import { purchaseShortcode, vendorShortcode } from "./identifier-fields";
 import { wholeCentAmount } from "./money";
 import { plainDate } from "./base-entity";
 

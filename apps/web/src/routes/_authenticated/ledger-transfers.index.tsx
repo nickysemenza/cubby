@@ -2,7 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { LedgerTransferList } from "~/app/finance/ledger-transfer-list";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import {
   ledgerTransferSearchDefaults,
   ledgerTransferSearchSchema,
@@ -22,13 +22,7 @@ export const Route = createFileRoute("/_authenticated/ledger-transfers/")({
   validateSearch: ledgerTransferSearchSchema,
   search: { middlewares: [stripSearchParams(ledgerTransferSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "ledgerTransfer",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("ledgerTransfer"),
   head: () => ({ meta: [{ title: pageTitle("Transfers") }] }),
   component: LedgerTransfersPage,
 });

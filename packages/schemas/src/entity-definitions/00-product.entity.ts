@@ -1,6 +1,48 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { dataQuality } from "@cubby/schemas/data-quality";
+import {
+  externalIdInputs,
+  externalIdOut,
+  gtin,
+} from "@cubby/schemas/external-id";
+import {
+  imageShortcode,
+  ingredientShortcode,
+  productShortcode,
+} from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
+import { isbn } from "@cubby/schemas/isbn";
+import {
+  moneyNullable,
+  positiveMoneyNullable,
+  productCategory,
+  productPricingOut,
+} from "@cubby/schemas/product-fields";
+import { unitMappingInput } from "@cubby/schemas/unitmapping";
+import { fdcId } from "@cubby/usda-schemas";
+import { numericRangeFields } from "@cubby/schemas/base-entity";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  nameFilter: z.string().optional().describe("Filter by product name"),
+  manufacturerExact: oneOrMany(z.string()).optional(),
+  upcFilter: z
+    .string()
+    .optional()
+    .describe("Filter by UPC/barcode — matches ANY of the product's barcodes"),
+  modelFilter: z
+    .string()
+    .optional()
+    .describe(
+      "Filter by model number — a tool's real identity when the name is generic.",
+    ),
+  categoryFilter: oneOrMany(productCategory)
+    .optional()
+    .describe("Filter by category"),
+  ...numericRangeFields("expectedQuantity"),
+  notesFilter: z.string().optional(),
+};
+export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
   route: { basePath: "products" },
@@ -15,13 +57,23 @@ export default literalEntity({
         control: { kind: "text", section: "identity-name" },
         display: { list: true, detail: true, standard: "name", detailOrder: 0 },
         validation: {
-          kind: "string",
-          description: "Product name",
-          mock: "commerce.productName",
-          write: { trim: true, min: 1, minMessage: "Product name is required" },
-          read: true,
-          create: true,
-          update: true,
+          read: z
+            .string()
+            .describe("Product name")
+            .meta({ mock: "commerce.productName" }),
+          create: z
+            .string()
+            .trim()
+            .min(1, "Product name is required")
+            .describe("Product name")
+            .meta({ mock: "commerce.productName" }),
+          update: z
+            .string()
+            .trim()
+            .min(1, "Product name is required")
+            .describe("Product name")
+            .meta({ mock: "commerce.productName" })
+            .optional(),
         },
       },
       {
@@ -29,11 +81,9 @@ export default literalEntity({
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
-          kind: "array",
-          item: { kind: "string" },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: z.array(z.string()),
+          create: z.array(z.string()).default([]),
+          update: z.array(z.string()).optional(),
         },
       },
       {
@@ -42,11 +92,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true, detailOrder: 10 },
         validation: {
-          kind: "array",
-          item: { kind: "string" },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: z.array(z.string()),
+          create: z.array(z.string()).default([]),
+          update: z.array(z.string()).optional(),
         },
       },
       {
@@ -56,11 +104,9 @@ export default literalEntity({
         readKey: null,
         control: { kind: "text" },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/external-id", export: "gtin" },
-          nullable: true,
-          create: true,
-          update: true,
+          read: null,
+          create: gtin.nullable(),
+          update: gtin.nullable().optional(),
         },
       },
       {
@@ -70,12 +116,9 @@ export default literalEntity({
         readKey: null,
         control: { kind: "text" },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/isbn", export: "isbn" },
-          nullable: true,
-          optional: true,
-          create: true,
-          update: true,
+          read: null,
+          create: isbn.nullable().optional(),
+          update: isbn.nullable().optional(),
         },
       },
       {
@@ -86,13 +129,9 @@ export default literalEntity({
         control: { kind: "number" },
         display: { list: true, detail: true, detailOrder: 7 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/usda-schemas", export: "fdcId" },
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: fdcId.nullable(),
+          create: fdcId.nullable().optional(),
+          update: fdcId.nullable().optional(),
         },
       },
       {
@@ -100,7 +139,11 @@ export default literalEntity({
         kind: "text",
         control: { kind: "text", section: "manufacturer" },
         display: { list: true, detail: true, detailOrder: 2 },
-        validation: { kind: "string", read: true, create: true, update: true },
+        validation: {
+          read: z.string(),
+          create: z.string(),
+          update: z.string().optional(),
+        },
       },
       {
         key: "model",
@@ -109,12 +152,9 @@ export default literalEntity({
         control: { kind: "text", section: "identity-model" },
         display: { list: true, detail: true, detailOrder: 3 },
         validation: {
-          kind: "string",
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().optional(),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -124,12 +164,9 @@ export default literalEntity({
         control: { kind: "textarea", section: "notes" },
         display: { list: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().optional(),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -139,11 +176,9 @@ export default literalEntity({
         control: { kind: "number" },
         display: { list: true },
         validation: {
-          kind: "number",
-          nullable: true,
-          read: true,
-          create: true,
-          update: true,
+          read: z.number().nullable(),
+          create: z.number().nullable(),
+          update: z.number().nullable().optional(),
         },
       },
       {
@@ -153,16 +188,9 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true, detail: true, detailOrder: 5 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/product-fields",
-            export: "productCategory",
-          },
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: productCategory.nullable(),
+          create: productCategory.nullable().optional(),
+          update: productCategory.nullable().optional(),
         },
       },
       {
@@ -175,14 +203,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true, detailOrder: 8 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "ingredientShortcode",
-          },
-          nullable: true,
-          create: true,
-          update: true,
+          read: null,
+          create: ingredientShortcode.nullable(),
+          update: ingredientShortcode.nullable().optional(),
         },
       },
       {
@@ -193,24 +216,11 @@ export default literalEntity({
         control: { kind: "number", renderer: "money" },
         display: { list: true, detail: true, detailOrder: 4 },
         validation: {
-          kind: "source",
-          write: {
-            source: {
-              module: "@cubby/schemas/product-fields",
-              export: "positiveMoneyNullable",
-            },
-            optional: true,
-          },
-          read: {
-            source: {
-              module: "@cubby/schemas/product-fields",
-              export: "moneyNullable",
-            },
-            description:
-              "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
-          },
-          create: true,
-          update: true,
+          read: moneyNullable.describe(
+            "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
+          ),
+          create: positiveMoneyNullable.optional(),
+          update: positiveMoneyNullable.optional(),
         },
       },
       {
@@ -219,16 +229,9 @@ export default literalEntity({
         readKey: null,
         control: { kind: "specialized", renderer: "structured-field" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/unitmapping",
-              export: "unitMappingInput",
-            },
-          },
-          create: { defaultValue: [] },
-          update: true,
+          read: null,
+          create: z.array(unitMappingInput).default([]),
+          update: z.array(unitMappingInput).optional(),
         },
       },
       {
@@ -238,25 +241,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true, detailOrder: 9 },
         validation: {
-          write: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/external-id",
-              export: "externalIdInputs",
-            },
-          },
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/external-id",
-                export: "externalIdOut",
-              },
-            },
-          },
-          create: { defaultValue: [] },
-          update: true,
+          read: z.array(externalIdOut),
+          create: externalIdInputs.default([]),
+          update: externalIdInputs.optional(),
         },
       },
       {
@@ -266,12 +253,9 @@ export default literalEntity({
         control: { kind: "checkbox" },
         display: { list: true },
         validation: {
-          kind: "boolean",
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.boolean().nullable(),
+          create: z.boolean().nullable().optional(),
+          update: z.boolean().nullable().optional(),
         },
       },
       {
@@ -281,12 +265,9 @@ export default literalEntity({
         control: { kind: "checkbox" },
         display: { list: true },
         validation: {
-          kind: "boolean",
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.boolean().nullable(),
+          create: z.boolean().nullable().optional(),
+          update: z.boolean().nullable().optional(),
         },
       },
       {
@@ -297,17 +278,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "imageShortcode",
-            },
-          },
-          optional: true,
-          create: true,
-          update: true,
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -318,16 +291,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -336,16 +302,9 @@ export default literalEntity({
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -354,13 +313,9 @@ export default literalEntity({
         label: "Shortcode",
         display: { detail: true, detailOrder: 1 },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "productShortcode",
-            },
-          },
+          read: productShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -370,11 +325,9 @@ export default literalEntity({
         label: "UPC",
         display: { list: true, detail: true, detailOrder: 6 },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/schemas/external-id", export: "gtin" },
-            nullable: true,
-          },
+          read: gtin.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -382,50 +335,46 @@ export default literalEntity({
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: { module: "@cubby/schemas/image", export: "imageOut" },
-            },
-          },
+          read: z.array(imageOut),
+          create: null,
+          update: null,
         },
       },
       {
         key: "pricing",
         kind: "json",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/product-fields",
-              export: "productPricingOut",
-            },
-          },
+          read: productPricingOut,
+          create: null,
+          update: null,
         },
       },
       {
         key: "dataQuality",
         kind: "json",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/data-quality",
-              export: "dataQuality",
-            },
-          },
+          read: dataQuality,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

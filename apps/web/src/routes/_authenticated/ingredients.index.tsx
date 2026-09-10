@@ -2,7 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { IngredientList } from "~/app/ingredients/ingredientlist";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import { ingredientListSearchSchema } from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
 
@@ -18,13 +18,7 @@ export const Route = createFileRoute("/_authenticated/ingredients/")({
   validateSearch: ingredientListSearchSchema,
   search: { middlewares: [stripSearchParams({})] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "ingredient",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("ingredient"),
   head: () => ({ meta: [{ title: pageTitle("Ingredients") }] }),
   component: IngredientsPage,
 });

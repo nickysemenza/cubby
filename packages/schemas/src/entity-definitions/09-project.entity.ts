@@ -1,6 +1,28 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import { projectShortcode } from "../identifier-fields.js";
+import { positiveMoneyNullable } from "@cubby/schemas/money";
+import {
+  googleDriveFolderUrl,
+  notionPageUrl,
+  projectKindSchema,
+  projectStatusSchema,
+} from "@cubby/schemas/project-fields";
+import {
+  projectDateWindow,
+  projectRollup,
+} from "@cubby/schemas/project-output-fields";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  status: oneOrMany(projectStatusSchema).optional(),
+  kind: oneOrMany(projectKindSchema).optional(),
+  location: oneOrMany(z.string())
+    .optional()
+    .describe("Any exact match against locations[]"),
+};
+export default defineEntity({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
   route: { basePath: "projects" },
@@ -21,11 +43,9 @@ export default literalEntity({
           standard: "name",
         },
         validation: {
-          kind: "string",
-          min: 1,
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
         },
       },
       {
@@ -39,14 +59,9 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/project-fields",
-            export: "projectStatusSchema",
-          },
-          read: true,
-          create: { defaultValue: "planning" },
-          update: true,
+          read: projectStatusSchema,
+          create: projectStatusSchema.default("planning"),
+          update: projectStatusSchema.optional(),
         },
       },
       {
@@ -61,15 +76,9 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/project-fields",
-            export: "projectKindSchema",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: projectKindSchema.nullable(),
+          create: projectKindSchema.nullable().default(null),
+          update: projectKindSchema.nullable().optional(),
         },
       },
       {
@@ -78,11 +87,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true, detailOrder: 90, detailSection: "overview" },
         validation: {
-          kind: "array",
-          item: { kind: "string" },
-          read: { description: "House/site names, free-form" },
-          create: { defaultValue: [] },
-          update: true,
+          read: z.array(z.string()).describe("House/site names, free-form"),
+          create: z.array(z.string()).default([]),
+          update: z.array(z.string()).optional(),
         },
       },
       {
@@ -98,14 +105,11 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/money",
-            export: "positiveMoneyNullable",
-          },
-          read: { nullable: true, description: "Budget estimate in dollars" },
-          create: { defaultValue: null },
-          update: true,
+          read: positiveMoneyNullable
+            .describe("Budget estimate in dollars")
+            .nullable(),
+          create: positiveMoneyNullable.default(null),
+          update: positiveMoneyNullable.optional(),
         },
       },
       {
@@ -122,15 +126,9 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "projectShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: projectShortcode.nullable(),
+          create: projectShortcode.nullable().default(null),
+          update: projectShortcode.nullable().optional(),
         },
       },
       {
@@ -146,12 +144,11 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          nullable: true,
-          read: { description: "Manual start override; usually null" },
-          create: { defaultValue: null },
-          update: true,
+          read: plainDate
+            .describe("Manual start override; usually null")
+            .nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
         },
       },
       {
@@ -167,12 +164,11 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          nullable: true,
-          read: { description: "Manual end override; usually null" },
-          create: { defaultValue: null },
-          update: true,
+          read: plainDate
+            .describe("Manual end override; usually null")
+            .nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
         },
       },
       {
@@ -187,11 +183,9 @@ export default literalEntity({
           detailSection: "overview",
         },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: { description: "Emoji shown next to the name" },
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().describe("Emoji shown next to the name").nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -201,11 +195,9 @@ export default literalEntity({
         control: { kind: "textarea", section: "details" },
         display: { list: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: { description: "Freeform markdown" },
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().describe("Freeform markdown").nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -221,14 +213,9 @@ export default literalEntity({
           detailSection: "resources",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/project-fields",
-            export: "googleDriveFolderUrl",
-          },
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: googleDriveFolderUrl,
+          create: googleDriveFolderUrl.default(null),
+          update: googleDriveFolderUrl.optional(),
         },
       },
       {
@@ -244,14 +231,9 @@ export default literalEntity({
           detailSection: "resources",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/project-fields",
-            export: "notionPageUrl",
-          },
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: notionPageUrl,
+          create: notionPageUrl.default(null),
+          update: notionPageUrl.optional(),
         },
       },
       {
@@ -262,31 +244,21 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: { list: true },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "projectShortcode",
-            },
-          },
-          read: true,
-          update: {
-            description: "Full replacement set of blocking-project ids",
-          },
+          read: z.array(projectShortcode),
+          create: null,
+          update: z
+            .array(projectShortcode)
+            .describe("Full replacement set of blocking-project ids")
+            .optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "projectShortcode",
-            },
-          },
+          read: projectShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -294,7 +266,11 @@ export default literalEntity({
         kind: "text",
         nullable: true,
         display: { list: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "childProjectIds",
@@ -303,16 +279,9 @@ export default literalEntity({
         reference: { entity: "project", multiple: true },
         display: { list: true },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "projectShortcode",
-              },
-            },
-          },
+          read: z.array(projectShortcode),
+          create: null,
+          update: null,
         },
       },
       {
@@ -322,54 +291,47 @@ export default literalEntity({
         reference: { entity: "task", multiple: true },
         display: { list: true },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "projectShortcode",
-              },
-            },
-          },
+          read: z.array(projectShortcode),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         label: "Last updated",
         display: { detail: true, detailOrder: 100, detailSection: "overview" },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "rollup",
         kind: "json",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/project-output-fields",
-              export: "projectRollup",
-            },
-          },
+          read: projectRollup,
+          create: null,
+          update: null,
         },
       },
       {
         key: "dates",
         kind: "json",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/project-output-fields",
-              export: "projectDateWindow",
-            },
-          },
+          read: projectDateWindow,
+          create: null,
+          update: null,
         },
       },
       { key: "shortcode", kind: "text", readKey: null },

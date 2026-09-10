@@ -158,7 +158,7 @@ const newRouteExtensions = {
  * Stamps every definition with the display names its own key already implies.
  *
  * Both come straight from the entity's manifest literal (`names` in
- * `scripts/entity-literals/entities/*.entity.ts`, surfaced as `entityNames`),
+ * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entityNames`),
  * so neither is spelled here and neither can disagree with the key it sits
  * under — `wish: { label: ... }` naming a vendor is no longer expressible.
  *

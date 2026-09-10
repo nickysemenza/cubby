@@ -1,6 +1,18 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { ingredientShortcode } from "../identifier-fields.js";
+import { baseKind } from "../codec.js";
+import { z } from "zod";
+export const filterSchemas = {
+  nameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by ingredient name (substring)"),
+  usuallyOnHand: z
+    .boolean()
+    .optional()
+    .describe("Filter by ingredients usually kept on hand"),
+};
+export default defineEntity({
   key: "ingredient",
   names: { singular: "Ingredient", plural: "Ingredients" },
   route: { basePath: "ingredients" },
@@ -15,16 +27,23 @@ export default literalEntity({
         control: { kind: "text", section: "identity" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          mock: "food.ingredient",
-          write: {
-            trim: true,
-            min: 1,
-            minMessage: "Ingredient name is required",
-          },
-          read: { description: "Ingredient name" },
-          create: { description: "Ingredient name" },
-          update: { description: "New name" },
+          read: z
+            .string()
+            .describe("Ingredient name")
+            .meta({ mock: "food.ingredient" }),
+          create: z
+            .string()
+            .trim()
+            .min(1, "Ingredient name is required")
+            .describe("Ingredient name")
+            .meta({ mock: "food.ingredient" }),
+          update: z
+            .string()
+            .trim()
+            .min(1, "Ingredient name is required")
+            .describe("New name")
+            .meta({ mock: "food.ingredient" })
+            .optional(),
         },
       },
       {
@@ -33,17 +52,17 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { list: true, detail: true },
         validation: {
-          kind: "array",
-          item: { kind: "string" },
-          read: { description: "Alternate names for this ingredient" },
-          create: {
-            defaultValue: [],
-            description: "Alternate names for this ingredient",
-          },
-          update: {
-            description: "New aliases (replaces existing list)",
-            descriptionAfter: true,
-          },
+          read: z
+            .array(z.string())
+            .describe("Alternate names for this ingredient"),
+          create: z
+            .array(z.string())
+            .describe("Alternate names for this ingredient")
+            .default([]),
+          update: z
+            .array(z.string())
+            .optional()
+            .describe("New aliases (replaces existing list)"),
         },
       },
       {
@@ -52,15 +71,9 @@ export default literalEntity({
         label: "Enrichment exclusions",
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: { module: "@cubby/schemas/problems", export: "baseKind" },
-          },
-          write: { optional: true },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: z.array(baseKind),
+          create: z.array(baseKind).optional().default([]),
+          update: z.array(baseKind).optional(),
         },
       },
       {
@@ -72,37 +85,39 @@ export default literalEntity({
         control: { kind: "checkbox" },
         display: { list: true, detail: true },
         validation: {
-          kind: "boolean",
-          write: { optional: true },
-          read: true,
-          create: { defaultValue: false },
-          update: true,
+          read: z.boolean(),
+          create: z.boolean().optional().default(false),
+          update: z.boolean().optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "ingredientShortcode",
-            },
-          },
+          read: ingredientShortcode,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

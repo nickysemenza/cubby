@@ -22,7 +22,11 @@ import {
 
 import { entities } from "~/entities/entities";
 
-import type { WayfindingDomain } from "./domain-wayfinding";
+import {
+  DOMAIN_WAYFINDING,
+  domainForEntity,
+  type WayfindingDomain,
+} from "./domain-wayfinding";
 
 /** A route selected by a declarative application view. */
 export interface ApplicationDestination {
@@ -63,7 +67,7 @@ const recordDestination = (
 export const activityViews = [
   {
     key: "cook",
-    label: "Cook",
+    label: DOMAIN_WAYFINDING.cook.label,
     icon: ChefHat,
     destinations: [
       recordDestination("recipe", "Browse recipes and open one to cook."),
@@ -96,7 +100,7 @@ export const activityViews = [
   },
   {
     key: "pantry",
-    label: "Pantry",
+    label: DOMAIN_WAYFINDING.pantry.label,
     icon: Warehouse,
     destinations: [
       recordDestination("inventory", "Review what is currently on hand."),
@@ -148,7 +152,7 @@ export const activityViews = [
   },
   {
     key: "plan",
-    label: "Plan",
+    label: DOMAIN_WAYFINDING.plan.label,
     icon: CalendarRange,
     destinations: [
       recordDestination("meal", "Review meals planned for upcoming days."),
@@ -175,7 +179,7 @@ export const activityViews = [
   },
   {
     key: "house",
-    label: "House",
+    label: DOMAIN_WAYFINDING.house.label,
     icon: Wrench,
     destinations: [
       recordDestination(
@@ -199,7 +203,7 @@ export const activityViews = [
   },
   {
     key: "finance",
-    label: "Finance",
+    label: DOMAIN_WAYFINDING.finance.label,
     icon: CreditCard,
     destinations: [
       recordDestination("expense", "Review the authoritative household spend."),
@@ -220,13 +224,19 @@ export const activityViews = [
   },
 ] as const satisfies readonly ActivityViewDefinition[];
 
+const recordDomain = (entity: BrowserRoutedEntity): WayfindingDomain => {
+  const domain = domainForEntity(entity);
+  if (!domain) throw new Error(`Record ${entity} has no navigation domain`);
+  return domain;
+};
+
 const recordView = (
   entity: BrowserRoutedEntity,
-  domain: WayfindingDomain,
   description: string,
 ): RecordViewDefinition => ({
   entity,
-  domain,
+  // Images have a Records destination but intentionally no route wayfinding.
+  domain: entity === "image" ? "pantry" : recordDomain(entity),
   to: entities[entity].routes.list,
   label: entities[entity].pluralLabel,
   description,
@@ -235,77 +245,28 @@ const recordView = (
 
 /** Every browser-routed entity appears exactly once in the Records catalog. */
 export const recordViews = [
-  recordView("recipe", "cook", "Recipes, their sections, and composition."),
-  recordView("cookbook", "cook", "Imported and maintained recipe collections."),
-  recordView(
-    "ingredient",
-    "cook",
-    "Canonical cooking ingredients and aliases.",
-  ),
-  recordView(
-    "product",
-    "pantry",
-    "Specific household products and their identity.",
-  ),
-  recordView(
-    "inventory",
-    "pantry",
-    "Approximate quantities at physical locations.",
-  ),
-  recordView(
-    "location",
-    "pantry",
-    "The hierarchy of household storage places.",
-  ),
-  recordView("image", "pantry", "Images attached to household records."),
-  recordView(
-    "usda-food",
-    "pantry",
-    "USDA foods available for product nutrition links.",
-  ),
-  recordView("meal", "plan", "Dated meal plans and preparation records."),
-  recordView("wish", "plan", "Wanted items and candidate products."),
-  recordView(
-    "project",
-    "house",
-    "Household work grouped into durable projects.",
-  ),
-  recordView(
-    "task",
-    "house",
-    "Concrete work, schedules, and completion state.",
-  ),
-  recordView(
-    "vendor",
-    "finance",
-    "Sources for purchases and expense evidence.",
-  ),
-  recordView("purchase", "finance", "Orders and their itemized expense lines."),
-  recordView(
-    "expense",
-    "finance",
-    "The authoritative record of household spend.",
-  ),
-  recordView(
-    "financialAccount",
-    "finance",
-    "Accounts that provide settlement evidence.",
-  ),
+  recordView("recipe", "Recipes, their sections, and composition."),
+  recordView("cookbook", "Imported and maintained recipe collections."),
+  recordView("ingredient", "Canonical cooking ingredients and aliases."),
+  recordView("product", "Specific household products and their identity."),
+  recordView("inventory", "Approximate quantities at physical locations."),
+  recordView("location", "The hierarchy of household storage places."),
+  recordView("image", "Images attached to household records."),
+  recordView("usda-food", "USDA foods available for product nutrition links."),
+  recordView("meal", "Dated meal plans and preparation records."),
+  recordView("wish", "Wanted items and candidate products."),
+  recordView("project", "Household work grouped into durable projects."),
+  recordView("task", "Concrete work, schedules, and completion state."),
+  recordView("vendor", "Sources for purchases and expense evidence."),
+  recordView("purchase", "Orders and their itemized expense lines."),
+  recordView("expense", "The authoritative record of household spend."),
+  recordView("financialAccount", "Accounts that provide settlement evidence."),
   recordView(
     "financialTransaction",
-    "finance",
     "Imported and matched settlement activity.",
   ),
-  recordView(
-    "ledgerParty",
-    "finance",
-    "People represented in the contribution ledger.",
-  ),
-  recordView(
-    "ledgerTransfer",
-    "finance",
-    "Transfers recorded between ledger parties.",
-  ),
+  recordView("ledgerParty", "People represented in the contribution ledger."),
+  recordView("ledgerTransfer", "Transfers recorded between ledger parties."),
 ] as const satisfies readonly RecordViewDefinition[];
 
 export function recordViewFor(

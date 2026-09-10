@@ -1,6 +1,19 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import {
+  productShortcode,
+  projectShortcode,
+  taskShortcode,
+} from "../identifier-fields.js";
+import { taskStatusSchema, tradeSchema } from "@cubby/schemas/task-fields";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  status: oneOrMany(taskStatusSchema).optional(),
+  trade: oneOrMany(tradeSchema).optional(),
+};
+export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
   route: { basePath: "tasks" },
@@ -15,11 +28,9 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true, standard: "name", detailOrder: 0 },
         validation: {
-          kind: "string",
-          min: 1,
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
         },
       },
       {
@@ -28,14 +39,9 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true, detail: true, detailOrder: 1 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/task-fields",
-            export: "taskStatusSchema",
-          },
-          read: true,
-          create: { defaultValue: "not_started" },
-          update: true,
+          read: taskStatusSchema,
+          create: taskStatusSchema.default("not_started"),
+          update: taskStatusSchema.optional(),
         },
       },
       {
@@ -47,15 +53,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true, detailOrder: 5 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "projectShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: projectShortcode.nullable(),
+          create: projectShortcode.nullable().default(null),
+          update: projectShortcode.nullable().optional(),
         },
       },
       {
@@ -67,15 +67,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true, detailOrder: 6 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "productShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: productShortcode.nullable(),
+          create: productShortcode.nullable().default(null),
+          update: productShortcode.nullable().optional(),
         },
       },
       {
@@ -87,15 +81,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "taskShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: taskShortcode.nullable(),
+          create: taskShortcode.nullable().default(null),
+          update: taskShortcode.nullable().optional(),
         },
       },
       {
@@ -105,12 +93,9 @@ export default literalEntity({
         control: { kind: "date", section: "schedule" },
         display: { list: true, detail: true, detailOrder: 3 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: plainDate.nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
         },
       },
       {
@@ -120,13 +105,15 @@ export default literalEntity({
         control: { kind: "date", section: "schedule" },
         display: { list: true, detail: true, detailOrder: 4 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          nullable: true,
-          description: "End of a due-date range",
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: plainDate.describe("End of a due-date range").nullable(),
+          create: plainDate
+            .describe("End of a due-date range")
+            .nullable()
+            .default(null),
+          update: plainDate
+            .describe("End of a due-date range")
+            .nullable()
+            .optional(),
         },
       },
       {
@@ -135,14 +122,9 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true, detail: true, detailOrder: 2 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/task-fields",
-            export: "tradeSchema",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: tradeSchema,
+          create: tradeSchema,
+          update: tradeSchema.optional(),
         },
       },
       {
@@ -152,11 +134,9 @@ export default literalEntity({
         control: { kind: "number", section: "ordering" },
         display: { list: true },
         validation: {
-          kind: "number",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.number().nullable(),
+          create: z.number().nullable().default(null),
+          update: z.number().nullable().optional(),
         },
       },
       {
@@ -167,29 +147,18 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: { list: true },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "taskShortcode",
-            },
-          },
-          read: true,
-          update: true,
+          read: z.array(taskShortcode),
+          create: null,
+          update: z.array(taskShortcode).optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "taskShortcode",
-            },
-          },
+          read: taskShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -197,21 +166,33 @@ export default literalEntity({
         kind: "text",
         nullable: true,
         display: { list: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "subjectProductName",
         kind: "text",
         nullable: true,
         display: { list: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "parentTaskName",
         kind: "text",
         nullable: true,
         display: { list: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "blockingIds",
@@ -220,39 +201,48 @@ export default literalEntity({
         reference: { entity: "task", multiple: true },
         display: { list: true },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "taskShortcode",
-              },
-            },
-          },
+          read: z.array(taskShortcode),
+          create: null,
+          update: null,
         },
       },
       {
         key: "subtaskCount",
         kind: "number",
         display: { list: true },
-        validation: { read: { kind: "number", integer: true } },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "doneSubtaskCount",
         kind: "number",
         display: { list: true },
-        validation: { read: { kind: "number", integer: true } },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       {

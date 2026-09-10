@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { uniqueBy } from "./base-entity";
-import { ledgerPartyShortcode } from "./identifiers";
+import { ledgerPartyShortcode } from "./identifier-fields";
 
 export const ledgerPartyKindValues = ["member", "guest", "household"] as const;
 export const ledgerPartyKind = z.enum(ledgerPartyKindValues);

@@ -95,23 +95,21 @@ interface EntityEditBody<E extends EditableEntity> {
   delete?: EntityEditAccess;
 }
 
-/**
- * The authoring handle, already bound to one entity. It is callable for the
- * ordinary field case and carries the shorthands, so an entity names itself
- * exactly once — as its key in the registry literal.
- *
- * Shorthands may not be called `name`, `length`, or `prototype`: the builder is
- * a function object, and those own properties are not writable.
- */
+type FieldOverrides<E extends EditableEntity> = Readonly<
+  Record<string, FieldOptions<E> | "trimmedName" | "nullableText">
+>;
+
 interface EntityEditBuilder<E extends EditableEntity> {
-  (id: string, options?: FieldOptions<E>): EditField<E>;
-  /** The required, trimmed `name` field shared by every named entity. */
-  trimmedName(): EditField<E>;
-  /** Text that stores `null` rather than an empty string. */
-  nullableText(id: string): EditField<E>;
-  /** Borrow another semantic intent's field list. */
+  fieldsFrom(
+    intents: readonly string[],
+    overrides?: FieldOverrides<E>,
+  ): readonly EditField<E>[];
   fieldsFor(semanticIntent: string): readonly string[];
 }
+
+const isFieldShorthand = <E extends EditableEntity>(
+  value: FieldOptions<E> | "trimmedName" | "nullableText" | undefined,
+): value is "trimmedName" | "nullableText" => typeof value === "string";
 
 const builderFor = <E extends EditableEntity>(
   entity: E,
@@ -142,24 +140,28 @@ const builderFor = <E extends EditableEntity>(
       changed(record, id, value) ? { [id]: value } : undefined,
   });
 
-  return Object.assign(makeField, {
-    trimmedName: () =>
-      makeField("name", {
-        required: true,
-        normalize: (value) => {
-          const parsed = z.string().safeParse(value);
-          return parsed.success ? parsed.data.trim() : value;
-        },
-      }),
-    nullableText: (id: string) =>
-      makeField(id, {
-        normalize: (value) => {
-          const parsed = z.string().safeParse(value);
-          return parsed.success ? parsed.data.trim() || null : value;
-        },
-      }),
-    fieldsFor: (semanticIntent: string) => fieldsFor(entity, semanticIntent),
-  });
+  return {
+    fieldsFrom: (intents, overrides) => {
+      const ids = new Set(
+        intents.flatMap((intent) => fieldsFor(entity, intent)),
+      );
+      return [...ids].map((id) => {
+        const override = overrides?.[id];
+        if (!isFieldShorthand(override)) return makeField(id, override);
+        // Editor blank handling predates API parsing and is part of the form contract.
+        return makeField(id, {
+          required: override === "trimmedName",
+          normalize: (value) => {
+            const parsed = z.string().safeParse(value);
+            if (!parsed.success) return value;
+            const trimmed = parsed.data.trim();
+            return override === "nullableText" ? trimmed || null : trimmed;
+          },
+        });
+      });
+    },
+    fieldsFor: (semanticIntent) => fieldsFor(entity, semanticIntent),
+  };
 };
 
 const makeIntent = <E extends EditableEntity>(
@@ -694,63 +696,42 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
  */
 export const entityEditRegistry = defineEntityEdits({
   product: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f("aliases"),
-      f("manufacturer", { required: true }),
-      f("model"),
-      f("category"),
-      f("ingredientId"),
-      f("upc"),
-      f("fdc_id"),
-      f("price"),
-      f("stockTracked"),
-      f("unitMappings"),
-      f.nullableText("notes"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      manufacturer: { required: true },
+      notes: "nullableText",
+    }),
     create: ["capture", "full"],
     update: ["full", "identity", "price", "stock"],
   }),
   ingredient: (f) => ({
-    fields: [f.trimmedName(), f("aliases"), f("naKinds")],
+    fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
     create: ["capture", "full"],
     update: ["full", "identity"],
   }),
   inventory: (f) => ({
-    fields: [f("amount"), f("productId"), f("locationId"), f("placement")],
+    fields: f.fieldsFrom(["full"]),
     create: ["capture", "full"],
     update: ["full", "amount", "product", "location", "placement"],
   }),
   location: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f("aliases"),
-      f("type"),
-      f("productId"),
-      f("parentId"),
-    ],
+    fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
     create: ["capture", "full"],
     update: ["full", "identity", "parent"],
   }),
   recipe: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f("cookbookId"),
-      f("tags"),
-      f.nullableText("notes"),
-      f("sections"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      notes: "nullableText",
+    }),
     create: ["capture", "full"],
     update: ["full", "identity"],
   }),
   meal: (f) => ({
-    fields: [
-      f("date", { required: true }),
-      f.nullableText("name"),
-      f("mealType"),
-      f("mealKind"),
-      f("sortOrder"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      date: { required: true },
+      name: "nullableText",
+    }),
     create: {
       capture: {
         defaults: () => ({
@@ -773,21 +754,13 @@ export const entityEditRegistry = defineEntityEdits({
     update: ["full", "calendar"],
   }),
   project: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f.nullableText("icon"),
-      f("status"),
-      f("kind"),
-      f("parentProjectId"),
-      f("startDate"),
-      f("endDate"),
-      f("costEstimate"),
-      f("locations"),
-      f.nullableText("googleDriveFolderUrl"),
-      f.nullableText("notionPageUrl"),
-      f("blockedByIds"),
-      f.nullableText("notes"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      icon: "nullableText",
+      googleDriveFolderUrl: "nullableText",
+      notionPageUrl: "nullableText",
+      notes: "nullableText",
+    }),
     create: {
       capture: {
         defaults: {
@@ -804,14 +777,9 @@ export const entityEditRegistry = defineEntityEdits({
     update: ["full", "status", "kind", "dates", "parent"],
   }),
   task: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f("status"),
-      f("projectId"),
-      f("subjectProductId"),
-      f("trade"),
-      f("dueDate"),
-      f("dueEndDate", {
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      dueEndDate: {
         validate: ({ value, values }) => {
           const end = z.string().safeParse(value);
           const due = z.string().safeParse(values.dueDate);
@@ -825,9 +793,9 @@ export const entityEditRegistry = defineEntityEdits({
               ]
             : noIssues();
         },
-      }),
-      f.nullableText("notes"),
-    ],
+      },
+      notes: "nullableText",
+    }),
     create: {
       capture: {
         defaults: {
@@ -861,23 +829,11 @@ export const entityEditRegistry = defineEntityEdits({
     },
   }),
   expense: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f("lineKind"),
-      f("cost"),
-      f("date"),
-      f("future"),
-      f("projectId"),
-      f("productId"),
-      f("productQuantity"),
-      f("vendor"),
-      f("orderId"),
-      f("trade"),
-      f("costType"),
-      f.nullableText("url"),
-      f.nullableText("notes"),
-      f("lineBasis"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      url: "nullableText",
+      notes: "nullableText",
+    }),
     create: {
       capture: {
         defaults: (context) => ({
@@ -932,12 +888,12 @@ export const entityEditRegistry = defineEntityEdits({
     },
   }),
   vendor: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f.nullableText("website"),
-      f.nullableText("orderUrlTemplate"),
-      f.nullableText("notes"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      website: "nullableText",
+      orderUrlTemplate: "nullableText",
+      notes: "nullableText",
+    }),
     create: {
       capture: { defaults: { name: "", website: null, notes: null } },
       full: { defaults: { name: "", website: null, notes: null } },
@@ -945,14 +901,13 @@ export const entityEditRegistry = defineEntityEdits({
     update: ["full", "identity"],
   }),
   purchase: (f) => ({
-    fields: [
-      f("vendorId", { required: true }),
-      f("date", { required: true }),
-      f.nullableText("orderId"),
-      f.nullableText("displayLabel"),
-      f("statedTotal"),
-      f.nullableText("notes"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      vendorId: { required: true },
+      date: { required: true },
+      orderId: "nullableText",
+      displayLabel: "nullableText",
+      notes: "nullableText",
+    }),
     create: {
       capture: {
         defaults: () => ({
@@ -973,19 +928,10 @@ export const entityEditRegistry = defineEntityEdits({
     update: ["full", "vendor", "identity"],
   }),
   financialAccount: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f("kind"),
-      f("issuer"),
-      f("network"),
-      f("institution"),
-      f("accountType"),
-      f("provider"),
-      f("last4"),
-      f("provisional"),
-      f("sourceAliases"),
-      f.nullableText("notes"),
-    ],
+    fields: f.fieldsFrom(["capture", "full"], {
+      name: "trimmedName",
+      notes: "nullableText",
+    }),
     create: {
       capture: {
         defaults: {
@@ -1025,12 +971,9 @@ export const entityEditRegistry = defineEntityEdits({
     },
   }),
   financialTransaction: (f) => ({
-    fields: [
-      f("accountId", { required: true }),
-      f("purchaseId"),
-      f("kind"),
-      f("status"),
-      f("amount", {
+    fields: f.fieldsFrom(["capture", "full"], {
+      accountId: { required: true },
+      amount: {
         validate: ({ value }) => {
           const amount = z.number().finite().safeParse(value);
           return amount.success && amount.data !== 0
@@ -1043,9 +986,8 @@ export const entityEditRegistry = defineEntityEdits({
                 },
               ];
         },
-      }),
-      f("transactionDate"),
-      f("postedDate", {
+      },
+      postedDate: {
         validate: ({ value, values }) =>
           values.status === "posted" && !value
             ? [
@@ -1056,13 +998,12 @@ export const entityEditRegistry = defineEntityEdits({
                 },
               ]
             : noIssues(),
-      }),
-      f.nullableText("merchant"),
-      f.nullableText("rawDescription"),
-      f.nullableText("sourceCategory"),
-      f("sourceRefs"),
-      f.nullableText("notes"),
-    ],
+      },
+      merchant: "nullableText",
+      rawDescription: "nullableText",
+      sourceCategory: "nullableText",
+      notes: "nullableText",
+    }),
     create: {
       capture: {
         defaults: {
@@ -1092,12 +1033,10 @@ export const entityEditRegistry = defineEntityEdits({
     },
   }),
   wish: (f) => ({
-    fields: [
-      f.trimmedName(),
-      f.nullableText("notes"),
-      f("candidateProductIds"),
-      f("acquired"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      notes: "nullableText",
+    }),
     create: {
       // Capture is the full form here: a wish has nothing worth deferring.
       capture: {
@@ -1115,20 +1054,23 @@ export const entityEditRegistry = defineEntityEdits({
   // No editor is rendered for these yet — create/update stay on MCP — but the
   // builders must exist for the registry to be exhaustive over EditableEntity.
   ledgerParty: (f) => ({
-    fields: [f.trimmedName(), f("kind"), f.nullableText("notes")],
+    fields: f.fieldsFrom(["full"], {
+      name: "trimmedName",
+      notes: "nullableText",
+    }),
     create: {
       full: { defaults: { name: "", kind: "member", notes: null } },
     },
     update: { full: { acceptsSeed: true } },
   }),
   ledgerTransfer: (f) => ({
-    fields: [
-      f("fromPartyId", { required: true }),
-      f("toPartyId", { required: true }),
-      f("amount", { required: true }),
-      f("date", { required: true }),
-      f.nullableText("notes"),
-    ],
+    fields: f.fieldsFrom(["full"], {
+      fromPartyId: { required: true },
+      toPartyId: { required: true },
+      amount: { required: true },
+      date: { required: true },
+      notes: "nullableText",
+    }),
     create: {
       full: {
         defaults: {

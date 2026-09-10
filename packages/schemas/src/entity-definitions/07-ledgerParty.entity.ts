@@ -1,6 +1,13 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { ledgerPartyShortcode } from "../identifier-fields.js";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  kind: oneOrMany(ledgerPartyKind).optional(),
+};
+export default defineEntity({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
   route: { basePath: "ledger-parties" },
@@ -15,15 +22,13 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          write: {
-            trim: true,
-            min: 1,
-            minMessage: "Ledger party name is required",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string(),
+          create: z.string().trim().min(1, "Ledger party name is required"),
+          update: z
+            .string()
+            .trim()
+            .min(1, "Ledger party name is required")
+            .optional(),
         },
       },
       {
@@ -32,14 +37,9 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/ledger-party-fields",
-            export: "ledgerPartyKind",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: ledgerPartyKind,
+          create: ledgerPartyKind,
+          update: ledgerPartyKind.optional(),
         },
       },
       {
@@ -49,37 +49,39 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "ledgerPartyShortcode",
-            },
-          },
+          read: ledgerPartyShortcode,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

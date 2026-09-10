@@ -1,10 +1,17 @@
 # Compiled entities
 
-Cubby's ordinary entity surfaces are compiled from restricted literal specs in
-`scripts/entity-literals/entities/*.entity.ts`. The generator parses them with
-Oxc; it never imports or executes them. This makes the spec usable by tooling
-without pulling application modules into scripts or depending on TypeScript's
-compiler API.
+Cubby's ordinary entity surfaces are compiled from typed TypeScript declarations
+in `packages/schemas/src/entity-definitions/*.entity.ts`. Each declaration uses
+real Zod schemas for read, create, and update modes. The generator imports these
+modules and emits references to the declared schemas; it never serializes Zod
+internals or reconstructs refinements.
+
+Declarations may import shared primitives and cycle-safe field modules. They
+must not import canonical schemas, generated artifacts, server implementations,
+or browser modules. Implementation references remain `{ module, export }` data.
+Browser metadata is generated separately and contains no executable schemas.
+A transitive import guard protects this boundary; shared identifier and field
+primitives compose domain projections without importing generated schema maps.
 
 Run:
 
@@ -13,17 +20,16 @@ pnpm entity:generate
 pnpm entity:check
 ```
 
-`entity:check` fails on invalid syntax, dynamic expressions, duplicate entity
-keys or routes, invalid relation policies, unsupported capability keys or
-values, and stale, missing, or extraneous generated files. Typecheck verifies
-that referenced schema modules and exports exist.
+`entity:check` fails on invalid metadata, duplicate entity keys or routes, invalid
+relation policies, unsupported capabilities, and stale, missing, or extraneous
+generated files. Typecheck verifies declaration types and referenced exports.
 
 ## One declaration, several consumers
 
-Each spec is a call whose argument is literal data:
+Each declaration co-locates schemas and field policy:
 
 ```ts
-export default literalEntity({
+export default defineEntity({
   key: "example",
   names: { singular: "Example", plural: "Examples" },
   route: { basePath: "examples" },
@@ -92,7 +98,7 @@ export default literalEntity({
 ```
 
 The exact accepted keys are enforced by the compiler. Source references name a
-module and export; they are not executable imports in the spec. `fields.detail`
+module and export; they do not import implementations into the declaration. `fields.detail`
 is optional and falls back to `fields.output`; declare it when the current
 detail read carries enriched relations or computed fields.
 
@@ -116,7 +122,7 @@ Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
 canonical outputs; specialized tool digests retain their own projections.
 
-Declare shared rules once and write only the exceptions:
+Use ordinary Zod composition for shared rules; spell out each mode:
 
 ```ts
 model: {
@@ -126,11 +132,9 @@ model: {
     control: { kind: "text" },
     display: { list: true, detail: true },
     validation: {
-      kind: "string",
-      write: { trim: true, min: 1 },
-      read: true,
-      create: true,
-      update: true,
+      read: z.string(),
+      create: z.string().trim().min(1),
+      update: z.string().trim().min(1).optional(),
     },
   }],
   storage: ["name"],
@@ -145,13 +149,10 @@ projection. Missing controls and display flags expose no UI. A control defaults
 to the `main` section; a reference defaults to one entity. Explicit labels,
 nullability, read keys, sections, and renderers override these defaults.
 
-Validation properties apply to every enabled mode; `write` properties apply
-only to create/update. Set a mode to `true` to use those shared rules, or give it
-an object of overrides. An omitted mode has no schema. Updates are optional by
-default; `optional: false` preserves an intentionally required update field.
-Create defaults stay in the create override so they cannot leak into reads or
-partial updates. Mode overrides replace individual properties; nested source,
-array-item, and enum definitions are whole values, not recursive patches.
+An omitted or null mode has no schema. Zod owns optionality, transformations,
+nullability, descriptions, refinements, and defaults. Put create-only defaults
+only on create schemas, and make partial update schemas explicitly optional so
+omitted values preserve existing data. Schema maps reference these exact objects.
 
 A storage string uses the declared field's kind and nullability, the key as its
 column name, and no database default. An object such as
@@ -194,7 +195,7 @@ the basic-information roster. Mobile title slots use the column accessor value,
 so linked identity columns must return the readable name and retain the entity
 shortcode separately for navigation.
 
-Filter descriptors are restricted literal records. Static choices stay literal;
+Filter descriptors are typed metadata. Static choices stay in the declaration;
 icon-bearing option lists, identifier brands, and compound preset expansion use
 explicit `{ module, export }` references. The compiler rejects unsupported
 kinds/properties and duplicate columns or derived URL keys. `audit: true`
@@ -311,7 +312,7 @@ irreducible transaction and collision rules.
 
 ## Adding an entity
 
-1. Add one literal `.entity.ts` spec with field validation, storage, mutation
+1. Add one typed `.entity.ts` declaration with field validation, storage, mutation
    policies, presentation, capabilities, and logical relationships.
 2. Add its branded id and compose its table and canonical input/output schemas
    from the generated factories. Keep indexes, constraints, domain refinements,

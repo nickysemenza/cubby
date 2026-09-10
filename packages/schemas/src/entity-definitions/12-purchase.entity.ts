@@ -1,6 +1,28 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import { dataQuality } from "@cubby/schemas/data-quality";
+import { financialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
+import {
+  imageShortcode,
+  purchaseShortcode,
+  vendorShortcode,
+} from "../identifier-fields.js";
+import { imageUrlSummary } from "@cubby/schemas/image-summary";
+import { money, wholeCentAmount } from "@cubby/schemas/money";
+import {
+  purchaseImages,
+  purchaseReconciliation,
+} from "@cubby/schemas/purchase-fields";
+import { numericRangeFields } from "@cubby/schemas/base-entity";
+import { z } from "zod";
+export const filterSchemas = {
+  displayLabelSearch: z
+    .string()
+    .optional()
+    .describe("Substring match on the human display label only"),
+  ...numericRangeFields("expenseTotal"),
+};
+export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
   route: { basePath: "purchases" },
@@ -22,14 +44,9 @@ export default literalEntity({
           columnId: "vendor",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "vendorShortcode",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: vendorShortcode,
+          create: vendorShortcode,
+          update: vendorShortcode.optional(),
         },
       },
       {
@@ -40,11 +57,9 @@ export default literalEntity({
         control: { kind: "text", section: "identity" },
         display: { list: true, detail: true, detailOrder: 1 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -55,12 +70,9 @@ export default literalEntity({
         control: { kind: "text", section: "identity" },
         display: { list: true, detail: true, detailOrder: 2 },
         validation: {
-          kind: "string",
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().optional(),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -69,11 +81,9 @@ export default literalEntity({
         control: { kind: "date", section: "schedule" },
         display: { list: true, detail: true, detailOrder: 3 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          read: { description: "The vendor order or receipt date" },
-          create: true,
-          update: true,
+          read: plainDate.describe("The vendor order or receipt date"),
+          create: plainDate,
+          update: plainDate.optional(),
         },
       },
       {
@@ -84,12 +94,9 @@ export default literalEntity({
         control: { kind: "number", renderer: "money" },
         display: { list: true, detail: true, detailOrder: 4 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/money", export: "wholeCentAmount" },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: wholeCentAmount.nullable(),
+          create: wholeCentAmount.nullable().default(null),
+          update: wholeCentAmount.nullable().optional(),
         },
       },
       {
@@ -99,11 +106,9 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true, detailOrder: 5 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -114,17 +119,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "imageShortcode",
-            },
-          },
-          optional: true,
-          create: true,
-          update: true,
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -135,16 +132,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -153,79 +143,80 @@ export default literalEntity({
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-            description: "existing document ids in display order",
-          },
+          read: null,
+          create: null,
+          update: z
+            .array(imageShortcode)
+            .describe("existing document ids in display order")
+            .optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "purchaseShortcode",
-            },
-          },
+          read: purchaseShortcode,
+          create: null,
+          update: null,
         },
       },
       {
         key: "vendorName",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "vendorLogo",
         kind: "json",
         nullable: true,
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/image-summary",
-              export: "imageUrlSummary",
-            },
-            nullable: true,
-          },
+          read: imageUrlSummary.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
         key: "orderUrl",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "url", nullable: true } },
+        validation: {
+          read: z.url().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "expenseCount",
         kind: "number",
         display: { list: true },
-        validation: { read: { kind: "number", integer: true } },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "unpricedExpenseCount",
         kind: "number",
-        validation: { read: { kind: "number", integer: true } },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "expenseTotal",
         kind: "number",
         display: { list: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/schemas/money", export: "money" },
-          },
+          read: money,
+          create: null,
+          update: null,
         },
       },
       {
@@ -233,45 +224,37 @@ export default literalEntity({
         kind: "json",
         display: { list: true, columnId: "reconciliation" },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/purchase-fields",
-              export: "purchaseReconciliation",
-            },
-          },
+          read: purchaseReconciliation,
+          create: null,
+          update: null,
         },
       },
       {
         key: "financialReconciliation",
         kind: "json",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/financial-reconciliation",
-              export: "financialReconciliationSummary",
-            },
-          },
+          read: financialReconciliationSummary,
+          create: null,
+          update: null,
         },
       },
       {
         key: "documentCount",
         kind: "number",
         display: { list: true },
-        validation: { read: { kind: "number", integer: true } },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "images",
         kind: "json",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/purchase-fields",
-              export: "purchaseImages",
-            },
-          },
+          read: purchaseImages,
+          create: null,
+          update: null,
         },
       },
       {
@@ -279,24 +262,28 @@ export default literalEntity({
         kind: "json",
         display: { list: true, columnId: "dataQuality" },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/data-quality",
-              export: "dataQuality",
-            },
-          },
+          read: dataQuality,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "dataExceptions", kind: "json", readKey: null },

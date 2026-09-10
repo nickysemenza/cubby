@@ -50,7 +50,7 @@ export const entityDescriptor = z.object({
 });
 export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 
-/** Generated from `scripts/entity-literals/entity-literals.ts`; do not add data here. */
+/** Generated from `packages/schemas/src/entity-definitions/*.entity.ts`; do not add data here. */
 export const entityManifest = generatedEntityManifest;
 export type EntityManifest = typeof entityManifest;
 

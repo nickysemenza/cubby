@@ -29,10 +29,11 @@ import {
   presenceFilter,
 } from "./pagination";
 import {
+  recipeTopLevelFields,
+  recipeTopLevel,
   recipeMeta,
   recipeNotes,
   recipeServings,
-  recipeSource,
   recipeSourceValues,
   recipeTags,
   recipeTotals,
@@ -80,23 +81,6 @@ const sectionIngredientIngredientOut = z.object({
   id: ingredientShortcode,
   ...sectionIngredientRefFields,
 });
-
-export const recipeTopLevelFields = {
-  id: recipeShortcode,
-  name: z.string(),
-  ...timestampedFields,
-  meta: recipeMeta,
-  // Strong provenance, derived from the DB columns on read. Output-only for now
-  // (`meta.url` still drives the write path); nullish so older rows are lenient.
-  source: recipeSource.nullish(),
-  yield: recipeYieldSchema.nullish(),
-  servings: recipeServings.nullish(),
-  tags: recipeTags.nullish(),
-  notes: recipeNotes.nullish(),
-};
-
-export const recipeTopLevel = z.object(recipeTopLevelFields);
-export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;
 
 export const recipeRefOut = z.object({ id: recipeShortcode, name: z.string() });
 export type RecipeRef = z.infer<typeof recipeRefOut>;

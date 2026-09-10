@@ -1,6 +1,6 @@
 import { wholeCentAmount } from "./money";
 import { plainDate, uniqueBy } from "./base-entity";
-import { financialTransactionShortcode } from "./identifiers";
+import { financialTransactionShortcode } from "./identifier-fields";
 import { z } from "zod";
 
 export const ledgerTransferAmount = wholeCentAmount.positive();

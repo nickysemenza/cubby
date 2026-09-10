@@ -1,10 +1,10 @@
 import {
   executeWorkflow,
-  inspectWorkflow,
   type WorkflowDefinition,
   WorkflowCancelledError,
   WorkflowEffectError,
 } from "~/server/workflow-runtime";
+import { inspectWorkflow } from "~/server/workflow-runtime/definition";
 
 /**
  * A durable job owns a narrower recovery rule than an ordinary workflow. Once

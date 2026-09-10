@@ -1,6 +1,38 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import {
+  costTypeSchema,
+  signedProductQuantity,
+} from "@cubby/schemas/expense-fields";
+import {
+  expenseLineBasisSchema,
+  expenseLineKindSchema,
+} from "@cubby/schemas/expense-line-kind";
+import {
+  expenseShortcode,
+  productShortcode,
+  projectShortcode,
+  purchaseShortcode,
+  vendorShortcode,
+} from "../identifier-fields.js";
+import { imageUrlSummary } from "@cubby/schemas/image-summary";
+import { ledgerAttributions } from "@cubby/schemas/ledger-party-fields";
+import {
+  ledgerSourceClaims,
+  ledgerSourceClaimsOut,
+} from "@cubby/schemas/ledger-transfer-fields";
+import { wholeCentAmount } from "@cubby/schemas/money";
+import { tradeSchema } from "@cubby/schemas/task-fields";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  costType: oneOrMany(costTypeSchema).optional(),
+  lineKind: oneOrMany(expenseLineKindSchema).optional(),
+  lineBasis: oneOrMany(expenseLineBasisSchema).optional(),
+  trade: oneOrMany(tradeSchema).optional(),
+  future: z.boolean().optional(),
+};
+export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
   route: { basePath: "expenses" },
@@ -20,11 +52,9 @@ export default literalEntity({
           standard: "name",
         },
         validation: {
-          kind: "string",
-          min: 1,
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
         },
       },
       {
@@ -34,12 +64,9 @@ export default literalEntity({
         control: { kind: "number", renderer: "money", section: "details" },
         display: { list: true, detail: true, detailOrder: 20 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/money", export: "wholeCentAmount" },
-          nullable: true,
-          read: { description: "Dollars" },
-          create: { defaultValue: null },
-          update: true,
+          read: wholeCentAmount.describe("Dollars").nullable(),
+          create: wholeCentAmount.nullable().default(null),
+          update: wholeCentAmount.nullable().optional(),
         },
       },
       {
@@ -48,11 +75,9 @@ export default literalEntity({
         control: { kind: "date", section: "schedule" },
         display: { list: true, detail: true, detailOrder: 30 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          read: true,
-          create: true,
-          update: true,
+          read: plainDate,
+          create: plainDate,
+          update: plainDate.optional(),
         },
       },
       {
@@ -62,18 +87,11 @@ export default literalEntity({
         control: { kind: "select", section: "details" },
         display: { list: true, detail: true, detailOrder: 40 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/expense-line-kind",
-            export: "expenseLineKindSchema",
-          },
-          write: { optional: true },
-          read: {
-            description:
-              "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
-          },
-          create: true,
-          update: true,
+          read: expenseLineKindSchema.describe(
+            "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
+          ),
+          create: expenseLineKindSchema.optional(),
+          update: expenseLineKindSchema.optional(),
         },
       },
       {
@@ -83,17 +101,11 @@ export default literalEntity({
         control: { kind: "select", section: "details" },
         display: { list: true, detail: true, detailOrder: 140 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/expense-line-kind",
-            export: "expenseLineBasisSchema",
-          },
-          read: {
-            description:
-              "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
-          },
-          create: { defaultValue: "item_line" },
-          update: true,
+          read: expenseLineBasisSchema.describe(
+            "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
+          ),
+          create: expenseLineBasisSchema.default("item_line"),
+          update: expenseLineBasisSchema.optional(),
         },
       },
       {
@@ -102,14 +114,9 @@ export default literalEntity({
         control: { kind: "select", section: "details" },
         display: { list: true, detail: true, detailOrder: 50 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/expense-fields",
-            export: "costTypeSchema",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: costTypeSchema,
+          create: costTypeSchema,
+          update: costTypeSchema.optional(),
         },
       },
       {
@@ -118,14 +125,9 @@ export default literalEntity({
         control: { kind: "select", section: "details" },
         display: { list: true, detail: true, detailOrder: 60 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/task-fields",
-            export: "tradeSchema",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: tradeSchema,
+          create: tradeSchema,
+          update: tradeSchema.optional(),
         },
       },
       {
@@ -136,11 +138,9 @@ export default literalEntity({
         control: { kind: "text", renderer: "url", section: "details" },
         display: { list: true, detail: true, detailOrder: 80 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -150,11 +150,9 @@ export default literalEntity({
         control: { kind: "textarea", section: "details" },
         display: { list: true, detail: true, detailOrder: 90 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -164,10 +162,9 @@ export default literalEntity({
         control: { kind: "checkbox", section: "details" },
         display: { list: true, detail: true, detailOrder: 70 },
         validation: {
-          kind: "boolean",
-          read: true,
-          create: { defaultValue: false },
-          update: true,
+          read: z.boolean(),
+          create: z.boolean().default(false),
+          update: z.boolean().optional(),
         },
       },
       {
@@ -184,15 +181,9 @@ export default literalEntity({
           columnId: "project",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "projectShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: projectShortcode.nullable(),
+          create: projectShortcode.nullable().default(null),
+          update: projectShortcode.nullable().optional(),
         },
       },
       {
@@ -209,18 +200,13 @@ export default literalEntity({
           columnId: "product",
         },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "productShortcode",
-          },
-          nullable: true,
-          read: {
-            description:
+          read: productShortcode
+            .describe(
               "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
-          },
-          create: { defaultValue: null },
-          update: true,
+            )
+            .nullable(),
+          create: productShortcode.nullable().default(null),
+          update: productShortcode.nullable().optional(),
         },
       },
       {
@@ -231,23 +217,18 @@ export default literalEntity({
         control: { kind: "number", section: "details" },
         display: { list: true, detail: true, detailOrder: 150 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/expense-fields",
-            export: "signedProductQuantity",
-          },
-          nullable: true,
-          read: {
-            description:
+          read: signedProductQuantity
+            .describe(
               'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.',
-          },
-          create: {
-            defaultValue: null,
-            description:
+            )
+            .nullable(),
+          create: signedProductQuantity
+            .nullable()
+            .default(null)
+            .describe(
               'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.',
-            descriptionAfter: true,
-          },
-          update: true,
+            ),
+          update: signedProductQuantity.nullable().optional(),
         },
       },
       {
@@ -257,11 +238,9 @@ export default literalEntity({
         control: { kind: "text", section: "details" },
         display: { detail: true, detailOrder: 100 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -272,11 +251,9 @@ export default literalEntity({
         control: { kind: "text", section: "details" },
         display: { list: true, detail: true, detailOrder: 110 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -288,15 +265,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, columnId: "vendor" },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "purchaseShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: purchaseShortcode.nullable(),
+          create: purchaseShortcode.nullable().default(null),
+          update: purchaseShortcode.nullable().optional(),
         },
       },
       {
@@ -304,15 +275,9 @@ export default literalEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/ledger-party-fields",
-            export: "ledgerAttributions",
-          },
-          write: { nullable: true },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: ledgerAttributions,
+          create: ledgerAttributions.nullable().default([]),
+          update: ledgerAttributions.nullable().optional(),
         },
       },
       {
@@ -320,15 +285,9 @@ export default literalEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/ledger-party-fields",
-            export: "ledgerAttributions",
-          },
-          write: { nullable: true },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: ledgerAttributions,
+          create: ledgerAttributions.nullable().default([]),
+          update: ledgerAttributions.nullable().optional(),
         },
       },
       {
@@ -336,35 +295,18 @@ export default literalEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         validation: {
-          kind: "source",
-          write: {
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerSourceClaims",
-            },
-            nullable: true,
-          },
-          read: {
-            source: {
-              module: "@cubby/schemas/ledger-transfer-fields",
-              export: "ledgerSourceClaimsOut",
-            },
-          },
-          create: { defaultValue: [] },
-          update: true,
+          read: ledgerSourceClaimsOut,
+          create: ledgerSourceClaims.nullable().default([]),
+          update: ledgerSourceClaims.nullable().optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "expenseShortcode",
-            },
-          },
+          read: expenseShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -372,21 +314,20 @@ export default literalEntity({
         kind: "date",
         nullable: true,
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/base-entity",
-              export: "plainDate",
-            },
-            nullable: true,
-          },
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
         key: "purchaseDisplayLabel",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "vendorId",
@@ -395,14 +336,9 @@ export default literalEntity({
         label: "Vendor ID",
         reference: { entity: "vendor" },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "vendorShortcode",
-            },
-            nullable: true,
-          },
+          read: vendorShortcode.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -410,43 +346,58 @@ export default literalEntity({
         kind: "json",
         nullable: true,
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/image-summary",
-              export: "imageUrlSummary",
-            },
-            nullable: true,
-          },
+          read: imageUrlSummary.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
         key: "orderUrl",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "url", nullable: true } },
+        validation: {
+          read: z.url().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "projectName",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "productName",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       {

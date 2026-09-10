@@ -1,6 +1,30 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { imageShortcode } from "../identifier-fields.js";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const generatedImageStatusValues = [
+  "PENDING",
+  "UPLOADED",
+  "FAILED",
+] as const;
+export const generatedImageRenderStatusValues = [
+  "unverified",
+  "verified",
+  "failed",
+] as const;
+export const generatedImageStorageStatusValues = [
+  "unverified",
+  "available",
+  "missing",
+  "metadata_mismatch",
+] as const;
+export const filterSchemas = {
+  nameFilter: z.string().optional().describe("Filter by filename (substring)"),
+  status: oneOrMany(z.enum(generatedImageStatusValues))
+    .optional()
+    .describe("Filter by upload status"),
+};
+export default defineEntity({
   key: "image",
   names: { singular: "Image", plural: "Images" },
   route: { basePath: "images" },
@@ -15,54 +39,68 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          read: true,
-          update: { trim: true, min: 1, max: 255, optional: false },
+          read: z.string(),
+          create: null,
+          update: z.string().trim().min(1).max(255),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "imageShortcode",
-            },
-          },
+          read: imageShortcode,
+          create: null,
+          update: null,
         },
       },
       {
         key: "url",
         kind: "text",
         display: { list: true, detail: true },
-        validation: { read: { kind: "url" } },
+        validation: {
+          read: z.url(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "key",
         kind: "text",
         display: { list: true, detail: true },
-        validation: { read: { kind: "string" } },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "size",
         kind: "number",
         display: { list: true, detail: true },
-        validation: { read: { kind: "number", integer: true, positive: true } },
+        validation: {
+          read: z.number().int().positive(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "contentType",
         kind: "text",
         display: { list: true, detail: true },
-        validation: { read: { kind: "string" } },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "status",
         kind: "enum",
         display: { list: true, detail: true },
         validation: {
-          read: { kind: "enum", values: ["PENDING", "UPLOADED", "FAILED"] },
+          read: z.enum(generatedImageStatusValues),
+          create: null,
+          update: null,
         },
       },
       {
@@ -71,12 +109,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "number",
-            integer: true,
-            positive: true,
-            nullable: true,
-          },
+          read: z.number().int().positive().nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -85,12 +120,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "number",
-            integer: true,
-            positive: true,
-            nullable: true,
-          },
+          read: z.number().int().positive().nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -98,14 +130,22 @@ export default literalEntity({
         kind: "text",
         nullable: true,
         display: { list: true, detail: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "sha256",
         kind: "text",
         nullable: true,
         display: { list: true, detail: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "renderStatus",
@@ -113,11 +153,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "enum",
-            values: ["unverified", "verified", "failed"],
-            nullable: true,
-          },
+          read: z.enum(generatedImageRenderStatusValues).nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -126,11 +164,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "enum",
-            values: ["unverified", "available", "missing", "metadata_mismatch"],
-            nullable: true,
-          },
+          read: z.enum(generatedImageStorageStatusValues).nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -138,19 +174,31 @@ export default literalEntity({
         kind: "timestamp",
         nullable: true,
         display: { list: true, detail: true },
-        validation: { read: { kind: "timestamp", nullable: true } },
+        validation: {
+          read: z.date().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "targetType", kind: "enum", nullable: true, readKey: null },

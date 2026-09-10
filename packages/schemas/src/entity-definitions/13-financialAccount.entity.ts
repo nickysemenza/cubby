@@ -1,6 +1,18 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import {
+  financialAccountIdentity,
+  financialAccountSourceAliases,
+} from "@cubby/schemas/financial-account-fields";
+import {
+  financialAccountShortcode,
+  ledgerPartyShortcode,
+} from "../identifier-fields.js";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  provisional: z.boolean().optional(),
+};
+export default defineEntity({
   key: "financialAccount",
   names: { singular: "Financial Account", plural: "Accounts" },
   route: { basePath: "financial-accounts" },
@@ -15,11 +27,9 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          min: 1,
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
         },
       },
       {
@@ -28,14 +38,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/financial-account-fields",
-            export: "financialAccountIdentity",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: financialAccountIdentity,
+          create: financialAccountIdentity,
+          update: financialAccountIdentity.optional(),
         },
       },
       {
@@ -44,10 +49,9 @@ export default literalEntity({
         control: { kind: "checkbox", section: "details" },
         display: { list: true, detail: true },
         validation: {
-          kind: "boolean",
-          read: true,
-          create: { defaultValue: false },
-          update: true,
+          read: z.boolean(),
+          create: z.boolean().default(false),
+          update: z.boolean().optional(),
         },
       },
       {
@@ -57,14 +61,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { list: true, detail: true, columnId: "aliases" },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/financial-account-fields",
-            export: "financialAccountSourceAliases",
-          },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: financialAccountSourceAliases,
+          create: financialAccountSourceAliases.default([]),
+          update: financialAccountSourceAliases.optional(),
         },
       },
       {
@@ -76,15 +75,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true, columnId: "ledgerPartyName" },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "ledgerPartyShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: ledgerPartyShortcode.nullable(),
+          create: ledgerPartyShortcode.nullable().default(null),
+          update: ledgerPartyShortcode.nullable().optional(),
         },
       },
       {
@@ -94,31 +87,29 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "financialAccountShortcode",
-            },
-          },
+          read: financialAccountShortcode,
+          create: null,
+          update: null,
         },
       },
       {
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "transactionCount",
@@ -126,20 +117,30 @@ export default literalEntity({
         label: "Transactions",
         display: { list: true, detail: true },
         validation: {
-          read: { kind: "number", integer: true, nonnegative: true },
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

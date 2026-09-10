@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { productShortcode } from "./identifiers";
+import { productShortcode } from "./identifier-fields";
 
 /**
  * Thin Product reference carried by cookbook browse and detail responses.

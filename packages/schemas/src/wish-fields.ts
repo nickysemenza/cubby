@@ -1,5 +1,5 @@
 import { moneyNullable } from "./money";
-import { productShortcode } from "./identifiers";
+import { productShortcode } from "./identifier-fields";
 import { z } from "zod";
 
 export const wishCandidateOut = z.object({

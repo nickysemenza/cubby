@@ -1,3 +1,4 @@
+import { productTopLevelOut } from "./product-output-fields";
 import {
   inventoryPlacementValues,
   UNSPECIFIED_MANUFACTURER,
@@ -568,7 +569,7 @@ export type ProductPricingOut = z.infer<typeof productPricingOut>;
 
 const productTopLevelFields = generatedProductFieldSchemas.read;
 
-export const productTopLevelOut = z.object(productTopLevelFields);
+export { productTopLevelOut } from "./product-output-fields";
 
 /**
  * find-or-create result: the product plus whether it was newly created (vs a

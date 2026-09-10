@@ -2,7 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { LedgerPartyList } from "~/app/finance/ledger-party-list";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import {
   ledgerPartySearchDefaults,
   ledgerPartySearchSchema,
@@ -22,13 +22,7 @@ export const Route = createFileRoute("/_authenticated/ledger-parties/")({
   validateSearch: ledgerPartySearchSchema,
   search: { middlewares: [stripSearchParams(ledgerPartySearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "ledgerParty",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("ledgerParty"),
   head: () => ({ meta: [{ title: pageTitle("Ledger Parties") }] }),
   component: LedgerPartiesPage,
 });

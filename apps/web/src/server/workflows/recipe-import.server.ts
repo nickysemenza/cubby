@@ -77,11 +77,11 @@ import {
 } from "~/server/utils/scraper";
 import {
   bindBulkWorkflow,
-  bindPreparedBulkWorkflow,
   bindWorkflow,
   defineBulkWorkflow,
-  definePreparedBulkWorkflow,
   defineWorkflowOperation,
+  executeBulkWorkflow,
+  executeWorkflow,
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflow-runtime";
@@ -749,68 +749,81 @@ type ReprocessPreparedContext = {
 type ReprocessPreparedInput = {
   readonly recipes: readonly z.output<typeof importRecipeSchema>[];
 };
-const reprocessCookbookDefinition = definePreparedBulkWorkflow({
+const reprocessCookbookPreparation = workflow<
+  AuthenticatedStartOperationContext,
+  z.output<typeof cookbookIdInput>
+>("recipe.reprocessCookbook.prepare")
+  .call("cookbookId", ({ context }, { input }) =>
+    cookbookShortcodes.one(context.db, input.cookbookId),
+  )
+  .call("selection", ({ context }, { cookbookId }) =>
+    prepareCookbookReprocessing(context.db, cookbookId),
+  )
+  .call("prepared", async ({ context }, { selection }) => ({
+    context: { operation: context, selection },
+    input: { recipes: selection.recipes },
+  }))
+  .output(({ prepared }) => prepared);
+const reprocessCookbookDefinition = defineBulkWorkflow({
   name: "recipe.reprocessCookbook",
-  prepare: workflow<
-    AuthenticatedStartOperationContext,
-    z.output<typeof cookbookIdInput>
-  >("recipe.reprocessCookbook.prepare")
-    .call("cookbookId", ({ context }, { input }) =>
-      cookbookShortcodes.one(context.db, input.cookbookId),
+  items: workflow<ReprocessPreparedContext, ReprocessPreparedInput>(
+    "recipe.reprocessCookbook.items",
+  ).output(({ input }) => input.recipes),
+  item: workflow<
+    ReprocessPreparedContext,
+    ReprocessPreparedInput["recipes"][number]
+  >("recipe.reprocessCookbook.item")
+    .commit("reprocessed", ({ context }, { input }) =>
+      reprocessCookbookRecipe(
+        context.operation.db,
+        context.selection,
+        input,
+        context.operation.actorContext,
+      ),
     )
-    .call("selection", ({ context }, { cookbookId }) =>
-      prepareCookbookReprocessing(context.db, cookbookId),
+    .output(({ reprocessed }) => reprocessed),
+  finalize: workflow<
+    ReprocessPreparedContext,
+    BulkWorkflowSummary<ReprocessPreparedInput["recipes"][number], RecipeId>
+  >("recipe.reprocessCookbook.finalize")
+    .commit("costing", ({ context }, { input }) =>
+      context.operation.services.recipeCosting.dispatchRecompute(
+        input.succeeded.map(({ result }) => result),
+        { source: "recipe.reprocessCookbook" },
+      ),
     )
-    .call("prepared", async ({ context }, { selection }) => ({
-      context: { operation: context, selection },
-      input: { recipes: selection.recipes },
+    .effect("summary", async ({ context }, { input }) => ({
+      reprocessed: input.succeeded.length,
+      importableExtras: [...context.selection.importableExtras],
     }))
-    .output(({ prepared }) => prepared),
-  bulk: defineBulkWorkflow({
-    name: "recipe.reprocessCookbook",
-    items: workflow<ReprocessPreparedContext, ReprocessPreparedInput>(
-      "recipe.reprocessCookbook.items",
-    ).output(({ input }) => input.recipes),
-    item: workflow<
-      ReprocessPreparedContext,
-      ReprocessPreparedInput["recipes"][number]
-    >("recipe.reprocessCookbook.item")
-      .commit("reprocessed", ({ context }, { input }) =>
-        reprocessCookbookRecipe(
-          context.operation.db,
-          context.selection,
-          input,
-          context.operation.actorContext,
-        ),
-      )
-      .output(({ reprocessed }) => reprocessed),
-    finalize: workflow<
-      ReprocessPreparedContext,
-      BulkWorkflowSummary<ReprocessPreparedInput["recipes"][number], RecipeId>
-    >("recipe.reprocessCookbook.finalize")
-      .commit("costing", ({ context }, { input }) =>
-        context.operation.services.recipeCosting.dispatchRecompute(
-          input.succeeded.map(({ result }) => result),
-          { source: "recipe.reprocessCookbook" },
-        ),
-      )
-      .effect("summary", async ({ context }, { input }) => ({
-        reprocessed: input.succeeded.length,
-        importableExtras: [...context.selection.importableExtras],
-      }))
-      .output(({ summary }) => summary),
-    initialProgress: false,
-    onItemError: "stop",
-    progress: () => undefined,
-  }),
+    .output(({ summary }) => summary),
+  initialProgress: false,
+  onItemError: "stop",
+  progress: () => undefined,
 });
-export const reprocessCookbookWorkflow = bindPreparedBulkWorkflow(
-  reprocessCookbookDefinition,
+
+export const reprocessCookbookWorkflow = Object.assign(
   (
     context: AuthenticatedStartOperationContext,
     input: z.output<typeof cookbookIdInput>,
     signal?: AbortSignal,
-  ) => ({ context, input, signal }),
+  ) => {
+    const run = async function* () {
+      const prepared = await executeWorkflow(reprocessCookbookPreparation, {
+        context,
+        input,
+        signal,
+      });
+      const { context: preparedContext, input: preparedInput } = prepared;
+      yield* executeBulkWorkflow(reprocessCookbookDefinition, {
+        context: preparedContext,
+        input: preparedInput,
+        signal,
+      });
+    };
+    return run();
+  },
+  { definition: reprocessCookbookDefinition },
 );
 type ChunkRequestInput = z.output<typeof chunkRequestInput>;
 export const extractCookbookChunkWorkflow = defineWorkflowOperation(

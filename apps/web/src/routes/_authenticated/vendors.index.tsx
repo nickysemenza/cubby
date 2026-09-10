@@ -4,7 +4,7 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { VendorList } from "~/app/vendors/vendorlist";
 import { vendorCaptureRequest } from "~/entities/editing/editor-requests";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import {
   vendorSearchDefaults,
   vendorSearchSchema,
@@ -28,13 +28,7 @@ export const Route = createFileRoute("/_authenticated/vendors/")({
   validateSearch: vendorSearchSchema,
   search: { middlewares: [stripSearchParams(vendorSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "vendor",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("vendor"),
   head: () => ({ meta: [{ title: pageTitle("Vendors") }] }),
   component: VendorsPage,
 });

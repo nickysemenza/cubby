@@ -3,24 +3,22 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { parseSync } from "oxc-parser";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { z } from "zod";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const SPEC_DIRECTORY = resolve(ROOT, "scripts/entity-literals/entities");
-const SPEC_PATH = SPEC_DIRECTORY;
+const SPEC_DIRECTORY = resolve(ROOT, "packages/schemas/src/entity-definitions");
 
-type AstValue = string | number | boolean | null | AstNode | AstValue[];
-type AstNode = { type: string; [key: string]: AstValue | undefined };
-type LiteralValue =
+type DeclarationValue =
   | string
   | number
   | boolean
   | null
-  | LiteralObject
-  | LiteralValue[];
-interface LiteralObject {
-  [key: string]: LiteralValue;
+  | DeclarationObject
+  | z.ZodType
+  | DeclarationValue[];
+interface DeclarationObject {
+  [key: string]: DeclarationValue;
 }
 
 type SourceRef = Readonly<{ module: string; export: string }>;
@@ -43,7 +41,7 @@ type FilterDescriptor = Readonly<{
     | "idMulti"
     | "range";
   placeholder: string;
-  options: readonly LiteralObject[] | null;
+  options: readonly DeclarationObject[] | null;
   optionsRef: SourceRef | null;
   optionsKey: string | null;
   label: string | null;
@@ -98,38 +96,6 @@ type EntityFieldControl = Readonly<{
   options: readonly Readonly<{ value: string; label: string }>[] | null;
   section: string;
 }>;
-type EntityFieldValidationSpec = Readonly<{
-  kind:
-    | "string"
-    | "url"
-    | "number"
-    | "boolean"
-    | "timestamp"
-    | "array"
-    | "enum"
-    | "source";
-  source: SourceRef | null;
-  lazy: boolean;
-  values: readonly string[] | null;
-  item: Readonly<{
-    kind: "string" | "source";
-    source: SourceRef | null;
-  }> | null;
-  optional: boolean;
-  nullable: boolean;
-  trim: boolean;
-  integer: boolean;
-  finite: boolean;
-  positive: boolean;
-  nonnegative: boolean;
-  min: number | null;
-  max: number | null;
-  minMessage: string | null;
-  defaultValue: LiteralValue | undefined;
-  description: string | null;
-  descriptionAfter: boolean;
-  mock: string | null;
-}>;
 type EntityField = Readonly<{
   key: string;
   kind: EntityFieldKind;
@@ -148,9 +114,9 @@ type EntityField = Readonly<{
     detailSection: string;
   }>;
   validation: Readonly<{
-    read: EntityFieldValidationSpec | null;
-    create: EntityFieldValidationSpec | null;
-    update: EntityFieldValidationSpec | null;
+    read: z.ZodType | null;
+    create: z.ZodType | null;
+    update: z.ZodType | null;
   }>;
 }>;
 type EntityStorageField = Readonly<{
@@ -159,7 +125,7 @@ type EntityStorageField = Readonly<{
   kind: EntityFieldKind;
   nullable: boolean;
   default: "none" | "generated" | "now" | "literal";
-  defaultValue: LiteralValue;
+  defaultValue: DeclarationValue;
   reference: string | null;
   specialized: string | null;
 }>;
@@ -172,7 +138,7 @@ type EntityFieldModel = Readonly<{
   audit: readonly string[];
   output: readonly string[];
 }>;
-export type EntityLiteral = Readonly<{
+export type CompiledEntity = Readonly<{
   key: string;
   shortcode: string | null;
   legacyShortcode: string | null;
@@ -181,7 +147,7 @@ export type EntityLiteral = Readonly<{
     plural: string | null;
     titleField: string;
   }>;
-  descriptor: LiteralObject;
+  descriptor: DeclarationObject;
   contract: Readonly<{
     create: SourceRef | null;
     update: SourceRef | null;
@@ -213,93 +179,89 @@ export type EntityArtifacts = Readonly<{
   source: string;
 }>;
 
-class LiteralSpecError extends Error {
+class EntityDeclarationError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "LiteralSpecError";
+    this.name = "EntityDeclarationError";
   }
 }
 
-const isNode = <T>(value: T): value is T & AstNode =>
-  typeof value === "object" && value !== null && "type" in value;
+const isDeclarationObject = (value: unknown): value is DeclarationObject =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  !(value instanceof z.ZodType);
 
-const asNode = <T>(value: T, context: string): AstNode => {
-  if (!isNode(value)) {
-    throw new LiteralSpecError(`${context} must be syntax.`);
-  }
-  return value;
-};
-
-const isLiteralObject = (value: LiteralValue): value is LiteralObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const isNonEmptyString = (value: LiteralValue): value is string =>
+const isNonEmptyString = (value: DeclarationValue): value is string =>
   typeof value === "string" && value.length > 0;
 
-const isBoolean = (value: LiteralValue): value is boolean =>
+const isBoolean = (value: DeclarationValue): value is boolean =>
   typeof value === "boolean";
 
-const objectValue = (value: LiteralValue, context: string): LiteralObject => {
-  if (!isLiteralObject(value)) {
-    throw new LiteralSpecError(`${context} must be an object.`);
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- This compiler boundary validates imported declaration values before consuming them.
+const objectValue = (value: unknown, context: string): DeclarationObject => {
+  if (!isDeclarationObject(value)) {
+    throw new EntityDeclarationError(`${context} must be an object.`);
   }
   return value;
 };
 
-const required = (object: LiteralObject, key: string, context: string) => {
+const required = (object: DeclarationObject, key: string, context: string) => {
   if (!(key in object)) {
-    throw new LiteralSpecError(`${context}.${key} is required.`);
+    throw new EntityDeclarationError(`${context}.${key} is required.`);
   }
   const value = object[key];
   if (value === undefined) {
-    throw new LiteralSpecError(`${context}.${key} must not be undefined.`);
+    throw new EntityDeclarationError(
+      `${context}.${key} must not be undefined.`,
+    );
   }
   return value;
 };
 
 const defaulted = (
-  object: LiteralObject,
+  object: DeclarationObject,
   key: string,
-  fallback: LiteralValue,
-): LiteralValue => (object[key] === undefined ? fallback : object[key]);
+  fallback: DeclarationValue,
+): DeclarationValue => (object[key] === undefined ? fallback : object[key]);
 
-const stringValue = (value: LiteralValue, context: string): string => {
+const stringValue = (value: DeclarationValue, context: string): string => {
   if (!isNonEmptyString(value)) {
-    throw new LiteralSpecError(`${context} must be a non-empty string.`);
+    throw new EntityDeclarationError(`${context} must be a non-empty string.`);
   }
   return value;
 };
 
-const booleanValue = (value: LiteralValue, context: string): boolean => {
+const booleanValue = (value: DeclarationValue, context: string): boolean => {
   if (!isBoolean(value)) {
-    throw new LiteralSpecError(`${context} must be a boolean.`);
+    throw new EntityDeclarationError(`${context} must be a boolean.`);
   }
   return value;
 };
 
 const exactKeys = (
-  object: LiteralObject,
+  object: DeclarationObject,
   allowed: readonly string[],
   context: string,
 ) => {
   for (const key of Object.keys(object)) {
     if (!allowed.includes(key)) {
-      throw new LiteralSpecError(`${context}.${key} is not allowed.`);
+      throw new EntityDeclarationError(`${context}.${key} is not allowed.`);
     }
   }
 };
 
 const literalObjectArray = (
-  value: LiteralValue,
+  value: DeclarationValue,
   context: string,
-): LiteralObject[] => {
+): DeclarationObject[] => {
   if (!Array.isArray(value)) {
-    throw new LiteralSpecError(`${context} must be an array.`);
+    throw new EntityDeclarationError(`${context} must be an array.`);
   }
   return value.map((item, index) => objectValue(item, `${context}[${index}]`));
 };
 
-const sourceRef = (value: LiteralValue, context: string): SourceRef => {
+const sourceRef = (value: DeclarationValue, context: string): SourceRef => {
   const object = objectValue(value, context);
   exactKeys(object, ["module", "export"], context);
   return {
@@ -314,7 +276,10 @@ const sourceRef = (value: LiteralValue, context: string): SourceRef => {
   };
 };
 
-const identifierRef = (value: LiteralValue, context: string): IdentifierRef => {
+const identifierRef = (
+  value: DeclarationValue,
+  context: string,
+): IdentifierRef => {
   const object = objectValue(value, context);
   exactKeys(object, ["entity", "kind"], context);
   const kind = stringValue(
@@ -322,7 +287,9 @@ const identifierRef = (value: LiteralValue, context: string): IdentifierRef => {
     `${context}.kind`,
   );
   if (kind !== "id" && kind !== "shortcode") {
-    throw new LiteralSpecError(`${context}.kind must be id or shortcode.`);
+    throw new EntityDeclarationError(
+      `${context}.kind must be id or shortcode.`,
+    );
   }
   return {
     entity: stringValue(
@@ -334,12 +301,12 @@ const identifierRef = (value: LiteralValue, context: string): IdentifierRef => {
 };
 
 const nullableSourceRef = (
-  value: LiteralValue,
+  value: DeclarationValue,
   context: string,
 ): SourceRef | null => (value === null ? null : sourceRef(value, context));
 
 const entityPorts = (
-  value: LiteralValue | undefined,
+  value: DeclarationValue | undefined,
   context: string,
 ): EntityPorts => {
   if (value === undefined) {
@@ -413,7 +380,7 @@ const filterKinds = [
 ] as const;
 
 const optionalString = (
-  object: LiteralObject,
+  object: DeclarationObject,
   key: string,
   context: string,
 ): string | null =>
@@ -421,27 +388,30 @@ const optionalString = (
     ? null
     : stringValue(object[key], `${context}.${key}`);
 
-const detailOrder = (object: LiteralObject, context: string): number | null => {
+const detailOrder = (
+  object: DeclarationObject,
+  context: string,
+): number | null => {
   const value = object.detailOrder;
   if (value === undefined || value === null) return null;
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- AST literal input must be numeric before enforcing the nonnegative integer contract.
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.detailOrder must be a nonnegative integer.`,
     );
   }
   return value;
 };
 
-const stringArray = (value: LiteralValue, context: string): string[] => {
+const stringArray = (value: DeclarationValue, context: string): string[] => {
   if (!Array.isArray(value)) {
-    throw new LiteralSpecError(`${context} must be an array.`);
+    throw new EntityDeclarationError(`${context} must be an array.`);
   }
   const values = value.map((item, index) =>
     stringValue(item, `${context}[${index}]`),
   );
   if (new Set(values).size !== values.length) {
-    throw new LiteralSpecError(`${context} contains duplicates.`);
+    throw new EntityDeclarationError(`${context} contains duplicates.`);
   }
   return values;
 };
@@ -468,198 +438,41 @@ const fieldControlKinds = [
   "specialized",
 ] as const;
 
-const fieldValidationKinds = [
-  "string",
-  "url",
-  "number",
-  "boolean",
-  "timestamp",
-  "array",
-  "enum",
-  "source",
-] as const;
-
 const storageDefaultKinds = ["none", "generated", "now", "literal"] as const;
 
-const fieldValidationKeys = [
-  "kind",
-  "source",
-  "lazy",
-  "values",
-  "item",
-  "optional",
-  "nullable",
-  "trim",
-  "integer",
-  "finite",
-  "positive",
-  "nonnegative",
-  "min",
-  "max",
-  "minMessage",
-  "defaultValue",
-  "description",
-  "descriptionAfter",
-  "mock",
-] as const;
-
 const parsedFieldKind = (
-  value: LiteralValue,
+  value: DeclarationValue,
   context: string,
 ): EntityFieldKind => {
   const kind = stringValue(value, context);
   const match = fieldKinds.find((candidate) => candidate === kind);
   if (match === undefined)
-    throw new LiteralSpecError(`${context} is unsupported.`);
+    throw new EntityDeclarationError(`${context} is unsupported.`);
   return match;
 };
 
-const fieldValidationSpec = (
-  value: LiteralValue,
-  context: string,
-): EntityFieldValidationSpec => {
-  const spec = objectValue(value, context);
-  exactKeys(spec, fieldValidationKeys, context);
-  const kind = stringValue(required(spec, "kind", context), `${context}.kind`);
-  const matchedKind = fieldValidationKinds.find(
-    (candidate) => candidate === kind,
-  );
-  if (matchedKind === undefined)
-    throw new LiteralSpecError(`${context}.kind is unsupported.`);
-  const numeric = (key: "min" | "max"): number | null => {
-    const candidate = spec[key];
-    if (candidate === undefined || candidate === null) return null;
-    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- AST literal values need a numeric boundary check before Number.isFinite.
-    if (typeof candidate !== "number" || !Number.isFinite(candidate))
-      throw new LiteralSpecError(`${context}.${key} must be a finite number.`);
-    return candidate;
-  };
-  const flag = (
-    key:
-      | "optional"
-      | "nullable"
-      | "trim"
-      | "integer"
-      | "finite"
-      | "positive"
-      | "nonnegative"
-      | "lazy"
-      | "descriptionAfter",
-  ) =>
-    spec[key] === undefined
-      ? false
-      : booleanValue(spec[key], `${context}.${key}`);
-  const source =
-    spec.source === undefined || spec.source === null
-      ? null
-      : sourceRef(spec.source, `${context}.source`);
-  if ((kind === "source") !== (source !== null))
-    throw new LiteralSpecError(
-      `${context}.source is required only when kind is source.`,
-    );
-  const values =
-    spec.values === undefined || spec.values === null
-      ? null
-      : stringArray(spec.values, `${context}.values`);
-  if ((kind === "enum") !== (values !== null))
-    throw new LiteralSpecError(
-      `${context}.values is required only when kind is enum.`,
-    );
-  const item =
-    spec.item === undefined || spec.item === null
-      ? null
-      : (() => {
-          const itemSpec = objectValue(spec.item, `${context}.item`);
-          exactKeys(itemSpec, ["kind", "source"], `${context}.item`);
-          const itemKind = stringValue(
-            required(itemSpec, "kind", `${context}.item`),
-            `${context}.item.kind`,
-          );
-          const matchedItemKind = (["string", "source"] as const).find(
-            (candidate) => candidate === itemKind,
-          );
-          if (matchedItemKind === undefined)
-            throw new LiteralSpecError(`${context}.item.kind is unsupported.`);
-          const itemSource =
-            itemSpec.source === undefined || itemSpec.source === null
-              ? null
-              : sourceRef(itemSpec.source, `${context}.item.source`);
-          if ((itemKind === "source") !== (itemSource !== null))
-            throw new LiteralSpecError(
-              `${context}.item.source is required only when kind is source.`,
-            );
-          return {
-            kind: matchedItemKind,
-            source: itemSource,
-          };
-        })();
-  if ((kind === "array") !== (item !== null))
-    throw new LiteralSpecError(
-      `${context}.item is required only when kind is array.`,
-    );
-  return {
-    kind: matchedKind,
-    source,
-    lazy: flag("lazy"),
-    values,
-    item,
-    optional: flag("optional"),
-    nullable: flag("nullable"),
-    trim: flag("trim"),
-    integer: flag("integer"),
-    finite: flag("finite"),
-    positive: flag("positive"),
-    nonnegative: flag("nonnegative"),
-    min: numeric("min"),
-    max: numeric("max"),
-    minMessage: optionalString(spec, "minMessage", context),
-    defaultValue: spec.defaultValue,
-    description: optionalString(spec, "description", context),
-    descriptionAfter: flag("descriptionAfter"),
-    mock: optionalString(spec, "mock", context),
-  };
-};
-
 const fieldValidation = (
-  value: LiteralValue | undefined,
+  value: DeclarationValue | undefined,
   context: string,
 ): EntityField["validation"] => {
   if (value === undefined || value === null)
     return { read: null, create: null, update: null };
-  const validation = objectValue(value, context);
-  exactKeys(
-    validation,
-    [...fieldValidationKeys, "write", "read", "create", "update"],
-    context,
-  );
-  const {
-    read: _read,
-    create: _create,
-    update: _update,
-    write,
-    ...shared
-  } = validation;
-  const writeRules =
-    write === undefined ? {} : objectValue(write, `${context}.write`);
-  exactKeys(writeRules, fieldValidationKeys, `${context}.write`);
+  const modes = objectValue(value, context);
+  exactKeys(modes, ["read", "create", "update"], context);
   const mode = (key: "read" | "create" | "update") => {
-    const override = validation[key];
-    if (override === undefined || override === null) return null;
-    const rules = { optional: key === "update", ...shared };
-    if (key !== "read") Object.assign(rules, writeRules);
-    if (override !== true)
-      Object.assign(rules, objectValue(override, `${context}.${key}`));
-    return fieldValidationSpec(rules, `${context}.${key}`);
+    const schema = modes[key];
+    if (schema === undefined || schema === null) return null;
+    if (!(schema instanceof z.ZodType))
+      throw new EntityDeclarationError(
+        `${context}.${key} must be a Zod schema.`,
+      );
+    return schema;
   };
-  return {
-    read: mode("read"),
-    create: mode("create"),
-    update: mode("update"),
-  };
+  return { read: mode("read"), create: mode("create"), update: mode("update") };
 };
 
 const compileFieldModel = (
-  value: LiteralValue | undefined,
+  value: DeclarationValue | undefined,
   context: string,
 ): EntityFieldModel => {
   if (value === undefined) {
@@ -744,7 +557,7 @@ const compileFieldModel = (
               (candidate) => candidate === kind,
             );
             if (matchedKind === undefined)
-              throw new LiteralSpecError(
+              throw new EntityDeclarationError(
                 `${fieldContext}.control.kind is unsupported.`,
               );
             const section =
@@ -755,7 +568,7 @@ const compileFieldModel = (
                     `${fieldContext}.control.section`,
                   );
             if (section.trim().length === 0)
-              throw new LiteralSpecError(
+              throw new EntityDeclarationError(
                 `${fieldContext}.control.section must be nonempty.`,
               );
             const optionsValue = controlObject.options;
@@ -824,7 +637,7 @@ const compileFieldModel = (
               `${fieldContext}.display`,
             );
             if (columnId !== null && !columnId.trim()) {
-              throw new LiteralSpecError(
+              throw new EntityDeclarationError(
                 `${fieldContext}.display.columnId must not be blank.`,
               );
             }
@@ -838,7 +651,7 @@ const compileFieldModel = (
               standard !== "name" &&
               standard !== "image"
             ) {
-              throw new LiteralSpecError(
+              throw new EntityDeclarationError(
                 `${fieldContext}.display.standard must be name or image.`,
               );
             }
@@ -849,7 +662,7 @@ const compileFieldModel = (
                 `${fieldContext}.display`,
               ) ?? "overview";
             if (!detailSection.trim()) {
-              throw new LiteralSpecError(
+              throw new EntityDeclarationError(
                 `${fieldContext}.display.detailSection must not be blank.`,
               );
             }
@@ -919,14 +732,14 @@ const compileFieldModel = (
         field.readKey !== (standard === "name" ? "name" : "images") ||
         (field.display.columnId ?? field.key) !== standard)
     ) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.${field.key} has an incompatible standard display column.`,
       );
     }
     if (!field.display.list) continue;
     const columnId = field.display.columnId ?? field.key;
     if (displayedColumnIds.has(columnId)) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context} declares duplicate display column ${columnId}.`,
       );
     }
@@ -934,7 +747,7 @@ const compileFieldModel = (
   }
   const rawStorage = required(model, "storage", context);
   if (!Array.isArray(rawStorage))
-    throw new LiteralSpecError(`${context}.storage must be an array.`);
+    throw new EntityDeclarationError(`${context}.storage must be an array.`);
   const storage = rawStorage.map((entry, index): EntityStorageField => {
     const fieldContext = `${context}.storage[${index}]`;
     const field = isNonEmptyString(entry)
@@ -946,7 +759,7 @@ const compileFieldModel = (
     );
     const declared = fields.find((candidate) => candidate.key === key);
     if (!declared)
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${fieldContext} references undeclared field ${key}.`,
       );
     exactKeys(
@@ -971,10 +784,12 @@ const compileFieldModel = (
       (candidate) => candidate === defaultKind,
     );
     if (matchedDefaultKind === undefined)
-      throw new LiteralSpecError(`${fieldContext}.default is unsupported.`);
+      throw new EntityDeclarationError(
+        `${fieldContext}.default is unsupported.`,
+      );
     const defaultValue = field.defaultValue ?? null;
     if (defaultKind === "literal" && field.defaultValue === undefined)
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${fieldContext}.defaultValue is required for a literal default.`,
       );
     return {
@@ -1000,9 +815,13 @@ const compileFieldModel = (
   const fieldKeys = fields.map(({ key }) => key);
   const storageKeys = storage.map(({ key }) => key);
   if (new Set(fieldKeys).size !== fieldKeys.length)
-    throw new LiteralSpecError(`${context}.fields contains duplicate keys.`);
+    throw new EntityDeclarationError(
+      `${context}.fields contains duplicate keys.`,
+    );
   if (new Set(storageKeys).size !== storageKeys.length)
-    throw new LiteralSpecError(`${context}.storage contains duplicate keys.`);
+    throw new EntityDeclarationError(
+      `${context}.storage contains duplicate keys.`,
+    );
   const policy = (key: "create" | "update" | "bulk" | "audit" | "output") => {
     const values = stringArray(
       required(model, key, context),
@@ -1010,7 +829,7 @@ const compileFieldModel = (
     );
     for (const field of values) {
       if (!fieldKeys.includes(field))
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${context}.${key} references undeclared field ${field}.`,
         );
     }
@@ -1027,7 +846,7 @@ const compileFieldModel = (
   };
   for (const field of compiled.bulk) {
     if (!compiled.update.includes(field))
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.bulk field ${field} must also be updateable.`,
       );
   }
@@ -1036,7 +855,7 @@ const compileFieldModel = (
 
 // oxlint-disable-next-line eslint/complexity -- The parser validates every optional descriptor property at the literal boundary.
 const filterDescriptor = (
-  value: LiteralValue,
+  value: DeclarationValue,
   context: string,
 ): FilterDescriptor => {
   const object = objectValue(value, context);
@@ -1072,7 +891,7 @@ const filterDescriptor = (
   );
   const parsedKind = filterKinds.find((candidate) => candidate === kind);
   if (parsedKind === undefined) {
-    throw new LiteralSpecError(`${context}.kind is unsupported.`);
+    throw new EntityDeclarationError(`${context}.kind is unsupported.`);
   }
   const rawOptions = object.options;
   if (
@@ -1080,7 +899,7 @@ const filterDescriptor = (
     rawOptions !== null &&
     !Array.isArray(rawOptions)
   ) {
-    throw new LiteralSpecError(`${context}.options must be an array.`);
+    throw new EntityDeclarationError(`${context}.options must be an array.`);
   }
   const options =
     rawOptions === undefined || rawOptions === null
@@ -1108,7 +927,7 @@ const filterDescriptor = (
       ? null
       : sourceRef(object.optionsRef, `${context}.optionsRef`);
   if (options !== null && optionsRef !== null) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context} cannot declare both options and optionsRef.`,
     );
   }
@@ -1144,7 +963,7 @@ const filterDescriptor = (
     context,
   );
   if (!deriveSchema && (schemaFromRead || schemaDescription !== null))
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context} schemaFromRead/schemaDescription require deriveSchema.`,
     );
   return {
@@ -1180,9 +999,9 @@ const filterDescriptor = (
 };
 
 const normalizedEntitySource = (
-  raw: LiteralObject,
+  raw: DeclarationObject,
   context: string,
-): LiteralObject => {
+): DeclarationObject => {
   if (raw.descriptor !== undefined) {
     const rawDescriptor = objectValue(raw.descriptor, `${context}.descriptor`);
     const lifecycle =
@@ -1314,8 +1133,8 @@ const normalizedEntitySource = (
 };
 
 const validateLegacyCapabilities = (
-  raw: LiteralObject,
-  capabilities: LiteralObject,
+  raw: DeclarationObject,
+  capabilities: DeclarationObject,
   context: string,
 ): void => {
   const owners = objectValue(
@@ -1334,7 +1153,7 @@ const validateLegacyCapabilities = (
       `${context}.capabilities.operationOwners`,
     );
     if (owner !== null && owner !== "kernel" && owner !== "workflow") {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.operationOwners.${operation} must be kernel, workflow, or null.`,
       );
     }
@@ -1349,7 +1168,7 @@ const validateLegacyCapabilities = (
   );
   if (deleteCapability !== null) {
     if (deleteOwner === null) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.operationOwners.delete is required for delete.`,
       );
     }
@@ -1363,7 +1182,7 @@ const validateLegacyCapabilities = (
       `${context}.capabilities.delete.mode`,
     );
     if (mode !== "soft" && mode !== "hard")
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.delete.mode is invalid.`,
       );
     booleanValue(
@@ -1372,7 +1191,7 @@ const validateLegacyCapabilities = (
     );
   }
   if (deleteCapability === null && deleteOwner !== null) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.capabilities.operationOwners.delete must be null without delete.`,
     );
   }
@@ -1381,7 +1200,7 @@ const validateLegacyCapabilities = (
     `${context}.capabilities.merge`,
   );
   if (mergeCapability !== (mergeOwner !== null)) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.capabilities.operationOwners.merge must match merge capability.`,
     );
   }
@@ -1402,7 +1221,7 @@ const validateLegacyCapabilities = (
       `${context}.capabilities.bulkUpdate`,
     );
     if (!Array.isArray(fields) || fields.length === 0) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.bulkUpdate.fields must be a non-empty array.`,
       );
     }
@@ -1413,12 +1232,12 @@ const validateLegacyCapabilities = (
       stringValue(field, `${context}.capabilities.bulkUpdate.fields[${index}]`),
     );
     if (new Set(names).size !== names.length) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.bulkUpdate.fields contains duplicates.`,
       );
     }
     if (required(raw, "fields", context) === null) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.bulkUpdate requires an update schema.`,
       );
     }
@@ -1429,7 +1248,9 @@ const validateLegacyCapabilities = (
   );
   const mcpActions = required(capabilities, "mcp", `${context}.capabilities`);
   if (!Array.isArray(mcpActions))
-    throw new LiteralSpecError(`${context}.capabilities.mcp must be an array.`);
+    throw new EntityDeclarationError(
+      `${context}.capabilities.mcp must be an array.`,
+    );
   const supportedMcpActions = [
     "get",
     "list",
@@ -1443,7 +1264,7 @@ const validateLegacyCapabilities = (
   for (const [index, action] of mcpActions.entries()) {
     const name = stringValue(action, `${context}.capabilities.mcp[${index}]`);
     if (!supportedMcpActions.includes(name))
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.capabilities.mcp[${index}] is unsupported.`,
       );
   }
@@ -1453,12 +1274,12 @@ const validateLegacyCapabilities = (
 // must identify the same literal relation path, including nested sources.
 // oxlint-disable-next-line eslint/complexity
 const normalizedLegacyRelations = (
-  raw: LiteralObject,
+  raw: DeclarationObject,
   context: string,
-): LiteralValue[] => {
+): DeclarationValue[] => {
   const relations = required(raw, "relations", context);
   if (!Array.isArray(relations))
-    throw new LiteralSpecError(`${context}.relations must be an array.`);
+    throw new EntityDeclarationError(`${context}.relations must be an array.`);
   for (const [index, value] of relations.entries()) {
     const relation = objectValue(value, `${context}.relations[${index}]`);
     exactKeys(
@@ -1485,7 +1306,7 @@ const normalizedLegacyRelations = (
       `${context}.relations[${index}].cardinality`,
     );
     if (cardinality !== "one" && cardinality !== "many") {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.relations[${index}].cardinality must be one or many.`,
       );
     }
@@ -1502,7 +1323,7 @@ const normalizedLegacyRelations = (
       `${context}.relations[${index}].provenance`,
     );
     if (provenance.kind === "local-path" && relation.inverse === undefined)
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.relations[${index}] local-path requires inverse.`,
       );
     const sources =
@@ -1540,13 +1361,13 @@ const normalizedLegacyRelations = (
         sourceProvenance.kind === "local-path" &&
         source.inverse === undefined
       ) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${context}.relations[${index}].sources[${sourceIndex}] local-path requires inverse.`,
         );
       }
     }
     if (new Set(sourceKeys).size !== sourceKeys.length) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${context}.relations[${index}] contains duplicate source keys.`,
       );
     }
@@ -1566,7 +1387,7 @@ const normalizedLegacyRelations = (
         `${context}.relations[${index}].mutation.source`,
       );
       if (!sourceKeys.includes(mutationSource)) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${context}.relations[${index}].mutation.source must name a declared source.`,
         );
       }
@@ -1592,7 +1413,7 @@ const normalizedLegacyRelations = (
         `${context}.relations[${index}].mutation`,
       );
       if (!Array.isArray(audiences) || audiences.length === 0) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${context}.relations[${index}].mutation.audiences must be a non-empty array.`,
         );
       }
@@ -1602,13 +1423,13 @@ const normalizedLegacyRelations = (
           `${context}.relations[${index}].mutation.audiences[${audienceIndex}]`,
         );
         if (name !== "browser" && name !== "mcp") {
-          throw new LiteralSpecError(
+          throw new EntityDeclarationError(
             `${context}.relations[${index}].mutation.audiences[${audienceIndex}] is unsupported.`,
           );
         }
       }
       if (new Set(audiences).size !== audiences.length) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${context}.relations[${index}].mutation.audiences contains duplicates.`,
         );
       }
@@ -1618,9 +1439,9 @@ const normalizedLegacyRelations = (
 };
 
 const normalizedLegacyRoute = (
-  raw: LiteralObject,
+  raw: DeclarationObject,
   context: string,
-): LiteralValue => {
+): DeclarationValue => {
   const route = required(raw, "route", context);
   if (route !== null) {
     exactKeys(
@@ -1633,16 +1454,16 @@ const normalizedLegacyRoute = (
 };
 
 const legacyDescriptor = (
-  raw: LiteralObject,
-  identifiers: LiteralObject,
-  capabilities: LiteralObject,
-  search: LiteralObject,
-  relations: LiteralValue[],
-  route: LiteralValue,
-  extensions: LiteralObject,
+  raw: DeclarationObject,
+  identifiers: DeclarationObject,
+  capabilities: DeclarationObject,
+  search: DeclarationObject,
+  relations: DeclarationValue[],
+  route: DeclarationValue,
+  extensions: DeclarationObject,
   context: string,
-): LiteralObject => {
-  const descriptor: LiteralObject = {
+): DeclarationObject => {
+  const descriptor: DeclarationObject = {
     dbTable: required(raw, "table", context),
     idBrand: required(identifiers, "brand", `${context}.identifiers`),
   };
@@ -1697,16 +1518,16 @@ const legacyDescriptor = (
 };
 
 const normalizedLegacyEntity = (
-  raw: LiteralObject,
-  names: LiteralObject,
-  presentation: LiteralObject,
-  descriptor: LiteralObject,
-  route: LiteralValue,
-  capabilities: LiteralObject,
-  extensions: LiteralObject,
+  raw: DeclarationObject,
+  names: DeclarationObject,
+  presentation: DeclarationObject,
+  descriptor: DeclarationObject,
+  route: DeclarationValue,
+  capabilities: DeclarationObject,
+  extensions: DeclarationObject,
   context: string,
-): LiteralObject => {
-  const normalized: LiteralObject = {
+): DeclarationObject => {
+  const normalized: DeclarationObject = {
     key: required(raw, "key", context),
     route,
     inspector: {
@@ -1737,7 +1558,7 @@ const normalizedLegacyEntity = (
   return normalized;
 };
 
-const compiledInspector = (object: LiteralObject, context: string) => {
+const compiledInspector = (object: DeclarationObject, context: string) => {
   const inspectorObject = objectValue(
     required(object, "inspector", context),
     `${context}.inspector`,
@@ -1767,7 +1588,7 @@ const compiledInspector = (object: LiteralObject, context: string) => {
 };
 
 const compiledRoute = (
-  value: LiteralValue | undefined,
+  value: DeclarationValue | undefined,
   context: string,
 ): ParsedEntityRoute | null => {
   if (value === undefined || value === null) return null;
@@ -1787,7 +1608,7 @@ const compiledRoute = (
 };
 
 const compiledShortcode = (
-  descriptor: LiteralObject,
+  descriptor: DeclarationObject,
   key: "shortcodePrefix" | "legacyShortcodePrefix",
   expression: RegExp,
   label: string,
@@ -1797,18 +1618,22 @@ const compiledShortcode = (
   if (value === undefined) return null;
   const shortcode = stringValue(value, `${context}.descriptor.${key}`);
   if (!expression.test(shortcode))
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.descriptor.${key} must be an ${label} prefix.`,
     );
   return shortcode;
 };
 
 // One compiler pass keeps cross-field capability errors attached to the exact
-// entity literal rather than losing context across partial validators.
-// oxlint-disable-next-line eslint/complexity
-const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
-  const context = `ENTITY_LITERALS[${index}]`;
-  const object = normalizedEntitySource(objectValue(value, context), context);
+// entity declaration rather than losing context across partial validators.
+// oxlint-disable-next-line eslint/complexity, anti-slop/no-unknown-parameters -- Imported declarations enter the metadata parser here.
+const compileEntity = (value: unknown, index: number): CompiledEntity => {
+  const context = `ENTITY_DECLARATIONS[${index}]`;
+  const { filterSchemas: _filterSchemas, ...metadata } = objectValue(
+    value,
+    context,
+  );
+  const object = normalizedEntitySource(metadata, context);
   exactKeys(
     object,
     [
@@ -1828,7 +1653,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
 
   const key = stringValue(required(object, "key", context), `${context}.key`);
   if (!/^[a-z][a-zA-Z-]*$/.test(key)) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.key must be lower-camel-case or kebab-case.`,
     );
   }
@@ -1857,7 +1682,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     if (value === null || value === "kernel" || value === "workflow") {
       return value;
     }
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.operationOwners.${operation} must be kernel, workflow, or null.`,
     );
   };
@@ -1885,7 +1710,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     `${context}.filters`,
   );
   if (!Array.isArray(rawFilterDescriptors)) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.filters.descriptors must be an array.`,
     );
   }
@@ -1894,7 +1719,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
   if (new Set(descriptorColumns).size !== descriptorColumns.length) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.filters.descriptors contains duplicate columnId values.`,
     );
   }
@@ -1904,12 +1729,12 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
       (columnId) => columnId === "createdAt" || columnId === "updatedAt",
     )
   ) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.filters.audit duplicates an explicit createdAt or updatedAt descriptor.`,
     );
   }
   if (filterAudit && descriptor.auditable !== true) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.filters.audit requires an auditable entity.`,
     );
   }
@@ -1978,7 +1803,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   );
   const filterUrlKeys = descriptorUrlKeys;
   if (new Set(descriptorUrlKeys).size !== descriptorUrlKeys.length) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.filters.descriptors contains duplicate URL keys.`,
     );
   }
@@ -2088,7 +1913,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
         })();
 
   if (shortcode === null && contract !== null) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context} cannot declare a contract without a shortcode.`,
     );
   }
@@ -2108,7 +1933,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
     ),
   );
   if (new Set(relationshipKeys).size !== relationshipKeys.length) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `${context}.descriptor.relationships contains duplicate keys.`,
     );
   }
@@ -2126,7 +1951,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
         `${relationContext}.mutation`,
       );
       if (!Array.isArray(audiences)) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${relationContext}.mutation.audiences must be an array.`,
         );
       }
@@ -2159,7 +1984,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
               `${relationContext}.mutation.audiences[${audienceIndex}]`,
             );
             if (value !== "browser" && value !== "mcp") {
-              throw new LiteralSpecError(
+              throw new EntityDeclarationError(
                 `${relationContext}.mutation.audiences[${audienceIndex}] is unsupported.`,
               );
             }
@@ -2184,7 +2009,7 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
             `${context}.bulkUpdate`,
           );
           if (!Array.isArray(fields)) {
-            throw new LiteralSpecError(
+            throw new EntityDeclarationError(
               `${context}.bulkUpdate.fields must be an array.`,
             );
           }
@@ -2212,107 +2037,18 @@ const compileEntity = (value: LiteralValue, index: number): EntityLiteral => {
   };
 };
 
-const unwrapTypeAssertion = (node: AstNode): AstNode => {
-  if (node.type === "TSAsExpression" || node.type === "TSSatisfiesExpression") {
-    return unwrapTypeAssertion(
-      asNode(node.expression, `${node.type}.expression`),
-    );
-  }
-  return node;
-};
-
-const isLiteralPrimitive = (
-  value: AstValue | undefined,
-): value is string | number | boolean | null =>
-  value === null ||
-  typeof value === "string" ||
-  typeof value === "number" ||
-  typeof value === "boolean";
-
-const isNonEmptyAstString = (value: AstValue | undefined): value is string =>
-  typeof value === "string" && value.length > 0;
-
-const literalFromNode = (node: AstNode, context: string): LiteralValue => {
-  const expression = unwrapTypeAssertion(node);
-  if (expression.type === "Literal") {
-    const value = expression.value;
-    if (isLiteralPrimitive(value)) {
-      return value;
-    }
-  }
-
-  if (expression.type === "ArrayExpression") {
-    const elements = expression.elements;
-    if (!Array.isArray(elements)) {
-      throw new LiteralSpecError(`${context} has an invalid array.`);
-    }
-    return elements.map((element, index) =>
-      literalFromNode(
-        asNode(element, `${context}[${index}]`),
-        `${context}[${index}]`,
-      ),
-    );
-  }
-
-  if (expression.type === "ObjectExpression") {
-    const properties = expression.properties;
-    if (!Array.isArray(properties)) {
-      throw new LiteralSpecError(`${context} has an invalid object.`);
-    }
-    const result: LiteralObject = {};
-    for (const propertyValue of properties) {
-      const property = asNode(propertyValue, context);
-      if (
-        property.type !== "Property" ||
-        property.kind !== "init" ||
-        property.method === true ||
-        property.shorthand === true ||
-        property.computed === true
-      ) {
-        throw new LiteralSpecError(
-          `${context} only permits ordinary literal properties.`,
-        );
-      }
-      const keyNode = asNode(property.key, `${context}.key`);
-      const key =
-        keyNode.type === "Identifier"
-          ? keyNode.name
-          : keyNode.type === "Literal"
-            ? keyNode.value
-            : undefined;
-      if (!isNonEmptyAstString(key)) {
-        throw new LiteralSpecError(`${context} has an invalid property key.`);
-      }
-      if (key in result) {
-        throw new LiteralSpecError(
-          `${context}.${key} is declared more than once.`,
-        );
-      }
-      result[key] = literalFromNode(
-        asNode(property.value, `${context}.${key}`),
-        `${context}.${key}`,
-      );
-    }
-    return result;
-  }
-
-  throw new LiteralSpecError(
-    `${context} must be a literal object, array, string, number, boolean, or null; found ${expression.type}.`,
-  );
-};
-
-const validateEntityIdentities = (entities: readonly EntityLiteral[]) => {
+const validateEntityIdentities = (entities: readonly CompiledEntity[]) => {
   const keys = new Set<string>();
   const prefixes = new Map<string, string>();
   for (const entity of entities) {
     if (keys.has(entity.key)) {
-      throw new LiteralSpecError(`Duplicate entity key ${entity.key}.`);
+      throw new EntityDeclarationError(`Duplicate entity key ${entity.key}.`);
     }
     keys.add(entity.key);
     if (entity.shortcode !== null) {
       const owner = prefixes.get(entity.shortcode);
       if (owner !== undefined) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `Canonical shortcode prefix ${entity.shortcode} for ${entity.key} conflicts with ${owner}.`,
         );
       }
@@ -2323,7 +2059,7 @@ const validateEntityIdentities = (entities: readonly EntityLiteral[]) => {
     if (entity.legacyShortcode === null) continue;
     const owner = prefixes.get(entity.legacyShortcode);
     if (owner !== undefined) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `Legacy shortcode prefix ${entity.legacyShortcode} for ${entity.key} conflicts with ${owner}.`,
       );
     }
@@ -2331,123 +2067,56 @@ const validateEntityIdentities = (entities: readonly EntityLiteral[]) => {
   }
 };
 
-export const parseEntityLiterals = (
-  source: string,
-  filename = SPEC_PATH,
-): EntityLiteral[] => {
-  const parsed = parseSync(filename, source, { lang: "ts", range: true });
-  const firstError = parsed.errors.at(0);
-  if (firstError !== undefined) {
-    throw new LiteralSpecError(`${filename}: ${firstError.message}`);
-  }
-
-  const declarations = parsed.program.body.flatMap((statement) => {
-    const node = asNode(statement, filename);
-    if (node.type !== "ExportNamedDeclaration") {
-      return [];
-    }
-    const declaration = node.declaration;
-    if (!isNode(declaration) || declaration.type !== "VariableDeclaration") {
-      return [];
-    }
-    const declarators = declaration.declarations;
-    return Array.isArray(declarators) ? declarators : [];
-  });
-  const matching = declarations.filter((declaration) => {
-    if (!isNode(declaration) || declaration.type !== "VariableDeclarator") {
-      return false;
-    }
-    const identifier = declaration.id;
-    return (
-      isNode(identifier) &&
-      identifier.type === "Identifier" &&
-      identifier.name === "ENTITY_LITERALS"
-    );
-  });
-
-  if (matching.length !== 1) {
-    throw new LiteralSpecError(
-      `${filename} must export exactly one const named ENTITY_LITERALS.`,
-    );
-  }
-  const declaration = asNode(matching[0], filename);
-  const initialValue = declaration.init;
-  if (!isNode(initialValue)) {
-    throw new LiteralSpecError(
-      `${filename}: ENTITY_LITERALS must have an initializer.`,
-    );
-  }
-  const literal = literalFromNode(initialValue, "ENTITY_LITERALS");
-  if (!Array.isArray(literal)) {
-    throw new LiteralSpecError("ENTITY_LITERALS must be an array.");
-  }
-
-  const entities = literal.map(compileEntity);
-  if (entities.length === 0) {
-    throw new LiteralSpecError("ENTITY_LITERALS must not be empty.");
-  }
+export const compileEntityDeclarations = (
+  declarations: readonly unknown[],
+): CompiledEntity[] => {
+  if (declarations.length === 0)
+    throw new EntityDeclarationError("Entity declarations must not be empty.");
+  const entities = declarations.map(compileEntity);
   validateEntityIdentities(entities);
   return entities;
 };
 
-const parseEntityLiteralFile = (
-  source: string,
-  filename: string,
-): EntityLiteral => {
-  const parsed = parseSync(filename, source, { lang: "ts", range: true });
-  const firstError = parsed.errors.at(0);
-  if (firstError !== undefined)
-    throw new LiteralSpecError(`${filename}: ${firstError.message}`);
-  const declaration = parsed.program.body.find((statement) => {
-    const node = asNode(statement, filename);
-    return node.type === "ExportDefaultDeclaration";
-  });
-  if (!declaration)
-    throw new LiteralSpecError(
-      `${filename} must default-export literalEntity({...}).`,
-    );
-  const expression = unwrapTypeAssertion(
-    asNode(
-      asNode(declaration, filename).declaration,
-      `${filename}.declaration`,
-    ),
-  );
-  if (expression.type !== "CallExpression")
-    throw new LiteralSpecError(`${filename} must call literalEntity({...}).`);
-  const callee = asNode(expression.callee, `${filename}.callee`);
-  const arguments_ = expression.arguments;
-  if (
-    callee.type !== "Identifier" ||
-    callee.name !== "literalEntity" ||
-    !Array.isArray(arguments_) ||
-    arguments_.length !== 1
-  ) {
-    throw new LiteralSpecError(
-      `${filename} must default-export literalEntity({...}).`,
-    );
-  }
-  return compileEntity(
-    literalFromNode(
-      asNode(arguments_[0], `${filename}.argument`),
-      "literalEntity",
-    ),
-    0,
-  );
-};
+const declarationModules = new Map<
+  string,
+  { path: string; enumExports: string[]; hasFilters: boolean }
+>();
 
-export const parseEntityLiteralFiles = async (): Promise<EntityLiteral[]> => {
+export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
   const entries = (await readdir(SPEC_DIRECTORY, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && entry.name.endsWith(".entity.ts"))
     .sort((left, right) => left.name.localeCompare(right.name));
   if (entries.length === 0)
-    throw new LiteralSpecError(`${SPEC_DIRECTORY} has no *.entity.ts files.`);
+    throw new EntityDeclarationError(
+      `${SPEC_DIRECTORY} has no entity declarations.`,
+    );
   const entities = await Promise.all(
-    entries.map(async (entry) =>
-      parseEntityLiteralFile(
-        await readFile(resolve(SPEC_DIRECTORY, entry.name), "utf8"),
-        resolve(SPEC_DIRECTORY, entry.name),
-      ),
-    ),
+    entries.map(async (entry) => {
+      const module = await import(
+        pathToFileURL(resolve(SPEC_DIRECTORY, entry.name)).href
+      );
+      const raw = objectValue(module.default, entry.name);
+      const { filterSchemas: declaredFilters, ...metadata } = raw;
+      const filterSchemas = module.filterSchemas ?? declaredFilters;
+      if (filterSchemas !== undefined) {
+        for (const [key, schema] of Object.entries(
+          objectValue(filterSchemas, entry.name),
+        ))
+          if (!(schema instanceof z.ZodType))
+            throw new EntityDeclarationError(
+              `${entry.name}.filterSchemas.${key} must be a Zod schema.`,
+            );
+      }
+      const entity = compileEntity(metadata, 0);
+      declarationModules.set(entity.key, {
+        path: `../entity-definitions/${entry.name.replace(/\.ts$/, "")}`,
+        enumExports: Object.keys(module).filter((key) =>
+          key.startsWith("generated"),
+        ),
+        hasFilters: filterSchemas !== undefined,
+      });
+      return entity;
+    }),
   );
   const routes = new Set<string>();
   validateEntityIdentities(entities);
@@ -2455,7 +2124,7 @@ export const parseEntityLiteralFiles = async (): Promise<EntityLiteral[]> => {
     if (entity.descriptor.browserRoutes === false) continue;
     for (const route of Object.values(browserRoutes(entity).routes)) {
       if (routes.has(route))
-        throw new LiteralSpecError(`Duplicate browser route ${route}.`);
+        throw new EntityDeclarationError(`Duplicate browser route ${route}.`);
       routes.add(route);
     }
   }
@@ -2463,7 +2132,7 @@ export const parseEntityLiteralFiles = async (): Promise<EntityLiteral[]> => {
 };
 
 const generatedHeader =
-  "// Generated by `pnpm entity:generate` from `scripts/entity-literals/entities/*.entity.ts`. Do not edit.\n\n";
+  "// Generated by `pnpm entity:generate` from `packages/schemas/src/entity-definitions/*.entity.ts`. Do not edit.\n\n";
 
 const compactLiteral = <T>(value: T) =>
   JSON.stringify(value).replaceAll(
@@ -2541,7 +2210,7 @@ const enumColumnExpression = (
   return lookupGeneratedType(expressions, key) ?? null;
 };
 
-const literalDefaultExpression = (value: LiteralValue): string => {
+const literalDefaultExpression = (value: DeclarationValue): string => {
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- String storage defaults have SQL-specific serialization.
   if (typeof value === "string") {
     if (value === "'{}'::text[]") return "sql`'{}'::text[]`";
@@ -2554,7 +2223,7 @@ const literalDefaultExpression = (value: LiteralValue): string => {
 
 // oxlint-disable-next-line eslint/complexity -- Ordered branches mirror the finite storage-column DSL.
 const renderStorageColumn = (
-  entity: EntityLiteral,
+  entity: CompiledEntity,
   field: EntityStorageField,
 ): string => {
   const column = JSON.stringify(field.column);
@@ -2623,7 +2292,7 @@ const renderStorageColumn = (
 };
 
 const renderEntityColumnsArtifact = (
-  entities: readonly EntityLiteral[],
+  entities: readonly CompiledEntity[],
 ): string => {
   const columnModels = entities.filter(
     (entity) => entity.fieldModel.storage.length > 0,
@@ -2675,67 +2344,6 @@ const renderEntityColumnsArtifact = (
   );
 };
 
-// oxlint-disable-next-line eslint/complexity -- Ordered modifiers mirror the finite validation DSL and preserve Zod call order.
-const renderValidationSchema = (
-  spec: EntityFieldValidationSpec,
-  enumValuesName?: string,
-  sourceNames: ReadonlyMap<string, string> = new Map(),
-): string => {
-  const sourceName = (ref: SourceRef): string =>
-    sourceNames.get(`${ref.module}#${ref.export}`) ?? ref.export;
-  let expression: string;
-  if (spec.kind === "source") {
-    if (spec.source === null)
-      throw new LiteralSpecError("Source validation is missing its source.");
-    expression = spec.lazy
-      ? `z.lazy(() => ${sourceName(spec.source!)})`
-      : sourceName(spec.source);
-  } else if (spec.kind === "string") {
-    expression = "z.string()";
-  } else if (spec.kind === "url") {
-    expression = "z.url()";
-  } else if (spec.kind === "number") {
-    expression = "z.number()";
-  } else if (spec.kind === "boolean") {
-    expression = "z.boolean()";
-  } else if (spec.kind === "timestamp") {
-    expression = "z.date()";
-  } else if (spec.kind === "enum") {
-    if (spec.values === null)
-      throw new LiteralSpecError("Enum validation is missing its values.");
-    expression = `z.enum(${enumValuesName ?? compactLiteral(spec.values)})`;
-  } else {
-    if (spec.item === null)
-      throw new LiteralSpecError("Array validation is missing its item.");
-    const item =
-      spec.item.kind === "string"
-        ? "z.string()"
-        : spec.item.source === null
-          ? "z.never()"
-          : sourceName(spec.item.source);
-    expression = `z.array(${item})`;
-  }
-  if (spec.trim) expression += ".trim()";
-  if (spec.integer) expression += ".int()";
-  if (spec.finite) expression += ".finite()";
-  if (spec.positive) expression += ".positive()";
-  if (spec.nonnegative) expression += ".nonnegative()";
-  if (spec.min !== null)
-    expression += `.min(${spec.min}${spec.minMessage === null ? "" : `,${JSON.stringify(spec.minMessage)}`})`;
-  if (spec.max !== null) expression += `.max(${spec.max})`;
-  if (spec.description !== null && !spec.descriptionAfter)
-    expression += `.describe(${JSON.stringify(spec.description)})`;
-  if (spec.mock !== null)
-    expression += `.meta({mock:${JSON.stringify(spec.mock)}})`;
-  if (spec.nullable) expression += ".nullable()";
-  if (spec.optional) expression += ".optional()";
-  if (spec.defaultValue !== undefined)
-    expression += `.default(${compactLiteral(spec.defaultValue)})`;
-  if (spec.description !== null && spec.descriptionAfter)
-    expression += `.describe(${JSON.stringify(spec.description)})`;
-  return expression;
-};
-
 /** PascalCase model name (as recorded in `descriptor.dbTable`) to its Drizzle export name. */
 const lowerCamelCase = (value: string): string =>
   value.length === 0
@@ -2761,7 +2369,7 @@ const browserBasePath = (entity: string): string =>
         : `${singular}s`;
   })();
 
-const browserRoutes = (entity: EntityLiteral) => {
+const browserRoutes = (entity: CompiledEntity) => {
   const basePath = entity.route?.basePath ?? browserBasePath(entity.key);
   const detailParam =
     entity.route?.detailParam ??
@@ -2774,7 +2382,7 @@ const browserRoutes = (entity: EntityLiteral) => {
 };
 
 export const expectedBrowserRouteFiles = (
-  entities: readonly EntityLiteral[],
+  entities: readonly CompiledEntity[],
 ): readonly string[] =>
   entities
     .filter(({ descriptor }) => descriptor.browserRoutes !== false)
@@ -2790,7 +2398,7 @@ export const expectedBrowserRouteFiles = (
     });
 
 export const missingBrowserRouteFiles = (
-  entities: readonly EntityLiteral[],
+  entities: readonly CompiledEntity[],
   exists: (path: string) => boolean = existsSync,
 ): readonly string[] =>
   expectedBrowserRouteFiles(entities).filter(
@@ -2800,7 +2408,7 @@ export const missingBrowserRouteFiles = (
 // One render pass preserves deterministic cross-artifact ordering and hashes.
 // oxlint-disable-next-line eslint/complexity
 export const renderEntityArtifacts = (
-  entities: readonly EntityLiteral[],
+  entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
   const relationMutations = entities.flatMap(
     (entity) => entity.relationMutations,
@@ -2809,7 +2417,7 @@ export const renderEntityArtifacts = (
     ({ entity, relation }) => `${entity}:${relation}`,
   );
   if (new Set(relationMutationKeys).size !== relationMutationKeys.length) {
-    throw new LiteralSpecError("Relation mutation keys must be unique.");
+    throw new EntityDeclarationError("Relation mutation keys must be unique.");
   }
   const relationSchemaImports = [
     ...new Map(
@@ -2960,15 +2568,15 @@ export const renderEntityArtifacts = (
   const schemaEntitySpecs = entities.filter(
     (
       entity,
-    ): entity is EntityLiteral & {
-      contract: NonNullable<EntityLiteral["contract"]>;
+    ): entity is CompiledEntity & {
+      contract: NonNullable<CompiledEntity["contract"]>;
     } => entity.contract !== null,
   );
   const schemaBindings = schemaEntitySpecs
     .map((entity) => {
       const { contract, filterSchema } = entity;
       if (entity.bulkUpdateFields !== null && contract.update === null) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${entity.key}.bulkUpdate requires an update contract.`,
         );
       }
@@ -3000,8 +2608,8 @@ export const renderEntityArtifacts = (
   const detailEntities = entities.filter(
     (
       entity,
-    ): entity is EntityLiteral & {
-      contract: NonNullable<EntityLiteral["contract"]>;
+    ): entity is CompiledEntity & {
+      contract: NonNullable<CompiledEntity["contract"]>;
     } =>
       entity.contract !== null &&
       entity.contract.create !== null &&
@@ -3072,8 +2680,8 @@ export const renderEntityArtifacts = (
   const browserCrudEntitySpecs = browserEntities.filter(
     (
       entity,
-    ): entity is EntityLiteral & {
-      contract: NonNullable<EntityLiteral["contract"]>;
+    ): entity is CompiledEntity & {
+      contract: NonNullable<CompiledEntity["contract"]>;
     } =>
       entity.contract !== null &&
       entity.contract.create !== null &&
@@ -3128,7 +2736,7 @@ export const renderEntityArtifacts = (
   const mutationOutputImportEntries = new Map<string, Set<string>>();
   for (const { contract } of browserCrudEntitySpecs) {
     if (!contract)
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         "Browser CRUD entity is missing its contract.",
       );
     const exports =
@@ -3147,7 +2755,7 @@ export const renderEntityArtifacts = (
   const mutationOutputTypes = browserCrudEntitySpecs
     .map(({ key, contract }) => {
       if (!contract)
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           "Browser CRUD entity is missing its contract.",
         );
       return `  ${JSON.stringify(key)}: z.output<typeof ${contract.output.export}>;`;
@@ -3156,7 +2764,7 @@ export const renderEntityArtifacts = (
   const mutationOutputSchemas = browserCrudEntitySpecs
     .map(({ key, contract }) => {
       if (!contract)
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           "Browser CRUD entity is missing its contract.",
         );
       return `  ${JSON.stringify(key)}: ${contract.output.export},`;
@@ -3179,7 +2787,9 @@ export const renderEntityArtifacts = (
       .map((entity) => {
         const schemaRef = entity.contract?.[schema];
         if (!schemaRef)
-          throw new LiteralSpecError(`${entity.key}.${schema} is missing.`);
+          throw new EntityDeclarationError(
+            `${entity.key}.${schema} is missing.`,
+          );
         const id =
           action === "update"
             ? ",id:shortcodeSchema(" + JSON.stringify(entity.key) + ")"
@@ -3196,7 +2806,7 @@ export const renderEntityArtifacts = (
       .map((entity) => {
         const output = entity.contract?.output;
         if (!output)
-          throw new LiteralSpecError(`${entity.key}.output is missing.`);
+          throw new EntityDeclarationError(`${entity.key}.output is missing.`);
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
@@ -3212,7 +2822,9 @@ export const renderEntityArtifacts = (
       .map((entity) => {
         const output = entity.contract?.mcpOutput;
         if (!output)
-          throw new LiteralSpecError(`${entity.key}.mcpOutput is missing.`);
+          throw new EntityDeclarationError(
+            `${entity.key}.mcpOutput is missing.`,
+          );
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
@@ -3259,13 +2871,13 @@ export const renderEntityArtifacts = (
       entity.bulkUpdateFields !== null && entity.contract?.update !== null,
   );
   const bulkUpdateCommandVariantsFor = (
-    entitySpecs: readonly EntityLiteral[],
+    entitySpecs: readonly CompiledEntity[],
   ) =>
     entitySpecs
       .map((entity) => {
         const schemaRef = entity.contract?.update;
         if (!schemaRef)
-          throw new LiteralSpecError(`${entity.key}.update is missing.`);
+          throw new EntityDeclarationError(`${entity.key}.update is missing.`);
         const mask = (entity.bulkUpdateFields ?? [])
           .map((field) => `${JSON.stringify(field)}:true`)
           .join(",");
@@ -3275,7 +2887,7 @@ export const renderEntityArtifacts = (
   // No declaration anywhere means the command exists but matches nothing,
   // rather than an empty `z.union([])` that fails far from its cause.
   const bulkUpdateCommandFactoryFor = (
-    entitySpecs: readonly EntityLiteral[],
+    entitySpecs: readonly CompiledEntity[],
   ) =>
     entitySpecs.length === 0
       ? "(_ids: z.ZodType<string[]>) => z.never()"
@@ -3299,7 +2911,7 @@ export const renderEntityArtifacts = (
   for (const entity of kernelEntities) {
     const adapter = entity.ports.repository;
     if (adapter === null) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${entity.key}.ports.repository is required for a kernel entity.`,
       );
     }
@@ -3349,12 +2961,12 @@ export const renderEntityArtifacts = (
         : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
     )
     .join("\n");
-  const lifecycleFor = (entity: EntityLiteral) =>
+  const lifecycleFor = (entity: CompiledEntity) =>
     objectValue(
       required(entity.descriptor, "lifecycle", `${entity.key}.descriptor`),
       `${entity.key}.descriptor.lifecycle`,
     );
-  const kernelActionsFor = (entity: EntityLiteral) => {
+  const kernelActionsFor = (entity: CompiledEntity) => {
     const lifecycle = lifecycleFor(entity);
     return [
       "get",
@@ -3382,7 +2994,7 @@ export const renderEntityArtifacts = (
     Object.entries(kernelContractCases)
       .filter(([, contractCase]) => contractCase.actions.includes(action))
       .map(([key]) => key);
-  const mcpActionsFor = (entity: EntityLiteral): string[] =>
+  const mcpActionsFor = (entity: CompiledEntity): string[] =>
     Array.isArray(entity.descriptor.mcp)
       ? entity.descriptor.mcp.map((action) => String(action))
       : [];
@@ -3394,7 +3006,7 @@ export const renderEntityArtifacts = (
         (action) => !executable.includes(action),
       );
       if (unsupported.length > 0) {
-        throw new LiteralSpecError(
+        throw new EntityDeclarationError(
           `${entity.key}.capabilities.mcp declares unbound actions: ${unsupported.join(", ")}.`,
         );
       }
@@ -3409,7 +3021,9 @@ export const renderEntityArtifacts = (
     .filter((entity) => kernelActionsFor(entity).includes("merge"))
     .map((entity) => {
       if (entity.contract === null) {
-        throw new LiteralSpecError(`${entity.key}.merge output is missing.`);
+        throw new EntityDeclarationError(
+          `${entity.key}.merge output is missing.`,
+        );
       }
       return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:${entity.contract.output.export},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
     })
@@ -3418,7 +3032,9 @@ export const renderEntityArtifacts = (
     .filter((entity) => mcpActionsFor(entity).includes("merge"))
     .map((entity) => {
       if (entity.contract === null) {
-        throw new LiteralSpecError(`${entity.key}.merge output is missing.`);
+        throw new EntityDeclarationError(
+          `${entity.key}.merge output is missing.`,
+        );
       }
       return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:${entity.contract.mcpOutput.export},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
     })
@@ -3507,270 +3123,84 @@ export const renderEntityArtifacts = (
     }),
   );
   const fieldModels = Object.fromEntries(
-    entities.map(({ key, fieldModel }) => [key, fieldModel]),
+    entities.map(({ key, fieldModel }) => [
+      key,
+      {
+        ...fieldModel,
+        fields: fieldModel.fields.map(
+          ({ validation: _validation, ...field }) => field,
+        ),
+      },
+    ]),
   );
-  const fieldByKey = (entity: EntityLiteral, key: string) => {
+  const fieldByKey = (entity: CompiledEntity, key: string) => {
     const field = entity.fieldModel.fields.find(
       (candidate) => candidate.key === key,
     );
     if (field === undefined)
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `${entity.key}.model is missing field ${key}.`,
       );
     return field;
   };
   const validationComplete = (
-    entity: EntityLiteral,
+    entity: CompiledEntity,
     mode: "create" | "update" | "read",
     keys: readonly string[],
   ) => keys.every((key) => fieldByKey(entity, key).validation[mode] !== null);
-  const renderedFieldSchemaMap = (
-    entity: EntityLiteral,
-    mode: "create" | "update" | "read",
-    keys: readonly string[],
-    enumValueNames: ReadonlyMap<string, string> = new Map(),
-    sourceNames: ReadonlyMap<string, string> = new Map(),
-  ): string =>
-    `{${keys
-      .map((key) => {
-        const field = fieldByKey(entity, key);
-        const validation = field.validation[mode];
-        if (validation !== null)
-          return `${JSON.stringify(mode === "read" ? (field.readKey ?? key) : key)}:${renderValidationSchema(validation, enumValueNames.get(key), sourceNames)}`;
-        throw new LiteralSpecError(
-          `${entity.key}.model.${mode} field ${key} has no validation.`,
+  const fieldSchemaArtifacts = entities.flatMap((entity) => {
+    const { fieldModel } = entity;
+    if (
+      fieldModel.create.length +
+        fieldModel.update.length +
+        fieldModel.output.length ===
+      0
+    )
+      return [];
+    for (const [mode, keys] of [
+      ["create", fieldModel.create],
+      ["update", fieldModel.update],
+      ["read", fieldModel.output],
+    ] as const)
+      if (!validationComplete(entity, mode, keys))
+        throw new EntityDeclarationError(
+          `${entity.key}.${mode} roster has missing schemas.`,
         );
-      })
-      .join(",")}}`;
-  const renderedScalarFilterFields = (
-    entity: EntityLiteral,
-    enumValueNames: ReadonlyMap<string, string>,
-    sourceNames: ReadonlyMap<string, string>,
-  ) => {
-    const helpers = new Set<string>();
-    // oxlint-disable-next-line eslint/complexity -- Each branch validates one declarative scalar-filter family.
-    const entries = entity.filterDescriptors.flatMap((descriptor) => {
-      if (!descriptor.deriveSchema) return [];
-      const field = entity.fieldModel.fields.find(
-        (candidate) => candidate.key === descriptor.columnId,
+    const declaration = declarationModules.get(entity.key);
+    if (!declaration)
+      throw new EntityDeclarationError(
+        `${entity.key} has no declaration module.`,
       );
-      if (field === undefined)
-        throw new LiteralSpecError(
-          `${entity.key}.filters.${descriptor.columnId} cannot derive a schema without a matching model field.`,
-        );
-      const description =
-        descriptor.schemaDescription === null
-          ? ""
-          : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
-      if (descriptor.kind === "text" && field.kind === "text") {
-        const schemaKey = descriptor.field ?? descriptor.columnId;
-        const textSchema = descriptor.schemaFromRead
-          ? (() => {
-              if (field.validation.read === null)
-                throw new LiteralSpecError(
-                  `${entity.key}.filters.${descriptor.columnId} requests missing read validation.`,
-                );
-              return renderValidationSchema(
-                field.validation.read,
-                enumValueNames.get(field.key),
-                sourceNames,
-              );
-            })()
-          : "z.string()";
-        return [
-          `${JSON.stringify(schemaKey)}:${textSchema}.optional()${description}`,
-        ];
-      }
-      if (descriptor.kind === "boolean" && field.kind === "boolean") {
-        const schemaKey = descriptor.field ?? descriptor.columnId;
-        return [
-          `${JSON.stringify(schemaKey)}:z.boolean().optional()${description}`,
-        ];
-      }
-      if (descriptor.kind === "range" && field.kind === "number") {
-        helpers.add("numericRangeFields");
-        const read = field.validation.read;
-        const options =
-          read?.kind === "number"
-            ? [
-                ...(read.integer ? ["int:true"] : []),
-                ...(read.nonnegative || read.min === 0
-                  ? ["nonnegative:true"]
-                  : []),
-                ...(read.finite ? ["finite:true"] : []),
-              ]
-            : [];
-        return [
-          `...numericRangeFields(${JSON.stringify(descriptor.columnId)}${options.length === 0 ? "" : `,{${options.join(",")}}`})`,
-        ];
-      }
-      if (descriptor.kind === "range" && field.kind === "date") {
-        helpers.add("dateRangeFields");
-        return [`...dateRangeFields(${JSON.stringify(descriptor.columnId)})`];
-      }
-      if (
-        descriptor.kind === "multiselect" &&
-        (field.kind === "text" || field.kind === "text-array")
-      ) {
-        const schemaKey = descriptor.field ?? descriptor.columnId;
-        helpers.add("oneOrMany");
-        return [
-          `${JSON.stringify(schemaKey)}:oneOrMany(z.string()).optional()${description}`,
-        ];
-      }
-      if (
-        (descriptor.kind === "select" || descriptor.kind === "multiselect") &&
-        field.kind === "enum"
-      ) {
-        const schemaKey = descriptor.field ?? descriptor.columnId;
-        const read = field.validation.read;
-        if (read === null)
-          throw new LiteralSpecError(
-            `${entity.key}.filters.${descriptor.columnId} enum schema requires read validation.`,
+    const schemaMap = (
+      mode: "create" | "update" | "read",
+      keys: readonly string[],
+    ) =>
+      `{${keys
+        .map((key) => {
+          const index = fieldModel.fields.findIndex(
+            (field) => field.key === key,
           );
-        const enumSchema =
-          read.kind === "source" && read.source !== null
-            ? (sourceNames.get(`${read.source.module}#${read.source.export}`) ??
-              read.source.export)
-            : read.kind === "enum"
-              ? `z.enum(${enumValueNames.get(field.key) ?? compactLiteral(read.values)})`
-              : null;
-        if (enumSchema === null)
-          throw new LiteralSpecError(
-            `${entity.key}.filters.${descriptor.columnId} enum field lacks enum validation.`,
-          );
-        helpers.add("oneOrMany");
-        return [
-          `${JSON.stringify(schemaKey)}:oneOrMany(${enumSchema}).optional()${description}`,
-        ];
-      }
-      throw new LiteralSpecError(
-        `${entity.key}.filters.${descriptor.columnId} is not an exactly derivable scalar filter.`,
-      );
-    });
-    return {
-      source: `{${entries.join(",")}}`,
-      helpers: [...helpers].sort(),
-      count: entries.length,
-    };
-  };
-  const completeFieldSchemaArtifacts: EntityArtifacts[] = entities.flatMap(
-    (entity) => {
-      const { fieldModel } = entity;
-      if (
-        fieldModel.create.length +
-          fieldModel.update.length +
-          fieldModel.output.length ===
-          0 ||
-        !validationComplete(entity, "create", fieldModel.create) ||
-        !validationComplete(entity, "update", fieldModel.update) ||
-        !validationComplete(entity, "read", fieldModel.output)
-      )
-        return [];
-      const refs = [
-        ...new Map(
-          entity.fieldModel.fields
-            .flatMap(({ validation }) =>
-              Object.values(validation).flatMap((spec) =>
-                spec === null
-                  ? []
-                  : [spec.source, spec.item?.source ?? null].filter(
-                      (ref): ref is SourceRef => ref !== null,
-                    ),
-              ),
-            )
-            .map((ref) => [`${ref.module}#${ref.export}`, ref] as const),
-        ).values(),
-      ].sort((left, right) =>
-        `${left.module}#${left.export}`.localeCompare(
-          `${right.module}#${right.export}`,
-        ),
-      );
-      const contractModules = new Set(
-        entity.contract === null
-          ? []
-          : [
-              entity.contract.create?.module,
-              entity.contract.update?.module,
-              entity.contract.output.module,
-            ].filter((module): module is string => module !== undefined),
-      );
-      const cyclicRef = refs.find(({ module }) => contractModules.has(module));
-      if (cyclicRef !== undefined)
-        throw new LiteralSpecError(
-          `${entity.key}.model validation source ${cyclicRef.module}#${cyclicRef.export} creates a cycle with its generated contract; move the field validator to a cycle-safe primitive module.`,
-        );
-      const enumValueNames = new Map<string, string>();
-      const enumDeclarations = entity.fieldModel.fields
-        .flatMap((field) => {
-          const enumSpecs = Object.values(field.validation).filter(
-            (spec): spec is EntityFieldValidationSpec =>
-              spec !== null && spec.kind === "enum",
-          );
-          if (enumSpecs.length === 0) return [];
-          const values = enumSpecs[0]?.values;
-          if (values === null || values === undefined)
-            throw new LiteralSpecError(
-              `${entity.key}.model.${field.key} enum is missing values.`,
-            );
-          if (
-            enumSpecs.some(
-              (spec) => compactLiteral(spec.values) !== compactLiteral(values),
-            )
-          )
-            throw new LiteralSpecError(
-              `${entity.key}.model.${field.key} enum values differ by mode.`,
-            );
-          const name = `generated${entity.inspector.singular.replaceAll(" ", "")}${field.key[0]?.toUpperCase() ?? ""}${field.key.slice(1)}Values`;
-          enumValueNames.set(field.key, name);
-          return [`export const ${name} = ${compactLiteral(values)} as const;`];
+          const field = fieldByKey(entity, key);
+          return `${JSON.stringify(mode === "read" ? (field.readKey ?? key) : key)}:definition.model.fields[${index}].validation.${mode}`;
         })
-        .join("\n");
-      const sourceNames = new Map(
-        refs.map((ref) => [`${ref.module}#${ref.export}`, ref.export]),
-      );
-      const imports = [
-        ...new Map(refs.map((ref) => [ref.module, new Set<string>()])).keys(),
-      ]
-        .map((module) => {
-          const exports = refs
-            .filter((ref) => ref.module === module)
-            .map((ref) => ref.export);
-          return `import { ${exports.join(", ")} } from ${JSON.stringify(module)};`;
-        })
-        .join("\n");
-      const scalarFilters = renderedScalarFilterFields(
-        entity,
-        enumValueNames,
-        sourceNames,
-      );
-      const baseFilterHelpers = scalarFilters.helpers.filter(
-        (helper) => helper !== "oneOrMany",
-      );
-      const filterHelperImport =
-        (baseFilterHelpers.length === 0
-          ? ""
-          : `import { ${baseFilterHelpers.join(", ")} } from "@cubby/schemas/base-entity";\n`) +
-        (scalarFilters.helpers.includes("oneOrMany")
-          ? 'import { oneOrMany } from "@cubby/schemas/pagination";\n'
-          : "");
-      return [
-        {
-          relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
-          source:
-            generatedHeader +
-            `${imports}\n` +
-            filterHelperImport +
-            'import { z } from "zod";\n\n' +
-            `${enumDeclarations}${enumDeclarations.length === 0 ? "" : "\n\n"}` +
-            `export const generated${entity.inspector.singular.replaceAll(" ", "")}FieldSchemas = {create:${renderedFieldSchemaMap(entity, "create", fieldModel.create, enumValueNames, sourceNames)},update:${renderedFieldSchemaMap(entity, "update", fieldModel.update, enumValueNames, sourceNames)},read:${renderedFieldSchemaMap(entity, "read", fieldModel.output, enumValueNames, sourceNames)}} as const;\n` +
-            (scalarFilters.count === 0
-              ? ""
-              : `export const generated${entity.inspector.singular.replaceAll(" ", "")}FilterFields = ${scalarFilters.source} as const;\n`),
-        },
-      ];
-    },
-  );
+        .join(",")}}`;
+    const prefix = `generated${entity.inspector.singular.replaceAll(" ", "")}`;
+    return [
+      {
+        relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
+        source:
+          generatedHeader +
+          `import definition${declaration.hasFilters ? ", {filterSchemas}" : ""} from ${JSON.stringify(declaration.path)};\n` +
+          (declaration.enumExports.length
+            ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
+            : "") +
+          `export const ${prefix}FieldSchemas = {create:${schemaMap("create", fieldModel.create)},update:${schemaMap("update", fieldModel.update)},read:${schemaMap("read", fieldModel.output)}} as const;\n` +
+          (declaration.hasFilters
+            ? `export const ${prefix}FilterFields = filterSchemas;\n`
+            : ""),
+      },
+    ];
+  });
   const portExportChecks = [
     ...new Map(
       entities.flatMap((entity) => {
@@ -3879,7 +3309,7 @@ export const renderEntityArtifacts = (
         " *\n" +
         " * `singular` is Title Case and names ONE record; `plural` is the\n" +
         " * nav/section name, which is not a pluralization of the singular (see the\n" +
-        " * `names` block in `scripts/entity-literals/entities/*.entity.ts`). It is\n" +
+        " * `names` block in `packages/schemas/src/entity-definitions/*.entity.ts`). It is\n" +
         " * `null` for the entities that have no browser route to name a section of.\n" +
         " *\n" +
         " * Deliberately its own artifact rather than a field read off\n" +
@@ -3905,10 +3335,8 @@ export const renderEntityArtifacts = (
         'import type { Entity } from "../entity-core";\n\n' +
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
-        "type GeneratedEntityFieldValidationSource = { module: string; export: string };\n" +
-        'type GeneratedEntityFieldValidationSpec = { kind: "string" | "url" | "number" | "boolean" | "timestamp" | "array" | "enum" | "source"; source: GeneratedEntityFieldValidationSource | null; lazy: boolean; values: readonly string[] | null; item: { kind: "string" | "source"; source: GeneratedEntityFieldValidationSource | null } | null; optional: boolean; nullable: boolean; trim: boolean; integer: boolean; finite: boolean; positive: boolean; nonnegative: boolean; min: number | null; max: number | null; minMessage: string | null; defaultValue?: unknown; description: string | null; descriptionAfter: boolean; mock: string | null };\n\n' +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; detailSection: string }; validation: { read: GeneratedEntityFieldValidationSpec | null; create: GeneratedEntityFieldValidationSpec | null; update: GeneratedEntityFieldValidationSpec | null } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; detailSection: string } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -3923,7 +3351,7 @@ export const renderEntityArtifacts = (
       relativePath: "apps/web/src/server/db/generated/entity-columns.gen.ts",
       source: renderEntityColumnsArtifact(entities),
     },
-    ...completeFieldSchemaArtifacts,
+    ...fieldSchemaArtifacts,
     {
       relativePath: "packages/schemas/src/generated/entity-inspector.gen.ts",
       source:
@@ -4321,7 +3749,7 @@ export const renderEntityArtifacts = (
 };
 
 export const renderFilterArtifacts = (
-  entities: readonly EntityLiteral[],
+  entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
   const roster = Object.fromEntries(
     entities.map(({ key, filterUrlKeys }) => [key, filterUrlKeys]),
@@ -4645,7 +4073,7 @@ const writeEntityArtifacts = async (
     problem.startsWith("extraneous:"),
   );
   if (extras.length > 0) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `Refusing to overwrite with ${extras.join(", ")}.`,
     );
   }
@@ -4666,11 +4094,8 @@ const writeEntityArtifacts = async (
   }
 };
 
-const generateEntityArtifacts = async (root = ROOT, source?: string) => {
-  const entities =
-    source === undefined
-      ? await parseEntityLiteralFiles()
-      : parseEntityLiterals(source, SPEC_PATH);
+const generateEntityArtifacts = async (root = ROOT) => {
+  const entities = await loadEntityDeclarations();
   const artifacts = [
     ...renderEntityArtifacts(entities),
     ...renderFilterArtifacts(entities),
@@ -4684,25 +4109,25 @@ const main = async () => {
     .slice(2)
     .filter((argument) => argument !== "--check");
   if (unknownArguments.length > 0) {
-    throw new LiteralSpecError(
+    throw new EntityDeclarationError(
       `Unknown arguments: ${unknownArguments.join(", ")}.`,
     );
   }
   if (check) {
-    const entities = await parseEntityLiteralFiles();
+    const entities = await loadEntityDeclarations();
     const artifacts = [
       ...renderEntityArtifacts(entities),
       ...renderFilterArtifacts(entities),
     ];
     const problems = await checkSealedEntityArtifacts(ROOT, artifacts);
     if (problems.length > 0) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `Generated entity artifacts are out of date:\n${problems.join("\n")}`,
       );
     }
     const missingRoutes = missingBrowserRouteFiles(entities);
     if (missingRoutes.length > 0) {
-      throw new LiteralSpecError(
+      throw new EntityDeclarationError(
         `Generated browser routes are missing route modules:\n${missingRoutes.map((path) => `- ${path}`).join("\n")}`,
       );
     }

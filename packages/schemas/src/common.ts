@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { timestampedFields } from "./base-entity";
 import { publicImpactItemSchema } from "./entity-integrity";
-import { id } from "./identifiers";
+import { id } from "./identifier-fields";
 
 export const dbTimestampsOut = z
   .object(timestampedFields)

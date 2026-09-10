@@ -1,6 +1,46 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import {
+  financialTransactionAllocations,
+  financialTransactionNonZeroAmount,
+  financialTransactionSourceRefs,
+  merchantVendorInference,
+} from "@cubby/schemas/financial-transaction-fields";
+import {
+  financialAccountShortcode,
+  financialTransactionShortcode,
+  ledgerTransferShortcode,
+  purchaseShortcode,
+} from "../identifier-fields.js";
+import { dateRangeFields } from "@cubby/schemas/base-entity";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const generatedFinancialTransactionKindValues = [
+  "purchase",
+  "refund",
+  "account_transfer",
+  "credit_card_payment",
+  "fee",
+  "interest",
+  "income",
+  "adjustment",
+  "other",
+] as const;
+export const generatedFinancialTransactionStatusValues = [
+  "expected",
+  "pending",
+  "posted",
+  "void",
+] as const;
+export const filterSchemas = {
+  kind: oneOrMany(z.enum(generatedFinancialTransactionKindValues)).optional(),
+  status: oneOrMany(
+    z.enum(generatedFinancialTransactionStatusValues),
+  ).optional(),
+  ...dateRangeFields("postedDate"),
+  merchant: z.string().optional(),
+};
+export default defineEntity({
   key: "financialTransaction",
   names: { singular: "Financial Transaction", plural: "Transactions" },
   route: { basePath: "financial-transactions" },
@@ -21,14 +61,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true, detailOrder: 60 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "financialAccountShortcode",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: financialAccountShortcode,
+          create: financialAccountShortcode,
+          update: financialAccountShortcode.optional(),
         },
       },
       {
@@ -40,15 +75,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "purchaseShortcode",
-          },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: purchaseShortcode.nullable(),
+          create: purchaseShortcode.nullable().default(null),
+          update: purchaseShortcode.nullable().optional(),
         },
       },
       {
@@ -70,21 +99,9 @@ export default literalEntity({
         },
         display: { list: true, detail: true, detailOrder: 40 },
         validation: {
-          kind: "enum",
-          values: [
-            "purchase",
-            "refund",
-            "account_transfer",
-            "credit_card_payment",
-            "fee",
-            "interest",
-            "income",
-            "adjustment",
-            "other",
-          ],
-          read: true,
-          create: true,
-          update: true,
+          read: z.enum(generatedFinancialTransactionKindValues),
+          create: z.enum(generatedFinancialTransactionKindValues),
+          update: z.enum(generatedFinancialTransactionKindValues).optional(),
         },
       },
       {
@@ -101,11 +118,9 @@ export default literalEntity({
         },
         display: { list: true, detail: true, detailOrder: 50 },
         validation: {
-          kind: "enum",
-          values: ["expected", "pending", "posted", "void"],
-          read: true,
-          create: true,
-          update: true,
+          read: z.enum(generatedFinancialTransactionStatusValues),
+          create: z.enum(generatedFinancialTransactionStatusValues),
+          update: z.enum(generatedFinancialTransactionStatusValues).optional(),
         },
       },
       {
@@ -114,14 +129,9 @@ export default literalEntity({
         control: { kind: "number", renderer: "money" },
         display: { list: true, detail: true, detailOrder: 30 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/financial-transaction-fields",
-            export: "financialTransactionNonZeroAmount",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: financialTransactionNonZeroAmount,
+          create: financialTransactionNonZeroAmount,
+          update: financialTransactionNonZeroAmount.optional(),
         },
       },
       {
@@ -131,12 +141,9 @@ export default literalEntity({
         control: { section: "schedule", kind: "date" },
         display: { list: true },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: plainDate.nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
         },
       },
       {
@@ -146,12 +153,9 @@ export default literalEntity({
         control: { section: "schedule", kind: "date" },
         display: { list: true, detail: true, detailOrder: 80 },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/base-entity", export: "plainDate" },
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: plainDate.nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
         },
       },
       {
@@ -161,11 +165,9 @@ export default literalEntity({
         control: { section: "identity", kind: "text" },
         display: { list: true, detail: true, detailOrder: 10 },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -176,11 +178,9 @@ export default literalEntity({
         control: { section: "details", kind: "textarea" },
         display: { list: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -191,11 +191,9 @@ export default literalEntity({
         control: { section: "details", kind: "text" },
         display: { list: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -205,14 +203,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { list: true, detail: true, detailOrder: 90 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/financial-transaction-fields",
-            export: "financialTransactionSourceRefs",
-          },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: financialTransactionSourceRefs,
+          create: financialTransactionSourceRefs.default([]),
+          update: financialTransactionSourceRefs.optional(),
         },
       },
       {
@@ -222,11 +215,9 @@ export default literalEntity({
         control: { section: "notes", kind: "textarea" },
         display: { list: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -235,27 +226,18 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true, detailOrder: 70 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/financial-transaction-fields",
-            export: "financialTransactionAllocations",
-          },
-          read: true,
-          create: { defaultValue: [] },
-          update: true,
+          read: financialTransactionAllocations,
+          create: financialTransactionAllocations.default([]),
+          update: financialTransactionAllocations.optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "financialTransactionShortcode",
-            },
-          },
+          read: financialTransactionShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -266,14 +248,9 @@ export default literalEntity({
         reference: { entity: "ledgerTransfer" },
         display: { list: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "ledgerTransferShortcode",
-            },
-            nullable: true,
-          },
+          read: ledgerTransferShortcode.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -281,7 +258,11 @@ export default literalEntity({
         kind: "text",
         nullable: true,
         display: { list: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "vendorInference",
@@ -290,29 +271,33 @@ export default literalEntity({
         label: "Possible vendor",
         display: { detail: true, detailOrder: 20 },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/financial-transaction-fields",
-              export: "merchantVendorInference",
-            },
-            nullable: true,
-            defaultValue: null,
-            description:
+          read: merchantVendorInference
+            .nullable()
+            .default(null)
+            .describe(
               "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship.",
-            descriptionAfter: true,
-          },
+            ),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

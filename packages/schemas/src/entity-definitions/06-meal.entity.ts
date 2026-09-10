@@ -1,6 +1,22 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { mealShortcode } from "../identifier-fields.js";
+import {
+  mealKindSchema,
+  mealTypeSchema,
+} from "@cubby/schemas/meal-classification";
+import {
+  mealRecipeInput,
+  mealRecipeOut,
+  mealTotals,
+} from "@cubby/schemas/meal-fields";
+import { mealDate } from "@cubby/schemas/meal-shared";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  mealType: oneOrMany(mealTypeSchema).optional(),
+  mealKind: oneOrMany(mealKindSchema).optional(),
+};
+export default defineEntity({
   key: "meal",
   names: { singular: "Meal", plural: "Meals" },
   route: { basePath: "meals" },
@@ -15,11 +31,9 @@ export default literalEntity({
         control: { kind: "date", section: "schedule" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: { module: "@cubby/schemas/meal-shared", export: "mealDate" },
-          read: true,
-          create: true,
-          update: true,
+          read: mealDate,
+          create: mealDate,
+          update: mealDate.optional(),
         },
       },
       {
@@ -29,12 +43,9 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().optional(),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -44,13 +55,9 @@ export default literalEntity({
         control: { kind: "number", section: "ordering" },
         display: { list: true, detail: true },
         validation: {
-          kind: "number",
-          integer: true,
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: z.number().int().nullable(),
+          create: z.number().int().nullable().optional(),
+          update: z.number().int().nullable().optional(),
         },
       },
       {
@@ -60,20 +67,19 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/meal-classification",
-            export: "mealTypeSchema",
-          },
-          nullable: true,
-          write: {
-            optional: true,
-            description:
+          read: mealTypeSchema.nullable(),
+          create: mealTypeSchema
+            .describe(
               "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
-          },
-          read: true,
-          create: true,
-          update: true,
+            )
+            .nullable()
+            .optional(),
+          update: mealTypeSchema
+            .describe(
+              "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
+            )
+            .nullable()
+            .optional(),
         },
       },
       {
@@ -82,19 +88,17 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/meal-classification",
-            export: "mealKindSchema",
-          },
-          write: {
-            optional: true,
-            description:
+          read: mealKindSchema,
+          create: mealKindSchema
+            .describe(
               "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
-          },
-          read: true,
-          create: true,
-          update: true,
+            )
+            .optional(),
+          update: mealKindSchema
+            .describe(
+              "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
+            )
+            .optional(),
         },
       },
       {
@@ -103,39 +107,18 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true },
         validation: {
-          kind: "array",
-          read: {
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/meal-fields",
-                export: "mealRecipeOut",
-              },
-            },
-          },
-          create: {
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/meal-fields",
-                export: "mealRecipeInput",
-              },
-            },
-            optional: true,
-          },
+          read: z.array(mealRecipeOut),
+          create: z.array(mealRecipeInput).optional(),
+          update: null,
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "mealShortcode",
-            },
-          },
+          read: mealShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -143,26 +126,30 @@ export default literalEntity({
         kind: "json",
         display: { detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/meal-fields",
-              export: "mealTotals",
-            },
-          },
+          read: mealTotals,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

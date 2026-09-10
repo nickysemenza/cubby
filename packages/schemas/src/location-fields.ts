@@ -1,8 +1,8 @@
 import { locationTypeValues, productCategoryValues } from "@cubby/shared";
 import { z } from "zod";
 
-import { imageOut } from "./image";
-import { productShortcode } from "./identifiers";
+import { imageOut } from "./entity-definitions/field-primitives";
+import { productShortcode } from "./identifier-fields";
 import { money, moneyNullable } from "./money";
 
 export const locationType = z

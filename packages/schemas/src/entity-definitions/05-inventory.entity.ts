@@ -1,6 +1,16 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { amount, positiveAmount } from "@cubby/schemas/codec";
+import {
+  inventoryShortcode,
+  locationShortcode,
+  productShortcode,
+} from "../identifier-fields.js";
+import {
+  inventoryPlacement,
+  inventoryValuation,
+} from "@cubby/schemas/inventory-fields";
+import { z } from "zod";
+export default defineEntity({
   key: "inventory",
   names: { singular: "Inventory Item", plural: "Inventory" },
   route: { basePath: "inventory" },
@@ -18,13 +28,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true, detailOrder: 2 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "productShortcode",
-          },
-          create: true,
-          update: true,
+          read: null,
+          create: productShortcode,
+          update: productShortcode.optional(),
         },
       },
       {
@@ -36,13 +42,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true, detailOrder: 1 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "locationShortcode",
-          },
-          create: true,
-          update: true,
+          read: null,
+          create: locationShortcode,
+          update: locationShortcode.optional(),
         },
       },
       {
@@ -51,19 +53,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "amount" },
         display: { list: true, detail: true, detailOrder: 0 },
         validation: {
-          kind: "source",
-          write: {
-            source: {
-              module: "@cubby/schemas/codec",
-              export: "positiveAmount",
-            },
-          },
-          read: {
-            source: { module: "@cubby/schemas/codec", export: "amount" },
-            description: "Quantity on hand",
-          },
-          create: true,
-          update: true,
+          read: amount.describe("Quantity on hand"),
+          create: positiveAmount,
+          update: positiveAmount.optional(),
         },
       },
       {
@@ -72,37 +64,28 @@ export default literalEntity({
         control: { kind: "select" },
         display: { list: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/inventory-fields",
-            export: "inventoryPlacement",
-          },
-          write: { optional: true, descriptionAfter: true },
-          read: {
-            description:
-              "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
-          },
-          create: {
-            description:
+          read: inventoryPlacement.describe(
+            "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
+          ),
+          create: inventoryPlacement
+            .optional()
+            .describe(
               "Defaults to 'stock'; pass 'installed' for a fixed fixture.",
-          },
-          update: {
-            description:
+            ),
+          update: inventoryPlacement
+            .optional()
+            .describe(
               "Flip between movable stock and a fixed installation. Installing something does not move it — the row keeps its location, it just stops being counted.",
-          },
+            ),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "inventoryShortcode",
-            },
-          },
+          read: inventoryShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -111,14 +94,11 @@ export default literalEntity({
         nullable: true,
         display: { list: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/inventory-fields",
-              export: "inventoryValuation",
-            },
-            description: "Precomputed value: amount × product price",
-          },
+          read: inventoryValuation.describe(
+            "Precomputed value: amount × product price",
+          ),
+          create: null,
+          update: null,
         },
       },
       {
@@ -128,24 +108,31 @@ export default literalEntity({
         label: "Verified",
         display: { list: true, detail: true, detailOrder: 3 },
         validation: {
-          read: {
-            kind: "timestamp",
-            nullable: true,
-            description:
-              "When last verified in an audit session (null = never)",
-            descriptionAfter: true,
-          },
+          read: z
+            .date()
+            .nullable()
+            .describe("When last verified in an audit session (null = never)"),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

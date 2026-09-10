@@ -3,7 +3,6 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
-import { format } from "date-fns";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -17,22 +16,15 @@ import {
   type CubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
-import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import {
+  renderScalarValue,
+  type ScalarDisplayValue,
+} from "~/components/common/scalar-value";
 import { NoneValue } from "~/components/ui/none-value";
-import { parsePlainDate } from "~/lib/plain-date";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
-type ScalarDisplayValue =
-  | { kind: "empty"; raw: null | undefined }
-  | { kind: "text"; raw: string; label: string }
-  | { kind: "number"; raw: number }
-  | { kind: "boolean"; raw: boolean }
-  | { kind: "date"; raw: string }
-  | { kind: "timestamp"; raw: string | Date }
-  | { kind: "list"; raw: string[] };
-
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
   entityFieldModels[entity].fields.filter((field) => field.display[surface]);
 
@@ -77,43 +69,6 @@ function readScalarField<TRecord extends object>(
     default:
       throw new Error(
         `Display field ${field.key} needs a specialized renderer`,
-      );
-  }
-}
-
-function renderScalarField<TRecord extends object>(
-  record: TRecord,
-  field: DisplayField,
-  surface: DisplaySurface = "detail",
-): ReactNode {
-  const value = readScalarField(record, field);
-  switch (value.kind) {
-    case "empty":
-      return value.raw === undefined ? undefined : <NoneValue />;
-    case "timestamp":
-      return <HoverableTimestamp timestamp={value.raw} />;
-    case "date":
-      return format(parsePlainDate(value.raw), "MMM d, yyyy");
-    case "boolean":
-      return value.raw ? "Yes" : "No";
-    case "number":
-      return value.raw;
-    case "list":
-      return value.raw.length ? value.raw.join(", ") : <NoneValue />;
-    case "text":
-      return value.label ? (
-        <span
-          className={
-            surface === "list"
-              ? "block truncate"
-              : "break-words whitespace-pre-wrap"
-          }
-          title={surface === "list" ? value.label : undefined}
-        >
-          {value.label}
-        </span>
-      ) : (
-        <NoneValue />
       );
   }
 }
@@ -182,7 +137,7 @@ export function EntityBasicInfo<TRecord extends object>({
         {
           label: field.label,
           ...(overrides[field.key]?.(record) ?? {
-            value: renderScalarField(record, field),
+            value: renderScalarValue(readScalarField(record, field), "detail"),
           }),
         },
         ...(afterFields[field.key] ?? []),
@@ -251,7 +206,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   ),
           }),
           cell: ({ row }) =>
-            renderScalarField(row.original, field, "list") ?? <NoneValue />,
+            renderScalarValue(readScalarField(row.original, field), "list") ?? (
+              <NoneValue />
+            ),
         }),
       );
     }

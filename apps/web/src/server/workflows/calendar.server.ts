@@ -7,20 +7,11 @@ import type { Database } from "~/server/db";
 import { getCalendarRange } from "~/server/repo/calendar";
 import {
   bindWorkflow,
-  callStep,
-  committedCallStep,
-  defineWorkflow,
-  defineWorkflowFunction,
   defineWorkflowOperation,
-  workflowValue,
+  workflow,
 } from "~/server/workflow-runtime";
 
 type CalendarClient = Awaited<ReturnType<typeof calendarFeedStateFor>>;
-type Invocation<Input> = { client: CalendarClient; input: Input };
-const resolveCalendar = defineWorkflowFunction<string, void, CalendarClient>(
-  "calendar.resolveClient",
-  async ({ context }) => calendarFeedStateFor(context),
-);
 
 /** Calendar application actions share client resolution; the DO retains
  * protocol state and owns each awaited write's commit boundary. */
@@ -30,25 +21,20 @@ function calendarOperation<Input, Output, Args extends readonly unknown[]>(
   run: (client: CalendarClient, input: Input) => Promise<Output>,
   prepare: (...args: Args) => { context: string; input: Input },
 ) {
-  const client = callStep({
-    name: "client",
-    fn: resolveCalendar,
-    input: workflowValue<Input, void>([], () => undefined),
-  });
-  const rpc = defineWorkflowFunction<string, Invocation<Input>, Output>(
-    `${name}.rpc`,
-    async (_, value) => run(value.client, value.input),
+  const graph = workflow<string, Input>(name).call(
+    "client",
+    async ({ context }) => calendarFeedStateFor(context),
   );
-  const invoke = (kind === "write" ? committedCallStep : callStep)({
-    name: "invoke",
-    fn: rpc,
-    input: workflowValue<Input, Invocation<Input>>(
-      ["$input", "client"],
-      (state) => ({ client: client.output.resolve(state), input: state.input }),
-    ),
-  });
+  const withInvoke =
+    kind === "write"
+      ? graph.commit("invoke", async (_, { input, client }) =>
+          run(client, input),
+        )
+      : graph.call("invoke", async (_, { input, client }) =>
+          run(client, input),
+        );
   return bindWorkflow(
-    defineWorkflow({ name, steps: [client, invoke], output: invoke.output }),
+    withInvoke.output(({ invoke }) => invoke),
     prepare,
   );
 }

@@ -1,6 +1,23 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { imageShortcode, recipeShortcode } from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
+import { recipeSectionsInput, recipeSectionsOut } from "../recipe-fields.js";
+import {
+  recipeMeta,
+  recipeNotes,
+  recipeServings,
+  recipeSource,
+  recipeTags,
+  recipeTotals,
+  recipeYieldSchema,
+} from "@cubby/schemas/recipe-shared";
+import { numericRangeFields } from "@cubby/schemas/base-entity";
+import { z } from "zod";
+export const filterSchemas = {
+  nameFilter: z.string().optional(),
+  ...numericRangeFields("totalMinutes"),
+};
+export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
   route: { basePath: "recipes" },
@@ -15,11 +32,13 @@ export default literalEntity({
         control: { kind: "text", section: "identity" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
-          kind: "string",
-          write: { trim: true, min: 1, minMessage: "Recipe name is required" },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string(),
+          create: z.string().trim().min(1, "Recipe name is required"),
+          update: z
+            .string()
+            .trim()
+            .min(1, "Recipe name is required")
+            .optional(),
         },
       },
       {
@@ -29,14 +48,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/recipe-shared",
-            export: "recipeMeta",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: recipeMeta,
+          create: recipeMeta,
+          update: recipeMeta.optional(),
         },
       },
       {
@@ -46,16 +60,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/recipe-shared",
-            export: "recipeYieldSchema",
-          },
-          nullable: true,
-          optional: true,
-          read: true,
-          create: true,
-          update: true,
+          read: recipeYieldSchema.nullable().optional(),
+          create: recipeYieldSchema.nullable().optional(),
+          update: recipeYieldSchema.nullable().optional(),
         },
       },
       {
@@ -65,16 +72,9 @@ export default literalEntity({
         control: { kind: "number", section: "servings" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/recipe-shared",
-            export: "recipeServings",
-          },
-          nullable: true,
-          optional: true,
-          read: true,
-          create: true,
-          update: true,
+          read: recipeServings.nullable().optional(),
+          create: recipeServings.nullable().optional(),
+          update: recipeServings.nullable().optional(),
         },
       },
       {
@@ -84,16 +84,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/recipe-shared",
-            export: "recipeTags",
-          },
-          nullable: true,
-          optional: true,
-          read: true,
-          create: true,
-          update: true,
+          read: recipeTags.nullable().optional(),
+          create: recipeTags.nullable().optional(),
+          update: recipeTags.nullable().optional(),
         },
       },
       {
@@ -104,16 +97,9 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/recipe-shared",
-            export: "recipeNotes",
-          },
-          nullable: true,
-          optional: true,
-          read: true,
-          create: true,
-          update: true,
+          read: recipeNotes.nullable().optional(),
+          create: recipeNotes.nullable().optional(),
+          update: recipeNotes.nullable().optional(),
         },
       },
       {
@@ -122,21 +108,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "structured-field" },
         display: { detail: true },
         validation: {
-          kind: "source",
-          write: {
-            source: {
-              module: "@cubby/schemas/recipe-fields",
-              export: "recipeSectionsInput",
-            },
-          },
-          read: {
-            source: {
-              module: "@cubby/schemas/recipe-fields",
-              export: "recipeSectionsOut",
-            },
-          },
-          create: true,
-          update: true,
+          read: recipeSectionsOut,
+          create: recipeSectionsInput,
+          update: recipeSectionsInput.optional(),
         },
       },
       {
@@ -147,17 +121,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "imageShortcode",
-            },
-          },
-          optional: true,
-          create: true,
-          update: true,
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -168,16 +134,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -186,42 +145,39 @@ export default literalEntity({
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "recipeShortcode",
-            },
-          },
+          read: recipeShortcode,
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "source",
@@ -229,15 +185,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/recipe-shared",
-              export: "recipeSource",
-            },
-            nullable: true,
-            optional: true,
-          },
+          read: recipeSource.nullable().optional(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -246,15 +196,9 @@ export default literalEntity({
         nullable: true,
         display: { detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/recipe-shared",
-              export: "recipeTotals",
-            },
-            nullable: true,
-            optional: true,
-          },
+          read: recipeTotals.nullable().optional(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -262,13 +206,9 @@ export default literalEntity({
         kind: "json",
         display: { list: true, standard: "image", columnId: "image" },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: { module: "@cubby/schemas/image", export: "imageOut" },
-            },
-          },
+          read: z.array(imageOut),
+          create: null,
+          update: null,
         },
       },
       { key: "shortcode", kind: "text", readKey: null },

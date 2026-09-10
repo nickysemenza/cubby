@@ -1,6 +1,25 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import {
+  imageShortcode,
+  locationShortcode,
+  productShortcode,
+} from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
+import {
+  locationIdentityProductOut,
+  locationType,
+  locationValuation,
+} from "@cubby/schemas/location-fields";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  nameFilter: z
+    .string()
+    .optional()
+    .describe("Filter by location name (substring)"),
+  itemTypeFilter: oneOrMany(locationType).optional(),
+};
+export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
   route: { basePath: "locations" },
@@ -15,16 +34,18 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true },
         validation: {
-          kind: "string",
-          description: "name of location",
-          write: {
-            trim: true,
-            min: 1,
-            minMessage: "Location name is required",
-          },
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().describe("name of location"),
+          create: z
+            .string()
+            .trim()
+            .min(1, "Location name is required")
+            .describe("name of location"),
+          update: z
+            .string()
+            .trim()
+            .min(1, "Location name is required")
+            .describe("name of location")
+            .optional(),
         },
       },
       {
@@ -33,21 +54,19 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
-          kind: "array",
-          item: { kind: "string" },
-          read: {
-            defaultValue: [],
-            description:
+          read: z
+            .array(z.string())
+            .default([])
+            .describe(
               "Alternate names for this location (searched + embedded)",
-            descriptionAfter: true,
-          },
-          create: {
-            defaultValue: [],
-            description:
+            ),
+          create: z
+            .array(z.string())
+            .default([])
+            .describe(
               "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-            descriptionAfter: true,
-          },
-          update: true,
+            ),
+          update: z.array(z.string()).optional(),
         },
       },
       {
@@ -56,17 +75,20 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "tag-list" },
         display: { detail: true },
         validation: {
-          kind: "array",
-          item: { kind: "string" },
-          optional: true,
-          write: { description: "Tags assigned directly to this location" },
-          read: {
-            description:
+          read: z
+            .array(z.string())
+            .optional()
+            .describe(
               "Namespaced Collection tags assigned directly to this location",
-            descriptionAfter: true,
-          },
-          create: true,
-          update: true,
+            ),
+          create: z
+            .array(z.string())
+            .describe("Tags assigned directly to this location")
+            .optional(),
+          update: z
+            .array(z.string())
+            .describe("Tags assigned directly to this location")
+            .optional(),
         },
       },
       {
@@ -76,16 +98,9 @@ export default literalEntity({
         control: { kind: "select", section: "classification" },
         display: { list: true, detail: true, detailOrder: 1 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/location-fields",
-            export: "locationType",
-          },
-          nullable: true,
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: locationType.nullable(),
+          create: locationType.nullable().optional(),
+          update: locationType.nullable().optional(),
         },
       },
       {
@@ -98,15 +113,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true, detailOrder: 2 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "productShortcode",
-          },
-          write: { optional: true, nullable: true },
-          read: true,
-          create: true,
-          update: true,
+          read: null,
+          create: productShortcode.nullable().optional(),
+          update: productShortcode.nullable().optional(),
         },
       },
       {
@@ -119,15 +128,9 @@ export default literalEntity({
         control: { kind: "specialized", renderer: "entity-select" },
         display: { detail: true, detailOrder: 3 },
         validation: {
-          kind: "source",
-          source: {
-            module: "@cubby/schemas/identifiers",
-            export: "locationShortcode",
-          },
-          write: { optional: true, nullable: true },
-          read: true,
-          create: true,
-          update: true,
+          read: null,
+          create: locationShortcode.nullable().optional(),
+          update: locationShortcode.nullable().optional(),
         },
       },
       {
@@ -138,18 +141,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          kind: "array",
-          item: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "imageShortcode",
-            },
-          },
-          write: { optional: true },
-          read: true,
-          create: true,
-          update: true,
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -160,16 +154,9 @@ export default literalEntity({
         reference: { entity: "image", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -178,16 +165,9 @@ export default literalEntity({
         readKey: null,
         control: { kind: "specialized", renderer: "image-order" },
         validation: {
-          update: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: {
-                module: "@cubby/schemas/identifiers",
-                export: "imageShortcode",
-              },
-            },
-          },
+          read: locationIdentityProductOut.nullable(),
+          create: null,
+          update: z.array(imageShortcode).optional(),
         },
       },
       {
@@ -196,13 +176,9 @@ export default literalEntity({
         label: "Shortcode",
         display: { detail: true, detailOrder: 0 },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "locationShortcode",
-            },
-          },
+          read: locationShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -211,14 +187,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/location-fields",
-              export: "locationIdentityProductOut",
-            },
-            nullable: true,
-          },
+          read: locationIdentityProductOut.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -227,27 +198,31 @@ export default literalEntity({
         nullable: true,
         label: "Last recount",
         display: { list: true, detail: true, detailOrder: 4 },
-        validation: { read: { kind: "timestamp", nullable: true } },
+        validation: {
+          read: z.date().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "aiDescription",
         kind: "text",
         nullable: true,
         display: { list: true, detail: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "images",
         kind: "json",
         display: { list: true, detail: true, columnId: "image" },
         validation: {
-          read: {
-            kind: "array",
-            item: {
-              kind: "source",
-              source: { module: "@cubby/schemas/image", export: "imageOut" },
-            },
-          },
+          read: z.array(imageOut),
+          create: null,
+          update: null,
         },
       },
       {
@@ -256,27 +231,30 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true, columnId: "valuation" },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/location-fields",
-              export: "locationValuation",
-            },
-            nullable: true,
-          },
+          read: locationValuation.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },

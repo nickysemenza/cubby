@@ -1,6 +1,20 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { vendorShortcode } from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
+import { money } from "@cubby/schemas/money";
+import { plainDate } from "@cubby/schemas/base-entity";
+import {
+  dateRangeFields,
+  numericRangeFields,
+} from "@cubby/schemas/base-entity";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  ...numericRangeFields("purchaseCount", { int: true, nonnegative: true }),
+  ...numericRangeFields("spend"),
+  ...dateRangeFields("latestPurchaseDate"),
+};
+export default defineEntity({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },
   route: { basePath: "vendors" },
@@ -15,11 +29,9 @@ export default literalEntity({
         control: { kind: "text" },
         display: { list: true, detail: true, standard: "name" },
         validation: {
-          kind: "string",
-          min: 1,
-          read: true,
-          create: true,
-          update: true,
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
         },
       },
       {
@@ -29,11 +41,9 @@ export default literalEntity({
         control: { kind: "text", renderer: "url" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
@@ -44,13 +54,26 @@ export default literalEntity({
         control: { kind: "text", renderer: "url", section: "details" },
         display: { detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          description:
-            "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z
+            .string()
+            .describe(
+              "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+            )
+            .nullable(),
+          create: z
+            .string()
+            .describe(
+              "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+            )
+            .nullable()
+            .default(null),
+          update: z
+            .string()
+            .describe(
+              "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+            )
+            .nullable()
+            .optional(),
         },
       },
       {
@@ -60,24 +83,18 @@ export default literalEntity({
         control: { kind: "textarea" },
         display: { list: true, detail: true },
         validation: {
-          kind: "string",
-          nullable: true,
-          read: true,
-          create: { defaultValue: null },
-          update: true,
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
         },
       },
       {
         key: "id",
         kind: "identifier",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "vendorShortcode",
-            },
-          },
+          read: vendorShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -85,17 +102,20 @@ export default literalEntity({
         kind: "number",
         label: "Purchases",
         display: { list: true, detail: true },
-        validation: { read: { kind: "number", integer: true, min: 0 } },
+        validation: {
+          read: z.number().int().min(0),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "spend",
         kind: "number",
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/schemas/money", export: "money" },
-          },
+          read: money,
+          create: null,
+          update: null,
         },
       },
       {
@@ -104,11 +124,9 @@ export default literalEntity({
         nullable: true,
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/schemas/project", export: "plainDate" },
-            nullable: true,
-          },
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -116,24 +134,30 @@ export default literalEntity({
         kind: "json",
         nullable: true,
         validation: {
-          read: {
-            kind: "source",
-            source: { module: "@cubby/schemas/image", export: "imageOut" },
-            nullable: true,
-          },
+          read: imageOut.nullable(),
+          create: null,
+          update: null,
         },
       },
       {
         key: "createdAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "updatedAt",
         kind: "timestamp",
         display: { detail: true },
-        validation: { read: { kind: "timestamp" } },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
       },
       { key: "shortcode", kind: "text", readKey: null },
       {

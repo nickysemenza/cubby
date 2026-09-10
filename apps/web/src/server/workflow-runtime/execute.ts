@@ -1,4 +1,3 @@
-import type { Database, DrizzleTransaction } from "~/server/db";
 import { withTrace } from "~/server/tracing";
 
 import type {
@@ -21,25 +20,6 @@ type WorkflowEvent = {
 };
 
 type WorkflowObserver = (event: WorkflowEvent) => void;
-
-export type WorkflowTransactionAdapter<Context> = {
-  run<Output>(
-    context: Context,
-    body: (transactionContext: Context) => Promise<Output>,
-  ): Promise<Output>;
-};
-
-export const databaseWorkflowTransaction = <Context>(options: {
-  database: (context: Context) => Database;
-  within: (context: Context, transaction: DrizzleTransaction) => Context;
-}): WorkflowTransactionAdapter<Context> => ({
-  run: async (context, body) => {
-    const { withTransaction } = await import("~/server/repo/database-helpers");
-    return withTransaction(options.database(context), (transaction) =>
-      body(options.within(context, transaction)),
-    );
-  },
-});
 
 export class WorkflowCancelledError extends Error {
   readonly committed: boolean;
@@ -69,23 +49,13 @@ export class WorkflowEffectError extends Error {
   }
 }
 
-type QueuedEffect<Context> = {
-  readonly step: Pick<
-    Extract<WorkflowStep<Context, unknown>, { type: "afterCommit" }>,
-    "name" | "fn"
-  >;
-  readonly input: unknown;
-};
-
 type Execution<Context, Input> = {
   readonly workflow: string;
   context: Context;
   readonly input: Input;
   readonly signal: AbortSignal;
   observer?: WorkflowObserver;
-  transaction?: WorkflowTransactionAdapter<Context>;
   readonly outputs: Map<string, unknown>;
-  readonly effects: QueuedEffect<Context>[];
   scope: WorkflowFunctionScope;
   committed: boolean;
   /** A write boundary has started. Its failure is ambiguous, so recovery must
@@ -117,7 +87,7 @@ const checkCancelled = <Context, Input>(
   execution: Execution<Context, Input>,
 ) => {
   if (execution.signal.aborted) {
-    throw cancellation(execution.committed, execution.effects.length > 0);
+    throw cancellation(execution.committed, false);
   }
 };
 
@@ -191,25 +161,11 @@ const assertCommittedEffectScope = <Context, Input>(
     throw new Error("Committed effects require a completed domain commit");
 };
 
-const checkAfterStep = <Context, Input>(
-  step: WorkflowStep<Context, Input>,
-  execution: Execution<Context, Input>,
-) => {
-  if (step.type !== "committedCall" && step.type !== "committedEffect")
-    checkCancelled(execution);
-};
-
 const notifySucceededStep = <Context, Input>(
   step: WorkflowStep<Context, Input>,
   execution: Execution<Context, Input>,
 ) => {
-  if (step.type !== "afterCommit") {
-    notify(execution, {
-      step: step.name,
-      type: step.type,
-      state: "succeeded",
-    });
-  }
+  notify(execution, { step: step.name, type: step.type, state: "succeeded" });
 };
 
 const runStep = async <Context, Input>(
@@ -220,12 +176,11 @@ const runStep = async <Context, Input>(
   notify(execution, {
     step: step.name,
     type: step.type,
-    state: step.type === "afterCommit" ? "queued" : "started",
+    state: "started",
   });
   try {
     await withTrace(
       `workflow.${execution.workflow}.${step.name}`,
-      // oxlint-disable-next-line complexity -- one exhaustive dispatch keeps every workflow step's durability boundary adjacent to its observer events.
       async (span) => {
         span.setAttributes({
           "cubby.workflow": execution.workflow,
@@ -235,14 +190,6 @@ const runStep = async <Context, Input>(
         switch (step.type) {
           case "call":
           case "committedCall": {
-            if (
-              step.type === "committedCall" &&
-              execution.scope !== "workflow"
-            ) {
-              throw new Error(
-                "Transaction-owning calls cannot join workflow transactions",
-              );
-            }
             if (step.type === "committedCall") execution.writeAttemptCount++;
             const result = await step.fn.run(
               {
@@ -269,97 +216,6 @@ const runStep = async <Context, Input>(
               step.input.resolve(stateOf(execution)),
             );
             execution.outputs.set(step.name, result);
-            break;
-          }
-          case "afterCommit": {
-            if (execution.scope !== "transaction") {
-              throw new Error(
-                `afterCommit step ${step.name} must be inside a transaction`,
-              );
-            }
-            execution.effects.push({
-              step,
-              input: step.input.resolve(stateOf(execution)),
-            });
-            break;
-          }
-          case "transaction": {
-            if (!execution.transaction) {
-              throw new Error(
-                `Workflow ${execution.workflow} needs a transaction adapter`,
-              );
-            }
-            if (execution.scope !== "workflow") {
-              throw new Error("Nested workflow transactions are not supported");
-            }
-            const effectStart = execution.effects.length;
-            // A transaction adapter rejection can follow a successful commit
-            // whose acknowledgement was lost; do not recover that ambiguity.
-            execution.writeAttemptCount++;
-            try {
-              await execution.transaction.run(
-                execution.context,
-                async (context) => {
-                  const previousContext = execution.context;
-                  const previousScope = execution.scope;
-                  execution.context = context;
-                  execution.scope = "transaction";
-                  try {
-                    await runSteps(step.steps, execution);
-                    checkCancelled(execution);
-                  } finally {
-                    execution.context = previousContext;
-                    execution.scope = previousScope;
-                  }
-                },
-              );
-            } catch (error) {
-              execution.effects.splice(effectStart);
-              throw error;
-            }
-            execution.committed = true;
-            const effects = execution.effects.splice(effectStart);
-            for (const [index, effect] of effects.entries()) {
-              try {
-                notify(execution, {
-                  step: effect.step.name,
-                  type: "afterCommit",
-                  state: "started",
-                });
-                await withTrace(
-                  `workflow.${execution.workflow}.${effect.step.name}.effect`,
-                  () =>
-                    effect.step.fn.run(
-                      {
-                        context: execution.context,
-                        signal: uncancelledSignal(),
-                        scope: "afterCommit",
-                      },
-                      effect.input,
-                    ),
-                );
-                notify(execution, {
-                  step: effect.step.name,
-                  type: "afterCommit",
-                  state: "succeeded",
-                });
-              } catch (cause) {
-                notify(execution, {
-                  step: effect.step.name,
-                  type: "afterCommit",
-                  state: "failed",
-                  error: cause,
-                });
-                throw new WorkflowEffectError(
-                  effect.step.name,
-                  effects.slice(index).map(({ step }) => step.name),
-                  cause,
-                );
-              }
-            }
-            if (execution.signal.aborted) {
-              throw cancellation(true, false);
-            }
             break;
           }
           case "branch": {
@@ -412,7 +268,8 @@ const runStep = async <Context, Input>(
         }
       },
     );
-    checkAfterStep(step, execution);
+    if (step.type !== "committedCall" && step.type !== "committedEffect")
+      checkCancelled(execution);
     notifySucceededStep(step, execution);
   } catch (error) {
     notify(execution, {
@@ -456,13 +313,11 @@ const runChild = async <Context, Input, Output, ParentInput>(
     input,
     signal: parent.signal,
     outputs: new Map(),
-    effects: parent.effects,
     scope: parent.scope,
     committed: parent.committed,
     writeAttemptCount: parent.writeAttemptCount,
   };
   if (parent.observer) child.observer = parent.observer;
-  if (parent.transaction) child.transaction = parent.transaction;
   try {
     return await runDefinition(definition, child);
   } finally {
@@ -500,7 +355,6 @@ export type WorkflowExecutionOptions<Context, Input> = {
   readonly input: Input;
   readonly signal?: AbortSignal;
   observer?: WorkflowObserver;
-  transaction?: WorkflowTransactionAdapter<Context>;
 };
 
 export const executeWorkflow = async <Context, Input, Output>(
@@ -513,13 +367,11 @@ export const executeWorkflow = async <Context, Input, Output>(
     input: options.input,
     signal: options.signal ?? uncancelledSignal(),
     outputs: new Map(),
-    effects: [],
     scope: "workflow",
     committed: false,
     writeAttemptCount: 0,
   };
   if (options.observer) execution.observer = options.observer;
-  if (options.transaction) execution.transaction = options.transaction;
   notify(execution, {
     step: definition.name,
     type: "workflow",

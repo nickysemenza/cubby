@@ -20,10 +20,6 @@ export const workflowValue = <Input, Value>(
   resolve: (state: WorkflowState<Input>) => Value,
 ): WorkflowSelector<Input, Value> => ({ dependencies, resolve });
 
-export const workflowStepOutput = <Input, Output>(step: {
-  readonly output: WorkflowSelector<Input, Output>;
-}): WorkflowSelector<Input, Output> => step.output;
-
 const outputOf = <Input, Output>(
   name: string,
 ): WorkflowSelector<Input, Output> =>
@@ -41,7 +37,7 @@ export const mapWorkflowValue = <Input, Value, Output>(
 ): WorkflowSelector<Input, Output> =>
   workflowValue(value.dependencies, (state) => map(value.resolve(state)));
 
-export type WorkflowFunctionScope = "workflow" | "transaction" | "afterCommit";
+export type WorkflowFunctionScope = "workflow" | "afterCommit";
 
 export type WorkflowFunctionContext<Context> = {
   readonly context: Context;
@@ -67,19 +63,6 @@ type CallStep<Context, Input, Value, Output> = {
   readonly name: string;
   readonly fn: WorkflowFunction<Context, Value, Output>;
   readonly input: WorkflowSelector<Input, Value>;
-};
-
-type AfterCommitStep<Context, Input, Value> = {
-  readonly type: "afterCommit";
-  readonly name: string;
-  readonly fn: WorkflowFunction<Context, Value, unknown>;
-  readonly input: WorkflowSelector<Input, Value>;
-};
-
-type TransactionStep<Context, Input> = {
-  readonly type: "transaction";
-  readonly name: string;
-  readonly steps: readonly WorkflowStep<Context, Input>[];
 };
 
 type BranchStep<Context, Input, Value, TrueOutput, FalseOutput> = {
@@ -123,8 +106,6 @@ type AttemptStep<Context, Input, Value, Output> = {
 
 export type WorkflowStep<Context, Input> =
   | CallStep<Context, Input, unknown, unknown>
-  | AfterCommitStep<Context, Input, unknown>
-  | TransactionStep<Context, Input>
   | BranchStep<Context, Input, unknown, unknown, unknown>
   | MapStep<Context, Input, unknown>
   | ParallelStep<Context, Input>
@@ -158,9 +139,7 @@ export const callStep = <Context, Input, Value, Output>(options: {
     readonly output: WorkflowSelector<Input, Output>;
   };
 
-/** For a domain function that owns and awaits its committed database writes.
- * It cannot join a workflow transaction; use callStep for transaction-aware
- * repository functions inside transactionStep instead. */
+/** For a domain function that owns and awaits its committed database writes. */
 export const committedCallStep = <Context, Input, Value, Output>(options: {
   name: string;
   fn: WorkflowFunction<Context, Value, Output>;
@@ -196,19 +175,6 @@ export const committedEffectStep = <Context, Input, Value, Output>(options: {
   }) as WorkflowStep<Context, Input> & {
     readonly output: WorkflowSelector<Input, Output>;
   };
-
-export const afterCommitStep = <Context, Input, Value>(options: {
-  name: string;
-  fn: WorkflowFunction<Context, Value, unknown>;
-  input: WorkflowSelector<Input, Value>;
-}): WorkflowStep<Context, Input> =>
-  // SAFETY: The queue captures this function and its matching selected input together.
-  ({ type: "afterCommit", ...options }) as WorkflowStep<Context, Input>;
-
-export const transactionStep = <Context, Input>(options: {
-  name: string;
-  steps: readonly WorkflowStep<Context, Input>[];
-}): WorkflowStep<Context, Input> => ({ type: "transaction", ...options });
 
 export const branchStep = <
   Context,
@@ -314,47 +280,6 @@ export const attemptStep = <Context, Input, Value, Output>(options: {
     readonly output: WorkflowSelector<Input, Output>;
   };
 
-const validateTransactionScope = <Context, Input>(
-  steps: readonly WorkflowStep<Context, Input>[],
-  inTransaction: boolean,
-): void => {
-  for (const step of steps) {
-    switch (step.type) {
-      case "committedCall":
-      case "committedEffect":
-        if (inTransaction)
-          throw new Error(
-            "Transaction-owning calls cannot join workflow transactions",
-          );
-        break;
-      case "transaction":
-        if (inTransaction)
-          throw new Error("Nested workflow transactions are not supported");
-        validateTransactionScope(step.steps, true);
-        break;
-      case "branch":
-        validateTransactionScope(step.whenTrue.steps, inTransaction);
-        validateTransactionScope(step.whenFalse.steps, inTransaction);
-        break;
-      case "map":
-        if (inTransaction && step.concurrency !== 1)
-          throw new Error("Transaction steps must execute serially");
-        validateTransactionScope(step.workflow.steps, inTransaction);
-        break;
-      case "parallel":
-        if (inTransaction && step.concurrency !== 1)
-          throw new Error("Transaction steps must execute serially");
-        for (const branch of Object.values(step.branches))
-          validateTransactionScope(branch.steps, inTransaction);
-        break;
-      case "attempt":
-        validateTransactionScope(step.attempt.steps, inTransaction);
-        validateTransactionScope(step.recover.steps, inTransaction);
-        break;
-    }
-  }
-};
-
 const validateCommittedEffects = <Context, Input>(
   steps: readonly WorkflowStep<Context, Input>[],
 ) => {
@@ -372,7 +297,6 @@ const validateCommittedEffects = <Context, Input>(
 export const defineWorkflow = <Context, Input, Output>(
   definition: WorkflowDefinition<Context, Input, Output>,
 ): WorkflowDefinition<Context, Input, Output> => {
-  validateTransactionScope(definition.steps, false);
   const names = new Set<string>();
   const validateSelector = (
     selector: { dependencies: readonly string[] },
@@ -388,7 +312,6 @@ export const defineWorkflow = <Context, Input, Output>(
   const validate = (
     steps: readonly WorkflowStep<Context, Input>[],
     initial: ReadonlySet<string>,
-    transaction: boolean,
   ): Set<string> => {
     const available = new Set(initial);
     validateCommittedEffects(steps);
@@ -405,20 +328,6 @@ export const defineWorkflow = <Context, Input, Output>(
           validateSelector(step.input, available);
           available.add(step.name);
           break;
-        case "afterCommit":
-          if (!transaction)
-            throw new Error(
-              `afterCommit step ${step.name} must be inside a transaction`,
-            );
-          validateSelector(step.input, available);
-          break;
-        case "transaction": {
-          if (transaction)
-            throw new Error("Nested workflow transactions are not supported");
-          const inner = validate(step.steps, available, true);
-          for (const name of inner) available.add(name);
-          break;
-        }
         case "branch":
           validateSelector(step.input, available);
 
@@ -426,14 +335,10 @@ export const defineWorkflow = <Context, Input, Output>(
           break;
         case "map":
           validateSelector(step.items, available);
-          if (transaction && step.concurrency !== 1)
-            throw new Error("Transaction steps must execute serially");
           available.add(step.name);
           break;
         case "parallel":
           validateSelector(step.input, available);
-          if (transaction && step.concurrency !== 1)
-            throw new Error("Transaction steps must execute serially");
           available.add(step.name);
           break;
         case "attempt":
@@ -446,7 +351,7 @@ export const defineWorkflow = <Context, Input, Output>(
   };
   validateSelector(
     definition.output,
-    validate(definition.steps, new Set(["$input"]), false),
+    validate(definition.steps, new Set(["$input"])),
   );
   return Object.freeze({
     ...definition,
@@ -483,18 +388,11 @@ const describeSteps = <Context, Input>(
       case "call":
       case "committedCall":
       case "committedEffect":
-      case "afterCommit":
         return {
           type: step.type,
           name: step.name,
           function: step.fn.name,
           dependencies: step.input.dependencies,
-        };
-      case "transaction":
-        return {
-          type: step.type,
-          name: step.name,
-          steps: describeSteps(step.steps),
         };
       case "branch":
         return {

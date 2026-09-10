@@ -1,6 +1,8 @@
-import { literalEntity } from "../literal.js";
-
-export default literalEntity({
+import { defineEntity } from "./definition.js";
+import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
+import { cookbookShortcode } from "../identifier-fields.js";
+import { z } from "zod";
+export default defineEntity({
   key: "cookbook",
   names: { singular: "Cookbook", plural: "Cookbooks" },
   route: { basePath: "cookbooks" },
@@ -15,13 +17,9 @@ export default literalEntity({
         kind: "text",
         readKey: "id",
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/identifiers",
-              export: "cookbookShortcode",
-            },
-          },
+          read: cookbookShortcode,
+          create: null,
+          update: null,
         },
       },
       {
@@ -29,19 +27,31 @@ export default literalEntity({
         kind: "text",
         readKey: "book",
         display: { list: true, detail: true },
-        validation: { read: { kind: "string" } },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "author",
         kind: "text-array",
         display: { list: true, detail: true },
-        validation: { read: { kind: "array", item: { kind: "string" } } },
+        validation: {
+          read: z.array(z.string()),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "subjects",
         kind: "text-array",
         display: { list: true, detail: true },
-        validation: { read: { kind: "array", item: { kind: "string" } } },
+        validation: {
+          read: z.array(z.string()),
+          create: null,
+          update: null,
+        },
       },
       { key: "sourceLabel", kind: "text", readKey: null },
       { key: "rawJson", kind: "json", readKey: null },
@@ -70,7 +80,11 @@ export default literalEntity({
         kind: "number",
         label: "Recipes",
         display: { list: true, detail: true },
-        validation: { read: { kind: "number", integer: true, min: 0 } },
+        validation: {
+          read: z.number().int().min(0),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "coverUrl",
@@ -78,14 +92,22 @@ export default literalEntity({
         nullable: true,
         label: "Cover",
         display: { list: true, detail: true },
-        validation: { read: { kind: "string", nullable: true } },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "sourceRecipeCount",
         kind: "number",
         label: "Source recipes",
         display: { detail: true },
-        validation: { read: { kind: "number", integer: true, min: 0 } },
+        validation: {
+          read: z.number().int().min(0),
+          create: null,
+          update: null,
+        },
       },
       {
         key: "product",
@@ -95,14 +117,9 @@ export default literalEntity({
         reference: { entity: "product" },
         display: { list: true, detail: true },
         validation: {
-          read: {
-            kind: "source",
-            source: {
-              module: "@cubby/schemas/cookbook-fields",
-              export: "cookbookProductSummary",
-            },
-            nullable: true,
-          },
+          read: cookbookProductSummary.nullable(),
+          create: null,
+          update: null,
         },
       },
     ],
