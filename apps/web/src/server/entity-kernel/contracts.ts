@@ -1,5 +1,6 @@
 import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";
 import { operationEffectSchema } from "@cubby/schemas/entity-integrity";
+import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";
 import {
   relatedSearchOutSchema,
@@ -135,7 +136,7 @@ export const entityMcpReadCommandSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("get"),
     entity: z.enum(generatedMcpEntityActionEntities.get),
-    id: z.string().min(1),
+    id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
     missing: z.enum(["error", "null"]).default("error"),
   }),
   z.object({
